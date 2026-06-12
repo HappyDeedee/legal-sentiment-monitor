@@ -974,7 +974,7 @@ def list_reports(limit: int = 100) -> list[dict[str, Any]]:
     with get_conn() as conn:
         rows = conn.execute(
             """
-            SELECT reports.*, monitor_jobs.law_firm_name FROM reports
+            SELECT reports.*, monitor_jobs.id AS current_job_id, monitor_jobs.law_firm_name FROM reports
             LEFT JOIN monitor_jobs ON monitor_jobs.id = reports.job_id
             ORDER BY reports.id DESC LIMIT ?
             """,
@@ -984,6 +984,7 @@ def list_reports(limit: int = 100) -> list[dict[str, Any]]:
     for row in rows:
         item = dict(row)
         item["summary"] = _json_loads(item.get("summary"), {})
+        _hydrate_report_item(item)
         result.append(item)
     _attach_report_lead_counts(result)
     return result
@@ -993,7 +994,7 @@ def get_report(report_id: int) -> dict[str, Any] | None:
     with get_conn() as conn:
         row = conn.execute(
             """
-            SELECT reports.*, monitor_jobs.law_firm_name FROM reports
+            SELECT reports.*, monitor_jobs.id AS current_job_id, monitor_jobs.law_firm_name FROM reports
             LEFT JOIN monitor_jobs ON monitor_jobs.id = reports.job_id
             WHERE reports.id=?
             """,
@@ -1003,8 +1004,22 @@ def get_report(report_id: int) -> dict[str, Any] | None:
         return None
     report = dict(row)
     report["summary"] = _json_loads(report.get("summary"), {})
+    _hydrate_report_item(report)
     _attach_report_lead_counts([report])
     return report
+
+
+def _hydrate_report_item(item: dict[str, Any]) -> None:
+    summary = item.get("summary") or {}
+    if not isinstance(summary, dict):
+        summary = {}
+    snapshot_job_id = _safe_int(summary.get("job_id"))
+    report_job_id = _safe_int(item.get("job_id"))
+    current_job_id = _safe_int(item.get("current_job_id"))
+    if not item.get("law_firm_name"):
+        item["law_firm_name"] = summary.get("law_firm_name") or ""
+    item["display_law_firm_name"] = item.get("law_firm_name") or summary.get("law_firm_name") or ""
+    item["job_deleted"] = bool((snapshot_job_id or report_job_id) and not current_job_id)
 
 
 def _attach_report_lead_counts(reports: list[dict[str, Any]]) -> None:

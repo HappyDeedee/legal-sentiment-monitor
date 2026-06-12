@@ -11,7 +11,7 @@ from fastapi import HTTPException
 
 from api.monitoring.ai import _build_endpoint, _parse_json, _validate_ai_output, test_ai as run_ai_config_test
 from api.monitoring.ai import DEFAULT_PROMPT
-from api.monitoring.database import create_run, finish_run, get_ai_config, get_conn, get_email_config, get_platform_login_config, get_report, get_run, init_db, list_jobs, list_leads, list_platform_login_configs, list_runs, save_ai_config, save_email_config, save_job, save_platform_login_config
+from api.monitoring.database import create_run, finish_run, get_ai_config, get_conn, get_email_config, get_platform_login_config, get_report, get_run, init_db, list_jobs, list_leads, list_platform_login_configs, list_reports, list_runs, save_ai_config, save_email_config, save_job, save_platform_login_config
 from api.monitoring.login_browser import build_login_browser_command, open_login_browser
 from api.monitoring.login_state import login_window_status, record_login_window
 from api.monitoring.mailer import build_report_email, send_test_email
@@ -531,7 +531,7 @@ def test_run_summary_and_log_api_redact_sensitive_values(tmp_path, monkeypatch):
             "time_window_type": "recent_1d",
             "frequency": "daily",
             "email_time": "09:00",
-            "enabled": True,
+            "enabled": False,
         }
     )
     run_id = create_run(job["id"])
@@ -842,7 +842,7 @@ def test_exclude_words_filter_before_insert():
             "time_window_type": "recent_1d",
             "frequency": "daily",
             "email_time": "09:00",
-            "enabled": True,
+            "enabled": False,
         }
     )
     now_ts = int(datetime.now(timezone.utc).timestamp())
@@ -895,7 +895,7 @@ def test_report_includes_platform_status_and_failure_reason():
             "time_window_type": "recent_1d",
             "frequency": "daily",
             "email_time": "09:00",
-            "enabled": True,
+            "enabled": False,
         }
     )
     run_id = create_run(job["id"])
@@ -988,6 +988,13 @@ def test_readiness_status_reports_checks():
 
 def test_readiness_platform_profiles_require_valid_login_state(monkeypatch):
     init_db()
+    job = {
+        "id": 123,
+        "enabled": True,
+        "keywords": ["测试律所避雷"],
+        "platforms": ["ks"],
+        "recipients": ["target@example.com"],
+    }
     monkeypatch.setattr(
         readiness_module,
         "list_platform_status",
@@ -997,13 +1004,24 @@ def test_readiness_platform_profiles_require_valid_login_state(monkeypatch):
             {"platform": "xhs", "platform_label": "小红书", "profile_exists": True, "needs_login": False},
         ],
     )
+    monkeypatch.setattr(
+        "api.monitoring.preflight.list_platform_status",
+        lambda: [
+            {"platform": "dy", "platform_label": "抖音", "profile_exists": True, "needs_login": False},
+            {"platform": "ks", "platform_label": "快手", "profile_exists": True, "needs_login": True},
+            {"platform": "xhs", "platform_label": "小红书", "profile_exists": True, "needs_login": False},
+        ],
+    )
 
     status = get_readiness_status()
     platform_check = next(check for check in status["checks"] if check["key"] == "platform_profiles")
+    preflight = build_job_preflight(job, [])
 
     assert platform_check["ok"] is False
     assert "重新登录" in platform_check["message"]
     assert any("账号登录" in action and "快手" in action for action in status["next_actions"])
+    assert preflight["can_run"] is False
+    assert any("重新登录" in blocker and "快手" in blocker for blocker in preflight["blockers"])
 
 
 def test_readiness_and_preflight_warn_when_login_window_is_still_open(monkeypatch):
@@ -1100,7 +1118,7 @@ def test_job_preflight_warns_but_allows_missing_ai_email(monkeypatch):
             "time_window_type": "recent_1d",
             "frequency": "daily",
             "email_time": "09:00",
-            "enabled": True,
+            "enabled": False,
         }
     )
     ai_snapshot = _snapshot_singleton_table("ai_configs")
@@ -1490,13 +1508,55 @@ def test_run_history_keeps_job_snapshot_after_job_deleted():
             conn.execute("DELETE FROM monitor_jobs WHERE id=?", (job["id"],))
         run = get_run(run_id)
     finally:
-        with get_conn() as conn:
-            conn.execute("DELETE FROM crawl_runs WHERE id=?", (run_id,))
+        _cleanup_test_records(job["id"], "")
 
     assert run
     assert run["job_id"] == job["id"]
     assert run["law_firm_name"] == "运行快照测试律所"
     assert run["job_deleted"] is True
+
+
+def test_report_history_keeps_law_firm_snapshot_after_job_deleted(monkeypatch):
+    init_db()
+    job = save_job(
+        {
+            "law_firm_name": "报告快照测试律所",
+            "aliases": [],
+            "exclude_words": [],
+            "keywords": ["报告快照测试律所避雷"],
+            "platforms": ["dy"],
+            "recipients": [],
+            "enable_comments": False,
+            "time_window_type": "recent_1d",
+            "frequency": "daily",
+            "email_time": "09:00",
+            "enabled": False,
+        }
+    )
+    run_id = create_run(job["id"])
+    report = create_report(
+        run_id,
+        job,
+        {
+            "job_id": job["id"],
+            "law_firm_name": job["law_firm_name"],
+            "platforms": job["platforms"],
+            "keywords": job["keywords"],
+            "failed_platforms": [],
+        },
+    )
+
+    try:
+        with get_conn() as conn:
+            conn.execute("DELETE FROM monitor_jobs WHERE id=?", (job["id"],))
+        stored = get_report(report["id"])
+        listed = next(item for item in list_reports(200) if item["id"] == report["id"])
+    finally:
+        _cleanup_test_records(job["id"], "")
+
+    assert stored and stored["law_firm_name"] == "报告快照测试律所"
+    assert listed["law_firm_name"] == "报告快照测试律所"
+    assert stored["job_deleted"] is True
 
 
 def test_list_runs_limit_zero_returns_all_recent_rows():
