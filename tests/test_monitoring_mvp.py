@@ -36,6 +36,11 @@ from api.monitoring.scheduler import _is_due, next_run_at, scheduler_disabled_re
 from tools.cdp_browser import resolve_cdp_user_data_dir
 
 
+@pytest.fixture(autouse=True)
+def _clear_ai_skip_env(monkeypatch):
+    monkeypatch.delenv("MONITOR_SKIP_AI_API", raising=False)
+
+
 def test_ai_endpoint_builder_handles_v1_and_full_paths():
     assert _build_endpoint("https://api.openai.com", "/v1/chat/completions") == "https://api.openai.com/v1/chat/completions"
     assert _build_endpoint("https://api.openai.com/v1", "/v1/chat/completions") == "https://api.openai.com/v1/chat/completions"
