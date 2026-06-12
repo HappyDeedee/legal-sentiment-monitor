@@ -34,6 +34,7 @@ def login_window_status(platform: str) -> dict[str, Any]:
     is_open = bool(pid and _pid_exists(pid))
     if not is_open:
         _state_path(platform).unlink(missing_ok=True)
+        return {"is_open": False, "pid": None, "debug_port": None, "opened_at": None}
     return {
         "is_open": is_open,
         "pid": pid,

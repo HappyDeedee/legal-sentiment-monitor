@@ -18,6 +18,7 @@ PROFILE_DIRS = {
     "xhs": "cdp_xhs_user_data_dir",
 }
 LOGIN_MARKERS = ("登录态", "未登录", "扫码", "no login", "login failed", "login state result: false")
+LOGIN_WINDOW_MARKERS = ("登录窗口未关闭",)
 
 
 def list_platform_status(project_root: Path | None = None, recent_runs: list[dict[str, Any]] | None = None) -> list[dict[str, Any]]:
@@ -32,9 +33,10 @@ def list_platform_status(project_root: Path | None = None, recent_runs: list[dic
         error = str(error_info.get("error") or "")
         error_at = _parse_time(error_info.get("at"))
         profile_mtime = _mtime(latest_file or profile_path)
-        stale_error = bool(error_at and profile_mtime and profile_mtime > error_at)
-        effective_error = "" if stale_error else error
         login_window = login_window_status(platform)
+        stale_error = bool(error_at and profile_mtime and profile_mtime > error_at)
+        closed_login_window_error = _looks_like_login_window_error(error) and not login_window.get("is_open")
+        effective_error = "" if stale_error or closed_login_window_error else error
         statuses.append(
             {
                 "platform": platform,
@@ -109,3 +111,8 @@ def _latest_platform_errors(recent_runs: list[dict[str, Any]] | None = None) -> 
 def _looks_like_login_error(error: str) -> bool:
     lower = (error or "").lower()
     return any(marker.lower() in lower for marker in LOGIN_MARKERS)
+
+
+def _looks_like_login_window_error(error: str) -> bool:
+    lower = (error or "").lower()
+    return any(marker.lower() in lower for marker in LOGIN_WINDOW_MARKERS)

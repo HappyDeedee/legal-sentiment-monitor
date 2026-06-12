@@ -178,6 +178,30 @@ def test_platform_status_ignores_login_error_older_than_profile_update(tmp_path)
     assert dy["last_error"] == ""
 
 
+def test_platform_status_clears_closed_login_window_error(tmp_path, monkeypatch):
+    profile = tmp_path / "browser_data" / "cdp_dy_user_data_dir"
+    profile.mkdir(parents=True)
+    (profile / "state").write_text("ok", encoding="utf-8")
+    monkeypatch.setattr("api.monitoring.platform_status.login_window_status", lambda platform: {"is_open": False})
+    statuses = list_platform_status(
+        tmp_path,
+        [
+            {
+                "finished_at": datetime.now(timezone.utc).isoformat(),
+                "summary": {
+                    "platform_results": {
+                        "dy": {"error": "抖音登录窗口未关闭，请关闭窗口后再运行采集"}
+                    }
+                },
+            }
+        ],
+    )
+    dy = next(item for item in statuses if item["platform"] == "dy")
+
+    assert dy["last_error"] == ""
+    assert dy["needs_login"] is False
+
+
 def test_platform_status_reports_open_login_window(tmp_path, monkeypatch):
     browser_data = tmp_path / "profiles"
     (browser_data / "cdp_dy_user_data_dir").mkdir(parents=True)
@@ -200,6 +224,7 @@ def test_login_window_status_removes_stale_pid_record(tmp_path, monkeypatch):
     status = login_window_status("dy")
 
     assert status["is_open"] is False
+    assert status["pid"] is None
     assert not (tmp_path / "login_windows" / "dy.json").exists()
 
 
@@ -245,6 +270,7 @@ def test_login_browser_message_reminds_to_close_window(tmp_path, monkeypatch):
     fake_browser.write_text("", encoding="utf-8")
     monkeypatch.setenv("MONITOR_BROWSER_DATA_DIR", str(tmp_path / "profiles"))
     monkeypatch.setattr("api.monitoring.login_state.LOGIN_STATE_DIR", tmp_path / "login_windows")
+    monkeypatch.setattr("api.monitoring.login_state._pid_exists", lambda pid: pid == 12345)
     monkeypatch.setattr("api.monitoring.login_browser.BrowserLauncher.detect_browser_paths", lambda self: [str(fake_browser)])
 
     class FakeProcess:
