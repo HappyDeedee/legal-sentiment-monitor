@@ -6,7 +6,7 @@ from datetime import datetime, time, timedelta
 from typing import Any
 
 from .database import get_job, has_job_template_placeholders, list_jobs, set_job_schedule_state
-from .runner import run_job
+from .runner import clear_stop_request, request_stop_job, run_job
 
 
 _scheduler_task: asyncio.Task | None = None
@@ -68,6 +68,7 @@ def launch_job(job_id: int, source: str = "manual") -> dict[str, Any]:
         raise ValueError("请先把验收模板里的律所名称和关键词改成真实内容")
     if job_id in _running_jobs:
         return {"started": False, "status": "already_running", "job_id": job_id}
+    clear_stop_request(job_id)
     _running_jobs.add(job_id)
     set_job_schedule_state(job_id, None)
     _job_tasks[job_id] = asyncio.create_task(_run_and_release(job_id))
@@ -75,7 +76,38 @@ def launch_job(job_id: int, source: str = "manual") -> dict[str, Any]:
 
 
 def running_job_ids() -> list[int]:
+    _cleanup_finished_job_tasks()
     return sorted(_running_jobs)
+
+
+def running_jobs_detail() -> list[dict[str, Any]]:
+    details = []
+    for job_id in running_job_ids():
+        job = get_job(job_id)
+        task = _job_tasks.get(job_id)
+        details.append(
+            {
+                "job_id": job_id,
+                "law_firm_name": job.get("law_firm_name") if job else "",
+                "job_deleted": not bool(job),
+                "task_done": bool(task and task.done()),
+                "task_cancelled": bool(task and task.cancelled()),
+            }
+        )
+    return details
+
+
+def stop_job(job_id: int) -> dict[str, Any]:
+    _cleanup_finished_job_tasks()
+    if job_id not in _running_jobs:
+        return {"stopped": False, "status": "not_running", "job_id": job_id}
+    process_count = request_stop_job(job_id)
+    return {
+        "stopped": True,
+        "status": "stopping",
+        "job_id": job_id,
+        "terminated_processes": process_count,
+    }
 
 
 def scheduler_status() -> dict[str, Any]:
@@ -85,6 +117,7 @@ def scheduler_status() -> dict[str, Any]:
         "mode": "disabled" if disabled_reason else "internal",
         "message": disabled_reason or "内置调度器已启用，会每 60 秒检查到期任务",
         "running_job_ids": running_job_ids(),
+        "running_jobs": running_jobs_detail(),
     }
 
 
@@ -116,6 +149,13 @@ async def _run_and_release(job_id: int) -> None:
             set_job_schedule_state(job_id, next_run_at(job, datetime.now()))
         elif job:
             set_job_schedule_state(job_id, None)
+
+
+def _cleanup_finished_job_tasks() -> None:
+    for job_id, task in list(_job_tasks.items()):
+        if task.done():
+            _running_jobs.discard(job_id)
+            _job_tasks.pop(job_id, None)
 
 
 def _is_due(job: dict, now: datetime) -> bool:

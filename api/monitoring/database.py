@@ -548,6 +548,46 @@ def delete_job(job_id: int) -> None:
         conn.execute("DELETE FROM monitor_jobs WHERE id=?", (job_id,))
 
 
+def has_running_run_for_job(job_id: int) -> bool:
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT 1 FROM crawl_runs WHERE job_id=? AND status='running' LIMIT 1",
+            (job_id,),
+        ).fetchone()
+    return bool(row)
+
+
+def cancel_running_runs_for_job(job_id: int, message: str) -> int:
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT id, summary FROM crawl_runs WHERE job_id=? AND status='running'",
+            (job_id,),
+        ).fetchall()
+    count = 0
+    for row in rows:
+        summary = _json_loads(row["summary"], {})
+        if not isinstance(summary, dict):
+            summary = {}
+        summary["cancelled"] = True
+        summary["cancel_reason"] = message
+        finish_run(int(row["id"]), "cancelled", summary, message)
+        count += 1
+    return count
+
+
+def cancel_run(run_id: int, message: str) -> bool:
+    run = get_run(run_id)
+    if not run or run.get("status") != "running":
+        return False
+    summary = run.get("summary") or {}
+    if not isinstance(summary, dict):
+        summary = {}
+    summary["cancelled"] = True
+    summary["cancel_reason"] = message
+    finish_run(run_id, "cancelled", summary, message)
+    return True
+
+
 def set_job_enabled(job_id: int, enabled: bool) -> None:
     with get_conn() as conn:
         conn.execute(
@@ -874,22 +914,60 @@ def finish_run(run_id: int, status: str, summary: dict[str, Any], error: str | N
         )
 
 
-def list_runs(limit: int = 100) -> list[dict[str, Any]]:
+def get_run(run_id: int) -> dict[str, Any] | None:
     with get_conn() as conn:
-        rows = conn.execute(
+        row = conn.execute(
             """
             SELECT r.*, j.law_firm_name FROM crawl_runs r
             LEFT JOIN monitor_jobs j ON j.id = r.job_id
-            ORDER BY r.id DESC LIMIT ?
+            WHERE r.id=?
             """,
-            (limit,),
-        ).fetchall()
-    result = []
-    for row in rows:
-        item = dict(row)
-        item["summary"] = _json_loads(item.get("summary"), {})
-        result.append(item)
-    return result
+            (run_id,),
+        ).fetchone()
+    return _hydrate_run_row(row) if row else None
+
+
+def list_runs(limit: int = 100) -> list[dict[str, Any]]:
+    sql = """
+        SELECT r.*, j.law_firm_name FROM crawl_runs r
+        LEFT JOIN monitor_jobs j ON j.id = r.job_id
+        ORDER BY r.id DESC
+    """
+    params: list[Any] = []
+    if limit > 0:
+        sql += " LIMIT ?"
+        params.append(limit)
+    with get_conn() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return [_hydrate_run_row(row) for row in rows]
+
+
+def _hydrate_run_row(row: sqlite3.Row) -> dict[str, Any]:
+    item = dict(row)
+    summary = _json_loads(item.get("summary"), {})
+    if not isinstance(summary, dict):
+        summary = {}
+    snapshot_job_id = _safe_int(summary.get("job_id"))
+    current_job_id = _safe_int(item.get("job_id"))
+    if current_job_id is None and snapshot_job_id is not None:
+        item["job_id"] = snapshot_job_id
+    item["summary"] = summary
+    if not item.get("law_firm_name"):
+        item["law_firm_name"] = summary.get("law_firm_name") or ""
+    is_legacy_without_snapshot = current_job_id is None and snapshot_job_id is None and not summary.get("selftest")
+    item["display_law_firm_name"] = item.get("law_firm_name") or summary.get("law_firm_name") or (
+        "旧记录无任务快照" if is_legacy_without_snapshot else ""
+    )
+    item["job_deleted"] = bool(snapshot_job_id and not current_job_id)
+    item["legacy_without_job_snapshot"] = bool(is_legacy_without_snapshot)
+    return item
+
+
+def _safe_int(value: Any) -> int | None:
+    try:
+        return int(value)
+    except (TypeError, ValueError):
+        return None
 
 
 def list_reports(limit: int = 100) -> list[dict[str, Any]]:

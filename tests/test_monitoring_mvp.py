@@ -11,7 +11,7 @@ from fastapi import HTTPException
 
 from api.monitoring.ai import _build_endpoint, _parse_json, _validate_ai_output, test_ai as run_ai_config_test
 from api.monitoring.ai import DEFAULT_PROMPT
-from api.monitoring.database import create_run, finish_run, get_ai_config, get_conn, get_email_config, get_platform_login_config, get_report, init_db, list_jobs, list_leads, list_platform_login_configs, save_ai_config, save_email_config, save_job, save_platform_login_config
+from api.monitoring.database import create_run, finish_run, get_ai_config, get_conn, get_email_config, get_platform_login_config, get_report, get_run, init_db, list_jobs, list_leads, list_platform_login_configs, list_runs, save_ai_config, save_email_config, save_job, save_platform_login_config
 from api.monitoring.login_browser import build_login_browser_command, open_login_browser
 from api.monitoring.login_state import login_window_status, record_login_window
 from api.monitoring.mailer import build_report_email, send_test_email
@@ -1159,6 +1159,27 @@ def test_job_preflight_and_launcher_block_template_placeholders(monkeypatch):
         scheduler_module.launch_job(123)
 
 
+def test_scheduler_stop_job_requests_runner_stop(monkeypatch):
+    scheduler_module._running_jobs.add(24680)
+    scheduler_module._job_tasks.pop(24680, None)
+    calls: list[int] = []
+
+    def fake_request_stop_job(job_id):
+        calls.append(job_id)
+        return 2
+
+    try:
+        monkeypatch.setattr(scheduler_module, "request_stop_job", fake_request_stop_job)
+        result = scheduler_module.stop_job(24680)
+    finally:
+        scheduler_module._running_jobs.discard(24680)
+        scheduler_module._job_tasks.pop(24680, None)
+
+    assert result["stopped"] is True
+    assert result["terminated_processes"] == 2
+    assert calls == [24680]
+
+
 def test_refresh_jobs_schedule_api_recomputes_next_run_at():
     init_db()
     job = save_job(
@@ -1218,6 +1239,12 @@ def test_monitor_page_exposes_acceptance_checklist():
     assert "login-browser" in page
     assert "openPlatformLoginBrowser" in page
     assert "正在运行的任务 ID" in page
+    assert "运行ID" in page
+    assert "任务ID" in page
+    assert "全部运行记录" in page
+    assert "/jobs/'+id+'/stop" in page
+    assert "/runs/'+id+'/stop" in page
+    assert "任务正在运行，请先停止后再删除" in page
     assert "startRunPolling" in page
     assert "api('/doctor')" in page
     assert "preflight" in page
@@ -1427,6 +1454,107 @@ def test_run_job_skips_when_cross_process_lock_exists():
     assert result["status"] == "already_running"
     assert result["run_id"] is None
     assert after == before
+
+
+def test_run_history_keeps_job_snapshot_after_job_deleted():
+    init_db()
+    job = save_job(
+        {
+            "law_firm_name": "运行快照测试律所",
+            "aliases": [],
+            "exclude_words": [],
+            "keywords": ["运行快照测试律所避雷"],
+            "platforms": ["dy"],
+            "recipients": ["ops@example.com"],
+            "enable_comments": False,
+            "time_window_type": "recent_1d",
+            "frequency": "daily",
+            "email_time": "09:00",
+            "enabled": True,
+        }
+    )
+    run_id = create_run(job["id"])
+    finish_run(
+        run_id,
+        "success",
+        {
+            "job_id": job["id"],
+            "law_firm_name": job["law_firm_name"],
+            "keywords": job["keywords"],
+            "platforms": job["platforms"],
+        },
+    )
+
+    try:
+        with get_conn() as conn:
+            conn.execute("DELETE FROM monitor_jobs WHERE id=?", (job["id"],))
+        run = get_run(run_id)
+    finally:
+        with get_conn() as conn:
+            conn.execute("DELETE FROM crawl_runs WHERE id=?", (run_id,))
+
+    assert run
+    assert run["job_id"] == job["id"]
+    assert run["law_firm_name"] == "运行快照测试律所"
+    assert run["job_deleted"] is True
+
+
+def test_list_runs_limit_zero_returns_all_recent_rows():
+    init_db()
+    job = save_job(
+        {
+            "law_firm_name": "全部运行测试律所",
+            "aliases": [],
+            "exclude_words": [],
+            "keywords": ["全部运行测试律所避雷"],
+            "platforms": ["dy"],
+            "recipients": [],
+            "enable_comments": False,
+            "time_window_type": "recent_1d",
+            "frequency": "daily",
+            "email_time": "09:00",
+            "enabled": True,
+        }
+    )
+    run_ids = [create_run(job["id"]) for _ in range(2)]
+    try:
+        assert len([r for r in list_runs(1) if r["id"] in run_ids]) == 1
+        assert len([r for r in list_runs(0) if r["id"] in run_ids]) == 2
+    finally:
+        _cleanup_test_records(job["id"], "")
+
+
+def test_delete_running_job_is_blocked_and_stop_job_marks_stale_run(monkeypatch):
+    init_db()
+    job = save_job(
+        {
+            "law_firm_name": "停止删除测试律所",
+            "aliases": [],
+            "exclude_words": [],
+            "keywords": ["停止删除测试律所避雷"],
+            "platforms": ["dy"],
+            "recipients": [],
+            "enable_comments": False,
+            "time_window_type": "recent_1d",
+            "frequency": "daily",
+            "email_time": "09:00",
+            "enabled": True,
+        }
+    )
+    run_id = create_run(job["id"])
+    try:
+        monkeypatch.setattr(monitor_router, "running_job_ids", lambda: [])
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(monitor_router.remove_job(job["id"]))
+        assert exc.value.status_code == 409
+
+        result = asyncio.run(monitor_router.stop_job_now(job["id"]))
+        run = get_run(run_id)
+    finally:
+        _cleanup_test_records(job["id"], "")
+
+    assert result["status"] == "cancelled_stale_run"
+    assert run and run["status"] == "cancelled"
 
 
 def test_run_job_blocks_platform_when_login_window_is_open(monkeypatch):

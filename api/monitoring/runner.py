@@ -4,6 +4,7 @@ import asyncio
 import json
 import os
 import subprocess
+import threading
 from collections import defaultdict
 from datetime import datetime, timezone
 from pathlib import Path
@@ -33,6 +34,36 @@ PLATFORM_DEBUG_PORTS = {"dy": 9223, "ks": 9224, "xhs": 9225}
 JOB_LOCK_TTL_SECONDS = int(os.environ.get("MONITOR_JOB_LOCK_TTL_SECONDS") or 21600)
 DEFAULT_CRAWLER_MAX_RETRIES = 1
 DEFAULT_CRAWLER_RETRY_DELAY_SECONDS = 3.0
+STOP_REQUESTS: set[int] = set()
+RUN_PROCESSES: dict[int, set[subprocess.Popen]] = defaultdict(set)
+PROCESS_LOCK = threading.Lock()
+
+
+class CrawlerStopped(Exception):
+    """Raised when an operator requests the current job to stop."""
+
+
+def clear_stop_request(job_id: int) -> None:
+    with PROCESS_LOCK:
+        STOP_REQUESTS.discard(int(job_id))
+        RUN_PROCESSES.pop(int(job_id), None)
+
+
+def request_stop_job(job_id: int) -> int:
+    job_id = int(job_id)
+    with PROCESS_LOCK:
+        STOP_REQUESTS.add(job_id)
+        processes = list(RUN_PROCESSES.get(job_id, set()))
+    stopped = 0
+    for process in processes:
+        if _terminate_process(process):
+            stopped += 1
+    return stopped
+
+
+def is_stop_requested(job_id: int) -> bool:
+    with PROCESS_LOCK:
+        return int(job_id) in STOP_REQUESTS
 
 
 async def run_job(job_id: int) -> dict[str, Any]:
@@ -43,6 +74,7 @@ async def run_job(job_id: int) -> dict[str, Any]:
         return await _run_job_locked(job_id)
     finally:
         _release_job_lock(lock_path)
+        clear_stop_request(job_id)
 
 
 async def _run_job_locked(job_id: int) -> dict[str, Any]:
@@ -51,8 +83,11 @@ async def _run_job_locked(job_id: int) -> dict[str, Any]:
         raise ValueError("job not found")
     run_id = create_run(job_id)
     summary: dict[str, Any] = {
+        "job_id": job_id,
+        "law_firm_name": job.get("law_firm_name") or "",
         "platforms": job.get("platforms", []),
         "keywords": job.get("keywords", []),
+        "recipients": job.get("recipients", []),
         "raw_contents": 0,
         "filtered_contents": 0,
         "excluded_contents": 0,
@@ -60,15 +95,23 @@ async def _run_job_locked(job_id: int) -> dict[str, Any]:
         "negative_count": 0,
         "high_count": 0,
         "failed_platforms": [],
+        "cancelled_platforms": [],
         "platform_results": {},
     }
     run_dir = RUNS_DIR / f"job_{job_id}" / f"run_{run_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     run_dir.mkdir(parents=True, exist_ok=True)
     try:
+        _raise_if_stop_requested(job_id)
         tasks = [run_platform(job, run_id, platform, run_dir) for platform in job.get("platforms", [])]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         content_ids_for_eval: list[int] = []
+        stopped = is_stop_requested(job_id)
         for platform, result in zip(job.get("platforms", []), results):
+            if isinstance(result, CrawlerStopped):
+                stopped = True
+                summary["cancelled_platforms"].append(platform)
+                summary["platform_results"][platform] = {"status": "cancelled", "error": redact_sensitive(str(result))}
+                continue
             if isinstance(result, Exception):
                 error = redact_sensitive(str(result))
                 summary["failed_platforms"].append(platform)
@@ -81,8 +124,17 @@ async def _run_job_locked(job_id: int) -> dict[str, Any]:
             summary["new_contents"] += result.get("new_contents", 0)
             content_ids_for_eval.extend(result.get("content_db_ids", []))
 
+        if stopped:
+            summary["cancelled"] = True
+            summary["duration_seconds"] = _run_duration_seconds(run_id)
+            finish_run(run_id, "cancelled", summary, "任务已手动停止")
+            _touch_job_last_run(job_id)
+            return {"run_id": run_id, "status": "cancelled", "summary": summary, "report": None}
+
+        _raise_if_stop_requested(job_id)
         eval_summary = await evaluate_new_contents(job, run_id, content_ids_for_eval)
         summary.update(eval_summary)
+        _raise_if_stop_requested(job_id)
         report = create_report(run_id, job, summary)
         ok, error = send_report(job, report)
         error = redact_sensitive(error)
@@ -95,6 +147,19 @@ async def _run_job_locked(job_id: int) -> dict[str, Any]:
         finish_run(run_id, final_status, summary)
         _touch_job_last_run(job_id)
         return {"run_id": run_id, "status": final_status, "summary": summary, "report": report}
+    except CrawlerStopped as exc:
+        summary["cancelled"] = True
+        summary["duration_seconds"] = _run_duration_seconds(run_id)
+        finish_run(run_id, "cancelled", summary, redact_sensitive(str(exc)))
+        _touch_job_last_run(job_id)
+        return {"run_id": run_id, "status": "cancelled", "summary": summary, "report": None}
+    except asyncio.CancelledError:
+        request_stop_job(job_id)
+        summary["cancelled"] = True
+        summary["duration_seconds"] = _run_duration_seconds(run_id)
+        finish_run(run_id, "cancelled", summary, "任务已取消")
+        _touch_job_last_run(job_id)
+        raise
     except Exception as exc:
         summary["duration_seconds"] = _run_duration_seconds(run_id)
         finish_run(run_id, "failed", summary, f"{type(exc).__name__}: {redact_sensitive(str(exc))}")
@@ -103,8 +168,10 @@ async def _run_job_locked(job_id: int) -> dict[str, Any]:
 
 
 async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir: Path) -> dict[str, Any]:
+    _raise_if_stop_requested(job["id"])
     async with GLOBAL_SEMAPHORE:
         async with PLATFORM_LOCKS[platform]:
+            _raise_if_stop_requested(job["id"])
             _ensure_login_window_closed(platform)
             platform_root = run_dir / platform
             platform_root.mkdir(parents=True, exist_ok=True)
@@ -115,46 +182,69 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
                 attempt_out = _attempt_output_dir(platform_root, attempt, total_attempts)
                 attempt_out.mkdir(parents=True, exist_ok=True)
                 try:
+                    _raise_if_stop_requested(job["id"])
                     await asyncio.to_thread(_run_crawler_attempt, job, platform, attempt_out)
+                    _raise_if_stop_requested(job["id"])
                     contents, comments = collect_platform_outputs(attempt_out, platform)
                     result = ingest_outputs(job, run_id, platform, contents, comments)
                     result["attempts"] = attempt
                     result["max_retries"] = max_retries
                     return result
+                except CrawlerStopped:
+                    raise
                 except RuntimeError as exc:
                     last_error = redact_sensitive(str(exc))
                     if not _should_retry_crawler_error(last_error) or attempt >= total_attempts:
                         break
+                    _raise_if_stop_requested(job["id"])
                     await asyncio.sleep(_crawler_retry_delay_seconds())
             raise RuntimeError(f"MediaCrawler failed after {attempt} attempt(s): {last_error}")
 
 
 def _run_crawler_attempt(job: dict[str, Any], platform: str, out_dir: Path) -> None:
+    _raise_if_stop_requested(job["id"])
     cmd = _build_crawler_cmd(job, platform, out_dir)
     env = {**os.environ, "PYTHONUNBUFFERED": "1"}
     log_path = out_dir / "crawler.log"
     timeout_seconds = int(os.environ.get("MONITOR_CRAWLER_TIMEOUT_SECONDS") or 900)
+    process: subprocess.Popen | None = None
     try:
-        process = subprocess.run(
+        creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
+        process = subprocess.Popen(
             cmd,
             cwd=PROJECT_ROOT,
             env=env,
-            capture_output=True,
-            text=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.PIPE,
             encoding="utf-8",
             errors="ignore",
-            timeout=timeout_seconds,
+            text=True,
+            creationflags=creationflags,
         )
+        _register_process(job["id"], process)
+        stdout, stderr = process.communicate(timeout=timeout_seconds)
     except subprocess.TimeoutExpired as exc:
-        log_text = redact_sensitive((exc.stdout or "") + "\n" + (exc.stderr or ""))
+        if process:
+            _terminate_process(process)
+            stdout, stderr = process.communicate()
+        else:
+            stdout, stderr = exc.stdout or "", exc.stderr or ""
+        log_text = redact_sensitive((stdout or "") + "\n" + (stderr or ""))
         log_path.write_text(log_text, encoding="utf-8", errors="ignore")
         raise RuntimeError(f"MediaCrawler timed out after {timeout_seconds}s; see {log_path}") from exc
     except Exception as exc:
+        if isinstance(exc, CrawlerStopped):
+            raise
         safe_error = redact_sensitive(f"{type(exc).__name__}: {exc}")
         log_path.write_text(safe_error, encoding="utf-8")
         raise RuntimeError(f"MediaCrawler failed to start: {safe_error}; see {log_path}") from exc
-    log_text = redact_sensitive((process.stdout or "") + "\n" + (process.stderr or ""))
+    finally:
+        if process:
+            _unregister_process(job["id"], process)
+    log_text = redact_sensitive((stdout or "") + "\n" + (stderr or ""))
     log_path.write_text(log_text, encoding="utf-8")
+    if is_stop_requested(job["id"]):
+        raise CrawlerStopped(f"任务已手动停止；see {log_path}")
     if process.returncode != 0:
         hint = "；检测到登录态失效，请先重新登录该平台账号" if _looks_like_login_required(log_text) else ""
         raise RuntimeError(f"MediaCrawler exited with {process.returncode}{hint}; see {log_path}")
@@ -436,6 +526,48 @@ def _int_env(name: str, default: int) -> int:
         return int(os.environ.get(name) or default)
     except ValueError:
         return default
+
+
+def _raise_if_stop_requested(job_id: int) -> None:
+    if is_stop_requested(job_id):
+        raise CrawlerStopped("任务已手动停止")
+
+
+def _register_process(job_id: int, process: subprocess.Popen) -> None:
+    with PROCESS_LOCK:
+        RUN_PROCESSES[int(job_id)].add(process)
+
+
+def _unregister_process(job_id: int, process: subprocess.Popen) -> None:
+    with PROCESS_LOCK:
+        processes = RUN_PROCESSES.get(int(job_id))
+        if not processes:
+            return
+        processes.discard(process)
+        if not processes:
+            RUN_PROCESSES.pop(int(job_id), None)
+
+
+def _terminate_process(process: subprocess.Popen) -> bool:
+    if process.poll() is not None:
+        return False
+    try:
+        if os.name == "nt":
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+            )
+        else:
+            process.terminate()
+        return True
+    except Exception:
+        try:
+            process.kill()
+            return True
+        except Exception:
+            return False
 
 
 def _acquire_job_lock(job_id: int) -> Path | None:

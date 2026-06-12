@@ -10,12 +10,16 @@ from ..monitoring import ai
 from ..monitoring.ai import DEFAULT_PROMPT
 from ..monitoring.database import (
     MONITOR_DATA_DIR,
+    cancel_run,
+    cancel_running_runs_for_job,
     delete_job,
     get_ai_config,
     get_email_config,
     get_job,
     get_platform_login_config,
     get_report,
+    get_run,
+    has_running_run_for_job,
     init_db,
     list_jobs,
     list_leads,
@@ -38,7 +42,7 @@ from ..monitoring.platform_status import list_platform_status
 from ..monitoring.preflight import build_job_preflight
 from ..monitoring.readiness import get_readiness_status
 from ..monitoring.reporting import resend_report_email
-from ..monitoring.scheduler import launch_job, next_run_at, running_job_ids, scheduler_status
+from ..monitoring.scheduler import launch_job, next_run_at, running_job_ids, scheduler_status, stop_job
 from ..monitoring.security import redact_sensitive
 from ..monitoring.selftest import create_sample_report
 
@@ -149,6 +153,8 @@ async def update_job(job_id: int, payload: dict[str, Any]):
 
 @router.delete("/jobs/{job_id}")
 async def remove_job(job_id: int):
+    if job_id in running_job_ids() or has_running_run_for_job(job_id):
+        raise HTTPException(status_code=409, detail="任务正在运行，请先停止后再删除")
     delete_job(job_id)
     return {"ok": True}
 
@@ -163,6 +169,17 @@ async def run_job_now(job_id: int):
         raise HTTPException(status_code=400, detail=redact_sensitive(str(exc)))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=redact_sensitive(f"{type(exc).__name__}: {exc}"))
+
+
+@router.post("/jobs/{job_id}/stop")
+async def stop_job_now(job_id: int):
+    result = stop_job(job_id)
+    if not result.get("stopped") and has_running_run_for_job(job_id):
+        cancelled = cancel_running_runs_for_job(job_id, "服务中没有找到活跃任务，已将残留运行记录标记为停止")
+        return {"stopped": True, "status": "cancelled_stale_run", "job_id": job_id, "cancelled_runs": cancelled}
+    if not result.get("stopped"):
+        raise HTTPException(status_code=404, detail="任务当前没有在运行")
+    return result
 
 
 @router.get("/jobs/{job_id}/preflight")
@@ -262,9 +279,29 @@ async def test_email(payload: dict[str, Any] | None = None):
 
 
 @router.get("/runs")
-async def runs(limit: int = 100):
+async def runs(limit: int = Query(100, ge=0, le=1000)):
     init_db()
     return {"runs": list_runs(limit), "running_job_ids": running_job_ids()}
+
+
+@router.post("/runs/{run_id}/stop")
+async def stop_run_now(run_id: int):
+    run = get_run(run_id)
+    if not run:
+        raise HTTPException(status_code=404, detail="run not found")
+    if run.get("status") != "running":
+        raise HTTPException(status_code=400, detail="这条运行记录已经结束")
+    job_id = run.get("job_id")
+    if not job_id:
+        if cancel_run(run_id, "这条运行记录没有可停止的任务 ID，已标记为停止"):
+            return {"stopped": True, "status": "cancelled_stale_run", "run_id": run_id}
+        raise HTTPException(status_code=400, detail="这条运行记录没有可停止的任务 ID")
+    result = stop_job(int(job_id))
+    if not result.get("stopped") and cancel_run(run_id, "服务中没有找到活跃任务，已将残留运行记录标记为停止"):
+        return {"stopped": True, "status": "cancelled_stale_run", "run_id": run_id, "job_id": int(job_id)}
+    if not result.get("stopped"):
+        raise HTTPException(status_code=404, detail="任务当前没有在运行")
+    return result
 
 
 @router.get("/runs/{run_id}/logs")

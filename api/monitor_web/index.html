@@ -207,7 +207,18 @@
       <section id="runs">
         <div class="panel">
           <h2>运行记录</h2>
-          <button class="secondary" onclick="loadRuns()">刷新</button>
+          <div class="toolbar">
+            <div>
+              <label>显示范围</label>
+              <select id="run_limit" onchange="loadRuns()">
+                <option value="50">最近 50 条</option>
+                <option value="100" selected>最近 100 条</option>
+                <option value="200">最近 200 条</option>
+                <option value="0">全部运行记录</option>
+              </select>
+            </div>
+            <button class="secondary" onclick="loadRuns()">刷新</button>
+          </div>
           <div id="running_summary"></div>
           <div id="runs_table"></div>
         </div>
@@ -251,6 +262,7 @@
   <script>
     const api = (path, options={}) => fetch('/api/monitor' + path, {headers:{'Content-Type':'application/json'}, ...options});
     const jobCache = new Map();
+    const runningJobIds = new Set();
     let platformLoginConfigCache = [];
     let runPollTimer = null;
     let defaultAIPrompt = '';
@@ -258,7 +270,7 @@
     const toast = msg => { const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; setTimeout(()=>el.style.display='none', 3500); };
     document.querySelectorAll('nav button').forEach(btn => btn.onclick = () => { document.querySelectorAll('nav button, section').forEach(x=>x.classList.remove('active')); btn.classList.add('active'); document.getElementById(btn.dataset.tab).classList.add('active'); if(btn.dataset.tab==='runs') loadRuns(); if(btn.dataset.tab==='reports') loadReports(); if(btn.dataset.tab==='doctor') loadDoctor(); });
 
-    async function loadAll(){ await Promise.all([loadReadiness(), loadSchedulerStatus(), loadPlatformStatus(), loadPlatformLoginConfigs(), loadJobs(), loadAI(), loadEmail(), loadRuns(), loadReports(), loadDoctor()]); }
+    async function loadAll(){ await Promise.all([loadReadiness(), loadSchedulerStatus(), loadPlatformStatus(), loadPlatformLoginConfigs(), loadAI(), loadEmail(), loadRuns(), loadReports(), loadDoctor()]); await loadJobs(); }
     async function loadReadiness(){
       const data=await (await api('/readiness')).json();
       const pending=(data.checks||[]).filter(c=>!c.ok);
@@ -279,7 +291,13 @@
     }
     async function loadPlatformStatus(){ const data=await (await api('/platform-status')).json(); const html=platformStatusTable(data.platforms); document.getElementById('platform_status_table').innerHTML=html; const accountTable=document.getElementById('account_status_table'); if(accountTable) accountTable.innerHTML=html; }
     async function loadPlatformLoginConfigs(){ const data=await (await api('/platform-login-configs')).json(); platformLoginConfigCache=data.configs||[]; document.getElementById('platform_login_config_table').innerHTML=platformLoginConfigTable(platformLoginConfigCache); }
-    async function loadSchedulerStatus(){ const data=await (await api('/scheduler-status')).json(); document.getElementById('scheduler_status').innerHTML = `<div class="${data.enabled?'notice':'notice warn'}"><strong>${data.enabled?'自动调度已启用':'自动调度未启用'}</strong><div>${esc(data.message)}</div><div class="small">正在运行的任务 ID：${esc((data.running_job_ids||[]).join(', ') || '无')}</div></div>`; }
+    async function loadSchedulerStatus(){
+      const data=await (await api('/scheduler-status')).json();
+      runningJobIds.clear();
+      (data.running_job_ids||[]).forEach(id=>runningJobIds.add(Number(id)));
+      const details=(data.running_jobs||[]).map(j=>`${j.job_id}${j.law_firm_name?' / '+j.law_firm_name:''}${j.job_deleted?'（任务已删除）':''}`).join('；') || '无';
+      document.getElementById('scheduler_status').innerHTML = `<div class="${data.enabled?'notice':'notice warn'}"><strong>${data.enabled?'自动调度已启用':'自动调度未启用'}</strong><div>${esc(data.message)}</div><div class="small">正在运行的任务：${esc(details)}</div></div>`;
+    }
     function platformStatusTable(platforms){ return table(['平台','登录方式','登录材料','最近状态','更新时间','操作'], platforms.map(p=>[esc(p.platform_label), esc(p.login_type_label||p.login_type||'浏览器 Profile / 扫码'), loginMaterialCell(p), platformStatusCell(p), esc((p.profile_last_modified||'').replace('T',' ').slice(0,19)), `<button class="secondary" onclick="openPlatformLoginBrowser('${esc(p.platform)}')">打开登录窗口</button><div class="small">用于 Profile 登录或人工刷新登录态。</div>`])); }
     function loginMaterialCell(p){ const profile=p.profile_exists ? '<span class="status">Profile 已发现</span>' : '<span class="status">Profile 未发现</span>'; const cookie=p.has_cookies ? '<span class="status">Cookie 已保存</span>' : '<span class="status">Cookie 未保存</span>'; return `${profile}<div style="height:4px"></div>${cookie}`; }
     function platformStatusCell(p){ if(p.login_window_open) return `<span class="status">登录窗口未关闭</span><div class="small">请关闭窗口后刷新状态，再运行采集。</div>`; if(p.login_type==='cookie' && !p.has_cookies) return '<span class="status">Cookie 待填写</span><div class="small">保存 Cookie 后才能用 Cookie 模式采集。</div>'; if(p.needs_login) return `<span class="status">需重新登录</span><div class="small">${esc(p.last_error||'请先准备 Profile 或 Cookie')}</div>`; return '<span class="status">可尝试运行</span>'; }
@@ -307,13 +325,23 @@
       toast('任务已保存'); resetJobForm(); loadJobs();
     }
     async function loadJobs(){
+      await loadSchedulerStatus();
       const data = await (await api('/jobs')).json();
       jobCache.clear();
       (data.jobs || []).forEach(j => jobCache.set(Number(j.id), j));
-      document.getElementById('jobs_table').innerHTML = table(['ID','律所','平台','关键词','频率','上次运行','下次运行','状态','操作'], data.jobs.map(j=>[
-        j.id, esc(j.law_firm_name), j.platforms.join(','), esc(j.keywords.join(' / ')), esc(formatFrequency(j)), esc(formatTime(j.last_run_at)), esc(j.enabled ? formatTime(j.next_run_at) : '已暂停'), j.enabled?'启用':'暂停',
-        `<button class="secondary" onclick="editJob(${Number(j.id)})">编辑</button> <button class="secondary" onclick="runJob(${Number(j.id)})">立即运行</button> <button class="secondary" onclick="toggleJob(${Number(j.id)}, ${j.enabled})">${j.enabled?'暂停':'恢复'}</button> <button class="danger" onclick="deleteJob(${Number(j.id)})">删除</button>`
-      ]));
+      document.getElementById('jobs_table').innerHTML = table(['任务ID','律所','平台','关键词','频率','上次运行','下次运行','状态','操作'], data.jobs.map(j=>jobRow(j)));
+    }
+    function jobRow(j){
+      const id=Number(j.id);
+      const running=runningJobIds.has(id);
+      const status=running ? '<span class="status">运行中</span>' : (j.enabled?'启用':'暂停');
+      const actions=[
+        `<button class="secondary" onclick="editJob(${id})">编辑</button>`,
+        running ? `<button class="danger" onclick="stopJob(${id})">停止</button>` : `<button class="secondary" onclick="runJob(${id})">立即运行</button>`,
+        `<button class="secondary" onclick="toggleJob(${id}, ${j.enabled})">${j.enabled?'暂停':'恢复'}</button>`,
+        `<button class="danger" onclick="deleteJob(${id})">删除</button>`
+      ].join(' ');
+      return [id, esc(j.law_firm_name), esc(formatPlatforms(j.platforms)), esc(j.keywords.join(' / ')), esc(formatFrequency(j)), esc(formatTime(j.last_run_at)), esc(j.enabled ? formatTime(j.next_run_at) : '已暂停'), status, actions];
     }
     async function refreshJobSchedule(){ const res=await api('/jobs/refresh-schedule',{method:'POST'}); if(!res.ok){toast(await err(res));return;} toast('调度时间已刷新'); loadJobs(); }
     function editJob(id){
@@ -340,7 +368,19 @@
       startRunPolling();
     }
     async function toggleJob(id, enabled){ const res = await api('/jobs/'+id+(enabled?'/pause':'/resume'),{method:'POST'}); toast(res.ok ? (enabled?'任务已暂停':'任务已恢复') : await err(res)); loadJobs(); }
-    async function deleteJob(id){ if(!confirm('确认删除任务？')) return; await api('/jobs/'+id,{method:'DELETE'}); loadJobs(); }
+    async function stopJob(id){
+      if(!confirm('确认停止这个正在运行的任务？')) return;
+      const res=await api('/jobs/'+id+'/stop',{method:'POST'});
+      toast(res.ok?'已发送停止指令，运行记录会更新为已停止':await err(res));
+      await Promise.all([loadSchedulerStatus(), loadRuns(), loadJobs()]);
+    }
+    async function deleteJob(id){
+      if(runningJobIds.has(Number(id))){ toast('任务正在运行，请先停止后再删除'); return; }
+      if(!confirm('确认删除任务？历史运行记录会保留。')) return;
+      const res=await api('/jobs/'+id,{method:'DELETE'});
+      toast(res.ok?'任务已删除':await err(res));
+      await Promise.all([loadJobs(), loadRuns()]);
+    }
     function resetJobForm(){ ['job_id','law_firm_name','aliases','exclude_words','keywords','recipients','custom_start','custom_end','cron_expr'].forEach(id=>set(id,'')); set('time_window_type','recent_1d'); set('frequency','daily'); set('email_time','09:00'); document.querySelectorAll('input[name=platform]').forEach(x=>x.checked=x.value==='dy'); document.getElementById('enabled').checked=true; document.getElementById('enable_comments').checked=true; }
     function fillAcceptanceJobTemplate(){
       set('job_id',''); set('law_firm_name','请改成目标律所名称'); set('aliases','律所简称\n律师事务所简称'); set('exclude_words','招聘\n无关同名\n广告合作');
@@ -362,11 +402,39 @@
     async function testEmail(){ const payload={smtp_host:val('smtp_host'),smtp_port:Number(val('smtp_port')||465),encryption:val('encryption'),sender:val('sender'),username:val('smtp_username'),password:val('smtp_password'),subject_template:val('subject_template'),default_recipients:lines('default_recipients')}; const res=await api('/email-config/test',{method:'POST',body:JSON.stringify(payload)}); toast(res.ok?'测试邮件已发送并记录通过':await err(res)); set('smtp_password',''); await loadEmail(); await loadReadiness(); }
 
     async function loadRuns(){
-      const data=await (await api('/runs')).json();
+      const limit=val('run_limit') || '100';
+      const data=await (await api('/runs?limit='+encodeURIComponent(limit))).json();
       const running=data.running_job_ids||[];
-      document.getElementById('running_summary').innerHTML = running.length ? `<div class="notice">正在运行的任务 ID：${esc(running.join(', '))}</div>` : '';
-      document.getElementById('runs_table').innerHTML=table(['ID','律所','状态','平台','关键词','耗时','采集/新增/排除','负面/高风险','失败原因','日志'], data.runs.map(r=>{ const s=r.summary||{}; return [r.id,esc(r.law_firm_name||''),`<span class="status">${esc(r.status)}</span>`,esc(formatPlatforms(s.platforms)),esc((s.keywords||[]).join(' / ')),esc(formatDuration(s.duration_seconds)),esc(`${s.raw_contents||0} / ${s.new_contents||0} / ${s.excluded_contents||0}`),esc(`${s.negative_count||0} / ${s.high_count||0}`),formatFailures(s),`<button class="secondary" onclick="loadRunLogs(${r.id})">查看</button>`]; }));
+      runningJobIds.clear();
+      running.forEach(id=>runningJobIds.add(Number(id)));
+      document.getElementById('running_summary').innerHTML = running.length ? `<div class="notice">正在运行的任务 ID：${esc(running.join(', '))}<div class="small">运行 ID 是单次执行记录，任务 ID 是任务管理里的配置编号。</div></div>` : '';
+      document.getElementById('runs_table').innerHTML=table(['运行ID','任务ID','任务/律所','状态','平台','关键词','耗时','采集/新增/排除','负面/高风险','失败原因','操作'], data.runs.map(runRow));
       return running.length > 0;
+    }
+    function runRow(r){
+      const s=r.summary||{};
+      const jobLabel=`${r.law_firm_name||r.display_law_firm_name||''}${r.job_deleted?'（任务已删除）':''}`;
+      const actions=[`<button class="secondary" onclick="loadRunLogs(${Number(r.id)})">查看日志</button>`];
+      if(r.status==='running') actions.push(`<button class="danger" onclick="stopRun(${Number(r.id)})">停止</button>`);
+      return [
+        r.id,
+        r.job_id || '-',
+        esc(jobLabel),
+        `<span class="status">${esc(formatRunStatus(r.status))}</span>`,
+        esc(formatPlatforms(s.platforms)),
+        esc((s.keywords||[]).join(' / ')),
+        esc(formatDuration(s.duration_seconds)),
+        esc(`${s.raw_contents||0} / ${s.new_contents||0} / ${s.excluded_contents||0}`),
+        esc(`${s.negative_count||0} / ${s.high_count||0}`),
+        formatFailures(s),
+        actions.join(' ')
+      ];
+    }
+    async function stopRun(id){
+      if(!confirm('确认停止这条运行记录对应的任务？')) return;
+      const res=await api('/runs/'+id+'/stop',{method:'POST'});
+      toast(res.ok?'已发送停止指令':await err(res));
+      await Promise.all([loadSchedulerStatus(), loadRuns(), loadJobs()]);
     }
     async function loadRunLogs(id){ const data=await (await api('/runs/'+id+'/logs')).json(); const text=(data.logs||[]).map(x=>`# ${x.path}\n${x.content}`).join('\n\n'); document.getElementById('run_logs').textContent = text || '暂无日志。'; }
     async function loadReports(){
@@ -410,7 +478,8 @@
     function formatTime(value){ if(!value) return '-'; const d=new Date(value); if(!Number.isNaN(d.getTime())) return d.toLocaleString('zh-CN',{hour12:false}); return String(value).replace('T',' ').replace(/\+.*/, '').slice(0,19); }
     function formatTestStatus(config, label){ const status=config.last_test_status||'untested'; if(status==='success') return `${label} 最近测试通过：${(config.last_test_at||'').replace('T',' ').slice(0,19)}`; if(status==='failed') return `${label} 最近测试失败：${config.last_test_error||'请检查配置'}`; return `${label} 尚未测试，配置更新后需要重新测试。`; }
     function formatDuration(seconds){ const n=Number(seconds||0); if(n<60) return `${n}s`; return `${Math.floor(n/60)}m ${n%60}s`; }
-    function formatFailures(summary){ const results=summary.platform_results||{}; const failed=summary.failed_platforms||[]; if(!failed.length) return ''; return failed.map(p=>`<div><strong>${esc(formatPlatforms([p]))}</strong>：${esc((results[p]||{}).error||'失败')}</div>`).join(''); }
+    function formatRunStatus(status){ const labels={running:'运行中',success:'成功',partial_failed:'部分失败',failed:'失败',cancelled:'已停止'}; return labels[status]||status||''; }
+    function formatFailures(summary){ const results=summary.platform_results||{}; const failed=summary.failed_platforms||[]; const cancelled=summary.cancelled_platforms||[]; const rows=[]; failed.forEach(p=>rows.push(`<div><strong>${esc(formatPlatforms([p]))}</strong>：${esc((results[p]||{}).error||'失败')}</div>`)); cancelled.forEach(p=>rows.push(`<div><strong>${esc(formatPlatforms([p]))}</strong>：已停止</div>`)); if(summary.cancel_reason) rows.push(`<div>${esc(summary.cancel_reason)}</div>`); return rows.join(''); }
     function formatLeadStatus(item){ if(item.eval_status==='pending_review') return '待人工复核'; if(item.is_related && item.is_negative) return item.risk_level==='high' ? '高风险' : '疑似负面'; return '无风险'; }
     function leadLinks(item){ const links=[]; if(item.content_url) links.push(`<a href="${esc(item.content_url)}" target="_blank">内容</a>`); if(item.cover_url) links.push(`<a href="${esc(item.cover_url)}" target="_blank">封面</a>`); return links.join(' '); }
     function val(id){ return document.getElementById(id).value; } function set(id,v){ document.getElementById(id).value = v ?? ''; }
