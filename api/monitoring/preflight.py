@@ -63,23 +63,29 @@ def _platform_profile_check(job: dict[str, Any]) -> dict[str, Any]:
     selected = set(job.get("platforms") or [])
     statuses = {item["platform"]: item for item in list_platform_status()}
     missing = []
+    missing_cookie = []
     needs_login = []
     open_windows = []
     for platform in selected:
         status = statuses.get(platform)
-        if not status or not status.get("profile_exists"):
+        if not status:
             missing.append(platform)
+            continue
+        if status.get("login_type") == "cookie" and not status.get("has_cookies"):
+            missing_cookie.append(platform)
         elif status.get("login_window_open"):
             open_windows.append(platform)
         elif status.get("needs_login"):
             needs_login.append(platform)
     if missing:
-        return _check("platform_profiles", "平台登录态", "warning", "缺少 Profile：" + _format_platforms(missing))
+        return _check("platform_profiles", "平台登录态", "warning", "缺少平台状态：" + _format_platforms(missing))
+    if missing_cookie:
+        return _check("platform_profiles", "平台登录态", "warning", "Cookie 登录未填写 Cookie：" + _format_platforms(missing_cookie))
     if open_windows:
         return _check("platform_profiles", "平台登录态", "blocking", "请先关闭登录窗口再运行采集：" + _format_platforms(open_windows))
     if needs_login:
         return _check("platform_profiles", "平台登录态", "warning", "可能需要重新登录：" + _format_platforms(needs_login))
-    return _check("platform_profiles", "平台登录态", "ok", "已发现所选平台 Profile")
+    return _check("platform_profiles", "平台登录态", "ok", "所选平台登录配置可用")
 
 
 def _ai_config_check() -> dict[str, Any]:

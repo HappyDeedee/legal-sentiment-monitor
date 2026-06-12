@@ -86,10 +86,11 @@ docs/deployment_runbook.md
 
 账号登录页支持：
 
-- 分平台查看抖音、快手、小红书 Profile 和登录态。
+- 分平台查看抖音、快手、小红书登录方式、Profile、Cookie 和登录态。
+- 分平台配置 MediaCrawler 登录方式：浏览器 Profile / 扫码、手机号、Cookie。
 - 一键打开对应平台登录窗口。
 - 登录完成后关闭窗口，再刷新状态。
-- 定时任务复用已保存 Profile，不在任务运行时反复选择二维码、手机号或 Cookie 登录。
+- 登录方式是平台账号配置，不放进每个监控任务；任务运行时自动按平台配置调用 MediaCrawler。
 
 任务管理页支持配置：
 
@@ -147,7 +148,13 @@ MONITOR_JOB_LOCK_TTL_SECONDS=21600
 
 ## 平台登录态
 
-服务器运行前，需要分别准备三个平台的浏览器 Profile。默认路径：
+服务器运行前，需要分别准备三个平台的登录态。MVP 支持 MediaCrawler 当前实际可用的登录方式，并把登录方式放在“账号登录”页做平台级配置：
+
+- 抖音：浏览器 Profile / 扫码、手机号、Cookie。
+- 快手：浏览器 Profile / 扫码、Cookie；当前 MediaCrawler 快手手机号分支未实现，因此后台不开放。
+- 小红书：浏览器 Profile / 扫码、手机号、Cookie。
+
+默认推荐使用浏览器 Profile / 扫码，适合定时任务长期复用。Profile 默认路径：
 
 ```text
 browser_data/cdp_dy_user_data_dir
@@ -157,7 +164,7 @@ browser_data/cdp_xhs_user_data_dir
 
 推荐在后台“账号登录”页分别点击“打开登录窗口”，完成扫码、手机号或平台安全验证后关闭窗口，再刷新状态。后续定时采集会复用对应平台 Profile。
 
-MediaCrawler 底层仍支持 `qrcode`、`phone`、`cookie` 等登录模式；第一版后台把这些能力收敛为“Profile 登录态管理”，运营人员只需要维护每个平台的登录窗口。CLI 登录参数主要作为排障备用。具体命令和排障说明见：
+如果选择 Cookie 登录，需要在“账号登录”页粘贴并保存对应平台 Cookie；Cookie 会加密保存，页面只显示是否已保存。CLI 登录参数仍可作为排障备用。具体命令和排障说明见：
 
 ```text
 docs/legal_sentiment_monitor.md

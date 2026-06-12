@@ -14,10 +14,12 @@ from ..monitoring.database import (
     get_ai_config,
     get_email_config,
     get_job,
+    get_platform_login_config,
     get_report,
     init_db,
     list_jobs,
     list_leads,
+    list_platform_login_configs,
     list_reports,
     list_runs,
     mark_ai_test_result,
@@ -25,6 +27,7 @@ from ..monitoring.database import (
     save_ai_config,
     save_email_config,
     save_job,
+    save_platform_login_config,
     set_job_enabled,
     set_job_schedule_state,
 )
@@ -81,6 +84,30 @@ async def platform_login_browser(platform: str):
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=redact_sensitive(f"{type(exc).__name__}: {exc}"))
+
+
+@router.get("/platform-login-configs")
+async def platform_login_configs():
+    init_db()
+    return {"configs": list_platform_login_configs(masked=True)}
+
+
+@router.get("/platform-login-configs/{platform}")
+async def platform_login_config(platform: str):
+    init_db()
+    try:
+        return {"config": get_platform_login_config(platform, masked=True)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.put("/platform-login-configs/{platform}")
+async def update_platform_login_config(platform: str, payload: dict[str, Any]):
+    init_db()
+    try:
+        return {"config": save_platform_login_config(platform, payload)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=redact_sensitive(str(exc)))
 
 
 @router.get("/readiness")

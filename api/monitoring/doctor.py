@@ -20,6 +20,7 @@ REQUIRED_TABLES = {
     "job_recipients",
     "ai_configs",
     "email_configs",
+    "platform_login_configs",
     "crawl_runs",
     "raw_contents",
     "raw_comments",
@@ -106,15 +107,26 @@ def _check_database() -> dict[str, Any]:
 
 def _check_browser_profiles() -> dict[str, Any]:
     platforms = list_platform_status()
-    missing = [p["platform_label"] for p in platforms if not p["profile_exists"]]
+    missing = [
+        p["platform_label"]
+        for p in platforms
+        if p.get("login_type") != "cookie" and not p["profile_exists"]
+    ]
+    missing_cookies = [
+        p["platform_label"]
+        for p in platforms
+        if p.get("login_type") == "cookie" and not p.get("has_cookies")
+    ]
     needs_login = [p["platform_label"] for p in platforms if p["needs_login"]]
-    ok = not missing and not needs_login
+    ok = all(p.get("login_ready") for p in platforms)
     if missing:
         message = "缺少 Profile：" + "、".join(missing)
+    elif missing_cookies:
+        message = "Cookie 登录未填写 Cookie：" + "、".join(missing_cookies)
     elif needs_login:
         message = "可能需要重新登录：" + "、".join(needs_login)
     else:
-        message = "三平台 Profile 已发现"
+        message = "三平台登录配置可用"
     return _check("browser_profiles", "浏览器登录态", ok, message, {"platforms": platforms})
 
 

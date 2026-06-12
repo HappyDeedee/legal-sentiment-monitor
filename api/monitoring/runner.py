@@ -10,7 +10,7 @@ from pathlib import Path
 from typing import Any
 
 from .ai import evaluate_content
-from .database import create_run, finish_run, get_conn, get_job, utc_now
+from .database import create_run, finish_run, get_conn, get_job, get_platform_login_config, utc_now
 from .mailer import send_report
 from .normalizer import (
     collect_platform_outputs,
@@ -292,6 +292,8 @@ def _build_crawler_cmd(job: dict[str, Any], platform: str, out_dir: Path) -> lis
     connect_existing = os.environ.get("MONITOR_CDP_CONNECT_EXISTING", "false").lower() in {"1", "true", "yes"}
     debug_port = os.environ.get(f"MONITOR_CDP_DEBUG_PORT_{platform.upper()}") or os.environ.get("MONITOR_CDP_DEBUG_PORT")
     debug_port = debug_port or str(PLATFORM_DEBUG_PORTS.get(platform, 9223))
+    login_config = get_platform_login_config(platform, masked=False)
+    login_type = login_config.get("login_type") or "qrcode"
     cmd = [
         "uv",
         "run",
@@ -300,7 +302,7 @@ def _build_crawler_cmd(job: dict[str, Any], platform: str, out_dir: Path) -> lis
         "--platform",
         platform,
         "--lt",
-        "qrcode",
+        login_type,
         "--type",
         "search",
         "--save_data_option",
@@ -318,6 +320,11 @@ def _build_crawler_cmd(job: dict[str, Any], platform: str, out_dir: Path) -> lis
         "--max_concurrency_num",
         "1",
     ]
+    if login_type == "cookie":
+        cookies = login_config.get("cookies") or ""
+        if not cookies:
+            raise ValueError(f"{platform} Cookie 登录未配置 Cookie")
+        cmd.extend(["--cookies", cookies])
     if platform == "dy":
         cmd.extend(["--publish_time_type", str(douyin_publish_time_type(job))])
     if platform == "xhs":

@@ -19,7 +19,7 @@ def get_readiness_status() -> dict[str, Any]:
     real_platforms = _successful_real_platforms(real_reports)
     empty_real_platforms = _empty_real_platforms(real_reports) - real_platforms
     checks = [
-        _check("platform_profiles", "三平台浏览器 Profile", _platform_profiles_ready(platforms), _platform_message(platforms)),
+        _check("platform_profiles", "三平台登录配置", _platform_profiles_ready(platforms), _platform_message(platforms)),
         _check("ai_config", "AI 配置", _ai_ready(ai_config), _ai_message(ai_config)),
         _check("email_config", "邮件配置", _email_ready(email_config), _email_message(email_config)),
         _check("selftest_report", "自测报告链路", bool(selftest_reports), _selftest_message(selftest_reports)),
@@ -50,11 +50,22 @@ def _next_actions(
 ) -> list[str]:
     failed = {check["key"] for check in checks if not check["ok"]}
     actions: list[str] = []
-    missing_profiles = [p["platform_label"] for p in platforms if not p.get("profile_exists")]
+    missing_profiles = [
+        p["platform_label"]
+        for p in platforms
+        if p.get("login_type") != "cookie" and not p.get("profile_exists")
+    ]
+    missing_cookies = [
+        p["platform_label"]
+        for p in platforms
+        if p.get("login_type") == "cookie" and not p.get("has_cookies")
+    ]
     open_windows = [p["platform_label"] for p in platforms if p.get("login_window_open")]
     needs_login = [p["platform_label"] for p in platforms if p.get("needs_login")]
     if missing_profiles:
         actions.append("进入账号登录页，分别打开并登录：" + "、".join(missing_profiles))
+    if missing_cookies:
+        actions.append("进入账号登录页，为 Cookie 登录平台补充 Cookie：" + "、".join(missing_cookies))
     if open_windows:
         actions.append("关闭这些平台的登录窗口后再运行采集：" + "、".join(open_windows))
     elif needs_login:
@@ -77,20 +88,34 @@ def _next_actions(
 
 
 def _platform_message(platforms: list[dict[str, Any]]) -> str:
-    missing = [p["platform_label"] for p in platforms if not p["profile_exists"]]
+    missing = [
+        p["platform_label"]
+        for p in platforms
+        if p.get("login_type") != "cookie" and not p["profile_exists"]
+    ]
+    missing_cookies = [
+        p["platform_label"]
+        for p in platforms
+        if p.get("login_type") == "cookie" and not p.get("has_cookies")
+    ]
     open_windows = [p["platform_label"] for p in platforms if p.get("login_window_open")]
     needs_login = [p["platform_label"] for p in platforms if p["needs_login"]]
     if missing:
         return "缺少 Profile：" + "、".join(missing)
+    if missing_cookies:
+        return "Cookie 登录未填写 Cookie：" + "、".join(missing_cookies)
     if open_windows:
         return "登录窗口未关闭：" + "、".join(open_windows)
     if needs_login:
         return "可能需要重新登录：" + "、".join(needs_login)
-    return "已发现抖音、快手、小红书 Profile"
+    return "抖音、快手、小红书登录配置可用"
 
 
 def _platform_profiles_ready(platforms: list[dict[str, Any]]) -> bool:
-    return bool(platforms) and all(p.get("profile_exists") and not p.get("needs_login") and not p.get("login_window_open") for p in platforms)
+    return bool(platforms) and all(
+        p.get("login_ready") if "login_ready" in p else p.get("profile_exists") and not p.get("needs_login") and not p.get("login_window_open")
+        for p in platforms
+    )
 
 
 def _ai_ready(config: dict[str, Any]) -> bool:

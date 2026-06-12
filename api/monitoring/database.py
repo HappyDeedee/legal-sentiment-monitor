@@ -13,6 +13,17 @@ from .security import MONITOR_DATA_DIR, decrypt_secret, encrypt_secret, mask_sec
 DB_PATH = MONITOR_DATA_DIR / "monitor.sqlite"
 DEFAULT_EMAIL_SUBJECT_TEMPLATE = "【律所舆情日报】{law_firm_name} - {date}"
 JOB_TEMPLATE_PLACEHOLDERS = ("请改成", "目标律所", "律所简称", "律师事务所简称")
+SUPPORTED_MONITOR_PLATFORMS = ("dy", "ks", "xhs")
+PLATFORM_LOGIN_TYPES = {
+    "dy": ("qrcode", "phone", "cookie"),
+    "ks": ("qrcode", "cookie"),
+    "xhs": ("qrcode", "phone", "cookie"),
+}
+LOGIN_TYPE_LABELS = {
+    "qrcode": "浏览器 Profile / 扫码",
+    "phone": "手机号",
+    "cookie": "Cookie",
+}
 
 
 def utc_now() -> str:
@@ -113,6 +124,13 @@ def init_db() -> None:
                 updated_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS platform_login_configs (
+                platform TEXT PRIMARY KEY,
+                login_type TEXT NOT NULL DEFAULT 'qrcode',
+                cookies_encrypted TEXT NOT NULL DEFAULT '',
+                updated_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS crawl_runs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 job_id INTEGER REFERENCES monitor_jobs(id) ON DELETE SET NULL,
@@ -204,6 +222,13 @@ def init_db() -> None:
         conn.execute(
             "INSERT OR IGNORE INTO email_configs (id, updated_at) VALUES (1, ?)",
             (now,),
+        )
+        conn.executemany(
+            """
+            INSERT OR IGNORE INTO platform_login_configs (platform, login_type, updated_at)
+            VALUES (?, 'qrcode', ?)
+            """,
+            [(platform, now) for platform in SUPPORTED_MONITOR_PLATFORMS],
         )
 
 
@@ -711,6 +736,101 @@ def mark_email_test_result(success: bool, error: str | None = None) -> dict[str,
             ("success" if success else "failed", utc_now(), "" if success else _trim_error(error)),
         )
     return get_email_config(masked=True)
+
+
+def list_platform_login_configs(masked: bool = True) -> list[dict[str, Any]]:
+    try:
+        with get_conn() as conn:
+            rows = conn.execute(
+                "SELECT * FROM platform_login_configs ORDER BY CASE platform WHEN 'dy' THEN 1 WHEN 'ks' THEN 2 WHEN 'xhs' THEN 3 ELSE 99 END"
+            ).fetchall()
+    except sqlite3.OperationalError:
+        return [_default_platform_login_config(platform, masked) for platform in SUPPORTED_MONITOR_PLATFORMS]
+    configs = [_row_to_platform_login_config(dict(row), masked) for row in rows]
+    existing = {item["platform"] for item in configs}
+    for platform in SUPPORTED_MONITOR_PLATFORMS:
+        if platform not in existing:
+            configs.append(_default_platform_login_config(platform, masked))
+    return sorted(configs, key=lambda item: SUPPORTED_MONITOR_PLATFORMS.index(item["platform"]))
+
+
+def get_platform_login_config(platform: str, masked: bool = True) -> dict[str, Any]:
+    _validate_platform(platform)
+    try:
+        with get_conn() as conn:
+            row = conn.execute("SELECT * FROM platform_login_configs WHERE platform=?", (platform,)).fetchone()
+    except sqlite3.OperationalError:
+        return _default_platform_login_config(platform, masked)
+    if not row:
+        return _default_platform_login_config(platform, masked)
+    return _row_to_platform_login_config(dict(row), masked)
+
+
+def save_platform_login_config(platform: str, payload: dict[str, Any]) -> dict[str, Any]:
+    _validate_platform(platform)
+    current = get_platform_login_config(platform, masked=False)
+    login_type = (payload.get("login_type") or current.get("login_type") or "qrcode").strip()
+    _validate_platform_login_type(platform, login_type)
+    if payload.get("clear_cookies"):
+        cookies = ""
+    elif payload.get("cookies"):
+        cookies = str(payload.get("cookies") or "").strip()
+    else:
+        cookies = current.get("cookies") or ""
+    if login_type == "cookie" and not cookies:
+        raise ValueError("Cookie 登录需要先填写 Cookie")
+    with get_conn() as conn:
+        conn.execute(
+            """
+            INSERT INTO platform_login_configs (platform, login_type, cookies_encrypted, updated_at)
+            VALUES (?, ?, ?, ?)
+            ON CONFLICT(platform) DO UPDATE SET
+                login_type=excluded.login_type,
+                cookies_encrypted=excluded.cookies_encrypted,
+                updated_at=excluded.updated_at
+            """,
+            (platform, login_type, encrypt_secret(cookies), utc_now()),
+        )
+    return get_platform_login_config(platform, masked=True)
+
+
+def _row_to_platform_login_config(row: dict[str, Any], masked: bool) -> dict[str, Any]:
+    platform = row.get("platform") or ""
+    encrypted = row.get("cookies_encrypted") or ""
+    cookies = mask_secret(encrypted) if masked else decrypt_secret(encrypted)
+    raw_cookies = decrypt_secret(encrypted)
+    login_type = row.get("login_type") or "qrcode"
+    return {
+        "platform": platform,
+        "login_type": login_type,
+        "login_type_label": LOGIN_TYPE_LABELS.get(login_type, login_type),
+        "supported_login_types": list(PLATFORM_LOGIN_TYPES.get(platform, ("qrcode", "cookie"))),
+        "supported_login_type_labels": {
+            item: LOGIN_TYPE_LABELS.get(item, item) for item in PLATFORM_LOGIN_TYPES.get(platform, ("qrcode", "cookie"))
+        },
+        "cookies": cookies,
+        "has_cookies": bool(raw_cookies),
+        "updated_at": row.get("updated_at"),
+    }
+
+
+def _default_platform_login_config(platform: str, masked: bool = True) -> dict[str, Any]:
+    return _row_to_platform_login_config(
+        {"platform": platform, "login_type": "qrcode", "cookies_encrypted": "", "updated_at": None},
+        masked,
+    )
+
+
+def _validate_platform(platform: str) -> None:
+    if platform not in SUPPORTED_MONITOR_PLATFORMS:
+        raise ValueError("unsupported platform")
+
+
+def _validate_platform_login_type(platform: str, login_type: str) -> None:
+    supported = PLATFORM_LOGIN_TYPES.get(platform, ())
+    if login_type not in supported:
+        labels = " / ".join(LOGIN_TYPE_LABELS.get(item, item) for item in supported)
+        raise ValueError(f"{platform} does not support login_type={login_type}; supported: {labels}")
 
 
 def validate_temperature(value: Any) -> float:

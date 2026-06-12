@@ -139,20 +139,25 @@
         <div class="panel">
           <h2>账号登录</h2>
           <div class="notice">
-            后台采用浏览器 Profile 登录：每个平台先打开一次登录窗口完成扫码或手机号验证，关闭窗口后，定时采集会复用该平台的登录态。任务运行时不再反复选择 qrcode、phone 或 cookie。
+            登录方式按平台统一配置，任务只选择平台和关键词。推荐使用“浏览器 Profile / 扫码”，服务器无界面或排障时可切换到 Cookie；手机号登录依赖 MediaCrawler 当前平台实现，适合本地人工处理。
           </div>
           <button class="secondary" onclick="loadPlatformStatus()">刷新登录状态</button>
           <div id="account_status_table"></div>
         </div>
         <div class="panel">
+          <h3>平台登录方式配置</h3>
+          <div id="platform_login_config_table"></div>
+        </div>
+        <div class="panel">
           <h3>操作顺序</h3>
           <ol>
+            <li>先为每个平台选择登录方式；不确定时保留默认的“浏览器 Profile / 扫码”。</li>
             <li>分别点击抖音、快手、小红书的“打开登录窗口”。</li>
             <li>在弹出的浏览器里完成扫码、手机号验证或平台要求的安全验证。</li>
             <li>确认网页已经是登录状态后，关闭这个登录窗口。</li>
             <li>回到后台点击“刷新登录状态”，再去任务管理里立即运行。</li>
           </ol>
-          <div class="small">说明：如果平台提示登录失效，重新打开对应平台登录窗口即可。Cookie、二维码、手机号是 MediaCrawler 底层登录方式，第一版后台统一用 Profile 保存登录态。</div>
+          <div class="small">说明：Cookie 会加密保存，页面只显示是否已保存；快手当前 MediaCrawler 代码未实现手机号登录，因此后台不开放快手手机号模式。</div>
         </div>
       </section>
 
@@ -246,13 +251,14 @@
   <script>
     const api = (path, options={}) => fetch('/api/monitor' + path, {headers:{'Content-Type':'application/json'}, ...options});
     const jobCache = new Map();
+    let platformLoginConfigCache = [];
     let runPollTimer = null;
     let defaultAIPrompt = '';
     const lines = id => document.getElementById(id).value.split(/\n|,/).map(s=>s.trim()).filter(Boolean);
     const toast = msg => { const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; setTimeout(()=>el.style.display='none', 3500); };
     document.querySelectorAll('nav button').forEach(btn => btn.onclick = () => { document.querySelectorAll('nav button, section').forEach(x=>x.classList.remove('active')); btn.classList.add('active'); document.getElementById(btn.dataset.tab).classList.add('active'); if(btn.dataset.tab==='runs') loadRuns(); if(btn.dataset.tab==='reports') loadReports(); if(btn.dataset.tab==='doctor') loadDoctor(); });
 
-    async function loadAll(){ await Promise.all([loadReadiness(), loadSchedulerStatus(), loadPlatformStatus(), loadJobs(), loadAI(), loadEmail(), loadRuns(), loadReports(), loadDoctor()]); }
+    async function loadAll(){ await Promise.all([loadReadiness(), loadSchedulerStatus(), loadPlatformStatus(), loadPlatformLoginConfigs(), loadJobs(), loadAI(), loadEmail(), loadRuns(), loadReports(), loadDoctor()]); }
     async function loadReadiness(){
       const data=await (await api('/readiness')).json();
       const pending=(data.checks||[]).filter(c=>!c.ok);
@@ -272,9 +278,16 @@
       document.getElementById('readiness_table').innerHTML=table(['检查项','状态','说明'], rows);
     }
     async function loadPlatformStatus(){ const data=await (await api('/platform-status')).json(); const html=platformStatusTable(data.platforms); document.getElementById('platform_status_table').innerHTML=html; const accountTable=document.getElementById('account_status_table'); if(accountTable) accountTable.innerHTML=html; }
+    async function loadPlatformLoginConfigs(){ const data=await (await api('/platform-login-configs')).json(); platformLoginConfigCache=data.configs||[]; document.getElementById('platform_login_config_table').innerHTML=platformLoginConfigTable(platformLoginConfigCache); }
     async function loadSchedulerStatus(){ const data=await (await api('/scheduler-status')).json(); document.getElementById('scheduler_status').innerHTML = `<div class="${data.enabled?'notice':'notice warn'}"><strong>${data.enabled?'自动调度已启用':'自动调度未启用'}</strong><div>${esc(data.message)}</div><div class="small">正在运行的任务 ID：${esc((data.running_job_ids||[]).join(', ') || '无')}</div></div>`; }
-    function platformStatusTable(platforms){ return table(['平台','Profile','最近状态','更新时间','操作'], platforms.map(p=>[esc(p.platform_label), p.profile_exists ? '<span class="status">已发现</span>' : '<span class="status">未发现</span>', platformStatusCell(p), esc((p.profile_last_modified||'').replace('T',' ').slice(0,19)), `<button class="secondary" onclick="openPlatformLoginBrowser('${esc(p.platform)}')">打开登录窗口</button><div class="small">登录完成后关闭窗口，再刷新状态。</div>`])); }
-    function platformStatusCell(p){ if(p.login_window_open) return `<span class="status">登录窗口未关闭</span><div class="small">请关闭窗口后刷新状态，再运行采集。</div>`; if(p.needs_login) return `<span class="status">需重新登录</span><div class="small">${esc(p.last_error||'请先准备浏览器 profile')}</div>`; return '<span class="status">可尝试运行</span>'; }
+    function platformStatusTable(platforms){ return table(['平台','登录方式','登录材料','最近状态','更新时间','操作'], platforms.map(p=>[esc(p.platform_label), esc(p.login_type_label||p.login_type||'浏览器 Profile / 扫码'), loginMaterialCell(p), platformStatusCell(p), esc((p.profile_last_modified||'').replace('T',' ').slice(0,19)), `<button class="secondary" onclick="openPlatformLoginBrowser('${esc(p.platform)}')">打开登录窗口</button><div class="small">用于 Profile 登录或人工刷新登录态。</div>`])); }
+    function loginMaterialCell(p){ const profile=p.profile_exists ? '<span class="status">Profile 已发现</span>' : '<span class="status">Profile 未发现</span>'; const cookie=p.has_cookies ? '<span class="status">Cookie 已保存</span>' : '<span class="status">Cookie 未保存</span>'; return `${profile}<div style="height:4px"></div>${cookie}`; }
+    function platformStatusCell(p){ if(p.login_window_open) return `<span class="status">登录窗口未关闭</span><div class="small">请关闭窗口后刷新状态，再运行采集。</div>`; if(p.login_type==='cookie' && !p.has_cookies) return '<span class="status">Cookie 待填写</span><div class="small">保存 Cookie 后才能用 Cookie 模式采集。</div>'; if(p.needs_login) return `<span class="status">需重新登录</span><div class="small">${esc(p.last_error||'请先准备 Profile 或 Cookie')}</div>`; return '<span class="status">可尝试运行</span>'; }
+    function platformLoginConfigTable(configs){ return table(['平台','登录方式','Cookie','操作'], configs.map(c=>[esc(formatPlatforms([c.platform])), loginTypeSelect(c), cookieInput(c), `<button class="secondary" onclick="savePlatformLoginConfig('${esc(c.platform)}')">保存登录方式</button><div class="small">${esc(formatLoginConfigHint(c))}</div>`])); }
+    function loginTypeSelect(c){ const labels=c.supported_login_type_labels||{}; return `<select id="login_type_${esc(c.platform)}">${(c.supported_login_types||['qrcode','cookie']).map(t=>`<option value="${esc(t)}" ${t===c.login_type?'selected':''}>${esc(labels[t]||t)}</option>`).join('')}</select>`; }
+    function cookieInput(c){ return `<textarea id="cookies_${esc(c.platform)}" placeholder="${c.has_cookies?'已保存 Cookie；留空表示不修改':'Cookie 模式需要粘贴 Cookie'}"></textarea><label class="small"><input id="clear_cookies_${esc(c.platform)}" type="checkbox" style="width:auto"> 清空已保存 Cookie</label>`; }
+    function formatLoginConfigHint(c){ if(c.login_type==='cookie') return c.has_cookies ? '当前会通过 MediaCrawler Cookie 登录运行。' : '当前选择 Cookie 登录，但还没有保存 Cookie。'; if(c.login_type==='phone') return '当前会通过 MediaCrawler 手机号登录流程运行，适合本地人工处理。'; return '当前会复用浏览器 Profile，适合定时任务。'; }
+    async function savePlatformLoginConfig(platform){ const payload={login_type:val('login_type_'+platform), cookies:val('cookies_'+platform), clear_cookies:document.getElementById('clear_cookies_'+platform).checked}; const res=await api('/platform-login-configs/'+platform,{method:'PUT',body:JSON.stringify(payload)}); if(!res.ok){ toast(await err(res)); return; } toast('平台登录方式已保存'); await Promise.all([loadPlatformLoginConfigs(), loadPlatformStatus(), loadReadiness(), loadDoctor()]); }
     async function openPlatformLoginBrowser(platform){ const res=await api('/platform-status/'+platform+'/login-browser',{method:'POST'}); if(!res.ok){ toast(await err(res)); return; } const data=await res.json(); toast(data.message || '已打开登录窗口'); await loadPlatformStatus(); }
     function hasJobTemplatePlaceholders(payload){ const text=[payload.law_firm_name, ...(payload.keywords||[])].join('\n'); return ['请改成','目标律所','律所简称','律师事务所简称'].some(x=>text.includes(x)); }
     async function saveJob(){

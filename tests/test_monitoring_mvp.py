@@ -11,7 +11,7 @@ from fastapi import HTTPException
 
 from api.monitoring.ai import _build_endpoint, _parse_json, _validate_ai_output, test_ai as run_ai_config_test
 from api.monitoring.ai import DEFAULT_PROMPT
-from api.monitoring.database import create_run, finish_run, get_ai_config, get_conn, get_email_config, get_report, init_db, list_jobs, list_leads, save_ai_config, save_email_config, save_job
+from api.monitoring.database import create_run, finish_run, get_ai_config, get_conn, get_email_config, get_platform_login_config, get_report, init_db, list_jobs, list_leads, list_platform_login_configs, save_ai_config, save_email_config, save_job, save_platform_login_config
 from api.monitoring.login_browser import build_login_browser_command, open_login_browser
 from api.monitoring.login_state import login_window_status, record_login_window
 from api.monitoring.mailer import build_report_email, send_test_email
@@ -174,6 +174,41 @@ def test_platform_status_ignores_login_error_older_than_profile_update(tmp_path)
     dy = next(item for item in statuses if item["platform"] == "dy")
 
     assert dy["profile_exists"] is True
+    assert dy["needs_login"] is False
+    assert dy["last_error"] == ""
+
+
+def test_platform_status_ignores_login_error_older_than_cookie_config(tmp_path, monkeypatch):
+    init_db()
+    snapshot = _snapshot_table("platform_login_configs")
+    try:
+        save_platform_login_config("dy", {"login_type": "cookie", "cookies": "sessionid=secret-cookie"})
+        with get_conn() as conn:
+            conn.execute(
+                "UPDATE platform_login_configs SET updated_at=? WHERE platform='dy'",
+                ("2026-06-12T09:10:00+00:00",),
+            )
+        statuses = list_platform_status(
+            tmp_path,
+            [
+                {
+                    "finished_at": "2026-06-12T09:00:00+00:00",
+                    "summary": {
+                        "platform_results": {
+                            "dy": {"error": "MediaCrawler exited with 1；检测到登录态失效，请先重新登录该平台账号"}
+                        }
+                    },
+                }
+            ],
+        )
+    finally:
+        _restore_table("platform_login_configs", snapshot)
+
+    dy = next(item for item in statuses if item["platform"] == "dy")
+
+    assert dy["login_type"] == "cookie"
+    assert dy["has_cookies"] is True
+    assert dy["profile_exists"] is False
     assert dy["needs_login"] is False
     assert dy["last_error"] == ""
 
@@ -345,6 +380,69 @@ def test_ai_and_email_config_validation_rejects_bad_inputs():
         save_email_config({"encryption": "tls"})
     with pytest.raises(ValueError, match="invalid recipient email"):
         save_email_config({"default_recipients": ["bad-email"]})
+
+
+def test_platform_login_config_defaults_masking_and_validation():
+    init_db()
+    snapshot = _snapshot_table("platform_login_configs")
+    try:
+        configs = list_platform_login_configs()
+        dy = next(item for item in configs if item["platform"] == "dy")
+        ks = next(item for item in configs if item["platform"] == "ks")
+
+        assert dy["login_type"] == "qrcode"
+        assert "phone" in dy["supported_login_types"]
+        assert "phone" not in ks["supported_login_types"]
+
+        saved = save_platform_login_config("dy", {"login_type": "cookie", "cookies": "sessionid=secret-cookie"})
+        raw = get_platform_login_config("dy", masked=False)
+
+        assert saved["login_type"] == "cookie"
+        assert saved["has_cookies"] is True
+        assert "secret-cookie" not in saved["cookies"]
+        assert raw["cookies"] == "sessionid=secret-cookie"
+
+        with pytest.raises(ValueError, match="does not support"):
+            save_platform_login_config("ks", {"login_type": "phone"})
+        with pytest.raises(ValueError, match="Cookie 登录需要先填写 Cookie"):
+            save_platform_login_config("xhs", {"login_type": "cookie"})
+        with pytest.raises(ValueError, match="unsupported platform"):
+            save_platform_login_config("wb", {"login_type": "qrcode"})
+    finally:
+        _restore_table("platform_login_configs", snapshot)
+
+
+def test_runner_command_uses_platform_login_config_for_cookie_mode(tmp_path):
+    init_db()
+    snapshot = _snapshot_table("platform_login_configs")
+    try:
+        save_platform_login_config("dy", {"login_type": "cookie", "cookies": "sessionid=secret-cookie"})
+        cmd = runner_module._build_crawler_cmd(
+            {"keywords": ["海安律所避雷"], "enable_comments": False, "time_window_type": "recent_1d"},
+            "dy",
+            tmp_path,
+        )
+    finally:
+        _restore_table("platform_login_configs", snapshot)
+
+    assert _cmd_value(cmd, "--lt") == "cookie"
+    assert _cmd_value(cmd, "--cookies") == "sessionid=secret-cookie"
+
+
+def test_runner_command_defaults_to_qrcode_login(tmp_path):
+    init_db()
+    snapshot = _snapshot_table("platform_login_configs")
+    try:
+        cmd = runner_module._build_crawler_cmd(
+            {"keywords": ["海安律所避雷"], "enable_comments": False, "time_window_type": "recent_1d"},
+            "xhs",
+            tmp_path,
+        )
+    finally:
+        _restore_table("platform_login_configs", snapshot)
+
+    assert _cmd_value(cmd, "--lt") == "qrcode"
+    assert "--cookies" not in cmd
 
 
 def test_ai_and_email_test_paths_reuse_config_validation():
@@ -1096,10 +1194,17 @@ def test_monitor_page_exposes_acceptance_checklist():
     assert "loadSchedulerStatus" in page
     assert "scheduler-status" in page
     assert "账号登录" in page
-    assert "后台采用浏览器 Profile 登录" in page
-    assert "任务运行时不再反复选择 qrcode、phone 或 cookie" in page
+    assert "登录方式按平台统一配置" in page
+    assert "平台登录方式配置" in page
+    assert "Cookie 会加密保存" in page
     assert "account_status_table" in page
     assert "platformStatusTable" in page
+    assert "platform_login_config_table" in page
+    assert "loadPlatformLoginConfigs" in page
+    assert "platform-login-configs" in page
+    assert "savePlatformLoginConfig" in page
+    assert "login_type_" in page
+    assert "cookies_" in page
     assert "下一步处理" in page
     assert "尚未完成真实采集" in page
     assert "已运行但未采到内容" in page
@@ -1109,7 +1214,7 @@ def test_monitor_page_exposes_acceptance_checklist():
     assert "refreshJobSchedule" in page
     assert "jobs/refresh-schedule" in page
     assert "打开登录窗口" in page
-    assert "登录完成后关闭窗口，再刷新状态。" in page
+    assert "用于 Profile 登录或人工刷新登录态。" in page
     assert "login-browser" in page
     assert "openPlatformLoginBrowser" in page
     assert "正在运行的任务 ID" in page
@@ -1635,6 +1740,31 @@ def _restore_singleton_table(table: str, snapshot: dict) -> None:
     values = [snapshot[key] for key in columns] + [snapshot["id"]]
     with get_conn() as conn:
         conn.execute(f"UPDATE {table} SET {assignments} WHERE id=?", values)
+
+
+def _snapshot_table(table: str) -> list[dict]:
+    with get_conn() as conn:
+        return [dict(row) for row in conn.execute(f"SELECT * FROM {table}").fetchall()]
+
+
+def _restore_table(table: str, snapshot: list[dict]) -> None:
+    with get_conn() as conn:
+        conn.execute(f"DELETE FROM {table}")
+        if not snapshot:
+            return
+        columns = list(snapshot[0].keys())
+        placeholders = ",".join("?" for _ in columns)
+        conn.executemany(
+            f"INSERT INTO {table} ({','.join(columns)}) VALUES ({placeholders})",
+            [[row[col] for col in columns] for row in snapshot],
+        )
+
+
+def _cmd_value(cmd: list[str], flag: str) -> str | None:
+    if flag not in cmd:
+        return None
+    index = cmd.index(flag)
+    return cmd[index + 1] if index + 1 < len(cmd) else None
 
 
 def _snapshot_monitor_jobs() -> dict[str, list[dict]]:

@@ -5,7 +5,7 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
-from .database import list_runs
+from .database import get_platform_login_config, list_runs
 from .login_state import login_window_status
 from .normalizer import PLATFORM_LABELS
 from .security import redact_sensitive
@@ -34,18 +34,31 @@ def list_platform_status(project_root: Path | None = None, recent_runs: list[dic
         error_at = _parse_time(error_info.get("at"))
         profile_mtime = _mtime(latest_file or profile_path)
         login_window = login_window_status(platform)
-        stale_error = bool(error_at and profile_mtime and profile_mtime > error_at)
+        login_config = get_platform_login_config(platform, masked=True)
+        login_config_updated_at = _parse_time(login_config.get("updated_at"))
+        stale_error = bool(
+            error_at
+            and ((profile_mtime and profile_mtime > error_at) or (login_config_updated_at and login_config_updated_at > error_at))
+        )
         closed_login_window_error = _looks_like_login_window_error(error) and not login_window.get("is_open")
         effective_error = "" if stale_error or closed_login_window_error else error
+        login_type = login_config.get("login_type") or "qrcode"
+        has_cookie_login = login_type == "cookie" and login_config.get("has_cookies")
+        needs_login = _needs_platform_login(profile_path.exists(), has_cookie_login, effective_error)
         statuses.append(
             {
                 "platform": platform,
                 "platform_label": PLATFORM_LABELS.get(platform, platform),
+                "login_type": login_type,
+                "login_type_label": login_config.get("login_type_label") or login_type,
+                "supported_login_types": login_config.get("supported_login_types") or ["qrcode", "cookie"],
+                "has_cookies": bool(login_config.get("has_cookies")),
                 "profile_path": str(profile_path),
                 "profile_exists": profile_path.exists(),
                 "profile_last_modified": _format_time(profile_mtime),
                 "last_error": effective_error,
-                "needs_login": (not profile_path.exists()) or _looks_like_login_error(effective_error),
+                "needs_login": needs_login,
+                "login_ready": not needs_login and not login_window.get("is_open"),
                 "login_window_open": bool(login_window.get("is_open")),
                 "login_window_pid": login_window.get("pid"),
             }
@@ -116,3 +129,9 @@ def _looks_like_login_error(error: str) -> bool:
 def _looks_like_login_window_error(error: str) -> bool:
     lower = (error or "").lower()
     return any(marker.lower() in lower for marker in LOGIN_WINDOW_MARKERS)
+
+
+def _needs_platform_login(profile_exists: bool, has_cookie_login: bool, error: str) -> bool:
+    if _looks_like_login_error(error):
+        return True
+    return not (profile_exists or has_cookie_login)
