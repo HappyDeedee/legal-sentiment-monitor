@@ -13,6 +13,7 @@ from api.monitoring.ai import _build_endpoint, _parse_json, _validate_ai_output,
 from api.monitoring.ai import DEFAULT_PROMPT
 from api.monitoring.database import create_login_session, create_run, finish_run, get_active_ai_key_profile, get_ai_config, get_conn, get_dashboard_summary, get_email_config, get_job, get_login_session, get_platform_login_config, get_report, get_run, init_db, list_ai_key_profiles, list_email_templates, list_jobs, list_leads, list_login_sessions, list_platform_login_configs, list_proxy_profiles, list_reports, list_runs, list_social_accounts, mark_selftest_jobs_internal, render_email_template_preview, save_ai_config, save_ai_key_profile, save_email_config, save_email_template, save_job, save_platform_login_config, save_proxy_profile, save_social_account, set_active_ai_key_profile
 from api.monitoring.login_browser import build_login_browser_command, open_login_browser
+import api.monitoring.login_qrcode as login_qrcode_module
 from api.monitoring.login_state import login_window_status, record_login_window
 from api.monitoring.mailer import build_report_email, send_test_email
 from api.monitoring.normalizer import collect_platform_outputs, in_time_window, normalize_content, parse_jsonl_file, resolve_window
@@ -902,6 +903,19 @@ def test_login_session_routes_create_pollable_session(monkeypatch):
                 "browser_path": "chrome",
             },
         )
+        async def fake_start_qrcode_login_session(session_id, platform):
+            return {
+                "ok": True,
+                "qr_image": "data:image/png;base64,abc",
+                "message": "请扫码登录",
+                "profile_path": "browser_data/cdp_dy_user_data_dir",
+            }
+
+        async def fake_poll_qrcode_login_session(session_id):
+            return {"active": True, "success": False, "message": "等待扫码确认。"}
+
+        monkeypatch.setattr(monitor_router, "start_qrcode_login_session", fake_start_qrcode_login_session)
+        monkeypatch.setattr(monitor_router, "poll_qrcode_login_session", fake_poll_qrcode_login_session)
         monkeypatch.setattr(
             monitor_router,
             "list_platform_status",
@@ -921,11 +935,83 @@ def test_login_session_routes_create_pollable_session(monkeypatch):
         polled = asyncio.run(monitor_router.login_session(session_id))
 
         assert created["capabilities"]["manual_browser_fallback"] is True
-        assert created["capabilities"]["qr_image_supported"] is False
-        assert polled["session"]["status"] == "waiting_manual_browser"
+        assert created["capabilities"]["qr_image_supported"] is True
+        assert created["session"]["status"] == "waiting_qrcode"
+        assert created["session"]["qr_image"].startswith("data:image")
+        assert polled["session"]["status"] == "waiting_qrcode"
         assert polled["platform_status"]["platform"] == "dy"
     finally:
         _restore_table("login_sessions", snapshot)
+
+
+def test_login_session_route_falls_back_when_qrcode_unavailable(monkeypatch):
+    init_db()
+    snapshot = _snapshot_table("login_sessions")
+    try:
+        monkeypatch.setattr(
+            monitor_router,
+            "build_login_browser_command",
+            lambda platform: {
+                "platform": platform,
+                "platform_label": "抖音",
+                "login_url": "https://www.douyin.com/",
+                "profile_path": "browser_data/cdp_dy_user_data_dir",
+                "debug_port": 9323,
+                "browser_path": "chrome",
+            },
+        )
+
+        async def fake_start_qrcode_login_session(session_id, platform):
+            return {"ok": False, "message": "没有在页面中找到登录二维码，请使用登录窗口兜底。", "profile_path": "browser_data/cdp_dy_user_data_dir"}
+
+        monkeypatch.setattr(monitor_router, "start_qrcode_login_session", fake_start_qrcode_login_session)
+
+        created = asyncio.run(monitor_router.create_platform_login_session({"platform": "dy"}))
+
+        assert created["capabilities"]["manual_browser_fallback"] is True
+        assert created["capabilities"]["qr_image_supported"] is False
+        assert created["session"]["status"] == "waiting_manual_browser"
+        assert "登录窗口兜底" in created["session"]["message"]
+    finally:
+        _restore_table("login_sessions", snapshot)
+
+
+def test_qrcode_poll_success_closes_browser_session(monkeypatch):
+    class DummyContext:
+        closed = False
+
+        async def close(self):
+            self.closed = True
+
+    class DummyPlaywright:
+        stopped = False
+
+        async def stop(self):
+            self.stopped = True
+
+    context = DummyContext()
+    playwright = DummyPlaywright()
+    handle = login_qrcode_module.LoginSessionHandle(
+        platform="dy",
+        playwright=playwright,
+        context=context,
+        page=object(),
+        profile_path="browser_data/cdp_dy_user_data_dir",
+        created_at=datetime.now(timezone.utc),
+    )
+    login_qrcode_module.ACTIVE_LOGIN_SESSIONS[99999] = handle
+
+    async def fake_is_logged_in(platform, context, page):
+        return True
+
+    monkeypatch.setattr(login_qrcode_module, "_is_logged_in", fake_is_logged_in)
+
+    result = asyncio.run(login_qrcode_module.poll_qrcode_login_session(99999))
+
+    assert result["success"] is True
+    assert 99999 not in login_qrcode_module.ACTIVE_LOGIN_SESSIONS
+    assert context.closed is True
+    assert playwright.stopped is True
 
 
 def test_ai_skip_env_prevents_external_ai_calls(monkeypatch):
@@ -1876,24 +1962,32 @@ def test_monitor_page_exposes_acceptance_checklist():
     assert "accountLedgerTable" in page
     assert "startLoginSessionForAccount" in page
     assert "参考 sub2api 的账号管理逻辑" in page
-    assert "基础配置" in page
-    assert "登录维护" in page
-    assert "风控备注" in page
+    assert "账号信息" in page
+    assert "扫码登录" in page
+    assert "生成登录二维码" in page
+    assert "打开登录窗口兜底" in page
+    assert "Cookie 登录" in page
+    assert "social_account_cookie_input" in page
+    assert "saveCurrentPlatformCookieLogin" in page
+    assert "手机号登录" in page
+    assert "social_account_phone" in page
+    assert "saveCurrentPlatformPhoneLogin" in page
+    assert "renderLoginModePanel" in page
+    assert "handleSocialLoginTypeChange" in page
+    assert "当前方式会显示对应输入区" in page
+    assert "login-card-grid" in page
+    assert "高级登录设置" in page
+    assert "平台登录状态" in page
+    assert "登录会话" in page
     assert "account_metrics" in page
     assert "renderAccountList" in page
-    assert "switchAccountTab" in page
     assert "social-accounts" in page
     assert "loadAccountsPool" in page
-    assert "服务器扫码方案" in page
-    assert "展示二维码" in page
-    assert "网页登录会话" in page
-    assert "页面发起登录" in page
+    assert "若平台风控导致二维码获取失败" in page
+    assert "二维码已生成，请扫码登录" in page
     assert "login-sessions" in page
     assert "pollLoginSession" in page
-    assert "账号登录与平台授权" in page
-    assert "任务只选择平台和关键词" in page
-    assert "平台默认登录方式配置" in page
-    assert "Cookie 会加密保存" in page
+    assert "平台默认登录方式" in page
     assert "代理 IP 池" in page
     assert "proxies" in page
     assert "loadProxyPool" in page

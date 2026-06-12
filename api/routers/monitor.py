@@ -55,10 +55,12 @@ from ..monitoring.database import (
     set_active_ai_key_profile,
     set_job_enabled,
     set_job_schedule_state,
+    update_login_session_status,
 )
 from ..monitoring.mailer import send_test_email
 from ..monitoring.doctor import run_doctor
 from ..monitoring.login_browser import build_login_browser_command, open_login_browser
+from ..monitoring.login_qrcode import close_qrcode_login_session, poll_qrcode_login_session, start_qrcode_login_session
 from ..monitoring.platform_status import list_platform_status
 from ..monitoring.preflight import build_job_preflight
 from ..monitoring.readiness import get_readiness_status
@@ -436,16 +438,27 @@ async def create_platform_login_session(payload: dict[str, Any]):
                 "account_id": payload.get("account_id"),
                 "login_url": command["login_url"],
                 "profile_path": command["profile_path"],
-                "message": (
-                    "已创建网页登录会话预留入口。当前 MediaCrawler 尚未稳定把二维码回传给后台，"
-                    "请先使用“打开登录窗口”完成扫码；后续会在这里展示二维码并自动轮询状态。"
-                ),
+                "message": "正在生成登录二维码。",
             }
         )
+        qr_result = await start_qrcode_login_session(int(session["id"]), str(platform))
+        if qr_result.get("ok"):
+            session = update_login_session_status(
+                int(session["id"]),
+                "waiting_qrcode",
+                str(qr_result.get("message") or "请扫码登录"),
+                str(qr_result.get("qr_image") or ""),
+            )
+        else:
+            session = update_login_session_status(
+                int(session["id"]),
+                "waiting_manual_browser",
+                str(qr_result.get("message") or "二维码生成失败，请使用登录窗口兜底"),
+            )
         return {
             "session": session,
             "capabilities": {
-                "qr_image_supported": False,
+                "qr_image_supported": bool(session.get("qr_image")),
                 "manual_browser_fallback": True,
                 "polling_supported": True,
             },
@@ -461,6 +474,15 @@ async def login_session(session_id: int):
     if not session:
         raise HTTPException(status_code=404, detail="login session not found")
     platform = session.get("platform")
+    qr_poll = await poll_qrcode_login_session(session_id)
+    if qr_poll.get("success"):
+        session = update_login_session_status(session_id, "success", str(qr_poll.get("message") or "登录成功"))
+    elif qr_poll.get("expired"):
+        session = update_login_session_status(session_id, "expired", str(qr_poll.get("message") or "二维码已过期"))
+    elif qr_poll.get("active") and session.get("status") != "waiting_qrcode":
+        session = update_login_session_status(session_id, "waiting_qrcode", str(qr_poll.get("message") or "等待扫码"))
+    elif qr_poll.get("message") and session.get("status") == "waiting_qrcode":
+        session = {**session, "message": qr_poll.get("message")}
     statuses = {item["platform"]: item for item in list_platform_status()}
     platform_status = statuses.get(platform) or {}
     status = session.get("status") or "waiting_manual_browser"
@@ -481,6 +503,7 @@ async def login_session(session_id: int):
 
 @router.delete("/login-sessions/{session_id}")
 async def remove_login_session(session_id: int):
+    await close_qrcode_login_session(session_id)
     delete_login_session(session_id)
     return {"ok": True}
 
