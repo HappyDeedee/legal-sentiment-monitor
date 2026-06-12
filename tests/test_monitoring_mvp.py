@@ -571,6 +571,7 @@ def test_leads_api_lists_pending_review_items():
         leads = list_leads(50)
         api_result = asyncio.run(monitor_router.leads(risk="pending"))["leads"]
         report_result = asyncio.run(monitor_router.reports(risk="pending"))["reports"]
+        no_risk_reports = asyncio.run(monitor_router.reports(risk="none"))["reports"]
     finally:
         _cleanup_test_records(result["job"]["id"], f"selftest_negative_{result['run_id']}")
         _cleanup_test_records(result["job"]["id"], f"selftest_excluded_{result['run_id']}")
@@ -580,6 +581,7 @@ def test_leads_api_lists_pending_review_items():
     assert all(item["eval_status"] == "pending_review" for item in api_result)
     assert any(item["id"] == result["report"]["id"] for item in report_result)
     assert next(item for item in report_result if item["id"] == result["report"]["id"])["summary"]["pending_review_count"] == 1
+    assert all(item["id"] != result["report"]["id"] for item in no_risk_reports)
 
 
 def test_selftest_report_generates_downloadable_artifacts():

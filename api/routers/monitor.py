@@ -242,7 +242,12 @@ async def reports(
     elif risk == "pending":
         items = [r for r in items if int((r.get("summary") or {}).get("pending_review_count") or 0) > 0]
     elif risk == "none":
-        items = [r for r in items if int((r.get("summary") or {}).get("negative_count") or 0) == 0]
+        items = [
+            r
+            for r in items
+            if int((r.get("summary") or {}).get("negative_count") or 0) == 0
+            and int((r.get("summary") or {}).get("pending_review_count") or 0) == 0
+        ]
     if date_from:
         items = [r for r in items if (r.get("created_at") or "")[:10] >= date_from]
     if date_to:
