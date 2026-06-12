@@ -617,12 +617,26 @@ def test_doctor_reports_deployment_diagnostics():
     assert isinstance(status["recommendations"], list)
 
 
+def test_doctor_api_exposes_deployment_diagnostics():
+    init_db()
+    status = asyncio.run(monitor_router.doctor())
+
+    assert "checks" in status
+    assert "readiness" in status
+    assert "recommendations" in status
+    assert "paths" in status
+
+
 def test_monitor_page_exposes_acceptance_checklist():
     page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
 
     assert "上线验收状态" in page
     assert "距离上线还差" in page
     assert "三平台真实采集缺口" in page
+    assert "部署诊断" in page
+    assert "正在运行的任务 ID" in page
+    assert "startRunPolling" in page
+    assert "api('/doctor')" in page
     assert "生成自测报告" in page
     assert "download?type=html" in page
     assert "download?type=excel" in page

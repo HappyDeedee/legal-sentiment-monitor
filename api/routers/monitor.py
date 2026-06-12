@@ -26,6 +26,7 @@ from ..monitoring.database import (
     set_job_schedule_state,
 )
 from ..monitoring.mailer import send_test_email
+from ..monitoring.doctor import run_doctor
 from ..monitoring.platform_status import list_platform_status
 from ..monitoring.readiness import get_readiness_status
 from ..monitoring.scheduler import launch_job, next_run_at, running_job_ids
@@ -58,6 +59,12 @@ async def platform_status():
 async def readiness():
     init_db()
     return get_readiness_status()
+
+
+@router.get("/doctor")
+async def doctor():
+    init_db()
+    return run_doctor()
 
 
 @router.post("/jobs")
