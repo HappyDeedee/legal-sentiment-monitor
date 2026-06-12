@@ -72,7 +72,10 @@ def _next_actions(
     elif needs_login:
         actions.append("进入账号登录页，重新登录并关闭窗口：" + "、".join(needs_login))
     if "ai_config" in failed:
-        actions.append("进入 AI 配置页，保存配置并点击真实测试 AI，直到最近测试通过。")
+        if ai_api_disabled():
+            actions.append("当前已开启 MONITOR_SKIP_AI_API；平台和邮件可继续联调，正式验收前需关闭后点击真实测试 AI。")
+        else:
+            actions.append("进入 AI 配置页，保存配置并点击真实测试 AI，直到最近测试通过。")
     if "email_config" in failed:
         actions.append("进入邮件配置页，填写 SMTP 和收件人并发送测试邮件。")
     if "selftest_report" in failed:

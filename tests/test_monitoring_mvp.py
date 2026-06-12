@@ -826,6 +826,8 @@ def test_ai_skip_env_warns_without_blocking_preflight(monkeypatch):
 
     assert readiness_module._ai_ready(cfg) is False
     assert "MONITOR_SKIP_AI_API" in readiness_module._ai_message(cfg)
+    actions = readiness_module._next_actions([{"key": "ai_config", "ok": False}], [], set(), set())
+    assert any("MONITOR_SKIP_AI_API" in action for action in actions)
     assert preflight["can_run"] is True
     assert any("AI API 已临时关闭" in item for item in preflight["warnings"])
 
