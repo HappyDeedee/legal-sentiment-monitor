@@ -65,6 +65,8 @@ $env:MONITOR_BROWSER_DATA_DIR = "D:\legal-sentiment-monitor\browser_data"
 
 同一个监控任务会使用 `MONITOR_DATA_DIR/locks` 下的轻量锁文件做防重复保护。即使 WebUI、内置调度器和 `monitor_cli.bat run-due` 同时触发同一任务，也只会有一个采集进程真正运行；其他入口会返回 `already_running`。如果上一次进程异常退出残留锁文件，系统默认会在 6 小时后自动回收；可通过 `MONITOR_JOB_LOCK_TTL_SECONDS` 调整。
 
+单个平台采集失败时，Worker 默认会重试 1 次；如果错误明显是登录态失效或登录窗口未关闭，则不会重复尝试。可通过 `MONITOR_CRAWLER_MAX_RETRIES` 和 `MONITOR_CRAWLER_RETRY_DELAY_SECONDS` 调整。
+
 如果部署环境必须使用多个 Web worker，内置调度器不会启动。此时页面仍可手动运行任务，但定时采集需要由外部定时器调用 `monitor_cli.bat run-due`。
 
 ## 页面配置

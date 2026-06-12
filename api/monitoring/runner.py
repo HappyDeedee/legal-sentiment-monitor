@@ -31,6 +31,8 @@ GLOBAL_SEMAPHORE = asyncio.Semaphore(2)
 PLATFORM_LOCKS: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
 PLATFORM_DEBUG_PORTS = {"dy": 9223, "ks": 9224, "xhs": 9225}
 JOB_LOCK_TTL_SECONDS = int(os.environ.get("MONITOR_JOB_LOCK_TTL_SECONDS") or 21600)
+DEFAULT_CRAWLER_MAX_RETRIES = 1
+DEFAULT_CRAWLER_RETRY_DELAY_SECONDS = 3.0
 
 
 async def run_job(job_id: int) -> dict[str, Any]:
@@ -103,40 +105,59 @@ async def _run_job_locked(job_id: int) -> dict[str, Any]:
 async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir: Path) -> dict[str, Any]:
     async with GLOBAL_SEMAPHORE:
         async with PLATFORM_LOCKS[platform]:
-            platform_out = run_dir / platform
-            platform_out.mkdir(parents=True, exist_ok=True)
             _ensure_login_window_closed(platform)
-            cmd = _build_crawler_cmd(job, platform, platform_out)
-            env = {**os.environ, "PYTHONUNBUFFERED": "1"}
-            log_path = platform_out / "crawler.log"
-            timeout_seconds = int(os.environ.get("MONITOR_CRAWLER_TIMEOUT_SECONDS") or 900)
-            try:
-                process = await asyncio.to_thread(
-                    subprocess.run,
-                    cmd,
-                    cwd=PROJECT_ROOT,
-                    env=env,
-                    capture_output=True,
-                    text=True,
-                    encoding="utf-8",
-                    errors="ignore",
-                    timeout=timeout_seconds,
-                )
-            except subprocess.TimeoutExpired as exc:
-                log_text = redact_sensitive((exc.stdout or "") + "\n" + (exc.stderr or ""))
-                log_path.write_text(log_text, encoding="utf-8", errors="ignore")
-                raise RuntimeError(f"MediaCrawler timed out after {timeout_seconds}s; see {log_path}") from exc
-            except Exception as exc:
-                safe_error = redact_sensitive(f"{type(exc).__name__}: {exc}")
-                log_path.write_text(safe_error, encoding="utf-8")
-                raise RuntimeError(f"MediaCrawler failed to start: {safe_error}; see {log_path}") from exc
-            log_text = redact_sensitive((process.stdout or "") + "\n" + (process.stderr or ""))
-            log_path.write_text(log_text, encoding="utf-8")
-            if process.returncode != 0:
-                hint = "；检测到登录态失效，请先重新登录该平台账号" if _looks_like_login_required(log_text) else ""
-                raise RuntimeError(f"MediaCrawler exited with {process.returncode}{hint}; see {log_path}")
-            contents, comments = collect_platform_outputs(platform_out, platform)
-            return ingest_outputs(job, run_id, platform, contents, comments)
+            platform_root = run_dir / platform
+            platform_root.mkdir(parents=True, exist_ok=True)
+            max_retries = _crawler_max_retries()
+            total_attempts = max_retries + 1
+            last_error = ""
+            for attempt in range(1, total_attempts + 1):
+                attempt_out = _attempt_output_dir(platform_root, attempt, total_attempts)
+                attempt_out.mkdir(parents=True, exist_ok=True)
+                try:
+                    await asyncio.to_thread(_run_crawler_attempt, job, platform, attempt_out)
+                    contents, comments = collect_platform_outputs(attempt_out, platform)
+                    result = ingest_outputs(job, run_id, platform, contents, comments)
+                    result["attempts"] = attempt
+                    result["max_retries"] = max_retries
+                    return result
+                except RuntimeError as exc:
+                    last_error = redact_sensitive(str(exc))
+                    if not _should_retry_crawler_error(last_error) or attempt >= total_attempts:
+                        break
+                    await asyncio.sleep(_crawler_retry_delay_seconds())
+            raise RuntimeError(f"MediaCrawler failed after {attempt} attempt(s): {last_error}")
+
+
+def _run_crawler_attempt(job: dict[str, Any], platform: str, out_dir: Path) -> None:
+    cmd = _build_crawler_cmd(job, platform, out_dir)
+    env = {**os.environ, "PYTHONUNBUFFERED": "1"}
+    log_path = out_dir / "crawler.log"
+    timeout_seconds = int(os.environ.get("MONITOR_CRAWLER_TIMEOUT_SECONDS") or 900)
+    try:
+        process = subprocess.run(
+            cmd,
+            cwd=PROJECT_ROOT,
+            env=env,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="ignore",
+            timeout=timeout_seconds,
+        )
+    except subprocess.TimeoutExpired as exc:
+        log_text = redact_sensitive((exc.stdout or "") + "\n" + (exc.stderr or ""))
+        log_path.write_text(log_text, encoding="utf-8", errors="ignore")
+        raise RuntimeError(f"MediaCrawler timed out after {timeout_seconds}s; see {log_path}") from exc
+    except Exception as exc:
+        safe_error = redact_sensitive(f"{type(exc).__name__}: {exc}")
+        log_path.write_text(safe_error, encoding="utf-8")
+        raise RuntimeError(f"MediaCrawler failed to start: {safe_error}; see {log_path}") from exc
+    log_text = redact_sensitive((process.stdout or "") + "\n" + (process.stderr or ""))
+    log_path.write_text(log_text, encoding="utf-8")
+    if process.returncode != 0:
+        hint = "；检测到登录态失效，请先重新登录该平台账号" if _looks_like_login_required(log_text) else ""
+        raise RuntimeError(f"MediaCrawler exited with {process.returncode}{hint}; see {log_path}")
 
 
 def _ensure_login_window_closed(platform: str) -> None:
@@ -385,6 +406,36 @@ def _looks_like_login_required(log_text: str) -> bool:
         "扫码",
     ]
     return any(marker in lower for marker in markers)
+
+
+def _crawler_max_retries() -> int:
+    return max(0, _int_env("MONITOR_CRAWLER_MAX_RETRIES", DEFAULT_CRAWLER_MAX_RETRIES))
+
+
+def _crawler_retry_delay_seconds() -> float:
+    try:
+        return max(0.0, float(os.environ.get("MONITOR_CRAWLER_RETRY_DELAY_SECONDS") or DEFAULT_CRAWLER_RETRY_DELAY_SECONDS))
+    except ValueError:
+        return DEFAULT_CRAWLER_RETRY_DELAY_SECONDS
+
+
+def _should_retry_crawler_error(error: str) -> bool:
+    if _looks_like_login_required(error) or "登录窗口未关闭" in error:
+        return False
+    return True
+
+
+def _attempt_output_dir(platform_root: Path, attempt: int, total_attempts: int) -> Path:
+    if total_attempts <= 1:
+        return platform_root
+    return platform_root / f"attempt_{attempt}"
+
+
+def _int_env(name: str, default: int) -> int:
+    try:
+        return int(os.environ.get(name) or default)
+    except ValueError:
+        return default
 
 
 def _acquire_job_lock(job_id: int) -> Path | None:

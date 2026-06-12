@@ -1250,6 +1250,7 @@ def test_cli_run_due_runs_only_due_enabled_jobs(monkeypatch):
     init_db()
     jobs_snapshot = _snapshot_monitor_jobs()
     run_calls: list[int] = []
+    _clear_monitor_jobs()
 
     due_job = save_job(
         {
@@ -1318,6 +1319,7 @@ def test_cli_run_due_skips_legacy_template_placeholder_jobs(monkeypatch):
     init_db()
     jobs_snapshot = _snapshot_monitor_jobs()
     run_calls: list[int] = []
+    _clear_monitor_jobs()
 
     try:
         with get_conn() as conn:
@@ -1467,6 +1469,82 @@ def test_run_job_blocks_platform_when_login_window_is_open(monkeypatch):
     assert result["status"] == "partial_failed"
     assert result["summary"]["failed_platforms"] == ["dy"]
     assert "登录窗口未关闭" in result["summary"]["platform_results"]["dy"]["error"]
+
+
+def test_run_platform_retries_transient_crawler_failure(tmp_path, monkeypatch):
+    init_db()
+    job = {
+        "id": 9991,
+        "law_firm_name": "重试测试律所",
+        "keywords": ["重试测试律所避雷"],
+        "enable_comments": False,
+        "time_window_type": "recent_1d",
+    }
+    calls: list[Path] = []
+
+    def fake_run_attempt(job_arg, platform_arg, out_dir):
+        calls.append(out_dir)
+        if len(calls) == 1:
+            (out_dir / "crawler.log").write_text("temporary network error", encoding="utf-8")
+            raise RuntimeError(f"MediaCrawler exited with 1; see {out_dir / 'crawler.log'}")
+        json_dir = out_dir / "douyin" / "json"
+        json_dir.mkdir(parents=True)
+        (json_dir / "search_contents_retry.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "aweme_id": "pytest_retry_success_001",
+                        "title": "重试测试律所避雷",
+                        "desc": "第二次成功",
+                        "create_time": int(datetime.now(timezone.utc).timestamp()),
+                    }
+                ],
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+    monkeypatch.setenv("MONITOR_CRAWLER_MAX_RETRIES", "1")
+    monkeypatch.setenv("MONITOR_CRAWLER_RETRY_DELAY_SECONDS", "0")
+    monkeypatch.setattr(runner_module, "list_platform_status", lambda: [{"platform": "dy", "login_window_open": False}])
+    monkeypatch.setattr(runner_module, "_run_crawler_attempt", fake_run_attempt)
+
+    result = asyncio.run(runner_module.run_platform(job, 10001, "dy", tmp_path))
+
+    _cleanup_test_records(job["id"], "pytest_retry_success_001")
+
+    assert len(calls) == 2
+    assert calls[0].name == "attempt_1"
+    assert calls[1].name == "attempt_2"
+    assert result["attempts"] == 2
+    assert result["max_retries"] == 1
+    assert result["new_contents"] == 1
+
+
+def test_run_platform_does_not_retry_login_required_error(tmp_path, monkeypatch):
+    job = {
+        "id": 9992,
+        "law_firm_name": "登录失败测试律所",
+        "keywords": ["登录失败测试律所避雷"],
+        "enable_comments": False,
+        "time_window_type": "recent_1d",
+    }
+    calls = 0
+
+    def fake_run_attempt(job_arg, platform_arg, out_dir):
+        nonlocal calls
+        calls += 1
+        raise RuntimeError("MediaCrawler exited with 1；检测到登录态失效，请先重新登录该平台账号")
+
+    monkeypatch.setenv("MONITOR_CRAWLER_MAX_RETRIES", "3")
+    monkeypatch.setenv("MONITOR_CRAWLER_RETRY_DELAY_SECONDS", "0")
+    monkeypatch.setattr(runner_module, "list_platform_status", lambda: [{"platform": "dy", "login_window_open": False}])
+    monkeypatch.setattr(runner_module, "_run_crawler_attempt", fake_run_attempt)
+
+    with pytest.raises(RuntimeError, match="failed after 1 attempt"):
+        asyncio.run(runner_module.run_platform(job, 10002, "dy", tmp_path))
+
+    assert calls == 1
 
 
 def test_expired_cross_process_lock_is_replaced(tmp_path, monkeypatch):
@@ -1788,3 +1866,9 @@ def _restore_monitor_jobs(snapshot: dict[str, list[dict]]) -> None:
                 f"INSERT INTO {table} ({','.join(columns)}) VALUES ({placeholders})",
                 [[row[col] for col in columns] for row in rows],
             )
+
+
+def _clear_monitor_jobs() -> None:
+    with get_conn() as conn:
+        for table in ["job_recipients", "job_platforms", "job_keywords", "monitor_jobs"]:
+            conn.execute(f"DELETE FROM {table}")
