@@ -1425,6 +1425,7 @@ def render_email_template_preview(payload: dict[str, Any]) -> dict[str, str]:
         "high_count": "1",
         "pending_review_count": "4",
         "platforms": "抖音 / 快手 / 小红书",
+        "report_html": _sample_report_html(),
         "report_url": "https://example.com/report-preview",
     }
     return {
@@ -1456,9 +1457,29 @@ def _default_email_preview_html() -> str:
         "<h2>【律所舆情日报】{law_firm_name} - {date}</h2>"
         "<p>新增 {new_contents} 条，疑似负面 {negative_count} 条，高风险 {high_count} 条，待复核 {pending_review_count} 条。</p>"
         "<p>覆盖平台：{platforms}</p>"
-        "<p><a href='{report_url}'>查看报告</a></p>"
+        "{report_html}"
         "<p style='color:#64748b;font-size:12px'>AI 仅作线索筛查，不代表事实认定。</p>"
         "</div>"
+    )
+
+
+def _sample_report_html() -> str:
+    return (
+        "<section style='border-top:1px solid #e5e7eb;padding-top:14px'>"
+        "<h2 style='font-size:16px;margin:0 0 10px'>高风险线索</h2>"
+        "<table style='width:100%;border-collapse:collapse;font-size:13px'>"
+        "<tr>"
+        "<th style='text-align:left;border-bottom:1px solid #e5e7eb;padding:8px'>平台</th>"
+        "<th style='text-align:left;border-bottom:1px solid #e5e7eb;padding:8px'>标题</th>"
+        "<th style='text-align:left;border-bottom:1px solid #e5e7eb;padding:8px'>AI 理由</th>"
+        "</tr>"
+        "<tr>"
+        "<td style='border-bottom:1px solid #e5e7eb;padding:8px'>抖音</td>"
+        "<td style='border-bottom:1px solid #e5e7eb;padding:8px'>海安律所退费投诉</td>"
+        "<td style='border-bottom:1px solid #e5e7eb;padding:8px'>包含退费、投诉等风险表达，建议人工复核。</td>"
+        "</tr>"
+        "</table>"
+        "</section>"
     )
 
 

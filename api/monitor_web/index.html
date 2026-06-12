@@ -1356,7 +1356,7 @@
       if(!res.ok){ if(showToast) toast(await err(res)); return; }
       const preview=(await res.json()).preview||{};
       document.getElementById('email_preview_subject').textContent = preview.subject || '';
-      document.getElementById('email_template_preview').srcdoc = (preview.html||'').replaceAll('{report_html}', sampleReportHtml());
+      document.getElementById('email_template_preview').srcdoc = preview.html || '';
       if(showToast) toast('邮件模板预览已刷新');
     }
 
@@ -1478,13 +1478,6 @@
     </div>
   </div>
 </div>`; }
-    function sampleReportHtml(){ return `<section style="border-top:1px solid #e5e7eb;padding-top:14px">
-  <h2 style="font-size:16px;margin:0 0 10px">高风险线索</h2>
-  <table style="width:100%;border-collapse:collapse;font-size:13px">
-    <tr><th style="text-align:left;border-bottom:1px solid #e5e7eb;padding:8px">平台</th><th style="text-align:left;border-bottom:1px solid #e5e7eb;padding:8px">标题</th><th style="text-align:left;border-bottom:1px solid #e5e7eb;padding:8px">AI 理由</th></tr>
-    <tr><td style="border-bottom:1px solid #e5e7eb;padding:8px">抖音</td><td style="border-bottom:1px solid #e5e7eb;padding:8px">海安律所退费投诉</td><td style="border-bottom:1px solid #e5e7eb;padding:8px">包含退费、投诉等风险表达，建议人工复核。</td></tr>
-  </table>
-</section>`; }
     function formatDuration(seconds){ const n=Number(seconds||0); if(n<60) return `${n}s`; return `${Math.floor(n/60)}m ${n%60}s`; }
     function formatRunStatus(status){ const labels={running:'运行中',success:'成功',partial_failed:'部分失败',failed:'失败',cancelled:'已停止'}; return labels[status]||status||''; }
     function formatFailures(summary){ const results=summary.platform_results||{}; const failed=summary.failed_platforms||[]; const cancelled=summary.cancelled_platforms||[]; const rows=[]; failed.forEach(p=>rows.push(`<div><strong>${esc(formatPlatforms([p]))}</strong>：${esc((results[p]||{}).error||'失败')}</div>`)); cancelled.forEach(p=>rows.push(`<div><strong>${esc(formatPlatforms([p]))}</strong>：已停止</div>`)); if(summary.cancel_reason) rows.push(`<div>${esc(summary.cancel_reason)}</div>`); return rows.join(''); }

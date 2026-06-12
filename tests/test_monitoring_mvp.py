@@ -849,7 +849,8 @@ def test_email_templates_preview_and_pool_configs_are_persisted():
         summary = get_dashboard_summary()
 
         assert preview["subject"].startswith("日报 海安律所")
-        assert "{report_html}" in preview["html"]
+        assert "{report_html}" not in preview["html"]
+        assert "海安律所退费投诉" in preview["html"]
         assert template["is_active"] is True
         assert list_email_templates()[0]["id"] == template["id"]
         assert list_proxy_profiles()[0]["proxy_url"].startswith("htt")
