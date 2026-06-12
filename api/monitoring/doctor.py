@@ -119,11 +119,14 @@ def _check_browser_profiles() -> dict[str, Any]:
         if p.get("login_type") == "cookie" and not p.get("has_cookies")
     ]
     needs_login = [p["platform_label"] for p in platforms if p["needs_login"]]
+    open_windows = [p["platform_label"] for p in platforms if p.get("login_window_open")]
     ok = all(p.get("login_ready") for p in platforms)
     if missing:
         message = "缺少 Profile：" + "、".join(missing)
     elif missing_cookies:
         message = "Cookie 登录未填写 Cookie：" + "、".join(missing_cookies)
+    elif open_windows:
+        message = "登录窗口未关闭：" + "、".join(open_windows)
     elif needs_login:
         message = "可能需要重新登录：" + "、".join(needs_login)
     else:

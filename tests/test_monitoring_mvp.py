@@ -1297,6 +1297,24 @@ def test_doctor_reports_ai_skip_mode(monkeypatch):
     assert any("真实测试 AI" in tip for tip in status["recommendations"])
 
 
+def test_doctor_warns_when_login_window_is_still_open(monkeypatch):
+    init_db()
+    statuses = [
+        {"platform": "dy", "platform_label": "抖音", "profile_exists": True, "needs_login": False, "login_ready": True, "login_window_open": False},
+        {"platform": "ks", "platform_label": "快手", "profile_exists": True, "needs_login": False, "login_ready": False, "login_window_open": True},
+        {"platform": "xhs", "platform_label": "小红书", "profile_exists": True, "needs_login": False, "login_ready": True, "login_window_open": False},
+    ]
+    monkeypatch.setattr("api.monitoring.doctor.list_platform_status", lambda: statuses)
+    monkeypatch.setattr(readiness_module, "list_platform_status", lambda: statuses)
+
+    status = run_doctor()
+    browser_check = next(check for check in status["checks"] if check["key"] == "browser_profiles")
+
+    assert browser_check["ok"] is False
+    assert "登录窗口未关闭" in browser_check["message"]
+    assert "快手" in browser_check["message"]
+
+
 def test_doctor_api_exposes_deployment_diagnostics():
     init_db()
     status = asyncio.run(monitor_router.doctor())
