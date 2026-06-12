@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import sqlite3
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -24,6 +25,8 @@ LOGIN_TYPE_LABELS = {
     "phone": "手机号",
     "cookie": "Cookie",
 }
+
+ACCOUNT_PROFILE_ROOT = MONITOR_DATA_DIR / "account_profiles"
 
 
 def utc_now() -> str:
@@ -1499,12 +1502,15 @@ def save_social_account(payload: dict[str, Any], account_id: int | None = None) 
     _validate_platform_login_type(platform, login_type)
     status = _validate_pool_status(payload.get("status") or "standby")
     now = utc_now()
+    profile_path = (payload.get("profile_path") or "").strip()
+    if account_id and not profile_path:
+        profile_path = _default_account_profile_path(platform, name, account_id)
     values = (
         name,
         platform,
         login_type,
         status,
-        (payload.get("profile_path") or "").strip(),
+        profile_path,
         _safe_int(payload.get("proxy_id")) or None,
         payload.get("notes") or "",
         payload.get("last_error") or "",
@@ -1534,6 +1540,12 @@ def save_social_account(payload: dict[str, Any], account_id: int | None = None) 
                 (*values[:-1], now, now),
             )
             target_id = int(cur.lastrowid)
+            if not profile_path:
+                profile_path = _default_account_profile_path(platform, name, target_id)
+                conn.execute(
+                    "UPDATE social_accounts SET profile_path=?, updated_at=? WHERE id=?",
+                    (profile_path, now, target_id),
+                )
     return get_social_account(target_id) or {}
 
 
@@ -1541,6 +1553,13 @@ def get_social_account(account_id: int) -> dict[str, Any] | None:
     with get_conn() as conn:
         row = conn.execute("SELECT * FROM social_accounts WHERE id=?", (account_id,)).fetchone()
     return _row_to_pool_item(dict(row)) if row else None
+
+
+def _default_account_profile_path(platform: str, account_name: str, account_id: int | None = None) -> str:
+    slug_source = f"{platform}_{account_id or ''}_{account_name}"
+    slug = re.sub(r"[^a-zA-Z0-9_\-\u4e00-\u9fff]+", "_", slug_source).strip("_") or platform
+    slug = slug[:80]
+    return str((ACCOUNT_PROFILE_ROOT / platform / slug).resolve())
 
 
 def delete_social_account(account_id: int) -> None:
@@ -1674,6 +1693,32 @@ def list_login_sessions(limit: int = 20) -> list[dict[str, Any]]:
     with get_conn() as conn:
         rows = conn.execute(sql, params).fetchall()
     return [dict(row) for row in rows]
+
+
+def expire_login_sessions_for_account(account_id: int | None, platform: str, profile_path: str = "") -> list[int]:
+    _validate_platform(platform)
+    clauses = ["platform=?", "status IN ('waiting_qrcode', 'waiting_manual_browser', 'scanned')"]
+    params: list[Any] = [platform]
+    if account_id:
+        clauses.append("account_id=?")
+        params.append(account_id)
+    elif profile_path:
+        clauses.append("profile_path=?")
+        params.append(profile_path)
+    else:
+        return []
+    where = " AND ".join(clauses)
+    now = utc_now()
+    with get_conn() as conn:
+        rows = conn.execute(f"SELECT id FROM login_sessions WHERE {where}", params).fetchall()
+        ids = [int(row["id"]) for row in rows]
+        if ids:
+            placeholders = ",".join("?" for _ in ids)
+            conn.execute(
+                f"UPDATE login_sessions SET status='expired', message=?, updated_at=? WHERE id IN ({placeholders})",
+                ["已被新的登录会话替换", now, *ids],
+            )
+    return ids
 
 
 def update_login_session_status(session_id: int, status: str, message: str = "", qr_image: str = "") -> dict[str, Any]:

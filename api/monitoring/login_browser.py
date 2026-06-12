@@ -40,6 +40,11 @@ def build_login_browser_command(platform: str, debug_port: int | None = None) ->
 
 def open_login_browser(platform: str) -> dict[str, Any]:
     command = build_login_browser_command(platform)
+    return open_login_browser_with_command(command)
+
+
+def open_login_browser_with_command(command: dict[str, Any]) -> dict[str, Any]:
+    Path(command["profile_path"]).mkdir(parents=True, exist_ok=True)
     args = [
         command["browser_path"],
         f"--remote-debugging-port={command['debug_port']}",
@@ -57,7 +62,7 @@ def open_login_browser(platform: str) -> dict[str, Any]:
         stderr=subprocess.DEVNULL,
         creationflags=creationflags,
     )
-    record_login_window(platform, process.pid, command["debug_port"], command["profile_path"])
+    record_login_window(command["platform"], process.pid, command["debug_port"], command["profile_path"])
     return {
         **command,
         "pid": process.pid,

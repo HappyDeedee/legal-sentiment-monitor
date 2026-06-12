@@ -19,6 +19,7 @@ from ..monitoring.database import (
     delete_login_session,
     delete_proxy_profile,
     delete_social_account,
+    expire_login_sessions_for_account,
     get_dashboard_summary,
     get_ai_config,
     get_email_config,
@@ -29,6 +30,7 @@ from ..monitoring.database import (
     get_platform_login_config,
     get_report,
     get_run,
+    get_social_account,
     has_running_run_for_job,
     init_db,
     list_jobs,
@@ -59,8 +61,12 @@ from ..monitoring.database import (
 )
 from ..monitoring.mailer import send_test_email
 from ..monitoring.doctor import run_doctor
-from ..monitoring.login_browser import build_login_browser_command, open_login_browser
-from ..monitoring.login_qrcode import close_qrcode_login_session, poll_qrcode_login_session, start_qrcode_login_session
+from ..monitoring.login_browser import build_login_browser_command, open_login_browser_with_command
+from ..monitoring.login_qrcode import (
+    close_qrcode_login_session,
+    poll_qrcode_login_session,
+    start_qrcode_login_session_with_profile,
+)
 from ..monitoring.platform_status import list_platform_status
 from ..monitoring.preflight import build_job_preflight
 from ..monitoring.readiness import get_readiness_status
@@ -104,9 +110,10 @@ async def platform_status():
 
 
 @router.post("/platform-status/{platform}/login-browser")
-async def platform_login_browser(platform: str):
+async def platform_login_browser(platform: str, payload: dict[str, Any] | None = None):
     try:
-        return open_login_browser(platform)
+        command = _login_browser_command_for_payload(platform, payload or {})
+        return open_login_browser_with_command(command)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
@@ -431,7 +438,15 @@ async def create_platform_login_session(payload: dict[str, Any]):
     init_db()
     platform = payload.get("platform")
     try:
-        command = build_login_browser_command(str(platform))
+        command = _login_browser_command_for_payload(str(platform), payload)
+        account = get_social_account(int(payload.get("account_id") or 0)) if payload.get("account_id") else None
+        expired_session_ids = expire_login_sessions_for_account(
+            int(account["id"]) if account else None,
+            str(platform),
+            str(command.get("profile_path") or ""),
+        )
+        for expired_session_id in expired_session_ids:
+            await close_qrcode_login_session(expired_session_id)
         session = create_login_session(
             {
                 "platform": platform,
@@ -441,8 +456,14 @@ async def create_platform_login_session(payload: dict[str, Any]):
                 "message": "正在生成登录二维码。",
             }
         )
-        qr_result = await start_qrcode_login_session(int(session["id"]), str(platform))
-        if qr_result.get("ok"):
+        qr_result = await start_qrcode_login_session_with_profile(int(session["id"]), str(platform), command)
+        if qr_result.get("already_logged_in"):
+            session = update_login_session_status(
+                int(session["id"]),
+                "success",
+                str(qr_result.get("message") or "当前 Profile 已经登录"),
+            )
+        elif qr_result.get("ok"):
             session = update_login_session_status(
                 int(session["id"]),
                 "waiting_qrcode",
@@ -712,6 +733,21 @@ def _refresh_job_schedule_state(job: dict[str, Any] | None) -> None:
     if not job:
         return
     set_job_schedule_state(job["id"], next_run_at(job) if job.get("enabled") else None)
+
+
+def _login_browser_command_for_payload(platform: str, payload: dict[str, Any]) -> dict[str, Any]:
+    command = build_login_browser_command(platform)
+    account_id = payload.get("account_id")
+    if not account_id:
+        return command
+    account = get_social_account(int(account_id))
+    if not account:
+        raise ValueError("account not found")
+    if account.get("platform") != platform:
+        raise ValueError("account platform does not match login platform")
+    if account.get("profile_path"):
+        command = {**command, "profile_path": str(account["profile_path"])}
+    return command
 
 
 def _report_download_media_type(report_type: str, path: Path) -> str:

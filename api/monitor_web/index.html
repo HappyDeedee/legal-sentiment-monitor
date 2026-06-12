@@ -320,7 +320,7 @@
                   <div><label>平台</label><select id="social_account_platform"><option value="dy">抖音</option><option value="ks">快手</option><option value="xhs">小红书</option></select></div>
                   <div><label>账号状态</label><select id="social_account_status"><option value="standby">待机</option><option value="active">可用</option><option value="limited">受限</option><option value="disabled">停用</option></select></div>
                   <div><label>绑定代理 ID</label><input id="social_account_proxy_id" placeholder="可留空"></div>
-                  <div><label>Profile 路径</label><input id="social_account_profile_path" placeholder="服务器浏览器 Profile 路径"></div>
+                  <div><label>Profile 路径</label><input id="social_account_profile_path" placeholder="留空自动生成独立 Profile"></div>
                 </div>
                 <label>备注</label><textarea id="social_account_notes" placeholder="记录账号用途、登录人、维护事项"></textarea>
                 <label>错误信息</label><textarea id="social_account_last_error" placeholder="最近一次登录或采集异常，可留空"></textarea>
@@ -675,7 +675,14 @@
       await Promise.all([loadPlatformLoginConfigs(), loadPlatformStatus(), loadReadiness(), loadDoctor()]);
       renderLoginModePanel();
     }
-    async function openPlatformLoginBrowser(platform){ const res=await api('/platform-status/'+platform+'/login-browser',{method:'POST'}); if(!res.ok){ toast(await err(res)); return; } const data=await res.json(); toast(data.message || '已打开登录窗口'); await loadPlatformStatus(); }
+    async function openPlatformLoginBrowser(platform, accountId=null){
+      const body=accountId ? JSON.stringify({account_id:accountId}) : JSON.stringify({});
+      const res=await api('/platform-status/'+platform+'/login-browser',{method:'POST',body});
+      if(!res.ok){ toast(await err(res)); return; }
+      const data=await res.json();
+      toast(data.message || '已打开登录窗口');
+      await loadPlatformStatus();
+    }
     async function startLoginSessionFromForm(){
       const accountId=Number(val('social_account_id')||0);
       const account=accountId ? socialAccountCache.get(accountId) : null;
@@ -953,15 +960,16 @@
     async function openSelectedAccountLoginBrowser(){
       const selected=[...selectedSocialAccountIds].map(id=>socialAccountCache.get(Number(id))).filter(Boolean);
       if(selected.length>1){ toast('扫码登录请先选择单个账号'); return; }
+      const accountId=(selected[0]||{}).id || Number(val('social_account_id')||0) || null;
       const platform=(selected[0]||{}).platform || val('social_account_platform');
       if(!platform){ toast('请先选择平台'); return; }
-      await openPlatformLoginBrowser(platform);
+      await openPlatformLoginBrowser(platform, accountId);
     }
     async function openAccountLoginBrowser(id){
       const account=socialAccountCache.get(Number(id));
       if(!account){ toast('账号池已刷新，请重新选择'); loadAccountsPool(); return; }
       editSocialAccount(id, true);
-      await openPlatformLoginBrowser(account.platform);
+      await openPlatformLoginBrowser(account.platform, Number(account.id));
     }
     async function startLoginSessionForAccountId(id){
       const account=socialAccountCache.get(Number(id));

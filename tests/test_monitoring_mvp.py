@@ -11,8 +11,8 @@ from fastapi import HTTPException
 
 from api.monitoring.ai import _build_endpoint, _parse_json, _validate_ai_output, test_ai as run_ai_config_test
 from api.monitoring.ai import DEFAULT_PROMPT
-from api.monitoring.database import create_login_session, create_run, finish_run, get_active_ai_key_profile, get_ai_config, get_conn, get_dashboard_summary, get_email_config, get_job, get_login_session, get_platform_login_config, get_report, get_run, init_db, list_ai_key_profiles, list_email_templates, list_jobs, list_leads, list_login_sessions, list_platform_login_configs, list_proxy_profiles, list_reports, list_runs, list_social_accounts, mark_selftest_jobs_internal, render_email_template_preview, save_ai_config, save_ai_key_profile, save_email_config, save_email_template, save_job, save_platform_login_config, save_proxy_profile, save_social_account, set_active_ai_key_profile
-from api.monitoring.login_browser import build_login_browser_command, open_login_browser
+from api.monitoring.database import create_login_session, create_run, expire_login_sessions_for_account, finish_run, get_active_ai_key_profile, get_ai_config, get_conn, get_dashboard_summary, get_email_config, get_job, get_login_session, get_platform_login_config, get_report, get_run, init_db, list_ai_key_profiles, list_email_templates, list_jobs, list_leads, list_login_sessions, list_platform_login_configs, list_proxy_profiles, list_reports, list_runs, list_social_accounts, mark_selftest_jobs_internal, render_email_template_preview, save_ai_config, save_ai_key_profile, save_email_config, save_email_template, save_job, save_platform_login_config, save_proxy_profile, save_social_account, set_active_ai_key_profile
+from api.monitoring.login_browser import build_login_browser_command, open_login_browser, open_login_browser_with_command
 import api.monitoring.login_qrcode as login_qrcode_module
 from api.monitoring.login_state import login_window_status, record_login_window
 from api.monitoring.mailer import build_report_email, send_test_email
@@ -326,6 +326,41 @@ def test_login_browser_message_reminds_to_close_window(tmp_path, monkeypatch):
     assert login_window_status("dy")["pid"] == 12345
     assert "关闭该窗口" in result["message"]
     assert "运行采集" in result["message"]
+
+
+def test_login_browser_route_can_use_social_account_profile(tmp_path, monkeypatch):
+    init_db()
+    snapshots = {
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    fake_browser = tmp_path / "chrome.exe"
+    fake_browser.write_text("", encoding="utf-8")
+    seen: dict[str, Any] = {}
+    try:
+        account = save_social_account(
+            {
+                "name": "海安律所抖音采集号",
+                "platform": "dy",
+                "login_type": "qrcode",
+                "status": "standby",
+                "profile_path": str(tmp_path / "account_profile"),
+            }
+        )
+        monkeypatch.setattr("api.monitoring.login_browser.BrowserLauncher.detect_browser_paths", lambda self: [str(fake_browser)])
+
+        def fake_open_login_browser_with_command(command):
+            seen["profile_path"] = command["profile_path"]
+            return {**command, "pid": 12345, "message": "ok"}
+
+        monkeypatch.setattr(monitor_router, "open_login_browser_with_command", fake_open_login_browser_with_command)
+
+        result = asyncio.run(monitor_router.platform_login_browser("dy", {"account_id": account["id"]}))
+
+        assert result["pid"] == 12345
+        assert seen["profile_path"] == str(tmp_path / "account_profile")
+    finally:
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
 
 
 def test_login_browser_command_supports_per_platform_port_env(tmp_path, monkeypatch):
@@ -933,6 +968,36 @@ def test_login_sessions_are_persisted_for_server_side_login_flow():
         _restore_table("login_sessions", snapshot)
 
 
+def test_login_sessions_can_be_expired_for_same_account():
+    init_db()
+    snapshot = _snapshot_table("login_sessions")
+    try:
+        first = create_login_session(
+            {
+                "platform": "dy",
+                "account_id": 10001,
+                "login_url": "https://www.douyin.com/",
+                "profile_path": "browser_data/account_10001",
+            }
+        )
+        other = create_login_session(
+            {
+                "platform": "dy",
+                "account_id": 10002,
+                "login_url": "https://www.douyin.com/",
+                "profile_path": "browser_data/account_10002",
+            }
+        )
+
+        expired = expire_login_sessions_for_account(10001, "dy", "browser_data/account_10001")
+
+        assert expired == [first["id"]]
+        assert get_login_session(first["id"])["status"] == "expired"
+        assert get_login_session(other["id"])["status"] == "waiting_manual_browser"
+    finally:
+        _restore_table("login_sessions", snapshot)
+
+
 def test_login_session_routes_create_pollable_session(monkeypatch):
     init_db()
     snapshot = _snapshot_table("login_sessions")
@@ -949,7 +1014,7 @@ def test_login_session_routes_create_pollable_session(monkeypatch):
                 "browser_path": "chrome",
             },
         )
-        async def fake_start_qrcode_login_session(session_id, platform):
+        async def fake_start_qrcode_login_session_with_profile(session_id, platform, command):
             return {
                 "ok": True,
                 "qr_image": "data:image/png;base64,abc",
@@ -960,7 +1025,7 @@ def test_login_session_routes_create_pollable_session(monkeypatch):
         async def fake_poll_qrcode_login_session(session_id):
             return {"active": True, "success": False, "message": "等待扫码确认。"}
 
-        monkeypatch.setattr(monitor_router, "start_qrcode_login_session", fake_start_qrcode_login_session)
+        monkeypatch.setattr(monitor_router, "start_qrcode_login_session_with_profile", fake_start_qrcode_login_session_with_profile)
         monkeypatch.setattr(monitor_router, "poll_qrcode_login_session", fake_poll_qrcode_login_session)
         monkeypatch.setattr(
             monitor_router,
@@ -1007,10 +1072,10 @@ def test_login_session_route_falls_back_when_qrcode_unavailable(monkeypatch):
             },
         )
 
-        async def fake_start_qrcode_login_session(session_id, platform):
+        async def fake_start_qrcode_login_session_with_profile(session_id, platform, command):
             return {"ok": False, "message": "没有在页面中找到登录二维码，请使用登录窗口兜底。", "profile_path": "browser_data/cdp_dy_user_data_dir"}
 
-        monkeypatch.setattr(monitor_router, "start_qrcode_login_session", fake_start_qrcode_login_session)
+        monkeypatch.setattr(monitor_router, "start_qrcode_login_session_with_profile", fake_start_qrcode_login_session_with_profile)
 
         created = asyncio.run(monitor_router.create_platform_login_session({"platform": "dy"}))
 
@@ -1020,6 +1085,169 @@ def test_login_session_route_falls_back_when_qrcode_unavailable(monkeypatch):
         assert "登录窗口兜底" in created["session"]["message"]
     finally:
         _restore_table("login_sessions", snapshot)
+
+
+def test_qrcode_data_url_is_preserved():
+    raw = "data:image/png;base64,abc123"
+
+    assert login_qrcode_module._as_data_url(raw) == raw
+
+
+def test_qrcode_fetch_remote_image_with_browser_request():
+    class FakeResponse:
+        ok = True
+        headers = {"content-type": "image/jpeg"}
+
+        async def body(self):
+            return b"fake-image"
+
+    class FakeRequest:
+        async def get(self, url, headers=None):
+            assert url == "https://example.com/qrcode.jpg"
+            return FakeResponse()
+
+    class FakeContext:
+        request = FakeRequest()
+
+    class FakePage:
+        context = FakeContext()
+
+        async def evaluate(self, script):
+            return "pytest-user-agent"
+
+    result = asyncio.run(login_qrcode_module._fetch_image_data_url(FakePage(), "https://example.com/qrcode.jpg"))
+
+    assert result.startswith("data:image/jpeg;base64,")
+
+
+def test_qrcode_element_screenshot_fallback():
+    class FakeElement:
+        async def screenshot(self):
+            return b"png-bytes"
+
+    result = asyncio.run(login_qrcode_module._element_screenshot_data_url(FakeElement()))
+
+    assert result.startswith("data:image/png;base64,")
+
+
+def test_qrcode_login_defaults_to_visible_browser(monkeypatch):
+    monkeypatch.delenv("MONITOR_LOGIN_QR_HEADLESS", raising=False)
+
+    assert login_qrcode_module._login_qr_headless() is False
+
+
+def test_login_session_route_marks_existing_profile_success(monkeypatch):
+    init_db()
+    snapshot = _snapshot_table("login_sessions")
+    try:
+        monkeypatch.setattr(
+            monitor_router,
+            "build_login_browser_command",
+            lambda platform: {
+                "platform": platform,
+                "platform_label": "抖音",
+                "login_url": "https://www.douyin.com/",
+                "profile_path": "browser_data/cdp_dy_user_data_dir",
+                "debug_port": 9323,
+                "browser_path": "chrome",
+            },
+        )
+
+        async def fake_start_qrcode_login_session_with_profile(session_id, platform, command):
+            return {
+                "ok": True,
+                "already_logged_in": True,
+                "qr_image": "",
+                "message": "当前 Profile 已经登录，不需要重新扫码。",
+                "profile_path": "browser_data/cdp_dy_user_data_dir",
+            }
+
+        monkeypatch.setattr(monitor_router, "start_qrcode_login_session_with_profile", fake_start_qrcode_login_session_with_profile)
+
+        created = asyncio.run(monitor_router.create_platform_login_session({"platform": "dy"}))
+
+        assert created["session"]["status"] == "success"
+        assert created["capabilities"]["manual_browser_fallback"] is True
+        assert created["capabilities"]["qr_image_supported"] is False
+        assert "已经登录" in created["session"]["message"]
+    finally:
+        _restore_table("login_sessions", snapshot)
+
+
+def test_login_session_uses_social_account_profile(monkeypatch, tmp_path):
+    init_db()
+    snapshots = {
+        "login_sessions": _snapshot_table("login_sessions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    seen: dict[str, Any] = {}
+    try:
+        account_profile = tmp_path / "account_profile"
+        account = save_social_account(
+            {
+                "name": "海安律所抖音采集号",
+                "platform": "dy",
+                "login_type": "qrcode",
+                "status": "standby",
+                "profile_path": str(account_profile),
+            }
+        )
+        monkeypatch.setattr(
+            monitor_router,
+            "build_login_browser_command",
+            lambda platform: {
+                "platform": platform,
+                "platform_label": "抖音",
+                "login_url": "https://www.douyin.com/",
+                "profile_path": str(tmp_path / "global_profile"),
+                "debug_port": 9323,
+                "browser_path": "chrome",
+            },
+        )
+
+        async def fake_start_qrcode_login_session_with_profile(session_id, platform, command):
+            seen["profile_path"] = command["profile_path"]
+            return {
+                "ok": True,
+                "qr_image": "data:image/png;base64,abc",
+                "message": "请扫码登录",
+                "profile_path": command["profile_path"],
+            }
+
+        monkeypatch.setattr(monitor_router, "start_qrcode_login_session_with_profile", fake_start_qrcode_login_session_with_profile)
+
+        created = asyncio.run(monitor_router.create_platform_login_session({"platform": "dy", "account_id": account["id"]}))
+
+        assert seen["profile_path"] == str(account_profile)
+        assert created["session"]["account_id"] == account["id"]
+        assert created["session"]["profile_path"] == str(account_profile)
+        assert created["session"]["qr_image"].startswith("data:image")
+    finally:
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+
+def test_social_account_profile_path_auto_generated_when_empty():
+    init_db()
+    snapshot = _snapshot_table("social_accounts")
+    try:
+        account = save_social_account(
+            {
+                "name": "海安律所小红书采集号",
+                "platform": "xhs",
+                "login_type": "qrcode",
+                "status": "standby",
+            }
+        )
+        assert "account_profiles" in account["profile_path"]
+        assert "海安律所小红书采集号" in account["profile_path"]
+
+        updated = save_social_account({**account, "profile_path": ""}, int(account["id"]))
+
+        assert updated["profile_path"]
+        assert str(account["id"]) in updated["profile_path"]
+    finally:
+        _restore_table("social_accounts", snapshot)
 
 
 def test_qrcode_poll_success_closes_browser_session(monkeypatch):
