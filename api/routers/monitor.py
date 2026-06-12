@@ -14,6 +14,7 @@ from ..monitoring.database import (
     get_ai_config,
     get_email_config,
     get_job,
+    get_report,
     init_db,
     list_jobs,
     list_leads,
@@ -33,6 +34,7 @@ from ..monitoring.login_browser import open_login_browser
 from ..monitoring.platform_status import list_platform_status
 from ..monitoring.preflight import build_job_preflight
 from ..monitoring.readiness import get_readiness_status
+from ..monitoring.reporting import resend_report_email
 from ..monitoring.scheduler import launch_job, next_run_at, running_job_ids
 from ..monitoring.security import redact_sensitive
 from ..monitoring.selftest import create_sample_report
@@ -314,26 +316,37 @@ async def report_selftest():
 
 @router.get("/reports/{report_id}")
 async def report_detail(report_id: int):
-    for report in list_reports(500):
-        if report["id"] == report_id:
-            html_path = _safe_report_path(report["html_path"])
-            report["html"] = html_path.read_text(encoding="utf-8") if html_path.exists() else ""
-            return {"report": report}
-    raise HTTPException(status_code=404, detail="report not found")
+    report = get_report(report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="report not found")
+    html_path = _safe_report_path(report["html_path"])
+    report["html"] = html_path.read_text(encoding="utf-8") if html_path.exists() else ""
+    return {"report": report}
+
+
+@router.post("/reports/{report_id}/resend-email")
+async def report_resend_email(report_id: int):
+    try:
+        ok, error, report = resend_report_email(report_id)
+        return {"ok": ok, "error": redact_sensitive(error), "report": report}
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=redact_sensitive(f"{type(exc).__name__}: {exc}"))
 
 
 @router.get("/reports/{report_id}/download")
 async def report_download(report_id: int, type: str = "excel"):
-    for report in list_reports(500):
-        if report["id"] == report_id:
-            key = {"excel": "excel_path", "markdown": "markdown_path", "html": "html_path"}.get(type)
-            if not key:
-                raise HTTPException(status_code=400, detail="unsupported report type")
-            path = _safe_report_path(report[key])
-            if not path.exists():
-                raise HTTPException(status_code=404, detail="file not found")
-            return FileResponse(path, filename=path.name, media_type=_report_download_media_type(type, path))
-    raise HTTPException(status_code=404, detail="report not found")
+    report = get_report(report_id)
+    if not report:
+        raise HTTPException(status_code=404, detail="report not found")
+    key = {"excel": "excel_path", "markdown": "markdown_path", "html": "html_path"}.get(type)
+    if not key:
+        raise HTTPException(status_code=400, detail="unsupported report type")
+    path = _safe_report_path(report[key])
+    if not path.exists():
+        raise HTTPException(status_code=404, detail="file not found")
+    return FileResponse(path, filename=path.name, media_type=_report_download_media_type(type, path))
 
 
 @router.get("/page", response_class=HTMLResponse)

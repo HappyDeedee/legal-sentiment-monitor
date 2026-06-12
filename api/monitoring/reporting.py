@@ -8,7 +8,8 @@ from typing import Any
 
 from openpyxl import Workbook
 
-from .database import MONITOR_DATA_DIR, get_conn, utc_now
+from .database import MONITOR_DATA_DIR, get_job, get_report, get_conn, utc_now
+from .mailer import send_report
 from .normalizer import PLATFORM_LABELS
 from .security import redact_sensitive
 
@@ -61,6 +62,21 @@ def update_report_email_status(report_id: int, status: str, error: str | None = 
             "UPDATE reports SET email_status=?, email_error=? WHERE id=?",
             (status, redact_sensitive(error), report_id),
         )
+
+
+def resend_report_email(report_id: int) -> tuple[bool, str | None, dict[str, Any]]:
+    report = get_report(report_id)
+    if not report:
+        raise ValueError("report not found")
+    job = get_job(int(report.get("job_id") or 0)) or {
+        "id": report.get("job_id"),
+        "law_firm_name": report.get("law_firm_name") or "",
+        "recipients": [],
+    }
+    ok, error = send_report(job, report)
+    update_report_email_status(report_id, "sent" if ok else "failed", error)
+    refreshed = get_report(report_id) or report
+    return ok, error, refreshed
 
 
 def render_html(job: dict[str, Any], summary: dict[str, Any], records: list[dict[str, Any]]) -> str:

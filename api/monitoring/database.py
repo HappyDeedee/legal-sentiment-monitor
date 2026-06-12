@@ -791,6 +791,24 @@ def list_reports(limit: int = 100) -> list[dict[str, Any]]:
     return result
 
 
+def get_report(report_id: int) -> dict[str, Any] | None:
+    with get_conn() as conn:
+        row = conn.execute(
+            """
+            SELECT reports.*, monitor_jobs.law_firm_name FROM reports
+            LEFT JOIN monitor_jobs ON monitor_jobs.id = reports.job_id
+            WHERE reports.id=?
+            """,
+            (report_id,),
+        ).fetchone()
+    if not row:
+        return None
+    report = dict(row)
+    report["summary"] = _json_loads(report.get("summary"), {})
+    _attach_report_lead_counts([report])
+    return report
+
+
 def _attach_report_lead_counts(reports: list[dict[str, Any]]) -> None:
     run_ids = [int(report["run_id"]) for report in reports if report.get("run_id")]
     if not run_ids:

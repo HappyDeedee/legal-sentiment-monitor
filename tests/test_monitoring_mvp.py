@@ -10,14 +10,14 @@ from fastapi import HTTPException
 
 from api.monitoring.ai import _build_endpoint, _parse_json, _validate_ai_output, test_ai as run_ai_config_test
 from api.monitoring.ai import DEFAULT_PROMPT
-from api.monitoring.database import create_run, finish_run, get_ai_config, get_conn, get_email_config, init_db, list_jobs, list_leads, save_ai_config, save_email_config, save_job
+from api.monitoring.database import create_run, finish_run, get_ai_config, get_conn, get_email_config, get_report, init_db, list_jobs, list_leads, save_ai_config, save_email_config, save_job
 from api.monitoring.login_browser import build_login_browser_command, open_login_browser
 from api.monitoring.mailer import build_report_email, send_test_email
 from api.monitoring.normalizer import collect_platform_outputs, in_time_window, normalize_content, parse_jsonl_file, resolve_window
 from api.monitoring.platform_status import list_platform_status
 from api.monitoring.preflight import build_job_preflight
 from api.monitoring.readiness import get_readiness_status
-from api.monitoring.reporting import create_report
+from api.monitoring.reporting import create_report, resend_report_email
 from api.monitoring.security import redact_sensitive
 from api.monitoring.selftest import create_sample_report
 from api.monitoring.cli import run_due_jobs
@@ -890,6 +890,9 @@ def test_monitor_page_exposes_acceptance_checklist():
     assert "待人工复核" in page
     assert "待复核" in page
     assert "生成自测报告" in page
+    assert "重发邮件" in page
+    assert "resendReportEmail" in page
+    assert "resend-email" in page
     assert "download?type=html" in page
     assert "download?type=excel" in page
     assert "download?type=markdown" in page
@@ -998,6 +1001,47 @@ def test_cli_run_due_skips_legacy_template_placeholder_jobs(monkeypatch):
     assert result["ok"] is True
     assert run_calls == []
     assert "验收模板" in result["results"][0]["reason"]
+
+
+def test_report_resend_email_updates_status(monkeypatch):
+    init_db()
+    job = save_job(
+        {
+            "law_firm_name": "重发测试律所",
+            "aliases": [],
+            "exclude_words": [],
+            "keywords": ["重发测试律所避雷"],
+            "platforms": ["dy"],
+            "recipients": ["ops@example.com"],
+            "enable_comments": False,
+            "time_window_type": "recent_1d",
+            "frequency": "daily",
+            "email_time": "09:00",
+            "enabled": True,
+        }
+    )
+    run_id = create_run(job["id"])
+    report = create_report(
+        run_id,
+        job,
+        {"platforms": ["dy"], "failed_platforms": [], "new_contents": 0, "negative_count": 0, "high_count": 0},
+    )
+
+    def fake_send_report(job, report):
+        return False, "SMTP 配置未完成"
+
+    try:
+        monkeypatch.setattr("api.monitoring.reporting.send_report", fake_send_report)
+        ok, error, refreshed = resend_report_email(report["id"])
+        stored = get_report(report["id"])
+    finally:
+        _cleanup_test_records(job["id"], "")
+
+    assert ok is False
+    assert error == "SMTP 配置未完成"
+    assert refreshed["email_status"] == "failed"
+    assert stored and stored["email_status"] == "failed"
+    assert stored["email_error"] == "SMTP 配置未完成"
 
 
 def test_run_job_skips_when_cross_process_lock_exists():

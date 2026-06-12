@@ -328,13 +328,14 @@
       const qs = new URLSearchParams({law_firm:val('report_law_firm'), platform:val('report_platform'), risk:val('report_risk'), date_from:val('report_date_from'), date_to:val('report_date_to')});
       const [reportData, leadData]=await Promise.all([(await api('/reports?'+qs.toString())).json(), (await api('/leads?'+qs.toString())).json()]);
       const data=reportData;
-      document.getElementById('reports_table').innerHTML=table(['ID','律所','新增','负面','高风险','待复核','邮件','创建时间','下载'], data.reports.map(r=>[r.id,esc(r.law_firm_name||''),esc((r.summary||{}).new_contents||0),esc((r.summary||{}).negative_count||0),esc((r.summary||{}).high_count||0),esc((r.summary||{}).pending_review_count||0),esc(r.email_status),esc(r.created_at),`<button class="secondary" onclick="previewReport(${r.id})">预览</button> <a href="/api/monitor/reports/${r.id}/download?type=html">HTML</a> <a href="/api/monitor/reports/${r.id}/download?type=excel">Excel</a> <a href="/api/monitor/reports/${r.id}/download?type=markdown">Markdown</a>`]));
+      document.getElementById('reports_table').innerHTML=table(['ID','律所','新增','负面','高风险','待复核','邮件','创建时间','下载'], data.reports.map(r=>[r.id,esc(r.law_firm_name||''),esc((r.summary||{}).new_contents||0),esc((r.summary||{}).negative_count||0),esc((r.summary||{}).high_count||0),esc((r.summary||{}).pending_review_count||0),esc(r.email_status),esc(r.created_at),`<button class="secondary" onclick="previewReport(${r.id})">预览</button> <button class="secondary" onclick="resendReportEmail(${r.id})">重发邮件</button> <a href="/api/monitor/reports/${r.id}/download?type=html">HTML</a> <a href="/api/monitor/reports/${r.id}/download?type=excel">Excel</a> <a href="/api/monitor/reports/${r.id}/download?type=markdown">Markdown</a>`]));
       document.getElementById('leads_table').innerHTML=table(['律所','平台','状态','标题','关键词','AI 理由','证据','链接'], (leadData.leads||[]).map(x=>[
         esc(x.law_firm_name||''), esc(formatPlatforms([x.platform])), esc(formatLeadStatus(x)), esc(x.title||''), esc(x.source_keyword||''), esc(x.reason||''), esc((x.evidence_quotes||[]).join(' / ')), leadLinks(x)
       ]));
     }
     async function createSelftestReport(){ const res=await api('/reports/selftest',{method:'POST'}); if(!res.ok){toast(await err(res));return;} toast('自测报告已生成'); loadReports(); loadRuns(); }
     async function previewReport(id){ const r=(await (await api('/reports/'+id)).json()).report; document.getElementById('report_preview').srcdoc = r.html || '无 HTML'; }
+    async function resendReportEmail(id){ const res=await api('/reports/'+id+'/resend-email',{method:'POST'}); if(!res.ok){toast(await err(res));return;} const data=await res.json(); toast(data.ok?'报告邮件已重新发送':'重发失败：'+(data.error||'请检查邮件配置')); loadReports(); }
     async function loadDoctor(){
       const data=await (await api('/doctor')).json();
       document.getElementById('doctor_summary').innerHTML = data.ok
