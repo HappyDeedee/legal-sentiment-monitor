@@ -32,6 +32,11 @@ from tools.browser_launcher import BrowserLauncher
 from tools import utils
 
 
+def resolve_cdp_user_data_dir(platform: str) -> str:
+    browser_data_root = os.environ.get("MONITOR_BROWSER_DATA_DIR") or os.path.join(os.getcwd(), "browser_data")
+    return os.path.join(browser_data_root, f"cdp_{config.USER_DATA_DIR % platform}")
+
+
 class CDPBrowserManager:
     """
     CDP browser manager, responsible for launching and managing browsers connected via CDP
@@ -232,7 +237,7 @@ class CDPBrowserManager:
             # Simple socket connection test
             with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as s:
                 s.settimeout(5)
-                result = s.connect_ex(("localhost", debug_port))
+                result = s.connect_ex(("127.0.0.1", debug_port))
                 if result == 0:
                     utils.logger.info(
                         f"[CDPBrowserManager] CDP port {debug_port} is accessible"
@@ -254,11 +259,7 @@ class CDPBrowserManager:
         # Set user data directory (if save login state is enabled)
         user_data_dir = None
         if config.SAVE_LOGIN_STATE:
-            user_data_dir = os.path.join(
-                os.getcwd(),
-                "browser_data",
-                f"cdp_{config.USER_DATA_DIR % config.PLATFORM}",
-            )
+            user_data_dir = resolve_cdp_user_data_dir(config.PLATFORM)
             os.makedirs(user_data_dir, exist_ok=True)
             utils.logger.info(f"[CDPBrowserManager] User data directory: {user_data_dir}")
 
@@ -289,26 +290,30 @@ class CDPBrowserManager:
         """
         Get browser WebSocket connection URL
         """
-        try:
-            async with httpx.AsyncClient() as client:
-                response = await client.get(
-                    f"http://localhost:{debug_port}/json/version", timeout=10
-                )
-                if response.status_code == 200:
-                    data = response.json()
-                    ws_url = data.get("webSocketDebuggerUrl")
-                    if ws_url:
-                        utils.logger.info(
-                            f"[CDPBrowserManager] Got browser WebSocket URL: {ws_url}"
-                        )
-                        return ws_url
-                    else:
+        last_error = None
+        for attempt in range(1, 11):
+            try:
+                async with httpx.AsyncClient(trust_env=False) as client:
+                    response = await client.get(
+                        f"http://127.0.0.1:{debug_port}/json/version", timeout=10
+                    )
+                    if response.status_code == 200:
+                        data = response.json()
+                        ws_url = data.get("webSocketDebuggerUrl")
+                        if ws_url:
+                            utils.logger.info(
+                                f"[CDPBrowserManager] Got browser WebSocket URL: {ws_url}"
+                            )
+                            return ws_url
                         raise RuntimeError("webSocketDebuggerUrl not found")
-                else:
                     raise RuntimeError(f"HTTP {response.status_code}: {response.text}")
-        except Exception as e:
-            utils.logger.error(f"[CDPBrowserManager] Failed to get WebSocket URL: {e}")
-            raise
+            except Exception as e:
+                last_error = e
+                if attempt < 10:
+                    await asyncio.sleep(0.5)
+
+        utils.logger.error(f"[CDPBrowserManager] Failed to get WebSocket URL: {last_error}")
+        raise last_error
 
     async def _connect_via_cdp(self, playwright: Playwright):
         """
@@ -316,10 +321,7 @@ class CDPBrowserManager:
         """
         try:
             if config.CDP_CONNECT_EXISTING:
-                # For existing browser (e.g. chrome://inspect/#remote-debugging),
-                # Chrome exposes a WebSocket at /devtools/browser and may show a confirmation
-                # dialog to the user. Use ws:// with a longer timeout to wait for user confirmation.
-                ws_url = f"ws://localhost:{self.debug_port}/devtools/browser"
+                ws_url = await self._get_browser_websocket_url(self.debug_port)
                 utils.logger.info(f"[CDPBrowserManager] Connecting to existing browser via CDP: {ws_url}")
                 utils.logger.info(
                     "[CDPBrowserManager] Please check your browser for a confirmation dialog and accept it"

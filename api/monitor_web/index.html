@@ -1,0 +1,292 @@
+<!doctype html>
+<html lang="zh-CN">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>律所舆情监控</title>
+  <style>
+    :root { color-scheme: light; --bg:#f6f7fb; --panel:#fff; --line:#dfe3ea; --text:#172033; --muted:#647084; --primary:#1677ff; --danger:#c2410c; }
+    * { box-sizing: border-box; }
+    body { margin:0; font-family: "Microsoft YaHei", Arial, sans-serif; background:var(--bg); color:var(--text); }
+    header { height:56px; display:flex; align-items:center; justify-content:space-between; padding:0 24px; background:#111827; color:#fff; }
+    main { display:grid; grid-template-columns: 220px 1fr; min-height:calc(100vh - 56px); }
+    nav { background:#fff; border-right:1px solid var(--line); padding:16px; }
+    nav button { width:100%; text-align:left; border:0; background:transparent; padding:10px 12px; border-radius:6px; cursor:pointer; color:#263244; }
+    nav button.active, nav button:hover { background:#eaf2ff; color:#0759c7; }
+    section { display:none; padding:20px; }
+    section.active { display:block; }
+    .grid { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:14px; }
+    .panel { background:var(--panel); border:1px solid var(--line); border-radius:8px; padding:16px; margin-bottom:16px; }
+    h2 { font-size:20px; margin:0 0 14px; }
+    h3 { font-size:16px; margin:0 0 12px; }
+    label { display:block; font-size:13px; color:var(--muted); margin:8px 0 6px; }
+    input, textarea, select { width:100%; border:1px solid var(--line); border-radius:6px; padding:9px 10px; font:inherit; background:#fff; }
+    textarea { min-height:80px; resize:vertical; }
+    .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
+    .row > * { flex:1; }
+    .checks label { display:inline-flex; align-items:center; gap:6px; margin-right:14px; color:#263244; }
+    .checks input { width:auto; }
+    button.primary { background:var(--primary); color:#fff; border:0; border-radius:6px; padding:9px 14px; cursor:pointer; }
+    button.secondary { background:#fff; color:#263244; border:1px solid var(--line); border-radius:6px; padding:8px 12px; cursor:pointer; }
+    button.danger { background:#fff7ed; color:var(--danger); border:1px solid #fed7aa; border-radius:6px; padding:8px 12px; cursor:pointer; }
+    table { width:100%; border-collapse:collapse; font-size:14px; }
+    th, td { border-bottom:1px solid var(--line); text-align:left; padding:10px; vertical-align:top; }
+    th { color:var(--muted); font-weight:600; background:#fafafa; }
+    .muted { color:var(--muted); }
+    .status { display:inline-block; padding:2px 7px; border-radius:999px; background:#eef2ff; color:#3730a3; font-size:12px; }
+    .toast { position:fixed; right:18px; top:70px; background:#111827; color:#fff; padding:10px 14px; border-radius:6px; display:none; max-width:420px; z-index:10; }
+    iframe { width:100%; min-height:520px; border:1px solid var(--line); border-radius:8px; background:#fff; }
+    pre.logbox { max-height:360px; overflow:auto; background:#0f172a; color:#e5e7eb; padding:12px; border-radius:6px; white-space:pre-wrap; }
+    .toolbar { display:flex; gap:10px; align-items:end; flex-wrap:wrap; margin-bottom:12px; }
+    .toolbar > div { min-width:150px; flex:1; }
+    .pill { display:inline-block; padding:2px 8px; border-radius:999px; background:#f1f5f9; color:#334155; font-size:12px; }
+    .readiness-summary { display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap; margin:12px 0; padding:12px; border:1px solid var(--line); border-radius:8px; background:#fbfdff; }
+    .readiness-summary.ready { border-color:#86efac; background:#f0fdf4; }
+    .readiness-summary.pending { border-color:#fed7aa; background:#fff7ed; }
+    .readiness-mark { min-width:92px; font-weight:700; }
+    .readiness-list { flex:1; min-width:260px; }
+    .readiness-list ul { margin:6px 0 0 18px; padding:0; }
+    .small { font-size:12px; color:var(--muted); }
+    @media (max-width: 900px) { main { grid-template-columns:1fr; } nav { display:flex; overflow:auto; } nav button { white-space:nowrap; } .grid { grid-template-columns:1fr; } }
+  </style>
+</head>
+<body>
+  <header>
+    <strong>律所舆情监控 MVP</strong>
+    <span class="muted">抖音 / 快手 / 小红书</span>
+  </header>
+  <main>
+    <nav>
+      <button class="active" data-tab="jobs">任务管理</button>
+      <button data-tab="ai">AI 配置</button>
+      <button data-tab="email">邮件配置</button>
+      <button data-tab="runs">运行记录</button>
+      <button data-tab="reports">报告中心</button>
+    </nav>
+    <div>
+      <section id="jobs" class="active">
+        <div class="panel">
+          <h2>上线验收状态</h2>
+          <button class="secondary" onclick="loadReadiness()">刷新验收状态</button>
+          <div id="readiness_summary"></div>
+          <div id="readiness_table"></div>
+        </div>
+        <div class="panel">
+          <h2>平台状态</h2>
+          <button class="secondary" onclick="loadPlatformStatus()">刷新状态</button>
+          <div id="platform_status_table"></div>
+        </div>
+        <div class="panel">
+          <h2>监控任务</h2>
+          <input type="hidden" id="job_id">
+          <div class="grid">
+            <div><label>律所名称</label><input id="law_firm_name" placeholder="例如：北京海安律师事务所"></div>
+            <div><label>收件邮箱（多行）</label><textarea id="recipients" placeholder="a@example.com&#10;b@example.com"></textarea></div>
+            <div><label>别名（多行）</label><textarea id="aliases" placeholder="海安律所&#10;海安律师"></textarea></div>
+            <div><label>排除词（多行）</label><textarea id="exclude_words" placeholder="招聘&#10;无关同名"></textarea></div>
+          </div>
+          <label>关键词（多行）</label>
+          <textarea id="keywords" placeholder="海安律所避雷&#10;海安律师事务所退费"></textarea>
+          <div class="row">
+            <div>
+              <label>平台</label>
+              <div class="checks">
+                <label><input type="checkbox" name="platform" value="dy" checked>抖音</label>
+                <label><input type="checkbox" name="platform" value="ks">快手</label>
+                <label><input type="checkbox" name="platform" value="xhs">小红书</label>
+              </div>
+            </div>
+            <div>
+              <label>采集范围</label>
+              <select id="time_window_type">
+                <option value="recent_1d">最近 1 天</option>
+                <option value="recent_7d">最近 7 天</option>
+                <option value="recent_30d">最近 30 天</option>
+                <option value="custom">自定义</option>
+              </select>
+            </div>
+            <div><label>频率</label><select id="frequency"><option value="daily">每天</option><option value="12h">每 12 小时</option><option value="6h">每 6 小时</option><option value="cron">自定义 cron</option></select></div>
+            <div><label>邮件发送时间</label><input id="email_time" value="09:00"></div>
+          </div>
+          <div class="row">
+            <div><label>自定义开始日期</label><input id="custom_start" type="date"></div>
+            <div><label>自定义结束日期</label><input id="custom_end" type="date"></div>
+            <div><label>自定义 cron</label><input id="cron_expr" placeholder="例如：0 9 * * *"></div>
+          </div>
+          <div class="row">
+            <label><input type="checkbox" id="enable_comments" checked style="width:auto"> 抓取一级评论</label>
+            <label><input type="checkbox" id="enabled" checked style="width:auto"> 启用任务</label>
+          </div>
+          <div class="row" style="margin-top:12px">
+            <button class="primary" onclick="saveJob()">保存任务</button>
+            <button class="secondary" onclick="resetJobForm()">清空</button>
+          </div>
+        </div>
+        <div class="panel"><h3>任务列表</h3><div id="jobs_table"></div></div>
+      </section>
+
+      <section id="ai">
+        <div class="panel">
+          <h2>AI 配置</h2>
+          <div class="grid">
+            <div><label>Provider</label><select id="ai_provider"><option value="openai">OpenAI Compatible</option><option value="anthropic">Anthropic</option></select></div>
+            <div><label>Model</label><input id="ai_model" placeholder="gpt-4.1-mini / claude-3-5-sonnet-latest"></div>
+            <div><label>Base URL</label><input id="ai_base_url" placeholder="https://api.openai.com"></div>
+            <div><label>API Key</label><input id="ai_api_key" type="password" placeholder="留空表示不修改"></div>
+            <div><label>Temperature</label><input id="ai_temperature" value="0"></div>
+          </div>
+          <label>负面判断 Prompt</label>
+          <textarea id="ai_prompt"></textarea>
+          <div id="ai_status" class="small" style="margin-top:8px"></div>
+          <div class="row" style="margin-top:12px">
+            <button class="primary" onclick="saveAI()">保存 AI 配置</button>
+            <button class="secondary" onclick="testAI()">测试 AI</button>
+          </div>
+          <pre id="ai_result" class="panel" style="white-space:pre-wrap"></pre>
+        </div>
+      </section>
+
+      <section id="email">
+        <div class="panel">
+          <h2>邮件配置</h2>
+          <div class="grid">
+            <div><label>SMTP Host</label><input id="smtp_host"></div>
+            <div><label>SMTP Port</label><input id="smtp_port" value="465"></div>
+            <div><label>加密方式</label><select id="encryption"><option value="ssl">SSL</option><option value="starttls">STARTTLS</option><option value="none">None</option></select></div>
+            <div><label>发件人</label><input id="sender"></div>
+            <div><label>用户名</label><input id="smtp_username"></div>
+            <div><label>密码</label><input id="smtp_password" type="password" placeholder="留空表示不修改"></div>
+          </div>
+          <label>默认收件人（多行）</label><textarea id="default_recipients"></textarea>
+          <label>标题模板</label><input id="subject_template" value="【律所舆情日报】{law_firm_name} - {date}">
+          <div id="email_status" class="small" style="margin-top:8px"></div>
+          <div class="row" style="margin-top:12px">
+            <button class="primary" onclick="saveEmail()">保存邮件配置</button>
+            <button class="secondary" onclick="testEmail()">发送测试邮件</button>
+          </div>
+        </div>
+      </section>
+
+      <section id="runs">
+        <div class="panel">
+          <h2>运行记录</h2>
+          <button class="secondary" onclick="loadRuns()">刷新</button>
+          <div id="runs_table"></div>
+        </div>
+        <div class="panel">
+          <h3>运行日志</h3>
+          <pre id="run_logs" class="logbox">选择一条运行记录查看日志。</pre>
+        </div>
+      </section>
+      <section id="reports">
+        <div class="panel">
+          <h2>报告中心</h2>
+          <div class="toolbar">
+            <div><label>律所</label><input id="report_law_firm" placeholder="输入律所名称"></div>
+            <div><label>平台</label><select id="report_platform"><option value="">全部</option><option value="dy">抖音</option><option value="ks">快手</option><option value="xhs">小红书</option></select></div>
+            <div><label>风险</label><select id="report_risk"><option value="">全部</option><option value="high">高风险</option><option value="negative">疑似负面</option><option value="none">无风险</option></select></div>
+            <div><label>开始日期</label><input id="report_date_from" type="date"></div>
+            <div><label>结束日期</label><input id="report_date_to" type="date"></div>
+            <button class="secondary" onclick="loadReports()">筛选</button>
+            <button class="secondary" onclick="createSelftestReport()">生成自测报告</button>
+          </div>
+          <div id="reports_table"></div>
+        </div>
+        <div class="panel"><h3>HTML 预览</h3><iframe id="report_preview"></iframe></div>
+      </section>
+    </div>
+  </main>
+  <div id="toast" class="toast"></div>
+  <script>
+    const api = (path, options={}) => fetch('/api/monitor' + path, {headers:{'Content-Type':'application/json'}, ...options});
+    const jobCache = new Map();
+    const lines = id => document.getElementById(id).value.split(/\n|,/).map(s=>s.trim()).filter(Boolean);
+    const toast = msg => { const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; setTimeout(()=>el.style.display='none', 3500); };
+    document.querySelectorAll('nav button').forEach(btn => btn.onclick = () => { document.querySelectorAll('nav button, section').forEach(x=>x.classList.remove('active')); btn.classList.add('active'); document.getElementById(btn.dataset.tab).classList.add('active'); if(btn.dataset.tab==='runs') loadRuns(); if(btn.dataset.tab==='reports') loadReports(); });
+
+    async function loadAll(){ await Promise.all([loadReadiness(), loadPlatformStatus(), loadJobs(), loadAI(), loadEmail(), loadRuns(), loadReports()]); }
+    async function loadReadiness(){
+      const data=await (await api('/readiness')).json();
+      const pending=(data.checks||[]).filter(c=>!c.ok);
+      const missingPlatforms=data.missing_real_platforms||[];
+      const pendingItems=pending.map(c=>`${c.label}：${c.message}`);
+      if(missingPlatforms.length){ pendingItems.push('三平台真实采集缺口：' + formatPlatforms(missingPlatforms)); }
+      document.getElementById('readiness_summary').innerHTML = data.ready
+        ? `<div class="readiness-summary ready"><div class="readiness-mark">可上线</div><div class="readiness-list">所有验收项已通过。</div></div>`
+        : `<div class="readiness-summary pending"><div class="readiness-mark">待验收</div><div class="readiness-list"><strong>距离上线还差 ${pendingItems.length} 项</strong><ul>${pendingItems.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div></div>`;
+      const rows=data.checks.map(c=>[esc(c.label), c.ok ? '<span class="status">已就绪</span>' : '<span class="status">待完成</span>', esc(c.message)]);
+      if(missingPlatforms.length){ rows.push(['真实采集缺口','<span class="status">待完成</span>', esc('未验收平台：' + formatPlatforms(missingPlatforms))]); }
+      document.getElementById('readiness_table').innerHTML=table(['检查项','状态','说明'], rows);
+    }
+    async function loadPlatformStatus(){ const data=await (await api('/platform-status')).json(); document.getElementById('platform_status_table').innerHTML=table(['平台','Profile','最近状态','更新时间'], data.platforms.map(p=>[esc(p.platform_label), p.profile_exists ? '<span class="status">已发现</span>' : '<span class="status">未发现</span>', p.needs_login ? `<span class="status">需重新登录</span><div class="small">${esc(p.last_error||'请先准备浏览器 profile')}</div>` : '<span class="status">可尝试运行</span>', esc((p.profile_last_modified||'').replace('T',' ').slice(0,19))])); }
+    async function saveJob(){
+      const id = document.getElementById('job_id').value;
+      const payload = {
+        law_firm_name: val('law_firm_name'), aliases: lines('aliases'), exclude_words: lines('exclude_words'),
+        keywords: lines('keywords'), recipients: lines('recipients'),
+        platforms: [...document.querySelectorAll('input[name=platform]:checked')].map(x=>x.value),
+        enable_comments: document.getElementById('enable_comments').checked,
+        enabled: document.getElementById('enabled').checked,
+        time_window_type: val('time_window_type'), custom_start: val('custom_start'), custom_end: val('custom_end'),
+        frequency: val('frequency'), cron_expr: val('cron_expr'), email_time: val('email_time')
+      };
+      const res = await api(id ? '/jobs/'+id : '/jobs', {method:id?'PUT':'POST', body:JSON.stringify(payload)});
+      if(!res.ok){ toast(await err(res)); return; }
+      toast('任务已保存'); resetJobForm(); loadJobs();
+    }
+    async function loadJobs(){
+      const data = await (await api('/jobs')).json();
+      jobCache.clear();
+      (data.jobs || []).forEach(j => jobCache.set(Number(j.id), j));
+      document.getElementById('jobs_table').innerHTML = table(['ID','律所','平台','关键词','频率','上次运行','下次运行','状态','操作'], data.jobs.map(j=>[
+        j.id, esc(j.law_firm_name), j.platforms.join(','), esc(j.keywords.join(' / ')), esc(formatFrequency(j)), esc(formatTime(j.last_run_at)), esc(j.enabled ? formatTime(j.next_run_at) : '已暂停'), j.enabled?'启用':'暂停',
+        `<button class="secondary" onclick="editJob(${Number(j.id)})">编辑</button> <button class="secondary" onclick="runJob(${Number(j.id)})">立即运行</button> <button class="secondary" onclick="toggleJob(${Number(j.id)}, ${j.enabled})">${j.enabled?'暂停':'恢复'}</button> <button class="danger" onclick="deleteJob(${Number(j.id)})">删除</button>`
+      ]));
+    }
+    function editJob(id){
+      const j = jobCache.get(Number(id));
+      if(!j){ toast('任务数据已刷新，请重新点击编辑'); loadJobs(); return; }
+      set('job_id', j.id); set('law_firm_name', j.law_firm_name); set('aliases', j.aliases.join('\n')); set('exclude_words', j.exclude_words.join('\n'));
+      set('keywords', j.keywords.join('\n')); set('recipients', j.recipients.join('\n')); set('time_window_type', j.time_window_type);
+      set('custom_start', (j.custom_start || '').slice(0,10)); set('custom_end', (j.custom_end || '').slice(0,10));
+      set('frequency', j.frequency); set('cron_expr', j.cron_expr || ''); set('email_time', j.email_time || '09:00');
+      document.querySelectorAll('input[name=platform]').forEach(x=>x.checked=j.platforms.includes(x.value));
+      document.getElementById('enable_comments').checked = j.enable_comments; document.getElementById('enabled').checked = j.enabled; window.scrollTo(0,0);
+    }
+    async function runJob(id){ const res = await api('/jobs/'+id+'/run',{method:'POST'}); if(!res.ok){toast(await err(res));return;} const data=await res.json(); toast(data.started ? '任务已开始运行，稍后看运行记录' : '任务已经在运行中'); loadRuns(); }
+    async function toggleJob(id, enabled){ const res = await api('/jobs/'+id+(enabled?'/pause':'/resume'),{method:'POST'}); toast(res.ok ? (enabled?'任务已暂停':'任务已恢复') : await err(res)); loadJobs(); }
+    async function deleteJob(id){ if(!confirm('确认删除任务？')) return; await api('/jobs/'+id,{method:'DELETE'}); loadJobs(); }
+    function resetJobForm(){ ['job_id','law_firm_name','aliases','exclude_words','keywords','recipients','custom_start','custom_end','cron_expr'].forEach(id=>set(id,'')); set('time_window_type','recent_1d'); set('frequency','daily'); set('email_time','09:00'); document.querySelectorAll('input[name=platform]').forEach(x=>x.checked=x.value==='dy'); document.getElementById('enabled').checked=true; document.getElementById('enable_comments').checked=true; }
+
+    async function loadAI(){ const c=(await (await api('/ai-config')).json()).config; set('ai_provider',c.provider); set('ai_base_url',c.base_url); set('ai_model',c.model); set('ai_temperature',c.temperature); set('ai_prompt',c.prompt); document.getElementById('ai_status').textContent = formatTestStatus(c, 'AI'); }
+    async function saveAI(){ const payload={provider:val('ai_provider'),base_url:val('ai_base_url'),api_key:val('ai_api_key'),model:val('ai_model'),temperature:Number(val('ai_temperature')||0),prompt:val('ai_prompt')}; const res=await api('/ai-config',{method:'PUT',body:JSON.stringify(payload)}); toast(res.ok?'AI 配置已保存，需重新测试':await err(res)); set('ai_api_key',''); await loadAI(); await loadReadiness(); }
+    async function testAI(){ const payload={provider:val('ai_provider'),base_url:val('ai_base_url'),api_key:val('ai_api_key'),model:val('ai_model'),temperature:Number(val('ai_temperature')||0),prompt:val('ai_prompt')}; const res=await api('/ai-config/test',{method:'POST',body:JSON.stringify(payload)}); document.getElementById('ai_result').textContent = res.ok ? JSON.stringify((await res.json()).result,null,2) : await err(res); set('ai_api_key',''); await loadAI(); await loadReadiness(); }
+
+    async function loadEmail(){ const c=(await (await api('/email-config')).json()).config; ['smtp_host','smtp_port','encryption','sender'].forEach(id=>set(id,c[id]||'')); set('smtp_username',c.username||''); set('subject_template',c.subject_template||''); set('default_recipients',(c.default_recipients||[]).join('\n')); document.getElementById('email_status').textContent = formatTestStatus(c, '邮件'); }
+    async function saveEmail(){ const payload={smtp_host:val('smtp_host'),smtp_port:Number(val('smtp_port')||465),encryption:val('encryption'),sender:val('sender'),username:val('smtp_username'),password:val('smtp_password'),subject_template:val('subject_template'),default_recipients:lines('default_recipients')}; const res=await api('/email-config',{method:'PUT',body:JSON.stringify(payload)}); toast(res.ok?'邮件配置已保存，需重新测试':await err(res)); set('smtp_password',''); await loadEmail(); await loadReadiness(); }
+    async function testEmail(){ const payload={smtp_host:val('smtp_host'),smtp_port:Number(val('smtp_port')||465),encryption:val('encryption'),sender:val('sender'),username:val('smtp_username'),password:val('smtp_password'),subject_template:val('subject_template'),default_recipients:lines('default_recipients')}; const res=await api('/email-config/test',{method:'POST',body:JSON.stringify(payload)}); toast(res.ok?'测试邮件已发送并记录通过':await err(res)); set('smtp_password',''); await loadEmail(); await loadReadiness(); }
+
+    async function loadRuns(){ const data=await (await api('/runs')).json(); document.getElementById('runs_table').innerHTML=table(['ID','律所','状态','平台','关键词','耗时','采集/新增/排除','负面/高风险','失败原因','日志'], data.runs.map(r=>{ const s=r.summary||{}; return [r.id,esc(r.law_firm_name||''),`<span class="status">${esc(r.status)}</span>`,esc(formatPlatforms(s.platforms)),esc((s.keywords||[]).join(' / ')),esc(formatDuration(s.duration_seconds)),esc(`${s.raw_contents||0} / ${s.new_contents||0} / ${s.excluded_contents||0}`),esc(`${s.negative_count||0} / ${s.high_count||0}`),formatFailures(s),`<button class="secondary" onclick="loadRunLogs(${r.id})">查看</button>`]; })); }
+    async function loadRunLogs(id){ const data=await (await api('/runs/'+id+'/logs')).json(); const text=(data.logs||[]).map(x=>`# ${x.path}\n${x.content}`).join('\n\n'); document.getElementById('run_logs').textContent = text || '暂无日志。'; }
+    async function loadReports(){
+      const qs = new URLSearchParams({law_firm:val('report_law_firm'), platform:val('report_platform'), risk:val('report_risk'), date_from:val('report_date_from'), date_to:val('report_date_to')});
+      const data=await (await api('/reports?'+qs.toString())).json();
+      document.getElementById('reports_table').innerHTML=table(['ID','律所','新增','负面','高风险','邮件','创建时间','下载'], data.reports.map(r=>[r.id,esc(r.law_firm_name||''),esc((r.summary||{}).new_contents||0),esc((r.summary||{}).negative_count||0),esc((r.summary||{}).high_count||0),esc(r.email_status),esc(r.created_at),`<button class="secondary" onclick="previewReport(${r.id})">预览</button> <a href="/api/monitor/reports/${r.id}/download?type=html">HTML</a> <a href="/api/monitor/reports/${r.id}/download?type=excel">Excel</a> <a href="/api/monitor/reports/${r.id}/download?type=markdown">Markdown</a>`]));
+    }
+    async function createSelftestReport(){ const res=await api('/reports/selftest',{method:'POST'}); if(!res.ok){toast(await err(res));return;} toast('自测报告已生成'); loadReports(); loadRuns(); }
+    async function previewReport(id){ const r=(await (await api('/reports/'+id)).json()).report; document.getElementById('report_preview').srcdoc = r.html || '无 HTML'; }
+
+    function table(headers, rows){ return `<table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c??''}</td>`).join('')}</tr>`).join('')}</tbody></table>`; }
+    function formatPlatforms(platforms){ const labels={dy:'抖音',ks:'快手',xhs:'小红书'}; return (platforms||[]).map(p=>labels[p]||p).join(' / '); }
+    function formatFrequency(job){ const labels={daily:`每天 ${job.email_time||'09:00'}`,'12h':'每 12 小时','6h':'每 6 小时',cron:`cron ${job.cron_expr||''}`}; return labels[job.frequency] || job.frequency || ''; }
+    function formatTime(value){ if(!value) return '-'; const d=new Date(value); if(!Number.isNaN(d.getTime())) return d.toLocaleString('zh-CN',{hour12:false}); return String(value).replace('T',' ').replace(/\+.*/, '').slice(0,19); }
+    function formatTestStatus(config, label){ const status=config.last_test_status||'untested'; if(status==='success') return `${label} 最近测试通过：${(config.last_test_at||'').replace('T',' ').slice(0,19)}`; if(status==='failed') return `${label} 最近测试失败：${config.last_test_error||'请检查配置'}`; return `${label} 尚未测试，配置更新后需要重新测试。`; }
+    function formatDuration(seconds){ const n=Number(seconds||0); if(n<60) return `${n}s`; return `${Math.floor(n/60)}m ${n%60}s`; }
+    function formatFailures(summary){ const results=summary.platform_results||{}; const failed=summary.failed_platforms||[]; if(!failed.length) return ''; return failed.map(p=>`<div><strong>${esc(formatPlatforms([p]))}</strong>：${esc((results[p]||{}).error||'失败')}</div>`).join(''); }
+    function val(id){ return document.getElementById(id).value; } function set(id,v){ document.getElementById(id).value = v ?? ''; }
+    function esc(s){ return String(s??'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
+    async function err(res){ try { return (await res.json()).detail || res.statusText; } catch { return res.statusText; } }
+    loadAll();
+  </script>
+</body>
+</html>

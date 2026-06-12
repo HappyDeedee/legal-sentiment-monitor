@@ -30,7 +30,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 
-from .routers import crawler_router, data_router, websocket_router
+from .monitoring.database import init_db
+from .monitoring.scheduler import start_scheduler
+from .routers import crawler_router, data_router, monitor_router, websocket_router
 
 app = FastAPI(
     title="MediaCrawler WebUI API",
@@ -40,6 +42,7 @@ app = FastAPI(
 
 # Get webui static files directory
 WEBUI_DIR = os.path.join(os.path.dirname(__file__), "webui")
+PROJECT_ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 
 # CORS configuration - allow frontend dev server access
 app.add_middleware(
@@ -58,7 +61,14 @@ app.add_middleware(
 # Register routers
 app.include_router(crawler_router, prefix="/api")
 app.include_router(data_router, prefix="/api")
+app.include_router(monitor_router, prefix="/api")
 app.include_router(websocket_router, prefix="/api")
+
+
+@app.on_event("startup")
+async def startup_monitoring():
+    init_db()
+    await start_scheduler()
 
 
 @app.get("/")
@@ -75,6 +85,15 @@ async def serve_frontend():
     }
 
 
+@app.get("/monitor")
+async def serve_monitor_frontend():
+    """Return monitoring admin page"""
+    page_path = os.path.join(os.path.dirname(__file__), "monitor_web", "index.html")
+    if os.path.exists(page_path):
+        return FileResponse(page_path)
+    return {"message": "monitor admin page not found"}
+
+
 @app.get("/api/health")
 async def health_check():
     return {"status": "ok"}
@@ -84,32 +103,33 @@ async def health_check():
 async def check_environment():
     """Check if MediaCrawler environment is configured correctly"""
     try:
-        # Run uv run main.py --help command to check environment
-        process = await asyncio.create_subprocess_exec(
-            "uv", "run", "main.py", "--help",
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            cwd="."  # Project root directory
-        )
-        stdout, stderr = await asyncio.wait_for(
-            process.communicate(),
-            timeout=30.0  # 30 seconds timeout
+        # Use a thread-backed subprocess call so the check works on Windows
+        # when uvicorn reload uses an event loop without async subprocess support.
+        process = await asyncio.to_thread(
+            subprocess.run,
+            ["uv", "run", "main.py", "--help"],
+            cwd=PROJECT_ROOT,
+            capture_output=True,
+            text=True,
+            encoding="utf-8",
+            errors="ignore",
+            timeout=30.0,
         )
 
         if process.returncode == 0:
             return {
                 "success": True,
                 "message": "MediaCrawler environment configured correctly",
-                "output": stdout.decode("utf-8", errors="ignore")[:500]  # Truncate to first 500 characters
+                "output": process.stdout[:500]  # Truncate to first 500 characters
             }
         else:
-            error_msg = stderr.decode("utf-8", errors="ignore") or stdout.decode("utf-8", errors="ignore")
+            error_msg = process.stderr or process.stdout
             return {
                 "success": False,
                 "message": "Environment check failed",
                 "error": error_msg[:500]
             }
-    except asyncio.TimeoutError:
+    except subprocess.TimeoutExpired:
         return {
             "success": False,
             "message": "Environment check timeout",
@@ -125,7 +145,7 @@ async def check_environment():
         return {
             "success": False,
             "message": "Environment check error",
-            "error": str(e)
+            "error": f"{type(e).__name__}: {e}",
         }
 
 
