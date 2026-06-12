@@ -858,6 +858,33 @@ def test_job_preflight_and_launcher_block_template_placeholders(monkeypatch):
         scheduler_module.launch_job(123)
 
 
+def test_refresh_jobs_schedule_api_recomputes_next_run_at():
+    init_db()
+    job = save_job(
+        {
+            "law_firm_name": "调度刷新测试律所",
+            "aliases": [],
+            "exclude_words": [],
+            "keywords": ["调度刷新测试律所避雷"],
+            "platforms": ["dy"],
+            "recipients": [],
+            "enable_comments": False,
+            "time_window_type": "recent_1d",
+            "frequency": "daily",
+            "email_time": "23:59",
+            "enabled": True,
+        }
+    )
+    try:
+        result = asyncio.run(monitor_router.refresh_jobs_schedule())
+        refreshed = next(item for item in result["jobs"] if item["id"] == job["id"])
+    finally:
+        _cleanup_test_records(job["id"], "")
+
+    assert refreshed["next_run_at"]
+    assert refreshed["next_run_at"].endswith("23:59:00")
+
+
 def test_monitor_page_exposes_acceptance_checklist():
     page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
 
@@ -867,6 +894,9 @@ def test_monitor_page_exposes_acceptance_checklist():
     assert "已运行但未采到内容" in page
     assert "真实采集空结果" in page
     assert "部署诊断" in page
+    assert "刷新调度时间" in page
+    assert "refreshJobSchedule" in page
+    assert "jobs/refresh-schedule" in page
     assert "打开登录窗口" in page
     assert "登录完成后关闭窗口，再刷新状态。" in page
     assert "login-browser" in page

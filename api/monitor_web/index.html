@@ -126,7 +126,7 @@
             <button id="reset_job_btn" class="secondary" type="button">清空</button>
           </div>
         </div>
-        <div class="panel"><h3>任务列表</h3><div id="jobs_table"></div></div>
+        <div class="panel"><h3>任务列表</h3><button class="secondary" onclick="refreshJobSchedule()">刷新调度时间</button><div id="jobs_table"></div></div>
       </section>
 
       <section id="ai">
@@ -271,6 +271,7 @@
         `<button class="secondary" onclick="editJob(${Number(j.id)})">编辑</button> <button class="secondary" onclick="runJob(${Number(j.id)})">立即运行</button> <button class="secondary" onclick="toggleJob(${Number(j.id)}, ${j.enabled})">${j.enabled?'暂停':'恢复'}</button> <button class="danger" onclick="deleteJob(${Number(j.id)})">删除</button>`
       ]));
     }
+    async function refreshJobSchedule(){ const res=await api('/jobs/refresh-schedule',{method:'POST'}); if(!res.ok){toast(await err(res));return;} toast('调度时间已刷新'); loadJobs(); }
     function editJob(id){
       const j = jobCache.get(Number(id));
       if(!j){ toast('任务数据已刷新，请重新点击编辑'); loadJobs(); return; }

@@ -55,6 +55,18 @@ async def jobs():
     return {"jobs": list_jobs()}
 
 
+@router.post("/jobs/refresh-schedule")
+async def refresh_jobs_schedule():
+    init_db()
+    refreshed = []
+    for job in list_jobs():
+        _refresh_job_schedule_state(job)
+        updated = get_job(job["id"])
+        if updated:
+            refreshed.append(updated)
+    return {"jobs": refreshed}
+
+
 @router.get("/platform-status")
 async def platform_status():
     init_db()
