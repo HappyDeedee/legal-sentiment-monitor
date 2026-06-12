@@ -192,6 +192,17 @@ def test_platform_status_reports_open_login_window(tmp_path, monkeypatch):
     assert dy["login_window_pid"] == 12345
 
 
+def test_login_window_status_removes_stale_pid_record(tmp_path, monkeypatch):
+    monkeypatch.setattr("api.monitoring.login_state.LOGIN_STATE_DIR", tmp_path / "login_windows")
+    monkeypatch.setattr("api.monitoring.login_state._pid_exists", lambda pid: False)
+    record_login_window("dy", 12345, 9323, str(tmp_path / "profile"))
+
+    status = login_window_status("dy")
+
+    assert status["is_open"] is False
+    assert not (tmp_path / "login_windows" / "dy.json").exists()
+
+
 def test_platform_status_supports_custom_browser_data_dir(tmp_path, monkeypatch):
     browser_data = tmp_path / "profiles"
     (browser_data / "cdp_dy_user_data_dir").mkdir(parents=True)
