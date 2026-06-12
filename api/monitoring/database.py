@@ -702,6 +702,69 @@ def list_reports(limit: int = 100) -> list[dict[str, Any]]:
         item = dict(row)
         item["summary"] = _json_loads(item.get("summary"), {})
         result.append(item)
+    _attach_report_lead_counts(result)
+    return result
+
+
+def _attach_report_lead_counts(reports: list[dict[str, Any]]) -> None:
+    run_ids = [int(report["run_id"]) for report in reports if report.get("run_id")]
+    if not run_ids:
+        return
+    placeholders = ",".join("?" for _ in run_ids)
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT
+                c.run_id,
+                SUM(CASE WHEN e.status='pending_review' THEN 1 ELSE 0 END) AS pending_review_count,
+                SUM(CASE WHEN e.is_related=1 AND e.is_negative=1 THEN 1 ELSE 0 END) AS negative_count,
+                SUM(CASE WHEN e.is_related=1 AND e.is_negative=1 AND e.risk_level='high' THEN 1 ELSE 0 END) AS high_count
+            FROM raw_contents c
+            LEFT JOIN ai_evaluations e ON e.raw_content_id = c.id
+            WHERE c.run_id IN ({placeholders})
+            GROUP BY c.run_id
+            """,
+            run_ids,
+        ).fetchall()
+    counts = {int(row["run_id"]): dict(row) for row in rows}
+    for report in reports:
+        summary = report.get("summary") or {}
+        row = counts.get(int(report.get("run_id") or 0), {})
+        if row:
+            summary["pending_review_count"] = int(row.get("pending_review_count") or 0)
+            summary["negative_count"] = int(row.get("negative_count") or summary.get("negative_count") or 0)
+            summary["high_count"] = int(row.get("high_count") or summary.get("high_count") or 0)
+        else:
+            summary.setdefault("pending_review_count", 0)
+        report["summary"] = summary
+
+
+def list_leads(limit: int = 100) -> list[dict[str, Any]]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT
+                c.id, c.platform, c.content_id, c.job_id, c.run_id,
+                COALESCE(c.law_firm_name, j.law_firm_name) AS law_firm_name,
+                c.source_keyword, c.title, c.description, c.author_name,
+                c.content_url, c.cover_url, c.publish_time, c.comment_count,
+                c.first_seen_at, c.last_seen_at,
+                e.status AS eval_status, e.is_related, e.is_negative, e.risk_level,
+                e.reason, e.evidence_quotes, e.recommended_action, e.created_at AS evaluated_at
+            FROM raw_contents c
+            LEFT JOIN monitor_jobs j ON j.id = c.job_id
+            LEFT JOIN ai_evaluations e ON e.raw_content_id = c.id
+            ORDER BY c.id DESC LIMIT ?
+            """,
+            (limit,),
+        ).fetchall()
+    result = []
+    for row in rows:
+        item = dict(row)
+        item["is_related"] = bool(item.get("is_related"))
+        item["is_negative"] = bool(item.get("is_negative"))
+        item["evidence_quotes"] = _json_loads(item.get("evidence_quotes"))
+        result.append(item)
     return result
 
 

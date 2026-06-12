@@ -15,6 +15,7 @@ from ..monitoring.database import (
     get_job,
     init_db,
     list_jobs,
+    list_leads,
     list_reports,
     list_runs,
     mark_ai_test_result,
@@ -238,6 +239,8 @@ async def reports(
         items = [r for r in items if int((r.get("summary") or {}).get("high_count") or 0) > 0]
     elif risk == "negative":
         items = [r for r in items if int((r.get("summary") or {}).get("negative_count") or 0) > 0]
+    elif risk == "pending":
+        items = [r for r in items if int((r.get("summary") or {}).get("pending_review_count") or 0) > 0]
     elif risk == "none":
         items = [r for r in items if int((r.get("summary") or {}).get("negative_count") or 0) == 0]
     if date_from:
@@ -245,6 +248,41 @@ async def reports(
     if date_to:
         items = [r for r in items if (r.get("created_at") or "")[:10] <= date_to]
     return {"reports": items}
+
+
+@router.get("/leads")
+async def leads(
+    limit: int = 100,
+    law_firm: str = "",
+    platform: str = "",
+    risk: str = Query("", description="high|negative|pending|none"),
+    date_from: str = "",
+    date_to: str = "",
+):
+    init_db()
+    items = list_leads(limit)
+    if law_firm:
+        items = [item for item in items if law_firm.strip() in (item.get("law_firm_name") or "")]
+    if platform:
+        items = [item for item in items if item.get("platform") == platform]
+    if risk == "high":
+        items = [item for item in items if item.get("is_related") and item.get("is_negative") and item.get("risk_level") == "high"]
+    elif risk == "negative":
+        items = [item for item in items if item.get("is_related") and item.get("is_negative")]
+    elif risk == "pending":
+        items = [item for item in items if item.get("eval_status") == "pending_review"]
+    elif risk == "none":
+        items = [
+            item
+            for item in items
+            if item.get("eval_status") != "pending_review"
+            and not (item.get("is_related") and item.get("is_negative"))
+        ]
+    if date_from:
+        items = [item for item in items if (item.get("first_seen_at") or "")[:10] >= date_from]
+    if date_to:
+        items = [item for item in items if (item.get("first_seen_at") or "")[:10] <= date_to]
+    return {"leads": items}
 
 
 @router.post("/reports/selftest")

@@ -188,7 +188,7 @@
           <div class="toolbar">
             <div><label>律所</label><input id="report_law_firm" placeholder="输入律所名称"></div>
             <div><label>平台</label><select id="report_platform"><option value="">全部</option><option value="dy">抖音</option><option value="ks">快手</option><option value="xhs">小红书</option></select></div>
-            <div><label>风险</label><select id="report_risk"><option value="">全部</option><option value="high">高风险</option><option value="negative">疑似负面</option><option value="none">无风险</option></select></div>
+            <div><label>风险</label><select id="report_risk"><option value="">全部</option><option value="high">高风险</option><option value="negative">疑似负面</option><option value="pending">待人工复核</option><option value="none">无风险</option></select></div>
             <div><label>开始日期</label><input id="report_date_from" type="date"></div>
             <div><label>结束日期</label><input id="report_date_to" type="date"></div>
             <button class="secondary" onclick="loadReports()">筛选</button>
@@ -196,6 +196,7 @@
           </div>
           <div id="reports_table"></div>
         </div>
+        <div class="panel"><h3>线索明细</h3><div id="leads_table"></div></div>
         <div class="panel"><h3>HTML 预览</h3><iframe id="report_preview"></iframe></div>
       </section>
       <section id="doctor">
@@ -305,8 +306,12 @@
     async function loadRunLogs(id){ const data=await (await api('/runs/'+id+'/logs')).json(); const text=(data.logs||[]).map(x=>`# ${x.path}\n${x.content}`).join('\n\n'); document.getElementById('run_logs').textContent = text || '暂无日志。'; }
     async function loadReports(){
       const qs = new URLSearchParams({law_firm:val('report_law_firm'), platform:val('report_platform'), risk:val('report_risk'), date_from:val('report_date_from'), date_to:val('report_date_to')});
-      const data=await (await api('/reports?'+qs.toString())).json();
-      document.getElementById('reports_table').innerHTML=table(['ID','律所','新增','负面','高风险','邮件','创建时间','下载'], data.reports.map(r=>[r.id,esc(r.law_firm_name||''),esc((r.summary||{}).new_contents||0),esc((r.summary||{}).negative_count||0),esc((r.summary||{}).high_count||0),esc(r.email_status),esc(r.created_at),`<button class="secondary" onclick="previewReport(${r.id})">预览</button> <a href="/api/monitor/reports/${r.id}/download?type=html">HTML</a> <a href="/api/monitor/reports/${r.id}/download?type=excel">Excel</a> <a href="/api/monitor/reports/${r.id}/download?type=markdown">Markdown</a>`]));
+      const [reportData, leadData]=await Promise.all([(await api('/reports?'+qs.toString())).json(), (await api('/leads?'+qs.toString())).json()]);
+      const data=reportData;
+      document.getElementById('reports_table').innerHTML=table(['ID','律所','新增','负面','高风险','待复核','邮件','创建时间','下载'], data.reports.map(r=>[r.id,esc(r.law_firm_name||''),esc((r.summary||{}).new_contents||0),esc((r.summary||{}).negative_count||0),esc((r.summary||{}).high_count||0),esc((r.summary||{}).pending_review_count||0),esc(r.email_status),esc(r.created_at),`<button class="secondary" onclick="previewReport(${r.id})">预览</button> <a href="/api/monitor/reports/${r.id}/download?type=html">HTML</a> <a href="/api/monitor/reports/${r.id}/download?type=excel">Excel</a> <a href="/api/monitor/reports/${r.id}/download?type=markdown">Markdown</a>`]));
+      document.getElementById('leads_table').innerHTML=table(['律所','平台','状态','标题','关键词','AI 理由','证据','链接'], (leadData.leads||[]).map(x=>[
+        esc(x.law_firm_name||''), esc(formatPlatforms([x.platform])), esc(formatLeadStatus(x)), esc(x.title||''), esc(x.source_keyword||''), esc(x.reason||''), esc((x.evidence_quotes||[]).join(' / ')), leadLinks(x)
+      ]));
     }
     async function createSelftestReport(){ const res=await api('/reports/selftest',{method:'POST'}); if(!res.ok){toast(await err(res));return;} toast('自测报告已生成'); loadReports(); loadRuns(); }
     async function previewReport(id){ const r=(await (await api('/reports/'+id)).json()).report; document.getElementById('report_preview').srcdoc = r.html || '无 HTML'; }
@@ -340,6 +345,8 @@
     function formatTestStatus(config, label){ const status=config.last_test_status||'untested'; if(status==='success') return `${label} 最近测试通过：${(config.last_test_at||'').replace('T',' ').slice(0,19)}`; if(status==='failed') return `${label} 最近测试失败：${config.last_test_error||'请检查配置'}`; return `${label} 尚未测试，配置更新后需要重新测试。`; }
     function formatDuration(seconds){ const n=Number(seconds||0); if(n<60) return `${n}s`; return `${Math.floor(n/60)}m ${n%60}s`; }
     function formatFailures(summary){ const results=summary.platform_results||{}; const failed=summary.failed_platforms||[]; if(!failed.length) return ''; return failed.map(p=>`<div><strong>${esc(formatPlatforms([p]))}</strong>：${esc((results[p]||{}).error||'失败')}</div>`).join(''); }
+    function formatLeadStatus(item){ if(item.eval_status==='pending_review') return '待人工复核'; if(item.is_related && item.is_negative) return item.risk_level==='high' ? '高风险' : '疑似负面'; return '无风险'; }
+    function leadLinks(item){ const links=[]; if(item.content_url) links.push(`<a href="${esc(item.content_url)}" target="_blank">内容</a>`); if(item.cover_url) links.push(`<a href="${esc(item.cover_url)}" target="_blank">封面</a>`); return links.join(' '); }
     function val(id){ return document.getElementById(id).value; } function set(id,v){ document.getElementById(id).value = v ?? ''; }
     function esc(s){ return String(s??'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
     async function err(res){ try { return (await res.json()).detail || res.statusText; } catch { return res.statusText; } }

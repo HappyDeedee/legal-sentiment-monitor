@@ -9,7 +9,7 @@ import pytest
 from fastapi import HTTPException
 
 from api.monitoring.ai import _build_endpoint, _validate_ai_output, test_ai as run_ai_config_test
-from api.monitoring.database import create_run, finish_run, get_ai_config, get_conn, get_email_config, init_db, list_jobs, save_ai_config, save_email_config, save_job
+from api.monitoring.database import create_run, finish_run, get_ai_config, get_conn, get_email_config, init_db, list_jobs, list_leads, save_ai_config, save_email_config, save_job
 from api.monitoring.mailer import build_report_email, send_test_email
 from api.monitoring.normalizer import collect_platform_outputs, in_time_window, normalize_content, parse_jsonl_file, resolve_window
 from api.monitoring.platform_status import list_platform_status
@@ -565,6 +565,23 @@ def test_report_includes_platform_status_and_failure_reason():
     assert "快手：失败" in markdown
 
 
+def test_leads_api_lists_pending_review_items():
+    result = asyncio.run(create_sample_report())
+    try:
+        leads = list_leads(50)
+        api_result = asyncio.run(monitor_router.leads(risk="pending"))["leads"]
+        report_result = asyncio.run(monitor_router.reports(risk="pending"))["reports"]
+    finally:
+        _cleanup_test_records(result["job"]["id"], f"selftest_negative_{result['run_id']}")
+        _cleanup_test_records(result["job"]["id"], f"selftest_excluded_{result['run_id']}")
+
+    assert any(item["content_id"] == f"selftest_negative_{result['run_id']}" for item in leads)
+    assert any(item["content_id"] == f"selftest_negative_{result['run_id']}" for item in api_result)
+    assert all(item["eval_status"] == "pending_review" for item in api_result)
+    assert any(item["id"] == result["report"]["id"] for item in report_result)
+    assert next(item for item in report_result if item["id"] == result["report"]["id"])["summary"]["pending_review_count"] == 1
+
+
 def test_selftest_report_generates_downloadable_artifacts():
     asyncio.run(_selftest_report_check())
 
@@ -694,6 +711,10 @@ def test_monitor_page_exposes_acceptance_checklist():
     assert "api('/doctor')" in page
     assert "preflight" in page
     assert "运行前提示" in page
+    assert "线索明细" in page
+    assert "api('/leads?" in page
+    assert "待人工复核" in page
+    assert "待复核" in page
     assert "生成自测报告" in page
     assert "download?type=html" in page
     assert "download?type=excel" in page
