@@ -283,7 +283,7 @@ def init_db() -> None:
         _ensure_column(conn, "email_configs", "last_test_at", "TEXT")
         _ensure_column(conn, "email_configs", "last_test_error", "TEXT NOT NULL DEFAULT ''")
         _migrate_raw_contents_unique_by_job(conn)
-        conn.execute("UPDATE monitor_jobs SET is_internal=1 WHERE law_firm_name=?", ("MVP自测律所",))
+        mark_selftest_jobs_internal(conn)
         now = utc_now()
         conn.execute(
             "INSERT OR IGNORE INTO ai_configs (id, updated_at) VALUES (1, ?)",
@@ -444,6 +444,24 @@ def has_job_template_placeholders(job: dict[str, Any]) -> bool:
     if any(placeholder in joined for placeholder in JOB_TEMPLATE_PLACEHOLDERS):
         return True
     return False
+
+
+def mark_selftest_jobs_internal(conn: sqlite3.Connection | None = None) -> None:
+    """Hide jobs created only to verify report generation."""
+    sql = """
+        UPDATE monitor_jobs
+        SET is_internal=1
+        WHERE id IN (
+            SELECT DISTINCT job_id FROM crawl_runs
+            WHERE job_id IS NOT NULL
+              AND (summary LIKE '%"selftest": true%' OR summary LIKE '%"selftest":true%')
+        )
+    """
+    if conn is not None:
+        conn.execute(sql)
+        return
+    with get_conn() as managed_conn:
+        managed_conn.execute(sql)
 
 
 def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:

@@ -4,13 +4,13 @@ import json
 from datetime import datetime, timezone
 from typing import Any
 
-from .database import create_run, get_conn, save_job
+from .database import create_run, get_conn, mark_selftest_jobs_internal, save_job
 from .reporting import create_report, update_report_email_status
 from .runner import ingest_outputs
 
 
 async def create_sample_report() -> dict[str, Any]:
-    _mark_existing_selftest_jobs_internal()
+    mark_selftest_jobs_internal()
     job = save_job(
         {
             "law_firm_name": "海安律所",
@@ -71,14 +71,6 @@ async def create_sample_report() -> dict[str, Any]:
             ("selftest", datetime.now(timezone.utc).isoformat(), json.dumps(summary, ensure_ascii=False), None, run_id),
         )
     return {"job": job, "run_id": run_id, "summary": summary, "report": report}
-
-
-def _mark_existing_selftest_jobs_internal() -> None:
-    with get_conn() as conn:
-        conn.execute(
-            "UPDATE monitor_jobs SET is_internal=1 WHERE law_firm_name=?",
-            ("MVP自测律所",),
-        )
 
 
 def _save_pending_review_evaluations(run_id: int, content_ids: list[int]) -> dict[str, int]:

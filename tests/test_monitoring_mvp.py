@@ -11,7 +11,7 @@ from fastapi import HTTPException
 
 from api.monitoring.ai import _build_endpoint, _parse_json, _validate_ai_output, test_ai as run_ai_config_test
 from api.monitoring.ai import DEFAULT_PROMPT
-from api.monitoring.database import create_login_session, create_run, finish_run, get_active_ai_key_profile, get_ai_config, get_conn, get_dashboard_summary, get_email_config, get_job, get_login_session, get_platform_login_config, get_report, get_run, init_db, list_ai_key_profiles, list_email_templates, list_jobs, list_leads, list_login_sessions, list_platform_login_configs, list_proxy_profiles, list_reports, list_runs, list_social_accounts, render_email_template_preview, save_ai_config, save_ai_key_profile, save_email_config, save_email_template, save_job, save_platform_login_config, save_proxy_profile, save_social_account, set_active_ai_key_profile
+from api.monitoring.database import create_login_session, create_run, finish_run, get_active_ai_key_profile, get_ai_config, get_conn, get_dashboard_summary, get_email_config, get_job, get_login_session, get_platform_login_config, get_report, get_run, init_db, list_ai_key_profiles, list_email_templates, list_jobs, list_leads, list_login_sessions, list_platform_login_configs, list_proxy_profiles, list_reports, list_runs, list_social_accounts, mark_selftest_jobs_internal, render_email_template_preview, save_ai_config, save_ai_key_profile, save_email_config, save_email_template, save_job, save_platform_login_config, save_proxy_profile, save_social_account, set_active_ai_key_profile
 from api.monitoring.login_browser import build_login_browser_command, open_login_browser
 from api.monitoring.login_state import login_window_status, record_login_window
 from api.monitoring.mailer import build_report_email, send_test_email
@@ -1408,6 +1408,36 @@ def test_internal_selftest_jobs_are_hidden_from_operator_job_list():
     visible_jobs = list_jobs()
     all_jobs = list_jobs(include_internal=True)
     _cleanup_test_records(job["id"], "")
+
+    assert all(j["id"] != job["id"] for j in visible_jobs)
+    assert any(j["id"] == job["id"] and j["is_internal"] for j in all_jobs)
+
+
+def test_selftest_jobs_are_hidden_by_run_summary_marker():
+    init_db()
+    job = save_job(
+        {
+            "law_firm_name": "海安律所",
+            "aliases": [],
+            "exclude_words": [],
+            "keywords": ["海安律所避雷"],
+            "platforms": ["dy"],
+            "recipients": [],
+            "enable_comments": False,
+            "time_window_type": "recent_1d",
+            "frequency": "daily",
+            "email_time": "09:00",
+            "enabled": False,
+        }
+    )
+    run_id = create_run(job["id"])
+    try:
+        finish_run(run_id, "selftest", {"selftest": True, "law_firm_name": "海安律所"})
+        mark_selftest_jobs_internal()
+        visible_jobs = list_jobs()
+        all_jobs = list_jobs(include_internal=True)
+    finally:
+        _cleanup_test_records(job["id"], "")
 
     assert all(j["id"] != job["id"] for j in visible_jobs)
     assert any(j["id"] == job["id"] and j["is_internal"] for j in all_jobs)
