@@ -174,21 +174,23 @@ async def update_ai_config(payload: dict[str, Any]):
 
 
 @router.post("/ai-config/test")
-async def test_ai_config(payload: dict[str, Any]):
-    config_saved = False
+async def test_ai_config(payload: dict[str, Any] | None = None):
+    payload = payload or {}
+    test_targets_saved_config = not payload
     try:
-        save_ai_config(payload)
-        config_saved = True
+        if payload:
+            save_ai_config(payload)
+            test_targets_saved_config = True
         result = await ai.test_ai({})
         config = mark_ai_test_result(True)
         return {"result": result, "config": config}
     except ValueError as exc:
-        if config_saved:
+        if test_targets_saved_config:
             mark_ai_test_result(False, str(exc))
         raise HTTPException(status_code=400, detail=redact_sensitive(str(exc)))
     except Exception as exc:
         message = redact_sensitive(f"{type(exc).__name__}: {exc}")
-        if config_saved:
+        if test_targets_saved_config:
             mark_ai_test_result(False, message)
         raise HTTPException(status_code=400, detail=message)
 

@@ -60,6 +60,7 @@
   <main>
     <nav>
       <button class="active" data-tab="jobs">任务管理</button>
+      <button data-tab="accounts">账号登录</button>
       <button data-tab="ai">AI 配置</button>
       <button data-tab="email">邮件配置</button>
       <button data-tab="runs">运行记录</button>
@@ -127,6 +128,27 @@
           </div>
         </div>
         <div class="panel"><h3>任务列表</h3><button class="secondary" onclick="refreshJobSchedule()">刷新调度时间</button><div id="jobs_table"></div></div>
+      </section>
+
+      <section id="accounts">
+        <div class="panel">
+          <h2>账号登录</h2>
+          <div class="notice">
+            后台采用浏览器 Profile 登录：每个平台先打开一次登录窗口完成扫码或手机号验证，关闭窗口后，定时采集会复用该平台的登录态。任务运行时不再反复选择 qrcode、phone 或 cookie。
+          </div>
+          <button class="secondary" onclick="loadPlatformStatus()">刷新登录状态</button>
+          <div id="account_status_table"></div>
+        </div>
+        <div class="panel">
+          <h3>操作顺序</h3>
+          <ol>
+            <li>分别点击抖音、快手、小红书的“打开登录窗口”。</li>
+            <li>在弹出的浏览器里完成扫码、手机号验证或平台要求的安全验证。</li>
+            <li>确认网页已经是登录状态后，关闭这个登录窗口。</li>
+            <li>回到后台点击“刷新登录状态”，再去任务管理里立即运行。</li>
+          </ol>
+          <div class="small">说明：如果平台提示登录失效，重新打开对应平台登录窗口即可。Cookie、二维码、手机号是 MediaCrawler 底层登录方式，第一版后台统一用 Profile 保存登录态。</div>
+        </div>
       </section>
 
       <section id="ai">
@@ -243,7 +265,8 @@
       if(notRunPlatforms.length){ rows.push(['真实采集缺口','<span class="status">待完成</span>', esc('未验收平台：' + formatPlatforms(notRunPlatforms))]); }
       document.getElementById('readiness_table').innerHTML=table(['检查项','状态','说明'], rows);
     }
-    async function loadPlatformStatus(){ const data=await (await api('/platform-status')).json(); document.getElementById('platform_status_table').innerHTML=table(['平台','Profile','最近状态','更新时间','操作'], data.platforms.map(p=>[esc(p.platform_label), p.profile_exists ? '<span class="status">已发现</span>' : '<span class="status">未发现</span>', p.needs_login ? `<span class="status">需重新登录</span><div class="small">${esc(p.last_error||'请先准备浏览器 profile')}</div>` : '<span class="status">可尝试运行</span>', esc((p.profile_last_modified||'').replace('T',' ').slice(0,19)), `<button class="secondary" onclick="openPlatformLoginBrowser('${esc(p.platform)}')">打开登录窗口</button><div class="small">登录完成后关闭窗口，再刷新状态。</div>`])); }
+    async function loadPlatformStatus(){ const data=await (await api('/platform-status')).json(); const html=platformStatusTable(data.platforms); document.getElementById('platform_status_table').innerHTML=html; const accountTable=document.getElementById('account_status_table'); if(accountTable) accountTable.innerHTML=html; }
+    function platformStatusTable(platforms){ return table(['平台','Profile','最近状态','更新时间','操作'], platforms.map(p=>[esc(p.platform_label), p.profile_exists ? '<span class="status">已发现</span>' : '<span class="status">未发现</span>', p.needs_login ? `<span class="status">需重新登录</span><div class="small">${esc(p.last_error||'请先准备浏览器 profile')}</div>` : '<span class="status">可尝试运行</span>', esc((p.profile_last_modified||'').replace('T',' ').slice(0,19)), `<button class="secondary" onclick="openPlatformLoginBrowser('${esc(p.platform)}')">打开登录窗口</button><div class="small">登录完成后关闭窗口，再刷新状态。</div>`])); }
     async function openPlatformLoginBrowser(platform){ const res=await api('/platform-status/'+platform+'/login-browser',{method:'POST'}); if(!res.ok){ toast(await err(res)); return; } const data=await res.json(); toast(data.message || '已打开登录窗口'); await loadPlatformStatus(); }
     function hasJobTemplatePlaceholders(payload){ const text=[payload.law_firm_name, ...(payload.keywords||[])].join('\n'); return ['请改成','目标律所','律所简称','律师事务所简称'].some(x=>text.includes(x)); }
     async function saveJob(){

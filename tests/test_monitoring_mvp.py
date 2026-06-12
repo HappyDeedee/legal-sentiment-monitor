@@ -197,6 +197,20 @@ def test_login_browser_message_reminds_to_close_window(tmp_path, monkeypatch):
     assert "运行采集" in result["message"]
 
 
+def test_login_browser_command_supports_per_platform_port_env(tmp_path, monkeypatch):
+    browser_data = tmp_path / "profiles"
+    fake_browser = tmp_path / "chrome.exe"
+    fake_browser.write_text("", encoding="utf-8")
+    monkeypatch.setenv("MONITOR_BROWSER_DATA_DIR", str(browser_data))
+    monkeypatch.setenv("MONITOR_LOGIN_DEBUG_PORT_DY", "19323")
+    monkeypatch.setattr("api.monitoring.login_browser.BrowserLauncher.detect_browser_paths", lambda self: [str(fake_browser)])
+
+    command = build_login_browser_command("dy")
+
+    assert command["debug_port"] == 19323
+    assert command["profile_path"] == str((browser_data / "cdp_dy_user_data_dir").resolve())
+
+
 def test_job_validation_rejects_operator_input_errors():
     base = {
         "law_firm_name": "校验测试律所",
@@ -511,6 +525,43 @@ def test_ai_email_test_results_are_persisted_for_readiness(monkeypatch):
         _restore_singleton_table("email_configs", email_snapshot)
 
 
+def test_ai_test_can_reuse_saved_config_when_payload_is_empty(monkeypatch):
+    init_db()
+    ai_snapshot = _snapshot_singleton_table("ai_configs")
+
+    async def fake_ai_test(payload):
+        assert payload == {}
+        return {
+            "is_related": True,
+            "is_negative": True,
+            "risk_level": "medium",
+            "reason": "测试通过",
+            "evidence_quotes": ["测试"],
+            "recommended_action": "继续",
+        }
+
+    try:
+        save_ai_config(
+            {
+                "provider": "openai",
+                "base_url": "https://example.com",
+                "api_key": "sk-test",
+                "model": "test-model",
+                "temperature": 0,
+                "prompt": DEFAULT_PROMPT,
+            }
+        )
+        monkeypatch.setattr(monitor_router.ai, "test_ai", fake_ai_test)
+
+        result = asyncio.run(monitor_router.test_ai_config({}))
+
+        assert result["config"]["last_test_status"] == "success"
+        assert result["config"]["base_url"] == "https://example.com"
+        assert result["config"]["model"] == "test-model"
+    finally:
+        _restore_singleton_table("ai_configs", ai_snapshot)
+
+
 def test_ai_config_api_exposes_default_prompt():
     init_db()
     result = asyncio.run(monitor_router.ai_config())
@@ -747,6 +798,25 @@ def test_readiness_status_reports_checks():
     assert all("label" in check and "ok" in check and "message" in check for check in status["checks"])
 
 
+def test_readiness_platform_profiles_require_valid_login_state(monkeypatch):
+    init_db()
+    monkeypatch.setattr(
+        readiness_module,
+        "list_platform_status",
+        lambda: [
+            {"platform": "dy", "platform_label": "抖音", "profile_exists": True, "needs_login": False},
+            {"platform": "ks", "platform_label": "快手", "profile_exists": True, "needs_login": True},
+            {"platform": "xhs", "platform_label": "小红书", "profile_exists": True, "needs_login": False},
+        ],
+    )
+
+    status = get_readiness_status()
+    platform_check = next(check for check in status["checks"] if check["key"] == "platform_profiles")
+
+    assert platform_check["ok"] is False
+    assert "重新登录" in platform_check["message"]
+
+
 def test_doctor_reports_deployment_diagnostics():
     init_db()
     status = run_doctor()
@@ -889,6 +959,11 @@ def test_monitor_page_exposes_acceptance_checklist():
     page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
 
     assert "上线验收状态" in page
+    assert "账号登录" in page
+    assert "后台采用浏览器 Profile 登录" in page
+    assert "任务运行时不再反复选择 qrcode、phone 或 cookie" in page
+    assert "account_status_table" in page
+    assert "platformStatusTable" in page
     assert "距离上线还差" in page
     assert "尚未完成真实采集" in page
     assert "已运行但未采到内容" in page

@@ -19,7 +19,7 @@ def get_readiness_status() -> dict[str, Any]:
     real_platforms = _successful_real_platforms(real_reports)
     empty_real_platforms = _empty_real_platforms(real_reports) - real_platforms
     checks = [
-        _check("platform_profiles", "三平台浏览器 Profile", all(p["profile_exists"] for p in platforms), _platform_message(platforms)),
+        _check("platform_profiles", "三平台浏览器 Profile", _platform_profiles_ready(platforms), _platform_message(platforms)),
         _check("ai_config", "AI 配置", _ai_ready(ai_config), _ai_message(ai_config)),
         _check("email_config", "邮件配置", _email_ready(email_config), _email_message(email_config)),
         _check("selftest_report", "自测报告链路", bool(selftest_reports), _selftest_message(selftest_reports)),
@@ -49,6 +49,10 @@ def _platform_message(platforms: list[dict[str, Any]]) -> str:
     if needs_login:
         return "可能需要重新登录：" + "、".join(needs_login)
     return "已发现抖音、快手、小红书 Profile"
+
+
+def _platform_profiles_ready(platforms: list[dict[str, Any]]) -> bool:
+    return bool(platforms) and all(p.get("profile_exists") and not p.get("needs_login") for p in platforms)
 
 
 def _ai_ready(config: dict[str, Any]) -> bool:

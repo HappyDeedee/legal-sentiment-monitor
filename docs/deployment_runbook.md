@@ -174,6 +174,16 @@ uv run python -m api.monitoring.cli doctor
 
 ## 6. 三平台登录态准备
 
+第一版后台不要求运营人员在每个任务里选择 `qrcode`、`phone` 或 `cookie`。推荐流程是：
+
+1. 打开后台“账号登录”页。
+2. 分别点击抖音、快手、小红书的“打开登录窗口”。
+3. 在弹出的浏览器中按平台提示完成扫码、手机号或安全验证。
+4. 确认网页已登录后关闭该登录窗口。
+5. 回后台刷新登录状态，再执行真实采集。
+
+这样做的目的，是把 MediaCrawler 的登录模式统一沉淀成可复用的浏览器 Profile。定时任务运行时只复用 Profile，不再临时弹二维码，也不依赖运营人员守在任务旁边。
+
 默认 profile 目录：
 
 ```text
@@ -182,7 +192,7 @@ uv run python -m api.monitoring.cli doctor
 {MONITOR_BROWSER_DATA_DIR}/cdp_xhs_user_data_dir
 ```
 
-可视化登录命令：
+如果后台无法打开浏览器，或需要排障，可使用 MediaCrawler CLI 的原始登录方式作为备用。可视化登录命令：
 
 ```bash
 uv run python main.py --platform dy --lt qrcode --type search --keywords 登录测试 --headless false --cdp_connect_existing false --cdp_debug_port 9223 --save_data_option json --save_data_path /opt/legal-sentiment-monitor/data/login_probe

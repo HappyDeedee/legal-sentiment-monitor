@@ -84,6 +84,13 @@ docs/deployment_runbook.md
 
 ## 后台页面
 
+账号登录页支持：
+
+- 分平台查看抖音、快手、小红书 Profile 和登录态。
+- 一键打开对应平台登录窗口。
+- 登录完成后关闭窗口，再刷新状态。
+- 定时任务复用已保存 Profile，不在任务运行时反复选择二维码、手机号或 Cookie 登录。
+
 任务管理页支持配置：
 
 - 律所名称、别名、关键词、排除词
@@ -140,7 +147,7 @@ MONITOR_JOB_LOCK_TTL_SECONDS=21600
 
 ## 平台登录态
 
-服务器运行前，需要分别准备三个平台的浏览器 profile。默认路径：
+服务器运行前，需要分别准备三个平台的浏览器 Profile。默认路径：
 
 ```text
 browser_data/cdp_dy_user_data_dir
@@ -148,7 +155,9 @@ browser_data/cdp_ks_user_data_dir
 browser_data/cdp_xhs_user_data_dir
 ```
 
-可以用可视化模式分别登录一次，再让定时任务复用 profile。具体命令和排障说明见：
+推荐在后台“账号登录”页分别点击“打开登录窗口”，完成扫码、手机号或平台安全验证后关闭窗口，再刷新状态。后续定时采集会复用对应平台 Profile。
+
+MediaCrawler 底层仍支持 `qrcode`、`phone`、`cookie` 等登录模式；第一版后台把这些能力收敛为“Profile 登录态管理”，运营人员只需要维护每个平台的登录窗口。CLI 登录参数主要作为排障备用。具体命令和排障说明见：
 
 ```text
 docs/legal_sentiment_monitor.md
