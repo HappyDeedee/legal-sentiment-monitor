@@ -5,6 +5,7 @@ import shutil
 from pathlib import Path
 from typing import Any
 
+from .ai import ai_api_disabled
 from .database import DB_PATH, get_ai_config, get_conn, get_email_config, list_jobs, list_reports
 from .platform_status import list_platform_status
 from .readiness import get_readiness_status
@@ -131,6 +132,13 @@ def _check_browser_profiles() -> dict[str, Any]:
 
 
 def _check_ai_config() -> dict[str, Any]:
+    if ai_api_disabled():
+        return _check(
+            "ai_config",
+            "AI 配置",
+            False,
+            "AI API 已通过 MONITOR_SKIP_AI_API 临时关闭；采集内容会进入待人工复核",
+        )
     cfg = get_ai_config(masked=True)
     fields_complete = bool(cfg.get("base_url") and cfg.get("api_key") and cfg.get("model"))
     tested = cfg.get("last_test_status") == "success"
@@ -198,7 +206,10 @@ def _recommendations(checks: list[dict[str, Any]], readiness: dict[str, Any]) ->
     if "browser_profiles" in failed:
         tips.append("按 docs/deployment_runbook.md 重新准备抖音、快手、小红书登录态。")
     if "ai_config" in failed:
-        tips.append("在后台 AI 配置页保存并点击测试 AI，必须看到最近测试通过。")
+        if ai_api_disabled():
+            tips.append("当前已开启 MONITOR_SKIP_AI_API；平台和邮件可继续联调，正式验收前需关闭后点击真实测试 AI。")
+        else:
+            tips.append("在后台 AI 配置页保存并点击真实测试 AI，必须看到最近测试通过。")
     if "email_config" in failed:
         tips.append("在后台邮件配置页发送测试邮件，确认真实收件箱收到。")
     if "jobs" in failed:

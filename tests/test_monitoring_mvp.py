@@ -1278,6 +1278,18 @@ def test_doctor_reports_deployment_diagnostics():
     assert isinstance(status["recommendations"], list)
 
 
+def test_doctor_reports_ai_skip_mode(monkeypatch):
+    init_db()
+    monkeypatch.setenv("MONITOR_SKIP_AI_API", "true")
+
+    status = run_doctor()
+    ai_check = next(check for check in status["checks"] if check["key"] == "ai_config")
+
+    assert ai_check["ok"] is False
+    assert "MONITOR_SKIP_AI_API" in ai_check["message"]
+    assert any("真实测试 AI" in tip for tip in status["recommendations"])
+
+
 def test_doctor_api_exposes_deployment_diagnostics():
     init_db()
     status = asyncio.run(monitor_router.doctor())
