@@ -1508,6 +1508,9 @@ def test_run_history_keeps_job_snapshot_after_job_deleted():
             conn.execute("DELETE FROM monitor_jobs WHERE id=?", (job["id"],))
         run = get_run(run_id)
     finally:
+        with get_conn() as conn:
+            conn.execute("DELETE FROM reports WHERE run_id=?", (run_id,))
+            conn.execute("DELETE FROM crawl_runs WHERE id=?", (run_id,))
         _cleanup_test_records(job["id"], "")
 
     assert run
@@ -1552,6 +1555,9 @@ def test_report_history_keeps_law_firm_snapshot_after_job_deleted(monkeypatch):
         stored = get_report(report["id"])
         listed = next(item for item in list_reports(200) if item["id"] == report["id"])
     finally:
+        with get_conn() as conn:
+            conn.execute("DELETE FROM reports WHERE id=?", (report["id"],))
+            conn.execute("DELETE FROM crawl_runs WHERE id=?", (run_id,))
         _cleanup_test_records(job["id"], "")
 
     assert stored and stored["law_firm_name"] == "报告快照测试律所"
