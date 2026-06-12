@@ -107,7 +107,8 @@ AI 配置页支持：
 - Provider：OpenAI Compatible / Anthropic
 - Base URL、API Key、Model、Temperature
 - 负面判断 Prompt
-- 测试 AI
+- 离线自检，不调用 AI API
+- 真实测试 AI，用于上线验收
 
 邮件配置页支持：
 

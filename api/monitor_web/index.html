@@ -176,7 +176,8 @@
           <div id="ai_status" class="small" style="margin-top:8px"></div>
           <div class="row" style="margin-top:12px">
             <button class="primary" onclick="saveAI()">保存 AI 配置</button>
-            <button class="secondary" onclick="testAI()">测试 AI</button>
+            <button class="secondary" onclick="checkAI()">离线自检</button>
+            <button class="secondary" onclick="testAI()">真实测试 AI</button>
             <button class="secondary" onclick="resetAIPrompt()">恢复默认 Prompt</button>
           </div>
           <pre id="ai_result" class="panel" style="white-space:pre-wrap"></pre>
@@ -393,9 +394,11 @@
     }
     window.fillAcceptanceJobTemplate = fillAcceptanceJobTemplate;
 
+    function aiPayload(){ return {provider:val('ai_provider'),base_url:val('ai_base_url'),api_key:val('ai_api_key'),model:val('ai_model'),temperature:Number(val('ai_temperature')||0),prompt:val('ai_prompt')}; }
     async function loadAI(){ const data=await (await api('/ai-config')).json(); const c=data.config; defaultAIPrompt=data.default_prompt||''; set('ai_provider',c.provider); set('ai_base_url',c.base_url); set('ai_model',c.model); set('ai_temperature',c.temperature); set('ai_prompt',c.prompt || defaultAIPrompt); document.getElementById('ai_status').textContent = formatTestStatus(c, 'AI'); }
-    async function saveAI(){ const payload={provider:val('ai_provider'),base_url:val('ai_base_url'),api_key:val('ai_api_key'),model:val('ai_model'),temperature:Number(val('ai_temperature')||0),prompt:val('ai_prompt')}; const res=await api('/ai-config',{method:'PUT',body:JSON.stringify(payload)}); if(res.ok){ const data=await res.json(); toast(data.config.last_test_status==='success'?'AI 配置已保存，测试状态仍有效':'AI 配置已保存，需重新测试'); } else toast(await err(res)); set('ai_api_key',''); await loadAI(); await loadReadiness(); }
-    async function testAI(){ const payload={provider:val('ai_provider'),base_url:val('ai_base_url'),api_key:val('ai_api_key'),model:val('ai_model'),temperature:Number(val('ai_temperature')||0),prompt:val('ai_prompt')}; const res=await api('/ai-config/test',{method:'POST',body:JSON.stringify(payload)}); document.getElementById('ai_result').textContent = res.ok ? JSON.stringify((await res.json()).result,null,2) : await err(res); set('ai_api_key',''); await loadAI(); await loadReadiness(); }
+    async function saveAI(){ const res=await api('/ai-config',{method:'PUT',body:JSON.stringify(aiPayload())}); if(res.ok){ const data=await res.json(); toast(data.config.last_test_status==='success'?'AI 配置已保存，测试状态仍有效':'AI 配置已保存，需重新测试'); } else toast(await err(res)); set('ai_api_key',''); await loadAI(); await loadReadiness(); }
+    async function checkAI(){ const res=await api('/ai-config/offline-check',{method:'POST',body:JSON.stringify(aiPayload())}); document.getElementById('ai_result').textContent = res.ok ? JSON.stringify((await res.json()).result,null,2) : await err(res); if(res.ok) toast('AI 离线自检通过，未调用外部 API'); }
+    async function testAI(){ const res=await api('/ai-config/test',{method:'POST',body:JSON.stringify(aiPayload())}); document.getElementById('ai_result').textContent = res.ok ? JSON.stringify((await res.json()).result,null,2) : await err(res); set('ai_api_key',''); await loadAI(); await loadReadiness(); }
     function resetAIPrompt(){ set('ai_prompt', defaultAIPrompt); toast('已恢复默认 Prompt，保存后生效'); }
 
     async function loadEmail(){ const c=(await (await api('/email-config')).json()).config; ['smtp_host','smtp_port','encryption','sender'].forEach(id=>set(id,c[id]||'')); set('smtp_username',c.username||''); set('subject_template',c.subject_template||''); set('default_recipients',(c.default_recipients||[]).join('\n')); document.getElementById('email_status').textContent = formatTestStatus(c, '邮件'); }

@@ -49,22 +49,45 @@ async def evaluate_content(job: dict[str, Any], content: dict[str, Any], comment
 async def test_ai(payload: dict[str, Any]) -> dict[str, Any]:
     cfg = _merge_test_config(payload)
     prompt = cfg.get("prompt") or DEFAULT_PROMPT
-    sample = {
-        "law_firm_name": "海安律所",
-        "aliases": ["海安律师事务所", "海安律师"],
-        "exclude_words": [],
-        "platform": "抖音",
-        "source_keyword": "海安律所避雷",
-        "title": payload.get("sample_title") or "海安律所避雷：退费拖了很久",
-        "description": payload.get("sample_text") or "我想曝光一下，沟通很差，收费也不透明，投诉后一直没人处理。",
-        "comments": [],
-    }
+    sample = _sample_payload(payload)
     if cfg.get("provider") == "anthropic":
         raw = await _call_anthropic(cfg, prompt, sample)
     else:
         raw = await _call_openai(cfg, prompt, sample)
     data = _parse_json(raw)
     return _validate_ai_output(data)
+
+
+def offline_check(payload: dict[str, Any]) -> dict[str, Any]:
+    cfg = _merge_test_config(payload, require_api_key=False)
+    endpoint = _build_endpoint(
+        str(cfg.get("base_url", "")),
+        "/v1/messages" if cfg.get("provider") == "anthropic" else "/v1/chat/completions",
+    )
+    prompt = cfg.get("prompt") or DEFAULT_PROMPT
+    warnings = []
+    if not cfg.get("api_key"):
+        warnings.append("未填写 API Key；离线自检不会验证密钥是否可用")
+    return {
+        "ok": True,
+        "mode": "offline",
+        "provider": cfg.get("provider"),
+        "model": cfg.get("model"),
+        "endpoint": endpoint,
+        "temperature": cfg.get("temperature"),
+        "api_key_present": bool(cfg.get("api_key")),
+        "prompt_chars": len(prompt),
+        "sample_payload": _sample_payload(payload),
+        "expected_output_fields": [
+            "is_related",
+            "is_negative",
+            "risk_level",
+            "reason",
+            "evidence_quotes",
+            "recommended_action",
+        ],
+        "warnings": warnings,
+    }
 
 
 async def _call_openai(cfg: dict[str, Any], prompt: str, payload: dict[str, Any]) -> str:
@@ -216,7 +239,20 @@ def _coerce_quotes(value: Any) -> list[str]:
     raise ValueError("AI 输出字段类型错误：evidence_quotes")
 
 
-def _merge_test_config(payload: dict[str, Any]) -> dict[str, Any]:
+def _sample_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "law_firm_name": "海安律所",
+        "aliases": ["海安律师事务所", "海安律师"],
+        "exclude_words": [],
+        "platform": "抖音",
+        "source_keyword": "海安律所避雷",
+        "title": payload.get("sample_title") or "海安律所避雷：退费拖了很久",
+        "description": payload.get("sample_text") or "我想曝光一下，沟通很差，收费也不透明，投诉后一直没人处理。",
+        "comments": [],
+    }
+
+
+def _merge_test_config(payload: dict[str, Any], require_api_key: bool = True) -> dict[str, Any]:
     current = get_ai_config(masked=False)
     cfg = dict(current)
     for key in ("provider", "base_url", "api_key", "model", "temperature", "prompt"):
@@ -226,7 +262,10 @@ def _merge_test_config(payload: dict[str, Any]) -> dict[str, Any]:
     if cfg.get("provider") not in {"openai", "anthropic"}:
         raise ValueError("invalid AI provider")
     cfg["temperature"] = validate_temperature(cfg.get("temperature", 0) or 0)
-    missing = [key for key in ("base_url", "api_key", "model") if not cfg.get(key)]
+    required = ["base_url", "model"]
+    if require_api_key:
+        required.append("api_key")
+    missing = [key for key in required if not cfg.get(key)]
     if missing:
         raise ValueError("AI 配置未完成：" + "、".join(missing))
     return cfg

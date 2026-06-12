@@ -654,6 +654,56 @@ def test_ai_test_uses_haian_sample_payload(monkeypatch):
     assert "海安律所" in seen["title"]
 
 
+def test_ai_offline_check_does_not_call_provider_or_update_test_status(monkeypatch):
+    init_db()
+    ai_snapshot = _snapshot_singleton_table("ai_configs")
+    called = False
+
+    async def fake_call_openai(cfg, prompt, payload):
+        nonlocal called
+        called = True
+        raise RuntimeError("offline check must not call provider")
+
+    try:
+        save_ai_config(
+            {
+                "provider": "openai",
+                "base_url": "https://saved.example.com",
+                "api_key": "sk-saved",
+                "model": "saved-model",
+                "temperature": 0,
+                "prompt": DEFAULT_PROMPT,
+            }
+        )
+        before = get_ai_config()
+        monkeypatch.setattr("api.monitoring.ai._call_openai", fake_call_openai)
+
+        result = asyncio.run(
+            monitor_router.ai_config_offline_check(
+                {
+                    "provider": "openai",
+                    "base_url": "https://example.com",
+                    "api_key": "sk-test",
+                    "model": "test-model",
+                    "temperature": 0,
+                    "prompt": DEFAULT_PROMPT,
+                }
+            )
+        )["result"]
+        after = get_ai_config()
+
+        assert called is False
+        assert result["mode"] == "offline"
+        assert result["endpoint"] == "https://example.com/v1/chat/completions"
+        assert result["api_key_present"] is True
+        assert result["sample_payload"]["law_firm_name"] == "海安律所"
+        assert result["sample_payload"]["source_keyword"] == "海安律所避雷"
+        assert after["base_url"] == before["base_url"]
+        assert after["last_test_status"] == before["last_test_status"]
+    finally:
+        _restore_singleton_table("ai_configs", ai_snapshot)
+
+
 def test_ai_email_test_results_are_persisted_for_readiness(monkeypatch):
     init_db()
     ai_snapshot = _snapshot_singleton_table("ai_configs")
@@ -1350,6 +1400,10 @@ def test_monitor_page_exposes_acceptance_checklist():
     assert "恢复默认 Prompt" in page
     assert "default_prompt" in page
     assert "resetAIPrompt" in page
+    assert "离线自检" in page
+    assert "真实测试 AI" in page
+    assert "ai-config/offline-check" in page
+    assert "checkAI" in page
     assert "线索明细" in page
     assert "api('/leads?" in page
     assert "待人工复核" in page

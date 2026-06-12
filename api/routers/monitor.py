@@ -244,6 +244,14 @@ async def test_ai_config(payload: dict[str, Any] | None = None):
         raise HTTPException(status_code=400, detail=message)
 
 
+@router.post("/ai-config/offline-check")
+async def ai_config_offline_check(payload: dict[str, Any] | None = None):
+    try:
+        return {"result": ai.offline_check(payload or {})}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=redact_sensitive(str(exc)))
+
+
 @router.get("/email-config")
 async def email_config():
     init_db()
