@@ -131,6 +131,76 @@ def init_db() -> None:
                 updated_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS ai_key_profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                provider TEXT NOT NULL DEFAULT 'openai',
+                base_url TEXT NOT NULL DEFAULT '',
+                api_key_encrypted TEXT NOT NULL DEFAULT '',
+                model TEXT NOT NULL DEFAULT '',
+                temperature REAL NOT NULL DEFAULT 0,
+                prompt TEXT NOT NULL DEFAULT '',
+                is_active INTEGER NOT NULL DEFAULT 0,
+                last_test_status TEXT NOT NULL DEFAULT 'untested',
+                last_test_at TEXT,
+                last_test_error TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS email_templates (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                subject_template TEXT NOT NULL DEFAULT '【律所舆情日报】{law_firm_name} - {date}',
+                html_template TEXT NOT NULL DEFAULT '',
+                is_active INTEGER NOT NULL DEFAULT 0,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS social_accounts (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                platform TEXT NOT NULL,
+                login_type TEXT NOT NULL DEFAULT 'qrcode',
+                status TEXT NOT NULL DEFAULT 'standby',
+                profile_path TEXT NOT NULL DEFAULT '',
+                proxy_id INTEGER,
+                notes TEXT NOT NULL DEFAULT '',
+                last_used_at TEXT,
+                last_error TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS proxy_profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                provider TEXT NOT NULL DEFAULT 'manual',
+                proxy_url_encrypted TEXT NOT NULL DEFAULT '',
+                status TEXT NOT NULL DEFAULT 'standby',
+                max_concurrency INTEGER NOT NULL DEFAULT 1,
+                notes TEXT NOT NULL DEFAULT '',
+                last_checked_at TEXT,
+                last_error TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS login_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                platform TEXT NOT NULL,
+                account_id INTEGER,
+                status TEXT NOT NULL DEFAULT 'waiting_manual_browser',
+                login_url TEXT NOT NULL DEFAULT '',
+                qr_image TEXT NOT NULL DEFAULT '',
+                profile_path TEXT NOT NULL DEFAULT '',
+                message TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL,
+                expires_at TEXT
+            );
+
             CREATE TABLE IF NOT EXISTS crawl_runs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 job_id INTEGER REFERENCES monitor_jobs(id) ON DELETE SET NULL,
@@ -1107,6 +1177,503 @@ def list_leads(limit: int = 100) -> list[dict[str, Any]]:
         item["evidence_quotes"] = _json_loads(item.get("evidence_quotes"))
         result.append(item)
     return result
+
+
+def get_dashboard_summary() -> dict[str, Any]:
+    with get_conn() as conn:
+        jobs_total = conn.execute("SELECT COUNT(*) AS n FROM monitor_jobs WHERE is_internal=0").fetchone()["n"]
+        jobs_enabled = conn.execute("SELECT COUNT(*) AS n FROM monitor_jobs WHERE is_internal=0 AND enabled=1").fetchone()["n"]
+        runs_total = conn.execute("SELECT COUNT(*) AS n FROM crawl_runs").fetchone()["n"]
+        contents_total = conn.execute("SELECT COUNT(*) AS n FROM raw_contents").fetchone()["n"]
+        reports_total = conn.execute("SELECT COUNT(*) AS n FROM reports").fetchone()["n"]
+        pending_review = conn.execute("SELECT COUNT(*) AS n FROM ai_evaluations WHERE status='pending_review'").fetchone()["n"]
+        negative_total = conn.execute("SELECT COUNT(*) AS n FROM ai_evaluations WHERE is_related=1 AND is_negative=1").fetchone()["n"]
+        high_total = conn.execute("SELECT COUNT(*) AS n FROM ai_evaluations WHERE is_related=1 AND is_negative=1 AND risk_level='high'").fetchone()["n"]
+        social_total = conn.execute("SELECT COUNT(*) AS n FROM social_accounts").fetchone()["n"]
+        proxy_total = conn.execute("SELECT COUNT(*) AS n FROM proxy_profiles").fetchone()["n"]
+        ai_profiles_total = conn.execute("SELECT COUNT(*) AS n FROM ai_key_profiles").fetchone()["n"]
+        login_sessions_total = conn.execute("SELECT COUNT(*) AS n FROM login_sessions").fetchone()["n"]
+        latest_runs = conn.execute("SELECT status, summary, started_at, finished_at FROM crawl_runs ORDER BY id DESC LIMIT 20").fetchall()
+    failed_runs = 0
+    platform_counts: dict[str, int] = {}
+    for row in latest_runs:
+        if row["status"] in {"failed", "partial_failed", "cancelled"}:
+            failed_runs += 1
+        summary = _json_loads(row["summary"], {})
+        for platform in summary.get("platforms") or []:
+            platform_counts[platform] = platform_counts.get(platform, 0) + 1
+    return {
+        "jobs_total": int(jobs_total or 0),
+        "jobs_enabled": int(jobs_enabled or 0),
+        "runs_total": int(runs_total or 0),
+        "reports_total": int(reports_total or 0),
+        "contents_total": int(contents_total or 0),
+        "pending_review": int(pending_review or 0),
+        "negative_total": int(negative_total or 0),
+        "high_total": int(high_total or 0),
+        "failed_runs_recent": failed_runs,
+        "platform_counts_recent": platform_counts,
+        "social_accounts_total": int(social_total or 0),
+        "proxy_profiles_total": int(proxy_total or 0),
+        "ai_profiles_total": int(ai_profiles_total or 0),
+        "login_sessions_total": int(login_sessions_total or 0),
+    }
+
+
+def list_ai_key_profiles(masked: bool = True) -> list[dict[str, Any]]:
+    with get_conn() as conn:
+        rows = conn.execute("SELECT * FROM ai_key_profiles ORDER BY is_active DESC, id DESC").fetchall()
+    return [_row_to_ai_profile(dict(row), masked) for row in rows]
+
+
+def get_ai_key_profile(profile_id: int, masked: bool = True) -> dict[str, Any] | None:
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM ai_key_profiles WHERE id=?", (profile_id,)).fetchone()
+    return _row_to_ai_profile(dict(row), masked) if row else None
+
+
+def get_active_ai_key_profile(masked: bool = True) -> dict[str, Any] | None:
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM ai_key_profiles WHERE is_active=1 ORDER BY id DESC LIMIT 1").fetchone()
+    return _row_to_ai_profile(dict(row), masked) if row else None
+
+
+def save_ai_key_profile(payload: dict[str, Any], profile_id: int | None = None) -> dict[str, Any]:
+    current = get_ai_key_profile(profile_id, masked=False) if profile_id else {}
+    name = (payload.get("name") or (current or {}).get("name") or "").strip()
+    if not name:
+        raise ValueError("profile name is required")
+    provider = payload.get("provider") or (current or {}).get("provider") or "openai"
+    if provider not in {"openai", "anthropic"}:
+        raise ValueError("invalid AI provider")
+    api_key = str(payload.get("api_key") or "") or (current or {}).get("api_key") or ""
+    temperature = validate_temperature(payload.get("temperature", (current or {}).get("temperature", 0)) or 0)
+    next_config = {
+        "name": name,
+        "provider": provider,
+        "base_url": (payload.get("base_url") or (current or {}).get("base_url") or "").strip(),
+        "api_key": api_key,
+        "model": (payload.get("model") or (current or {}).get("model") or "").strip(),
+        "temperature": temperature,
+        "prompt": payload.get("prompt") if payload.get("prompt") is not None else (current or {}).get("prompt", ""),
+        "is_active": bool(payload.get("is_active", (current or {}).get("is_active", False))),
+    }
+    changed = not current or _ai_config_changed(current, next_config)
+    test_state = _next_test_state(current or {}, changed)
+    now = utc_now()
+    with get_conn() as conn:
+        if next_config["is_active"]:
+            conn.execute("UPDATE ai_key_profiles SET is_active=0")
+        if profile_id:
+            exists = conn.execute("SELECT id FROM ai_key_profiles WHERE id=?", (profile_id,)).fetchone()
+            if not exists:
+                raise ValueError("AI profile not found")
+            conn.execute(
+                """
+                UPDATE ai_key_profiles SET name=?, provider=?, base_url=?, api_key_encrypted=?,
+                    model=?, temperature=?, prompt=?, is_active=?, last_test_status=?,
+                    last_test_at=?, last_test_error=?, updated_at=? WHERE id=?
+                """,
+                (
+                    next_config["name"],
+                    next_config["provider"],
+                    next_config["base_url"],
+                    encrypt_secret(next_config["api_key"]),
+                    next_config["model"],
+                    next_config["temperature"],
+                    next_config["prompt"],
+                    1 if next_config["is_active"] else 0,
+                    test_state["last_test_status"],
+                    test_state["last_test_at"],
+                    test_state["last_test_error"],
+                    now,
+                    profile_id,
+                ),
+            )
+            target_id = profile_id
+        else:
+            cur = conn.execute(
+                """
+                INSERT INTO ai_key_profiles (
+                    name, provider, base_url, api_key_encrypted, model, temperature, prompt,
+                    is_active, last_test_status, last_test_at, last_test_error, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    next_config["name"],
+                    next_config["provider"],
+                    next_config["base_url"],
+                    encrypt_secret(next_config["api_key"]),
+                    next_config["model"],
+                    next_config["temperature"],
+                    next_config["prompt"],
+                    1 if next_config["is_active"] else 0,
+                    test_state["last_test_status"],
+                    test_state["last_test_at"],
+                    test_state["last_test_error"],
+                    now,
+                    now,
+                ),
+            )
+            target_id = int(cur.lastrowid)
+    return get_ai_key_profile(target_id, masked=True) or {}
+
+
+def delete_ai_key_profile(profile_id: int) -> None:
+    with get_conn() as conn:
+        conn.execute("DELETE FROM ai_key_profiles WHERE id=?", (profile_id,))
+
+
+def set_active_ai_key_profile(profile_id: int) -> dict[str, Any]:
+    with get_conn() as conn:
+        row = conn.execute("SELECT id FROM ai_key_profiles WHERE id=?", (profile_id,)).fetchone()
+        if not row:
+            raise ValueError("AI profile not found")
+        conn.execute("UPDATE ai_key_profiles SET is_active=0")
+        conn.execute("UPDATE ai_key_profiles SET is_active=1, updated_at=? WHERE id=?", (utc_now(), profile_id))
+    return get_ai_key_profile(profile_id, masked=True) or {}
+
+
+def _row_to_ai_profile(row: dict[str, Any], masked: bool) -> dict[str, Any]:
+    encrypted = row.pop("api_key_encrypted", "")
+    row["api_key"] = mask_secret(encrypted) if masked else decrypt_secret(encrypted)
+    row["is_active"] = bool(row.get("is_active"))
+    return row
+
+
+def list_email_templates() -> list[dict[str, Any]]:
+    with get_conn() as conn:
+        rows = conn.execute("SELECT * FROM email_templates ORDER BY is_active DESC, id DESC").fetchall()
+    return [_row_to_email_template(dict(row)) for row in rows]
+
+
+def get_active_email_template() -> dict[str, Any] | None:
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM email_templates WHERE is_active=1 ORDER BY id DESC LIMIT 1").fetchone()
+    return _row_to_email_template(dict(row)) if row else None
+
+
+def save_email_template(payload: dict[str, Any], template_id: int | None = None) -> dict[str, Any]:
+    name = (payload.get("name") or "").strip()
+    if not name:
+        raise ValueError("template name is required")
+    subject_template = payload.get("subject_template") or DEFAULT_EMAIL_SUBJECT_TEMPLATE
+    html_template = payload.get("html_template") or ""
+    is_active = bool(payload.get("is_active"))
+    now = utc_now()
+    with get_conn() as conn:
+        if is_active:
+            conn.execute("UPDATE email_templates SET is_active=0")
+        if template_id:
+            exists = conn.execute("SELECT id FROM email_templates WHERE id=?", (template_id,)).fetchone()
+            if not exists:
+                raise ValueError("email template not found")
+            conn.execute(
+                "UPDATE email_templates SET name=?, subject_template=?, html_template=?, is_active=?, updated_at=? WHERE id=?",
+                (name, subject_template, html_template, 1 if is_active else 0, now, template_id),
+            )
+            target_id = template_id
+        else:
+            cur = conn.execute(
+                """
+                INSERT INTO email_templates (name, subject_template, html_template, is_active, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?)
+                """,
+                (name, subject_template, html_template, 1 if is_active else 0, now, now),
+            )
+            target_id = int(cur.lastrowid)
+    return get_email_template(target_id) or {}
+
+
+def get_email_template(template_id: int) -> dict[str, Any] | None:
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM email_templates WHERE id=?", (template_id,)).fetchone()
+    return _row_to_email_template(dict(row)) if row else None
+
+
+def delete_email_template(template_id: int) -> None:
+    with get_conn() as conn:
+        conn.execute("DELETE FROM email_templates WHERE id=?", (template_id,))
+
+
+def render_email_template_preview(payload: dict[str, Any]) -> dict[str, str]:
+    subject = payload.get("subject_template") or DEFAULT_EMAIL_SUBJECT_TEMPLATE
+    html_template = payload.get("html_template") or ""
+    sample = {
+        "law_firm_name": payload.get("law_firm_name") or "海安律所",
+        "date": datetime.now().date().isoformat(),
+        "new_contents": "12",
+        "negative_count": "3",
+        "high_count": "1",
+        "pending_review_count": "4",
+        "platforms": "抖音 / 快手 / 小红书",
+        "report_url": "https://example.com/report-preview",
+    }
+    return {
+        "subject": _safe_format(subject, sample),
+        "html": _safe_format(html_template or _default_email_preview_html(), sample),
+    }
+
+
+def _row_to_email_template(row: dict[str, Any]) -> dict[str, Any]:
+    row["is_active"] = bool(row.get("is_active"))
+    return row
+
+
+def _safe_format(template: str, values: dict[str, Any]) -> str:
+    try:
+        return template.format_map(_FormatDict(values))
+    except Exception:
+        return template
+
+
+class _FormatDict(dict):
+    def __missing__(self, key: str) -> str:
+        return "{" + key + "}"
+
+
+def _default_email_preview_html() -> str:
+    return (
+        "<div style='font-family:Arial,Microsoft YaHei,sans-serif;color:#1f2937'>"
+        "<h2>【律所舆情日报】{law_firm_name} - {date}</h2>"
+        "<p>新增 {new_contents} 条，疑似负面 {negative_count} 条，高风险 {high_count} 条，待复核 {pending_review_count} 条。</p>"
+        "<p>覆盖平台：{platforms}</p>"
+        "<p><a href='{report_url}'>查看报告</a></p>"
+        "<p style='color:#64748b;font-size:12px'>AI 仅作线索筛查，不代表事实认定。</p>"
+        "</div>"
+    )
+
+
+def list_social_accounts() -> list[dict[str, Any]]:
+    with get_conn() as conn:
+        rows = conn.execute("SELECT * FROM social_accounts ORDER BY platform, id DESC").fetchall()
+    return [_row_to_pool_item(dict(row)) for row in rows]
+
+
+def save_social_account(payload: dict[str, Any], account_id: int | None = None) -> dict[str, Any]:
+    name = (payload.get("name") or "").strip()
+    platform = (payload.get("platform") or "").strip()
+    if not name:
+        raise ValueError("account name is required")
+    _validate_platform(platform)
+    login_type = payload.get("login_type") or "qrcode"
+    _validate_platform_login_type(platform, login_type)
+    status = _validate_pool_status(payload.get("status") or "standby")
+    now = utc_now()
+    values = (
+        name,
+        platform,
+        login_type,
+        status,
+        (payload.get("profile_path") or "").strip(),
+        _safe_int(payload.get("proxy_id")) or None,
+        payload.get("notes") or "",
+        payload.get("last_error") or "",
+        now,
+    )
+    with get_conn() as conn:
+        if account_id:
+            exists = conn.execute("SELECT id FROM social_accounts WHERE id=?", (account_id,)).fetchone()
+            if not exists:
+                raise ValueError("account not found")
+            conn.execute(
+                """
+                UPDATE social_accounts SET name=?, platform=?, login_type=?, status=?,
+                    profile_path=?, proxy_id=?, notes=?, last_error=?, updated_at=? WHERE id=?
+                """,
+                (*values, account_id),
+            )
+            target_id = account_id
+        else:
+            cur = conn.execute(
+                """
+                INSERT INTO social_accounts (
+                    name, platform, login_type, status, profile_path, proxy_id, notes,
+                    last_error, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (*values[:-1], now, now),
+            )
+            target_id = int(cur.lastrowid)
+    return get_social_account(target_id) or {}
+
+
+def get_social_account(account_id: int) -> dict[str, Any] | None:
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM social_accounts WHERE id=?", (account_id,)).fetchone()
+    return _row_to_pool_item(dict(row)) if row else None
+
+
+def delete_social_account(account_id: int) -> None:
+    with get_conn() as conn:
+        conn.execute("DELETE FROM social_accounts WHERE id=?", (account_id,))
+
+
+def list_proxy_profiles(masked: bool = True) -> list[dict[str, Any]]:
+    with get_conn() as conn:
+        rows = conn.execute("SELECT * FROM proxy_profiles ORDER BY id DESC").fetchall()
+    return [_row_to_proxy_profile(dict(row), masked) for row in rows]
+
+
+def save_proxy_profile(payload: dict[str, Any], proxy_id: int | None = None) -> dict[str, Any]:
+    name = (payload.get("name") or "").strip()
+    if not name:
+        raise ValueError("proxy name is required")
+    status = _validate_pool_status(payload.get("status") or "standby")
+    max_concurrency = max(1, int(payload.get("max_concurrency") or 1))
+    current = get_proxy_profile(proxy_id, masked=False) if proxy_id else {}
+    proxy_url = str(payload.get("proxy_url") or "") or (current or {}).get("proxy_url") or ""
+    now = utc_now()
+    with get_conn() as conn:
+        if proxy_id:
+            exists = conn.execute("SELECT id FROM proxy_profiles WHERE id=?", (proxy_id,)).fetchone()
+            if not exists:
+                raise ValueError("proxy not found")
+            conn.execute(
+                """
+                UPDATE proxy_profiles SET name=?, provider=?, proxy_url_encrypted=?, status=?,
+                    max_concurrency=?, notes=?, last_error=?, updated_at=? WHERE id=?
+                """,
+                (
+                    name,
+                    (payload.get("provider") or "manual").strip(),
+                    encrypt_secret(proxy_url),
+                    status,
+                    max_concurrency,
+                    payload.get("notes") or "",
+                    payload.get("last_error") or "",
+                    now,
+                    proxy_id,
+                ),
+            )
+            target_id = proxy_id
+        else:
+            cur = conn.execute(
+                """
+                INSERT INTO proxy_profiles (
+                    name, provider, proxy_url_encrypted, status, max_concurrency,
+                    notes, last_error, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    name,
+                    (payload.get("provider") or "manual").strip(),
+                    encrypt_secret(proxy_url),
+                    status,
+                    max_concurrency,
+                    payload.get("notes") or "",
+                    payload.get("last_error") or "",
+                    now,
+                    now,
+                ),
+            )
+            target_id = int(cur.lastrowid)
+    return get_proxy_profile(target_id, masked=True) or {}
+
+
+def get_proxy_profile(proxy_id: int | None, masked: bool = True) -> dict[str, Any] | None:
+    if not proxy_id:
+        return None
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM proxy_profiles WHERE id=?", (proxy_id,)).fetchone()
+    return _row_to_proxy_profile(dict(row), masked) if row else None
+
+
+def delete_proxy_profile(proxy_id: int) -> None:
+    with get_conn() as conn:
+        conn.execute("DELETE FROM proxy_profiles WHERE id=?", (proxy_id,))
+
+
+def create_login_session(payload: dict[str, Any]) -> dict[str, Any]:
+    platform = (payload.get("platform") or "").strip()
+    _validate_platform(platform)
+    account_id = _safe_int(payload.get("account_id")) or None
+    login_url = (payload.get("login_url") or "").strip()
+    profile_path = (payload.get("profile_path") or "").strip()
+    message = payload.get("message") or (
+        "当前 MediaCrawler 版本暂未稳定回传网页登录二维码；请先使用本地/远程浏览器窗口完成扫码，后续会升级为页面二维码登录。"
+    )
+    now = utc_now()
+    with get_conn() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO login_sessions (
+                platform, account_id, status, login_url, qr_image, profile_path,
+                message, created_at, updated_at, expires_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                platform,
+                account_id,
+                "waiting_manual_browser",
+                login_url,
+                payload.get("qr_image") or "",
+                profile_path,
+                message,
+                now,
+                now,
+                payload.get("expires_at") or "",
+            ),
+        )
+        target_id = int(cur.lastrowid)
+    return get_login_session(target_id) or {}
+
+
+def get_login_session(session_id: int) -> dict[str, Any] | None:
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM login_sessions WHERE id=?", (session_id,)).fetchone()
+    return dict(row) if row else None
+
+
+def list_login_sessions(limit: int = 20) -> list[dict[str, Any]]:
+    limit = _coerce_limit(limit, 20)
+    sql = "SELECT * FROM login_sessions ORDER BY id DESC"
+    params: list[Any] = []
+    if limit > 0:
+        sql += " LIMIT ?"
+        params.append(limit)
+    with get_conn() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return [dict(row) for row in rows]
+
+
+def update_login_session_status(session_id: int, status: str, message: str = "", qr_image: str = "") -> dict[str, Any]:
+    allowed = {"waiting_qrcode", "waiting_manual_browser", "scanned", "success", "expired", "failed"}
+    if status not in allowed:
+        raise ValueError("invalid login session status")
+    with get_conn() as conn:
+        row = conn.execute("SELECT id FROM login_sessions WHERE id=?", (session_id,)).fetchone()
+        if not row:
+            raise ValueError("login session not found")
+        conn.execute(
+            """
+            UPDATE login_sessions SET status=?, message=?, qr_image=COALESCE(NULLIF(?, ''), qr_image), updated_at=?
+            WHERE id=?
+            """,
+            (status, message, qr_image, utc_now(), session_id),
+        )
+    return get_login_session(session_id) or {}
+
+
+def delete_login_session(session_id: int) -> None:
+    with get_conn() as conn:
+        conn.execute("DELETE FROM login_sessions WHERE id=?", (session_id,))
+
+
+def _row_to_proxy_profile(row: dict[str, Any], masked: bool) -> dict[str, Any]:
+    encrypted = row.pop("proxy_url_encrypted", "")
+    row["proxy_url"] = mask_secret(encrypted) if masked else decrypt_secret(encrypted)
+    return _row_to_pool_item(row)
+
+
+def _row_to_pool_item(row: dict[str, Any]) -> dict[str, Any]:
+    return row
+
+
+def _validate_pool_status(status: str) -> str:
+    if status not in {"standby", "active", "limited", "disabled"}:
+        raise ValueError("invalid pool status")
+    return status
 
 
 def _coerce_limit(value: Any, default: int = 100) -> int:

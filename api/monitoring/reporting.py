@@ -49,6 +49,10 @@ def create_report(run_id: int, job: dict[str, Any], summary: dict[str, Any]) -> 
         report_id = int(cur.lastrowid)
     return {
         "id": report_id,
+        "run_id": run_id,
+        "job_id": job["id"],
+        "law_firm_name": job.get("law_firm_name", ""),
+        "summary": summary,
         "html_path": str(html_path),
         "markdown_path": str(md_path),
         "excel_path": str(xlsx_path),

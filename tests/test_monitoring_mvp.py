@@ -11,7 +11,7 @@ from fastapi import HTTPException
 
 from api.monitoring.ai import _build_endpoint, _parse_json, _validate_ai_output, test_ai as run_ai_config_test
 from api.monitoring.ai import DEFAULT_PROMPT
-from api.monitoring.database import create_run, finish_run, get_ai_config, get_conn, get_email_config, get_job, get_platform_login_config, get_report, get_run, init_db, list_jobs, list_leads, list_platform_login_configs, list_reports, list_runs, save_ai_config, save_email_config, save_job, save_platform_login_config
+from api.monitoring.database import create_login_session, create_run, finish_run, get_active_ai_key_profile, get_ai_config, get_conn, get_dashboard_summary, get_email_config, get_job, get_login_session, get_platform_login_config, get_report, get_run, init_db, list_ai_key_profiles, list_email_templates, list_jobs, list_leads, list_login_sessions, list_platform_login_configs, list_proxy_profiles, list_reports, list_runs, list_social_accounts, render_email_template_preview, save_ai_config, save_ai_key_profile, save_email_config, save_email_template, save_job, save_platform_login_config, save_proxy_profile, save_social_account, set_active_ai_key_profile
 from api.monitoring.login_browser import build_login_browser_command, open_login_browser
 from api.monitoring.login_state import login_window_status, record_login_window
 from api.monitoring.mailer import build_report_email, send_test_email
@@ -486,6 +486,51 @@ def test_report_email_uses_specific_attachment_mime_types(tmp_path):
     assert msg["To"] == "target@example.com"
 
 
+def test_active_email_template_uses_report_summary_values(tmp_path):
+    init_db()
+    snapshot = _snapshot_table("email_templates")
+    html_path = tmp_path / "report.html"
+    xlsx_path = tmp_path / "report.xlsx"
+    md_path = tmp_path / "report.md"
+    html_path.write_text("<article>真实报告正文</article>", encoding="utf-8")
+    xlsx_path.write_bytes(b"fake-xlsx")
+    md_path.write_text("# 日报", encoding="utf-8")
+    try:
+        save_email_template(
+            {
+                "name": "企业日报模板",
+                "subject_template": "日报 {law_firm_name} {negative_count}",
+                "html_template": "<main>{law_firm_name}|{new_contents}|{negative_count}|{high_count}|{pending_review_count}|{platforms}|{report_html}</main>",
+                "is_active": True,
+            }
+        )
+        msg = build_report_email(
+            {"sender": "sender@example.com"},
+            ["target@example.com"],
+            "测试日报",
+            {
+                "law_firm_name": "海安律所",
+                "summary": {
+                    "law_firm_name": "海安律所",
+                    "new_contents": 9,
+                    "negative_count": 3,
+                    "high_count": 1,
+                    "pending_review_count": 2,
+                    "platforms": ["dy", "ks", "xhs"],
+                },
+                "html_path": str(html_path),
+                "excel_path": str(xlsx_path),
+                "markdown_path": str(md_path),
+            },
+        )
+        html_body = _email_html_body(msg)
+    finally:
+        _restore_table("email_templates", snapshot)
+
+    assert "海安律所|9|3|1|2|抖音 / 快手 / 小红书" in html_body
+    assert "真实报告正文" in html_body
+
+
 def test_report_download_media_types_are_specific(tmp_path):
     assert (
         monitor_router._report_download_media_type("excel", tmp_path / "report.xlsx")
@@ -708,6 +753,179 @@ def test_ai_offline_check_does_not_call_provider_or_update_test_status(monkeypat
         assert after["last_test_status"] == before["last_test_status"]
     finally:
         _restore_singleton_table("ai_configs", ai_snapshot)
+
+
+def test_ai_profiles_can_be_selected_and_used_for_evaluation(monkeypatch):
+    init_db()
+    profile_snapshot = _snapshot_table("ai_key_profiles")
+    seen: dict[str, Any] = {}
+
+    async def fake_call_openai(cfg, prompt, payload):
+        seen.update(cfg)
+        return json.dumps(
+            {
+                "is_related": True,
+                "is_negative": True,
+                "risk_level": "high",
+                "reason": "命中投诉",
+                "evidence_quotes": ["投诉"],
+                "recommended_action": "人工复核",
+            },
+            ensure_ascii=False,
+        )
+
+    try:
+        profile = save_ai_key_profile(
+            {
+                "name": "主力 OpenAI",
+                "provider": "openai",
+                "base_url": "https://ai.example.com",
+                "api_key": "sk-profile",
+                "model": "profile-model",
+                "temperature": 0,
+                "prompt": DEFAULT_PROMPT,
+                "is_active": True,
+            }
+        )
+        monkeypatch.setattr("api.monitoring.ai._call_openai", fake_call_openai)
+
+        result = asyncio.run(
+            ai_module.evaluate_content(
+                {"law_firm_name": "海安律所"},
+                {"platform": "dy", "title": "海安律所投诉", "description": "退费迟迟没有处理"},
+                [],
+            )
+        )
+
+        assert profile["is_active"] is True
+        assert get_active_ai_key_profile()["id"] == profile["id"]
+        assert seen["model"] == "profile-model"
+        assert result["risk_level"] == "high"
+    finally:
+        _restore_table("ai_key_profiles", profile_snapshot)
+
+
+def test_email_templates_preview_and_pool_configs_are_persisted():
+    init_db()
+    snapshots = {
+        "email_templates": _snapshot_table("email_templates"),
+        "social_accounts": _snapshot_table("social_accounts"),
+        "proxy_profiles": _snapshot_table("proxy_profiles"),
+    }
+    try:
+        preview = render_email_template_preview(
+            {
+                "subject_template": "日报 {law_firm_name} {date}",
+                "html_template": "<h1>{law_firm_name}</h1><section>{report_html}</section>",
+            }
+        )
+        template = save_email_template(
+            {
+                "name": "企业日报模板",
+                "subject_template": "日报 {law_firm_name}",
+                "html_template": "<main>{report_html}</main>",
+                "is_active": True,
+            }
+        )
+        proxy = save_proxy_profile(
+            {
+                "name": "华东代理池",
+                "provider": "manual",
+                "proxy_url": "http://user:pass@127.0.0.1:8081",
+                "status": "active",
+                "max_concurrency": 2,
+            }
+        )
+        account = save_social_account(
+            {
+                "name": "抖音一号",
+                "platform": "dy",
+                "login_type": "qrcode",
+                "status": "active",
+                "proxy_id": proxy["id"],
+            }
+        )
+        summary = get_dashboard_summary()
+
+        assert preview["subject"].startswith("日报 海安律所")
+        assert "{report_html}" in preview["html"]
+        assert template["is_active"] is True
+        assert list_email_templates()[0]["id"] == template["id"]
+        assert list_proxy_profiles()[0]["proxy_url"].startswith("htt")
+        assert account["platform"] == "dy"
+        assert list_social_accounts()[0]["name"] == "抖音一号"
+        assert summary["social_accounts_total"] >= 1
+        assert summary["proxy_profiles_total"] >= 1
+    finally:
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+
+def test_login_sessions_are_persisted_for_server_side_login_flow():
+    init_db()
+    snapshot = _snapshot_table("login_sessions")
+    try:
+        session = create_login_session(
+            {
+                "platform": "dy",
+                "account_id": None,
+                "login_url": "https://www.douyin.com/",
+                "profile_path": "browser_data/cdp_dy_user_data_dir",
+            }
+        )
+        listed = list_login_sessions()
+        summary = get_dashboard_summary()
+
+        assert session["status"] == "waiting_manual_browser"
+        assert get_login_session(session["id"])["platform"] == "dy"
+        assert listed[0]["id"] == session["id"]
+        assert summary["login_sessions_total"] >= 1
+        with pytest.raises(ValueError, match="unsupported platform"):
+            create_login_session({"platform": "wb"})
+    finally:
+        _restore_table("login_sessions", snapshot)
+
+
+def test_login_session_routes_create_pollable_session(monkeypatch):
+    init_db()
+    snapshot = _snapshot_table("login_sessions")
+    try:
+        monkeypatch.setattr(
+            monitor_router,
+            "build_login_browser_command",
+            lambda platform: {
+                "platform": platform,
+                "platform_label": "抖音",
+                "login_url": "https://www.douyin.com/",
+                "profile_path": "browser_data/cdp_dy_user_data_dir",
+                "debug_port": 9323,
+                "browser_path": "chrome",
+            },
+        )
+        monkeypatch.setattr(
+            monitor_router,
+            "list_platform_status",
+            lambda: [
+                {
+                    "platform": "dy",
+                    "platform_label": "抖音",
+                    "profile_path": "browser_data/cdp_dy_user_data_dir",
+                    "login_ready": False,
+                    "login_window_open": False,
+                }
+            ],
+        )
+
+        created = asyncio.run(monitor_router.create_platform_login_session({"platform": "dy"}))
+        session_id = created["session"]["id"]
+        polled = asyncio.run(monitor_router.login_session(session_id))
+
+        assert created["capabilities"]["manual_browser_fallback"] is True
+        assert created["capabilities"]["qr_image_supported"] is False
+        assert polled["session"]["status"] == "waiting_manual_browser"
+        assert polled["platform_status"]["platform"] == "dy"
+    finally:
+        _restore_table("login_sessions", snapshot)
 
 
 def test_ai_skip_env_prevents_external_ai_calls(monkeypatch):
@@ -1600,14 +1818,38 @@ def test_refresh_jobs_schedule_api_recomputes_next_run_at():
 def test_monitor_page_exposes_acceptance_checklist():
     page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
 
+    assert "总仪表台" in page
+    assert "dashboard_metrics" in page
+    assert "/dashboard" in page
+    assert "企业级律所舆情监控" in page
     assert "上线验收状态" in page
     assert "调度器状态" in page
     assert "loadSchedulerStatus" in page
     assert "scheduler-status" in page
-    assert "账号登录" in page
-    assert "登录方式按平台统一配置" in page
-    assert "平台登录方式配置" in page
+    assert "账号设置" in page
+    assert "账号资源" in page
+    assert "账号详情" in page
+    assert "基础配置" in page
+    assert "登录维护" in page
+    assert "风控备注" in page
+    assert "account_metrics" in page
+    assert "renderAccountList" in page
+    assert "switchAccountTab" in page
+    assert "social-accounts" in page
+    assert "loadAccountsPool" in page
+    assert "服务器扫码方案" in page
+    assert "展示二维码" in page
+    assert "网页登录会话" in page
+    assert "页面发起登录" in page
+    assert "login-sessions" in page
+    assert "pollLoginSession" in page
+    assert "账号登录与平台授权" in page
+    assert "任务只选择平台和关键词" in page
+    assert "平台默认登录方式配置" in page
     assert "Cookie 会加密保存" in page
+    assert "代理 IP 池" in page
+    assert "proxies" in page
+    assert "loadProxyPool" in page
     assert "account_status_table" in page
     assert "platformStatusTable" in page
     assert "platform_login_config_table" in page
@@ -1648,10 +1890,18 @@ def test_monitor_page_exposes_acceptance_checklist():
     assert "恢复默认 Prompt" in page
     assert "default_prompt" in page
     assert "resetAIPrompt" in page
+    assert "多 API Key Profile" in page
+    assert "ai-profiles" in page
+    assert "loadAIProfiles" in page
+    assert "activateAIProfile" in page
     assert "离线自检" in page
     assert "真实测试 AI" in page
     assert "ai-config/offline-check" in page
     assert "checkAI" in page
+    assert "HTML 邮件模板" in page
+    assert "email-templates/preview" in page
+    assert "email_template_preview" in page
+    assert "scheduleEmailPreview" in page
     assert "线索明细" in page
     assert "api('/leads?" in page
     assert "待人工复核" in page
@@ -2569,6 +2819,13 @@ def _cleanup_test_records(job_id: int, content_id: str) -> None:
             conn.execute("DELETE FROM reports WHERE run_id IN (%s)" % ",".join("?" for _ in run_ids), run_ids)
             conn.execute("DELETE FROM crawl_runs WHERE id IN (%s)" % ",".join("?" for _ in run_ids), run_ids)
         conn.execute("DELETE FROM monitor_jobs WHERE id=?", (job_id,))
+
+
+def _email_html_body(msg) -> str:
+    for part in msg.walk():
+        if part.get_content_type() == "text/html":
+            return part.get_content()
+    raise AssertionError("email html body not found")
 
 
 def _snapshot_singleton_table(table: str) -> dict:

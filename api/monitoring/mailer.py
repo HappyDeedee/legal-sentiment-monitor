@@ -5,7 +5,8 @@ from email.message import EmailMessage
 from pathlib import Path
 from typing import Any
 
-from .database import get_email_config, validate_port, validate_recipients
+from .database import get_active_email_template, get_email_config, validate_port, validate_recipients
+from .normalizer import PLATFORM_LABELS
 
 
 def send_report(job: dict[str, Any], report: dict[str, Any]) -> tuple[bool, str | None]:
@@ -16,10 +17,9 @@ def send_report(job: dict[str, Any], report: dict[str, Any]) -> tuple[bool, str 
     if not cfg.get("smtp_host") or not cfg.get("sender"):
         return False, "SMTP 配置未完成"
     try:
-        subject = (cfg.get("subject_template") or "【律所舆情日报】{law_firm_name} - {date}").format(
-            law_firm_name=job.get("law_firm_name", ""),
-            date=__import__("datetime").date.today().isoformat(),
-        )
+        template = get_active_email_template()
+        subject_template = (template or {}).get("subject_template") or cfg.get("subject_template") or "【律所舆情日报】{law_firm_name} - {date}"
+        subject = _safe_format(subject_template, _template_values(job, report, ""))
         msg = build_report_email(cfg, recipients, subject, report)
         _smtp_send(cfg, msg)
         return True, None
@@ -29,6 +29,9 @@ def send_report(job: dict[str, Any], report: dict[str, Any]) -> tuple[bool, str 
 
 def build_report_email(cfg: dict[str, Any], recipients: list[str], subject: str, report: dict[str, Any]) -> EmailMessage:
     html_body = Path(report["html_path"]).read_text(encoding="utf-8")
+    template = get_active_email_template()
+    if template and template.get("html_template"):
+        html_body = _safe_format(template["html_template"], _template_values({}, report, html_body))
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = cfg["sender"]
@@ -41,6 +44,40 @@ def build_report_email(cfg: dict[str, Any], recipients: list[str], subject: str,
             maintype, subtype = _attachment_mime(path)
             msg.add_attachment(path.read_bytes(), maintype=maintype, subtype=subtype, filename=path.name)
     return msg
+
+
+def _template_values(job: dict[str, Any], report: dict[str, Any], report_html: str) -> dict[str, Any]:
+    summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
+    law_firm_name = (
+        job.get("law_firm_name")
+        or report.get("law_firm_name")
+        or report.get("display_law_firm_name")
+        or summary.get("law_firm_name")
+        or ""
+    )
+    platforms = summary.get("platforms") or list((summary.get("platform_results") or {}).keys())
+    return {
+        "law_firm_name": law_firm_name,
+        "date": __import__("datetime").date.today().isoformat(),
+        "new_contents": summary.get("new_contents", 0),
+        "negative_count": summary.get("negative_count", 0),
+        "high_count": summary.get("high_count", 0),
+        "pending_review_count": summary.get("pending_review_count", 0),
+        "platforms": " / ".join(PLATFORM_LABELS.get(platform, platform) for platform in platforms),
+        "report_html": report_html,
+    }
+
+
+def _safe_format(template: str, values: dict[str, Any]) -> str:
+    try:
+        return (template or "").format_map(_FormatDict(values))
+    except Exception:
+        return template or ""
+
+
+class _FormatDict(dict):
+    def __missing__(self, key: str) -> str:
+        return "{" + key + "}"
 
 
 def _attachment_mime(path: Path) -> tuple[str, str]:

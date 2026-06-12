@@ -93,6 +93,7 @@ async def _run_job_locked(job_id: int) -> dict[str, Any]:
         "new_contents": 0,
         "negative_count": 0,
         "high_count": 0,
+        "pending_review_count": 0,
         "failed_platforms": [],
         "cancelled_platforms": [],
         "platform_results": {},
@@ -351,6 +352,7 @@ def ingest_outputs(
 async def evaluate_new_contents(job: dict[str, Any], run_id: int, content_ids: list[int]) -> dict[str, Any]:
     negative_count = 0
     high_count = 0
+    pending_review_count = 0
     with get_conn() as conn:
         rows = [
             dict(row)
@@ -362,13 +364,15 @@ async def evaluate_new_contents(job: dict[str, Any], run_id: int, content_ids: l
     for row in rows:
         comments = _load_comments(row["platform"], row["content_id"])
         evaluation = await evaluate_content(job, row, comments)
+        if evaluation["status"] == "pending_review":
+            pending_review_count += 1
         is_related_negative = bool(evaluation["is_related"] and evaluation["is_negative"])
         if is_related_negative:
             negative_count += 1
         if is_related_negative and evaluation["risk_level"] == "high":
             high_count += 1
         _save_evaluation(row["id"], run_id, evaluation)
-    return {"negative_count": negative_count, "high_count": high_count}
+    return {"negative_count": negative_count, "high_count": high_count, "pending_review_count": pending_review_count}
 
 
 def _save_evaluation(content_db_id: int, run_id: int, evaluation: dict[str, Any]) -> None:

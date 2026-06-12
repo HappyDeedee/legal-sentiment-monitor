@@ -12,10 +12,20 @@ from ..monitoring.database import (
     MONITOR_DATA_DIR,
     cancel_run,
     cancel_running_runs_for_job,
+    create_login_session,
     delete_job,
+    delete_ai_key_profile,
+    delete_email_template,
+    delete_login_session,
+    delete_proxy_profile,
+    delete_social_account,
+    get_dashboard_summary,
     get_ai_config,
     get_email_config,
+    get_active_ai_key_profile,
+    get_active_email_template,
     get_job,
+    get_login_session,
     get_platform_login_config,
     get_report,
     get_run,
@@ -23,21 +33,32 @@ from ..monitoring.database import (
     init_db,
     list_jobs,
     list_leads,
+    list_ai_key_profiles,
+    list_email_templates,
+    list_login_sessions,
     list_platform_login_configs,
+    list_proxy_profiles,
     list_reports,
     list_runs,
+    list_social_accounts,
     mark_ai_test_result,
     mark_email_test_result,
+    render_email_template_preview,
     save_ai_config,
+    save_ai_key_profile,
     save_email_config,
+    save_email_template,
     save_job,
     save_platform_login_config,
+    save_proxy_profile,
+    save_social_account,
+    set_active_ai_key_profile,
     set_job_enabled,
     set_job_schedule_state,
 )
 from ..monitoring.mailer import send_test_email
 from ..monitoring.doctor import run_doctor
-from ..monitoring.login_browser import open_login_browser
+from ..monitoring.login_browser import build_login_browser_command, open_login_browser
 from ..monitoring.platform_status import list_platform_status
 from ..monitoring.preflight import build_job_preflight
 from ..monitoring.readiness import get_readiness_status
@@ -129,6 +150,12 @@ async def monitor_scheduler_status():
 async def doctor():
     init_db()
     return run_doctor()
+
+
+@router.get("/dashboard")
+async def dashboard():
+    init_db()
+    return {"summary": get_dashboard_summary(), "readiness": get_readiness_status(), "scheduler": scheduler_status()}
 
 
 @router.post("/jobs")
@@ -260,6 +287,42 @@ async def ai_config_offline_check(payload: dict[str, Any] | None = None):
         raise HTTPException(status_code=400, detail=redact_sensitive(str(exc)))
 
 
+@router.get("/ai-profiles")
+async def ai_profiles():
+    init_db()
+    return {"profiles": list_ai_key_profiles(masked=True), "active": get_active_ai_key_profile(masked=True)}
+
+
+@router.post("/ai-profiles")
+async def create_ai_profile(payload: dict[str, Any]):
+    try:
+        return {"profile": save_ai_key_profile(payload)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=redact_sensitive(str(exc)))
+
+
+@router.put("/ai-profiles/{profile_id}")
+async def update_ai_profile(profile_id: int, payload: dict[str, Any]):
+    try:
+        return {"profile": save_ai_key_profile(payload, profile_id)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=redact_sensitive(str(exc)))
+
+
+@router.post("/ai-profiles/{profile_id}/activate")
+async def activate_ai_profile(profile_id: int):
+    try:
+        return {"profile": set_active_ai_key_profile(profile_id)}
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.delete("/ai-profiles/{profile_id}")
+async def remove_ai_profile(profile_id: int):
+    delete_ai_key_profile(profile_id)
+    return {"ok": True}
+
+
 @router.get("/email-config")
 async def email_config():
     init_db()
@@ -292,6 +355,162 @@ async def test_email(payload: dict[str, Any] | None = None):
         if config_saved:
             mark_email_test_result(False, message)
         raise HTTPException(status_code=400, detail=message)
+
+
+@router.get("/email-templates")
+async def email_templates():
+    init_db()
+    return {"templates": list_email_templates(), "active": get_active_email_template()}
+
+
+@router.post("/email-templates")
+async def create_email_template(payload: dict[str, Any]):
+    try:
+        return {"template": save_email_template(payload)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.put("/email-templates/{template_id}")
+async def update_email_template(template_id: int, payload: dict[str, Any]):
+    try:
+        return {"template": save_email_template(payload, template_id)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.delete("/email-templates/{template_id}")
+async def remove_email_template(template_id: int):
+    delete_email_template(template_id)
+    return {"ok": True}
+
+
+@router.post("/email-templates/preview")
+async def email_template_preview(payload: dict[str, Any] | None = None):
+    return {"preview": render_email_template_preview(payload or {})}
+
+
+@router.get("/social-accounts")
+async def social_accounts():
+    init_db()
+    return {"accounts": list_social_accounts()}
+
+
+@router.post("/social-accounts")
+async def create_social_account(payload: dict[str, Any]):
+    try:
+        return {"account": save_social_account(payload)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.put("/social-accounts/{account_id}")
+async def update_social_account(account_id: int, payload: dict[str, Any]):
+    try:
+        return {"account": save_social_account(payload, account_id)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.delete("/social-accounts/{account_id}")
+async def remove_social_account(account_id: int):
+    delete_social_account(account_id)
+    return {"ok": True}
+
+
+@router.get("/login-sessions")
+async def login_sessions(limit: int = Query(20, ge=0, le=200)):
+    init_db()
+    return {"sessions": list_login_sessions(limit)}
+
+
+@router.post("/login-sessions")
+async def create_platform_login_session(payload: dict[str, Any]):
+    init_db()
+    platform = payload.get("platform")
+    try:
+        command = build_login_browser_command(str(platform))
+        session = create_login_session(
+            {
+                "platform": platform,
+                "account_id": payload.get("account_id"),
+                "login_url": command["login_url"],
+                "profile_path": command["profile_path"],
+                "message": (
+                    "已创建网页登录会话预留入口。当前 MediaCrawler 尚未稳定把二维码回传给后台，"
+                    "请先使用“打开登录窗口”完成扫码；后续会在这里展示二维码并自动轮询状态。"
+                ),
+            }
+        )
+        return {
+            "session": session,
+            "capabilities": {
+                "qr_image_supported": False,
+                "manual_browser_fallback": True,
+                "polling_supported": True,
+            },
+        }
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=redact_sensitive(str(exc)))
+
+
+@router.get("/login-sessions/{session_id}")
+async def login_session(session_id: int):
+    init_db()
+    session = get_login_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="login session not found")
+    platform = session.get("platform")
+    statuses = {item["platform"]: item for item in list_platform_status()}
+    platform_status = statuses.get(platform) or {}
+    status = session.get("status") or "waiting_manual_browser"
+    if platform_status.get("login_ready"):
+        status = "success"
+    elif platform_status.get("login_window_open"):
+        status = "waiting_manual_browser"
+    return {
+        "session": {**session, "status": status},
+        "platform_status": platform_status,
+        "capabilities": {
+            "qr_image_supported": bool(session.get("qr_image")),
+            "manual_browser_fallback": True,
+            "polling_supported": True,
+        },
+    }
+
+
+@router.delete("/login-sessions/{session_id}")
+async def remove_login_session(session_id: int):
+    delete_login_session(session_id)
+    return {"ok": True}
+
+
+@router.get("/proxies")
+async def proxies():
+    init_db()
+    return {"proxies": list_proxy_profiles(masked=True)}
+
+
+@router.post("/proxies")
+async def create_proxy(payload: dict[str, Any]):
+    try:
+        return {"proxy": save_proxy_profile(payload)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=redact_sensitive(str(exc)))
+
+
+@router.put("/proxies/{proxy_id}")
+async def update_proxy(proxy_id: int, payload: dict[str, Any]):
+    try:
+        return {"proxy": save_proxy_profile(payload, proxy_id)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=redact_sensitive(str(exc)))
+
+
+@router.delete("/proxies/{proxy_id}")
+async def remove_proxy(proxy_id: int):
+    delete_proxy_profile(proxy_id)
+    return {"ok": True}
 
 
 @router.get("/runs")

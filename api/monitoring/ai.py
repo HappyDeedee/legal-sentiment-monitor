@@ -7,7 +7,7 @@ from typing import Any
 
 import httpx
 
-from .database import get_ai_config, validate_temperature
+from .database import get_active_ai_key_profile, get_ai_config, validate_temperature
 from .prompts import DEFAULT_PROMPT
 
 
@@ -19,7 +19,7 @@ async def evaluate_content(job: dict[str, Any], content: dict[str, Any], comment
     if ai_api_disabled():
         return _fallback("AI API 已通过 MONITOR_SKIP_AI_API 临时关闭，本条内容待人工复核。", content)
 
-    cfg = get_ai_config(masked=False)
+    cfg = get_active_ai_key_profile(masked=False) or get_ai_config(masked=False)
     if not cfg.get("api_key") or not cfg.get("model") or not cfg.get("base_url"):
         return _fallback("AI 配置未完成", content)
 
@@ -267,7 +267,7 @@ def _sample_payload(payload: dict[str, Any]) -> dict[str, Any]:
 
 
 def _merge_test_config(payload: dict[str, Any], require_api_key: bool = True) -> dict[str, Any]:
-    current = get_ai_config(masked=False)
+    current = get_active_ai_key_profile(masked=False) or get_ai_config(masked=False)
     cfg = dict(current)
     for key in ("provider", "base_url", "api_key", "model", "temperature", "prompt"):
         value = payload.get(key)
