@@ -227,6 +227,8 @@ async def test_ai_config(payload: dict[str, Any] | None = None):
     payload = payload or {}
     test_targets_saved_config = not payload
     try:
+        if ai.ai_api_disabled():
+            raise ValueError("AI API 已通过 MONITOR_SKIP_AI_API 临时关闭；请使用离线自检，关闭该开关后再做真实测试 AI")
         if payload:
             save_ai_config(payload)
             test_targets_saved_config = True

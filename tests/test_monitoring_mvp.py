@@ -742,6 +742,47 @@ def test_ai_skip_env_prevents_external_ai_calls(monkeypatch):
         )
 
 
+def test_ai_test_route_skip_env_does_not_save_payload(monkeypatch):
+    init_db()
+    ai_snapshot = _snapshot_singleton_table("ai_configs")
+    try:
+        save_ai_config(
+            {
+                "provider": "openai",
+                "base_url": "https://saved.example.com",
+                "api_key": "sk-saved",
+                "model": "saved-model",
+                "temperature": 0,
+                "prompt": DEFAULT_PROMPT,
+            }
+        )
+        before = get_ai_config()
+        monkeypatch.setenv("MONITOR_SKIP_AI_API", "true")
+
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(
+                monitor_router.test_ai_config(
+                    {
+                        "provider": "openai",
+                        "base_url": "https://changed.example.com",
+                        "api_key": "sk-changed",
+                        "model": "changed-model",
+                        "temperature": 0,
+                        "prompt": "changed",
+                    }
+                )
+            )
+        after = get_ai_config()
+
+        assert exc.value.status_code == 400
+        assert "MONITOR_SKIP_AI_API" in str(exc.value.detail)
+        assert after["base_url"] == before["base_url"]
+        assert after["model"] == before["model"]
+        assert after["last_test_status"] == before["last_test_status"]
+    finally:
+        _restore_singleton_table("ai_configs", ai_snapshot)
+
+
 def test_ai_skip_env_warns_without_blocking_preflight(monkeypatch):
     monkeypatch.setenv("MONITOR_SKIP_AI_API", "true")
     cfg = {
