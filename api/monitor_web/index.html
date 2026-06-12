@@ -75,12 +75,29 @@
     .preview-frame { min-height:420px; }
     .empty { padding:18px; border:1px dashed var(--line); border-radius:8px; color:var(--muted); background:#fbfdff; }
     .code { font-family:Consolas,Menlo,monospace; font-size:12px; color:#334155; }
-    .account-workspace { display:grid; grid-template-columns:360px minmax(0,1fr); gap:16px; align-items:start; }
-    .account-filter { display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:12px; }
-    .account-item { border:1px solid var(--line); border-radius:8px; padding:12px; margin-bottom:10px; cursor:pointer; background:#fff; }
-    .account-item:hover, .account-item.active { border-color:#93c5fd; background:#eff6ff; }
-    .account-title { display:flex; justify-content:space-between; gap:10px; align-items:flex-start; }
-    .account-title strong { font-size:14px; }
+    .account-console { display:grid; grid-template-columns:minmax(0,1fr) 420px; gap:16px; align-items:start; }
+    .account-platform-grid { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:12px; }
+    .account-platform-card { border:1px solid var(--line); border-radius:8px; padding:13px; background:#fff; cursor:pointer; min-height:150px; }
+    .account-platform-card:hover, .account-platform-card.active { border-color:#93c5fd; background:#eff6ff; }
+    .account-platform-card h4 { margin:0 0 8px; font-size:15px; display:flex; justify-content:space-between; gap:8px; align-items:center; }
+    .account-mini-stats { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:8px; margin:10px 0; }
+    .account-mini-stat { border:1px solid var(--line); border-radius:6px; padding:8px; background:#f8fafc; }
+    .account-mini-stat strong { display:block; font-size:18px; }
+    .account-mini-stat span { color:var(--muted); font-size:12px; }
+    .account-filter { display:grid; grid-template-columns:1.4fr 1fr 1fr 1fr; gap:10px; margin-bottom:12px; }
+    .account-ledger-head { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; margin-bottom:12px; }
+    .account-ledger-head h3 { margin-bottom:4px; }
+    .account-bulk-bar { display:none; align-items:center; justify-content:space-between; gap:10px; border:1px solid #bfdbfe; background:#eff6ff; color:#1e3a8a; border-radius:8px; padding:10px 12px; margin-bottom:12px; }
+    .account-bulk-bar.active { display:flex; }
+    .account-table tr.active td { background:#eff6ff; }
+    .account-name-cell strong { display:block; font-size:13px; }
+    .account-name-cell span { display:block; margin-top:3px; color:var(--muted); font-size:12px; }
+    .account-detail-card { position:sticky; top:82px; }
+    .account-detail-empty { border:1px dashed var(--line); border-radius:8px; padding:18px; background:#fbfdff; color:var(--muted); margin-bottom:12px; }
+    .account-detail-summary { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px; margin:12px 0; }
+    .account-detail-summary div { border:1px solid var(--line); border-radius:6px; background:#f8fafc; padding:8px; min-height:58px; }
+    .account-detail-summary strong { display:block; font-size:13px; }
+    .account-detail-summary span { display:block; margin-top:4px; color:var(--muted); font-size:12px; word-break:break-all; }
     .detail-tabs { display:flex; gap:8px; border-bottom:1px solid var(--line); margin:12px 0 16px; }
     .detail-tabs button { border:0; background:transparent; padding:10px 12px; cursor:pointer; color:var(--muted); font-weight:700; }
     .detail-tabs button.active { color:var(--primary); border-bottom:2px solid var(--primary); }
@@ -88,7 +105,7 @@
     .account-tab.active { display:block; }
     .detail-block { border-top:1px solid var(--line); padding-top:14px; margin-top:14px; }
     @media (max-width: 1100px) { .shell { grid-template-columns:1fr; } aside { position:static; height:auto; } nav { display:flex; overflow:auto; } nav button { min-width:max-content; } .grid, .grid-3, .grid-4, .split { grid-template-columns:1fr; } section { padding:16px; } }
-    @media (max-width: 1100px) { .account-workspace { grid-template-columns:1fr; } }
+    @media (max-width: 1100px) { .account-console, .account-platform-grid, .account-filter { grid-template-columns:1fr; } .account-detail-card { position:static; } }
   </style>
 </head>
 <body>
@@ -201,25 +218,52 @@
 
       <section id="accounts">
         <div class="page-head">
-          <div><h2>账号设置</h2><p>按账号资源管理登录态、代理绑定、状态和授权维护。</p></div>
+          <div><h2>账号设置</h2><p>按平台维护社媒账号资源、登录态、代理绑定和授权风险。</p></div>
           <div class="row" style="flex:0 0 auto">
             <button class="primary" onclick="resetSocialAccountForm()">新增账号</button>
             <button class="secondary" onclick="loadAccountsPool()">刷新账号池</button>
           </div>
         </div>
         <div id="account_metrics" class="grid-4"></div>
-        <div class="account-workspace">
+        <div class="panel">
+          <div class="account-ledger-head">
+            <div>
+              <h3>平台账号概览</h3>
+              <p class="small">参考 sub2api 的账号管理逻辑：先按平台和状态定位账号资源，再进入单账号维护。</p>
+            </div>
+            <button class="secondary" onclick="setAccountPlatformFilter('')">查看全部平台</button>
+          </div>
+          <div id="account_platform_overview" class="account-platform-grid"></div>
+        </div>
+        <div class="account-console">
           <div class="panel">
-            <h3>账号资源</h3>
+            <div class="account-ledger-head">
+              <div>
+                <h3>账号资源台账</h3>
+                <p class="small">筛选、选择和维护抖音 / 快手 / 小红书账号，任务运行时后续可按这里的资源预留调度。</p>
+              </div>
+              <div class="row" style="flex:0 0 auto">
+                <button class="secondary" onclick="clearAccountFilters()">清空筛选</button>
+                <button class="primary" onclick="resetSocialAccountForm()">添加账号</button>
+              </div>
+            </div>
             <div class="account-filter">
               <div><label>搜索</label><input id="account_search" placeholder="账号名称 / 备注"></div>
               <div><label>平台</label><select id="account_platform_filter"><option value="">全部平台</option><option value="dy">抖音</option><option value="ks">快手</option><option value="xhs">小红书</option></select></div>
               <div><label>状态</label><select id="account_status_filter"><option value="">全部状态</option><option value="active">可用</option><option value="standby">待机</option><option value="limited">受限</option><option value="disabled">停用</option></select></div>
-              <div><label>操作</label><button class="secondary" onclick="renderAccountList()">筛选</button></div>
+              <div><label>登录方式</label><select id="account_login_type_filter"><option value="">全部方式</option><option value="qrcode">浏览器 Profile / 扫码</option><option value="phone">手机号</option><option value="cookie">Cookie</option></select></div>
+            </div>
+            <div id="account_bulk_bar" class="account-bulk-bar">
+              <span id="account_bulk_text">已选择 0 个账号</span>
+              <div class="row" style="flex:0 0 auto">
+                <button class="secondary" onclick="openSelectedAccountLoginBrowser()">打开登录窗口</button>
+                <button class="secondary" onclick="startLoginSessionFromSelected()">页面发起登录</button>
+                <button class="danger" onclick="deleteSelectedSocialAccount()">删除账号</button>
+              </div>
             </div>
             <div id="social_accounts_table"></div>
           </div>
-          <div class="panel">
+          <div class="panel account-detail-card">
             <div class="page-head" style="margin-bottom:0">
               <div>
                 <h3 id="account_detail_title">账号详情</h3>
@@ -232,6 +276,8 @@
               </div>
             </div>
             <input type="hidden" id="social_account_id">
+            <div id="account_detail_empty" class="account-detail-empty">当前没有选中账号。可以从左侧台账选择，或点击“新增账号”创建一个资源。</div>
+            <div id="account_detail_summary" class="account-detail-summary"></div>
             <div class="detail-tabs">
               <button class="active" data-account-tab="account_basic">基础配置</button>
               <button data-account-tab="account_login">登录维护</button>
@@ -466,6 +512,7 @@
     const jobCache = new Map();
     const runningJobIds = new Set();
     const socialAccountCache = new Map();
+    const selectedSocialAccountIds = new Set();
     const proxyProfileCache = new Map();
     const aiProfileCache = new Map();
     const emailTemplateCache = new Map();
@@ -547,7 +594,12 @@
     async function savePlatformLoginConfig(platform){ const payload={login_type:val('login_type_'+platform), cookies:val('cookies_'+platform), clear_cookies:document.getElementById('clear_cookies_'+platform).checked}; const res=await api('/platform-login-configs/'+platform,{method:'PUT',body:JSON.stringify(payload)}); if(!res.ok){ toast(await err(res)); return; } toast('平台登录方式已保存'); await Promise.all([loadPlatformLoginConfigs(), loadPlatformStatus(), loadReadiness(), loadDoctor()]); }
     async function openPlatformLoginBrowser(platform){ const res=await api('/platform-status/'+platform+'/login-browser',{method:'POST'}); if(!res.ok){ toast(await err(res)); return; } const data=await res.json(); toast(data.message || '已打开登录窗口'); await loadPlatformStatus(); }
     async function startLoginSessionFromForm(){
-      const payload={platform:val('social_account_platform'),account_id:val('social_account_id')||null};
+      const accountId=Number(val('social_account_id')||0);
+      const account=accountId ? socialAccountCache.get(accountId) : null;
+      await startLoginSessionForAccount(account || {platform:val('social_account_platform'), id: val('social_account_id')||null});
+    }
+    async function startLoginSessionForAccount(account){
+      const payload={platform:account.platform,account_id:account.id||null};
       const res=await api('/login-sessions',{method:'POST',body:JSON.stringify(payload)});
       if(!res.ok){ toast(await err(res)); return; }
       const data=await res.json();
@@ -610,8 +662,12 @@
       const data=await (await api('/social-accounts')).json();
       socialAccountCache.clear();
       (data.accounts||[]).forEach(a=>socialAccountCache.set(Number(a.id), a));
+      [...selectedSocialAccountIds].forEach(id=>{ if(!socialAccountCache.has(Number(id))) selectedSocialAccountIds.delete(id); });
       renderAccountMetrics(data.accounts||[]);
+      renderAccountPlatformOverview(data.accounts||[]);
       renderAccountList();
+      const currentId=Number(val('social_account_id')||0);
+      if(currentId && !socialAccountCache.has(currentId)) resetSocialAccountForm();
       if(!val('social_account_id') && (data.accounts||[]).length){
         editSocialAccount(Number(data.accounts[0].id), true);
       }
@@ -619,32 +675,126 @@
     function renderAccountMetrics(accounts){
       const counts={active:0,standby:0,limited:0,disabled:0};
       (accounts||[]).forEach(a=>{ counts[a.status]=(counts[a.status]||0)+1; });
+      const noProfile=(accounts||[]).filter(a=>!a.profile_path).length;
       document.getElementById('account_metrics').innerHTML=[
         metricCard('账号总数', accounts.length, '抖音 / 快手 / 小红书'),
         metricCard('可用账号', counts.active||0, `待机 ${counts.standby||0}`),
         metricCard('受限账号', counts.limited||0, `停用 ${counts.disabled||0}`),
-        metricCard('需处理错误', accounts.filter(a=>a.last_error).length, '查看风控备注')
+        metricCard('需维护账号', accounts.filter(a=>a.last_error).length + noProfile, `错误 ${accounts.filter(a=>a.last_error).length} / 缺 Profile ${noProfile}`)
       ].join('');
     }
-    function renderAccountList(){
+    function renderAccountPlatformOverview(accounts){
+      const mount=document.getElementById('account_platform_overview');
+      if(!mount) return;
+      const activePlatform=val('account_platform_filter');
+      const platforms=['dy','ks','xhs'];
+      mount.innerHTML=platforms.map(platform=>{
+        const list=(accounts||[]).filter(a=>a.platform===platform);
+        const active=list.filter(a=>a.status==='active').length;
+        const limited=list.filter(a=>a.status==='limited').length;
+        const errors=list.filter(a=>a.last_error).length;
+        const profileReady=list.filter(a=>a.profile_path).length;
+        const statusHint=list.length ? `Profile ${profileReady}/${list.length} · 异常 ${errors}` : '还没有账号资源';
+        return `<div class="account-platform-card${activePlatform===platform?' active':''}" onclick="setAccountPlatformFilter('${platform}')">
+          <h4><span>${esc(formatPlatforms([platform]))}</span>${limited||errors?'<span class="status warn">需维护</span>':'<span class="status ok">正常</span>'}</h4>
+          <div class="account-mini-stats">
+            <div class="account-mini-stat"><strong>${esc(list.length)}</strong><span>账号</span></div>
+            <div class="account-mini-stat"><strong>${esc(active)}</strong><span>可用</span></div>
+            <div class="account-mini-stat"><strong>${esc(limited)}</strong><span>受限</span></div>
+          </div>
+          <div class="small">${esc(statusHint)}</div>
+        </div>`;
+      }).join('');
+    }
+    function setAccountPlatformFilter(platform){
+      set('account_platform_filter', platform||'');
+      renderAccountPlatformOverview([...socialAccountCache.values()]);
+      renderAccountList();
+    }
+    function clearAccountFilters(){
+      ['account_search','account_platform_filter','account_status_filter','account_login_type_filter'].forEach(id=>set(id,''));
+      renderAccountPlatformOverview([...socialAccountCache.values()]);
+      renderAccountList();
+    }
+    function filteredSocialAccounts(){
       const query=(val('account_search')||'').trim().toLowerCase();
       const platform=val('account_platform_filter');
       const status=val('account_status_filter');
-      const selectedId=Number(val('social_account_id')||0);
+      const loginType=val('account_login_type_filter');
       let accounts=[...socialAccountCache.values()];
-      if(query) accounts=accounts.filter(a=>[a.name,a.notes,a.last_error].join(' ').toLowerCase().includes(query));
+      if(query) accounts=accounts.filter(a=>[a.name,a.notes,a.last_error,a.profile_path].join(' ').toLowerCase().includes(query));
       if(platform) accounts=accounts.filter(a=>a.platform===platform);
       if(status) accounts=accounts.filter(a=>a.status===status);
-      document.getElementById('social_accounts_table').innerHTML = accounts.length ? accounts.map(a=>accountListItem(a, selectedId)).join('') : '<div class="empty">没有匹配的账号。可以点击右上角“新增账号”。</div>';
+      if(loginType) accounts=accounts.filter(a=>(a.login_type||'qrcode')===loginType);
+      return accounts;
     }
-    function accountListItem(a, selectedId){
-      const active=Number(a.id)===selectedId?' active':'';
-      return `<div class="account-item${active}" onclick="editSocialAccount(${Number(a.id)})">
-        <div class="account-title"><strong>${esc(a.name)}</strong>${poolStatusBadge(a.status)}</div>
-        <div class="small">${esc(formatPlatforms([a.platform]))} · ${esc(loginTypeLabel(a.login_type))} · 代理 ${esc(a.proxy_id||'-')}</div>
-        <div class="small">Profile：${esc(a.profile_path||'未配置')}</div>
-        ${a.last_error?'<div class="small">错误：'+esc(a.last_error)+'</div>':''}
-      </div>`;
+    function renderAccountList(){
+      const selectedId=Number(val('social_account_id')||0);
+      const accounts=filteredSocialAccounts();
+      renderAccountPlatformOverview([...socialAccountCache.values()]);
+      renderAccountBulkBar(accounts);
+      document.getElementById('social_accounts_table').innerHTML = accounts.length ? accountLedgerTable(accounts, selectedId) : '<div class="empty">没有匹配的账号。可以点击右上角“新增账号”。</div>';
+    }
+    function accountLedgerTable(accounts, selectedId){
+      const allChecked=accounts.length>0 && accounts.every(a=>selectedSocialAccountIds.has(Number(a.id)));
+      const rows=accounts.map(a=>accountLedgerRow(a, selectedId)).join('');
+      return `<table class="account-table">
+        <thead><tr>
+          <th><input type="checkbox" ${allChecked?'checked':''} onchange="toggleAllFilteredAccounts(this.checked)"></th>
+          <th>账号</th><th>平台 / 登录</th><th>状态</th><th>代理</th><th>Profile</th><th>备注 / 异常</th><th>操作</th>
+        </tr></thead>
+        <tbody>${rows}</tbody>
+      </table>`;
+    }
+    function accountLedgerRow(a, selectedId){
+      const id=Number(a.id);
+      const active=id===selectedId?' class="active"':'';
+      const checked=selectedSocialAccountIds.has(id)?'checked':'';
+      const profile=a.profile_path ? `<span class="code">${esc(a.profile_path)}</span>` : '<span class="status warn">未配置</span>';
+      const note=[a.notes?esc(a.notes):'', a.last_error?`<div class="small">错误：${esc(a.last_error)}</div>`:''].join('');
+      return `<tr${active} onclick="selectAccountRow(${id})">
+        <td onclick="event.stopPropagation()"><input type="checkbox" ${checked} onchange="toggleAccountSelection(${id}, this.checked)"></td>
+        <td><div class="account-name-cell"><strong>${esc(a.name)}</strong><span>ID ${esc(id)}</span></div></td>
+        <td>${esc(formatPlatforms([a.platform]))}<div class="small">${esc(loginTypeLabel(a.login_type))}</div></td>
+        <td>${poolStatusBadge(a.status)}</td>
+        <td>${esc(a.proxy_id||'-')}</td>
+        <td>${profile}</td>
+        <td>${note || '<span class="muted">-</span>'}</td>
+        <td onclick="event.stopPropagation()">
+          <button class="secondary" onclick="editSocialAccount(${id})">详情</button>
+          <button class="secondary" onclick="startLoginSessionForAccountId(${id})">网页登录</button>
+          <button class="secondary" onclick="openAccountLoginBrowser(${id})">登录窗口</button>
+        </td>
+      </tr>`;
+    }
+    function selectAccountRow(id){
+      editSocialAccount(id, true);
+    }
+    function toggleAccountSelection(id, checked){
+      if(checked) selectedSocialAccountIds.add(Number(id));
+      else selectedSocialAccountIds.delete(Number(id));
+      renderAccountList();
+    }
+    function toggleAllFilteredAccounts(checked){
+      filteredSocialAccounts().forEach(a=>{
+        if(checked) selectedSocialAccountIds.add(Number(a.id));
+        else selectedSocialAccountIds.delete(Number(a.id));
+      });
+      renderAccountList();
+    }
+    function renderAccountBulkBar(accounts){
+      const bar=document.getElementById('account_bulk_bar');
+      const text=document.getElementById('account_bulk_text');
+      if(!bar || !text) return;
+      const scopedIds=new Set((accounts||[]).map(a=>Number(a.id)));
+      const selected=[...selectedSocialAccountIds].filter(id=>scopedIds.has(Number(id)));
+      if(!selected.length){
+        bar.classList.remove('active');
+        text.textContent='已选择 0 个账号';
+        return;
+      }
+      bar.classList.add('active');
+      text.textContent=`已选择 ${selected.length} 个账号。MVP 阶段登录维护建议单账号操作，批量仅用于删除或状态排查。`;
     }
     async function saveSocialAccount(){
       const id=val('social_account_id');
@@ -673,6 +823,8 @@
       set('social_account_login_type', a.login_type||'qrcode'); set('social_account_status', a.status||'standby');
       set('social_account_proxy_id', a.proxy_id||''); set('social_account_profile_path', a.profile_path||''); set('social_account_notes', a.notes||''); set('social_account_last_error', a.last_error||'');
       updateAccountDetailHeader(a);
+      selectedSocialAccountIds.clear();
+      selectedSocialAccountIds.add(Number(id));
       renderAccountList();
       if(!silent) toast('已载入账号配置');
     }
@@ -680,24 +832,68 @@
       if(!confirm('确认删除这个社媒账号记录？')) return;
       const res=await api('/social-accounts/'+id,{method:'DELETE'});
       toast(res.ok?'社媒账号已删除':await err(res));
+      selectedSocialAccountIds.delete(Number(id));
       resetSocialAccountForm();
       await Promise.all([loadAccountsPool(), loadDashboard()]);
     }
     async function deleteSelectedSocialAccount(){
-      const id=Number(val('social_account_id')||0);
-      if(!id){ toast('请先选择一个账号'); return; }
-      await deleteSocialAccount(id);
+      let ids=[...selectedSocialAccountIds].map(Number);
+      const currentId=Number(val('social_account_id')||0);
+      if(!ids.length && currentId) ids=[currentId];
+      if(!ids.length){ toast('请先选择一个账号'); return; }
+      if(!confirm(ids.length>1?`确认删除选中的 ${ids.length} 个账号记录？`:'确认删除这个社媒账号记录？')) return;
+      for(const id of ids){
+        const res=await api('/social-accounts/'+id,{method:'DELETE'});
+        if(!res.ok){ toast(await err(res)); return; }
+        selectedSocialAccountIds.delete(Number(id));
+      }
+      toast(ids.length>1?'已删除选中的社媒账号':'社媒账号已删除');
+      resetSocialAccountForm();
+      await Promise.all([loadAccountsPool(), loadDashboard()]);
     }
     async function openSelectedAccountLoginBrowser(){
-      const platform=val('social_account_platform');
+      const selected=[...selectedSocialAccountIds].map(id=>socialAccountCache.get(Number(id))).filter(Boolean);
+      if(selected.length>1){ toast('登录维护请先选择单个账号'); return; }
+      const platform=(selected[0]||{}).platform || val('social_account_platform');
       if(!platform){ toast('请先选择平台'); return; }
       await openPlatformLoginBrowser(platform);
+    }
+    async function openAccountLoginBrowser(id){
+      const account=socialAccountCache.get(Number(id));
+      if(!account){ toast('账号池已刷新，请重新选择'); loadAccountsPool(); return; }
+      editSocialAccount(id, true);
+      await openPlatformLoginBrowser(account.platform);
+    }
+    async function startLoginSessionForAccountId(id){
+      const account=socialAccountCache.get(Number(id));
+      if(!account){ toast('账号池已刷新，请重新选择'); loadAccountsPool(); return; }
+      editSocialAccount(id, true);
+      await startLoginSessionForAccount(account);
+    }
+    async function startLoginSessionFromSelected(){
+      const selected=[...selectedSocialAccountIds].map(id=>socialAccountCache.get(Number(id))).filter(Boolean);
+      if(selected.length!==1){ toast('网页登录维护请先勾选一个账号'); return; }
+      await startLoginSessionForAccount(selected[0]);
     }
     function updateAccountDetailHeader(account){
       document.getElementById('account_detail_title').textContent = account ? account.name : '新建账号';
       document.getElementById('account_detail_subtitle').textContent = account
         ? `${formatPlatforms([account.platform])} · ${loginTypeLabel(account.login_type)} · ${poolStatusText(account.status)}`
         : '创建一个抖音、快手或小红书账号资源。';
+      const empty=document.getElementById('account_detail_empty');
+      const summary=document.getElementById('account_detail_summary');
+      if(empty) empty.style.display = account ? 'none' : 'block';
+      if(summary){
+        summary.innerHTML = account ? [
+          accountSummaryItem('平台', formatPlatforms([account.platform])),
+          accountSummaryItem('登录方式', loginTypeLabel(account.login_type)),
+          accountSummaryItem('绑定代理', account.proxy_id || '未绑定'),
+          accountSummaryItem('Profile', account.profile_path || '未配置')
+        ].join('') : '';
+      }
+    }
+    function accountSummaryItem(label, value){
+      return `<div><strong>${esc(label)}</strong><span>${esc(value)}</span></div>`;
     }
     function switchAccountTab(tabId){
       document.querySelectorAll('.detail-tabs button').forEach(btn=>btn.classList.toggle('active', btn.dataset.accountTab===tabId));
@@ -706,6 +902,7 @@
     function resetSocialAccountForm(){
       ['social_account_id','social_account_name','social_account_proxy_id','social_account_profile_path','social_account_notes','social_account_last_error'].forEach(id=>set(id,''));
       set('social_account_platform','dy'); set('social_account_login_type','qrcode'); set('social_account_status','standby');
+      selectedSocialAccountIds.clear();
       updateSocialLoginTypeOptions();
       updateAccountDetailHeader(null);
       renderAccountList();
@@ -1157,7 +1354,7 @@
     document.getElementById('fill_acceptance_template_btn').addEventListener('click', fillAcceptanceJobTemplate);
     document.getElementById('reset_job_btn').addEventListener('click', resetJobForm);
     document.getElementById('social_account_platform').addEventListener('change', updateSocialLoginTypeOptions);
-    ['account_search','account_platform_filter','account_status_filter'].forEach(id=>{
+    ['account_search','account_platform_filter','account_status_filter','account_login_type_filter'].forEach(id=>{
       const el=document.getElementById(id);
       if(el) el.addEventListener('input', renderAccountList);
       if(el) el.addEventListener('change', renderAccountList);

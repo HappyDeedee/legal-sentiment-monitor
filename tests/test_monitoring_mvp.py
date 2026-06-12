@@ -1829,6 +1829,14 @@ def test_monitor_page_exposes_acceptance_checklist():
     assert "账号设置" in page
     assert "账号资源" in page
     assert "账号详情" in page
+    assert "平台账号概览" in page
+    assert "账号资源台账" in page
+    assert "account_platform_overview" in page
+    assert "account_login_type_filter" in page
+    assert "selectedSocialAccountIds" in page
+    assert "accountLedgerTable" in page
+    assert "startLoginSessionForAccount" in page
+    assert "参考 sub2api 的账号管理逻辑" in page
     assert "基础配置" in page
     assert "登录维护" in page
     assert "风控备注" in page
