@@ -201,11 +201,17 @@ async def pause_job(job_id: int):
 
 @router.post("/jobs/{job_id}/resume")
 async def resume_job(job_id: int):
-    if not get_job(job_id):
+    job = get_job(job_id)
+    if not job:
         raise HTTPException(status_code=404, detail="job not found")
+    preflight_job = {**job, "enabled": True}
+    preflight = build_job_preflight(preflight_job, running_job_ids())
+    if preflight["blockers"]:
+        raise HTTPException(status_code=400, detail="启用前检查未通过：" + "；".join(preflight["blockers"]))
     set_job_enabled(job_id, True)
-    _refresh_job_schedule_state(get_job(job_id))
-    return {"ok": True}
+    refreshed = get_job(job_id)
+    _refresh_job_schedule_state(refreshed)
+    return {"ok": True, "job": get_job(job_id), "preflight": preflight}
 
 
 @router.get("/ai-config")

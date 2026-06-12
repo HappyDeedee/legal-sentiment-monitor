@@ -11,7 +11,7 @@ from fastapi import HTTPException
 
 from api.monitoring.ai import _build_endpoint, _parse_json, _validate_ai_output, test_ai as run_ai_config_test
 from api.monitoring.ai import DEFAULT_PROMPT
-from api.monitoring.database import create_run, finish_run, get_ai_config, get_conn, get_email_config, get_platform_login_config, get_report, get_run, init_db, list_jobs, list_leads, list_platform_login_configs, list_reports, list_runs, save_ai_config, save_email_config, save_job, save_platform_login_config
+from api.monitoring.database import create_run, finish_run, get_ai_config, get_conn, get_email_config, get_job, get_platform_login_config, get_report, get_run, init_db, list_jobs, list_leads, list_platform_login_configs, list_reports, list_runs, save_ai_config, save_email_config, save_job, save_platform_login_config
 from api.monitoring.login_browser import build_login_browser_command, open_login_browser
 from api.monitoring.login_state import login_window_status, record_login_window
 from api.monitoring.mailer import build_report_email, send_test_email
@@ -1444,6 +1444,90 @@ def test_job_preflight_blocks_already_running_job():
 
     assert preflight["can_run"] is False
     assert any("正在运行" in item for item in preflight["blockers"])
+
+
+def test_resume_job_blocks_when_preflight_has_blockers(monkeypatch):
+    init_db()
+    jobs_snapshot = _snapshot_monitor_jobs()
+    try:
+        _clear_monitor_jobs()
+        job = save_job(
+            {
+                "law_firm_name": "海安律所",
+                "aliases": [],
+                "exclude_words": [],
+                "keywords": ["海安律所避雷"],
+                "platforms": ["dy"],
+                "recipients": ["target@example.com"],
+                "enable_comments": False,
+                "time_window_type": "recent_1d",
+                "frequency": "daily",
+                "email_time": "09:00",
+                "enabled": False,
+            }
+        )
+        monkeypatch.setattr(
+            "api.monitoring.preflight.list_platform_status",
+            lambda: [
+                {"platform": "dy", "platform_label": "抖音", "profile_exists": True, "needs_login": False, "login_window_open": True},
+                {"platform": "ks", "platform_label": "快手", "profile_exists": True, "needs_login": False, "login_window_open": False},
+                {"platform": "xhs", "platform_label": "小红书", "profile_exists": True, "needs_login": False, "login_window_open": False},
+            ],
+        )
+
+        with pytest.raises(HTTPException) as exc:
+            asyncio.run(monitor_router.resume_job(job["id"]))
+
+        assert exc.value.status_code == 400
+        assert "启用前检查未通过" in str(exc.value.detail)
+        assert get_job(job["id"])["enabled"] is False
+    finally:
+        _restore_monitor_jobs(jobs_snapshot)
+
+
+def test_resume_job_allows_warnings_and_returns_preflight(monkeypatch):
+    init_db()
+    jobs_snapshot = _snapshot_monitor_jobs()
+    ai_snapshot = _snapshot_singleton_table("ai_configs")
+    email_snapshot = _snapshot_singleton_table("email_configs")
+    try:
+        _clear_monitor_jobs()
+        save_ai_config({"provider": "openai", "base_url": "", "api_key": "", "model": ""})
+        save_email_config({"smtp_host": "", "sender": "", "default_recipients": []})
+        job = save_job(
+            {
+                "law_firm_name": "海安律所",
+                "aliases": [],
+                "exclude_words": [],
+                "keywords": ["海安律所避雷"],
+                "platforms": ["dy"],
+                "recipients": [],
+                "enable_comments": False,
+                "time_window_type": "recent_1d",
+                "frequency": "daily",
+                "email_time": "09:00",
+                "enabled": False,
+            }
+        )
+        monkeypatch.setattr(
+            "api.monitoring.preflight.list_platform_status",
+            lambda: [
+                {"platform": "dy", "platform_label": "抖音", "profile_exists": True, "needs_login": False, "login_window_open": False},
+                {"platform": "ks", "platform_label": "快手", "profile_exists": True, "needs_login": False, "login_window_open": False},
+                {"platform": "xhs", "platform_label": "小红书", "profile_exists": True, "needs_login": False, "login_window_open": False},
+            ],
+        )
+
+        result = asyncio.run(monitor_router.resume_job(job["id"]))
+
+        assert result["ok"] is True
+        assert result["job"]["enabled"] is True
+        assert result["preflight"]["can_run"] is True
+        assert result["preflight"]["warnings"]
+    finally:
+        _restore_monitor_jobs(jobs_snapshot)
+        _restore_singleton_table("ai_configs", ai_snapshot)
+        _restore_singleton_table("email_configs", email_snapshot)
 
 
 def test_job_preflight_and_launcher_block_template_placeholders(monkeypatch):
