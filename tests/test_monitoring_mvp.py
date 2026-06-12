@@ -191,6 +191,10 @@ def test_job_validation_rejects_operator_input_errors():
         )
     with pytest.raises(ValueError, match="email_time must be HH:MM"):
         save_job({**base, "recipients": [], "email_time": "25:00"})
+    with pytest.raises(ValueError, match="验收模板"):
+        save_job({**base, "law_firm_name": "请改成目标律所名称", "recipients": []})
+    with pytest.raises(ValueError, match="验收模板"):
+        save_job({**base, "keywords": ["目标律所避雷"], "recipients": []})
 
 
 def test_ai_and_email_config_validation_rejects_bad_inputs():
@@ -817,7 +821,11 @@ def test_monitor_page_exposes_acceptance_checklist():
     assert "preflight" in page
     assert "运行前提示" in page
     assert "填入三平台验收模板" in page
+    assert "fill_acceptance_template_btn" in page
+    assert "addEventListener('click', fillAcceptanceJobTemplate)" in page
     assert "fillAcceptanceJobTemplate" in page
+    assert "hasJobTemplatePlaceholders" in page
+    assert "请先把验收模板里的律所名称和关键词改成真实内容" in page
     assert "恢复默认 Prompt" in page
     assert "default_prompt" in page
     assert "resetAIPrompt" in page

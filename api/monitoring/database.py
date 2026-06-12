@@ -12,6 +12,7 @@ from .security import MONITOR_DATA_DIR, decrypt_secret, encrypt_secret, mask_sec
 
 DB_PATH = MONITOR_DATA_DIR / "monitor.sqlite"
 DEFAULT_EMAIL_SUBJECT_TEMPLATE = "【律所舆情日报】{law_firm_name} - {date}"
+JOB_TEMPLATE_PLACEHOLDERS = ("请改成", "目标律所", "律所简称", "律师事务所简称")
 
 
 def utc_now() -> str:
@@ -255,6 +256,7 @@ def save_job(payload: dict[str, Any], job_id: int | None = None) -> dict[str, An
     keywords = [str(k).strip() for k in payload.get("keywords", []) if str(k).strip()]
     if not keywords:
         raise ValueError("keywords is required")
+    _validate_no_job_template_placeholders([law_firm_name, *keywords])
     platforms = [p for p in payload.get("platforms", []) if p in {"dy", "ks", "xhs"}]
     if not platforms:
         raise ValueError("at least one platform is required")
@@ -338,6 +340,12 @@ def save_job(payload: dict[str, Any], job_id: int | None = None) -> dict[str, An
             [(target_id, e) for e in recipients],
         )
     return get_job(target_id) or {}
+
+
+def _validate_no_job_template_placeholders(values: list[str]) -> None:
+    joined = "\n".join(values)
+    if any(placeholder in joined for placeholder in JOB_TEMPLATE_PLACEHOLDERS):
+        raise ValueError("请先把验收模板里的律所名称和关键词改成真实内容")
 
 
 def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:

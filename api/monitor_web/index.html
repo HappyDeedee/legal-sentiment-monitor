@@ -121,9 +121,9 @@
             <label><input type="checkbox" id="enabled" checked style="width:auto"> 启用任务</label>
           </div>
           <div class="row" style="margin-top:12px">
-            <button class="primary" onclick="saveJob()">保存任务</button>
-            <button class="secondary" onclick="fillAcceptanceJobTemplate()">填入三平台验收模板</button>
-            <button class="secondary" onclick="resetJobForm()">清空</button>
+            <button id="save_job_btn" class="primary" type="button">保存任务</button>
+            <button id="fill_acceptance_template_btn" class="secondary" type="button">填入三平台验收模板</button>
+            <button id="reset_job_btn" class="secondary" type="button">清空</button>
           </div>
         </div>
         <div class="panel"><h3>任务列表</h3><div id="jobs_table"></div></div>
@@ -244,6 +244,7 @@
       document.getElementById('readiness_table').innerHTML=table(['检查项','状态','说明'], rows);
     }
     async function loadPlatformStatus(){ const data=await (await api('/platform-status')).json(); document.getElementById('platform_status_table').innerHTML=table(['平台','Profile','最近状态','更新时间'], data.platforms.map(p=>[esc(p.platform_label), p.profile_exists ? '<span class="status">已发现</span>' : '<span class="status">未发现</span>', p.needs_login ? `<span class="status">需重新登录</span><div class="small">${esc(p.last_error||'请先准备浏览器 profile')}</div>` : '<span class="status">可尝试运行</span>', esc((p.profile_last_modified||'').replace('T',' ').slice(0,19))])); }
+    function hasJobTemplatePlaceholders(payload){ const text=[payload.law_firm_name, ...(payload.keywords||[])].join('\n'); return ['请改成','目标律所','律所简称','律师事务所简称'].some(x=>text.includes(x)); }
     async function saveJob(){
       const id = document.getElementById('job_id').value;
       const payload = {
@@ -255,6 +256,7 @@
         time_window_type: val('time_window_type'), custom_start: val('custom_start'), custom_end: val('custom_end'),
         frequency: val('frequency'), cron_expr: val('cron_expr'), email_time: val('email_time')
       };
+      if(hasJobTemplatePlaceholders(payload)){ toast('请先把验收模板里的律所名称和关键词改成真实内容'); return; }
       const res = await api(id ? '/jobs/'+id : '/jobs', {method:id?'PUT':'POST', body:JSON.stringify(payload)});
       if(!res.ok){ toast(await err(res)); return; }
       toast('任务已保存'); resetJobForm(); loadJobs();
@@ -367,6 +369,9 @@
     function val(id){ return document.getElementById(id).value; } function set(id,v){ document.getElementById(id).value = v ?? ''; }
     function esc(s){ return String(s??'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
     async function err(res){ try { return (await res.json()).detail || res.statusText; } catch { return res.statusText; } }
+    document.getElementById('save_job_btn').addEventListener('click', saveJob);
+    document.getElementById('fill_acceptance_template_btn').addEventListener('click', fillAcceptanceJobTemplate);
+    document.getElementById('reset_job_btn').addEventListener('click', resetJobForm);
     loadAll();
   </script>
 </body>
