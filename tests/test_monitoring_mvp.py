@@ -1142,6 +1142,42 @@ def test_scheduler_status_api_exposes_internal_mode(monkeypatch):
     assert api_status["enabled"] is True
 
 
+def test_scheduler_tick_skips_template_jobs_and_continues(monkeypatch):
+    calls: list[int] = []
+    schedule_updates: list[tuple[int, str | None]] = []
+    jobs = [
+        {
+            "id": 1,
+            "enabled": True,
+            "law_firm_name": "请改成目标律所名称",
+            "keywords": ["目标律所避雷"],
+            "platforms": ["dy"],
+            "frequency": "daily",
+            "email_time": "00:00",
+            "last_run_at": None,
+        },
+        {
+            "id": 2,
+            "enabled": True,
+            "law_firm_name": "海安律所",
+            "keywords": ["海安律所避雷"],
+            "platforms": ["dy"],
+            "frequency": "daily",
+            "email_time": "00:00",
+            "last_run_at": None,
+        },
+    ]
+
+    monkeypatch.setattr(scheduler_module, "list_jobs", lambda: jobs)
+    monkeypatch.setattr(scheduler_module, "set_job_schedule_state", lambda job_id, value: schedule_updates.append((job_id, value)))
+    monkeypatch.setattr(scheduler_module, "launch_job", lambda job_id, source="scheduler": calls.append(job_id))
+
+    asyncio.run(scheduler_module.tick())
+
+    assert calls == [2]
+    assert [job_id for job_id, _ in schedule_updates] == [1, 2]
+
+
 def test_job_preflight_warns_but_allows_missing_ai_email(monkeypatch):
     init_db()
     job = save_job(

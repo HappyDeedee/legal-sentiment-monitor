@@ -57,7 +57,12 @@ async def tick() -> None:
         set_job_schedule_state(job["id"], next_run_at(job, now))
         if not _is_due(job, now):
             continue
-        launch_job(job["id"], source="scheduler")
+        if has_job_template_placeholders(job):
+            continue
+        try:
+            launch_job(job["id"], source="scheduler")
+        except ValueError:
+            continue
 
 
 def launch_job(job_id: int, source: str = "manual") -> dict[str, Any]:
