@@ -382,6 +382,20 @@ def test_ai_email_test_results_are_persisted_for_readiness(monkeypatch):
         ai_check = next(check for check in get_readiness_status()["checks"] if check["key"] == "ai_config")
         assert ai_check["ok"] is True
 
+        save_ai_config(
+            {
+                "provider": "openai",
+                "base_url": "https://example.com",
+                "api_key": "",
+                "model": "test-model",
+                "temperature": 0,
+                "prompt": DEFAULT_PROMPT,
+            }
+        )
+        assert get_ai_config()["last_test_status"] == "success"
+        ai_check = next(check for check in get_readiness_status()["checks"] if check["key"] == "ai_config")
+        assert ai_check["ok"] is True
+
         save_ai_config({"provider": "openai", "base_url": "https://example.com", "api_key": "sk-test", "model": "changed"})
         assert get_ai_config()["last_test_status"] == "untested"
         ai_check = next(check for check in get_readiness_status()["checks"] if check["key"] == "ai_config")
@@ -405,7 +419,22 @@ def test_ai_email_test_results_are_persisted_for_readiness(monkeypatch):
         email_check = next(check for check in get_readiness_status()["checks"] if check["key"] == "email_config")
         assert email_check["ok"] is True
 
-        save_email_config({"smtp_host": "smtp.example.com", "sender": "sender@example.com", "default_recipients": ["target@example.com"]})
+        save_email_config(
+            {
+                "smtp_host": "smtp.example.com",
+                "smtp_port": 465,
+                "encryption": "ssl",
+                "sender": "sender@example.com",
+                "username": "sender@example.com",
+                "password": "",
+                "default_recipients": ["target@example.com"],
+            }
+        )
+        assert get_email_config()["last_test_status"] == "success"
+        email_check = next(check for check in get_readiness_status()["checks"] if check["key"] == "email_config")
+        assert email_check["ok"] is True
+
+        save_email_config({"smtp_host": "smtp.example.com", "sender": "changed@example.com", "default_recipients": ["target@example.com"]})
         assert get_email_config()["last_test_status"] == "untested"
         email_check = next(check for check in get_readiness_status()["checks"] if check["key"] == "email_config")
         assert email_check["ok"] is False

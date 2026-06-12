@@ -6,10 +6,12 @@ from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
+from .prompts import DEFAULT_PROMPT
 from .security import MONITOR_DATA_DIR, decrypt_secret, encrypt_secret, mask_secret, redact_sensitive
 
 
 DB_PATH = MONITOR_DATA_DIR / "monitor.sqlite"
+DEFAULT_EMAIL_SUBJECT_TEMPLATE = "【律所舆情日报】{law_firm_name} - {date}"
 
 
 def utc_now() -> str:
@@ -534,28 +536,84 @@ def get_ai_config(masked: bool = True) -> dict[str, Any]:
     return data
 
 
+def _effective_ai_prompt(value: str | None) -> str:
+    return value or DEFAULT_PROMPT
+
+
+def _ai_config_changed(current: dict[str, Any], next_config: dict[str, Any]) -> bool:
+    return (
+        (current.get("provider") or "openai") != next_config["provider"]
+        or (current.get("base_url") or "") != next_config["base_url"]
+        or (current.get("api_key") or "") != next_config["api_key"]
+        or (current.get("model") or "") != next_config["model"]
+        or float(current.get("temperature") or 0) != float(next_config["temperature"])
+        or _effective_ai_prompt(current.get("prompt")) != _effective_ai_prompt(next_config["prompt"])
+    )
+
+
+def _email_config_changed(current: dict[str, Any], next_config: dict[str, Any]) -> bool:
+    return (
+        (current.get("smtp_host") or "") != next_config["smtp_host"]
+        or int(current.get("smtp_port") or 465) != int(next_config["smtp_port"])
+        or (current.get("encryption") or "ssl") != next_config["encryption"]
+        or (current.get("sender") or "") != next_config["sender"]
+        or (current.get("username") or "") != next_config["username"]
+        or (current.get("password") or "") != next_config["password"]
+        or (current.get("subject_template") or DEFAULT_EMAIL_SUBJECT_TEMPLATE) != next_config["subject_template"]
+        or (current.get("default_recipients") or []) != (next_config["default_recipients"] or [])
+    )
+
+
+def _next_test_state(current: dict[str, Any], changed: bool) -> dict[str, str | None]:
+    if changed:
+        return {
+            "last_test_status": "untested",
+            "last_test_at": None,
+            "last_test_error": "配置已更新，需重新测试",
+        }
+    return {
+        "last_test_status": current.get("last_test_status") or "untested",
+        "last_test_at": current.get("last_test_at"),
+        "last_test_error": current.get("last_test_error") or "",
+    }
+
+
 def save_ai_config(payload: dict[str, Any]) -> dict[str, Any]:
     current = get_ai_config(masked=False)
     api_key = payload.get("api_key")
-    encrypted = encrypt_secret(api_key) if api_key else encrypt_secret(current.get("api_key"))
+    next_api_key = str(api_key) if api_key else current.get("api_key")
+    encrypted = encrypt_secret(next_api_key)
     provider = payload.get("provider") or "openai"
     if provider not in {"openai", "anthropic"}:
         raise ValueError("invalid AI provider")
     temperature = validate_temperature(payload.get("temperature", 0) or 0)
+    next_config = {
+        "provider": provider,
+        "base_url": (payload.get("base_url") or "").strip(),
+        "api_key": next_api_key or "",
+        "model": (payload.get("model") or "").strip(),
+        "temperature": temperature,
+        "prompt": payload.get("prompt") or "",
+    }
+    changed = _ai_config_changed(current, next_config)
+    test_state = _next_test_state(current, changed)
     with get_conn() as conn:
         conn.execute(
             """
             UPDATE ai_configs SET provider=?, base_url=?, api_key_encrypted=?, model=?,
-                temperature=?, prompt=?, last_test_status='untested', last_test_at=NULL,
-                last_test_error='配置已更新，需重新测试', updated_at=? WHERE id=1
+                temperature=?, prompt=?, last_test_status=?, last_test_at=?,
+                last_test_error=?, updated_at=? WHERE id=1
             """,
             (
-                provider,
-                (payload.get("base_url") or "").strip(),
+                next_config["provider"],
+                next_config["base_url"],
                 encrypted,
-                (payload.get("model") or "").strip(),
-                temperature,
-                payload.get("prompt") or "",
+                next_config["model"],
+                next_config["temperature"],
+                next_config["prompt"],
+                test_state["last_test_status"],
+                test_state["last_test_at"],
+                test_state["last_test_error"],
                 utc_now(),
             ),
         )
@@ -586,30 +644,46 @@ def get_email_config(masked: bool = True) -> dict[str, Any]:
 def save_email_config(payload: dict[str, Any]) -> dict[str, Any]:
     current = get_email_config(masked=False)
     password = payload.get("password")
-    encrypted = encrypt_secret(password) if password else encrypt_secret(current.get("password"))
+    next_password = str(password) if password else current.get("password")
+    encrypted = encrypt_secret(next_password)
     recipients = [str(e).strip() for e in payload.get("default_recipients", []) if str(e).strip()]
     validate_recipients(recipients)
     smtp_port = validate_port(payload.get("smtp_port") or 465)
     encryption_mode = payload.get("encryption") or "ssl"
     if encryption_mode not in {"ssl", "starttls", "none"}:
         raise ValueError("invalid email encryption")
+    next_config = {
+        "smtp_host": (payload.get("smtp_host") or "").strip(),
+        "smtp_port": smtp_port,
+        "encryption": encryption_mode,
+        "sender": (payload.get("sender") or "").strip(),
+        "username": (payload.get("username") or "").strip(),
+        "password": next_password or "",
+        "subject_template": payload.get("subject_template") or DEFAULT_EMAIL_SUBJECT_TEMPLATE,
+        "default_recipients": recipients,
+    }
+    changed = _email_config_changed(current, next_config)
+    test_state = _next_test_state(current, changed)
     with get_conn() as conn:
         conn.execute(
             """
             UPDATE email_configs SET smtp_host=?, smtp_port=?, encryption=?, sender=?,
                 username=?, password_encrypted=?, subject_template=?, default_recipients=?,
-                last_test_status='untested', last_test_at=NULL,
-                last_test_error='配置已更新，需重新测试', updated_at=? WHERE id=1
+                last_test_status=?, last_test_at=?,
+                last_test_error=?, updated_at=? WHERE id=1
             """,
             (
-                (payload.get("smtp_host") or "").strip(),
-                smtp_port,
-                encryption_mode,
-                (payload.get("sender") or "").strip(),
-                (payload.get("username") or "").strip(),
+                next_config["smtp_host"],
+                next_config["smtp_port"],
+                next_config["encryption"],
+                next_config["sender"],
+                next_config["username"],
                 encrypted,
-                payload.get("subject_template") or "【律所舆情日报】{law_firm_name} - {date}",
-                _json_dumps(recipients),
+                next_config["subject_template"],
+                _json_dumps(next_config["default_recipients"]),
+                test_state["last_test_status"],
+                test_state["last_test_at"],
+                test_state["last_test_error"],
                 utc_now(),
             ),
         )
