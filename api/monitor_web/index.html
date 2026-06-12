@@ -75,7 +75,7 @@
     .preview-frame { min-height:420px; }
     .empty { padding:18px; border:1px dashed var(--line); border-radius:8px; color:var(--muted); background:#fbfdff; }
     .code { font-family:Consolas,Menlo,monospace; font-size:12px; color:#334155; }
-    .account-console { display:grid; grid-template-columns:minmax(0,1fr) 420px; gap:16px; align-items:start; }
+    .account-console { display:grid; grid-template-columns:1fr; gap:16px; align-items:start; }
     .account-platform-grid { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:12px; }
     .account-platform-card { border:1px solid var(--line); border-radius:8px; padding:13px; background:#fff; cursor:pointer; min-height:150px; }
     .account-platform-card:hover, .account-platform-card.active { border-color:#93c5fd; background:#eff6ff; }
@@ -92,7 +92,7 @@
     .account-table tr.active td { background:#eff6ff; }
     .account-name-cell strong { display:block; font-size:13px; }
     .account-name-cell span { display:block; margin-top:3px; color:var(--muted); font-size:12px; }
-    .account-detail-card { position:sticky; top:82px; }
+    .account-detail-card { position:static; }
     .account-detail-empty { border:1px dashed var(--line); border-radius:8px; padding:18px; background:#fbfdff; color:var(--muted); margin-bottom:12px; }
     .account-detail-summary { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px; margin:12px 0; }
     .account-detail-summary div { border:1px solid var(--line); border-radius:6px; background:#f8fafc; padding:8px; min-height:58px; }
@@ -105,7 +105,7 @@
     .account-tab.active { display:block; }
     .detail-block { border-top:1px solid var(--line); padding-top:14px; margin-top:14px; }
     @media (max-width: 1100px) { .shell { grid-template-columns:1fr; } aside { position:static; height:auto; } nav { display:flex; overflow:auto; } nav button { min-width:max-content; } .grid, .grid-3, .grid-4, .split { grid-template-columns:1fr; } section { padding:16px; } }
-    @media (max-width: 1100px) { .account-console, .account-platform-grid, .account-filter { grid-template-columns:1fr; } .account-detail-card { position:static; } }
+    @media (max-width: 1100px) { .account-platform-grid, .account-filter { grid-template-columns:1fr; } }
   </style>
 </head>
 <body>
@@ -267,7 +267,7 @@
             <div class="page-head" style="margin-bottom:0">
               <div>
                 <h3 id="account_detail_title">账号详情</h3>
-                <p id="account_detail_subtitle" class="small">选择左侧账号，或新建一个账号资源。</p>
+                <p id="account_detail_subtitle" class="small">从上方账号台账选择账号，或新建一个账号资源。</p>
               </div>
               <div class="row" style="flex:0 0 auto">
                 <button class="primary" onclick="saveSocialAccount()">保存账号</button>
@@ -276,7 +276,7 @@
               </div>
             </div>
             <input type="hidden" id="social_account_id">
-            <div id="account_detail_empty" class="account-detail-empty">当前没有选中账号。可以从左侧台账选择，或点击“新增账号”创建一个资源。</div>
+            <div id="account_detail_empty" class="account-detail-empty">当前没有选中账号。可以从上方台账选择，或点击“新增账号”创建一个资源。</div>
             <div id="account_detail_summary" class="account-detail-summary"></div>
             <div class="detail-tabs">
               <button class="active" data-account-tab="account_basic">基础配置</button>
