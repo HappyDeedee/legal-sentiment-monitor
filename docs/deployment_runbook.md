@@ -160,6 +160,8 @@ http://服务器IP:8080/monitor
 uv run python -m api.monitoring.cli selftest-report
 ```
 
+自测报告会使用“海安律所避雷 / 海安律所退费 / 海安律所投诉”样例关键词，只用于验证报告链路，不调用真实平台，也不会发送邮件。
+
 5. 查看验收状态：
 
 ```bash
