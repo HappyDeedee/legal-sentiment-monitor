@@ -64,14 +64,19 @@ def _platform_profile_check(job: dict[str, Any]) -> dict[str, Any]:
     statuses = {item["platform"]: item for item in list_platform_status()}
     missing = []
     needs_login = []
+    open_windows = []
     for platform in selected:
         status = statuses.get(platform)
         if not status or not status.get("profile_exists"):
             missing.append(platform)
+        elif status.get("login_window_open"):
+            open_windows.append(platform)
         elif status.get("needs_login"):
             needs_login.append(platform)
     if missing:
         return _check("platform_profiles", "平台登录态", "warning", "缺少 Profile：" + _format_platforms(missing))
+    if open_windows:
+        return _check("platform_profiles", "平台登录态", "blocking", "请先关闭登录窗口再运行采集：" + _format_platforms(open_windows))
     if needs_login:
         return _check("platform_profiles", "平台登录态", "warning", "可能需要重新登录：" + _format_platforms(needs_login))
     return _check("platform_profiles", "平台登录态", "ok", "已发现所选平台 Profile")

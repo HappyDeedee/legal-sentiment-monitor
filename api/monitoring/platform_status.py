@@ -6,6 +6,7 @@ from pathlib import Path
 from typing import Any
 
 from .database import list_runs
+from .login_state import login_window_status
 from .normalizer import PLATFORM_LABELS
 from .security import redact_sensitive
 
@@ -33,6 +34,7 @@ def list_platform_status(project_root: Path | None = None, recent_runs: list[dic
         profile_mtime = _mtime(latest_file or profile_path)
         stale_error = bool(error_at and profile_mtime and profile_mtime > error_at)
         effective_error = "" if stale_error else error
+        login_window = login_window_status(platform)
         statuses.append(
             {
                 "platform": platform,
@@ -42,6 +44,8 @@ def list_platform_status(project_root: Path | None = None, recent_runs: list[dic
                 "profile_last_modified": _format_time(profile_mtime),
                 "last_error": effective_error,
                 "needs_login": (not profile_path.exists()) or _looks_like_login_error(effective_error),
+                "login_window_open": bool(login_window.get("is_open")),
+                "login_window_pid": login_window.get("pid"),
             }
         )
     return statuses

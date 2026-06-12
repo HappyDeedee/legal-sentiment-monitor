@@ -51,9 +51,12 @@ def _next_actions(
     failed = {check["key"] for check in checks if not check["ok"]}
     actions: list[str] = []
     missing_profiles = [p["platform_label"] for p in platforms if not p.get("profile_exists")]
+    open_windows = [p["platform_label"] for p in platforms if p.get("login_window_open")]
     needs_login = [p["platform_label"] for p in platforms if p.get("needs_login")]
     if missing_profiles:
         actions.append("进入账号登录页，分别打开并登录：" + "、".join(missing_profiles))
+    if open_windows:
+        actions.append("关闭这些平台的登录窗口后再运行采集：" + "、".join(open_windows))
     elif needs_login:
         actions.append("进入账号登录页，重新登录并关闭窗口：" + "、".join(needs_login))
     if "ai_config" in failed:
@@ -75,16 +78,19 @@ def _next_actions(
 
 def _platform_message(platforms: list[dict[str, Any]]) -> str:
     missing = [p["platform_label"] for p in platforms if not p["profile_exists"]]
+    open_windows = [p["platform_label"] for p in platforms if p.get("login_window_open")]
     needs_login = [p["platform_label"] for p in platforms if p["needs_login"]]
     if missing:
         return "缺少 Profile：" + "、".join(missing)
+    if open_windows:
+        return "登录窗口未关闭：" + "、".join(open_windows)
     if needs_login:
         return "可能需要重新登录：" + "、".join(needs_login)
     return "已发现抖音、快手、小红书 Profile"
 
 
 def _platform_profiles_ready(platforms: list[dict[str, Any]]) -> bool:
-    return bool(platforms) and all(p.get("profile_exists") and not p.get("needs_login") for p in platforms)
+    return bool(platforms) and all(p.get("profile_exists") and not p.get("needs_login") and not p.get("login_window_open") for p in platforms)
 
 
 def _ai_ready(config: dict[str, Any]) -> bool:

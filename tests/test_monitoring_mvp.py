@@ -13,6 +13,7 @@ from api.monitoring.ai import _build_endpoint, _parse_json, _validate_ai_output,
 from api.monitoring.ai import DEFAULT_PROMPT
 from api.monitoring.database import create_run, finish_run, get_ai_config, get_conn, get_email_config, get_report, init_db, list_jobs, list_leads, save_ai_config, save_email_config, save_job
 from api.monitoring.login_browser import build_login_browser_command, open_login_browser
+from api.monitoring.login_state import login_window_status, record_login_window
 from api.monitoring.mailer import build_report_email, send_test_email
 from api.monitoring.normalizer import collect_platform_outputs, in_time_window, normalize_content, parse_jsonl_file, resolve_window
 from api.monitoring.platform_status import list_platform_status
@@ -177,6 +178,20 @@ def test_platform_status_ignores_login_error_older_than_profile_update(tmp_path)
     assert dy["last_error"] == ""
 
 
+def test_platform_status_reports_open_login_window(tmp_path, monkeypatch):
+    browser_data = tmp_path / "profiles"
+    (browser_data / "cdp_dy_user_data_dir").mkdir(parents=True)
+    monkeypatch.setenv("MONITOR_BROWSER_DATA_DIR", str(browser_data))
+    monkeypatch.setattr("api.monitoring.login_state.LOGIN_STATE_DIR", tmp_path / "login_windows")
+    monkeypatch.setattr("api.monitoring.login_state._pid_exists", lambda pid: pid == 12345)
+    record_login_window("dy", 12345, 9323, str(browser_data / "cdp_dy_user_data_dir"))
+
+    dy = next(item for item in list_platform_status(tmp_path, []) if item["platform"] == "dy")
+
+    assert dy["login_window_open"] is True
+    assert dy["login_window_pid"] == 12345
+
+
 def test_platform_status_supports_custom_browser_data_dir(tmp_path, monkeypatch):
     browser_data = tmp_path / "profiles"
     (browser_data / "cdp_dy_user_data_dir").mkdir(parents=True)
@@ -218,6 +233,7 @@ def test_login_browser_message_reminds_to_close_window(tmp_path, monkeypatch):
     fake_browser = tmp_path / "chrome.exe"
     fake_browser.write_text("", encoding="utf-8")
     monkeypatch.setenv("MONITOR_BROWSER_DATA_DIR", str(tmp_path / "profiles"))
+    monkeypatch.setattr("api.monitoring.login_state.LOGIN_STATE_DIR", tmp_path / "login_windows")
     monkeypatch.setattr("api.monitoring.login_browser.BrowserLauncher.detect_browser_paths", lambda self: [str(fake_browser)])
 
     class FakeProcess:
@@ -228,6 +244,7 @@ def test_login_browser_message_reminds_to_close_window(tmp_path, monkeypatch):
     result = open_login_browser("dy")
 
     assert result["pid"] == 12345
+    assert login_window_status("dy")["pid"] == 12345
     assert "关闭该窗口" in result["message"]
     assert "运行采集" in result["message"]
 
@@ -852,6 +869,34 @@ def test_readiness_platform_profiles_require_valid_login_state(monkeypatch):
     assert platform_check["ok"] is False
     assert "重新登录" in platform_check["message"]
     assert any("账号登录" in action and "快手" in action for action in status["next_actions"])
+
+
+def test_readiness_and_preflight_warn_when_login_window_is_still_open(monkeypatch):
+    init_db()
+    job = {
+        "id": 123,
+        "enabled": True,
+        "keywords": ["测试律所避雷"],
+        "platforms": ["dy"],
+        "recipients": ["target@example.com"],
+    }
+    statuses = [
+        {"platform": "dy", "platform_label": "抖音", "profile_exists": True, "needs_login": False, "login_window_open": True},
+        {"platform": "ks", "platform_label": "快手", "profile_exists": True, "needs_login": False, "login_window_open": False},
+        {"platform": "xhs", "platform_label": "小红书", "profile_exists": True, "needs_login": False, "login_window_open": False},
+    ]
+    monkeypatch.setattr(readiness_module, "list_platform_status", lambda: statuses)
+    monkeypatch.setattr("api.monitoring.preflight.list_platform_status", lambda: statuses)
+
+    readiness = get_readiness_status()
+    preflight = build_job_preflight(job, [])
+
+    platform_check = next(check for check in readiness["checks"] if check["key"] == "platform_profiles")
+    assert platform_check["ok"] is False
+    assert "登录窗口未关闭" in platform_check["message"]
+    assert any("关闭" in action and "抖音" in action for action in readiness["next_actions"])
+    assert preflight["can_run"] is False
+    assert any("关闭登录窗口" in blocker for blocker in preflight["blockers"])
 
 
 def test_doctor_reports_deployment_diagnostics():

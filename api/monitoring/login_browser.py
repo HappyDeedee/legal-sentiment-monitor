@@ -5,6 +5,7 @@ import subprocess
 from pathlib import Path
 from typing import Any
 
+from .login_state import record_login_window
 from .normalizer import PLATFORM_LABELS
 from .platform_status import PROFILE_DIRS, PROJECT_ROOT
 from tools.browser_launcher import BrowserLauncher
@@ -56,6 +57,7 @@ def open_login_browser(platform: str) -> dict[str, Any]:
         stderr=subprocess.DEVNULL,
         creationflags=creationflags,
     )
+    record_login_window(platform, process.pid, command["debug_port"], command["profile_path"])
     return {
         **command,
         "pid": process.pid,
