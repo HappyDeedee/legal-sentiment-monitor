@@ -816,6 +816,8 @@ def test_monitor_page_exposes_acceptance_checklist():
     assert "api('/doctor')" in page
     assert "preflight" in page
     assert "运行前提示" in page
+    assert "填入三平台验收模板" in page
+    assert "fillAcceptanceJobTemplate" in page
     assert "恢复默认 Prompt" in page
     assert "default_prompt" in page
     assert "resetAIPrompt" in page

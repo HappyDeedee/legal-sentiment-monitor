@@ -122,6 +122,7 @@
           </div>
           <div class="row" style="margin-top:12px">
             <button class="primary" onclick="saveJob()">保存任务</button>
+            <button class="secondary" onclick="fillAcceptanceJobTemplate()">填入三平台验收模板</button>
             <button class="secondary" onclick="resetJobForm()">清空</button>
           </div>
         </div>
@@ -293,6 +294,15 @@
     async function toggleJob(id, enabled){ const res = await api('/jobs/'+id+(enabled?'/pause':'/resume'),{method:'POST'}); toast(res.ok ? (enabled?'任务已暂停':'任务已恢复') : await err(res)); loadJobs(); }
     async function deleteJob(id){ if(!confirm('确认删除任务？')) return; await api('/jobs/'+id,{method:'DELETE'}); loadJobs(); }
     function resetJobForm(){ ['job_id','law_firm_name','aliases','exclude_words','keywords','recipients','custom_start','custom_end','cron_expr'].forEach(id=>set(id,'')); set('time_window_type','recent_1d'); set('frequency','daily'); set('email_time','09:00'); document.querySelectorAll('input[name=platform]').forEach(x=>x.checked=x.value==='dy'); document.getElementById('enabled').checked=true; document.getElementById('enable_comments').checked=true; }
+    function fillAcceptanceJobTemplate(){
+      set('job_id',''); set('law_firm_name','请改成目标律所名称'); set('aliases','律所简称\n律师事务所简称'); set('exclude_words','招聘\n无关同名\n广告合作');
+      set('keywords','目标律所避雷\n目标律所退费\n目标律所投诉\n目标律所收费争议');
+      set('recipients',''); set('time_window_type','recent_7d'); set('frequency','daily'); set('email_time','09:00'); set('custom_start',''); set('custom_end',''); set('cron_expr','');
+      document.querySelectorAll('input[name=platform]').forEach(x=>x.checked=['dy','ks','xhs'].includes(x.value));
+      document.getElementById('enabled').checked=true; document.getElementById('enable_comments').checked=true;
+      toast('已填入验收模板，请先改律所名称、关键词和收件邮箱，再保存任务');
+    }
+    window.fillAcceptanceJobTemplate = fillAcceptanceJobTemplate;
 
     async function loadAI(){ const data=await (await api('/ai-config')).json(); const c=data.config; defaultAIPrompt=data.default_prompt||''; set('ai_provider',c.provider); set('ai_base_url',c.base_url); set('ai_model',c.model); set('ai_temperature',c.temperature); set('ai_prompt',c.prompt || defaultAIPrompt); document.getElementById('ai_status').textContent = formatTestStatus(c, 'AI'); }
     async function saveAI(){ const payload={provider:val('ai_provider'),base_url:val('ai_base_url'),api_key:val('ai_api_key'),model:val('ai_model'),temperature:Number(val('ai_temperature')||0),prompt:val('ai_prompt')}; const res=await api('/ai-config',{method:'PUT',body:JSON.stringify(payload)}); if(res.ok){ const data=await res.json(); toast(data.config.last_test_status==='success'?'AI 配置已保存，测试状态仍有效':'AI 配置已保存，需重新测试'); } else toast(await err(res)); set('ai_api_key',''); await loadAI(); await loadReadiness(); }
