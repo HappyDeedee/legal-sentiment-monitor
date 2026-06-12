@@ -25,9 +25,10 @@ from api.routers import monitor as monitor_router
 import api.monitoring.cli as cli_module
 import api.monitoring.readiness as readiness_module
 import api.monitoring.runner as runner_module
+import api.monitoring.scheduler as scheduler_module
 from api.monitoring.runner import evaluate_new_contents, ingest_outputs
 from api.monitoring.runner import run_job as run_monitor_job
-from api.monitoring.scheduler import _is_due, next_run_at
+from api.monitoring.scheduler import _is_due, next_run_at, scheduler_disabled_reason
 from tools.cdp_browser import resolve_cdp_user_data_dir
 
 
@@ -729,6 +730,22 @@ def test_doctor_api_exposes_deployment_diagnostics():
     assert "readiness" in status
     assert "recommendations" in status
     assert "paths" in status
+
+
+def test_scheduler_is_disabled_for_multi_worker_env(monkeypatch):
+    monkeypatch.setenv("WEB_CONCURRENCY", "2")
+    monkeypatch.setattr(scheduler_module, "_apscheduler", None)
+    monkeypatch.setattr(scheduler_module, "_scheduler_task", None)
+
+    assert "多 worker" in scheduler_disabled_reason()
+    asyncio.run(scheduler_module.start_scheduler())
+    status = run_doctor()
+    scheduler_check = next(check for check in status["checks"] if check["key"] == "scheduler_mode")
+
+    assert scheduler_module._apscheduler is None
+    assert scheduler_module._scheduler_task is None
+    assert scheduler_check["ok"] is False
+    assert "多 worker" in scheduler_check["message"]
 
 
 def test_job_preflight_warns_but_allows_missing_ai_email(monkeypatch):

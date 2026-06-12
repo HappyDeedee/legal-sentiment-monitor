@@ -14,7 +14,7 @@
 http://127.0.0.1:8080/monitor
 ```
 
-第一版调度器运行在 FastAPI 单进程内，部署时不要给 `uvicorn` 开多 worker。
+第一版调度器运行在 FastAPI 单进程内，部署时不要给 `uvicorn` 开多 worker。检测到多 worker 时，系统会自动停用内置调度器；如需多 worker，请设置 `MONITOR_DISABLE_SCHEDULER=true`，再用服务器 cron / Windows 计划任务定时调用 `monitor_cli.bat run-due`。
 
 ## 服务器持久化目录
 
@@ -64,6 +64,8 @@ $env:MONITOR_BROWSER_DATA_DIR = "D:\legal-sentiment-monitor\browser_data"
 脚本输出统一是 JSON，方便后续写日志、接告警或被其他系统调用。
 
 同一个监控任务会使用 `MONITOR_DATA_DIR/locks` 下的轻量锁文件做防重复保护。即使 WebUI、内置调度器和 `monitor_cli.bat run-due` 同时触发同一任务，也只会有一个采集进程真正运行；其他入口会返回 `already_running`。如果上一次进程异常退出残留锁文件，系统默认会在 6 小时后自动回收；可通过 `MONITOR_JOB_LOCK_TTL_SECONDS` 调整。
+
+如果部署环境必须使用多个 Web worker，内置调度器不会启动。此时页面仍可手动运行任务，但定时采集需要由外部定时器调用 `monitor_cli.bat run-due`。
 
 ## 页面配置
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import os
 from datetime import datetime, time, timedelta
 from typing import Any
 
@@ -16,6 +17,8 @@ _job_tasks: dict[int, asyncio.Task] = {}
 
 async def start_scheduler() -> None:
     global _scheduler_task, _apscheduler
+    if scheduler_disabled_reason():
+        return
     if _apscheduler is not None:
         return
     try:
@@ -70,6 +73,19 @@ def launch_job(job_id: int, source: str = "manual") -> dict[str, Any]:
 
 def running_job_ids() -> list[int]:
     return sorted(_running_jobs)
+
+
+def scheduler_disabled_reason() -> str:
+    if os.environ.get("MONITOR_DISABLE_SCHEDULER", "").lower() in {"1", "true", "yes"}:
+        return "已设置 MONITOR_DISABLE_SCHEDULER=true，内置调度器不会启动"
+    workers = os.environ.get("WEB_CONCURRENCY") or os.environ.get("UVICORN_WORKERS")
+    try:
+        worker_count = int(workers) if workers else 1
+    except ValueError:
+        worker_count = 1
+    if worker_count > 1:
+        return "检测到多 worker 配置，MVP 内置调度器要求单进程"
+    return ""
 
 
 async def _run_and_release(job_id: int) -> None:

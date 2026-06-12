@@ -12,7 +12,7 @@
 - 报告：本地 HTML / Excel / Markdown 文件
 - 浏览器登录态：本机 profile 目录
 
-第一版不建议同时运行多个 Web 进程，也不要给 `uvicorn` 开多 worker。否则内置调度器会被启动多份，虽然任务锁能减少重复运行，但排障成本会变高。
+第一版不建议同时运行多个 Web 进程，也不要给 `uvicorn` 开多 worker。系统检测到多 worker 环境变量时会自动停用内置调度器，避免重复触发任务；如果确实需要多 worker，请显式设置 `MONITOR_DISABLE_SCHEDULER=true`，并用外部 cron 或 systemd timer 调用 `monitor_cli.bat run-due` / `python -m api.monitoring.cli run-due`。
 
 ## 2. 目录规划
 
@@ -60,6 +60,7 @@ MONITOR_CRAWLER_HEADLESS=true
 MONITOR_CDP_CONNECT_EXISTING=false
 MONITOR_CRAWLER_TIMEOUT_SECONDS=900
 MONITOR_JOB_LOCK_TTL_SECONDS=21600
+MONITOR_DISABLE_SCHEDULER=false
 ```
 
 按平台固定 CDP 端口：

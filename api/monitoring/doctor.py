@@ -8,6 +8,7 @@ from typing import Any
 from .database import DB_PATH, get_ai_config, get_conn, get_email_config, list_jobs, list_reports
 from .platform_status import list_platform_status
 from .readiness import get_readiness_status
+from .scheduler import scheduler_disabled_reason
 from .security import KEY_PATH, MONITOR_DATA_DIR
 
 
@@ -167,10 +168,10 @@ def _check_reports() -> dict[str, Any]:
 
 
 def _check_scheduler_mode() -> dict[str, Any]:
-    workers = os.environ.get("WEB_CONCURRENCY") or os.environ.get("UVICORN_WORKERS")
-    if workers and str(workers) not in {"0", "1"}:
-        return _check("scheduler_mode", "调度器模式", False, "检测到多 worker 环境变量；MVP 调度器要求单进程")
-    return _check("scheduler_mode", "调度器模式", True, "未检测到多 worker 配置")
+    reason = scheduler_disabled_reason()
+    if reason:
+        return _check("scheduler_mode", "调度器模式", False, reason)
+    return _check("scheduler_mode", "调度器模式", True, "内置调度器会随 Web 单进程启动")
 
 
 def _recommendations(checks: list[dict[str, Any]], readiness: dict[str, Any]) -> list[str]:
@@ -192,6 +193,8 @@ def _recommendations(checks: list[dict[str, Any]], readiness: dict[str, Any]) ->
         tips.append("在任务管理页创建并启用至少一个监控任务。")
     if "reports" in failed:
         tips.append("先运行 monitor_cli.bat selftest-report，再运行真实平台任务生成报告。")
+    if "scheduler_mode" in failed:
+        tips.append("只运行一个 Web 进程承载内置调度器；如果必须多 worker，请设置 MONITOR_DISABLE_SCHEDULER=true 并用外部 cron 调用 monitor_cli.bat run-due。")
     missing = readiness.get("missing_real_platforms") or []
     if missing:
         tips.append("真实采集验收仍缺平台：" + "、".join(_platform_label(p) for p in missing))
