@@ -200,6 +200,7 @@ def _check_scheduler_mode() -> dict[str, Any]:
 def _recommendations(checks: list[dict[str, Any]], readiness: dict[str, Any]) -> list[str]:
     failed = {item["key"] for item in checks if not item["ok"]}
     tips: list[str] = []
+    check_by_key = {item["key"]: item for item in checks}
     if "uv" in failed:
         tips.append("先安装 uv，并在项目目录执行 uv sync。")
     if "data_dir" in failed:
@@ -207,7 +208,11 @@ def _recommendations(checks: list[dict[str, Any]], readiness: dict[str, Any]) ->
     if "secret_key" in failed:
         tips.append("保存一次 AI 或邮件配置生成 secret.key，并把它加入服务器备份。")
     if "browser_profiles" in failed:
-        tips.append("按 docs/deployment_runbook.md 重新准备抖音、快手、小红书登录态。")
+        browser_message = check_by_key["browser_profiles"].get("message") or ""
+        if "登录窗口未关闭" in browser_message:
+            tips.append(browser_message.replace("登录窗口未关闭：", "关闭这些平台的登录窗口后再运行采集："))
+        else:
+            tips.append("按 docs/deployment_runbook.md 重新准备抖音、快手、小红书登录态。")
     if "ai_config" in failed:
         if ai_api_disabled():
             tips.append("当前已开启 MONITOR_SKIP_AI_API；平台和邮件可继续联调，正式验收前需关闭后点击真实测试 AI。")

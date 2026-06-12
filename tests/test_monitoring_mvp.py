@@ -1313,6 +1313,7 @@ def test_doctor_warns_when_login_window_is_still_open(monkeypatch):
     assert browser_check["ok"] is False
     assert "登录窗口未关闭" in browser_check["message"]
     assert "快手" in browser_check["message"]
+    assert any("关闭" in tip and "快手" in tip for tip in status["recommendations"])
 
 
 def test_doctor_api_exposes_deployment_diagnostics():
