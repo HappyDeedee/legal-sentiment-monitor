@@ -257,9 +257,10 @@
       if(emptyPlatforms.length){ pendingItems.push('已运行但未采到内容：' + formatPlatforms(emptyPlatforms)); }
       const notRunPlatforms=missingPlatforms.filter(p=>!emptyPlatforms.includes(p));
       if(notRunPlatforms.length){ pendingItems.push('尚未完成真实采集：' + formatPlatforms(notRunPlatforms)); }
+      const actions=data.next_actions||pendingItems;
       document.getElementById('readiness_summary').innerHTML = data.ready
         ? `<div class="readiness-summary ready"><div class="readiness-mark">可上线</div><div class="readiness-list">所有验收项已通过。</div></div>`
-        : `<div class="readiness-summary pending"><div class="readiness-mark">待验收</div><div class="readiness-list"><strong>距离上线还差 ${pendingItems.length} 项</strong><ul>${pendingItems.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div></div>`;
+        : `<div class="readiness-summary pending"><div class="readiness-mark">待验收</div><div class="readiness-list"><strong>下一步处理</strong><ul>${actions.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div></div>`;
       const rows=data.checks.map(c=>[esc(c.label), c.ok ? '<span class="status">已就绪</span>' : '<span class="status">待完成</span>', esc(c.message)]);
       if(emptyPlatforms.length){ rows.push(['真实采集空结果','<span class="status">待处理</span>', esc('已运行但未采到内容：' + formatPlatforms(emptyPlatforms))]); }
       if(notRunPlatforms.length){ rows.push(['真实采集缺口','<span class="status">待完成</span>', esc('未验收平台：' + formatPlatforms(notRunPlatforms))]); }

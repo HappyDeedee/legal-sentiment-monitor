@@ -28,6 +28,7 @@ def get_readiness_status() -> dict[str, Any]:
     return {
         "ready": all(check["ok"] for check in checks),
         "checks": checks,
+        "next_actions": _next_actions(checks, platforms, real_platforms, empty_real_platforms),
         "platforms": platforms,
         "real_platforms": sorted(real_platforms),
         "missing_real_platforms": sorted(REQUIRED_REAL_PLATFORMS - real_platforms),
@@ -39,6 +40,37 @@ def get_readiness_status() -> dict[str, Any]:
 
 def _check(key: str, label: str, ok: bool, message: str) -> dict[str, Any]:
     return {"key": key, "label": label, "ok": ok, "message": message}
+
+
+def _next_actions(
+    checks: list[dict[str, Any]],
+    platforms: list[dict[str, Any]],
+    real_platforms: set[str],
+    empty_real_platforms: set[str],
+) -> list[str]:
+    failed = {check["key"] for check in checks if not check["ok"]}
+    actions: list[str] = []
+    missing_profiles = [p["platform_label"] for p in platforms if not p.get("profile_exists")]
+    needs_login = [p["platform_label"] for p in platforms if p.get("needs_login")]
+    if missing_profiles:
+        actions.append("进入账号登录页，分别打开并登录：" + "、".join(missing_profiles))
+    elif needs_login:
+        actions.append("进入账号登录页，重新登录并关闭窗口：" + "、".join(needs_login))
+    if "ai_config" in failed:
+        actions.append("进入 AI 配置页，保存配置并点击测试 AI，直到最近测试通过。")
+    if "email_config" in failed:
+        actions.append("进入邮件配置页，填写 SMTP 和收件人并发送测试邮件。")
+    if "selftest_report" in failed:
+        actions.append("进入报告中心，点击生成自测报告，验证 HTML、Excel、Markdown 链路。")
+    missing_real = REQUIRED_REAL_PLATFORMS - real_platforms
+    if missing_real:
+        empty = missing_real & empty_real_platforms
+        if empty:
+            actions.append("这些平台已运行但未采到内容，请换真实可搜索关键词后重跑：" + "、".join(_platform_label(p) for p in sorted(empty)))
+        not_run = missing_real - empty
+        if not_run:
+            actions.append("创建或编辑真实监控任务，完成这些平台的真实采集：" + "、".join(_platform_label(p) for p in sorted(not_run)))
+    return actions
 
 
 def _platform_message(platforms: list[dict[str, Any]]) -> str:

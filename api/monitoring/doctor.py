@@ -195,9 +195,9 @@ def _recommendations(checks: list[dict[str, Any]], readiness: dict[str, Any]) ->
         tips.append("先运行 monitor_cli.bat selftest-report，再运行真实平台任务生成报告。")
     if "scheduler_mode" in failed:
         tips.append("只运行一个 Web 进程承载内置调度器；如果必须多 worker，请设置 MONITOR_DISABLE_SCHEDULER=true 并用外部 cron 调用 monitor_cli.bat run-due。")
-    missing = readiness.get("missing_real_platforms") or []
-    if missing:
-        tips.append("真实采集验收仍缺平台：" + "、".join(_platform_label(p) for p in missing))
+    for action in readiness.get("next_actions") or []:
+        if action not in tips:
+            tips.append(action)
     return tips
 
 

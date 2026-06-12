@@ -123,13 +123,16 @@ def test_collect_platform_outputs_supports_json_and_jsonl(tmp_path):
 def test_platform_status_reports_profile_and_login_error(tmp_path):
     profile = tmp_path / "browser_data" / "cdp_dy_user_data_dir"
     profile.mkdir(parents=True)
-    (profile / "state").write_text("ok", encoding="utf-8")
-    run_time = datetime.now(timezone.utc).isoformat()
+    state = profile / "state"
+    state.write_text("ok", encoding="utf-8")
+    profile_time = datetime.now(timezone.utc) - timedelta(minutes=10)
+    run_time = datetime.now(timezone.utc)
+    os.utime(state, (profile_time.timestamp(), profile_time.timestamp()))
     statuses = list_platform_status(
         tmp_path,
         [
             {
-                "finished_at": run_time,
+                "finished_at": run_time.isoformat(),
                 "summary": {
                     "platform_results": {
                         "dy": {"error": "MediaCrawler exited with 1；检测到登录态失效，请先重新登录该平台账号"}
@@ -826,6 +829,7 @@ def test_readiness_status_reports_checks():
 
     assert {"platform_profiles", "ai_config", "email_config", "selftest_report", "real_report"} <= keys
     assert isinstance(status["ready"], bool)
+    assert isinstance(status["next_actions"], list)
     assert len(status["platforms"]) == 3
     assert all("label" in check and "ok" in check and "message" in check for check in status["checks"])
 
@@ -847,6 +851,7 @@ def test_readiness_platform_profiles_require_valid_login_state(monkeypatch):
 
     assert platform_check["ok"] is False
     assert "重新登录" in platform_check["message"]
+    assert any("账号登录" in action and "快手" in action for action in status["next_actions"])
 
 
 def test_doctor_reports_deployment_diagnostics():
@@ -996,7 +1001,7 @@ def test_monitor_page_exposes_acceptance_checklist():
     assert "任务运行时不再反复选择 qrcode、phone 或 cookie" in page
     assert "account_status_table" in page
     assert "platformStatusTable" in page
-    assert "距离上线还差" in page
+    assert "下一步处理" in page
     assert "尚未完成真实采集" in page
     assert "已运行但未采到内容" in page
     assert "真实采集空结果" in page
@@ -1033,6 +1038,8 @@ def test_monitor_page_exposes_acceptance_checklist():
     assert "download?type=html" in page
     assert "download?type=excel" in page
     assert "download?type=markdown" in page
+    assert "下一步处理" in page
+    assert "next_actions" in page
 
 
 def test_cli_run_due_runs_only_due_enabled_jobs(monkeypatch):
@@ -1308,6 +1315,8 @@ def test_readiness_requires_successful_real_reports_for_all_three_platforms(monk
     assert partial["empty_real_platforms"] == ["ks"]
     assert partial["missing_real_platforms"] == ["ks", "xhs"]
     assert "未采到内容" in partial_real_check["message"]
+    assert any("换真实可搜索关键词" in action and "快手" in action for action in partial["next_actions"])
+    assert any("真实采集" in action and "小红书" in action for action in partial["next_actions"])
     assert complete_real_check["ok"] is True
     assert complete["missing_real_platforms"] == []
     assert complete["empty_real_platforms"] == []
