@@ -952,10 +952,10 @@ def test_internal_selftest_jobs_are_hidden_from_operator_job_list():
     init_db()
     job = save_job(
         {
-            "law_firm_name": "MVP自测律所",
+            "law_firm_name": "海安律所",
             "aliases": [],
             "exclude_words": [],
-            "keywords": ["MVP自测律所避雷"],
+            "keywords": ["海安律所避雷"],
             "platforms": ["dy"],
             "recipients": [],
             "enable_comments": False,
@@ -1590,6 +1590,154 @@ def test_list_runs_limit_zero_returns_all_recent_rows():
         _cleanup_test_records(job["id"], "")
 
 
+def test_running_run_keeps_job_snapshot_before_finish():
+    init_db()
+    job = save_job(
+        {
+            "law_firm_name": "海安律所",
+            "aliases": ["海安律师事务所"],
+            "exclude_words": [],
+            "keywords": ["海安律所避雷", "海安律所退费", "海安律所投诉"],
+            "platforms": ["dy"],
+            "recipients": [],
+            "enable_comments": False,
+            "time_window_type": "recent_1d",
+            "frequency": "daily",
+            "email_time": "09:00",
+            "enabled": True,
+        }
+    )
+    run_id = create_run(
+        job["id"],
+        {
+            "job_id": job["id"],
+            "law_firm_name": job["law_firm_name"],
+            "platforms": job["platforms"],
+            "keywords": job["keywords"],
+        },
+    )
+    try:
+        run = get_run(run_id)
+    finally:
+        _cleanup_test_records(job["id"], "")
+
+    assert run
+    assert run["status"] == "running"
+    assert run["display_law_firm_name"] == "海安律所"
+    assert run["summary"]["keywords"] == ["海安律所避雷", "海安律所退费", "海安律所投诉"]
+    assert run["summary"]["duration_seconds"] >= 0
+
+
+def test_list_reports_limit_zero_returns_all_recent_rows():
+    init_db()
+    job = save_job(
+        {
+            "law_firm_name": "海安律所",
+            "aliases": [],
+            "exclude_words": [],
+            "keywords": ["海安律所避雷"],
+            "platforms": ["dy"],
+            "recipients": [],
+            "enable_comments": False,
+            "time_window_type": "recent_1d",
+            "frequency": "daily",
+            "email_time": "09:00",
+            "enabled": True,
+        }
+    )
+    run_ids = [create_run(job["id"]) for _ in range(2)]
+    reports = []
+    try:
+        for run_id in run_ids:
+            reports.append(
+                create_report(
+                    run_id,
+                    job,
+                    {
+                        "job_id": job["id"],
+                        "law_firm_name": job["law_firm_name"],
+                        "platforms": ["dy"],
+                        "failed_platforms": [],
+                    },
+                )
+            )
+        report_ids = {report["id"] for report in reports}
+        assert len([r for r in list_reports(1) if r["id"] in report_ids]) == 1
+        assert len([r for r in list_reports(0) if r["id"] in report_ids]) == 2
+    finally:
+        _cleanup_test_records(job["id"], "")
+
+
+def test_list_leads_limit_zero_returns_all_recent_rows():
+    init_db()
+    job = save_job(
+        {
+            "law_firm_name": "海安律所",
+            "aliases": [],
+            "exclude_words": [],
+            "keywords": ["海安律所避雷"],
+            "platforms": ["dy"],
+            "recipients": [],
+            "enable_comments": False,
+            "time_window_type": "recent_1d",
+            "frequency": "daily",
+            "email_time": "09:00",
+            "enabled": True,
+        }
+    )
+    run_id = create_run(job["id"])
+    content_ids = ["pytest_all_leads_001", "pytest_all_leads_002"]
+    now_ts = int(datetime.now(timezone.utc).timestamp())
+    items = [
+        {"aweme_id": content_id, "title": f"海安律所避雷 {index}", "create_time": now_ts}
+        for index, content_id in enumerate(content_ids, start=1)
+    ]
+    try:
+        ingest_outputs(job, run_id, "dy", items, [])
+        stored_ids = {item["content_id"] for item in list_leads(0) if item["content_id"] in content_ids}
+        assert len([item for item in list_leads(1) if item["content_id"] in content_ids]) == 1
+        assert stored_ids == set(content_ids)
+    finally:
+        for content_id in content_ids:
+            _cleanup_test_records(job["id"], content_id)
+
+
+def test_leads_api_can_scope_items_to_selected_report():
+    init_db()
+    job = save_job(
+        {
+            "law_firm_name": "海安律所",
+            "aliases": ["海安律师事务所"],
+            "exclude_words": [],
+            "keywords": ["海安律所避雷", "海安律所退费", "海安律所投诉"],
+            "platforms": ["dy"],
+            "recipients": [],
+            "enable_comments": False,
+            "time_window_type": "recent_1d",
+            "frequency": "daily",
+            "email_time": "09:00",
+            "enabled": True,
+        }
+    )
+    now_ts = int(datetime.now(timezone.utc).timestamp())
+    first_id = "pytest_report_scope_001"
+    second_id = "pytest_report_scope_002"
+    try:
+        run1 = create_run(job["id"])
+        ingest_outputs(job, run1, "dy", [{"aweme_id": first_id, "title": "海安律所避雷", "create_time": now_ts}], [])
+        report1 = create_report(run1, job, {"job_id": job["id"], "law_firm_name": job["law_firm_name"], "platforms": ["dy"], "failed_platforms": []})
+        run2 = create_run(job["id"])
+        ingest_outputs(job, run2, "dy", [{"aweme_id": second_id, "title": "海安律所退费", "create_time": now_ts}], [])
+        create_report(run2, job, {"job_id": job["id"], "law_firm_name": job["law_firm_name"], "platforms": ["dy"], "failed_platforms": []})
+
+        scoped = asyncio.run(monitor_router.leads(report_id=report1["id"], limit=0))["leads"]
+    finally:
+        _cleanup_test_records(job["id"], first_id)
+        _cleanup_test_records(job["id"], second_id)
+
+    assert [item["content_id"] for item in scoped] == [first_id]
+
+
 def test_delete_running_job_is_blocked_and_stop_job_marks_stale_run(monkeypatch):
     init_db()
     job = save_job(
@@ -1628,10 +1776,10 @@ def test_run_job_blocks_platform_when_login_window_is_open(monkeypatch):
     jobs_snapshot = _snapshot_monitor_jobs()
     job = save_job(
         {
-            "law_firm_name": "登录窗口测试律所",
+            "law_firm_name": "海安律所",
             "aliases": [],
             "exclude_words": [],
-            "keywords": ["登录窗口测试律所避雷"],
+            "keywords": ["海安律所避雷"],
             "platforms": ["dy"],
             "recipients": [],
             "enable_comments": False,
@@ -1840,6 +1988,49 @@ def test_readiness_requires_successful_real_reports_for_all_three_platforms(monk
     assert complete["empty_real_platforms"] == []
 
 
+def test_readiness_uses_all_reports_for_real_platform_audit(monkeypatch):
+    seen: dict[str, int] = {}
+    monkeypatch.setattr(
+        readiness_module,
+        "list_platform_status",
+        lambda: [
+            {"platform": "dy", "platform_label": "抖音", "profile_exists": True, "needs_login": False},
+            {"platform": "ks", "platform_label": "快手", "profile_exists": True, "needs_login": False},
+            {"platform": "xhs", "platform_label": "小红书", "profile_exists": True, "needs_login": False},
+        ],
+    )
+    monkeypatch.setattr(
+        readiness_module,
+        "get_ai_config",
+        lambda masked=True: {
+            "base_url": "https://example.com",
+            "api_key": "sk-********test",
+            "model": "test-model",
+            "last_test_status": "success",
+        },
+    )
+    monkeypatch.setattr(
+        readiness_module,
+        "get_email_config",
+        lambda masked=True: {
+            "smtp_host": "smtp.example.com",
+            "sender": "sender@example.com",
+            "default_recipients": ["target@example.com"],
+            "last_test_status": "success",
+        },
+    )
+
+    def fake_list_reports(limit=100):
+        seen["limit"] = limit
+        return []
+
+    monkeypatch.setattr(readiness_module, "list_reports", fake_list_reports)
+
+    readiness_module.get_readiness_status()
+
+    assert seen["limit"] == 0
+
+
 async def _dedupe_and_report_check(monkeypatch):
     init_db()
     job = save_job(
@@ -1973,7 +2164,7 @@ async def _selftest_report_check():
     assert html_path.exists()
     assert markdown_path.exists()
     assert excel_path.exists()
-    assert "MVP自测律所" in html
+    assert "海安律所" in html
     assert "待人工复核" in html
     assert "AI 结果仅用于舆情线索筛查" in markdown
     assert summary["email_status"] == "skipped"

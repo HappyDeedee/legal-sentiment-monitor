@@ -236,12 +236,13 @@
             <div><label>风险</label><select id="report_risk"><option value="">全部</option><option value="high">高风险</option><option value="negative">疑似负面</option><option value="pending">待人工复核</option><option value="none">无风险</option></select></div>
             <div><label>开始日期</label><input id="report_date_from" type="date"></div>
             <div><label>结束日期</label><input id="report_date_to" type="date"></div>
+            <div><label>显示范围</label><select id="report_limit"><option value="100" selected>最近 100 条</option><option value="200">最近 200 条</option><option value="500">最近 500 条</option><option value="0">全部报告和线索</option></select></div>
             <button class="secondary" onclick="loadReports()">筛选</button>
             <button class="secondary" onclick="createSelftestReport()">生成自测报告</button>
           </div>
           <div id="reports_table"></div>
         </div>
-        <div class="panel"><h3>线索明细</h3><div id="leads_table"></div></div>
+        <div class="panel"><h3>线索明细</h3><div id="leads_scope" class="small"></div><div id="leads_table"></div></div>
         <div class="panel"><h3>HTML 预览</h3><iframe id="report_preview"></iframe></div>
       </section>
       <section id="doctor">
@@ -436,18 +437,40 @@
       toast(res.ok?'已发送停止指令':await err(res));
       await Promise.all([loadSchedulerStatus(), loadRuns(), loadJobs()]);
     }
-    async function loadRunLogs(id){ const data=await (await api('/runs/'+id+'/logs')).json(); const text=(data.logs||[]).map(x=>`# ${x.path}\n${x.content}`).join('\n\n'); document.getElementById('run_logs').textContent = text || '暂无日志。'; }
+    async function loadRunLogs(id){
+      document.getElementById('run_logs').textContent = '正在读取日志...';
+      const res=await api('/runs/'+id+'/logs');
+      if(!res.ok){ document.getElementById('run_logs').textContent='日志读取失败。'; toast(await err(res)); return; }
+      const data=await res.json();
+      const text=(data.logs||[]).map(x=>`# ${x.path}\n${x.content}`).join('\n\n');
+      document.getElementById('run_logs').textContent = text || '暂无日志；如果任务刚启动，请稍后刷新。';
+    }
     async function loadReports(){
-      const qs = new URLSearchParams({law_firm:val('report_law_firm'), platform:val('report_platform'), risk:val('report_risk'), date_from:val('report_date_from'), date_to:val('report_date_to')});
+      const qs = new URLSearchParams({law_firm:val('report_law_firm'), platform:val('report_platform'), risk:val('report_risk'), date_from:val('report_date_from'), date_to:val('report_date_to'), limit:val('report_limit') || '100'});
       const [reportData, leadData]=await Promise.all([(await api('/reports?'+qs.toString())).json(), (await api('/leads?'+qs.toString())).json()]);
       const data=reportData;
-      document.getElementById('reports_table').innerHTML=table(['ID','律所','新增','负面','高风险','待复核','邮件','创建时间','下载'], data.reports.map(r=>[r.id,esc(r.law_firm_name||''),esc((r.summary||{}).new_contents||0),esc((r.summary||{}).negative_count||0),esc((r.summary||{}).high_count||0),esc((r.summary||{}).pending_review_count||0),esc(r.email_status),esc(r.created_at),`<button class="secondary" onclick="previewReport(${r.id})">预览</button> <button class="secondary" onclick="resendReportEmail(${r.id})">重发邮件</button> <a href="/api/monitor/reports/${r.id}/download?type=html">HTML</a> <a href="/api/monitor/reports/${r.id}/download?type=excel">Excel</a> <a href="/api/monitor/reports/${r.id}/download?type=markdown">Markdown</a>`]));
-      document.getElementById('leads_table').innerHTML=table(['律所','平台','状态','标题','关键词','AI 理由','证据','链接'], (leadData.leads||[]).map(x=>[
+      document.getElementById('reports_table').innerHTML=table(['ID','律所','新增','负面','高风险','待复核','邮件','创建时间','下载'], data.reports.map(r=>[r.id,esc(r.law_firm_name||''),esc((r.summary||{}).new_contents||0),esc((r.summary||{}).negative_count||0),esc((r.summary||{}).high_count||0),esc((r.summary||{}).pending_review_count||0),esc(r.email_status),esc(r.created_at),`<button class="secondary" onclick="previewReport(${r.id})">预览并查看线索</button> <button class="secondary" onclick="resendReportEmail(${r.id})">重发邮件</button> <a href="/api/monitor/reports/${r.id}/download?type=html">HTML</a> <a href="/api/monitor/reports/${r.id}/download?type=excel">Excel</a> <a href="/api/monitor/reports/${r.id}/download?type=markdown">Markdown</a>`]));
+      renderLeads(leadData.leads||[], '当前筛选条件下的线索');
+    }
+    async function createSelftestReport(){ const res=await api('/reports/selftest',{method:'POST'}); if(!res.ok){toast(await err(res));return;} toast('自测报告已生成'); loadReports(); loadRuns(); }
+    async function previewReport(id){
+      document.getElementById('report_preview').srcdoc = '正在加载报告...';
+      document.getElementById('leads_scope').textContent = '正在加载当前报告线索...';
+      const reportRes=await api('/reports/'+id);
+      if(!reportRes.ok){ document.getElementById('report_preview').srcdoc='报告读取失败。'; toast(await err(reportRes)); return; }
+      const r=(await reportRes.json()).report;
+      document.getElementById('report_preview').srcdoc = r.html || '无 HTML';
+      const leadsRes=await api('/leads?report_id='+encodeURIComponent(id)+'&limit=0');
+      if(!leadsRes.ok){ toast(await err(leadsRes)); return; }
+      const leadsData=await leadsRes.json();
+      renderLeads(leadsData.leads||[], `报告 ID ${id} 的线索明细`);
+    }
+    function renderLeads(leads, scope){
+      document.getElementById('leads_scope').textContent = scope || '';
+      document.getElementById('leads_table').innerHTML=table(['律所','平台','状态','标题','关键词','AI 理由','证据','链接'], leads.map(x=>[
         esc(x.law_firm_name||''), esc(formatPlatforms([x.platform])), esc(formatLeadStatus(x)), esc(x.title||''), esc(x.source_keyword||''), esc(x.reason||''), esc((x.evidence_quotes||[]).join(' / ')), leadLinks(x)
       ]));
     }
-    async function createSelftestReport(){ const res=await api('/reports/selftest',{method:'POST'}); if(!res.ok){toast(await err(res));return;} toast('自测报告已生成'); loadReports(); loadRuns(); }
-    async function previewReport(id){ const r=(await (await api('/reports/'+id)).json()).report; document.getElementById('report_preview').srcdoc = r.html || '无 HTML'; }
     async function resendReportEmail(id){ const res=await api('/reports/'+id+'/resend-email',{method:'POST'}); if(!res.ok){toast(await err(res));return;} const data=await res.json(); toast(data.ok?'报告邮件已重新发送':'重发失败：'+(data.error||'请检查邮件配置')); loadReports(); }
     async function loadDoctor(){
       const data=await (await api('/doctor')).json();

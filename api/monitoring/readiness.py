@@ -13,7 +13,7 @@ def get_readiness_status() -> dict[str, Any]:
     platforms = list_platform_status()
     ai_config = get_ai_config(masked=True)
     email_config = get_email_config(masked=True)
-    reports = list_reports(200)
+    reports = list_reports(0)
     selftest_reports = [report for report in reports if (report.get("summary") or {}).get("selftest")]
     real_reports = [report for report in reports if not (report.get("summary") or {}).get("selftest")]
     real_platforms = _successful_real_platforms(real_reports)

@@ -897,13 +897,21 @@ def _trim_error(error: str | None) -> str:
     return redact_sensitive(str(error or ""))[:1000]
 
 
-def create_run(job_id: int) -> int:
+def create_run(job_id: int, summary: dict[str, Any] | None = None) -> int:
     with get_conn() as conn:
         cur = conn.execute(
-            "INSERT INTO crawl_runs (job_id, status, started_at) VALUES (?, 'running', ?)",
-            (job_id, utc_now()),
+            "INSERT INTO crawl_runs (job_id, status, started_at, summary) VALUES (?, 'running', ?, ?)",
+            (job_id, utc_now(), json.dumps(_redact_json(summary or {}), ensure_ascii=False)),
         )
         return int(cur.lastrowid)
+
+
+def update_run_summary(run_id: int, summary: dict[str, Any]) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            "UPDATE crawl_runs SET summary=? WHERE id=? AND status='running'",
+            (json.dumps(_redact_json(summary), ensure_ascii=False), run_id),
+        )
 
 
 def finish_run(run_id: int, status: str, summary: dict[str, Any], error: str | None = None) -> None:
@@ -954,6 +962,8 @@ def _hydrate_run_row(row: sqlite3.Row) -> dict[str, Any]:
     item["summary"] = summary
     if not item.get("law_firm_name"):
         item["law_firm_name"] = summary.get("law_firm_name") or ""
+    if item.get("status") == "running":
+        summary["duration_seconds"] = summary.get("duration_seconds") or _elapsed_seconds(item.get("started_at"))
     is_legacy_without_snapshot = current_job_id is None and snapshot_job_id is None and not summary.get("selftest")
     item["display_law_firm_name"] = item.get("law_firm_name") or summary.get("law_firm_name") or (
         "旧记录无任务快照" if is_legacy_without_snapshot else ""
@@ -970,16 +980,28 @@ def _safe_int(value: Any) -> int | None:
         return None
 
 
+def _elapsed_seconds(started_at: Any) -> int:
+    try:
+        started = datetime.fromisoformat(str(started_at or "").replace("Z", "+00:00"))
+        now = datetime.fromisoformat(utc_now())
+        return max(0, int((now - started).total_seconds()))
+    except ValueError:
+        return 0
+
+
 def list_reports(limit: int = 100) -> list[dict[str, Any]]:
+    limit = _coerce_limit(limit)
+    sql = """
+        SELECT reports.*, monitor_jobs.id AS current_job_id, monitor_jobs.law_firm_name FROM reports
+        LEFT JOIN monitor_jobs ON monitor_jobs.id = reports.job_id
+        ORDER BY reports.id DESC
+    """
+    params: list[Any] = []
+    if limit > 0:
+        sql += " LIMIT ?"
+        params.append(limit)
     with get_conn() as conn:
-        rows = conn.execute(
-            """
-            SELECT reports.*, monitor_jobs.id AS current_job_id, monitor_jobs.law_firm_name FROM reports
-            LEFT JOIN monitor_jobs ON monitor_jobs.id = reports.job_id
-            ORDER BY reports.id DESC LIMIT ?
-            """,
-            (limit,),
-        ).fetchall()
+        rows = conn.execute(sql, params).fetchall()
     result = []
     for row in rows:
         item = dict(row)
@@ -1056,24 +1078,27 @@ def _attach_report_lead_counts(reports: list[dict[str, Any]]) -> None:
 
 
 def list_leads(limit: int = 100) -> list[dict[str, Any]]:
+    limit = _coerce_limit(limit)
+    sql = """
+        SELECT
+            c.id, c.platform, c.content_id, c.job_id, c.run_id,
+            COALESCE(c.law_firm_name, j.law_firm_name) AS law_firm_name,
+            c.source_keyword, c.title, c.description, c.author_name,
+            c.content_url, c.cover_url, c.publish_time, c.comment_count,
+            c.first_seen_at, c.last_seen_at,
+            e.status AS eval_status, e.is_related, e.is_negative, e.risk_level,
+            e.reason, e.evidence_quotes, e.recommended_action, e.created_at AS evaluated_at
+        FROM raw_contents c
+        LEFT JOIN monitor_jobs j ON j.id = c.job_id
+        LEFT JOIN ai_evaluations e ON e.raw_content_id = c.id
+        ORDER BY c.id DESC
+    """
+    params: list[Any] = []
+    if limit > 0:
+        sql += " LIMIT ?"
+        params.append(limit)
     with get_conn() as conn:
-        rows = conn.execute(
-            """
-            SELECT
-                c.id, c.platform, c.content_id, c.job_id, c.run_id,
-                COALESCE(c.law_firm_name, j.law_firm_name) AS law_firm_name,
-                c.source_keyword, c.title, c.description, c.author_name,
-                c.content_url, c.cover_url, c.publish_time, c.comment_count,
-                c.first_seen_at, c.last_seen_at,
-                e.status AS eval_status, e.is_related, e.is_negative, e.risk_level,
-                e.reason, e.evidence_quotes, e.recommended_action, e.created_at AS evaluated_at
-            FROM raw_contents c
-            LEFT JOIN monitor_jobs j ON j.id = c.job_id
-            LEFT JOIN ai_evaluations e ON e.raw_content_id = c.id
-            ORDER BY c.id DESC LIMIT ?
-            """,
-            (limit,),
-        ).fetchall()
+        rows = conn.execute(sql, params).fetchall()
     result = []
     for row in rows:
         item = dict(row)
@@ -1082,6 +1107,13 @@ def list_leads(limit: int = 100) -> list[dict[str, Any]]:
         item["evidence_quotes"] = _json_loads(item.get("evidence_quotes"))
         result.append(item)
     return result
+
+
+def _coerce_limit(value: Any, default: int = 100) -> int:
+    try:
+        return max(0, int(value))
+    except (TypeError, ValueError):
+        return default
 
 
 def _redact_json(value: Any) -> Any:

@@ -13,10 +13,10 @@ async def create_sample_report() -> dict[str, Any]:
     _mark_existing_selftest_jobs_internal()
     job = save_job(
         {
-            "law_firm_name": "MVP自测律所",
-            "aliases": ["MVP自测"],
+            "law_firm_name": "海安律所",
+            "aliases": ["海安律师事务所", "海安律师"],
             "exclude_words": ["招聘"],
-            "keywords": ["MVP自测律所避雷"],
+            "keywords": ["海安律所避雷", "海安律所退费", "海安律所投诉"],
             "platforms": ["dy"],
             "recipients": [],
             "enable_comments": False,
@@ -32,7 +32,7 @@ async def create_sample_report() -> dict[str, Any]:
     contents = [
         {
             "aweme_id": f"selftest_negative_{run_id}",
-            "title": "MVP自测律所避雷：收费沟通争议",
+            "title": "海安律所避雷：收费沟通争议",
             "desc": "样例内容：用户投诉沟通慢、收费不透明。此内容用于本地报告链路自测。",
             "aweme_url": f"https://example.com/selftest/video/{run_id}",
             "cover_url": "https://example.com/selftest/cover.jpg",
@@ -40,7 +40,7 @@ async def create_sample_report() -> dict[str, Any]:
         },
         {
             "aweme_id": f"selftest_excluded_{run_id}",
-            "title": "MVP自测律所招聘信息",
+            "title": "海安律所招聘信息",
             "desc": "样例内容：招聘信息应该被排除词过滤。",
             "create_time": now_ts,
         },

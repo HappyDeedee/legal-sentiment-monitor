@@ -324,7 +324,7 @@ async def reports(
     date_to: str = "",
 ):
     init_db()
-    items = list_reports(limit)
+    items = list_reports(_query_limit(limit))
     if law_firm:
         items = [r for r in items if law_firm.strip() in (r.get("law_firm_name") or "")]
     if platform:
@@ -362,9 +362,19 @@ async def leads(
     risk: str = Query("", description="high|negative|pending|none"),
     date_from: str = "",
     date_to: str = "",
+    run_id: int | None = None,
+    report_id: int | None = None,
 ):
     init_db()
-    items = list_leads(limit)
+    target_run_id = run_id
+    if report_id:
+        report = get_report(report_id)
+        if not report:
+            raise HTTPException(status_code=404, detail="report not found")
+        target_run_id = int(report["run_id"])
+    items = list_leads(0 if target_run_id else _query_limit(limit))
+    if target_run_id:
+        items = [item for item in items if int(item.get("run_id") or 0) == int(target_run_id)]
     if law_firm:
         items = [item for item in items if law_firm.strip() in (item.get("law_firm_name") or "")]
     if platform:
@@ -454,6 +464,13 @@ def _report_download_media_type(report_type: str, path: Path) -> str:
     if report_type == "html" or path.suffix.lower() == ".html":
         return "text/html"
     return "application/octet-stream"
+
+
+def _query_limit(value: Any, default: int = 100, maximum: int = 5000) -> int:
+    try:
+        return min(maximum, max(0, int(value)))
+    except (TypeError, ValueError):
+        return default
 
 
 def _safe_report_path(value: str) -> Path:

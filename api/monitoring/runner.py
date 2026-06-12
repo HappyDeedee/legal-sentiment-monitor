@@ -11,7 +11,7 @@ from pathlib import Path
 from typing import Any
 
 from .ai import evaluate_content
-from .database import create_run, finish_run, get_conn, get_job, get_platform_login_config, utc_now
+from .database import create_run, finish_run, get_conn, get_job, get_platform_login_config, update_run_summary, utc_now
 from .mailer import send_report
 from .normalizer import (
     collect_platform_outputs,
@@ -81,7 +81,6 @@ async def _run_job_locked(job_id: int) -> dict[str, Any]:
     job = get_job(job_id)
     if not job:
         raise ValueError("job not found")
-    run_id = create_run(job_id)
     summary: dict[str, Any] = {
         "job_id": job_id,
         "law_firm_name": job.get("law_firm_name") or "",
@@ -98,8 +97,11 @@ async def _run_job_locked(job_id: int) -> dict[str, Any]:
         "cancelled_platforms": [],
         "platform_results": {},
     }
+    run_id = create_run(job_id, summary)
     run_dir = RUNS_DIR / f"job_{job_id}" / f"run_{run_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     run_dir.mkdir(parents=True, exist_ok=True)
+    summary["run_dir"] = str(run_dir)
+    update_run_summary(run_id, summary)
     try:
         _raise_if_stop_requested(job_id)
         tasks = [run_platform(job, run_id, platform, run_dir) for platform in job.get("platforms", [])]
@@ -123,6 +125,7 @@ async def _run_job_locked(job_id: int) -> dict[str, Any]:
             summary["excluded_contents"] += result.get("excluded_contents", 0)
             summary["new_contents"] += result.get("new_contents", 0)
             content_ids_for_eval.extend(result.get("content_db_ids", []))
+        update_run_summary(run_id, summary)
 
         if stopped:
             summary["cancelled"] = True
@@ -210,39 +213,45 @@ def _run_crawler_attempt(job: dict[str, Any], platform: str, out_dir: Path) -> N
     process: subprocess.Popen | None = None
     try:
         creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
-        process = subprocess.Popen(
-            cmd,
-            cwd=PROJECT_ROOT,
-            env=env,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
-            encoding="utf-8",
-            errors="ignore",
-            text=True,
-            creationflags=creationflags,
-        )
-        _register_process(job["id"], process)
-        stdout, stderr = process.communicate(timeout=timeout_seconds)
+        log_path.write_text(redact_sensitive("Starting crawler: " + " ".join(cmd)) + "\n", encoding="utf-8", errors="ignore")
+        with log_path.open("a", encoding="utf-8", errors="ignore") as log_file:
+            process = subprocess.Popen(
+                cmd,
+                cwd=PROJECT_ROOT,
+                env=env,
+                stdout=log_file,
+                stderr=subprocess.STDOUT,
+                creationflags=creationflags,
+            )
+            _register_process(job["id"], process)
+            try:
+                process.wait(timeout=timeout_seconds)
+            except subprocess.TimeoutExpired as exc:
+                _terminate_process(process)
+                try:
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    pass
+                log_file.write(f"\n[monitor] MediaCrawler timed out after {timeout_seconds}s\n")
+                log_file.flush()
+                raise RuntimeError(f"MediaCrawler timed out after {timeout_seconds}s; see {log_path}") from exc
     except subprocess.TimeoutExpired as exc:
-        if process:
-            _terminate_process(process)
-            stdout, stderr = process.communicate()
-        else:
-            stdout, stderr = exc.stdout or "", exc.stderr or ""
-        log_text = redact_sensitive((stdout or "") + "\n" + (stderr or ""))
-        log_path.write_text(log_text, encoding="utf-8", errors="ignore")
         raise RuntimeError(f"MediaCrawler timed out after {timeout_seconds}s; see {log_path}") from exc
+    except RuntimeError:
+        raise
     except Exception as exc:
         if isinstance(exc, CrawlerStopped):
             raise
         safe_error = redact_sensitive(f"{type(exc).__name__}: {exc}")
-        log_path.write_text(safe_error, encoding="utf-8")
+        log_path.write_text(safe_error, encoding="utf-8", errors="ignore")
         raise RuntimeError(f"MediaCrawler failed to start: {safe_error}; see {log_path}") from exc
     finally:
         if process:
             _unregister_process(job["id"], process)
-    log_text = redact_sensitive((stdout or "") + "\n" + (stderr or ""))
-    log_path.write_text(log_text, encoding="utf-8")
+    raw_log_text = log_path.read_text(encoding="utf-8", errors="ignore")
+    log_text = redact_sensitive(raw_log_text)
+    if log_text != raw_log_text:
+        log_path.write_text(log_text, encoding="utf-8", errors="ignore")
     if is_stop_requested(job["id"]):
         raise CrawlerStopped(f"任务已手动停止；see {log_path}")
     if process.returncode != 0:
