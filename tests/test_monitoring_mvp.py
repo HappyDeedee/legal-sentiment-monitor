@@ -1863,7 +1863,14 @@ def test_monitor_page_exposes_acceptance_checklist():
     assert "账号资源台账" in page
     assert "account_platform_overview" in page
     assert ".account-console { display:grid; grid-template-columns:1fr;" in page
-    assert "从上方账号台账选择账号" in page
+    assert "account_modal" in page
+    assert "modal-backdrop" in page
+    assert "openNewSocialAccountModal" in page
+    assert "openSocialAccountModal" in page
+    assert "closeSocialAccountModal" in page
+    assert 'onclick="openNewSocialAccountModal()">新增账号' in page
+    assert 'onclick="openNewSocialAccountModal()">添加账号' in page
+    assert "当前没有选中账号。可以从账号台账选择" in page
     assert "account_login_type_filter" in page
     assert "selectedSocialAccountIds" in page
     assert "accountLedgerTable" in page
