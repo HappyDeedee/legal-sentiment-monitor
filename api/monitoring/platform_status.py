@@ -27,16 +27,21 @@ def list_platform_status(project_root: Path | None = None, recent_runs: list[dic
     for platform, dirname in PROFILE_DIRS.items():
         profile_path = browser_data / dirname
         latest_file = _latest_profile_file(profile_path)
-        error = last_errors.get(platform, "")
+        error_info = last_errors.get(platform) or {}
+        error = str(error_info.get("error") or "")
+        error_at = _parse_time(error_info.get("at"))
+        profile_mtime = _mtime(latest_file or profile_path)
+        stale_error = bool(error_at and profile_mtime and profile_mtime > error_at)
+        effective_error = "" if stale_error else error
         statuses.append(
             {
                 "platform": platform,
                 "platform_label": PLATFORM_LABELS.get(platform, platform),
                 "profile_path": str(profile_path),
                 "profile_exists": profile_path.exists(),
-                "profile_last_modified": _format_mtime(latest_file or profile_path),
-                "last_error": error,
-                "needs_login": (not profile_path.exists()) or _looks_like_login_error(error),
+                "profile_last_modified": _format_time(profile_mtime),
+                "last_error": effective_error,
+                "needs_login": (not profile_path.exists()) or _looks_like_login_error(effective_error),
             }
         )
     return statuses
@@ -54,26 +59,44 @@ def _latest_profile_file(profile_path: Path) -> Path | None:
     return latest
 
 
-def _format_mtime(path: Path) -> str | None:
+def _mtime(path: Path) -> datetime | None:
     try:
         if not path.exists():
             return None
-        return datetime.fromtimestamp(path.stat().st_mtime, timezone.utc).isoformat()
+        return datetime.fromtimestamp(path.stat().st_mtime, timezone.utc)
     except OSError:
         return None
 
 
-def _latest_platform_errors(recent_runs: list[dict[str, Any]] | None = None) -> dict[str, str]:
-    errors: dict[str, str] = {}
+def _format_time(value: datetime | None) -> str | None:
+    return value.isoformat() if value else None
+
+
+def _parse_time(value: Any) -> datetime | None:
+    text = str(value or "").strip()
+    if not text:
+        return None
+    try:
+        parsed = datetime.fromisoformat(text.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _latest_platform_errors(recent_runs: list[dict[str, Any]] | None = None) -> dict[str, dict[str, str]]:
+    errors: dict[str, dict[str, str]] = {}
     for run in recent_runs if recent_runs is not None else list_runs(50):
         summary = run.get("summary") or {}
         platform_results = summary.get("platform_results") or {}
+        run_time = run.get("finished_at") or run.get("started_at") or ""
         for platform, result in platform_results.items():
             if platform in errors:
                 continue
             error = result.get("error") if isinstance(result, dict) else ""
             if error:
-                errors[platform] = redact_sensitive(str(error))
+                errors[platform] = {"error": redact_sensitive(str(error)), "at": str(run_time)}
         if len(errors) >= len(PROFILE_DIRS):
             break
     return errors

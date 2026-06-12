@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import os
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -123,10 +124,12 @@ def test_platform_status_reports_profile_and_login_error(tmp_path):
     profile = tmp_path / "browser_data" / "cdp_dy_user_data_dir"
     profile.mkdir(parents=True)
     (profile / "state").write_text("ok", encoding="utf-8")
+    run_time = datetime.now(timezone.utc).isoformat()
     statuses = list_platform_status(
         tmp_path,
         [
             {
+                "finished_at": run_time,
                 "summary": {
                     "platform_results": {
                         "dy": {"error": "MediaCrawler exited with 1；检测到登录态失效，请先重新登录该平台账号"}
@@ -140,6 +143,35 @@ def test_platform_status_reports_profile_and_login_error(tmp_path):
     assert dy["profile_exists"] is True
     assert dy["needs_login"] is True
     assert ks["profile_exists"] is False
+
+
+def test_platform_status_ignores_login_error_older_than_profile_update(tmp_path):
+    profile = tmp_path / "browser_data" / "cdp_dy_user_data_dir"
+    profile.mkdir(parents=True)
+    state = profile / "state"
+    state.write_text("ok", encoding="utf-8")
+    error_time = datetime(2026, 6, 12, 9, 0, tzinfo=timezone.utc)
+    updated_time = error_time + timedelta(minutes=10)
+    os.utime(state, (updated_time.timestamp(), updated_time.timestamp()))
+
+    statuses = list_platform_status(
+        tmp_path,
+        [
+            {
+                "finished_at": error_time.isoformat(),
+                "summary": {
+                    "platform_results": {
+                        "dy": {"error": "MediaCrawler exited with 1；检测到登录态失效，请先重新登录该平台账号"}
+                    }
+                },
+            }
+        ],
+    )
+    dy = next(item for item in statuses if item["platform"] == "dy")
+
+    assert dy["profile_exists"] is True
+    assert dy["needs_login"] is False
+    assert dy["last_error"] == ""
 
 
 def test_platform_status_supports_custom_browser_data_dir(tmp_path, monkeypatch):
