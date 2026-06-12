@@ -8,7 +8,7 @@ from pathlib import Path
 import pytest
 from fastapi import HTTPException
 
-from api.monitoring.ai import _build_endpoint, _validate_ai_output, test_ai as run_ai_config_test
+from api.monitoring.ai import _build_endpoint, _parse_json, _validate_ai_output, test_ai as run_ai_config_test
 from api.monitoring.ai import DEFAULT_PROMPT
 from api.monitoring.database import create_run, finish_run, get_ai_config, get_conn, get_email_config, init_db, list_jobs, list_leads, save_ai_config, save_email_config, save_job
 from api.monitoring.mailer import build_report_email, send_test_email
@@ -332,6 +332,22 @@ def test_ai_test_requires_contract_shaped_output():
         }
     )
     assert valid["risk_level"] == "high"
+    tolerant = _validate_ai_output(
+        {
+            "result": {
+                "is_related": "true",
+                "is_negative": "false",
+                "risk_level": "高风险",
+                "reason": "命中投诉",
+                "evidence_quotes": "退费争议",
+                "recommended_action": "人工复核",
+            }
+        }
+    )
+    assert tolerant["is_related"] is True
+    assert tolerant["is_negative"] is False
+    assert tolerant["risk_level"] == "high"
+    assert tolerant["evidence_quotes"] == ["退费争议"]
     with pytest.raises(ValueError, match="AI 输出缺少字段"):
         _validate_ai_output({"is_related": True})
     with pytest.raises(ValueError, match="risk_level"):
@@ -345,6 +361,20 @@ def test_ai_test_requires_contract_shaped_output():
                 "recommended_action": "人工复核",
             }
         )
+
+
+def test_ai_json_parser_accepts_fenced_json_with_prefix_text():
+    parsed = _parse_json(
+        """
+        下面是判断结果：
+        ```json
+        {"is_related": true, "is_negative": false, "risk_level": "low", "reason": "普通内容", "evidence_quotes": [], "recommended_action": "无需处理"}
+        ```
+        """
+    )
+
+    assert parsed["is_related"] is True
+    assert parsed["risk_level"] == "low"
 
 
 def test_ai_email_test_results_are_persisted_for_readiness(monkeypatch):

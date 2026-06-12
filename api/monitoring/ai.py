@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import re
 from typing import Any
 
 import httpx
@@ -30,15 +31,15 @@ async def evaluate_content(job: dict[str, Any], content: dict[str, Any], comment
             raw = await _call_anthropic(cfg, prompt, user_payload)
         else:
             raw = await _call_openai(cfg, prompt, user_payload)
-        data = _parse_json(raw)
+        data = _validate_ai_output(_parse_json(raw))
         return {
             "status": "ok",
-            "is_related": bool(data.get("is_related")),
-            "is_negative": bool(data.get("is_negative")),
-            "risk_level": _normalize_risk(data.get("risk_level")),
-            "reason": str(data.get("reason") or ""),
-            "evidence_quotes": data.get("evidence_quotes") if isinstance(data.get("evidence_quotes"), list) else [],
-            "recommended_action": str(data.get("recommended_action") or ""),
+            "is_related": data["is_related"],
+            "is_negative": data["is_negative"],
+            "risk_level": data["risk_level"],
+            "reason": data["reason"],
+            "evidence_quotes": data["evidence_quotes"],
+            "recommended_action": data["recommended_action"],
             "raw_response": raw,
         }
     except Exception as exc:
@@ -111,46 +112,108 @@ async def _call_anthropic(cfg: dict[str, Any], prompt: str, payload: dict[str, A
 
 
 def _parse_json(raw: str) -> dict[str, Any]:
-    text = raw.strip()
-    if text.startswith("```"):
-        text = text.strip("`")
-        if text.lower().startswith("json"):
-            text = text[4:].strip()
-    start = text.find("{")
-    end = text.rfind("}")
-    if start >= 0 and end > start:
-        text = text[start : end + 1]
-    data = json.loads(text)
+    text = (raw or "").strip()
+    fenced = re.findall(r"```(?:json)?\s*(.*?)```", text, flags=re.IGNORECASE | re.DOTALL)
+    candidates = fenced + [text]
+    last_error: Exception | None = None
+    for candidate in candidates:
+        try:
+            data = json.loads(_extract_json_object(candidate))
+            break
+        except Exception as exc:
+            last_error = exc
+    else:
+        raise ValueError(f"AI output is not valid JSON: {last_error}") from last_error
     if not isinstance(data, dict):
         raise ValueError("AI output is not a JSON object")
     return data
 
 
 def _validate_ai_output(data: dict[str, Any]) -> dict[str, Any]:
-    required = {
-        "is_related": bool,
-        "is_negative": bool,
-        "risk_level": str,
-        "reason": str,
-        "evidence_quotes": list,
-        "recommended_action": str,
-    }
+    data = _unwrap_ai_output(data)
+    required = {"is_related", "is_negative", "risk_level", "reason", "evidence_quotes", "recommended_action"}
     missing = [key for key in required if key not in data]
     if missing:
         raise ValueError("AI 输出缺少字段：" + "、".join(missing))
-    invalid = [key for key, expected_type in required.items() if not isinstance(data.get(key), expected_type)]
-    if invalid:
-        raise ValueError("AI 输出字段类型错误：" + "、".join(invalid))
-    if _normalize_risk(data.get("risk_level")) != data.get("risk_level"):
-        raise ValueError("AI 输出 risk_level 必须是 high、medium、low 或 irrelevant")
+    is_related = _coerce_bool(data.get("is_related"), "is_related")
+    is_negative = _coerce_bool(data.get("is_negative"), "is_negative")
+    risk_level = _coerce_risk(data.get("risk_level"))
     return {
-        "is_related": data["is_related"],
-        "is_negative": data["is_negative"],
-        "risk_level": data["risk_level"],
-        "reason": data["reason"],
-        "evidence_quotes": [str(item) for item in data["evidence_quotes"]],
-        "recommended_action": data["recommended_action"],
+        "is_related": is_related,
+        "is_negative": is_negative,
+        "risk_level": risk_level,
+        "reason": str(data.get("reason") or ""),
+        "evidence_quotes": _coerce_quotes(data.get("evidence_quotes")),
+        "recommended_action": str(data.get("recommended_action") or ""),
     }
+
+
+def _extract_json_object(text: str) -> str:
+    cleaned = text.strip()
+    start = cleaned.find("{")
+    end = cleaned.rfind("}")
+    if start >= 0 and end > start:
+        return cleaned[start : end + 1]
+    return cleaned
+
+
+def _unwrap_ai_output(data: dict[str, Any]) -> dict[str, Any]:
+    required = {"is_related", "is_negative", "risk_level", "reason", "evidence_quotes", "recommended_action"}
+    if required & set(data):
+        return data
+    for key in ("result", "data", "evaluation", "output"):
+        nested = data.get(key)
+        if isinstance(nested, dict) and required & set(nested):
+            return nested
+    return data
+
+
+def _coerce_bool(value: Any, field: str) -> bool:
+    if isinstance(value, bool):
+        return value
+    if isinstance(value, int) and value in {0, 1}:
+        return bool(value)
+    if isinstance(value, str):
+        normalized = value.strip().lower()
+        truthy = {"true", "1", "yes", "y", "是", "相关", "有关", "负面", "疑似负面"}
+        falsy = {"false", "0", "no", "n", "否", "不相关", "无关", "非负面", "不是"}
+        if normalized in truthy:
+            return True
+        if normalized in falsy:
+            return False
+    raise ValueError(f"AI 输出字段类型错误：{field}")
+
+
+def _coerce_risk(value: Any) -> str:
+    normalized = str(value or "").strip().lower()
+    mapping = {
+        "high": "high",
+        "高": "high",
+        "高风险": "high",
+        "medium": "medium",
+        "middle": "medium",
+        "中": "medium",
+        "中风险": "medium",
+        "low": "low",
+        "低": "low",
+        "低风险": "low",
+        "irrelevant": "irrelevant",
+        "none": "irrelevant",
+        "无": "irrelevant",
+        "无关": "irrelevant",
+        "不相关": "irrelevant",
+    }
+    if normalized not in mapping:
+        raise ValueError("AI 输出 risk_level 必须是 high、medium、low 或 irrelevant")
+    return mapping[normalized]
+
+
+def _coerce_quotes(value: Any) -> list[str]:
+    if isinstance(value, list):
+        return [str(item) for item in value if str(item).strip()]
+    if isinstance(value, str):
+        return [value] if value.strip() else []
+    raise ValueError("AI 输出字段类型错误：evidence_quotes")
 
 
 def _merge_test_config(payload: dict[str, Any]) -> dict[str, Any]:
