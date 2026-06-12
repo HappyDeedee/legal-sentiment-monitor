@@ -270,7 +270,19 @@
       document.querySelectorAll('input[name=platform]').forEach(x=>x.checked=j.platforms.includes(x.value));
       document.getElementById('enable_comments').checked = j.enable_comments; document.getElementById('enabled').checked = j.enabled; window.scrollTo(0,0);
     }
-    async function runJob(id){ const res = await api('/jobs/'+id+'/run',{method:'POST'}); if(!res.ok){toast(await err(res));return;} const data=await res.json(); toast(data.started ? '任务已开始运行，运行记录会自动刷新' : '任务已经在运行中'); await loadRuns(); startRunPolling(); }
+    async function runJob(id){
+      const preRes = await api('/jobs/'+id+'/preflight');
+      if(!preRes.ok){ toast(await err(preRes)); return; }
+      const preflight = (await preRes.json()).preflight;
+      if(!preflight.can_run){ toast('运行前检查未通过：' + preflight.blockers.join('；')); return; }
+      if(preflight.warnings.length && !confirm('运行前提示：\n' + preflight.warnings.join('\n') + '\n\n仍然立即运行？')) return;
+      const res = await api('/jobs/'+id+'/run',{method:'POST'});
+      if(!res.ok){toast(await err(res));return;}
+      const data=await res.json();
+      toast(data.started ? '任务已开始运行，运行记录会自动刷新' : '任务已经在运行中');
+      await loadRuns();
+      startRunPolling();
+    }
     async function toggleJob(id, enabled){ const res = await api('/jobs/'+id+(enabled?'/pause':'/resume'),{method:'POST'}); toast(res.ok ? (enabled?'任务已暂停':'任务已恢复') : await err(res)); loadJobs(); }
     async function deleteJob(id){ if(!confirm('确认删除任务？')) return; await api('/jobs/'+id,{method:'DELETE'}); loadJobs(); }
     function resetJobForm(){ ['job_id','law_firm_name','aliases','exclude_words','keywords','recipients','custom_start','custom_end','cron_expr'].forEach(id=>set(id,'')); set('time_window_type','recent_1d'); set('frequency','daily'); set('email_time','09:00'); document.querySelectorAll('input[name=platform]').forEach(x=>x.checked=x.value==='dy'); document.getElementById('enabled').checked=true; document.getElementById('enable_comments').checked=true; }

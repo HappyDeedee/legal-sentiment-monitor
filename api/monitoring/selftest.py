@@ -1,11 +1,12 @@
 from __future__ import annotations
 
+import json
 from datetime import datetime, timezone
 from typing import Any
 
 from .database import create_run, get_conn, save_job
 from .reporting import create_report, update_report_email_status
-from .runner import evaluate_new_contents, ingest_outputs
+from .runner import ingest_outputs
 
 
 async def create_sample_report() -> dict[str, Any]:
@@ -45,7 +46,7 @@ async def create_sample_report() -> dict[str, Any]:
         },
     ]
     ingested = ingest_outputs(job, run_id, "dy", contents, [])
-    eval_summary = await evaluate_new_contents(job, run_id, ingested["content_db_ids"])
+    eval_summary = _save_pending_review_evaluations(run_id, ingested["content_db_ids"])
     summary = {
         "platforms": ["dy"],
         "keywords": job["keywords"],
@@ -67,7 +68,7 @@ async def create_sample_report() -> dict[str, Any]:
     with get_conn() as conn:
         conn.execute(
             "UPDATE crawl_runs SET status=?, finished_at=?, summary=?, error_message=? WHERE id=?",
-            ("selftest", datetime.now(timezone.utc).isoformat(), __import__("json").dumps(summary, ensure_ascii=False), None, run_id),
+            ("selftest", datetime.now(timezone.utc).isoformat(), json.dumps(summary, ensure_ascii=False), None, run_id),
         )
     return {"job": job, "run_id": run_id, "summary": summary, "report": report}
 
@@ -78,3 +79,38 @@ def _mark_existing_selftest_jobs_internal() -> None:
             "UPDATE monitor_jobs SET is_internal=1 WHERE law_firm_name=?",
             ("MVP自测律所",),
         )
+
+
+def _save_pending_review_evaluations(run_id: int, content_ids: list[int]) -> dict[str, int]:
+    now = datetime.now(timezone.utc).isoformat()
+    with get_conn() as conn:
+        rows = [
+            dict(row)
+            for row in conn.execute(
+                "SELECT id, title, description FROM raw_contents WHERE id IN (%s)" % ",".join("?" for _ in content_ids),
+                content_ids,
+            ).fetchall()
+        ] if content_ids else []
+        for row in rows:
+            conn.execute(
+                """
+                INSERT OR REPLACE INTO ai_evaluations (
+                    raw_content_id, run_id, status, is_related, is_negative, risk_level, reason,
+                    evidence_quotes, recommended_action, raw_response, created_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    row["id"],
+                    run_id,
+                    "pending_review",
+                    1,
+                    0,
+                    "low",
+                    "本地自测不调用真实 AI，固定标记为待人工复核",
+                    json.dumps([row.get("title") or row.get("description") or ""], ensure_ascii=False),
+                    "请确认报告预览、Excel、Markdown 下载链路正常。",
+                    "",
+                    now,
+                ),
+            )
+    return {"negative_count": 0, "high_count": 0}

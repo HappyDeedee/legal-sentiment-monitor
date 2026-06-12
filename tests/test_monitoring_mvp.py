@@ -13,6 +13,7 @@ from api.monitoring.database import create_run, finish_run, get_ai_config, get_c
 from api.monitoring.mailer import build_report_email, send_test_email
 from api.monitoring.normalizer import collect_platform_outputs, in_time_window, normalize_content, parse_jsonl_file, resolve_window
 from api.monitoring.platform_status import list_platform_status
+from api.monitoring.preflight import build_job_preflight
 from api.monitoring.readiness import get_readiness_status
 from api.monitoring.reporting import create_report
 from api.monitoring.security import redact_sensitive
@@ -424,8 +425,8 @@ def test_failed_ai_test_is_recorded_after_saving_valid_config(monkeypatch):
         _restore_singleton_table("ai_configs", ai_snapshot)
 
 
-def test_ingest_dedupes_and_report_keeps_pending_review():
-    asyncio.run(_dedupe_and_report_check())
+def test_ingest_dedupes_and_report_keeps_pending_review(monkeypatch):
+    asyncio.run(_dedupe_and_report_check(monkeypatch))
 
 
 def test_dedupe_is_isolated_per_monitor_job():
@@ -627,6 +628,60 @@ def test_doctor_api_exposes_deployment_diagnostics():
     assert "paths" in status
 
 
+def test_job_preflight_warns_but_allows_missing_ai_email(monkeypatch):
+    init_db()
+    job = save_job(
+        {
+            "law_firm_name": "预检测试律所",
+            "aliases": [],
+            "exclude_words": [],
+            "keywords": ["预检测试律所避雷"],
+            "platforms": ["dy"],
+            "recipients": [],
+            "enable_comments": False,
+            "time_window_type": "recent_1d",
+            "frequency": "daily",
+            "email_time": "09:00",
+            "enabled": True,
+        }
+    )
+    ai_snapshot = _snapshot_singleton_table("ai_configs")
+    email_snapshot = _snapshot_singleton_table("email_configs")
+
+    try:
+        save_ai_config({"provider": "openai", "base_url": "", "api_key": "", "model": ""})
+        save_email_config({"smtp_host": "", "sender": "", "default_recipients": []})
+        monkeypatch.setattr(
+            "api.monitoring.preflight.list_platform_status",
+            lambda: [
+                {"platform": "dy", "platform_label": "抖音", "profile_exists": True, "needs_login": False},
+                {"platform": "ks", "platform_label": "快手", "profile_exists": True, "needs_login": False},
+                {"platform": "xhs", "platform_label": "小红书", "profile_exists": True, "needs_login": False},
+            ],
+        )
+
+        preflight = build_job_preflight(job, [])
+        api_result = asyncio.run(monitor_router.job_preflight(job["id"]))["preflight"]
+    finally:
+        _restore_singleton_table("ai_configs", ai_snapshot)
+        _restore_singleton_table("email_configs", email_snapshot)
+        _cleanup_test_records(job["id"], "")
+
+    assert preflight["can_run"] is True
+    assert preflight["ready"] is False
+    assert any("AI" in item for item in preflight["warnings"])
+    assert any("收件人" in item for item in preflight["warnings"])
+    assert api_result["can_run"] is True
+
+
+def test_job_preflight_blocks_already_running_job():
+    job = {"id": 123, "enabled": True, "keywords": ["测试"], "platforms": ["dy"], "recipients": ["a@example.com"]}
+    preflight = build_job_preflight(job, [123])
+
+    assert preflight["can_run"] is False
+    assert any("正在运行" in item for item in preflight["blockers"])
+
+
 def test_monitor_page_exposes_acceptance_checklist():
     page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
 
@@ -637,6 +692,8 @@ def test_monitor_page_exposes_acceptance_checklist():
     assert "正在运行的任务 ID" in page
     assert "startRunPolling" in page
     assert "api('/doctor')" in page
+    assert "preflight" in page
+    assert "运行前提示" in page
     assert "生成自测报告" in page
     assert "download?type=html" in page
     assert "download?type=excel" in page
@@ -831,7 +888,7 @@ def test_readiness_requires_successful_real_reports_for_all_three_platforms(monk
     assert complete["missing_real_platforms"] == []
 
 
-async def _dedupe_and_report_check():
+async def _dedupe_and_report_check(monkeypatch):
     init_db()
     job = save_job(
         {
@@ -858,6 +915,19 @@ async def _dedupe_and_report_check():
         "create_time": now_ts,
     }
 
+    async def pending_review(job, content, comments):
+        return {
+            "status": "pending_review",
+            "is_related": True,
+            "is_negative": False,
+            "risk_level": "low",
+            "reason": "AI 未完成判断，请人工复核",
+            "evidence_quotes": [content.get("title") or ""],
+            "recommended_action": "人工复核",
+            "raw_response": "",
+        }
+
+    monkeypatch.setattr(runner_module, "evaluate_content", pending_review)
     run1 = create_run(job["id"])
     first = ingest_outputs(job, run1, "dy", [item], [])
     await evaluate_new_contents(job, run1, first["content_db_ids"])

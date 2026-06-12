@@ -28,6 +28,7 @@ from ..monitoring.database import (
 from ..monitoring.mailer import send_test_email
 from ..monitoring.doctor import run_doctor
 from ..monitoring.platform_status import list_platform_status
+from ..monitoring.preflight import build_job_preflight
 from ..monitoring.readiness import get_readiness_status
 from ..monitoring.scheduler import launch_job, next_run_at, running_job_ids
 from ..monitoring.security import redact_sensitive
@@ -101,6 +102,14 @@ async def run_job_now(job_id: int):
         return launch_job(job_id, source="manual")
     except Exception as exc:
         raise HTTPException(status_code=500, detail=redact_sensitive(f"{type(exc).__name__}: {exc}"))
+
+
+@router.get("/jobs/{job_id}/preflight")
+async def job_preflight(job_id: int):
+    job = get_job(job_id)
+    if not job:
+        raise HTTPException(status_code=404, detail="job not found")
+    return {"preflight": build_job_preflight(job, running_job_ids())}
 
 
 @router.post("/jobs/{job_id}/pause")
