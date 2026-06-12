@@ -9,6 +9,7 @@ import pytest
 from fastapi import HTTPException
 
 from api.monitoring.ai import _build_endpoint, _validate_ai_output, test_ai as run_ai_config_test
+from api.monitoring.ai import DEFAULT_PROMPT
 from api.monitoring.database import create_run, finish_run, get_ai_config, get_conn, get_email_config, init_db, list_jobs, list_leads, save_ai_config, save_email_config, save_job
 from api.monitoring.mailer import build_report_email, send_test_email
 from api.monitoring.normalizer import collect_platform_outputs, in_time_window, normalize_content, parse_jsonl_file, resolve_window
@@ -397,6 +398,14 @@ def test_ai_email_test_results_are_persisted_for_readiness(monkeypatch):
         _restore_singleton_table("email_configs", email_snapshot)
 
 
+def test_ai_config_api_exposes_default_prompt():
+    init_db()
+    result = asyncio.run(monitor_router.ai_config())
+
+    assert result["default_prompt"] == DEFAULT_PROMPT
+    assert "负面" in result["default_prompt"]
+
+
 def test_failed_ai_test_is_recorded_after_saving_valid_config(monkeypatch):
     init_db()
     ai_snapshot = _snapshot_singleton_table("ai_configs")
@@ -713,6 +722,9 @@ def test_monitor_page_exposes_acceptance_checklist():
     assert "api('/doctor')" in page
     assert "preflight" in page
     assert "运行前提示" in page
+    assert "恢复默认 Prompt" in page
+    assert "default_prompt" in page
+    assert "resetAIPrompt" in page
     assert "线索明细" in page
     assert "api('/leads?" in page
     assert "待人工复核" in page

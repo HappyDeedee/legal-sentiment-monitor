@@ -7,6 +7,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse
 
 from ..monitoring import ai
+from ..monitoring.ai import DEFAULT_PROMPT
 from ..monitoring.database import (
     MONITOR_DATA_DIR,
     delete_job,
@@ -134,7 +135,7 @@ async def resume_job(job_id: int):
 @router.get("/ai-config")
 async def ai_config():
     init_db()
-    return {"config": get_ai_config(masked=True)}
+    return {"config": get_ai_config(masked=True), "default_prompt": DEFAULT_PROMPT}
 
 
 @router.put("/ai-config")
