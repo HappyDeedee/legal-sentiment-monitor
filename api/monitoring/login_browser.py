@@ -59,7 +59,7 @@ def open_login_browser(platform: str) -> dict[str, Any]:
     return {
         **command,
         "pid": process.pid,
-        "message": f"已打开{command['platform_label']}登录窗口，请在窗口内完成扫码或账号登录",
+        "message": f"已打开{command['platform_label']}登录窗口，请完成登录后关闭该窗口，再回后台刷新状态并运行采集",
     }
 
 
