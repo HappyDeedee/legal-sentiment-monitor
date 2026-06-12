@@ -29,6 +29,7 @@ from ..monitoring.database import (
 )
 from ..monitoring.mailer import send_test_email
 from ..monitoring.doctor import run_doctor
+from ..monitoring.login_browser import open_login_browser
 from ..monitoring.platform_status import list_platform_status
 from ..monitoring.preflight import build_job_preflight
 from ..monitoring.readiness import get_readiness_status
@@ -56,6 +57,16 @@ async def jobs():
 async def platform_status():
     init_db()
     return {"platforms": list_platform_status()}
+
+
+@router.post("/platform-status/{platform}/login-browser")
+async def platform_login_browser(platform: str):
+    try:
+        return open_login_browser(platform)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+    except Exception as exc:
+        raise HTTPException(status_code=500, detail=redact_sensitive(f"{type(exc).__name__}: {exc}"))
 
 
 @router.get("/readiness")

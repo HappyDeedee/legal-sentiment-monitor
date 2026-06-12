@@ -11,6 +11,7 @@ from fastapi import HTTPException
 from api.monitoring.ai import _build_endpoint, _parse_json, _validate_ai_output, test_ai as run_ai_config_test
 from api.monitoring.ai import DEFAULT_PROMPT
 from api.monitoring.database import create_run, finish_run, get_ai_config, get_conn, get_email_config, init_db, list_jobs, list_leads, save_ai_config, save_email_config, save_job
+from api.monitoring.login_browser import build_login_browser_command
 from api.monitoring.mailer import build_report_email, send_test_email
 from api.monitoring.normalizer import collect_platform_outputs, in_time_window, normalize_content, parse_jsonl_file, resolve_window
 from api.monitoring.platform_status import list_platform_status
@@ -162,6 +163,20 @@ def test_cdp_browser_uses_same_custom_profile_root_as_status(tmp_path, monkeypat
     assert Path(resolve_cdp_user_data_dir("dy")) == expected
     dy_status = next(item for item in list_platform_status(tmp_path, []) if item["platform"] == "dy")
     assert dy_status["profile_path"] == str(expected.resolve())
+
+
+def test_login_browser_command_uses_monitor_profile_root(tmp_path, monkeypatch):
+    browser_data = tmp_path / "profiles"
+    fake_browser = tmp_path / "chrome.exe"
+    fake_browser.write_text("", encoding="utf-8")
+    monkeypatch.setenv("MONITOR_BROWSER_DATA_DIR", str(browser_data))
+    monkeypatch.setattr("api.monitoring.login_browser.BrowserLauncher.detect_browser_paths", lambda self: [str(fake_browser)])
+
+    command = build_login_browser_command("xhs")
+
+    assert command["profile_path"] == str((browser_data / "cdp_xhs_user_data_dir").resolve())
+    assert command["debug_port"] == 9325
+    assert command["login_url"].startswith("https://www.xiaohongshu.com")
 
 
 def test_job_validation_rejects_operator_input_errors():
@@ -834,6 +849,9 @@ def test_monitor_page_exposes_acceptance_checklist():
     assert "已运行但未采到内容" in page
     assert "真实采集空结果" in page
     assert "部署诊断" in page
+    assert "打开登录窗口" in page
+    assert "login-browser" in page
+    assert "openPlatformLoginBrowser" in page
     assert "正在运行的任务 ID" in page
     assert "startRunPolling" in page
     assert "api('/doctor')" in page
