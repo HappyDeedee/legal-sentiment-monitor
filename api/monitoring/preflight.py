@@ -2,7 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
-from .database import get_ai_config, get_email_config
+from .database import get_ai_config, get_email_config, has_job_template_placeholders
 from .platform_status import list_platform_status
 
 
@@ -37,6 +37,7 @@ def build_job_preflight(job: dict[str, Any], running_jobs: list[int] | None = No
             "ok" if job.get("platforms") else "blocking",
             "已选择：" + _format_platforms(job.get("platforms") or []) if job.get("platforms") else "未选择平台",
         ),
+        _template_placeholder_check(job),
         _platform_profile_check(job),
         _ai_config_check(),
         _email_config_check(job),
@@ -50,6 +51,12 @@ def build_job_preflight(job: dict[str, Any], running_jobs: list[int] | None = No
         "blockers": blockers,
         "warnings": warnings,
     }
+
+
+def _template_placeholder_check(job: dict[str, Any]) -> dict[str, Any]:
+    if has_job_template_placeholders(job):
+        return _check("template_placeholders", "任务内容", "blocking", "请先把验收模板里的律所名称和关键词改成真实内容")
+    return _check("template_placeholders", "任务内容", "ok", "任务内容已替换为真实律所和关键词")
 
 
 def _platform_profile_check(job: dict[str, Any]) -> dict[str, Any]:

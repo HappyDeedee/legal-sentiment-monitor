@@ -102,6 +102,8 @@ async def run_job_now(job_id: int):
         raise HTTPException(status_code=404, detail="job not found")
     try:
         return launch_job(job_id, source="manual")
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=redact_sensitive(str(exc)))
     except Exception as exc:
         raise HTTPException(status_code=500, detail=redact_sensitive(f"{type(exc).__name__}: {exc}"))
 

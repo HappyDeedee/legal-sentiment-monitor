@@ -256,7 +256,8 @@ def save_job(payload: dict[str, Any], job_id: int | None = None) -> dict[str, An
     keywords = [str(k).strip() for k in payload.get("keywords", []) if str(k).strip()]
     if not keywords:
         raise ValueError("keywords is required")
-    _validate_no_job_template_placeholders([law_firm_name, *keywords])
+    if has_job_template_placeholders({"law_firm_name": law_firm_name, "keywords": keywords}):
+        raise ValueError("请先把验收模板里的律所名称和关键词改成真实内容")
     platforms = [p for p in payload.get("platforms", []) if p in {"dy", "ks", "xhs"}]
     if not platforms:
         raise ValueError("at least one platform is required")
@@ -342,10 +343,12 @@ def save_job(payload: dict[str, Any], job_id: int | None = None) -> dict[str, An
     return get_job(target_id) or {}
 
 
-def _validate_no_job_template_placeholders(values: list[str]) -> None:
+def has_job_template_placeholders(job: dict[str, Any]) -> bool:
+    values = [str(job.get("law_firm_name") or ""), *(str(item) for item in job.get("keywords", []))]
     joined = "\n".join(values)
     if any(placeholder in joined for placeholder in JOB_TEMPLATE_PLACEHOLDERS):
-        raise ValueError("请先把验收模板里的律所名称和关键词改成真实内容")
+        return True
+    return False
 
 
 def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition: str) -> None:

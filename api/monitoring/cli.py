@@ -6,7 +6,7 @@ import json
 from datetime import datetime
 from typing import Any, Sequence
 
-from .database import get_job, init_db, list_jobs, set_job_schedule_state
+from .database import get_job, has_job_template_placeholders, init_db, list_jobs, set_job_schedule_state
 from .doctor import run_doctor
 from .readiness import get_readiness_status
 from .runner import run_job
@@ -81,6 +81,9 @@ async def run_due_jobs(now: datetime | None = None) -> dict[str, Any]:
         set_job_schedule_state(job_id, next_run_at(job, now))
         if not _is_due(job, now):
             continue
+        if has_job_template_placeholders(job):
+            results.append({"job_id": job_id, "status": "skipped", "reason": "请先把验收模板里的律所名称和关键词改成真实内容"})
+            continue
         try:
             result = await run_job(job_id)
             results.append({"job_id": job_id, "status": result.get("status"), "result": result})
@@ -89,8 +92,8 @@ async def run_due_jobs(now: datetime | None = None) -> dict[str, Any]:
         finally:
             _refresh_schedule_state(job_id)
     failed = [item for item in results if item.get("status") in {"failed", "partial_failed"}]
-    ran = [item for item in results if item.get("status") != "already_running"]
-    skipped = [item for item in results if item.get("status") == "already_running"]
+    ran = [item for item in results if item.get("status") not in {"already_running", "skipped"}]
+    skipped = [item for item in results if item.get("status") in {"already_running", "skipped"}]
     return {"ok": not failed, "ran": len(ran), "skipped": len(skipped), "failed": len(failed), "results": results}
 
 

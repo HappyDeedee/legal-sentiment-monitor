@@ -806,6 +806,25 @@ def test_job_preflight_blocks_already_running_job():
     assert any("正在运行" in item for item in preflight["blockers"])
 
 
+def test_job_preflight_and_launcher_block_template_placeholders(monkeypatch):
+    job = {
+        "id": 123,
+        "enabled": True,
+        "law_firm_name": "请改成目标律所名称",
+        "keywords": ["目标律所避雷"],
+        "platforms": ["dy"],
+        "recipients": ["a@example.com"],
+    }
+
+    preflight = build_job_preflight(job, [])
+
+    assert preflight["can_run"] is False
+    assert any("验收模板" in item for item in preflight["blockers"])
+    monkeypatch.setattr(scheduler_module, "get_job", lambda job_id: job)
+    with pytest.raises(ValueError, match="验收模板"):
+        scheduler_module.launch_job(123)
+
+
 def test_monitor_page_exposes_acceptance_checklist():
     page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
 
@@ -905,6 +924,43 @@ def test_cli_run_due_runs_only_due_enabled_jobs(monkeypatch):
     assert run_calls == [due_job["id"]]
     assert future_job["id"] not in run_calls
     assert disabled_job["id"] not in run_calls
+
+
+def test_cli_run_due_skips_legacy_template_placeholder_jobs(monkeypatch):
+    init_db()
+    jobs_snapshot = _snapshot_monitor_jobs()
+    run_calls: list[int] = []
+
+    try:
+        with get_conn() as conn:
+            now = "2026-06-12T00:00:00+00:00"
+            cur = conn.execute(
+                """
+                INSERT INTO monitor_jobs (
+                    law_firm_name, aliases, exclude_words, enable_comments, time_window_type,
+                    frequency, email_time, enabled, is_internal, created_at, updated_at
+                ) VALUES (?, '[]', '[]', 0, 'recent_1d', 'daily', '08:00', 1, 0, ?, ?)
+                """,
+                ("请改成目标律所名称", now, now),
+            )
+            job_id = int(cur.lastrowid)
+            conn.execute("INSERT INTO job_keywords (job_id, keyword) VALUES (?, ?)", (job_id, "目标律所避雷"))
+            conn.execute("INSERT INTO job_platforms (job_id, platform) VALUES (?, ?)", (job_id, "dy"))
+
+        async def fake_run_job(job_id):
+            run_calls.append(job_id)
+            return {"run_id": 999, "status": "success", "summary": {}, "report": {}}
+
+        monkeypatch.setattr(cli_module, "run_job", fake_run_job)
+        result = asyncio.run(run_due_jobs(datetime(2026, 6, 12, 9, 0, 0)))
+    finally:
+        _restore_monitor_jobs(jobs_snapshot)
+
+    assert result["ran"] == 0
+    assert result["skipped"] == 1
+    assert result["ok"] is True
+    assert run_calls == []
+    assert "验收模板" in result["results"][0]["reason"]
 
 
 def test_run_job_skips_when_cross_process_lock_exists():

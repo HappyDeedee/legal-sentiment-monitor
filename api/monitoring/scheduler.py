@@ -5,7 +5,7 @@ import os
 from datetime import datetime, time, timedelta
 from typing import Any
 
-from .database import get_job, list_jobs, set_job_schedule_state
+from .database import get_job, has_job_template_placeholders, list_jobs, set_job_schedule_state
 from .runner import run_job
 
 
@@ -61,8 +61,11 @@ async def tick() -> None:
 
 
 def launch_job(job_id: int, source: str = "manual") -> dict[str, Any]:
-    if not get_job(job_id):
+    job = get_job(job_id)
+    if not job:
         raise ValueError("job not found")
+    if has_job_template_placeholders(job):
+        raise ValueError("请先把验收模板里的律所名称和关键词改成真实内容")
     if job_id in _running_jobs:
         return {"started": False, "status": "already_running", "job_id": job_id}
     _running_jobs.add(job_id)
