@@ -616,6 +616,44 @@ def test_ai_json_parser_accepts_fenced_json_with_prefix_text():
     assert parsed["risk_level"] == "low"
 
 
+def test_ai_test_uses_haian_sample_payload(monkeypatch):
+    init_db()
+    seen: dict[str, Any] = {}
+
+    async def fake_call_openai(cfg, prompt, payload):
+        seen.update(payload)
+        return json.dumps(
+            {
+                "is_related": True,
+                "is_negative": True,
+                "risk_level": "medium",
+                "reason": "命中退费投诉",
+                "evidence_quotes": ["退费拖了很久"],
+                "recommended_action": "人工复核",
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("api.monitoring.ai._call_openai", fake_call_openai)
+
+    result = asyncio.run(
+        run_ai_config_test(
+            {
+                "provider": "openai",
+                "base_url": "https://example.com",
+                "api_key": "sk-test",
+                "model": "test-model",
+                "temperature": 0,
+            }
+        )
+    )
+
+    assert result["risk_level"] == "medium"
+    assert seen["law_firm_name"] == "海安律所"
+    assert seen["source_keyword"] == "海安律所避雷"
+    assert "海安律所" in seen["title"]
+
+
 def test_ai_email_test_results_are_persisted_for_readiness(monkeypatch):
     init_db()
     ai_snapshot = _snapshot_singleton_table("ai_configs")

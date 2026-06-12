@@ -50,13 +50,13 @@ async def test_ai(payload: dict[str, Any]) -> dict[str, Any]:
     cfg = _merge_test_config(payload)
     prompt = cfg.get("prompt") or DEFAULT_PROMPT
     sample = {
-        "law_firm_name": "测试律所",
-        "aliases": ["测试律师事务所"],
+        "law_firm_name": "海安律所",
+        "aliases": ["海安律师事务所", "海安律师"],
         "exclude_words": [],
         "platform": "抖音",
-        "source_keyword": "测试律所避雷",
-        "title": payload.get("sample_title") or "这家测试律所服务太差，退费拖了很久",
-        "description": payload.get("sample_text") or "我想曝光一下，沟通很差，收费也不透明。",
+        "source_keyword": "海安律所避雷",
+        "title": payload.get("sample_title") or "海安律所避雷：退费拖了很久",
+        "description": payload.get("sample_text") or "我想曝光一下，沟通很差，收费也不透明，投诉后一直没人处理。",
         "comments": [],
     }
     if cfg.get("provider") == "anthropic":
