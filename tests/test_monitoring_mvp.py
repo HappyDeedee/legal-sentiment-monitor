@@ -18,6 +18,7 @@ from api.monitoring.reporting import create_report
 from api.monitoring.security import redact_sensitive
 from api.monitoring.selftest import create_sample_report
 from api.monitoring.cli import run_due_jobs
+from api.monitoring.doctor import run_doctor
 from api.routers import monitor as monitor_router
 import api.monitoring.cli as cli_module
 import api.monitoring.readiness as readiness_module
@@ -602,6 +603,18 @@ def test_readiness_status_reports_checks():
     assert isinstance(status["ready"], bool)
     assert len(status["platforms"]) == 3
     assert all("label" in check and "ok" in check and "message" in check for check in status["checks"])
+
+
+def test_doctor_reports_deployment_diagnostics():
+    init_db()
+    status = run_doctor()
+    keys = {check["key"] for check in status["checks"]}
+
+    assert {"project_files", "uv", "data_dir", "database", "browser_profiles", "ai_config", "email_config", "reports"} <= keys
+    assert "readiness" in status
+    assert "paths" in status
+    assert status["paths"]["monitor_data_dir"]
+    assert isinstance(status["recommendations"], list)
 
 
 def test_monitor_page_exposes_acceptance_checklist():

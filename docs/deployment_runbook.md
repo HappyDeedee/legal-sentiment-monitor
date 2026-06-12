@@ -163,6 +163,14 @@ uv run python -m api.monitoring.cli selftest-report
 uv run python -m api.monitoring.cli readiness
 ```
 
+6. 运行本机部署诊断：
+
+```bash
+uv run python -m api.monitoring.cli doctor
+```
+
+`doctor` 会检查项目文件、uv 命令、数据目录写入权限、SQLite 表结构、三平台 profile、AI/邮件配置、任务、报告链路和单进程调度环境。它不会调用真实平台、AI 或 SMTP，只用于发现部署基础问题。
+
 ## 6. 三平台登录态准备
 
 默认 profile 目录：
@@ -214,6 +222,12 @@ uv run python -m api.monitoring.cli readiness
 
 ```bash
 uv run python -m api.monitoring.cli list-jobs
+```
+
+部署诊断：
+
+```bash
+uv run python -m api.monitoring.cli doctor
 ```
 
 手动运行：

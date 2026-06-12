@@ -45,6 +45,7 @@ $env:MONITOR_BROWSER_DATA_DIR = "D:\legal-sentiment-monitor\browser_data"
 
 ```powershell
 .\monitor_cli.bat readiness
+.\monitor_cli.bat doctor
 .\monitor_cli.bat list-jobs
 .\monitor_cli.bat selftest-report
 .\monitor_cli.bat run-job 1
@@ -54,6 +55,7 @@ $env:MONITOR_BROWSER_DATA_DIR = "D:\legal-sentiment-monitor\browser_data"
 命令说明：
 
 - `readiness`：输出当前上线验收状态。
+- `doctor`：检查项目文件、依赖命令、数据目录、SQLite、浏览器 profile、AI/邮件配置、任务和报告链路。
 - `list-jobs`：列出后台已配置的监控任务。
 - `selftest-report`：生成一份本地自测报告，不调用平台、不发邮件。
 - `run-job 1`：立即运行 ID 为 `1` 的监控任务。

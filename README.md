@@ -38,6 +38,12 @@ http://127.0.0.1:8080/monitor
 .\monitor_cli.bat readiness
 ```
 
+部署诊断：
+
+```powershell
+.\monitor_cli.bat doctor
+```
+
 生成本地自测报告：
 
 ```powershell
@@ -70,7 +76,7 @@ Linux 服务器可参考 systemd 示例：
 deploy/systemd/
 ```
 
-完整部署、验收、排障、备份恢复流程见：
+完整部署、验收、部署诊断、排障、备份恢复流程见：
 
 ```text
 docs/deployment_runbook.md

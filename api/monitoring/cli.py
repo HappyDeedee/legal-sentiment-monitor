@@ -7,6 +7,7 @@ from datetime import datetime
 from typing import Any, Sequence
 
 from .database import get_job, init_db, list_jobs, set_job_schedule_state
+from .doctor import run_doctor
 from .readiness import get_readiness_status
 from .runner import run_job
 from .scheduler import _is_due, next_run_at
@@ -33,6 +34,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers = parser.add_subparsers(dest="command", required=True)
 
     subparsers.add_parser("readiness", help="print deployment readiness status")
+    subparsers.add_parser("doctor", help="run local deployment diagnostics")
     subparsers.add_parser("selftest-report", help="generate a local self-test report")
     subparsers.add_parser("list-jobs", help="list visible monitor jobs")
 
@@ -47,6 +49,8 @@ async def _run_command(args: argparse.Namespace) -> dict[str, Any]:
     init_db()
     if args.command == "readiness":
         return get_readiness_status()
+    if args.command == "doctor":
+        return run_doctor()
     if args.command == "selftest-report":
         return await create_sample_report()
     if args.command == "list-jobs":
