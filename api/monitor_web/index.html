@@ -229,13 +229,17 @@
       const data=await (await api('/readiness')).json();
       const pending=(data.checks||[]).filter(c=>!c.ok);
       const missingPlatforms=data.missing_real_platforms||[];
+      const emptyPlatforms=data.empty_real_platforms||[];
       const pendingItems=pending.map(c=>`${c.label}：${c.message}`);
-      if(missingPlatforms.length){ pendingItems.push('三平台真实采集缺口：' + formatPlatforms(missingPlatforms)); }
+      if(emptyPlatforms.length){ pendingItems.push('已运行但未采到内容：' + formatPlatforms(emptyPlatforms)); }
+      const notRunPlatforms=missingPlatforms.filter(p=>!emptyPlatforms.includes(p));
+      if(notRunPlatforms.length){ pendingItems.push('尚未完成真实采集：' + formatPlatforms(notRunPlatforms)); }
       document.getElementById('readiness_summary').innerHTML = data.ready
         ? `<div class="readiness-summary ready"><div class="readiness-mark">可上线</div><div class="readiness-list">所有验收项已通过。</div></div>`
         : `<div class="readiness-summary pending"><div class="readiness-mark">待验收</div><div class="readiness-list"><strong>距离上线还差 ${pendingItems.length} 项</strong><ul>${pendingItems.map(x=>`<li>${esc(x)}</li>`).join('')}</ul></div></div>`;
       const rows=data.checks.map(c=>[esc(c.label), c.ok ? '<span class="status">已就绪</span>' : '<span class="status">待完成</span>', esc(c.message)]);
-      if(missingPlatforms.length){ rows.push(['真实采集缺口','<span class="status">待完成</span>', esc('未验收平台：' + formatPlatforms(missingPlatforms))]); }
+      if(emptyPlatforms.length){ rows.push(['真实采集空结果','<span class="status">待处理</span>', esc('已运行但未采到内容：' + formatPlatforms(emptyPlatforms))]); }
+      if(notRunPlatforms.length){ rows.push(['真实采集缺口','<span class="status">待完成</span>', esc('未验收平台：' + formatPlatforms(notRunPlatforms))]); }
       document.getElementById('readiness_table').innerHTML=table(['检查项','状态','说明'], rows);
     }
     async function loadPlatformStatus(){ const data=await (await api('/platform-status')).json(); document.getElementById('platform_status_table').innerHTML=table(['平台','Profile','最近状态','更新时间'], data.platforms.map(p=>[esc(p.platform_label), p.profile_exists ? '<span class="status">已发现</span>' : '<span class="status">未发现</span>', p.needs_login ? `<span class="status">需重新登录</span><div class="small">${esc(p.last_error||'请先准备浏览器 profile')}</div>` : '<span class="status">可尝试运行</span>', esc((p.profile_last_modified||'').replace('T',' ').slice(0,19))])); }

@@ -760,7 +760,9 @@ def test_monitor_page_exposes_acceptance_checklist():
 
     assert "上线验收状态" in page
     assert "距离上线还差" in page
-    assert "三平台真实采集缺口" in page
+    assert "尚未完成真实采集" in page
+    assert "已运行但未采到内容" in page
+    assert "真实采集空结果" in page
     assert "部署诊断" in page
     assert "正在运行的任务 ID" in page
     assert "startRunPolling" in page
@@ -938,7 +940,15 @@ def test_readiness_requires_successful_real_reports_for_all_three_platforms(monk
     )
 
     partial_reports = [
-        {"id": 1, "summary": {"platform_results": {"dy": {"status": "success"}, "ks": {"status": "success"}}}},
+        {
+            "id": 1,
+            "summary": {
+                "platform_results": {
+                    "dy": {"status": "success", "raw_contents": 2, "new_contents": 1},
+                    "ks": {"status": "success", "raw_contents": 0, "new_contents": 0},
+                }
+            },
+        },
         {"id": 2, "summary": {"selftest": True}},
     ]
     monkeypatch.setattr(readiness_module, "list_reports", lambda limit=200: partial_reports)
@@ -950,9 +960,9 @@ def test_readiness_requires_successful_real_reports_for_all_three_platforms(monk
             "id": 3,
             "summary": {
                 "platform_results": {
-                    "dy": {"status": "success"},
-                    "ks": {"status": "success"},
-                    "xhs": {"status": "success"},
+                    "dy": {"status": "success", "raw_contents": 2, "new_contents": 1},
+                    "ks": {"status": "success", "raw_contents": 3, "new_contents": 2},
+                    "xhs": {"status": "success", "raw_contents": 1, "new_contents": 1},
                 }
             },
         },
@@ -963,9 +973,13 @@ def test_readiness_requires_successful_real_reports_for_all_three_platforms(monk
     complete_real_check = next(check for check in complete["checks"] if check["key"] == "real_report")
 
     assert partial_real_check["ok"] is False
-    assert partial["missing_real_platforms"] == ["xhs"]
+    assert partial["real_platforms"] == ["dy"]
+    assert partial["empty_real_platforms"] == ["ks"]
+    assert partial["missing_real_platforms"] == ["ks", "xhs"]
+    assert "未采到内容" in partial_real_check["message"]
     assert complete_real_check["ok"] is True
     assert complete["missing_real_platforms"] == []
+    assert complete["empty_real_platforms"] == []
 
 
 async def _dedupe_and_report_check(monkeypatch):

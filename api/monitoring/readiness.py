@@ -17,6 +17,7 @@ def get_readiness_status() -> dict[str, Any]:
     selftest_reports = [report for report in reports if (report.get("summary") or {}).get("selftest")]
     real_reports = [report for report in reports if not (report.get("summary") or {}).get("selftest")]
     real_platforms = _successful_real_platforms(real_reports)
+    empty_real_platforms = _empty_real_platforms(real_reports) - real_platforms
     checks = [
         _check("platform_profiles", "三平台浏览器 Profile", all(p["profile_exists"] for p in platforms), _platform_message(platforms)),
         _check("ai_config", "AI 配置", _ai_ready(ai_config), _ai_message(ai_config)),
@@ -30,6 +31,7 @@ def get_readiness_status() -> dict[str, Any]:
         "platforms": platforms,
         "real_platforms": sorted(real_platforms),
         "missing_real_platforms": sorted(REQUIRED_REAL_PLATFORMS - real_platforms),
+        "empty_real_platforms": sorted(empty_real_platforms),
         "latest_selftest_report_id": selftest_reports[0]["id"] if selftest_reports else None,
         "latest_real_report_id": real_reports[0]["id"] if real_reports else None,
     }
@@ -104,7 +106,14 @@ def _real_report_message(reports: list[dict[str, Any]]) -> str:
     successful = _successful_real_platforms(reports)
     missing = REQUIRED_REAL_PLATFORMS - successful
     if missing:
-        return "还需完成真实采集：" + "、".join(_platform_label(p) for p in sorted(missing))
+        empty = _empty_real_platforms(reports) - successful
+        parts = []
+        if empty:
+            parts.append("已运行但未采到内容：" + "、".join(_platform_label(p) for p in sorted(empty)))
+        not_run = missing - empty
+        if not_run:
+            parts.append("还需完成真实采集：" + "、".join(_platform_label(p) for p in sorted(not_run)))
+        return "；".join(parts) if parts else "还需完成真实采集：" + "、".join(_platform_label(p) for p in sorted(missing))
     return f"三平台均已完成真实采集，最近真实报告 ID：{reports[0]['id']}"
 
 
@@ -122,9 +131,34 @@ def _successful_real_platforms(reports: list[dict[str, Any]]) -> set[str]:
             result = platform_results.get(platform)
             if platform in failed or not isinstance(result, dict):
                 continue
-            if result.get("status") == "success":
+            if result.get("status") == "success" and _platform_result_has_content(result):
                 successful.add(platform)
     return successful
+
+
+def _empty_real_platforms(reports: list[dict[str, Any]]) -> set[str]:
+    empty: set[str] = set()
+    for report in reports:
+        summary = report.get("summary") or {}
+        failed = set(summary.get("failed_platforms") or [])
+        platform_results = summary.get("platform_results") or {}
+        for platform in REQUIRED_REAL_PLATFORMS:
+            result = platform_results.get(platform)
+            if platform in failed or not isinstance(result, dict):
+                continue
+            if result.get("status") == "success" and not _platform_result_has_content(result):
+                empty.add(platform)
+    return empty
+
+
+def _platform_result_has_content(result: dict[str, Any]) -> bool:
+    for key in ("raw_contents", "filtered_contents", "new_contents"):
+        try:
+            if int(result.get(key) or 0) > 0:
+                return True
+        except (TypeError, ValueError):
+            continue
+    return False
 
 
 def _platform_label(platform: str) -> str:
