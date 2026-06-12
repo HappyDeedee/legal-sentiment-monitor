@@ -1296,6 +1296,48 @@ def test_run_job_skips_when_cross_process_lock_exists():
     assert after == before
 
 
+def test_run_job_blocks_platform_when_login_window_is_open(monkeypatch):
+    init_db()
+    jobs_snapshot = _snapshot_monitor_jobs()
+    job = save_job(
+        {
+            "law_firm_name": "登录窗口测试律所",
+            "aliases": [],
+            "exclude_words": [],
+            "keywords": ["登录窗口测试律所避雷"],
+            "platforms": ["dy"],
+            "recipients": [],
+            "enable_comments": False,
+            "time_window_type": "recent_1d",
+            "frequency": "daily",
+            "email_time": "09:00",
+            "enabled": True,
+        }
+    )
+
+    def fail_if_called(*args, **kwargs):
+        raise AssertionError("MediaCrawler subprocess should not start while login window is open")
+
+    try:
+        monkeypatch.setattr(
+            runner_module,
+            "list_platform_status",
+            lambda: [
+                {"platform": "dy", "platform_label": "抖音", "profile_exists": True, "needs_login": False, "login_window_open": True},
+                {"platform": "ks", "platform_label": "快手", "profile_exists": True, "needs_login": False, "login_window_open": False},
+                {"platform": "xhs", "platform_label": "小红书", "profile_exists": True, "needs_login": False, "login_window_open": False},
+            ],
+        )
+        monkeypatch.setattr(runner_module.subprocess, "run", fail_if_called)
+        result = asyncio.run(run_monitor_job(job["id"]))
+    finally:
+        _restore_monitor_jobs(jobs_snapshot)
+
+    assert result["status"] == "partial_failed"
+    assert result["summary"]["failed_platforms"] == ["dy"]
+    assert "登录窗口未关闭" in result["summary"]["platform_results"]["dy"]["error"]
+
+
 def test_expired_cross_process_lock_is_replaced(tmp_path, monkeypatch):
     monkeypatch.setattr(runner_module, "LOCKS_DIR", tmp_path / "locks")
     monkeypatch.setattr(runner_module, "JOB_LOCK_TTL_SECONDS", 60)

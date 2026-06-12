@@ -19,6 +19,7 @@ from .normalizer import (
     normalize_comment,
     normalize_content,
 )
+from .platform_status import list_platform_status
 from .reporting import create_report, update_report_email_status
 from .security import MONITOR_DATA_DIR, redact_sensitive
 
@@ -104,6 +105,7 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
         async with PLATFORM_LOCKS[platform]:
             platform_out = run_dir / platform
             platform_out.mkdir(parents=True, exist_ok=True)
+            _ensure_login_window_closed(platform)
             cmd = _build_crawler_cmd(job, platform, platform_out)
             env = {**os.environ, "PYTHONUNBUFFERED": "1"}
             log_path = platform_out / "crawler.log"
@@ -135,6 +137,14 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
                 raise RuntimeError(f"MediaCrawler exited with {process.returncode}{hint}; see {log_path}")
             contents, comments = collect_platform_outputs(platform_out, platform)
             return ingest_outputs(job, run_id, platform, contents, comments)
+
+
+def _ensure_login_window_closed(platform: str) -> None:
+    statuses = {item["platform"]: item for item in list_platform_status()}
+    status = statuses.get(platform) or {}
+    if status.get("login_window_open"):
+        label = {"dy": "抖音", "ks": "快手", "xhs": "小红书"}.get(platform, platform)
+        raise RuntimeError(f"{label}登录窗口未关闭，请关闭窗口后再运行采集")
 
 
 def ingest_outputs(
