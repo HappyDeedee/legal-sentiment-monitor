@@ -2334,6 +2334,7 @@ async def _dedupe_and_report_check(monkeypatch):
         {"platforms": ["dy"], "failed_platforms": [], "new_contents": first["new_contents"], "negative_count": 0, "high_count": 0},
     )
     html = Path(report["html_path"]).read_text(encoding="utf-8")
+    markdown = Path(report["markdown_path"]).read_text(encoding="utf-8")
 
     run2 = create_run(job["id"])
     second = ingest_outputs(job, run2, "dy", [item], [])
@@ -2346,6 +2347,7 @@ async def _dedupe_and_report_check(monkeypatch):
     assert second["new_contents"] == 0
     assert run2_rows == 0
     assert "待人工复核" in html
+    assert "- 待人工复核：1" in markdown
     assert "https://example.com/cover.jpg" in html
 
 
@@ -2420,6 +2422,7 @@ async def _selftest_report_check():
     assert excel_path.exists()
     assert "海安律所" in html
     assert "待人工复核" in html
+    assert "- 待人工复核：1" in markdown
     assert "AI 结果仅用于舆情线索筛查" in markdown
     assert summary["email_status"] == "skipped"
     assert row["email_status"] == "skipped"

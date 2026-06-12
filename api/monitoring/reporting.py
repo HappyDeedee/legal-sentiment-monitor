@@ -94,6 +94,7 @@ def render_html(job: dict[str, Any], summary: dict[str, Any], records: list[dict
             ("新增内容", summary.get("new_contents", 0)),
             ("疑似负面", len(risk_records)),
             ("高风险", high_count),
+            ("待人工复核", len(review_records)),
             ("失败平台", len(summary.get("failed_platforms", []))),
         ]
     )
@@ -129,20 +130,21 @@ h1{{font-size:22px;margin:0 0 16px}}h2{{font-size:18px;border-bottom:1px solid #
 
 
 def render_markdown(job: dict[str, Any], summary: dict[str, Any], records: list[dict[str, Any]]) -> str:
+    risks = [r for r in records if r["is_related"] and r["is_negative"]]
+    reviews = [r for r in records if r.get("eval_status") == "pending_review"]
     lines = [
         f"# 【律所舆情日报】{job['law_firm_name']} - {datetime.now().date()}",
         "",
         f"- 新增内容：{summary.get('new_contents', 0)}",
         f"- 疑似负面：{summary.get('negative_count', 0)}",
         f"- 高风险：{summary.get('high_count', 0)}",
+        f"- 待人工复核：{len(reviews)}",
         "",
         "## 平台采集状态",
         "",
         *_platform_summary_markdown_lines(summary),
         "",
     ]
-    risks = [r for r in records if r["is_related"] and r["is_negative"]]
-    reviews = [r for r in records if r.get("eval_status") == "pending_review"]
     if not risks and not reviews:
         lines.append("本次未发现新增疑似负面线索。")
     for rec in risks + reviews:
