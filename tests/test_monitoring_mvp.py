@@ -250,6 +250,22 @@ def test_report_download_media_types_are_specific(tmp_path):
     assert monitor_router._report_download_media_type("html", tmp_path / "report.html") == "text/html"
 
 
+def test_report_path_guard_rejects_files_outside_report_dir(tmp_path, monkeypatch):
+    reports_dir = tmp_path / "reports"
+    reports_dir.mkdir()
+    safe_path = reports_dir / "report.html"
+    unsafe_path = tmp_path / "secret.txt"
+    safe_path.write_text("ok", encoding="utf-8")
+    unsafe_path.write_text("secret", encoding="utf-8")
+    monkeypatch.setattr(monitor_router, "MONITOR_DATA_DIR", tmp_path)
+
+    assert monitor_router._safe_report_path(str(safe_path)) == safe_path
+    with pytest.raises(HTTPException) as exc:
+        monitor_router._safe_report_path(str(unsafe_path))
+
+    assert exc.value.status_code == 403
+
+
 def test_sensitive_text_is_redacted():
     text = "Authorization: Bearer sk-secret123456789 api_key=abc123 password=hunter2 cookie=session=abc token=mytoken"
     redacted = redact_sensitive(text)

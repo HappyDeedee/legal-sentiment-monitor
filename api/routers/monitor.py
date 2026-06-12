@@ -303,7 +303,7 @@ async def report_selftest():
 async def report_detail(report_id: int):
     for report in list_reports(500):
         if report["id"] == report_id:
-            html_path = Path(report["html_path"])
+            html_path = _safe_report_path(report["html_path"])
             report["html"] = html_path.read_text(encoding="utf-8") if html_path.exists() else ""
             return {"report": report}
     raise HTTPException(status_code=404, detail="report not found")
@@ -316,11 +316,7 @@ async def report_download(report_id: int, type: str = "excel"):
             key = {"excel": "excel_path", "markdown": "markdown_path", "html": "html_path"}.get(type)
             if not key:
                 raise HTTPException(status_code=400, detail="unsupported report type")
-            path = Path(report[key])
-            try:
-                path.resolve().relative_to((MONITOR_DATA_DIR / "reports").resolve())
-            except ValueError:
-                raise HTTPException(status_code=403, detail="invalid report path")
+            path = _safe_report_path(report[key])
             if not path.exists():
                 raise HTTPException(status_code=404, detail="file not found")
             return FileResponse(path, filename=path.name, media_type=_report_download_media_type(type, path))
@@ -349,3 +345,12 @@ def _report_download_media_type(report_type: str, path: Path) -> str:
     if report_type == "html" or path.suffix.lower() == ".html":
         return "text/html"
     return "application/octet-stream"
+
+
+def _safe_report_path(value: str) -> Path:
+    path = Path(value)
+    try:
+        path.resolve().relative_to((MONITOR_DATA_DIR / "reports").resolve())
+    except ValueError:
+        raise HTTPException(status_code=403, detail="invalid report path")
+    return path
