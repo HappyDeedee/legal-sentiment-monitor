@@ -205,13 +205,14 @@ def _render_platform_summary_html(summary: dict[str, Any]) -> str:
         f"<td>{html.escape(row['status_label'])}</td>"
         f"<td>{row['raw_contents']}</td>"
         f"<td>{row['new_contents']}</td>"
+        f"<td>{html.escape(row['proxy_label'])}</td>"
         f"<td>{html.escape(row['error'])}</td>"
         "</tr>"
         for row in rows
     )
     return (
         "<h2>平台采集状态</h2>"
-        "<table class='platforms'><thead><tr><th>平台</th><th>状态</th><th>采集数</th><th>新增数</th><th>说明</th></tr></thead>"
+        "<table class='platforms'><thead><tr><th>平台</th><th>状态</th><th>采集数</th><th>新增数</th><th>代理</th><th>说明</th></tr></thead>"
         f"<tbody>{body}</tbody></table>"
     )
 
@@ -222,6 +223,7 @@ def _platform_summary_markdown_lines(summary: dict[str, Any]) -> list[str]:
         return ["- 暂无平台采集状态。"]
     return [
         f"- {row['platform_label']}：{row['status_label']}，采集 {row['raw_contents']}，新增 {row['new_contents']}"
+        + (f"，代理：{row['proxy_label']}" if row["proxy_label"] else "")
         + (f"，说明：{row['error']}" if row["error"] else "")
         for row in rows
     ]
@@ -242,10 +244,24 @@ def _platform_summary_rows(summary: dict[str, Any]) -> list[dict[str, Any]]:
                 "status_label": "失败" if is_failed else "成功",
                 "raw_contents": int(result.get("raw_contents") or 0),
                 "new_contents": int(result.get("new_contents") or 0),
+                "proxy_label": _format_proxy_label(result.get("proxy")),
                 "error": redact_sensitive(str(result.get("error") or "")),
             }
         )
     return rows
+
+
+def _format_proxy_label(proxy: Any) -> str:
+    if not isinstance(proxy, dict):
+        return ""
+    parts = [
+        str(proxy.get("proxy_name") or "").strip(),
+        str(proxy.get("provider") or "").strip(),
+    ]
+    label = " / ".join(part for part in parts if part)
+    if proxy.get("proxy_id"):
+        label = f"{label} #{proxy['proxy_id']}" if label else f"#{proxy['proxy_id']}"
+    return redact_sensitive(label)
 
 
 def _load_report_records(run_id: int) -> list[dict[str, Any]]:

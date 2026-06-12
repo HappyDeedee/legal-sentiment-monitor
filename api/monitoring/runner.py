@@ -11,7 +11,17 @@ from pathlib import Path
 from typing import Any
 
 from .ai import evaluate_content
-from .database import create_run, finish_run, get_conn, get_job, get_platform_login_config, update_run_summary, utc_now
+from .database import (
+    create_run,
+    finish_run,
+    get_conn,
+    get_job,
+    get_platform_login_config,
+    get_proxy_profile,
+    list_social_accounts,
+    update_run_summary,
+    utc_now,
+)
 from .mailer import send_report
 from .normalizer import (
     collect_platform_outputs,
@@ -187,12 +197,15 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
                 attempt_out.mkdir(parents=True, exist_ok=True)
                 try:
                     _raise_if_stop_requested(job["id"])
-                    await asyncio.to_thread(_run_crawler_attempt, job, platform, attempt_out)
+                    proxy_binding = _resolve_platform_proxy_binding(platform)
+                    await asyncio.to_thread(_run_crawler_attempt, job, platform, attempt_out, proxy_binding)
                     _raise_if_stop_requested(job["id"])
                     contents, comments = collect_platform_outputs(attempt_out, platform)
                     result = ingest_outputs(job, run_id, platform, contents, comments)
                     result["attempts"] = attempt
                     result["max_retries"] = max_retries
+                    if proxy_binding:
+                        result["proxy"] = _proxy_summary(proxy_binding)
                     return result
                 except CrawlerStopped:
                     raise
@@ -205,16 +218,31 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
             raise RuntimeError(f"MediaCrawler failed after {attempt} attempt(s): {last_error}")
 
 
-def _run_crawler_attempt(job: dict[str, Any], platform: str, out_dir: Path) -> None:
+def _run_crawler_attempt(
+    job: dict[str, Any],
+    platform: str,
+    out_dir: Path,
+    proxy_binding: dict[str, Any] | None = None,
+) -> None:
     _raise_if_stop_requested(job["id"])
     cmd = _build_crawler_cmd(job, platform, out_dir)
-    env = {**os.environ, "PYTHONUNBUFFERED": "1"}
+    env = _build_crawler_env(proxy_binding)
     log_path = out_dir / "crawler.log"
     timeout_seconds = int(os.environ.get("MONITOR_CRAWLER_TIMEOUT_SECONDS") or 900)
     process: subprocess.Popen | None = None
     try:
         creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
-        log_path.write_text(redact_sensitive("Starting crawler: " + " ".join(cmd)) + "\n", encoding="utf-8", errors="ignore")
+        log_lines = [redact_sensitive("Starting crawler: " + " ".join(cmd))]
+        if proxy_binding:
+            log_lines.append(
+                "[monitor] Proxy enabled: "
+                + redact_sensitive(
+                    f"{proxy_binding.get('proxy_name') or '-'} "
+                    f"({proxy_binding.get('provider') or '-'}) "
+                    f"{proxy_binding.get('proxy_url') or ''}"
+                )
+            )
+        log_path.write_text("\n".join(log_lines) + "\n", encoding="utf-8", errors="ignore")
         with log_path.open("a", encoding="utf-8", errors="ignore") as log_file:
             process = subprocess.Popen(
                 cmd,
@@ -462,6 +490,63 @@ def _build_crawler_cmd(job: dict[str, Any], platform: str, out_dir: Path) -> lis
         ]
     )
     return cmd
+
+
+def _build_crawler_env(proxy_binding: dict[str, Any] | None = None) -> dict[str, str]:
+    env = {**os.environ, "PYTHONUNBUFFERED": "1"}
+    if not proxy_binding:
+        return env
+    proxy_url = str(proxy_binding.get("proxy_url") or "").strip()
+    if not proxy_url:
+        return env
+    env.update(
+        {
+            "HTTP_PROXY": proxy_url,
+            "HTTPS_PROXY": proxy_url,
+            "ALL_PROXY": proxy_url,
+            "http_proxy": proxy_url,
+            "https_proxy": proxy_url,
+            "all_proxy": proxy_url,
+            "MONITOR_ACTIVE_PROXY_ID": str(proxy_binding.get("proxy_id") or ""),
+            "MONITOR_ACTIVE_PROXY_NAME": str(proxy_binding.get("proxy_name") or ""),
+        }
+    )
+    return env
+
+
+def _resolve_platform_proxy_binding(platform: str) -> dict[str, Any] | None:
+    for account in list_social_accounts():
+        if account.get("platform") != platform:
+            continue
+        if account.get("status") != "active":
+            continue
+        proxy_id = account.get("proxy_id")
+        if not proxy_id:
+            continue
+        proxy = get_proxy_profile(int(proxy_id), masked=False)
+        if not proxy or proxy.get("status") != "active" or not proxy.get("proxy_url"):
+            continue
+        return {
+            "account_id": account.get("id"),
+            "account_name": account.get("name") or "",
+            "platform": platform,
+            "proxy_id": proxy.get("id"),
+            "proxy_name": proxy.get("name") or "",
+            "provider": proxy.get("provider") or "",
+            "proxy_url": proxy.get("proxy_url") or "",
+        }
+    return None
+
+
+def _proxy_summary(proxy_binding: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "account_id": proxy_binding.get("account_id"),
+        "account_name": proxy_binding.get("account_name") or "",
+        "proxy_id": proxy_binding.get("proxy_id"),
+        "proxy_name": proxy_binding.get("proxy_name") or "",
+        "provider": proxy_binding.get("provider") or "",
+        "proxy_url": redact_sensitive(str(proxy_binding.get("proxy_url") or "")),
+    }
 
 
 def _touch_job_last_run(job_id: int) -> None:

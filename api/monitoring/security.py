@@ -53,6 +53,7 @@ def redact_sensitive(text: str | None) -> str:
         return ""
     result = str(text)
     patterns = [
+        (r"(?i)\b(https?|socks5h?|socks4)://([^:/@\s]+):([^@/\s]+)@", r"\1://[REDACTED]@"),
         (r"(?i)(authorization\s*[:=]\s*bearer\s+)[^\s,;'\"]+", r"\1[REDACTED]"),
         (r"(?i)(x-api-key\s*[:=]\s*)[^\s,;'\"]+", r"\1[REDACTED]"),
         (r"(?i)(api[_-]?key\s*[:=]\s*)[^\s,;'\"]+", r"\1[REDACTED]"),

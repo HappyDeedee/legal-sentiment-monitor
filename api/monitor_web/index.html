@@ -106,12 +106,20 @@
     .login-method-guide { border:1px solid var(--line); border-radius:8px; padding:12px; background:#fff; }
     .login-method-guide strong { display:block; margin-bottom:6px; }
     .login-method-guide ul { margin:8px 0 0 18px; padding:0; color:var(--muted); font-size:12px; line-height:1.7; }
+    .login-method-options { display:grid; grid-template-columns:repeat(3, minmax(0,1fr)); gap:8px; margin:10px 0; }
+    .login-method-option { border:1px solid var(--line); background:#fff; border-radius:8px; padding:10px 8px; text-align:left; cursor:pointer; color:var(--text); }
+    .login-method-option strong { display:block; margin-bottom:4px; font-size:13px; }
+    .login-method-option span { display:block; color:var(--muted); font-size:12px; line-height:1.35; }
+    .login-method-option.active { border-color:#93c5fd; background:#eff6ff; color:#1d4ed8; }
+    .login-method-option.disabled { opacity:.45; cursor:not-allowed; background:#f8fafc; }
     .login-actions { display:grid; grid-template-columns:repeat(2, minmax(0,1fr)); gap:8px; margin:12px 0; }
     .login-actions button { width:100%; }
     .login-result { min-height:180px; display:flex; align-items:center; justify-content:center; text-align:center; border:1px dashed var(--line); border-radius:8px; background:#fff; padding:14px; }
     .login-result img { width:220px; max-width:100%; border:1px solid var(--line); border-radius:8px; background:#fff; padding:8px; }
     .login-mode-panel { display:none; }
     .login-mode-panel.active { display:block; }
+    .platform-login-panel { display:none; }
+    .platform-login-panel.active { display:block; }
     details.advanced { margin-top:14px; border-top:1px solid var(--line); padding-top:12px; }
     details.advanced summary { cursor:pointer; color:var(--muted); font-weight:700; }
     .modal-backdrop { position:fixed; inset:0; display:none; align-items:flex-start; justify-content:center; overflow:auto; padding:72px 18px 28px; background:rgba(15,23,42,.45); z-index:30; }
@@ -323,6 +331,7 @@
                   <div class="login-method-guide">
                     <label>登录方式</label>
                     <select id="social_account_login_type" onchange="handleSocialLoginTypeChange()"><option value="qrcode">扫码登录</option><option value="phone">手机号</option><option value="cookie">Cookie</option></select>
+                    <div id="social_login_method_options" class="login-method-options"></div>
                     <p id="login_mode_hint" class="small">优先在页面生成二维码，扫码成功后系统保存浏览器 Profile。若平台风控导致二维码获取失败，再使用登录窗口兜底。</p>
                     <strong>当前方式会显示对应输入区</strong>
                     <ul>
@@ -332,7 +341,7 @@
                     </ul>
                   </div>
                   <div>
-                    <div id="login_panel_qrcode" class="login-mode-panel active">
+                    <div id="login_panel_qrcode" class="login-mode-panel platform-login-panel active">
                       <div class="login-actions">
                         <button class="primary" onclick="startLoginSessionFromForm()">生成登录二维码</button>
                         <button class="secondary" onclick="openSelectedAccountLoginBrowser()">打开登录窗口兜底</button>
@@ -340,7 +349,7 @@
                       </div>
                       <div id="login_session_result" class="login-result"><div class="small">点击“生成登录二维码”后在这里扫码。</div></div>
                     </div>
-                    <div id="login_panel_cookie" class="login-mode-panel">
+                    <div id="login_panel_cookie" class="login-mode-panel platform-login-panel">
                       <label>Cookie</label>
                       <textarea id="social_account_cookie_input" placeholder="粘贴该平台 Cookie。保存后采集会使用 Cookie 登录。"></textarea>
                       <label class="small"><input id="social_account_clear_cookie" type="checkbox" style="width:auto"> 清空该平台已保存 Cookie</label>
@@ -350,7 +359,7 @@
                       </div>
                       <div id="cookie_login_result" class="notice">Cookie 会加密保存，页面不会回显原文。</div>
                     </div>
-                    <div id="login_panel_phone" class="login-mode-panel">
+                    <div id="login_panel_phone" class="login-mode-panel platform-login-panel">
                       <label>手机号</label>
                       <input id="social_account_phone" placeholder="填写用于平台验证码登录的手机号">
                       <div class="notice warn">手机号登录需要人工处理验证码或短信转发，MVP 暂不在后台代收验证码。建议优先使用扫码登录；快手当前不支持手机号登录。</div>
@@ -986,6 +995,44 @@
     function accountSummaryItem(label, value){
       return `<div><strong>${esc(label)}</strong><span>${esc(value)}</span></div>`;
     }
+    function supportedSocialLoginTypes(platform){
+      return {dy:['qrcode','phone','cookie'],ks:['qrcode','cookie'],xhs:['qrcode','phone','cookie']}[platform]||['qrcode','cookie'];
+    }
+    function socialLoginMethodMeta(type, platform){
+      const meta={
+        qrcode:{title:'扫码登录', note:'页面二维码 / Profile'},
+        cookie:{title:'Cookie 登录', note:'粘贴 Cookie 加密保存'},
+        phone:{title:'手机号登录', note:'人工验证码流程'}
+      };
+      const item=meta[type] || {title:type, note:''};
+      if(type==='phone' && platform==='ks') return {...item, note:'快手暂不支持'};
+      return item;
+    }
+    function selectSocialLoginType(type){
+      const select=document.getElementById('social_account_login_type');
+      if(!select) return;
+      const supported=[...select.options].map(option=>option.value);
+      if(!supported.includes(type)){
+        toast(`${loginTypeLabel(type)} 不适用于当前平台`);
+        return;
+      }
+      select.value=type;
+      handleSocialLoginTypeChange();
+    }
+    function renderSocialLoginMethodOptions(loginType, platform){
+      const mount=document.getElementById('social_login_method_options');
+      if(!mount) return;
+      const supported=supportedSocialLoginTypes(platform);
+      mount.innerHTML=['qrcode','cookie','phone'].map(type=>{
+        const meta=socialLoginMethodMeta(type, platform);
+        const disabled=!supported.includes(type);
+        const active=loginType===type;
+        return `<button type="button" class="login-method-option${active?' active':''}${disabled?' disabled':''}" ${disabled?'disabled':''} onclick="selectSocialLoginType('${type}')">
+          <strong>${esc(meta.title)}</strong>
+          <span>${esc(meta.note)}</span>
+        </button>`;
+      }).join('');
+    }
     function renderLoginModePanel(){
       const loginType=val('social_account_login_type') || 'qrcode';
       const platform=val('social_account_platform') || 'dy';
@@ -1000,9 +1047,14 @@
       const hint=document.getElementById('login_mode_hint');
       if(title) title.textContent=titles[loginType] || '登录';
       if(hint) hint.textContent=hints[loginType] || '';
+      renderSocialLoginMethodOptions(loginType, platform);
       ['qrcode','cookie','phone'].forEach(type=>{
         const panel=document.getElementById('login_panel_'+type);
-        if(panel) panel.classList.toggle('active', loginType===type);
+        if(panel){
+          const active=loginType===type;
+          panel.classList.toggle('active', active);
+          panel.style.display = active ? 'block' : 'none';
+        }
       });
       const badge=document.getElementById('login_status_badge');
       if(badge){
@@ -1042,6 +1094,10 @@
     }
     function resetSocialAccountForm(){
       ['social_account_id','social_account_name','social_account_proxy_id','social_account_profile_path','social_account_notes','social_account_last_error'].forEach(id=>set(id,''));
+      set('social_account_cookie_input','');
+      set('social_account_phone','');
+      const clearCookie=document.getElementById('social_account_clear_cookie');
+      if(clearCookie) clearCookie.checked=false;
       set('social_account_platform','dy'); set('social_account_login_type','qrcode'); set('social_account_status','standby');
       selectedSocialAccountIds.clear();
       updateSocialLoginTypeOptions();
@@ -1051,7 +1107,7 @@
     }
     function updateSocialLoginTypeOptions(){
       const platform=val('social_account_platform');
-      const supported={dy:['qrcode','phone','cookie'],ks:['qrcode','cookie'],xhs:['qrcode','phone','cookie']}[platform]||['qrcode','cookie'];
+      const supported=supportedSocialLoginTypes(platform);
       const select=document.getElementById('social_account_login_type');
       const current=select.value;
       select.innerHTML=supported.map(t=>`<option value="${esc(t)}">${esc(loginTypeLabel(t))}</option>`).join('');

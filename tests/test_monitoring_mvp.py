@@ -452,6 +452,47 @@ def test_runner_command_defaults_to_qrcode_login(tmp_path):
     assert "--cookies" not in cmd
 
 
+def test_runner_injects_bound_active_proxy_without_leaking_secret(tmp_path):
+    init_db()
+    snapshots = {
+        "proxy_profiles": _snapshot_table("proxy_profiles"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        proxy = save_proxy_profile(
+            {
+                "name": "华东采集代理",
+                "provider": "manual",
+                "proxy_url": "http://user:pass@127.0.0.1:8081",
+                "status": "active",
+                "max_concurrency": 1,
+            }
+        )
+        account = save_social_account(
+            {
+                "name": "抖音采集号",
+                "platform": "dy",
+                "login_type": "qrcode",
+                "status": "active",
+                "proxy_id": proxy["id"],
+            }
+        )
+        binding = runner_module._resolve_platform_proxy_binding("dy")
+        env = runner_module._build_crawler_env(binding)
+        summary = runner_module._proxy_summary(binding)
+    finally:
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+    assert binding["account_id"] == account["id"]
+    assert env["HTTP_PROXY"] == "http://user:pass@127.0.0.1:8081"
+    assert env["HTTPS_PROXY"] == "http://user:pass@127.0.0.1:8081"
+    assert env["MONITOR_ACTIVE_PROXY_ID"] == str(proxy["id"])
+    assert summary["proxy_id"] == proxy["id"]
+    assert "user:pass" not in summary["proxy_url"]
+    assert "[REDACTED]" in summary["proxy_url"]
+
+
 def test_ai_and_email_test_paths_reuse_config_validation():
     init_db()
     with pytest.raises(ValueError, match="invalid AI provider"):
@@ -559,13 +600,17 @@ def test_report_path_guard_rejects_files_outside_report_dir(tmp_path, monkeypatc
 
 def test_sensitive_text_is_redacted():
     text = "Authorization: Bearer sk-secret123456789 api_key=abc123 password=hunter2 cookie=session=abc token=mytoken"
+    proxy_text = "proxy=http://user:pass@127.0.0.1:8081"
     redacted = redact_sensitive(text)
+    redacted_proxy = redact_sensitive(proxy_text)
 
     assert "sk-secret123456789" not in redacted
     assert "abc123" not in redacted
     assert "hunter2" not in redacted
     assert "session=abc" not in redacted
     assert "mytoken" not in redacted
+    assert "user:pass" not in redacted_proxy
+    assert "http://[REDACTED]@127.0.0.1:8081" in redacted_proxy
     assert "[REDACTED]" in redacted
 
 
@@ -1432,7 +1477,12 @@ def test_report_includes_platform_status_and_failure_reason():
             "platforms": ["dy", "ks"],
             "failed_platforms": ["ks"],
             "platform_results": {
-                "dy": {"status": "success", "raw_contents": 2, "new_contents": 1},
+                "dy": {
+                    "status": "success",
+                    "raw_contents": 2,
+                    "new_contents": 1,
+                    "proxy": {"proxy_id": 8, "proxy_name": "华东采集代理", "provider": "manual"},
+                },
                 "ks": {"status": "failed", "error": "检测到登录态失效"},
             },
             "new_contents": 1,
@@ -1445,9 +1495,11 @@ def test_report_includes_platform_status_and_failure_reason():
     _cleanup_test_records(job["id"], "")
 
     assert "平台采集状态" in html
+    assert "华东采集代理 / manual #8" in html
     assert "快手" in html
     assert "检测到登录态失效" in html
     assert "平台采集状态" in markdown
+    assert "代理：华东采集代理 / manual #8" in markdown
     assert "快手：失败" in markdown
 
 
@@ -1975,6 +2027,12 @@ def test_monitor_page_exposes_acceptance_checklist():
     assert "saveCurrentPlatformPhoneLogin" in page
     assert "renderLoginModePanel" in page
     assert "handleSocialLoginTypeChange" in page
+    assert "selectSocialLoginType" in page
+    assert "supportedSocialLoginTypes" in page
+    assert "social_login_method_options" in page
+    assert "login-method-option" in page
+    assert "platform-login-panel" in page
+    assert "panel.style.display = active ? 'block' : 'none'" in page
     assert "当前方式会显示对应输入区" in page
     assert "login-card-grid" in page
     assert "高级登录设置" in page
@@ -2592,7 +2650,7 @@ def test_run_platform_retries_transient_crawler_failure(tmp_path, monkeypatch):
     }
     calls: list[Path] = []
 
-    def fake_run_attempt(job_arg, platform_arg, out_dir):
+    def fake_run_attempt(job_arg, platform_arg, out_dir, proxy_binding=None):
         calls.append(out_dir)
         if len(calls) == 1:
             (out_dir / "crawler.log").write_text("temporary network error", encoding="utf-8")
@@ -2631,6 +2689,75 @@ def test_run_platform_retries_transient_crawler_failure(tmp_path, monkeypatch):
     assert result["new_contents"] == 1
 
 
+def test_run_platform_attaches_bound_proxy_summary(tmp_path, monkeypatch):
+    init_db()
+    snapshots = {
+        "proxy_profiles": _snapshot_table("proxy_profiles"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    job = {
+        "id": 9993,
+        "law_firm_name": "代理测试律所",
+        "keywords": ["代理测试律所避雷"],
+        "enable_comments": False,
+        "time_window_type": "recent_1d",
+    }
+    seen: dict[str, Any] = {}
+
+    def fake_run_attempt(job_arg, platform_arg, out_dir, proxy_binding=None):
+        seen["proxy_binding"] = proxy_binding
+        json_dir = out_dir / "douyin" / "json"
+        json_dir.mkdir(parents=True)
+        (json_dir / "search_contents_proxy.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "aweme_id": "pytest_proxy_success_001",
+                        "title": "代理测试律所避雷",
+                        "desc": "代理绑定测试",
+                        "create_time": int(datetime.now(timezone.utc).timestamp()),
+                    }
+                ],
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+    try:
+        proxy = save_proxy_profile(
+            {
+                "name": "华东采集代理",
+                "provider": "manual",
+                "proxy_url": "http://user:pass@127.0.0.1:8081",
+                "status": "active",
+                "max_concurrency": 1,
+            }
+        )
+        save_social_account(
+            {
+                "name": "抖音采集号",
+                "platform": "dy",
+                "login_type": "qrcode",
+                "status": "active",
+                "proxy_id": proxy["id"],
+            }
+        )
+        monkeypatch.setenv("MONITOR_CRAWLER_MAX_RETRIES", "0")
+        monkeypatch.setattr(runner_module, "list_platform_status", lambda: [{"platform": "dy", "login_window_open": False}])
+        monkeypatch.setattr(runner_module, "_run_crawler_attempt", fake_run_attempt)
+
+        result = asyncio.run(runner_module.run_platform(job, 10003, "dy", tmp_path))
+    finally:
+        _cleanup_test_records(job["id"], "pytest_proxy_success_001")
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+    assert seen["proxy_binding"]["proxy_url"] == "http://user:pass@127.0.0.1:8081"
+    assert result["proxy"]["proxy_id"] == proxy["id"]
+    assert "user:pass" not in result["proxy"]["proxy_url"]
+    assert result["new_contents"] == 1
+
+
 def test_run_platform_does_not_retry_login_required_error(tmp_path, monkeypatch):
     job = {
         "id": 9992,
@@ -2641,7 +2768,7 @@ def test_run_platform_does_not_retry_login_required_error(tmp_path, monkeypatch)
     }
     calls = 0
 
-    def fake_run_attempt(job_arg, platform_arg, out_dir):
+    def fake_run_attempt(job_arg, platform_arg, out_dir, proxy_binding=None):
         nonlocal calls
         calls += 1
         raise RuntimeError("MediaCrawler exited with 1；检测到登录态失效，请先重新登录该平台账号")
