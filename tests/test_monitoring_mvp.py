@@ -26,6 +26,7 @@ from api.monitoring.cli import run_due_jobs
 from api.monitoring.doctor import run_doctor
 from api.routers import monitor as monitor_router
 import api.monitoring.cli as cli_module
+import api.monitoring.ai as ai_module
 import api.monitoring.readiness as readiness_module
 import api.monitoring.runner as runner_module
 import api.monitoring.scheduler as scheduler_module
@@ -702,6 +703,90 @@ def test_ai_offline_check_does_not_call_provider_or_update_test_status(monkeypat
         assert after["last_test_status"] == before["last_test_status"]
     finally:
         _restore_singleton_table("ai_configs", ai_snapshot)
+
+
+def test_ai_skip_env_prevents_external_ai_calls(monkeypatch):
+    init_db()
+    called = False
+
+    async def fake_call_openai(cfg, prompt, payload):
+        nonlocal called
+        called = True
+        raise RuntimeError("AI provider should not be called")
+
+    monkeypatch.setenv("MONITOR_SKIP_AI_API", "true")
+    monkeypatch.setattr("api.monitoring.ai._call_openai", fake_call_openai)
+
+    result = asyncio.run(
+        ai_module.evaluate_content(
+            {"law_firm_name": "海安律所"},
+            {"platform": "dy", "title": "海安律所投诉", "description": "退费迟迟没有处理"},
+            [],
+        )
+    )
+
+    assert called is False
+    assert result["status"] == "pending_review"
+    assert "MONITOR_SKIP_AI_API" in result["reason"]
+    with pytest.raises(ValueError, match="MONITOR_SKIP_AI_API"):
+        asyncio.run(
+            run_ai_config_test(
+                {
+                    "provider": "openai",
+                    "base_url": "https://example.com",
+                    "api_key": "sk-test",
+                    "model": "test-model",
+                    "temperature": 0,
+                }
+            )
+        )
+
+
+def test_ai_skip_env_warns_without_blocking_preflight(monkeypatch):
+    monkeypatch.setenv("MONITOR_SKIP_AI_API", "true")
+    cfg = {
+        "provider": "openai",
+        "base_url": "https://example.com",
+        "api_key": "sk-********test",
+        "model": "test-model",
+        "last_test_status": "success",
+        "last_test_at": "2026-06-12T00:00:00+00:00",
+    }
+    job = {
+        "id": 1,
+        "enabled": True,
+        "law_firm_name": "海安律所",
+        "keywords": ["海安律所避雷"],
+        "platforms": ["dy"],
+        "recipients": ["target@example.com"],
+    }
+    monkeypatch.setattr(
+        "api.monitoring.preflight.list_platform_status",
+        lambda: [
+            {
+                "platform": "dy",
+                "platform_label": "抖音",
+                "login_type": "qrcode",
+                "profile_exists": True,
+                "has_cookies": False,
+                "needs_login": False,
+                "login_ready": True,
+                "login_window_open": False,
+            }
+        ],
+    )
+    monkeypatch.setattr("api.monitoring.preflight.get_ai_config", lambda masked=True: cfg)
+    monkeypatch.setattr(
+        "api.monitoring.preflight.get_email_config",
+        lambda masked=True: {"smtp_host": "smtp.example.com", "sender": "sender@example.com", "last_test_status": "success"},
+    )
+
+    preflight = build_job_preflight(job, [])
+
+    assert readiness_module._ai_ready(cfg) is False
+    assert "MONITOR_SKIP_AI_API" in readiness_module._ai_message(cfg)
+    assert preflight["can_run"] is True
+    assert any("AI API 已临时关闭" in item for item in preflight["warnings"])
 
 
 def test_ai_email_test_results_are_persisted_for_readiness(monkeypatch):

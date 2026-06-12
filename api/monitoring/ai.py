@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import os
 import re
 from typing import Any
 
@@ -10,7 +11,14 @@ from .database import get_ai_config, validate_temperature
 from .prompts import DEFAULT_PROMPT
 
 
+def ai_api_disabled() -> bool:
+    return str(os.environ.get("MONITOR_SKIP_AI_API") or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
 async def evaluate_content(job: dict[str, Any], content: dict[str, Any], comments: list[dict[str, Any]]) -> dict[str, Any]:
+    if ai_api_disabled():
+        return _fallback("AI API 已通过 MONITOR_SKIP_AI_API 临时关闭，本条内容待人工复核。", content)
+
     cfg = get_ai_config(masked=False)
     if not cfg.get("api_key") or not cfg.get("model") or not cfg.get("base_url"):
         return _fallback("AI 配置未完成", content)
@@ -47,6 +55,9 @@ async def evaluate_content(job: dict[str, Any], content: dict[str, Any], comment
 
 
 async def test_ai(payload: dict[str, Any]) -> dict[str, Any]:
+    if ai_api_disabled():
+        raise ValueError("AI API 已通过 MONITOR_SKIP_AI_API 临时关闭；请先使用离线自检，或关闭该开关后再做真实测试 AI")
+
     cfg = _merge_test_config(payload)
     prompt = cfg.get("prompt") or DEFAULT_PROMPT
     sample = _sample_payload(payload)
@@ -68,9 +79,12 @@ def offline_check(payload: dict[str, Any]) -> dict[str, Any]:
     warnings = []
     if not cfg.get("api_key"):
         warnings.append("未填写 API Key；离线自检不会验证密钥是否可用")
+    if ai_api_disabled():
+        warnings.append("当前已设置 MONITOR_SKIP_AI_API=true；真实 AI 测试和采集评估会跳过外部 AI")
     return {
         "ok": True,
         "mode": "offline",
+        "ai_api_disabled": ai_api_disabled(),
         "provider": cfg.get("provider"),
         "model": cfg.get("model"),
         "endpoint": endpoint,

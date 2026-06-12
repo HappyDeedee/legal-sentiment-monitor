@@ -148,9 +148,12 @@ MONITOR_CRAWLER_TIMEOUT_SECONDS=900
 MONITOR_CRAWLER_MAX_RETRIES=1
 MONITOR_CRAWLER_RETRY_DELAY_SECONDS=3
 MONITOR_JOB_LOCK_TTL_SECONDS=21600
+MONITOR_SKIP_AI_API=false
 ```
 
 采集 Worker 默认在单个平台的 MediaCrawler 子进程失败后重试 1 次；如果失败内容像登录态失效或登录窗口未关闭，则不会重复尝试，后台会提示重新登录。
+
+开发或联调阶段如果只想跳过外部 AI 调用，但继续真实采集、生成报告和发送邮件，可临时设置 `MONITOR_SKIP_AI_API=true`。此时新内容会标记为“待人工复核”，不影响平台和邮件链路测试；上线验收前应关闭该开关并完成“真实测试 AI”。
 
 ## 平台登录态
 

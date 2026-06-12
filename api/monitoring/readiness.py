@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .ai import ai_api_disabled
 from .database import get_ai_config, get_email_config, list_reports
 from .platform_status import list_platform_status
 
@@ -71,7 +72,7 @@ def _next_actions(
     elif needs_login:
         actions.append("进入账号登录页，重新登录并关闭窗口：" + "、".join(needs_login))
     if "ai_config" in failed:
-        actions.append("进入 AI 配置页，保存配置并点击测试 AI，直到最近测试通过。")
+        actions.append("进入 AI 配置页，保存配置并点击真实测试 AI，直到最近测试通过。")
     if "email_config" in failed:
         actions.append("进入邮件配置页，填写 SMTP 和收件人并发送测试邮件。")
     if "selftest_report" in failed:
@@ -119,17 +120,21 @@ def _platform_profiles_ready(platforms: list[dict[str, Any]]) -> bool:
 
 
 def _ai_ready(config: dict[str, Any]) -> bool:
+    if ai_api_disabled():
+        return False
     return _ai_fields_complete(config) and config.get("last_test_status") == "success"
 
 
 def _ai_message(config: dict[str, Any]) -> str:
+    if ai_api_disabled():
+        return "AI API 已通过 MONITOR_SKIP_AI_API 临时关闭；采集内容会进入待人工复核"
     if not _ai_fields_complete(config):
-        return "需填写 Base URL、API Key、Model，并点击测试 AI"
+        return "需填写 Base URL、API Key、Model，并点击真实测试 AI"
     if config.get("last_test_status") == "success":
         return f"最近测试通过：{config.get('provider')} / {config.get('model')}（{_format_time(config.get('last_test_at'))}）"
     if config.get("last_test_status") == "failed":
         return "最近测试失败：" + (config.get("last_test_error") or "请检查 AI 配置")
-    return "配置已填写，但还未完成测试"
+    return "配置已填写，但还未完成真实测试"
 
 
 def _email_ready(config: dict[str, Any]) -> bool:

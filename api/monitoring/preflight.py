@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from typing import Any
 
+from .ai import ai_api_disabled
 from .database import get_ai_config, get_email_config, has_job_template_placeholders
 from .platform_status import list_platform_status
 
@@ -89,12 +90,14 @@ def _platform_profile_check(job: dict[str, Any]) -> dict[str, Any]:
 
 
 def _ai_config_check() -> dict[str, Any]:
+    if ai_api_disabled():
+        return _check("ai_config", "AI 配置", "warning", "AI API 已临时关闭；本轮采集和邮件会继续，内容会进入待人工复核")
     cfg = get_ai_config(masked=True)
     complete = bool(cfg.get("base_url") and cfg.get("api_key") and cfg.get("model"))
     if not complete:
         return _check("ai_config", "AI 配置", "warning", "AI 未配置完整；本轮会生成报告，但内容会进入待人工复核")
     if cfg.get("last_test_status") != "success":
-        return _check("ai_config", "AI 配置", "warning", "AI 配置未测试通过；建议先测试 AI")
+        return _check("ai_config", "AI 配置", "warning", "AI 配置未测试通过；建议先真实测试 AI")
     return _check("ai_config", "AI 配置", "ok", "AI 最近测试通过")
 
 

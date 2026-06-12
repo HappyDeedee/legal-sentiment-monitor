@@ -37,6 +37,8 @@ $env:MONITOR_BROWSER_DATA_DIR = "D:\legal-sentiment-monitor\browser_data"
 
 如果不配置这两个环境变量，系统仍使用项目内默认目录。
 
+开发或联调阶段可设置 `MONITOR_SKIP_AI_API=true`，只跳过外部 AI API 调用，真实采集、去重、报告生成和邮件发送仍照常执行。该模式下新增内容会进入“待人工复核”，不会作为 AI 验收通过；正式上线前应关闭该开关并完成“真实测试 AI”。
+
 系统会在保存运行摘要、错误信息、采集日志和后台日志接口返回前，对常见的 `api_key`、`password`、`cookie`、`token`、`Authorization` 等敏感片段做脱敏。实际使用时仍不要把真实密钥、Cookie 或短信验证码写入律所名称、关键词、Prompt 等业务字段。
 
 ## 脚本化运行
