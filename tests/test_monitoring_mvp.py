@@ -31,7 +31,7 @@ import api.monitoring.runner as runner_module
 import api.monitoring.scheduler as scheduler_module
 from api.monitoring.runner import evaluate_new_contents, ingest_outputs
 from api.monitoring.runner import run_job as run_monitor_job
-from api.monitoring.scheduler import _is_due, next_run_at, scheduler_disabled_reason
+from api.monitoring.scheduler import _is_due, next_run_at, scheduler_disabled_reason, scheduler_status
 from tools.cdp_browser import resolve_cdp_user_data_dir
 
 
@@ -948,6 +948,20 @@ def test_scheduler_is_disabled_for_multi_worker_env(monkeypatch):
     assert "多 worker" in scheduler_check["message"]
 
 
+def test_scheduler_status_api_exposes_internal_mode(monkeypatch):
+    monkeypatch.delenv("MONITOR_DISABLE_SCHEDULER", raising=False)
+    monkeypatch.delenv("WEB_CONCURRENCY", raising=False)
+    monkeypatch.delenv("UVICORN_WORKERS", raising=False)
+
+    status = scheduler_status()
+    api_status = asyncio.run(monitor_router.monitor_scheduler_status())
+
+    assert status["enabled"] is True
+    assert status["mode"] == "internal"
+    assert "60 秒" in status["message"]
+    assert api_status["enabled"] is True
+
+
 def test_job_preflight_warns_but_allows_missing_ai_email(monkeypatch):
     init_db()
     job = save_job(
@@ -1052,6 +1066,9 @@ def test_monitor_page_exposes_acceptance_checklist():
     page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
 
     assert "上线验收状态" in page
+    assert "调度器状态" in page
+    assert "loadSchedulerStatus" in page
+    assert "scheduler-status" in page
     assert "账号登录" in page
     assert "后台采用浏览器 Profile 登录" in page
     assert "任务运行时不再反复选择 qrcode、phone 或 cookie" in page

@@ -76,6 +76,11 @@
           <div id="readiness_table"></div>
         </div>
         <div class="panel">
+          <h2>调度器状态</h2>
+          <button class="secondary" onclick="loadSchedulerStatus()">刷新调度器状态</button>
+          <div id="scheduler_status"></div>
+        </div>
+        <div class="panel">
           <h2>平台状态</h2>
           <button class="secondary" onclick="loadPlatformStatus()">刷新状态</button>
           <div id="platform_status_table"></div>
@@ -247,7 +252,7 @@
     const toast = msg => { const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; setTimeout(()=>el.style.display='none', 3500); };
     document.querySelectorAll('nav button').forEach(btn => btn.onclick = () => { document.querySelectorAll('nav button, section').forEach(x=>x.classList.remove('active')); btn.classList.add('active'); document.getElementById(btn.dataset.tab).classList.add('active'); if(btn.dataset.tab==='runs') loadRuns(); if(btn.dataset.tab==='reports') loadReports(); if(btn.dataset.tab==='doctor') loadDoctor(); });
 
-    async function loadAll(){ await Promise.all([loadReadiness(), loadPlatformStatus(), loadJobs(), loadAI(), loadEmail(), loadRuns(), loadReports(), loadDoctor()]); }
+    async function loadAll(){ await Promise.all([loadReadiness(), loadSchedulerStatus(), loadPlatformStatus(), loadJobs(), loadAI(), loadEmail(), loadRuns(), loadReports(), loadDoctor()]); }
     async function loadReadiness(){
       const data=await (await api('/readiness')).json();
       const pending=(data.checks||[]).filter(c=>!c.ok);
@@ -267,6 +272,7 @@
       document.getElementById('readiness_table').innerHTML=table(['检查项','状态','说明'], rows);
     }
     async function loadPlatformStatus(){ const data=await (await api('/platform-status')).json(); const html=platformStatusTable(data.platforms); document.getElementById('platform_status_table').innerHTML=html; const accountTable=document.getElementById('account_status_table'); if(accountTable) accountTable.innerHTML=html; }
+    async function loadSchedulerStatus(){ const data=await (await api('/scheduler-status')).json(); document.getElementById('scheduler_status').innerHTML = `<div class="${data.enabled?'notice':'notice warn'}"><strong>${data.enabled?'自动调度已启用':'自动调度未启用'}</strong><div>${esc(data.message)}</div><div class="small">正在运行的任务 ID：${esc((data.running_job_ids||[]).join(', ') || '无')}</div></div>`; }
     function platformStatusTable(platforms){ return table(['平台','Profile','最近状态','更新时间','操作'], platforms.map(p=>[esc(p.platform_label), p.profile_exists ? '<span class="status">已发现</span>' : '<span class="status">未发现</span>', platformStatusCell(p), esc((p.profile_last_modified||'').replace('T',' ').slice(0,19)), `<button class="secondary" onclick="openPlatformLoginBrowser('${esc(p.platform)}')">打开登录窗口</button><div class="small">登录完成后关闭窗口，再刷新状态。</div>`])); }
     function platformStatusCell(p){ if(p.login_window_open) return `<span class="status">登录窗口未关闭</span><div class="small">请关闭窗口后刷新状态，再运行采集。</div>`; if(p.needs_login) return `<span class="status">需重新登录</span><div class="small">${esc(p.last_error||'请先准备浏览器 profile')}</div>`; return '<span class="status">可尝试运行</span>'; }
     async function openPlatformLoginBrowser(platform){ const res=await api('/platform-status/'+platform+'/login-browser',{method:'POST'}); if(!res.ok){ toast(await err(res)); return; } const data=await res.json(); toast(data.message || '已打开登录窗口'); await loadPlatformStatus(); }

@@ -78,6 +78,16 @@ def running_job_ids() -> list[int]:
     return sorted(_running_jobs)
 
 
+def scheduler_status() -> dict[str, Any]:
+    disabled_reason = scheduler_disabled_reason()
+    return {
+        "enabled": not bool(disabled_reason),
+        "mode": "disabled" if disabled_reason else "internal",
+        "message": disabled_reason or "内置调度器已启用，会每 60 秒检查到期任务",
+        "running_job_ids": running_job_ids(),
+    }
+
+
 def scheduler_disabled_reason() -> str:
     if os.environ.get("MONITOR_DISABLE_SCHEDULER", "").lower() in {"1", "true", "yes"}:
         return "已设置 MONITOR_DISABLE_SCHEDULER=true，内置调度器不会启动"

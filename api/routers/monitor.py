@@ -35,7 +35,7 @@ from ..monitoring.platform_status import list_platform_status
 from ..monitoring.preflight import build_job_preflight
 from ..monitoring.readiness import get_readiness_status
 from ..monitoring.reporting import resend_report_email
-from ..monitoring.scheduler import launch_job, next_run_at, running_job_ids
+from ..monitoring.scheduler import launch_job, next_run_at, running_job_ids, scheduler_status
 from ..monitoring.security import redact_sensitive
 from ..monitoring.selftest import create_sample_report
 
@@ -87,6 +87,11 @@ async def platform_login_browser(platform: str):
 async def readiness():
     init_db()
     return get_readiness_status()
+
+
+@router.get("/scheduler-status")
+async def monitor_scheduler_status():
+    return scheduler_status()
 
 
 @router.get("/doctor")
