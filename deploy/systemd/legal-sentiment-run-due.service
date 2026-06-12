@@ -1,0 +1,9 @@
+[Unit]
+Description=legal-sentiment-monitor due job runner
+After=network.target
+
+[Service]
+Type=oneshot
+WorkingDirectory=/opt/legal-sentiment-monitor/app
+EnvironmentFile=/etc/legal-sentiment-monitor.env
+ExecStart=/usr/bin/env uv run python -m api.monitoring.cli run-due

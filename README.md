@@ -56,6 +56,26 @@ http://127.0.0.1:8080/monitor
 .\monitor_cli.bat run-due
 ```
 
+## 服务器部署
+
+Windows 服务器建议使用不自动打开浏览器的服务脚本：
+
+```powershell
+.\start_monitor_service.bat
+```
+
+Linux 服务器可参考 systemd 示例：
+
+```text
+deploy/systemd/
+```
+
+完整部署、验收、排障、备份恢复流程见：
+
+```text
+docs/deployment_runbook.md
+```
+
 ## 后台页面
 
 任务管理页支持配置：

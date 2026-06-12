@@ -1,0 +1,14 @@
+[Unit]
+Description=legal-sentiment-monitor Web API
+After=network.target
+
+[Service]
+Type=simple
+WorkingDirectory=/opt/legal-sentiment-monitor/app
+EnvironmentFile=/etc/legal-sentiment-monitor.env
+ExecStart=/usr/bin/env uv run uvicorn api.main:app --host ${MONITOR_HOST} --port ${MONITOR_PORT}
+Restart=always
+RestartSec=10
+
+[Install]
+WantedBy=multi-user.target
