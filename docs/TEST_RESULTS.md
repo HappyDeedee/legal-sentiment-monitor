@@ -2,6 +2,25 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-06-14 - Review Follow-Up Minor Documentation Gaps
+
+Environment: local repository documentation update.
+
+Result:
+
+- Clarified documentation check script timing as Phase 1 close-out.
+- Added bootstrap administrator login checks to the test plan.
+- Added recommended container base image guidance.
+- Added `.gitignore` validation for `monitor.yaml`.
+- Added Quick Index maintenance and superseded-decision rules to agent
+  workflow.
+- Added CR-017 for Runtime Strategy page layout confirmation.
+
+Limitations:
+
+- No code or runtime validation was performed.
+- CR-017 remains pending user confirmation before Phase 2 UI implementation.
+
 ## 2026-06-14 - Attached Review Follow-Up
 
 Environment: local repository documentation update.

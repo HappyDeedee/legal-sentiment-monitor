@@ -85,6 +85,10 @@ structured `needs_verification` state instead of attempting bypass behavior.
 Minimum container build requirements:
 
 - base image provides Python 3.11 or newer;
+- recommended base image: official Playwright Python image for the pinned
+  Playwright version, such as `mcr.microsoft.com/playwright/python:*`;
+- acceptable fallback: `python:3.11-slim` with explicit Playwright browser and
+  system dependency installation;
 - install application dependencies;
 - install Playwright Chromium and required system dependencies;
 - copy application code into the image;

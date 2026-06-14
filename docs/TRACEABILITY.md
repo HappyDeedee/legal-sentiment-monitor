@@ -22,6 +22,7 @@ Use this file to connect requirements, tasks, code areas, and tests.
 | CR-014 | Server deployment guide | Phase 8 | docs/SERVER_DEPLOYMENT.md, docs/TEST_PLAN.md | Server-like acceptance tests | Implemented |
 | CR-015 | Documentation consistency check specification | Phase 0 | docs/DOCUMENTATION_CHECKS.md, docs/AGENT_WORKFLOW.md | Documentation review | Implemented |
 | CR-016 | Phase 0.5 and code-state documentation hardening | Phase 0, Phase 0.5 | docs/CURRENT_STATE.md, docs/TASKS.md, docs/TEST_PLAN.md, docs/DATA_MODEL.md, docs/AGENT_WORKFLOW.md | Documentation review, migration tests | Implemented |
+| CR-017 | Runtime Strategy page layout detail | Phase 2 | docs/PRODUCT_REQUIREMENTS.md, docs/UI_UX_GUIDELINES.md | Runtime settings UI tests | Needs Confirmation |
 
 ## Rules
 

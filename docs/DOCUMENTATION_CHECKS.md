@@ -44,6 +44,8 @@ The command should be safe to run locally and in CI. It should not modify files.
     in `monitor.example.yaml` or a documented reason why they are database-only.
 13. `CURRENT_STATE.md` implementation claims match actual code evidence for
     schema, auth, settings, profile, and deployment work.
+14. `monitor.yaml` is ignored by `.gitignore`, while `monitor.example.yaml`
+    remains committed.
 
 ## Suggested Output
 

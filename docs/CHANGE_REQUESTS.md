@@ -33,6 +33,7 @@ Status values:
 - CR-014: Server Deployment Guide
 - CR-015: Documentation Consistency Check Specification
 - CR-016: Phase 0.5 And Code-State Documentation Hardening
+- CR-017: Runtime Strategy Page Layout Detail
 
 ## CR-001 - Documentation Governance Bootstrap
 
@@ -608,3 +609,36 @@ Acceptance:
 - `DATA_MODEL.md` states that target tables and fields are not assumed to
   exist before Phase 0.5;
 - `AGENT_WORKFLOW.md` prevents Phase 1-9 work from skipping Phase 0.5.
+
+## CR-017 - Runtime Strategy Page Layout Detail
+
+Date: 2026-06-14
+
+Source: external documentation review
+
+Module: UI/UX
+
+Requirement:
+
+Confirm the detailed layout pattern for the administrator Runtime Strategy
+page.
+
+Reason:
+
+The settings fields and categories are documented, but the exact UI pattern
+for grouping, apply-scope display, and locked-setting display should be clear
+before implementation.
+
+Status: Needs Confirmation
+
+Related tasks:
+
+- Phase 2 in `TASKS.md`
+
+Acceptance:
+
+- user confirms whether Runtime Strategy uses a dense table, grouped form
+  sections, or another layout;
+- `PRODUCT_REQUIREMENTS.md` and `UI_UX_GUIDELINES.md` are updated with the
+  confirmed layout;
+- Phase 2 UI implementation follows the confirmed layout.

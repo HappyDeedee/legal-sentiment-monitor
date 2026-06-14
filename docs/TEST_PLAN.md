@@ -25,6 +25,9 @@ the operator's computer is not a valid acceptance path.
 
 ## Role And Permission Tests
 
+- Bootstrap administrator is created from `MONITOR_ADMIN_EMAIL` and
+  `MONITOR_ADMIN_PASSWORD` when no administrator exists.
+- Bootstrap administrator can log in with the configured credentials.
 - Administrator can see all menus.
 - Normal user sees only overview, monitoring, run center, and report center.
 - Normal user cannot access account pool, proxy resources, AI access, mail

@@ -28,7 +28,8 @@ Status legend:
 - [x] Add API authentication and authorization implementation guide.
 - [x] Add server deployment and server-like validation guide.
 - [x] Add documentation consistency check specification.
-- [ ] Add a documentation check script after the first implementation phase.
+- [ ] Add a documentation check script during Phase 1 close-out, after Phase
+      0.5 schema foundation and basic auth/session implementation are verified.
 
 ## Phase 0.5 - Schema Foundation
 
@@ -60,6 +61,7 @@ and permission work.
 - [ ] Add login/session flow.
 - [ ] Hide administrator-only menus from normal users.
 - [ ] Restrict normal users to their own workspace data.
+- [ ] Implement `scripts/check_docs.py` before closing Phase 1.
 
 ## Phase 2 - System Settings Center
 

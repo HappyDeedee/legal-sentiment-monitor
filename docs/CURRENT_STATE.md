@@ -83,6 +83,8 @@ tables required by the target V1 model.
 - Phase 5/6 still need user confirmation for CR-012A final `profile_key`
   format, CR-012B lock timeout behavior, and CR-012C lock storage strategy
   before coding the account/profile/proxy locking layer.
+- Phase 2 Runtime Strategy detailed layout still needs CR-017 confirmation
+  before UI implementation.
 
 ## Next Step
 

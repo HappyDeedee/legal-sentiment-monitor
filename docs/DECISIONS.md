@@ -1,6 +1,8 @@
 # Decisions
 
 This file is append-only. Add new dated decisions instead of rewriting history.
+If a later decision supersedes an earlier one, keep the old decision and add a
+short `Superseded by` note rather than deleting history.
 
 ## 2026-06-14
 

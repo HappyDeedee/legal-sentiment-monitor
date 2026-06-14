@@ -39,21 +39,26 @@ If documents conflict, follow this priority:
 4. `docs/TASKS.md`
 5. general product or workflow documents
 
+If a later decision supersedes an earlier decision, keep both entries in
+`DECISIONS.md` and add a short `Superseded by` note to the older decision when
+safe to do so without rewriting its meaning.
+
 ## New Requirement Intake
 
 When the user gives a new requirement:
 
 1. Decide whether it is already covered by existing documents.
 2. If it is new or changes scope, add an entry to `CHANGE_REQUESTS.md`.
-3. If it is ambiguous, mark it as `Proposed` and ask the user to confirm.
-4. If it changes product behavior, update `PRODUCT_REQUIREMENTS.md` only after
+3. Update the `CHANGE_REQUESTS.md` Quick Index when adding a new CR.
+4. If it is ambiguous, mark it as `Proposed` and ask the user to confirm.
+5. If it changes product behavior, update `PRODUCT_REQUIREMENTS.md` only after
    the decision is clear, or mark the section as proposed.
-5. If it changes UI rules, update `UI_UX_GUIDELINES.md` only after the decision
+6. If it changes UI rules, update `UI_UX_GUIDELINES.md` only after the decision
    is clear, or mark the section as proposed.
-6. If it changes a product or technical decision, append to `DECISIONS.md`
+7. If it changes a product or technical decision, append to `DECISIONS.md`
    after user confirmation.
-7. Add or update tasks in `TASKS.md`.
-8. Add or update rows in `TRACEABILITY.md`.
+8. Add or update tasks in `TASKS.md`.
+9. Add or update rows in `TRACEABILITY.md`.
 
 Do not implement meaningful new scope only from chat memory.
 
