@@ -95,14 +95,14 @@ and permission work.
 
 ## Phase 4 - Normal User Task Wizard
 
-- [ ] Replace complex task form for normal users with a simplified wizard.
-- [ ] Include law firm, aliases, platform search terms, platforms, frequency,
+- [x] Replace complex task form for normal users with a simplified wizard.
+- [x] Include law firm, aliases, platform search terms, platforms, frequency,
       crawl range, comments, and recipient emails.
-- [ ] Explain crawl range boundaries: max items is a cap, max pages is
+- [x] Explain crawl range boundaries: max items is a cap, max pages is
       approximate, start page and time window depend on platform support.
-- [ ] Hide account, proxy, AI profile, template, and browser options from normal
+- [x] Hide account, proxy, AI profile, template, and browser options from normal
       users.
-- [ ] Keep administrator advanced task settings available.
+- [x] Keep administrator advanced task settings available.
 
 ## Phase 5 - Account Environment
 

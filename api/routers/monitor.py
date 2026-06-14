@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse
 
 from ..monitoring import ai
-from ..monitoring.auth_context import require_authenticated_user, require_role
+from ..monitoring.auth_context import is_administrator, require_authenticated_user, require_role
 from ..monitoring.prompts import AI_OUTPUT_SCHEMA, DEFAULT_PROMPT, DEFAULT_PROMPT_SECTIONS
 from ..monitoring.database import (
     MONITOR_DATA_DIR,
@@ -106,6 +106,30 @@ CurrentUser = Depends(require_authenticated_user)
 
 def _route_actor(user: Any) -> dict[str, Any] | None:
     return user if isinstance(user, dict) else None
+
+
+def _task_payload_for_role(payload: dict[str, Any], user: dict[str, Any] | None) -> dict[str, Any]:
+    if is_administrator(user):
+        return payload
+    cleaned = dict(payload or {})
+    for key in (
+        "ai_profile_id",
+        "job_ai_profile_id",
+        "email_template_id",
+        "job_email_template_id",
+        "account_id",
+        "job_account_id",
+        "proxy_id",
+        "job_proxy_id",
+    ):
+        cleaned.pop(key, None)
+    cleaned["target_type"] = "search"
+    cleaned["job_target_type"] = "search"
+    cleaned["output_mode"] = "internal"
+    cleaned["job_output_mode"] = "internal"
+    cleaned["browser_mode"] = "server_qrcode"
+    cleaned["job_browser_mode"] = "server_qrcode"
+    return cleaned
 
 
 @router.get("/health")
@@ -235,6 +259,7 @@ async def dashboard(user: dict[str, Any] = CurrentUser):
 async def create_job(payload: dict[str, Any], user: dict[str, Any] = CurrentUser):
     try:
         actor = _route_actor(user)
+        payload = _task_payload_for_role(payload, user)
         job = save_job(payload, actor=actor)
         _refresh_job_schedule_state(job)
         return {"job": get_job(job["id"], actor=actor)}
@@ -246,6 +271,7 @@ async def create_job(payload: dict[str, Any], user: dict[str, Any] = CurrentUser
 async def update_job(job_id: int, payload: dict[str, Any], user: dict[str, Any] = CurrentUser):
     try:
         actor = _route_actor(user)
+        payload = _task_payload_for_role(payload, user)
         job = save_job(payload, job_id, actor=actor)
         _refresh_job_schedule_state(job)
         return {"job": get_job(job["id"], actor=actor)}

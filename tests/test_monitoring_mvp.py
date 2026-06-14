@@ -452,6 +452,124 @@ def test_phase_1_http_routes_enforce_sessions_roles_and_owner_scope():
         _restore_table("audit_logs", snapshots["audit_logs"])
 
 
+def test_phase_4_normal_user_task_api_ignores_advanced_resource_fields():
+    from api import main as api_main
+
+    init_db()
+    snapshots = {
+        "users": _snapshot_table("users"),
+        "user_sessions": _snapshot_table("user_sessions"),
+        "monitor_jobs": _snapshot_table("monitor_jobs"),
+        "job_keywords": _snapshot_table("job_keywords"),
+        "job_platforms": _snapshot_table("job_platforms"),
+        "job_recipients": _snapshot_table("job_recipients"),
+        "ai_key_profiles": _snapshot_table("ai_key_profiles"),
+        "email_templates": _snapshot_table("email_templates"),
+        "proxy_profiles": _snapshot_table("proxy_profiles"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        with get_conn() as conn:
+            for table in ["job_recipients", "job_platforms", "job_keywords", "monitor_jobs", "user_sessions", "users"]:
+                conn.execute(f"DELETE FROM {table}")
+
+        admin = save_user(
+            {
+                "email": "phase4-admin@example.com",
+                "display_name": "Phase4 Admin",
+                "password": "AdminPass123!",
+                "role": "administrator",
+            }
+        )
+        save_user(
+            {
+                "email": "phase4-user@example.com",
+                "display_name": "Phase4 User",
+                "password": "UserPass123!",
+                "role": "normal",
+            },
+            actor_id=int(admin["id"]),
+        )
+        profile = save_ai_key_profile(
+            {
+                "name": "Phase4 AI",
+                "provider": "openai",
+                "base_url": "https://example.com",
+                "api_key": "sk-phase4",
+                "model": "phase4-model",
+            }
+        )
+        template = save_email_template({"name": "Phase4 Template", "subject_template": "日报 {law_firm_name}", "html_template": "{report_body}"})
+        proxy = save_proxy_profile({"name": "Phase4 Proxy", "provider": "manual", "proxy_url": "http://user:pass@127.0.0.1:8081"})
+        account = save_social_account({"name": "Phase4 Account", "platform": "dy", "status": "active", "proxy_id": proxy["id"]})
+        payload = {
+            "law_firm_name": "海安律所",
+            "aliases": ["海安律师事务所"],
+            "keywords": ["海安律所避雷", "海安律所退费"],
+            "platforms": ["dy"],
+            "recipients": ["target@example.com"],
+            "enable_comments": True,
+            "enable_sub_comments": True,
+            "time_window_type": "recent_7d",
+            "frequency": "daily",
+            "email_time": "09:00",
+            "max_items": 80,
+            "start_page": 2,
+            "max_pages": 3,
+            "target_type": "detail",
+            "output_mode": "excel",
+            "browser_mode": "local_window",
+            "ai_profile_id": profile["id"],
+            "email_template_id": template["id"],
+            "account_id": account["id"],
+            "proxy_id": proxy["id"],
+        }
+        transport = httpx.ASGITransport(app=api_main.app)
+
+        async def exercise() -> None:
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as normal_client:
+                login = await normal_client.post(
+                    "/api/auth/login",
+                    json={"email": "phase4-user@example.com", "password": "UserPass123!"},
+                )
+                assert login.status_code == 200
+                created = await normal_client.post("/api/monitor/jobs", json=payload)
+                assert created.status_code == 200
+                normal_job = created.json()["job"]
+                assert normal_job["target_type"] == "search"
+                assert normal_job["output_mode"] == "internal"
+                assert normal_job["browser_mode"] == "server_qrcode"
+                assert normal_job["ai_profile_id"] is None
+                assert normal_job["email_template_id"] is None
+                assert normal_job["account_id"] is None
+                assert normal_job["proxy_id"] is None
+                assert normal_job["max_items"] == 80
+                assert normal_job["start_page"] == 2
+                assert normal_job["max_pages"] == 3
+
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as admin_client:
+                login = await admin_client.post(
+                    "/api/auth/login",
+                    json={"email": "phase4-admin@example.com", "password": "AdminPass123!"},
+                )
+                assert login.status_code == 200
+                created = await admin_client.post("/api/monitor/jobs", json=payload)
+                assert created.status_code == 200
+                admin_job = created.json()["job"]
+                assert admin_job["target_type"] == "detail"
+                assert admin_job["output_mode"] == "excel"
+                assert admin_job["browser_mode"] == "local_window"
+                assert admin_job["ai_profile_id"] == profile["id"]
+                assert admin_job["email_template_id"] == template["id"]
+                assert admin_job["account_id"] == account["id"]
+                assert admin_job["proxy_id"] == proxy["id"]
+
+        asyncio.run(exercise())
+    finally:
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+
 def test_phase_2_runtime_settings_storage_validation_and_environment_locks(monkeypatch):
     init_db()
     snapshot = _snapshot_table("system_settings")
@@ -6436,8 +6554,26 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "preflight" in page
     assert "运行前提示" in page
     assert "填入海安律所样例" in page
-    assert "基本信息" in page
-    assert "采集设置" in page
+    assert "1. 目标" in page
+    assert "2. 采集内容" in page
+    assert "3. 调度" in page
+    assert "4. 报告" in page
+    assert "normal_task_wizard_steps" in page
+    assert "normal_task_wizard_hint" in page
+    assert "wizard-step" in page
+    assert "wizard-section" in page
+    assert "normal-only" in page
+    assert "普通用户只需填写目标律所、平台搜索词、采集范围、调度和收件邮箱。" in page
+    assert "账号、代理、AI 接入、邮件模板和浏览器方式由管理员维护。" in page
+    assert "管理员高级采集设置" in page
+    assert "admin-only-job-field" in page
+    assert "applyJobFormRoleMode" in page
+    assert "isAdminUser" in page
+    assert "document.querySelectorAll('.admin-only-job-field')" in page
+    assert "document.querySelectorAll('.normal-only')" in page
+    assert "采集条数是内容数量上限" in page
+    assert "部分平台可能返回少于所选范围的结果" in page
+    assert "任务运行超时由管理员在运行策略中统一控制" in page
     assert "过滤与去重" in page
     assert "平台搜索词（多行）" in page
     assert "律所名称和别名用于 AI 判断、报告标题和线索归属，不会自动追加为平台搜索词。" in page

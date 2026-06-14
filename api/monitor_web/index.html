@@ -373,10 +373,17 @@
     .section-note strong { color:var(--text); }
     .field-hint { color:var(--muted); font-size:12px; line-height:1.6; margin:6px 0 12px; }
     .config-section .section-note, .config-section .field-hint { display:none; }
+    .wizard-steps { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin:0 0 14px; }
+    .wizard-step { border:1px solid var(--line); border-radius:8px; background:#f8fafc; padding:10px; color:var(--muted); min-height:64px; }
+    .wizard-step strong { display:block; color:var(--text); margin-bottom:4px; }
+    .wizard-step span { display:block; font-size:12px; line-height:1.45; }
+    .normal-wizard-hint { display:none; margin:0 0 14px; }
+    .admin-advanced-section { border-color:#bfdbfe; background:#fbfdff; }
+    .admin-advanced-section h3 { color:#1d4ed8; }
     .form-actions { position:sticky; bottom:-18px; z-index:5; margin:16px -18px -18px; display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap; border-top:1px solid var(--line); padding:14px 18px; background:#fff; }
     .rule-modal-actions .row, .ai-test-actions .row, .account-flow-actions .row, .resource-modal-actions .row { width:auto; flex:0 0 auto; justify-content:flex-end; }
     .rule-modal-actions > .small, .ai-test-actions > .small, .account-flow-actions .small, .resource-modal-actions .small { max-width:620px; }
-    @media (max-width: 1100px) { .shell { grid-template-columns:minmax(0,1fr); width:100%; overflow:hidden; } .shell > aside { position:static; height:auto; width:100%; max-width:100%; min-width:0; overflow:visible; } nav { display:flex; width:100%; max-width:100%; min-width:0; overflow-x:auto; overflow-y:hidden; } .nav-group { flex:0 0 auto; } nav button { min-width:max-content; } .nav-popover { position:fixed; top:78px; left:12px; right:12px; width:auto; max-width:360px; } .grid, .grid-3, .grid-4, .split, .settings-panel-grid, .template-editor-layout, .diagnostic-layout, .settings-grid, .artifact-grid, .resource-summary-grid { grid-template-columns:1fr; } section { padding:16px; } }
+    @media (max-width: 1100px) { .shell { grid-template-columns:minmax(0,1fr); width:100%; overflow:hidden; } .shell > aside { position:static; height:auto; width:100%; max-width:100%; min-width:0; overflow:visible; } nav { display:flex; width:100%; max-width:100%; min-width:0; overflow-x:auto; overflow-y:hidden; } .nav-group { flex:0 0 auto; } nav button { min-width:max-content; } .nav-popover { position:fixed; top:78px; left:12px; right:12px; width:auto; max-width:360px; } .grid, .grid-3, .grid-4, .split, .settings-panel-grid, .template-editor-layout, .diagnostic-layout, .settings-grid, .artifact-grid, .resource-summary-grid, .wizard-steps { grid-template-columns:1fr; } section { padding:16px; } }
     @media (max-width: 1100px) { .account-filter, .account-modal-grid, .login-card-grid, .rule-builder-grid, .rule-flow, .rule-sections, .rule-modal-flow, .rule-accordion, .diagnostic-grid { grid-template-columns:1fr; } .template-preview-panel { position:static; } }
     @media (max-width: 720px) {
       body { font-size:13px; }
@@ -542,8 +549,15 @@
         </div>
         <div id="job_form" class="panel">
           <input type="hidden" id="job_id">
-          <div class="config-section">
-            <h3>基本信息</h3>
+          <div id="normal_task_wizard_hint" class="notice normal-wizard-hint">普通用户只需填写目标律所、平台搜索词、采集范围、调度和收件邮箱。账号、代理、AI 接入、邮件模板和浏览器方式由管理员维护。</div>
+          <div id="normal_task_wizard_steps" class="wizard-steps normal-only">
+            <div class="wizard-step"><strong>1. 目标</strong><span>填写律所名称和别名，用于报告归属和线索判断。</span></div>
+            <div class="wizard-step"><strong>2. 采集内容</strong><span>选择平台、输入平台搜索词，并设置采集范围。</span></div>
+            <div class="wizard-step"><strong>3. 调度</strong><span>选择运行频率、发送时间和是否启用任务。</span></div>
+            <div class="wizard-step"><strong>4. 报告</strong><span>填写日报收件邮箱；未填写时仍可生成报告。</span></div>
+          </div>
+          <div class="config-section wizard-section" data-wizard-step="target">
+            <h3>1. 目标</h3>
             <p class="section-note">律所名称和别名用于 AI 判断、报告标题和线索归属，不会自动追加为平台搜索词。</p>
             <div class="grid">
               <div><label>律所名称</label><input id="law_firm_name" placeholder="例如：海安律所"></div>
@@ -551,9 +565,9 @@
             </div>
           </div>
 
-          <div class="config-section">
-            <h3>采集设置</h3>
-            <p class="section-note">平台搜索词会逐行传入平台搜索。账号和代理只在这里绑定，资源资料仍在资源管理中维护。</p>
+          <div class="config-section wizard-section" data-wizard-step="content">
+            <h3>2. 采集内容</h3>
+            <p class="section-note">平台搜索词会逐行传入平台搜索。律所名称和别名只用于评估、报告和线索归属。</p>
             <label>平台搜索词（多行）</label>
             <textarea id="keywords" placeholder="海安律所避雷&#10;海安律所退费&#10;海安律所投诉"></textarea>
             <div class="field-hint">这里的每一行才会用于平台搜索；律所别名不会自动参与搜索。</div>
@@ -566,25 +580,17 @@
                   <label><input type="checkbox" name="platform" value="xhs">小红书</label>
                 </div>
               </div>
-              <div><label>绑定平台账号</label><select id="job_account_id"><option value="">自动选择可用账号</option></select></div>
-              <div><label>绑定代理资源</label><select id="job_proxy_id"><option value="">跟随账号设置</option></select></div>
             </div>
+            <div class="grid-3">
+              <div><label>最大采集条数</label><input id="job_max_items" value="50"></div>
+              <div><label>起始页</label><input id="job_start_page" value="1"></div>
+              <div><label>最大采集页数</label><input id="job_max_pages" value="1"></div>
+            </div>
+            <div class="notice" id="crawl_range_hint">采集条数是内容数量上限；起始页和页数会按平台能力执行，部分平台可能返回少于所选范围的结果。任务运行超时由管理员在运行策略中统一控制。</div>
             <div class="row">
               <label><input type="checkbox" id="enable_comments" checked style="width:auto"> 抓取一级评论</label>
               <label><input type="checkbox" id="enable_sub_comments" style="width:auto"> 抓取二级评论</label>
             </div>
-            <details class="advanced">
-              <summary>采集参数</summary>
-              <div class="grid-3">
-                <div><label>采集目标类型</label><select id="job_target_type"><option value="search">关键词搜索</option></select></div>
-                <div><label>最大采集页数</label><input id="job_max_pages" value="1"></div>
-              <div><label>最大采集条数</label><input id="job_max_items" value="50"></div>
-              <div><label>起始页</label><input id="job_start_page" value="1"></div>
-              <div><label>输出方式</label><select id="job_output_mode"><option value="internal">系统内部存储</option><option value="json">JSON 归档</option><option value="excel">Excel 归档</option></select></div>
-                <div><label>登录方式</label><select id="job_browser_mode"><option value="server_qrcode">网页登录态 / 扫码</option><option value="profile">已有网页登录态</option><option value="local_window">本地登录窗口</option></select></div>
-              </div>
-              <div id="job_target_hint" class="notice">当前任务按平台搜索词运行。平台搜索词、平台和采集范围会共同决定本次采集内容。</div>
-            </details>
           </div>
 
           <div class="config-section">
@@ -594,8 +600,26 @@
             <textarea id="exclude_words" placeholder="招聘&#10;无关同名&#10;广告合作"></textarea>
           </div>
 
-          <div class="config-section">
-            <h3>任务调度</h3>
+          <div class="config-section admin-advanced-section admin-only-job-field">
+            <h3>管理员高级采集设置</h3>
+            <p class="section-note">仅管理员可绑定账号、代理和采集技术参数；普通用户任务会使用系统自动选择的资源。</p>
+            <div class="row">
+              <div><label>绑定平台账号</label><select id="job_account_id"><option value="">自动选择可用账号</option></select></div>
+              <div><label>绑定代理资源</label><select id="job_proxy_id"><option value="">跟随账号设置</option></select></div>
+            </div>
+            <details class="advanced">
+              <summary>采集参数</summary>
+              <div class="grid-3">
+                <div><label>采集目标类型</label><select id="job_target_type"><option value="search">关键词搜索</option></select></div>
+                <div><label>输出方式</label><select id="job_output_mode"><option value="internal">系统内部存储</option><option value="json">JSON 归档</option><option value="excel">Excel 归档</option></select></div>
+                <div><label>登录方式</label><select id="job_browser_mode"><option value="server_qrcode">网页登录态 / 扫码</option><option value="profile">已有网页登录态</option><option value="local_window">本地登录窗口</option></select></div>
+              </div>
+              <div id="job_target_hint" class="notice">当前任务按平台搜索词运行。平台搜索词、平台和采集范围会共同决定本次采集内容。</div>
+            </details>
+          </div>
+
+          <div class="config-section wizard-section" data-wizard-step="schedule">
+            <h3>3. 调度</h3>
             <p class="section-note">设置任务是否启用、多久运行一次，以及每次只处理哪个时间范围内的新内容。</p>
             <div class="row">
               <div>
@@ -618,7 +642,7 @@
             <label><input type="checkbox" id="enabled" checked style="width:auto"> 启用任务</label>
           </div>
 
-          <div class="config-section">
+          <div class="config-section admin-advanced-section admin-only-job-field">
             <h3>AI 评估</h3>
             <p class="section-note">选择用于本任务的 AI 接入资源。未选择或接入异常时，采集仍会运行，内容进入待人工复核。</p>
             <div class="grid">
@@ -627,11 +651,11 @@
             </div>
           </div>
 
-          <div class="config-section">
-            <h3>邮件报告</h3>
+          <div class="config-section wizard-section" data-wizard-step="report">
+            <h3>4. 报告</h3>
             <p class="section-note">设置报告收件人和本任务使用的邮件模板。未配置邮件也可以采集和生成报告，只是不发送邮件。</p>
             <label>收件邮箱（多行）</label><textarea id="recipients" placeholder="a@example.com&#10;b@example.com"></textarea>
-            <div class="grid">
+            <div class="grid admin-only-job-field">
               <div><label>邮件模板</label><select id="job_email_template_id"><option value="">使用当前启用模板</option></select></div>
             </div>
           </div>
@@ -1433,6 +1457,7 @@
       hideLogin();
       renderCurrentUser();
       applyMenuPermissions();
+      applyJobFormRoleMode();
       renderJobAccountOptions([...socialAccountCache.values()].filter(a=>!a.is_draft));
       renderProxySelectOptions();
       renderJobAIProfileOptions();
@@ -1444,6 +1469,25 @@
       if(!el || !currentSession) return;
       const role=currentSession.role==='administrator' ? '管理员' : '普通用户';
       el.innerHTML=`<span class="status ok">${esc(role)}</span> ${esc(currentSession.display_name || currentSession.email || '')}`;
+    }
+    function isAdminUser(){ return currentSession && currentSession.role === 'administrator'; }
+    function applyJobFormRoleMode(){
+      const admin=isAdminUser();
+      document.querySelectorAll('.admin-only-job-field').forEach(el=>{ el.style.display=admin ? '' : 'none'; });
+      document.querySelectorAll('.normal-only').forEach(el=>{ el.style.display=admin ? 'none' : ''; });
+      const hint=document.getElementById('normal_task_wizard_hint');
+      if(hint) hint.style.display=admin ? 'none' : 'block';
+      const title=document.getElementById('job_drawer_title');
+      if(title && !val('job_id')) title.textContent = admin ? '新建任务' : '新建监控任务';
+      if(!admin){
+        set('job_account_id','');
+        set('job_proxy_id','');
+        set('job_ai_profile_id','');
+        set('job_email_template_id','');
+        set('job_output_mode','internal');
+        set('job_browser_mode','server_qrcode');
+        setJobTargetType('search');
+      }
     }
     async function loginWithForm(event){
       event.preventDefault();
@@ -1462,6 +1506,7 @@
         hideLogin();
         renderCurrentUser();
         applyMenuPermissions();
+        applyJobFormRoleMode();
         await loadAll();
       } finally {
         if(button){ button.disabled=false; button.textContent=oldText; }
@@ -2883,6 +2928,7 @@
       set('job_start_page', j.start_page || '1');
       set('job_output_mode', j.output_mode || 'internal');
       set('job_browser_mode', j.browser_mode || 'server_qrcode');
+      applyJobFormRoleMode();
       openJobDrawer('编辑任务');
     }
     async function runJob(id){
@@ -2921,6 +2967,7 @@
     }
     function openJobDrawer(title='新建任务'){
       document.getElementById('job_drawer_title').textContent=title;
+      applyJobFormRoleMode();
       document.getElementById('job_drawer_backdrop').classList.add('active');
       document.getElementById('job_drawer').classList.add('active');
       document.body.style.overflow='hidden';
@@ -2949,7 +2996,7 @@
           : `当前任务使用“${labels[targetType]||targetType}”。请确认平台搜索词区域填写的是平台可识别的内容 ID 或主页 ID。`;
       }
     }
-    function resetJobForm(){ ['job_id','law_firm_name','aliases','exclude_words','keywords','recipients','custom_start','custom_end','cron_expr'].forEach(id=>set(id,'')); set('time_window_type','recent_1d'); set('frequency','daily'); set('email_time','09:00'); document.querySelectorAll('input[name=platform]').forEach(x=>x.checked=x.value==='dy'); document.getElementById('enabled').checked=true; document.getElementById('enable_comments').checked=true; set('job_ai_profile_id',''); set('job_email_template_id',''); set('job_account_id',''); set('job_proxy_id',''); setJobTargetType('search'); set('job_max_pages','1'); set('job_max_items','50'); set('job_start_page','1'); set('job_output_mode','internal'); set('job_browser_mode','server_qrcode'); document.getElementById('enable_sub_comments').checked=false; document.getElementById('job_drawer_title').textContent='新建任务'; }
+    function resetJobForm(){ ['job_id','law_firm_name','aliases','exclude_words','keywords','recipients','custom_start','custom_end','cron_expr'].forEach(id=>set(id,'')); set('time_window_type','recent_1d'); set('frequency','daily'); set('email_time','09:00'); document.querySelectorAll('input[name=platform]').forEach(x=>x.checked=x.value==='dy'); document.getElementById('enabled').checked=true; document.getElementById('enable_comments').checked=true; set('job_ai_profile_id',''); set('job_email_template_id',''); set('job_account_id',''); set('job_proxy_id',''); setJobTargetType('search'); set('job_max_pages','1'); set('job_max_items','50'); set('job_start_page','1'); set('job_output_mode','internal'); set('job_browser_mode','server_qrcode'); document.getElementById('enable_sub_comments').checked=false; document.getElementById('job_drawer_title').textContent='新建任务'; applyJobFormRoleMode(); }
     function fillSampleJobTemplate(){
       set('job_id',''); set('law_firm_name','海安律所'); set('aliases','海安律师事务所\n海安律师'); set('exclude_words','招聘\n无关同名\n广告合作');
       set('keywords','海安律所避雷\n海安律所退费\n海安律所投诉');

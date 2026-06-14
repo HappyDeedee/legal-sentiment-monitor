@@ -11,6 +11,46 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
   `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-14 - Phase 4 Normal User Task Wizard Verified
+
+Environment: local worktree `E:\myproject\MediaCrawler-worktrees\v1-roadmap`
+using `uv run`, the monitoring SQLite database, and Node script parsing for the
+single-file frontend.
+
+Result:
+
+- Replaced the normal-user task creation experience with a four-step wizard:
+  target, collection content, schedule, and report.
+- Included law firm, aliases, platform search terms, selected platforms, crawl
+  range, comment collection, frequency/send time, enabled state, and recipient
+  emails in the normal-user path.
+- Added crawl range copy explaining that max items is a content-count cap,
+  start page and max pages depend on platform behavior, and task timeout is
+  controlled by administrator Runtime Strategy.
+- Hid account binding, proxy binding, AI access override, email template
+  override, output mode, target type, and browser mode from normal users.
+- Added API-side normal-user payload cleanup so advanced task fields are
+  ignored even if a normal user submits them directly.
+- Kept administrator advanced task settings available and verified that
+  administrator submissions still persist advanced bindings.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 207 passed, 3 warnings.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- Node syntax check for the `api/monitor_web/index.html` script block
+- Result: monitor web script parses.
+
+Limitations:
+
+- Phase 4 does not implement Phase 5 account/profile/proxy runtime locking or
+  `profile_key` path resolution.
+- Phase 4 does not make server-side QR login the primary production login
+  flow; that remains Phase 6 after the account environment is complete.
+- No server-like acceptance validation was performed in this phase.
+
 ## 2026-06-14 - Phase 3 Administrator Resource Center Verified
 
 Environment: local worktree `E:\myproject\MediaCrawler-worktrees\v1-roadmap`

@@ -23,8 +23,9 @@ Use this file to connect requirements, tasks, code areas, and tests.
 | CR-015 | Documentation consistency check specification | Phase 0, Phase 1 | docs/DOCUMENTATION_CHECKS.md, scripts/check_docs.py | `uv run python scripts/check_docs.py` | Verified |
 | CR-016 | Phase 0.5 and code-state documentation hardening | Phase 0, Phase 0.5 | docs/CURRENT_STATE.md, docs/TASKS.md, docs/TEST_PLAN.md, docs/DATA_MODEL.md, docs/AGENT_WORKFLOW.md | Documentation review, migration tests | Implemented |
 | CR-017 | Runtime Strategy page layout detail | Phase 2 | api/monitor_web/index.html, docs/PRODUCT_REQUIREMENTS.md, docs/UI_UX_GUIDELINES.md | tests/test_monitoring_mvp.py::test_phase_2_runtime_settings_api_is_admin_only, Node script parse check for api/monitor_web/index.html | Verified |
-| CR-018 | Crawl range capability boundaries | Phase 4, Phase 7 | docs/PRODUCT_REQUIREMENTS.md, docs/TEST_PLAN.md | Crawl range validation and timeout tests | Accepted |
+| CR-018 | Crawl range capability boundaries | Phase 4, Phase 7 | api/monitor_web/index.html, docs/PRODUCT_REQUIREMENTS.md, docs/TEST_PLAN.md | tests/test_monitoring_mvp.py::test_monitor_page_uses_tob_information_architecture_without_customer_facing_engine_traces | Verified for Phase 4 UI copy; Phase 7 runtime/report behavior remains |
 | PR-RESOURCE-001 | Administrator resource center | Phase 3 | api/monitor_web/index.html, tests/test_monitoring_mvp.py | tests/test_monitoring_mvp.py::test_monitor_page_uses_tob_information_architecture_without_customer_facing_engine_traces, tests/test_monitoring_mvp.py::test_monitor_page_uses_consistent_buttons_tables_and_modal_actions, Node script parse check for api/monitor_web/index.html | Verified |
+| PR-TASK-001 | Normal user task wizard | Phase 4 | api/routers/monitor.py, api/monitor_web/index.html, tests/test_monitoring_mvp.py | tests/test_monitoring_mvp.py::test_phase_4_normal_user_task_api_ignores_advanced_resource_fields, tests/test_monitoring_mvp.py::test_monitor_page_uses_tob_information_architecture_without_customer_facing_engine_traces, Node script parse check for api/monitor_web/index.html | Verified |
 
 ## Rules
 
