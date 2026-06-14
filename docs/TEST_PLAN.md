@@ -5,6 +5,20 @@
 Production acceptance must run in a server-like environment. Local Chrome on
 the operator's computer is not a valid acceptance path.
 
+## Phase 0.5 Schema Foundation Tests
+
+- Foundation tables exist: `workspaces`, `users`, `user_sessions`,
+  `system_settings`, and `audit_logs`.
+- Priority business tables have `workspace_id`, `created_by`, and `updated_by`
+  columns.
+- `social_accounts` and `login_sessions` have `profile_key`.
+- Existing `monitor_jobs`, `social_accounts`, `crawl_runs`, and `reports`
+  still load without runtime errors.
+- Default workspace exists with `id = 1` or equivalent configured default.
+- Existing `profile_path` data is preserved during the first schema foundation
+  step but is not used for new account environments.
+- Existing MVP monitoring pages still load after migration.
+
 ## Role And Permission Tests
 
 - Administrator can see all menus.
@@ -27,6 +41,15 @@ Use the standard test subject:
 
 - law firm: `海安律所`
 - search terms: `海安律所避雷`, `海安律所退费`, `海安律所投诉`
+
+Use the standard permission test data:
+
+- administrator: `admin@example.com`;
+- normal user 1: `user1@example.com`;
+- normal user 2: `user2@example.com`;
+- law firm 1: `海安律所`, created by normal user 1;
+- law firm 2: `恒泰律所`, created by normal user 2;
+- verify normal user 1 cannot see normal user 2's tasks, runs, or reports.
 
 ## Administrator Resource Tests
 
@@ -85,4 +108,3 @@ Use the standard test subject:
 - Run a task using the server-side browser/profile.
 - Restart service/container and verify profile reuse.
 - Verify no acceptance step depends on local Chrome.
-

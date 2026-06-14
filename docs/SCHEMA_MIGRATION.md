@@ -110,15 +110,15 @@ Confirmed:
 
 ### Step 5 - Add Lock Fields
 
-Proposed fields for account locking:
+Proposed fields for account/profile locking, pending CR-012C confirmation:
 
 ```text
 social_accounts.locked_by_run_id
 social_accounts.locked_at
+social_accounts.lock_expires_at
 ```
 
-Proposed fields for proxy concurrency may be implemented through runtime rows
-or a separate lock table:
+Proposed table for proxy concurrency, pending CR-012C confirmation:
 
 ```text
 resource_locks
@@ -130,9 +130,21 @@ resource_locks
   expires_at
 ```
 
+Recommended approach:
+
+- use inline lock fields for single-resource account/profile locks;
+- use `resource_locks` for proxy concurrency because multiple runs may share a
+  proxy up to `max_concurrency`.
+
+Recommended timeout behavior, pending CR-012B confirmation:
+
+- lock timeout follows task timeout plus a cleanup buffer;
+- stale locks are released by run recovery logic.
+
 Open confirmation:
 
-- Use explicit lock fields or a generic `resource_locks` table?
+- CR-012B: lock timeout behavior.
+- CR-012C: final lock storage strategy.
 
 ## Profile Migration Strategy
 
@@ -160,9 +172,9 @@ After migration:
 
 Before implementation, still confirm:
 
-- final `profile_key` format;
-- lock timeout behavior;
-- lock table vs lock fields.
+- CR-012A final `profile_key` format;
+- CR-012B lock timeout behavior;
+- CR-012C lock storage strategy.
 
 Confirmed:
 

@@ -134,6 +134,27 @@ Restore validation must include:
 - account profiles can be reused;
 - a report can be opened from restored data.
 
+## Encryption Key Management
+
+V1 behavior:
+
+- use one encryption key for stored secrets;
+- create or load the key from `MONITOR_SECRET_KEY_PATH` or the configured data
+  directory;
+- do not include automatic key rotation in V1.
+
+If the key is compromised:
+
+1. stop the service;
+2. back up the database and deployment data;
+3. replace the compromised key;
+4. restart the service;
+5. re-enter encrypted secrets such as proxy URLs, API keys, SMTP passwords,
+   cookies, and account login material;
+6. record the event in the audit log once audit logging exists.
+
+Automated key rotation is deferred until after V1.
+
 ## Server-Like Acceptance
 
 Before production handoff, run the server-like tests in `TEST_PLAN.md` and

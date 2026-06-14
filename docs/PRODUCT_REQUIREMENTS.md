@@ -370,6 +370,19 @@ Editable settings:
 - run log retention days;
 - report retention days.
 
+Layout:
+
+- group settings by Crawling, Login, Scheduler, and Retention;
+- show each setting with label, current value, input control, range hint, and
+  apply scope;
+- display apply scope as:
+  - immediate;
+  - next run;
+  - next session;
+  - scheduler reload or restart;
+- locked settings are read-only with a lock indicator and a short explanation
+  that deployment configuration controls the value.
+
 Read-only/locked settings:
 
 - data directory;
@@ -399,4 +412,3 @@ Rules:
 
 - diagnostic text must be customer-safe;
 - raw paths and secrets are not shown to normal users.
-

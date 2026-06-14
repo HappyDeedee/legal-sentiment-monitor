@@ -29,6 +29,7 @@ Specialist document routing:
 - server/deployment work: `docs/SERVER_DEPLOYMENT.md` and `docs/TEST_PLAN.md`
 - runtime setting work: `docs/SYSTEM_SETTINGS.md`
 - data-model work: `docs/DATA_MODEL.md` and `docs/SCHEMA_MIGRATION.md`
+- documentation consistency tooling: `docs/DOCUMENTATION_CHECKS.md`
 
 If documents conflict, follow this priority:
 
@@ -128,3 +129,18 @@ Rules:
 - merge one feature branch at a time;
 - update documents in every branch;
 - run relevant tests before merge.
+
+### Document Update Protocol For Parallel Work
+
+- Each branch or worktree may update shared documents, but the final merge must
+  reconcile `TASKS.md`, `CURRENT_STATE.md`, `TRACEABILITY.md`, and
+  `TEST_RESULTS.md`.
+- Rebase on the latest main branch before merging a feature branch.
+- `DECISIONS.md` is append-only; keep all confirmed decisions and resolve
+  conflicts by preserving both dated entries when they are not contradictory.
+- `TEST_RESULTS.md` is append-at-top; resolve conflicts by preserving all
+  dated entries in reverse chronological order.
+- If two branches change the same requirement or task status, the later merge
+  must verify the actual code state before marking anything implemented.
+- If document conflict resolution changes product meaning, add or update a
+  change request before merging.

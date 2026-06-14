@@ -362,7 +362,7 @@ Acceptance:
 - the file contains runtime, platform, login, scheduler, and retention examples;
 - deployment-only values remain environment-variable based.
 
-## CR-012 - Account Environment Locking Details
+## CR-012A - Account Environment Profile Key Format
 
 Date: 2026-06-14
 
@@ -372,13 +372,13 @@ Module: account environment
 
 Requirement:
 
-Confirm the remaining Phase 5/6 account-environment details before coding the
-account/profile/proxy locking layer.
+Confirm the final `profile_key` format before implementing the account profile
+resolver.
 
 Reason:
 
-The product direction is accepted, but lock storage and timeout behavior affect
-database schema, run recovery, and proxy concurrency correctness.
+The product direction is accepted, but the exact key format affects filesystem
+layout, database values, diagnostics, and migration scripts.
 
 Status: Needs Confirmation
 
@@ -389,9 +389,75 @@ Related tasks:
 
 Acceptance:
 
-- user confirms final `profile_key` format;
-- user confirms lock timeout behavior;
-- user confirms lock table vs lock fields.
+- user confirms final format, with current recommendation:
+  `{workspace_id}/{platform}/acc_{account_id}`;
+- examples are updated in `ACCOUNT_ENVIRONMENT.md`;
+- path resolver tests use the confirmed format.
+
+## CR-012B - Account And Profile Lock Timeout
+
+Date: 2026-06-14
+
+Source: external documentation review
+
+Module: account environment
+
+Requirement:
+
+Confirm lock timeout behavior before implementing account/profile lock
+acquisition and stale-lock recovery.
+
+Reason:
+
+Lock timeout affects failed-run recovery and whether a stuck browser session can
+block future scheduled runs.
+
+Status: Needs Confirmation
+
+Related tasks:
+
+- Phase 5 in `TASKS.md`
+- Phase 6 in `TASKS.md`
+
+Acceptance:
+
+- user confirms timeout strategy, with current recommendation:
+  task timeout plus cleanup buffer;
+- stale lock cleanup behavior is documented;
+- timeout setting source is documented in `SYSTEM_SETTINGS.md` if configurable.
+
+## CR-012C - Account/Profile/Proxy Lock Storage
+
+Date: 2026-06-14
+
+Source: external documentation review
+
+Module: account environment
+
+Requirement:
+
+Confirm lock storage before implementing account, profile, and proxy
+concurrency controls.
+
+Reason:
+
+Inline lock fields and a dedicated lock table have different migration,
+querying, and proxy concurrency tradeoffs.
+
+Status: Needs Confirmation
+
+Related tasks:
+
+- Phase 5 in `TASKS.md`
+- Phase 6 in `TASKS.md`
+
+Acceptance:
+
+- user confirms storage strategy, with current recommendation:
+  inline fields for single account/profile locks and `resource_locks` table for
+  proxy concurrency;
+- schema migration plan is updated with the confirmed fields/tables;
+- lock tests cover account, profile, and proxy concurrency.
 
 ## CR-013 - API Authentication Implementation Guide
 
@@ -457,3 +523,33 @@ Acceptance:
 - `SERVER_DEPLOYMENT.md` exists;
 - it documents server-like acceptance requirements and persistent data;
 - `AGENTS.md` and `AGENT_WORKFLOW.md` route deployment work to the document.
+
+## CR-015 - Documentation Consistency Check Specification
+
+Date: 2026-06-14
+
+Source: external documentation review
+
+Module: project governance
+
+Requirement:
+
+Define the future documentation check script before implementation, including
+what it should validate and how it should report inconsistencies.
+
+Reason:
+
+The task list required a documentation check script, but no specification
+existed for coding agents to implement it consistently.
+
+Status: Implemented
+
+Related tasks:
+
+- Phase 0 in `TASKS.md`
+
+Acceptance:
+
+- `DOCUMENTATION_CHECKS.md` exists;
+- it defines required checks, severity levels, output format, and run timing;
+- the script implementation remains explicitly pending in `TASKS.md`.

@@ -200,3 +200,32 @@ Actions requiring feedback include:
 - save template;
 - save runtime settings.
 
+## Authentication And Error Pages
+
+Login page:
+
+- use a centered card layout with restrained product branding;
+- include email and password fields;
+- include a clear login button and loading state;
+- show failed-login errors without revealing whether the email exists;
+- do not include public self-registration in V1.
+
+Permission denied page:
+
+- show the message `当前角色无权访问此功能`;
+- provide a return-to-overview action;
+- do not reveal hidden administrator resource details.
+
+Empty states:
+
+- use a simple icon, short message, and one primary action when available;
+- example for monitoring: `暂无监控任务`;
+- example for reports: `暂无报告`;
+- avoid technical explanations in normal-user empty states.
+
+Loading states:
+
+- use skeleton rows for initial table loading;
+- use inline spinners for refresh actions;
+- disable the action button while save/test/run actions are in progress;
+- keep layout dimensions stable while loading.

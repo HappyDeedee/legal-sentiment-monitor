@@ -27,6 +27,7 @@ Status legend:
 - [x] Add `monitor.example.yaml`.
 - [x] Add API authentication and authorization implementation guide.
 - [x] Add server deployment and server-like validation guide.
+- [x] Add documentation consistency check specification.
 - [ ] Add a documentation check script after the first implementation phase.
 
 ## Phase 0.5 - Schema Foundation

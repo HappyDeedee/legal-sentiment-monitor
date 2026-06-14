@@ -30,10 +30,19 @@ Read the relevant specialist document before touching a related area:
 - Server deployment or browser login changes: `docs/SERVER_DEPLOYMENT.md` and
   `docs/TEST_PLAN.md`
 - System setting changes: `docs/SYSTEM_SETTINGS.md`
+- Documentation consistency tooling: `docs/DOCUMENTATION_CHECKS.md`
 - Agent process details: `docs/AGENT_WORKFLOW.md`
 
 Before Phase 1 implementation, complete the Phase 0.5 schema foundation in
 `docs/TASKS.md` and `docs/SCHEMA_MIGRATION.md`.
+
+Before starting Phase 1 work, verify that Phase 0.5 tasks are marked complete
+and the active database schema has the foundation tables and columns described
+in `docs/DATA_MODEL.md`.
+
+Phase 5 note: current code may still use `profile_path` as the primary profile
+identity. Do not extend that behavior for new account environments; migrate new
+work to `profile_key` only when the Phase 5 migration task is active.
 
 If documents conflict, use this order:
 

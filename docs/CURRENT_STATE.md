@@ -7,6 +7,17 @@ Last updated: 2026-06-14
 Phase 0 is complete for planning purposes. The next implementation foundation
 is Phase 0.5 - Schema Foundation.
 
+## Implementation Status
+
+- Phase 0 - Documentation: complete.
+- Phase 0.5 - Schema Foundation: not started; required before Phase 1.
+- Phase 1 - Users And Permissions: blocked by Phase 0.5 implementation, not
+  by permission decisions.
+- Phase 2 - System Settings: can begin after the schema/settings foundation is
+  available.
+- Phase 5/6 - Account Environment and Server Login: blocked by CR-012A,
+  CR-012B, and CR-012C before coding profile/lock behavior.
+
 ## Completed
 
 - Project direction has been clarified as a server-deployed ToB law-firm
@@ -34,6 +45,8 @@ is Phase 0.5 - Schema Foundation.
   configuration example have been added.
 - API authentication/authorization and server deployment guides have been
   added.
+- Documentation consistency check specification and Phase 0.5 test coverage
+  have been added.
 - Permission, workspace, authentication, initial administrator, disabled-user
   behavior, audit-log timing, and runtime settings storage decisions have been
   accepted using the V1 recommended options.
@@ -46,6 +59,8 @@ is Phase 0.5 - Schema Foundation.
 ## Known Risks
 
 - Current code still exposes or handles real profile paths in places.
+- Current code still uses `profile_path` as a primary account/profile identity
+  in places; Phase 5 will migrate new account environments to `profile_key`.
 - Current system is closer to a single-team MVP than a production multi-user
   system.
 - Server-side QR login and profile persistence need container/server validation.
@@ -57,9 +72,9 @@ is Phase 0.5 - Schema Foundation.
 - Profile migration strategy has been clarified: existing low-volume
   `profile_path` accounts do not need long-term compatibility and can be reset
   or re-logged in under the new `profile_key` model.
-- Phase 5/6 still need user confirmation for final `profile_key` format, lock
-  timeout behavior, and lock table vs lock fields before coding the
-  account/profile locking layer.
+- Phase 5/6 still need user confirmation for CR-012A final `profile_key`
+  format, CR-012B lock timeout behavior, and CR-012C lock storage strategy
+  before coding the account/profile/proxy locking layer.
 
 ## Next Step
 

@@ -19,10 +19,11 @@ Recommended reading order for contributors and coding agents:
 13. `PERMISSIONS_CONFIRMATION.md` - user confirmation items for Phase 1.
 14. `SCHEMA_MIGRATION.md` - compatible schema migration plan.
 15. `SERVER_DEPLOYMENT.md` - server/container deployment and validation rules.
-16. `UI_UX_GUIDELINES.md` - UI and interaction rules.
-17. `AGENT_WORKFLOW.md` - how agents read and update documents.
-18. `TEST_PLAN.md` - acceptance and regression test plan.
-19. `TEST_RESULTS.md` - latest verification notes.
+16. `DOCUMENTATION_CHECKS.md` - future documentation consistency check spec.
+17. `UI_UX_GUIDELINES.md` - UI and interaction rules.
+18. `AGENT_WORKFLOW.md` - how agents read and update documents.
+19. `TEST_PLAN.md` - acceptance and regression test plan.
+20. `TEST_RESULTS.md` - latest verification notes.
 
 Existing crawler-origin documents remain in this directory for reference, but
 the files above are the active project governance documents for the monitoring

@@ -2,6 +2,27 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-06-14 - Review Follow-Up Documentation Hardening
+
+Environment: local repository documentation update.
+
+Result:
+
+- Clarified implementation status: Phase 0.5 is not started and is required
+  before Phase 1.
+- Split CR-012 into CR-012A, CR-012B, and CR-012C for profile key format, lock
+  timeout, and lock storage confirmation.
+- Added Phase 0.5 schema foundation tests and standard permission test data.
+- Added `DOCUMENTATION_CHECKS.md` as the future documentation consistency
+  script specification.
+- Added parallel-document merge protocol, authentication/error UI states,
+  runtime settings page layout, and encryption key management guidance.
+
+Limitations:
+
+- No code or runtime validation was performed.
+- Phase 5/6 remain blocked until CR-012A, CR-012B, and CR-012C are confirmed.
+
 ## 2026-06-14 - Phase 0.5 Documentation Alignment
 
 Environment: local repository documentation update.

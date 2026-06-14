@@ -19,7 +19,7 @@ Rules:
 
 ## Profile Identity
 
-Current target design, pending user confirmation:
+Proposed target design, pending CR-012A confirmation:
 
 ```text
 profile_key = {workspace_id}/{platform}/acc_{account_id}
@@ -41,7 +41,7 @@ Rules:
 - real profile paths are never shown in normal-user UI;
 - administrator UI may show "account environment created" rather than raw path;
 - raw profile paths may appear only in server diagnostics for trusted admins,
-  pending user confirmation.
+  pending a separate administrator diagnostics decision.
 
 ## Social Account Fields
 
@@ -138,7 +138,7 @@ Minimum V1 locks:
 - profile lock;
 - proxy concurrency lock.
 
-Proposed lock behavior, pending user confirmation:
+Proposed lock behavior, pending CR-012B and CR-012C confirmation:
 
 - lock by account ID;
 - lock by profile key;
@@ -148,8 +148,10 @@ Proposed lock behavior, pending user confirmation:
 
 Open confirmation:
 
-- Should lock timeout default to task timeout, fixed 6 hours, or runtime
-  setting?
+- CR-012B: should lock timeout default to task timeout plus cleanup buffer,
+  fixed 6 hours, or a runtime setting?
+- CR-012C: should locks use inline account/profile fields, a generic
+  `resource_locks` table, or a hybrid strategy?
 
 ## Migration From profile_path
 
