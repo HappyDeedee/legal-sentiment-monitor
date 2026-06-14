@@ -21,11 +21,14 @@ Phase 0 - Project Governance.
   task -> platform account -> profile -> proxy -> server browser.
 - Server-like validation has been made mandatory for production acceptance.
 - Initial governance documents have been added.
+- Menu-level product requirements have been documented.
+- Change request intake, traceability, and agent workflow documents have been
+  added.
 
 ## In Progress
 
-- Turning the plan into implementation tasks that coding agents can follow.
-- Keeping UI/UX consistency rules explicit before additional frontend changes.
+- Preparing for implementation phases that use the documentation loop as the
+  source of truth.
 
 ## Known Risks
 
@@ -36,6 +39,8 @@ Phase 0 - Project Governance.
 - Runtime settings are still partly hard-coded or environment-driven.
 - Existing UI may still mix administrator resource management and normal-user
   task creation.
+- The newly added product documents are initial versions and should be refined
+  during implementation.
 
 ## Next Step
 
@@ -45,8 +50,9 @@ Implement Phase 1 and Phase 2 in small increments:
 2. add menu/route permission controls;
 3. add runtime settings storage and administrator UI;
 4. keep normal-user task creation simple.
+5. for every new requirement, add or update `CHANGE_REQUESTS.md`,
+   `TASKS.md`, `TRACEABILITY.md`, and `TEST_RESULTS.md`.
 
 ## Latest Verification
 
 No server-like acceptance run has been completed for the new plan yet.
-

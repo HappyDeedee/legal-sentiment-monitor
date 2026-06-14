@@ -32,4 +32,10 @@ This file is append-only. Add new dated decisions instead of rewriting history.
 - Create/edit/test interactions should be visually consistent. First-version
   UI should prefer modal dialogs for secondary operations to avoid mixed drawer
   and inline form behavior.
-
+- Every active menu item must be covered by product requirements, not only the
+  features explicitly discussed in chat.
+- Meaningful new user requirements must be recorded in `CHANGE_REQUESTS.md`
+  and connected to tasks and tests before being treated as complete.
+- Agent work must update project documents as part of the completion criteria.
+- Parallel agent/worktree development is allowed only with clear module/file
+  ownership and document updates in each branch.

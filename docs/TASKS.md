@@ -13,6 +13,10 @@ Status legend:
 - [x] Add agent entry file.
 - [x] Define documentation update mechanism.
 - [x] Define UI/UX consistency rules.
+- [x] Add menu-level product requirements.
+- [x] Add change request intake document.
+- [x] Add requirement/task/test traceability matrix.
+- [x] Add detailed agent workflow document.
 - [ ] Add `monitor.example.yaml` after the runtime settings schema is finalized.
 - [ ] Add a documentation check script after the first implementation phase.
 
@@ -99,4 +103,3 @@ Status legend:
 - [ ] Add account invalidation alert path.
 - [ ] Add proxy error alert path.
 - [ ] Add disk and retention diagnostics.
-

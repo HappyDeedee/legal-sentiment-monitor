@@ -2,6 +2,23 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-06-14 - Documentation Loop Expansion
+
+Environment: local repository documentation update.
+
+Result:
+
+- Added menu-level product requirements.
+- Added change request intake document.
+- Added traceability matrix.
+- Added detailed agent workflow document.
+- Updated agent entry rules and current state.
+
+Limitations:
+
+- No application runtime validation was performed.
+- No server-like acceptance validation has been completed yet.
+
 ## 2026-06-14 - Documentation Bootstrap
 
 Environment: local repository inspection only.
@@ -18,4 +35,3 @@ Next required verification:
 - run existing tests after the next implementation change;
 - create or use a server-like environment for login/profile validation before
   production acceptance.
-

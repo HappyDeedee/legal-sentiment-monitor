@@ -12,14 +12,18 @@ Before changing code or UI, read these files in order:
 2. `docs/CURRENT_STATE.md`
 3. `docs/TASKS.md`
 4. `docs/DECISIONS.md`
-5. `docs/TEST_PLAN.md`
+5. `docs/CHANGE_REQUESTS.md`
+6. `docs/TRACEABILITY.md`
+7. `docs/TEST_PLAN.md`
 
 Read the relevant specialist document before touching a related area:
 
 - UI changes: `docs/UI_UX_GUIDELINES.md`
+- Product/page behavior: `docs/PRODUCT_REQUIREMENTS.md`
 - Role or permission changes: `docs/GOAL.md` and `docs/TASKS.md`
 - Server deployment or browser login changes: `docs/TEST_PLAN.md`
 - System setting changes: `docs/GOAL.md`
+- Agent process details: `docs/AGENT_WORKFLOW.md`
 
 ## Product Boundary
 
@@ -78,10 +82,18 @@ After each meaningful change, update:
 - `docs/TASKS.md`
 - `docs/CURRENT_STATE.md`
 - `docs/TEST_RESULTS.md`
+- `docs/TRACEABILITY.md` when requirements, tasks, or tests are added
 
 If a new product or technical decision is made, append it to:
 
 - `docs/DECISIONS.md`
+
+If the user raises a new requirement, first record it in:
+
+- `docs/CHANGE_REQUESTS.md`
+
+Then connect it to tasks and tests before or during implementation. Meaningful
+new requirements should not exist only in chat history.
 
 A task is not complete until code, verification, and documentation state agree.
 
@@ -99,4 +111,3 @@ Never commit real secrets or runtime data:
 - local `.env` or deployment-only `monitor.yaml`
 
 Commit examples only, such as `.env.example` and `monitor.example.yaml`.
-
