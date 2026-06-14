@@ -86,12 +86,12 @@ and permission work.
 
 ## Phase 3 - Administrator Resource Center
 
-- [ ] Refine platform account pool page.
-- [ ] Refine proxy resource page.
-- [ ] Refine AI access page.
-- [ ] Refine mail configuration page.
-- [ ] Refine email template page.
-- [ ] Ensure all create/edit/test actions use consistent modal interactions.
+- [x] Refine platform account pool page.
+- [x] Refine proxy resource page.
+- [x] Refine AI access page.
+- [x] Refine mail configuration page.
+- [x] Refine email template page.
+- [x] Ensure all create/edit/test actions use consistent modal interactions.
 
 ## Phase 4 - Normal User Task Wizard
 

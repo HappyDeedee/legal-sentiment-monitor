@@ -191,6 +191,18 @@
     .settings-card { border:1px solid var(--line); border-radius:8px; background:#fff; padding:12px; }
     .settings-card h3 { margin-bottom:8px; }
     .settings-actions { display:flex; gap:8px; align-items:center; justify-content:flex-end; flex-wrap:wrap; margin-top:12px; }
+    .resource-toolbar { display:flex; gap:10px; align-items:end; flex-wrap:wrap; margin-bottom:12px; }
+    .resource-toolbar > div { min-width:150px; flex:1 1 170px; }
+    .resource-toolbar .toolbar-actions { flex:0 0 auto; }
+    .resource-summary-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin:0 0 12px; }
+    .resource-stat { border:1px solid var(--line); border-radius:8px; background:#fbfdff; padding:10px; min-height:62px; }
+    .resource-stat strong { display:block; color:var(--muted); font-size:12px; margin-bottom:5px; }
+    .resource-stat span { display:block; color:var(--text); font-weight:750; word-break:break-word; }
+    .resource-modal-actions { position:sticky; bottom:-18px; margin:16px -18px -18px; padding:14px 18px; border-top:1px solid var(--line); background:#fff; display:flex; align-items:center; justify-content:space-between; gap:12px; z-index:5; flex-wrap:wrap; }
+    .resource-modal-actions .row { flex:0 0 auto; justify-content:flex-end; }
+    .mail-test-modal { width:min(760px, calc(100% - 36px)); }
+    .test-console { min-height:168px; max-height:360px; overflow:auto; background:#0f172a; color:#dbeafe; border-radius:8px; padding:12px; white-space:pre-wrap; font-family:Consolas,Menlo,monospace; line-height:1.6; }
+    .muted-line { color:#93a4bd; }
     .template-editor-layout { display:grid; grid-template-columns:1fr; gap:14px; align-items:start; }
     .template-editor-layout textarea { min-height:300px; }
     .template-preview-panel { position:static; }
@@ -362,9 +374,9 @@
     .field-hint { color:var(--muted); font-size:12px; line-height:1.6; margin:6px 0 12px; }
     .config-section .section-note, .config-section .field-hint { display:none; }
     .form-actions { position:sticky; bottom:-18px; z-index:5; margin:16px -18px -18px; display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap; border-top:1px solid var(--line); padding:14px 18px; background:#fff; }
-    .rule-modal-actions .row, .ai-test-actions .row, .account-flow-actions .row { width:auto; flex:0 0 auto; justify-content:flex-end; }
-    .rule-modal-actions > .small, .ai-test-actions > .small, .account-flow-actions .small { max-width:620px; }
-    @media (max-width: 1100px) { .shell { grid-template-columns:minmax(0,1fr); width:100%; overflow:hidden; } .shell > aside { position:static; height:auto; width:100%; max-width:100%; min-width:0; overflow:visible; } nav { display:flex; width:100%; max-width:100%; min-width:0; overflow-x:auto; overflow-y:hidden; } .nav-group { flex:0 0 auto; } nav button { min-width:max-content; } .nav-popover { position:fixed; top:78px; left:12px; right:12px; width:auto; max-width:360px; } .grid, .grid-3, .grid-4, .split, .settings-panel-grid, .template-editor-layout, .diagnostic-layout, .settings-grid, .artifact-grid { grid-template-columns:1fr; } section { padding:16px; } }
+    .rule-modal-actions .row, .ai-test-actions .row, .account-flow-actions .row, .resource-modal-actions .row { width:auto; flex:0 0 auto; justify-content:flex-end; }
+    .rule-modal-actions > .small, .ai-test-actions > .small, .account-flow-actions .small, .resource-modal-actions .small { max-width:620px; }
+    @media (max-width: 1100px) { .shell { grid-template-columns:minmax(0,1fr); width:100%; overflow:hidden; } .shell > aside { position:static; height:auto; width:100%; max-width:100%; min-width:0; overflow:visible; } nav { display:flex; width:100%; max-width:100%; min-width:0; overflow-x:auto; overflow-y:hidden; } .nav-group { flex:0 0 auto; } nav button { min-width:max-content; } .nav-popover { position:fixed; top:78px; left:12px; right:12px; width:auto; max-width:360px; } .grid, .grid-3, .grid-4, .split, .settings-panel-grid, .template-editor-layout, .diagnostic-layout, .settings-grid, .artifact-grid, .resource-summary-grid { grid-template-columns:1fr; } section { padding:16px; } }
     @media (max-width: 1100px) { .account-filter, .account-modal-grid, .login-card-grid, .rule-builder-grid, .rule-flow, .rule-sections, .rule-modal-flow, .rule-accordion, .diagnostic-grid { grid-template-columns:1fr; } .template-preview-panel { position:static; } }
     @media (max-width: 720px) {
       body { font-size:13px; }
@@ -386,10 +398,10 @@
       .wide-actions { min-width:220px; }
       .account-bulk-toolbar { justify-content:flex-start; }
       .account-bulk-toolbar button { flex:0 0 auto; }
-      .rule-modal-actions, .ai-test-actions, .account-flow-actions { align-items:stretch; }
-      .rule-modal-actions > .small, .ai-test-actions > .small, .account-flow-actions .small { display:none; }
-      .rule-modal-actions .row, .ai-test-actions .row, .account-flow-actions .row { width:100%; }
-      .rule-modal-actions button, .ai-test-actions button, .account-flow-actions button { flex:1 1 auto; }
+      .rule-modal-actions, .ai-test-actions, .account-flow-actions, .resource-modal-actions { align-items:stretch; }
+      .rule-modal-actions > .small, .ai-test-actions > .small, .account-flow-actions .small, .resource-modal-actions .small { display:none; }
+      .rule-modal-actions .row, .ai-test-actions .row, .account-flow-actions .row, .resource-modal-actions .row { width:100%; }
+      .rule-modal-actions button, .ai-test-actions button, .account-flow-actions button, .resource-modal-actions button { flex:1 1 auto; }
       .schema-item { grid-template-columns:1fr; }
     }
   </style>
@@ -770,8 +782,23 @@
             <button class="secondary" onclick="loadProxyPool()">刷新代理</button>
           </div>
         </div>
+        <div id="proxy_resource_summary" class="resource-summary-grid"></div>
         <div class="panel">
-          <h3>代理列表</h3>
+          <div class="account-ledger-head">
+            <div>
+              <h3>代理列表</h3>
+              <p class="small">新增、编辑和删除都在弹窗内确认；代理 URL 保存后只显示掩码。</p>
+            </div>
+            <div class="inline-status"><span id="proxy_resource_count">-</span></div>
+          </div>
+          <div class="resource-toolbar">
+            <div><label>搜索</label><input id="proxy_search" placeholder="代理名称 / 供应商 / 备注"></div>
+            <div><label>状态</label><select id="proxy_status_filter"><option value="">全部状态</option><option value="active">可用</option><option value="standby">待机</option><option value="limited">受限</option><option value="disabled">停用</option></select></div>
+            <div class="toolbar-actions">
+              <button class="secondary" onclick="clearProxyFilters()">清空筛选</button>
+              <button class="secondary" onclick="loadProxyPool()">刷新</button>
+            </div>
+          </div>
           <div id="proxy_profiles_table"></div>
         </div>
       </section>
@@ -797,9 +824,12 @@
           </div>
           <label>备注</label><textarea id="proxy_notes" placeholder="记录供应商、地区、套餐、过期时间"></textarea>
           <label>错误信息</label><textarea id="proxy_last_error" placeholder="记录最近一次代理检测异常，可留空"></textarea>
-          <div class="form-actions">
-            <button class="primary" onclick="saveProxyProfile()">保存代理</button>
-            <button class="secondary" onclick="resetProxyForm()">清空</button>
+          <div class="resource-modal-actions">
+            <div class="small">保存后任务和账号绑定会继续引用这个代理资源；删除前请确认没有正在使用的任务。</div>
+            <div class="row">
+              <button class="secondary" onclick="resetProxyForm()">清空</button>
+              <button class="primary" onclick="saveProxyProfile()">保存代理</button>
+            </div>
           </div>
         </div>
       </div>
@@ -812,8 +842,24 @@
             <button class="secondary" onclick="loadAIProfiles()">刷新 AI 接入</button>
           </div>
         </div>
+        <div id="ai_resource_summary" class="resource-summary-grid"></div>
         <div class="panel">
-          <h3>AI 接入资源</h3>
+          <div class="account-ledger-head">
+            <div>
+              <h3>AI 接入资源</h3>
+              <p class="small">API Key 保存后不回显；连接测试在独立弹窗中执行并记录最近状态。</p>
+            </div>
+            <div class="inline-status"><span id="ai_resource_count">-</span></div>
+          </div>
+          <div class="resource-toolbar">
+            <div><label>搜索</label><input id="ai_profile_search" placeholder="接入名称 / 模型 / Base URL"></div>
+            <div><label>接口协议</label><select id="ai_profile_provider_filter"><option value="">全部协议</option><option value="openai">OpenAI-compatible</option><option value="anthropic">Anthropic-compatible</option></select></div>
+            <div><label>测试状态</label><select id="ai_profile_test_filter"><option value="">全部状态</option><option value="success">最近通过</option><option value="failed">最近失败</option><option value="untested">尚未测试</option></select></div>
+            <div class="toolbar-actions">
+              <button class="secondary" onclick="clearAIProfileFilters()">清空筛选</button>
+              <button class="secondary" onclick="loadAIProfiles()">刷新</button>
+            </div>
+          </div>
           <div id="ai_profiles_table" style="margin-top:12px"></div>
         </div>
       </section>
@@ -890,9 +936,12 @@
           </details>
           <input type="hidden" id="ai_profile_prompt">
           <label><input type="checkbox" id="ai_profile_active"> 设为默认 AI 接入</label>
-          <div class="form-actions">
-            <button class="primary" onclick="saveAIProfile()">保存 AI 接入</button>
-            <button class="secondary" onclick="resetAIProfileForm()">清空</button>
+          <div class="resource-modal-actions">
+            <div class="small">保存后可在列表中进行连接测试；API Key 留空时不会覆盖已保存密钥。</div>
+            <div class="row">
+              <button class="secondary" onclick="resetAIProfileForm()">清空</button>
+              <button class="primary" onclick="saveAIProfile()">保存 AI 接入</button>
+            </div>
           </div>
         </div>
       </div>
@@ -1011,14 +1060,43 @@
       <section id="email">
         <div class="page-head">
           <div><h2>邮件配置</h2><p>配置 SMTP、发件人和默认收件人。HTML 邮件样式在“邮件模板”中维护。</p></div>
-          <button class="secondary" onclick="loadEmail()">刷新配置</button>
+          <div class="page-actions">
+            <button class="primary" onclick="openMailConfigModal()">编辑邮件配置</button>
+            <button class="secondary" onclick="openMailTestModal()">发送测试邮件</button>
+            <button class="secondary" onclick="loadEmail()">刷新配置</button>
+          </div>
         </div>
-        <div class="panel">
-          <div class="settings-grid">
+        <div class="resource-summary-grid">
             <div class="settings-stat"><strong>测试状态</strong><span id="email_status_label">未测试</span></div>
             <div class="settings-stat"><strong>发件身份</strong><span id="email_sender_summary">-</span></div>
             <div class="settings-stat"><strong>默认收件人</strong><span id="email_recipient_summary">0 个</span></div>
+            <div class="settings-stat"><strong>标题模板</strong><span id="email_subject_summary">-</span></div>
+        </div>
+        <div class="panel">
+          <div class="account-ledger-head">
+            <div>
+              <h3>SMTP 与发送默认值</h3>
+              <p class="small">配置和测试都通过弹窗完成；密码保存后不会在页面回显。</p>
+            </div>
+            <div class="wide-actions">
+              <button class="secondary" onclick="openMailConfigModal()">编辑配置</button>
+              <button class="secondary" onclick="openMailTestModal()">测试邮件</button>
+            </div>
           </div>
+          <div id="email_status" class="notice">邮件配置尚未读取。</div>
+        </div>
+      </section>
+
+      <div id="mail_config_backdrop" class="drawer-backdrop" onclick="closeMailConfigModal()"></div>
+      <div id="mail_config_modal" class="drawer form-drawer" role="dialog" aria-modal="true" aria-label="邮件配置">
+        <div class="drawer-head">
+          <div>
+            <h3>编辑邮件配置</h3>
+            <div class="small">SMTP 密码会加密保存；留空表示不修改已保存密码。</div>
+          </div>
+          <button class="modal-close" onclick="closeMailConfigModal()" title="关闭">×</button>
+        </div>
+        <div class="panel">
           <div class="settings-panel-grid">
             <div class="settings-card">
               <h3>SMTP 连接</h3>
@@ -1035,15 +1113,36 @@
               <h3>发送默认值</h3>
               <label>默认收件人</label><textarea id="default_recipients" style="min-height:136px"></textarea>
               <label>标题模板</label><input id="subject_template" value="【律所舆情日报】{law_firm_name} - {date}">
-              <div id="email_status" class="small" style="margin-top:8px"></div>
-              <div class="settings-actions">
-                <button class="primary" onclick="saveEmail()">保存配置</button>
-                <button class="secondary" onclick="testEmail()">发送测试邮件</button>
-              </div>
+            </div>
+          </div>
+          <div class="resource-modal-actions">
+            <div class="small">保存配置不会自动发送邮件；如需验证 SMTP，请使用“测试邮件”。</div>
+            <div class="row">
+              <button class="secondary" onclick="closeMailConfigModal()">取消</button>
+              <button class="primary" onclick="saveEmail()">保存配置</button>
             </div>
           </div>
         </div>
-      </section>
+      </div>
+
+      <div id="mail_test_backdrop" class="drawer-backdrop" onclick="closeMailTestModal()"></div>
+      <div id="mail_test_modal" class="drawer mail-test-modal" role="dialog" aria-modal="true" aria-label="邮件测试">
+        <div class="drawer-head">
+          <div>
+            <h3>发送测试邮件</h3>
+            <div class="small">测试会使用当前表单中的配置；如果刚修改过密码，请先保存或在配置弹窗中保持当前输入。</div>
+          </div>
+          <button class="modal-close" onclick="closeMailTestModal()" title="关闭">×</button>
+        </div>
+        <pre id="mail_test_console" class="test-console"><span class="muted-line">点击“开始测试”后，系统会尝试发送一封测试邮件并记录结果。</span></pre>
+        <div class="resource-modal-actions">
+          <div class="small">测试失败不会阻断报告生成；系统仍会保留报告供下载和预览。</div>
+          <div class="row">
+            <button class="secondary" onclick="closeMailTestModal()">关闭</button>
+            <button id="mail_test_start_btn" class="primary" onclick="testEmail()">开始测试</button>
+          </div>
+        </div>
+      </div>
 
       <section id="email_templates">
         <div class="page-head">
@@ -1053,6 +1152,7 @@
             <button class="secondary" onclick="loadEmailTemplates()">刷新模板</button>
           </div>
         </div>
+        <div id="email_template_resource_summary" class="resource-summary-grid"></div>
         <div class="panel">
           <div class="account-ledger-head">
             <div>
@@ -1060,6 +1160,14 @@
               <p class="small">报告发送时优先使用当前启用模板；点击编辑可查看实时预览。</p>
             </div>
             <div class="inline-status"><span id="email_template_summary">-</span></div>
+          </div>
+          <div class="resource-toolbar">
+            <div><label>搜索</label><input id="email_template_search" placeholder="模板名称 / 标题模板"></div>
+            <div><label>状态</label><select id="email_template_status_filter"><option value="">全部模板</option><option value="active">当前使用</option><option value="standby">备用</option></select></div>
+            <div class="toolbar-actions">
+              <button class="secondary" onclick="clearEmailTemplateFilters()">清空筛选</button>
+              <button class="secondary" onclick="loadEmailTemplates()">刷新</button>
+            </div>
           </div>
           <div id="email_templates_table"></div>
         </div>
@@ -2550,9 +2658,41 @@
       proxyProfileCache.clear();
       (data.proxies||[]).forEach(p=>proxyProfileCache.set(Number(p.id), p));
       renderProxySelectOptions();
-      document.getElementById('proxy_profiles_table').innerHTML = (data.proxies||[]).length ? table(
+      renderProxyResourceSummary(data.proxies||[]);
+      renderProxyProfilesTable();
+    }
+    function renderProxyResourceSummary(proxies){
+      const total=(proxies||[]).length;
+      const active=(proxies||[]).filter(p=>p.status==='active').length;
+      const limited=(proxies||[]).filter(p=>p.status==='limited').length;
+      const concurrency=(proxies||[]).reduce((sum,p)=>sum+Number(p.max_concurrency||0),0);
+      const target=document.getElementById('proxy_resource_summary');
+      if(target){
+        target.innerHTML=[
+          resourceStat('代理总数', total || '0'),
+          resourceStat('可用代理', active || '0'),
+          resourceStat('受限代理', limited || '0'),
+          resourceStat('并发容量', concurrency || '0')
+        ].join('');
+      }
+      const count=document.getElementById('proxy_resource_count');
+      if(count) count.textContent=`共 ${total} 个代理资源`;
+    }
+    function filteredProxyProfiles(){
+      const query=(val('proxy_search')||'').trim().toLowerCase();
+      const status=val('proxy_status_filter');
+      return [...proxyProfileCache.values()].filter(p=>{
+        if(status && p.status!==status) return false;
+        const haystack=[p.name,p.provider,p.proxy_url,p.notes,p.last_error].join(' ').toLowerCase();
+        if(query && !haystack.includes(query)) return false;
+        return true;
+      });
+    }
+    function renderProxyProfilesTable(){
+      const proxies=filteredProxyProfiles();
+      document.getElementById('proxy_profiles_table').innerHTML = proxies.length ? table(
         ['ID','名称','供应商','代理','状态','并发','备注/错误','更新时间','操作'],
-        data.proxies.map(p=>[
+        proxies.map(p=>[
           p.id,
           esc(p.name),
           esc(p.provider||'manual'),
@@ -2568,6 +2708,7 @@
         ])
       ) : '<div class="empty">还没有代理。首版可先不使用代理；需要指定线路时，先新增代理再绑定到账号。</div>';
     }
+    function clearProxyFilters(){ ['proxy_search','proxy_status_filter'].forEach(id=>set(id,'')); renderProxyProfilesTable(); }
     function renderProxySelectOptions(){
       const proxies=[...proxyProfileCache.values()];
       const options=['<option value="">不绑定代理</option>'].concat(proxies.map(p=>{
@@ -3098,9 +3239,44 @@
       aiProfileCache.clear();
       (data.profiles||[]).forEach(p=>aiProfileCache.set(Number(p.id), p));
       renderJobAIProfileOptions();
+      renderAIResourceSummary(data.profiles||[]);
+      renderAIProfilesTable();
+    }
+    function renderAIResourceSummary(profiles){
+      const total=(profiles||[]).length;
+      const active=(profiles||[]).filter(p=>p.is_active).length;
+      const passed=(profiles||[]).filter(p=>p.last_test_status==='success').length;
+      const failed=(profiles||[]).filter(p=>p.last_test_status==='failed').length;
+      const target=document.getElementById('ai_resource_summary');
+      if(target){
+        target.innerHTML=[
+          resourceStat('接入总数', total || '0'),
+          resourceStat('默认接入', active ? '已设置' : '未设置'),
+          resourceStat('最近通过', passed || '0'),
+          resourceStat('最近失败', failed || '0')
+        ].join('');
+      }
+      const count=document.getElementById('ai_resource_count');
+      if(count) count.textContent=`共 ${total} 个 AI 接入资源`;
+    }
+    function filteredAIProfiles(){
+      const query=(val('ai_profile_search')||'').trim().toLowerCase();
+      const provider=val('ai_profile_provider_filter');
+      const test=val('ai_profile_test_filter');
+      return [...aiProfileCache.values()].filter(p=>{
+        if(provider && p.provider!==provider) return false;
+        const status=p.last_test_status||'untested';
+        if(test && status!==test) return false;
+        const haystack=[p.name,p.model,p.base_url,p.provider].join(' ').toLowerCase();
+        if(query && !haystack.includes(query)) return false;
+        return true;
+      });
+    }
+    function renderAIProfilesTable(){
+      const profiles=filteredAIProfiles();
       document.getElementById('ai_profiles_table').innerHTML = table(
         ['ID','名称','接口协议','模型','Base URL','Key','状态','测试','操作'],
-        (data.profiles||[]).map(p=>[
+        profiles.map(p=>[
           p.id,
           esc(p.name),
           esc(providerLabel(p.provider)),
@@ -3117,10 +3293,11 @@
           ].join(' ')}</div>`
         ])
       );
-      if(!(data.profiles||[]).length){
+      if(!profiles.length){
         document.getElementById('ai_profiles_table').innerHTML = '<div class="empty">还没有 AI 接入资源。采集仍可运行，线索会进入待人工复核；需要自动初筛时再新增模型连接。</div>';
       }
     }
+    function clearAIProfileFilters(){ ['ai_profile_search','ai_profile_provider_filter','ai_profile_test_filter'].forEach(id=>set(id,'')); renderAIProfilesTable(); }
     function renderJobAIProfileOptions(){
       const select=document.getElementById('job_ai_profile_id');
       if(!select) return;
@@ -3374,23 +3551,134 @@
       if(senderSummary) senderSummary.textContent = c.sender || c.username || '-';
       const recipientSummary=document.getElementById('email_recipient_summary');
       if(recipientSummary) recipientSummary.textContent = `${(c.default_recipients||[]).length} 个`;
+      const subjectSummary=document.getElementById('email_subject_summary');
+      if(subjectSummary) subjectSummary.textContent = c.subject_template || '-';
     }
-    async function saveEmail(){ const payload={smtp_host:val('smtp_host'),smtp_port:Number(val('smtp_port')||465),encryption:val('encryption'),sender:val('sender'),username:val('smtp_username'),password:val('smtp_password'),subject_template:val('subject_template'),default_recipients:lines('default_recipients')}; const res=await api('/email-config',{method:'PUT',body:JSON.stringify(payload)}); if(res.ok){ const data=await res.json(); toast(data.config.last_test_status==='success'?'邮件配置已保存，测试状态仍有效':'邮件配置已保存，需重新测试'); } else toast(await err(res)); set('smtp_password',''); await loadEmail(); await loadReadiness(); }
-    async function testEmail(){ const payload={smtp_host:val('smtp_host'),smtp_port:Number(val('smtp_port')||465),encryption:val('encryption'),sender:val('sender'),username:val('smtp_username'),password:val('smtp_password'),subject_template:val('subject_template'),default_recipients:lines('default_recipients')}; const res=await api('/email-config/test',{method:'POST',body:JSON.stringify(payload)}); toast(res.ok?'测试邮件已发送并记录通过':await err(res)); set('smtp_password',''); await loadEmail(); await loadReadiness(); }
+    async function saveEmail(){
+      const payload=emailConfigPayload();
+      const res=await api('/email-config',{method:'PUT',body:JSON.stringify(payload)});
+      if(res.ok){
+        const data=await res.json();
+        toast(data.config.last_test_status==='success'?'邮件配置已保存，测试状态仍有效':'邮件配置已保存，需重新测试');
+        closeMailConfigModal();
+      } else toast(await err(res));
+      set('smtp_password','');
+      await loadEmail();
+      await loadReadiness();
+    }
+    async function testEmail(){
+      const payload=emailConfigPayload();
+      const btn=document.getElementById('mail_test_start_btn');
+      const consoleBox=document.getElementById('mail_test_console');
+      if(btn){ btn.disabled=true; btn.textContent='测试中...'; }
+      if(consoleBox){
+        consoleBox.textContent=[
+          '开始测试邮件配置',
+          'SMTP：' + (payload.smtp_host || '-'),
+          '发件人：' + (payload.sender || payload.username || '-'),
+          '默认收件人：' + (payload.default_recipients||[]).length + ' 个',
+          '',
+          '正在发送测试邮件...'
+        ].join('\n');
+      }
+      const res=await api('/email-config/test',{method:'POST',body:JSON.stringify(payload)});
+      if(res.ok){
+        if(consoleBox) consoleBox.textContent='测试邮件已发送并记录通过。\n\n后续报告发送会继续使用当前邮件配置。';
+        toast('测试邮件已发送并记录通过');
+      } else {
+        const message=cleanCustomerText(await err(res));
+        if(consoleBox) consoleBox.textContent='测试邮件发送失败。\n\n' + message;
+        toast(message);
+      }
+      if(btn){ btn.disabled=false; btn.textContent='重新测试'; }
+      set('smtp_password','');
+      await loadEmail();
+      await loadReadiness();
+    }
+    function emailConfigPayload(){
+      return {
+        smtp_host:val('smtp_host'),
+        smtp_port:Number(val('smtp_port')||465),
+        encryption:val('encryption'),
+        sender:val('sender'),
+        username:val('smtp_username'),
+        password:val('smtp_password'),
+        subject_template:val('subject_template'),
+        default_recipients:lines('default_recipients')
+      };
+    }
+    function openMailConfigModal(){
+      document.getElementById('mail_config_backdrop').classList.add('active');
+      document.getElementById('mail_config_modal').classList.add('active');
+      document.body.style.overflow='hidden';
+    }
+    function closeMailConfigModal(){
+      document.getElementById('mail_config_backdrop').classList.remove('active');
+      document.getElementById('mail_config_modal').classList.remove('active');
+      document.body.style.overflow='';
+    }
+    function openMailTestModal(){
+      const consoleBox=document.getElementById('mail_test_console');
+      if(consoleBox) consoleBox.textContent='点击“开始测试”后，系统会尝试发送一封测试邮件并记录结果。';
+      const btn=document.getElementById('mail_test_start_btn');
+      if(btn){ btn.disabled=false; btn.textContent='开始测试'; }
+      document.getElementById('mail_test_backdrop').classList.add('active');
+      document.getElementById('mail_test_modal').classList.add('active');
+      document.body.style.overflow='hidden';
+    }
+    function closeMailTestModal(){
+      document.getElementById('mail_test_backdrop').classList.remove('active');
+      document.getElementById('mail_test_modal').classList.remove('active');
+      document.body.style.overflow='';
+    }
     async function loadEmailTemplates(){
       if(!canMenu('mail_templates')) return;
       const data=await (await api('/email-templates')).json();
       emailTemplateCache.clear();
       (data.templates||[]).forEach(t=>emailTemplateCache.set(Number(t.id), t));
       renderJobEmailTemplateOptions();
+      renderEmailTemplateResourceSummary(data.templates||[]);
       const summary=document.getElementById('email_template_summary');
       if(summary){
         const active=(data.templates||[]).find(t=>t.is_active);
         summary.textContent=`共 ${(data.templates||[]).length} 个模板${active ? '，当前使用：' + active.name : ''}`;
       }
-      document.getElementById('email_templates_table').innerHTML = (data.templates||[]).length ? table(
+      renderEmailTemplatesTable();
+      if(!val('email_template_id') && data.active){
+        loadEmailTemplateIntoForm(Number(data.active.id));
+      }
+      await previewEmailTemplate(false);
+    }
+    function renderEmailTemplateResourceSummary(templates){
+      const total=(templates||[]).length;
+      const active=(templates||[]).find(t=>t.is_active);
+      const withHtml=(templates||[]).filter(t=>String(t.html_template||'').trim()).length;
+      const target=document.getElementById('email_template_resource_summary');
+      if(target){
+        target.innerHTML=[
+          resourceStat('模板总数', total || '0'),
+          resourceStat('当前模板', active ? active.name : '未设置'),
+          resourceStat('已填 HTML', withHtml || '0'),
+          resourceStat('变量预览', '可用')
+        ].join('');
+      }
+    }
+    function filteredEmailTemplates(){
+      const query=(val('email_template_search')||'').trim().toLowerCase();
+      const status=val('email_template_status_filter');
+      return [...emailTemplateCache.values()].filter(t=>{
+        if(status==='active' && !t.is_active) return false;
+        if(status==='standby' && t.is_active) return false;
+        const haystack=[t.name,t.subject_template,t.html_template].join(' ').toLowerCase();
+        if(query && !haystack.includes(query)) return false;
+        return true;
+      });
+    }
+    function renderEmailTemplatesTable(){
+      const templates=filteredEmailTemplates();
+      document.getElementById('email_templates_table').innerHTML = templates.length ? table(
         ['ID','模板名称','标题模板','状态','更新时间','操作'],
-        data.templates.map(t=>[
+        templates.map(t=>[
           t.id,
           esc(t.name),
           `<span class="code">${esc(t.subject_template||'')}</span>`,
@@ -3402,11 +3690,8 @@
           ].join(' ')}</div>`
         ])
       ) : '<div class="empty">还没有 HTML 邮件模板。系统会先使用默认报告 HTML。</div>';
-      if(!val('email_template_id') && data.active){
-        loadEmailTemplateIntoForm(Number(data.active.id));
-      }
-      await previewEmailTemplate(false);
     }
+    function clearEmailTemplateFilters(){ ['email_template_search','email_template_status_filter'].forEach(id=>set(id,'')); renderEmailTemplatesTable(); }
     function renderJobEmailTemplateOptions(){
       const select=document.getElementById('job_email_template_id');
       if(!select) return;
@@ -3780,6 +4065,7 @@
       const minWidth=Math.max(920, (headers||[]).length * 112);
       return `<div class="table-wrap"><table style="min-width:${minWidth}px"><thead><tr>${headers.map(h=>`<th class="${h==='操作'?'col-actions':''}">${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map((c,i)=>`<td class="${headers[i]==='操作'?'col-actions':''}">${c??''}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
     }
+    function resourceStat(label, value){ return `<div class="resource-stat"><strong>${esc(label)}</strong><span>${esc(value)}</span></div>`; }
     function formatPlatforms(platforms){ const labels={dy:'抖音',ks:'快手',xhs:'小红书'}; return (platforms||[]).map(p=>labels[p]||p).join(' / '); }
     function formatPlatformCounts(counts){ const items=Object.entries(counts||{}).map(([p,n])=>`${formatPlatforms([p])} ${n}`); return items.length?items.join(' / '):'暂无'; }
     function formatFrequency(job){ const anchor=job.email_time||'09:00'; const labels={daily:`每天 ${anchor}`,'12h':`每 12 小时，起点 ${anchor}`,'6h':`每 6 小时，起点 ${anchor}`,cron:`cron ${job.cron_expr||''}`}; return labels[job.frequency] || job.frequency || ''; }
@@ -3852,6 +4138,21 @@
       const el=document.getElementById(id);
       if(el) el.addEventListener('input', renderAccountList);
       if(el) el.addEventListener('change', renderAccountList);
+    });
+    ['proxy_search','proxy_status_filter'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el) el.addEventListener('input', renderProxyProfilesTable);
+      if(el) el.addEventListener('change', renderProxyProfilesTable);
+    });
+    ['ai_profile_search','ai_profile_provider_filter','ai_profile_test_filter'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el) el.addEventListener('input', renderAIProfilesTable);
+      if(el) el.addEventListener('change', renderAIProfilesTable);
+    });
+    ['email_template_search','email_template_status_filter'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el) el.addEventListener('input', renderEmailTemplatesTable);
+      if(el) el.addEventListener('change', renderEmailTemplatesTable);
     });
     ['email_template_subject','email_html_template','email_template_name'].forEach(id=>{
       const el=document.getElementById(id);

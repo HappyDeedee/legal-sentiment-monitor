@@ -6,11 +6,13 @@ Last updated: 2026-06-14
 
 Phase 0 documentation is complete. Phase 0.5 - Schema Foundation is complete
 and verified. Phase 1 - Users And Permissions is complete and verified. Phase
-2 - System Settings Center is complete and verified. The active SQLite schema
-now provides the foundation tables and columns required before later
-implementation work, and the web/API layer now has session login,
-administrator/normal-user roles, menu visibility, owner-scoped business data
-access, and administrator-managed runtime strategy settings.
+2 - System Settings Center is complete and verified. Phase 3 - Administrator
+Resource Center is complete and verified. The active SQLite schema now provides
+the foundation tables and columns required before later implementation work,
+and the web/API layer now has session login, administrator/normal-user roles,
+menu visibility, owner-scoped business data access, administrator-managed
+runtime strategy settings, and administrator resource pages with consistent
+summary, toolbar, modal, and test interactions.
 
 ## Implementation Status
 
@@ -18,13 +20,13 @@ access, and administrator-managed runtime strategy settings.
 - Phase 0.5 - Schema Foundation: complete and verified.
 - Phase 1 - Users And Permissions: complete and verified.
 - Phase 2 - System Settings: complete and verified.
-- Phase 3 - Administrator Resource Center: next unblocked implementation
-  phase.
+- Phase 3 - Administrator Resource Center: complete and verified.
+- Phase 4 - Normal User Task Wizard: next unblocked implementation phase.
 - Phase 5/6 - Account Environment and Server Login: profile key, timeout, and
   lock-storage decisions are accepted; runtime implementation is still blocked
-  by preceding Phase 3-4 work and Phase 5/6 sequencing.
+  by preceding Phase 4 work and Phase 5/6 sequencing.
 
-Phase 3 can begin next. Phase 4-9 implementation must still proceed in order
+Phase 4 can begin next. Phase 5-9 implementation must still proceed in order
 and must not bypass unfinished earlier phases.
 
 ## Completed
@@ -84,10 +86,16 @@ and must not bypass unfinished earlier phases.
   `crawl_runs.timeout_seconds`, compute `deadline_at`, allocate remaining run
   time to platform crawler attempts, and mark deadline-exceeded runs as
   `timeout` while preserving partial platform results.
+- Phase 3 administrator resource center has been refined:
+  platform accounts keep the single account-detail dialog, proxy resources have
+  summary cards plus search/status filters, AI access has summary cards plus
+  protocol/test-status filters and a connection-test dialog, mail configuration
+  uses edit/test dialogs with masked password behavior, and mail templates have
+  summary cards plus search/status filters and live preview.
 
 ## In Progress
 
-- Phase 3 - Administrator Resource Center is ready to start.
+- Phase 4 - Normal User Task Wizard is ready to start.
 
 ## Known Risks
 
@@ -102,8 +110,8 @@ and must not bypass unfinished earlier phases.
 - Current system is closer to a single-team MVP than a production multi-user
   system.
 - Server-side QR login and profile persistence need container/server validation.
-- Existing UI may still mix administrator resource management and normal-user
-  task creation.
+- Phase 3 resource pages are consistent, but Phase 4 still needs to separate
+  normal-user task creation into a simplified wizard.
 - The newly added product documents are initial versions and should be refined
   during implementation.
 - Profile migration strategy has been clarified: existing low-volume
@@ -117,34 +125,32 @@ and must not bypass unfinished earlier phases.
 
 ## Next Step
 
-Implement Phase 3 in small increments:
+Implement Phase 4 in small increments:
 
-1. refine administrator platform account pool page;
-2. refine proxy resource page;
-3. refine AI access page;
-4. refine mail configuration page;
-5. refine email template page;
-6. keep normal-user task creation simple until Phase 4.
-7. for every new requirement, add or update `CHANGE_REQUESTS.md`,
-   `TASKS.md`, `TRACEABILITY.md`, and `TEST_RESULTS.md`.
-8. ask for user confirmation before accepting ambiguous assumptions in
-   permissions, deployment, account environment, security, or data model.
-9. Phase 3 can proceed now that Phase 2 has implemented and verified runtime
-   settings, administrator-only Runtime Strategy APIs/UI, and setting-backed
-   scheduler/runner/login timing.
-10. Accepted Phase 5/6 decisions:
+1. replace the normal-user task form with a simplified wizard;
+2. include target, collection content, schedule, and report steps;
+3. explain crawl range capability boundaries without promising exact
+   cross-platform behavior;
+4. hide account, proxy, AI profile, email template, and browser options from
+   normal users;
+5. keep administrator advanced task settings available;
+6. for every new requirement, add or update `CHANGE_REQUESTS.md`,
+   `TASKS.md`, `TRACEABILITY.md`, and `TEST_RESULTS.md`;
+7. ask for user confirmation before accepting ambiguous assumptions in
+   permissions, deployment, account environment, security, or data model;
+8. Accepted Phase 5/6 decisions:
    - `profile_key` format is `{workspace_id}/{platform}/acc_{account_id}`;
    - task timeout is a run-level wall-clock deadline controlled by
      administrator Runtime Strategy;
    - lock expiry is the run deadline plus cleanup buffer;
    - account/profile locks use inline `social_accounts` fields;
    - proxy concurrency uses `resource_locks`.
-11. Before Phase 5/6 coding, re-verify that run timeout fields, profile keys,
+9. Before Phase 5/6 coding, re-verify that run timeout fields, profile keys,
     lock fields, and `resource_locks` exist in the active database.
 
 ## Latest Verification
 
-Phase 2 local verification passed on 2026-06-14:
+Phase 3 local verification passed on 2026-06-14:
 
 - `uv run python -m pytest tests/test_monitoring_mvp.py`
 - Result: 206 passed, 3 warnings.

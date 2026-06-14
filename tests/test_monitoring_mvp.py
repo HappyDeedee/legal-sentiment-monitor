@@ -6363,6 +6363,15 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "pollLoginSession" in page
     assert "代理资源" in page
     assert "代理可绑定到账号或任务，采集时按绑定关系使用" in page
+    assert "proxy_resource_summary" in page
+    assert "proxy_resource_count" in page
+    assert "proxy_search" in page
+    assert "proxy_status_filter" in page
+    assert "clearProxyFilters" in page
+    assert "renderProxyResourceSummary" in page
+    assert "renderProxyProfilesTable" in page
+    assert "新增、编辑和删除都在弹窗内确认；代理 URL 保存后只显示掩码。" in page
+    assert "保存后任务和账号绑定会继续引用这个代理资源；删除前请确认没有正在使用的任务。" in page
     assert "proxies" in page
     assert "loadProxyPool" in page
     assert "platformStatusTable" in page
@@ -6509,6 +6518,15 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "接口协议" in page
     assert "OpenAI-compatible / Anthropic-compatible 协议的模型连接资源" in page
     assert "Provider" not in page
+    assert "ai_resource_summary" in page
+    assert "ai_resource_count" in page
+    assert "ai_profile_search" in page
+    assert "ai_profile_provider_filter" in page
+    assert "ai_profile_test_filter" in page
+    assert "clearAIProfileFilters" in page
+    assert "renderAIResourceSummary" in page
+    assert "renderAIProfilesTable" in page
+    assert "API Key 保存后不回显；连接测试在独立弹窗中执行并记录最近状态。" in page
     assert "获取模型列表" in page
     assert "ai_profile_model_options" in page
     assert "toggleAIProfileModelOptions" in page
@@ -6540,6 +6558,23 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "testAI" in page
     assert "HTML 邮件模板" in page
     assert "email_template_summary" in page
+    assert "email_template_resource_summary" in page
+    assert "email_template_search" in page
+    assert "email_template_status_filter" in page
+    assert "clearEmailTemplateFilters" in page
+    assert "renderEmailTemplateResourceSummary" in page
+    assert "renderEmailTemplatesTable" in page
+    assert "mail_config_modal" in page
+    assert "openMailConfigModal" in page
+    assert "closeMailConfigModal" in page
+    assert "mail_test_modal" in page
+    assert "openMailTestModal" in page
+    assert "closeMailTestModal" in page
+    assert "mail_test_console" in page
+    assert "mail_test_start_btn" in page
+    assert "email_subject_summary" in page
+    assert "配置和测试都通过弹窗完成；密码保存后不会在页面回显。" in page
+    assert "测试失败不会阻断报告生成；系统仍会保留报告供下载和预览。" in page
     assert "email-templates/preview" in page
     assert "email_template_preview" in page
     assert "scheduleEmailPreview" in page
@@ -6581,6 +6616,11 @@ def test_monitor_page_uses_consistent_buttons_tables_and_modal_actions():
     assert ".account-flow-actions { position:sticky;" in page
     assert ".ai-test-actions { position:sticky;" in page
     assert ".rule-modal-actions { position:sticky;" in page
+    assert ".resource-modal-actions { position:sticky;" in page
+    assert ".resource-summary-grid { display:grid;" in page
+    assert ".resource-toolbar { display:flex;" in page
+    assert ".mail-test-modal" in page
+    assert ".test-console" in page
     assert ".config-section .section-note, .config-section .field-hint { display:none; }" in page
     assert ".ui-icon svg" in page
     assert '<symbol id="icon-dashboard"' in page
@@ -6591,6 +6631,13 @@ def test_monitor_page_uses_consistent_buttons_tables_and_modal_actions():
     assert ".action-menu-host" in page
     assert ".action-menu.active" in page
     assert "openReportMenuId" in page
+    assert "resourceStat(label, value)" in page
+    assert "renderProxyProfilesTable" in page
+    assert "renderAIProfilesTable" in page
+    assert "renderEmailTemplatesTable" in page
+    assert "addEventListener('input', renderProxyProfilesTable)" in page
+    assert "addEventListener('input', renderAIProfilesTable)" in page
+    assert "addEventListener('input', renderEmailTemplatesTable)" in page
     assert "oldHtml = btn ? btn.innerHTML : ''" in page
     assert "btn.innerHTML = oldHtml" in page
     assert "<div class=\"wide-actions\"><button class=\"secondary\" onclick=\"switchTab('accounts')\">管理账号</button></div>" in page

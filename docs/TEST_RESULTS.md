@@ -11,6 +11,49 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
   `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-14 - Phase 3 Administrator Resource Center Verified
+
+Environment: local worktree `E:\myproject\MediaCrawler-worktrees\v1-roadmap`
+using `uv run`, the monitoring SQLite database, and Node script parsing for the
+single-file frontend.
+
+Result:
+
+- Refined the administrator resource center UI for platform accounts, proxy
+  resources, AI access, mail configuration, and mail templates.
+- Kept platform accounts in the existing account-detail dialog with account
+  resource metrics, filters, login maintenance, Cookie maintenance, proxy
+  binding, bulk actions, and customer-safe login state text.
+- Added proxy resource summary cards, search/status filters, and consistent
+  modal action footer for create/edit.
+- Added AI access summary cards, search/protocol/test-status filters,
+  consistent modal action footer for create/edit, and retained the dedicated
+  connection-test dialog without exposing raw API keys.
+- Changed mail configuration to use edit/test dialogs, summary cards, masked
+  password behavior, and a test console that records success or failure without
+  blocking report generation.
+- Added mail-template summary cards, search/status filters, live preview, and
+  consistent modal actions.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 206 passed, 3 warnings.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- Node syntax check for the `api/monitor_web/index.html` script block
+- Result: monitor web script parses.
+
+Limitations:
+
+- Phase 3 is a resource-center UI and interaction refinement. It does not
+  implement Phase 4 simplified normal-user task wizard, Phase 5
+  profile-key/lock runtime behavior, Phase 6 primary server-side login flow, or
+  Phase 8 server-like acceptance validation.
+- Proxy connection testing remains outside Phase 3 because the current product
+  and API surface only define create/edit/disable/delete for proxy resources;
+  no new proxy test requirement was accepted in this phase.
+
 ## 2026-06-14 - Phase 2 System Settings Center Verified
 
 Environment: local worktree `E:\myproject\MediaCrawler-worktrees\v1-roadmap`
