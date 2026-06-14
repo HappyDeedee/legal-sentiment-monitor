@@ -121,6 +121,123 @@ def test_scheduler_next_run_at_is_visible_for_jobs():
     ).startswith("2026-06-12T12:00:00")
 
 
+def test_phase_05_schema_foundation_tables_and_columns_exist():
+    init_db()
+    expected_tables = {
+        "workspaces",
+        "users",
+        "user_sessions",
+        "system_settings",
+        "audit_logs",
+        "resource_locks",
+    }
+    ownership_tables = {
+        "monitor_jobs",
+        "social_accounts",
+        "proxy_profiles",
+        "login_sessions",
+        "crawl_runs",
+        "raw_contents",
+        "raw_comments",
+        "ai_evaluations",
+        "reports",
+        "email_templates",
+        "ai_key_profiles",
+    }
+    with get_conn() as conn:
+        tables = {
+            row["name"]
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+        }
+        assert expected_tables <= tables
+        workspace = conn.execute("SELECT id, status FROM workspaces WHERE id=1").fetchone()
+        assert dict(workspace) == {"id": 1, "status": "active"}
+        for table in ownership_tables:
+            columns = _table_columns(conn, table)
+            assert {"workspace_id", "created_by", "updated_by"} <= columns
+        assert {"profile_key", "locked_by_run_id", "locked_at", "lock_expires_at"} <= _table_columns(conn, "social_accounts")
+        assert "profile_key" in _table_columns(conn, "login_sessions")
+        assert {"timeout_seconds", "deadline_at", "timeout_reason", "account_id", "proxy_id"} <= _table_columns(conn, "crawl_runs")
+        assert {"workspace_id", "resource_type", "resource_id", "run_id", "locked_at", "expires_at"} <= _table_columns(conn, "resource_locks")
+
+
+def test_phase_05_schema_defaults_keep_existing_mvp_records_compatible(tmp_path):
+    init_db()
+    jobs_snapshot = _snapshot_monitor_jobs()
+    snapshots = {
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "login_sessions": _snapshot_table("login_sessions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+        "proxy_profiles": _snapshot_table("proxy_profiles"),
+    }
+    _clear_monitor_jobs()
+    try:
+        proxy = save_proxy_profile(
+            {
+                "name": "华东代理池",
+                "provider": "manual",
+                "proxy_url": "http://user:password@example.com:8080",
+                "status": "standby",
+            }
+        )
+        account = save_social_account(
+            {
+                "name": "海安律所抖音采集号",
+                "platform": "dy",
+                "login_type": "qrcode",
+                "status": "standby",
+                "profile_path": str(tmp_path / "dy_profile"),
+                "proxy_id": proxy["id"],
+            }
+        )
+        job = save_job(
+            {
+                "law_firm_name": "海安律所",
+                "aliases": [],
+                "exclude_words": [],
+                "keywords": ["海安律所投诉"],
+                "platforms": ["dy"],
+                "recipients": [],
+                "account_id": account["id"],
+                "proxy_id": proxy["id"],
+            }
+        )
+        session = create_login_session(
+            {
+                "platform": "dy",
+                "account_id": account["id"],
+                "login_url": "https://www.douyin.com/",
+                "profile_path": account["profile_path"],
+            }
+        )
+        run_id = create_run(job["id"], {"law_firm_name": job["law_firm_name"]})
+        finish_run(run_id, "success", {"law_firm_name": job["law_firm_name"]})
+        report = create_report(run_id, job, {"law_firm_name": job["law_firm_name"], "platforms": ["dy"]})
+
+        assert get_job(job["id"])["workspace_id"] == 1
+        stored_account = get_social_account(account["id"])
+        stored_session = get_login_session(session["id"])
+        assert stored_account["workspace_id"] == 1
+        assert stored_account["profile_key"] == f"1/dy/acc_{account['id']}"
+        assert stored_session["workspace_id"] == 1
+        assert stored_session["profile_key"] == stored_account["profile_key"]
+        assert get_run(run_id)["workspace_id"] == 1
+        assert get_report(report["id"])["workspace_id"] == 1
+        assert list_jobs()[0]["id"] == job["id"]
+        assert list_social_accounts()[0]["id"] == account["id"]
+        assert list_login_sessions(limit=1)[0]["id"] == session["id"]
+        assert list_runs(limit=1)[0]["id"] == run_id
+        assert list_reports(limit=1)[0]["id"] == report["id"]
+    finally:
+        _restore_table("reports", snapshots["reports"])
+        _restore_table("crawl_runs", snapshots["crawl_runs"])
+        _restore_table("login_sessions", snapshots["login_sessions"])
+        _restore_table("social_accounts", snapshots["social_accounts"])
+        _restore_table("proxy_profiles", snapshots["proxy_profiles"])
+        _restore_monitor_jobs(jobs_snapshot)
+
+
 def test_custom_window_and_millisecond_timestamps():
     start, end = resolve_window({"time_window_type": "custom", "custom_start": "2026-06-10", "custom_end": "2026-06-11"})
     assert start.isoformat().startswith("2026-06-10T00:00:00")
@@ -194,7 +311,10 @@ def test_platform_status_reports_profile_and_login_error(tmp_path):
 
 def test_platform_status_ignores_login_error_older_than_successful_login_session(tmp_path):
     init_db()
-    snapshot = _snapshot_table("login_sessions")
+    snapshots = {
+        "login_sessions": _snapshot_table("login_sessions"),
+        "platform_login_configs": _snapshot_table("platform_login_configs"),
+    }
     profile = tmp_path / "browser_data" / "cdp_dy_user_data_dir"
     profile.mkdir(parents=True)
     state = profile / "state"
@@ -233,7 +353,8 @@ def test_platform_status_ignores_login_error_older_than_successful_login_session
             ],
         )
     finally:
-        _restore_table("login_sessions", snapshot)
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
     dy = next(item for item in statuses if item["platform"] == "dy")
 
     assert dy["profile_exists"] is True
@@ -242,6 +363,8 @@ def test_platform_status_ignores_login_error_older_than_successful_login_session
 
 
 def test_platform_status_keeps_fresh_login_error_when_browser_profile_was_touched(tmp_path):
+    init_db()
+    snapshot = _snapshot_table("platform_login_configs")
     profile = tmp_path / "browser_data" / "cdp_ks_user_data_dir"
     profile.mkdir(parents=True)
     state = profile / "state"
@@ -249,22 +372,29 @@ def test_platform_status_keeps_fresh_login_error_when_browser_profile_was_touche
     error_time = datetime.now(timezone.utc) - timedelta(minutes=5)
     touched_time = error_time + timedelta(seconds=5)
     os.utime(state, (touched_time.timestamp(), touched_time.timestamp()))
-
-    statuses = list_platform_status(
-        tmp_path,
-        [
-            {
-                "finished_at": error_time.isoformat(),
-                "summary": {
-                    "platform_results": {
-                        "ks": {
-                            "error": "MediaCrawler exited with 1；检测到登录态失效，请先重新登录该平台账号"
+    try:
+        with get_conn() as conn:
+            conn.execute(
+                "UPDATE platform_login_configs SET updated_at=? WHERE platform='ks'",
+                ((error_time - timedelta(minutes=1)).isoformat(),),
+            )
+        statuses = list_platform_status(
+            tmp_path,
+            [
+                {
+                    "finished_at": error_time.isoformat(),
+                    "summary": {
+                        "platform_results": {
+                            "ks": {
+                                "error": "MediaCrawler exited with 1；检测到登录态失效，请先重新登录该平台账号"
+                            }
                         }
-                    }
-                },
-            }
-        ],
-    )
+                    },
+                }
+            ],
+        )
+    finally:
+        _restore_table("platform_login_configs", snapshot)
     ks = next(item for item in statuses if item["platform"] == "ks")
 
     assert ks["profile_exists"] is True
@@ -7078,6 +7208,10 @@ def _restore_singleton_table(table: str, snapshot: dict) -> None:
 def _snapshot_table(table: str) -> list[dict]:
     with get_conn() as conn:
         return [dict(row) for row in conn.execute(f"SELECT * FROM {table}").fetchall()]
+
+
+def _table_columns(conn, table: str) -> set[str]:
+    return {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
 
 
 def _restore_table(table: str, snapshot: list[dict]) -> None:

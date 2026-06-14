@@ -9,15 +9,15 @@ Use this file to connect requirements, tasks, code areas, and tests.
 | CR-003 | Agent workflow | Phase 0 | docs, AGENTS.md | Documentation review | Implemented |
 | CR-004 | Agent confirmation gate | Phase 0 | AGENTS.md, docs/AGENT_WORKFLOW.md | Documentation review | Implemented |
 | CR-005 | P0 implementation specifications | Phase 0 | docs/ROLES_AND_PERMISSIONS.md, docs/ACCOUNT_ENVIRONMENT.md, docs/SYSTEM_SETTINGS.md, docs/DATA_MODEL.md | Documentation review | Implemented |
-| CR-006 | User and workspace permissions | Phase 1 after Phase 0.5 | docs/ROLES_AND_PERMISSIONS.md, docs/PERMISSIONS_CONFIRMATION.md | Permission tests | Accepted; Phase 0.5 not yet implemented, so Phase 1 is blocked until schema foundation exists |
+| CR-006 | User and workspace permissions | Phase 1 | docs/ROLES_AND_PERMISSIONS.md, docs/PERMISSIONS_CONFIRMATION.md | Permission tests | Accepted; Phase 1 is unblocked by the verified Phase 0.5 schema foundation |
 | CR-007 | Account environment and profile migration direction | Phase 5, Phase 6 | docs/ACCOUNT_ENVIRONMENT.md, docs/DATA_MODEL.md | Account/login/server tests | Accepted |
 | CR-008 | Runtime settings specification | Phase 2 | docs/SYSTEM_SETTINGS.md | Runtime settings tests | Accepted |
 | CR-009 | Permission confirmation pack | Phase 1 | docs/PERMISSIONS_CONFIRMATION.md | Documentation review | Implemented |
-| CR-010 | Compatible schema migration plan | Phase 0.5, Phase 1, Phase 5 | docs/SCHEMA_MIGRATION.md, docs/DATA_MODEL.md | Migration tests | Implemented |
+| CR-010 | Compatible schema migration plan | Phase 0.5, Phase 1, Phase 5 | api/monitoring/database.py, docs/SCHEMA_MIGRATION.md, docs/DATA_MODEL.md | tests/test_monitoring_mvp.py::test_phase_05_schema_foundation_tables_and_columns_exist, tests/test_monitoring_mvp.py::test_phase_05_schema_defaults_keep_existing_mvp_records_compatible | Verified for Phase 0.5 schema foundation |
 | CR-011 | Runtime config example | Phase 0, Phase 2 | monitor.example.yaml, docs/SYSTEM_SETTINGS.md | Configuration loading tests | Implemented |
 | CR-012A | Account environment profile key format | Phase 5, Phase 6 | docs/ACCOUNT_ENVIRONMENT.md, docs/SCHEMA_MIGRATION.md | Profile resolver tests | Accepted |
 | CR-012B | Account and profile lock timeout | Phase 2, Phase 5, Phase 6, Phase 7 | docs/ACCOUNT_ENVIRONMENT.md, docs/SCHEMA_MIGRATION.md, docs/SYSTEM_SETTINGS.md | Run timeout and stale-lock recovery tests | Accepted |
-| CR-012C | Account/profile/proxy lock storage | Phase 0.5, Phase 5, Phase 6 | docs/ACCOUNT_ENVIRONMENT.md, docs/SCHEMA_MIGRATION.md | Account/profile/proxy lock tests | Accepted |
+| CR-012C | Account/profile/proxy lock storage | Phase 0.5, Phase 5, Phase 6 | api/monitoring/database.py, docs/ACCOUNT_ENVIRONMENT.md, docs/SCHEMA_MIGRATION.md | tests/test_monitoring_mvp.py::test_phase_05_schema_foundation_tables_and_columns_exist | Phase 0.5 lock schema verified; runtime lock behavior remains for Phase 5/6 |
 | CR-013 | API authentication implementation guide | Phase 1 | docs/API_AUTHENTICATION.md, docs/ROLES_AND_PERMISSIONS.md | Auth and permission tests | Implemented |
 | CR-014 | Server deployment guide | Phase 8 | docs/SERVER_DEPLOYMENT.md, docs/TEST_PLAN.md | Server-like acceptance tests | Implemented |
 | CR-015 | Documentation consistency check specification | Phase 0 | docs/DOCUMENTATION_CHECKS.md, docs/AGENT_WORKFLOW.md | Documentation review | Implemented |

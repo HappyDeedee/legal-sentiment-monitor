@@ -11,6 +11,41 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
   `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-14 - Phase 0.5 Schema Foundation Verified
+
+Environment: local worktree `E:\myproject\MediaCrawler-worktrees\v1-roadmap`
+using `uv run` and the monitoring SQLite database.
+
+Result:
+
+- Implemented Phase 0.5 foundation schema in `api/monitoring/database.py`.
+- Created `workspaces`, `users`, `user_sessions`, `system_settings`,
+  `audit_logs`, and `resource_locks`.
+- Added `workspace_id`, `created_by`, and `updated_by` to priority business
+  tables.
+- Added `profile_key` to `social_accounts` and `login_sessions`, including
+  default key backfill and inheritance for new account login sessions.
+- Added run timeout fields to `crawl_runs`: `timeout_seconds`, `deadline_at`,
+  and `timeout_reason`.
+- Added account/profile lock fields to `social_accounts`:
+  `locked_by_run_id`, `locked_at`, and `lock_expires_at`.
+- Verified default workspace backfill with `workspace_id = 1`.
+- Verified existing MVP tasks, social accounts, login sessions, runs, and
+  reports still load after migration.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 198 passed, 3 warnings.
+
+Limitations:
+
+- Phase 0.5 adds schema and minimal profile-key persistence only. Full
+  authentication, RBAC, runtime settings UI, runtime lock acquisition,
+  timeout enforcement, and server-like login validation remain for later
+  phases.
+- No server-like acceptance validation was performed in this phase.
+
 ## 2026-06-14 - Documentation Review Follow-Up For Timeout And Range
 
 Environment: local repository documentation update.

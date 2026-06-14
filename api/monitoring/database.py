@@ -13,6 +13,8 @@ from .security import MONITOR_DATA_DIR, customer_safe_text, decrypt_secret, encr
 
 
 DB_PATH = MONITOR_DATA_DIR / "monitor.sqlite"
+DEFAULT_WORKSPACE_ID = 1
+DEFAULT_WORKSPACE_NAME = "Default Workspace"
 DEFAULT_EMAIL_SUBJECT_TEMPLATE = "【律所舆情日报】{law_firm_name} - {date}"
 DEFAULT_EMAIL_TEMPLATE_NAME = "标准舆情日报模板"
 JOB_TEMPLATE_PLACEHOLDERS = ("请改成", "目标律所", "律所简称", "律师事务所简称")
@@ -53,8 +55,67 @@ def init_db() -> None:
     with get_conn() as conn:
         conn.executescript(
             """
+            CREATE TABLE IF NOT EXISTS workspaces (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'active',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
+                email TEXT NOT NULL UNIQUE,
+                display_name TEXT NOT NULL DEFAULT '',
+                password_hash TEXT NOT NULL DEFAULT '',
+                role TEXT NOT NULL DEFAULT 'normal',
+                status TEXT NOT NULL DEFAULT 'active',
+                last_login_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS user_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                session_token_hash TEXT NOT NULL UNIQUE,
+                status TEXT NOT NULL DEFAULT 'active',
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                last_active_at TEXT,
+                user_agent TEXT NOT NULL DEFAULT '',
+                ip_address TEXT NOT NULL DEFAULT ''
+            );
+
+            CREATE TABLE IF NOT EXISTS system_settings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
+                key TEXT NOT NULL,
+                value_json TEXT NOT NULL DEFAULT 'null',
+                value_type TEXT NOT NULL DEFAULT 'json',
+                is_locked INTEGER NOT NULL DEFAULT 0,
+                source TEXT NOT NULL DEFAULT 'database',
+                updated_by INTEGER,
+                updated_at TEXT NOT NULL,
+                UNIQUE(workspace_id, key)
+            );
+
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
+                user_id INTEGER,
+                action_type TEXT NOT NULL,
+                resource_type TEXT NOT NULL DEFAULT '',
+                resource_id TEXT NOT NULL DEFAULT '',
+                details_json TEXT NOT NULL DEFAULT '{}',
+                ip_address TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS monitor_jobs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
                 law_firm_name TEXT NOT NULL,
                 aliases TEXT NOT NULL DEFAULT '[]',
                 exclude_words TEXT NOT NULL DEFAULT '[]',
@@ -80,6 +141,8 @@ def init_db() -> None:
                 is_internal INTEGER NOT NULL DEFAULT 0,
                 next_run_at TEXT,
                 last_run_at TEXT,
+                created_by INTEGER,
+                updated_by INTEGER,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
@@ -142,6 +205,7 @@ def init_db() -> None:
 
             CREATE TABLE IF NOT EXISTS ai_key_profiles (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
                 name TEXT NOT NULL,
                 provider TEXT NOT NULL DEFAULT 'openai',
                 base_url TEXT NOT NULL DEFAULT '',
@@ -153,6 +217,8 @@ def init_db() -> None:
                 last_test_status TEXT NOT NULL DEFAULT 'untested',
                 last_test_at TEXT,
                 last_test_error TEXT NOT NULL DEFAULT '',
+                created_by INTEGER,
+                updated_by INTEGER,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
@@ -171,21 +237,26 @@ def init_db() -> None:
 
             CREATE TABLE IF NOT EXISTS email_templates (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
                 name TEXT NOT NULL,
                 subject_template TEXT NOT NULL DEFAULT '【律所舆情日报】{law_firm_name} - {date}',
                 html_template TEXT NOT NULL DEFAULT '',
                 is_active INTEGER NOT NULL DEFAULT 0,
+                created_by INTEGER,
+                updated_by INTEGER,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS social_accounts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
                 name TEXT NOT NULL,
                 platform TEXT NOT NULL,
                 login_type TEXT NOT NULL DEFAULT 'qrcode',
                 cookies_encrypted TEXT NOT NULL DEFAULT '',
                 status TEXT NOT NULL DEFAULT 'standby',
+                profile_key TEXT NOT NULL DEFAULT '',
                 profile_path TEXT NOT NULL DEFAULT '',
                 proxy_id INTEGER,
                 is_draft INTEGER NOT NULL DEFAULT 0,
@@ -198,12 +269,18 @@ def init_db() -> None:
                 last_used_at TEXT,
                 last_checked_at TEXT,
                 last_error TEXT NOT NULL DEFAULT '',
+                locked_by_run_id INTEGER,
+                locked_at TEXT,
+                lock_expires_at TEXT,
+                created_by INTEGER,
+                updated_by INTEGER,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS proxy_profiles (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
                 name TEXT NOT NULL,
                 provider TEXT NOT NULL DEFAULT 'manual',
                 proxy_url_encrypted TEXT NOT NULL DEFAULT '',
@@ -212,19 +289,25 @@ def init_db() -> None:
                 notes TEXT NOT NULL DEFAULT '',
                 last_checked_at TEXT,
                 last_error TEXT NOT NULL DEFAULT '',
+                created_by INTEGER,
+                updated_by INTEGER,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS login_sessions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
                 platform TEXT NOT NULL,
                 account_id INTEGER,
                 status TEXT NOT NULL DEFAULT 'waiting_manual_browser',
                 login_url TEXT NOT NULL DEFAULT '',
                 qr_image TEXT NOT NULL DEFAULT '',
+                profile_key TEXT NOT NULL DEFAULT '',
                 profile_path TEXT NOT NULL DEFAULT '',
                 message TEXT NOT NULL DEFAULT '',
+                created_by INTEGER,
+                updated_by INTEGER,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 expires_at TEXT
@@ -232,16 +315,25 @@ def init_db() -> None:
 
             CREATE TABLE IF NOT EXISTS crawl_runs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
                 job_id INTEGER REFERENCES monitor_jobs(id) ON DELETE SET NULL,
+                account_id INTEGER,
+                proxy_id INTEGER,
                 status TEXT NOT NULL,
                 started_at TEXT NOT NULL,
                 finished_at TEXT,
                 summary TEXT NOT NULL DEFAULT '{}',
-                error_message TEXT
+                error_message TEXT,
+                timeout_seconds INTEGER,
+                deadline_at TEXT,
+                timeout_reason TEXT,
+                created_by INTEGER,
+                updated_by INTEGER
             );
 
             CREATE TABLE IF NOT EXISTS raw_contents (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
                 platform TEXT NOT NULL,
                 content_id TEXT NOT NULL,
                 job_id INTEGER,
@@ -258,11 +350,14 @@ def init_db() -> None:
                 raw_json TEXT NOT NULL,
                 first_seen_at TEXT NOT NULL,
                 last_seen_at TEXT NOT NULL,
+                created_by INTEGER,
+                updated_by INTEGER,
                 UNIQUE(job_id, platform, content_id)
             );
 
             CREATE TABLE IF NOT EXISTS raw_comments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
                 platform TEXT NOT NULL,
                 comment_id TEXT NOT NULL,
                 content_id TEXT NOT NULL,
@@ -271,11 +366,14 @@ def init_db() -> None:
                 create_time INTEGER,
                 raw_json TEXT NOT NULL,
                 first_seen_at TEXT NOT NULL,
+                created_by INTEGER,
+                updated_by INTEGER,
                 UNIQUE(platform, comment_id)
             );
 
             CREATE TABLE IF NOT EXISTS ai_evaluations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
                 raw_content_id INTEGER NOT NULL REFERENCES raw_contents(id) ON DELETE CASCADE,
                 run_id INTEGER,
                 status TEXT NOT NULL,
@@ -287,11 +385,14 @@ def init_db() -> None:
                 recommended_action TEXT NOT NULL DEFAULT '',
                 raw_response TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL,
+                created_by INTEGER,
+                updated_by INTEGER,
                 UNIQUE(raw_content_id)
             );
 
             CREATE TABLE IF NOT EXISTS reports (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
                 run_id INTEGER NOT NULL REFERENCES crawl_runs(id) ON DELETE CASCADE,
                 job_id INTEGER,
                 html_path TEXT NOT NULL,
@@ -300,9 +401,30 @@ def init_db() -> None:
                 email_status TEXT NOT NULL DEFAULT 'pending',
                 email_error TEXT,
                 summary TEXT NOT NULL DEFAULT '{}',
+                created_by INTEGER,
+                updated_by INTEGER,
                 created_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS resource_locks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
+                resource_type TEXT NOT NULL,
+                resource_id INTEGER NOT NULL,
+                run_id INTEGER NOT NULL,
+                locked_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                UNIQUE(resource_type, resource_id, run_id)
+            );
             """
+        )
+        now = utc_now()
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO workspaces (id, name, status, created_at, updated_at)
+            VALUES (?, ?, 'active', ?, ?)
+            """,
+            (DEFAULT_WORKSPACE_ID, DEFAULT_WORKSPACE_NAME, now, now),
         )
         _ensure_column(conn, "monitor_jobs", "is_internal", "INTEGER NOT NULL DEFAULT 0")
         _ensure_column(conn, "monitor_jobs", "enable_sub_comments", "INTEGER NOT NULL DEFAULT 0")
@@ -332,8 +454,8 @@ def init_db() -> None:
         _ensure_column(conn, "social_accounts", "platform_home_url", "TEXT NOT NULL DEFAULT ''")
         _ensure_column(conn, "social_accounts", "platform_identity_checked_at", "TEXT")
         _migrate_raw_contents_unique_by_job(conn)
+        _ensure_phase_05_schema(conn)
         mark_selftest_jobs_internal(conn)
-        now = utc_now()
         conn.execute(
             "INSERT OR IGNORE INTO ai_configs (id, updated_at) VALUES (1, ?)",
             (now,),
@@ -572,6 +694,100 @@ def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition
     columns = [row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()]
     if column not in columns:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+
+def _ensure_phase_05_schema(conn: sqlite3.Connection) -> None:
+    ownership_tables = [
+        "monitor_jobs",
+        "social_accounts",
+        "proxy_profiles",
+        "login_sessions",
+        "crawl_runs",
+        "raw_contents",
+        "raw_comments",
+        "ai_evaluations",
+        "reports",
+        "email_templates",
+        "ai_key_profiles",
+    ]
+    for table in ownership_tables:
+        _ensure_column(conn, table, "workspace_id", f"INTEGER NOT NULL DEFAULT {DEFAULT_WORKSPACE_ID}")
+        _ensure_column(conn, table, "created_by", "INTEGER")
+        _ensure_column(conn, table, "updated_by", "INTEGER")
+
+    _ensure_column(conn, "social_accounts", "profile_key", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "social_accounts", "locked_by_run_id", "INTEGER")
+    _ensure_column(conn, "social_accounts", "locked_at", "TEXT")
+    _ensure_column(conn, "social_accounts", "lock_expires_at", "TEXT")
+    _ensure_column(conn, "login_sessions", "profile_key", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "crawl_runs", "account_id", "INTEGER")
+    _ensure_column(conn, "crawl_runs", "proxy_id", "INTEGER")
+    _ensure_column(conn, "crawl_runs", "timeout_seconds", "INTEGER")
+    _ensure_column(conn, "crawl_runs", "deadline_at", "TEXT")
+    _ensure_column(conn, "crawl_runs", "timeout_reason", "TEXT")
+    _backfill_social_account_profile_keys(conn)
+    _backfill_login_session_profile_keys(conn)
+
+    conn.executescript(
+        """
+        CREATE INDEX IF NOT EXISTS idx_users_workspace_role_status
+            ON users(workspace_id, role, status);
+        CREATE INDEX IF NOT EXISTS idx_user_sessions_token_status
+            ON user_sessions(session_token_hash, status);
+        CREATE INDEX IF NOT EXISTS idx_user_sessions_user_status
+            ON user_sessions(user_id, status);
+        CREATE INDEX IF NOT EXISTS idx_system_settings_workspace_key
+            ON system_settings(workspace_id, key);
+        CREATE INDEX IF NOT EXISTS idx_audit_logs_workspace_created
+            ON audit_logs(workspace_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_account_lock_status
+            ON social_accounts(locked_by_run_id, lock_expires_at);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_resource_locks_unique
+            ON resource_locks(resource_type, resource_id, run_id);
+        CREATE INDEX IF NOT EXISTS idx_resource_lock_lookup
+            ON resource_locks(resource_type, resource_id, expires_at);
+        CREATE INDEX IF NOT EXISTS idx_resource_lock_cleanup
+            ON resource_locks(expires_at);
+        """
+    )
+
+
+def _backfill_social_account_profile_keys(conn: sqlite3.Connection) -> None:
+    rows = conn.execute(
+        """
+        SELECT id, workspace_id, platform FROM social_accounts
+        WHERE COALESCE(profile_key, '') = ''
+        """
+    ).fetchall()
+    for row in rows:
+        conn.execute(
+            "UPDATE social_accounts SET profile_key=? WHERE id=?",
+            (
+                _default_account_profile_key(
+                    _safe_int(row["workspace_id"]) or DEFAULT_WORKSPACE_ID,
+                    str(row["platform"] or ""),
+                    int(row["id"]),
+                ),
+                row["id"],
+            ),
+        )
+
+
+def _backfill_login_session_profile_keys(conn: sqlite3.Connection) -> None:
+    rows = conn.execute(
+        """
+        SELECT s.id AS session_id, a.profile_key AS account_profile_key
+        FROM login_sessions s
+        JOIN social_accounts a ON a.id = s.account_id
+        WHERE COALESCE(s.profile_key, '') = ''
+          AND COALESCE(a.profile_key, '') <> ''
+        """
+    ).fetchall()
+    for row in rows:
+        conn.execute(
+            "UPDATE login_sessions SET profile_key=? WHERE id=?",
+            (row["account_profile_key"], row["session_id"]),
+        )
 
 
 def _migrate_raw_contents_unique_by_job(conn: sqlite3.Connection) -> None:
@@ -1963,6 +2179,14 @@ def save_social_account(payload: dict[str, Any], account_id: int | None = None) 
     profile_path = (payload.get("profile_path") or "").strip()
     if account_id and not profile_path:
         profile_path = _default_account_profile_path(platform, name, account_id)
+    profile_key = (payload.get("profile_key") or "").strip()
+    if account_id and not profile_key:
+        with get_conn() as conn:
+            row = conn.execute("SELECT workspace_id, profile_key FROM social_accounts WHERE id=?", (account_id,)).fetchone()
+        if row and row["profile_key"]:
+            profile_key = str(row["profile_key"])
+        else:
+            profile_key = _default_account_profile_key(_safe_int(row["workspace_id"]) if row else DEFAULT_WORKSPACE_ID, platform, account_id)
     proxy_id = _safe_int(payload.get("proxy_id")) or None
     if proxy_id and not get_proxy_profile(proxy_id, masked=True):
         raise ValueError("proxy not found")
@@ -1986,6 +2210,7 @@ def save_social_account(payload: dict[str, Any], account_id: int | None = None) 
         login_type,
         encrypt_secret(cookies),
         status,
+        profile_key,
         profile_path,
         proxy_id,
         is_draft,
@@ -2005,7 +2230,7 @@ def save_social_account(payload: dict[str, Any], account_id: int | None = None) 
             conn.execute(
                 """
                 UPDATE social_accounts SET name=?, platform=?, login_type=?, cookies_encrypted=?, status=?,
-                    profile_path=?, proxy_id=?, is_draft=?, notes=?, last_error=?, updated_at=? WHERE id=?
+                    profile_key=?, profile_path=?, proxy_id=?, is_draft=?, notes=?, last_error=?, updated_at=? WHERE id=?
                 """,
                 (*values, account_id),
             )
@@ -2014,13 +2239,19 @@ def save_social_account(payload: dict[str, Any], account_id: int | None = None) 
             cur = conn.execute(
                 """
                 INSERT INTO social_accounts (
-                    name, platform, login_type, cookies_encrypted, status, profile_path, proxy_id, is_draft, notes,
+                    name, platform, login_type, cookies_encrypted, status, profile_key, profile_path, proxy_id, is_draft, notes,
                     last_error, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (*values[:-1], now, now),
             )
             target_id = int(cur.lastrowid)
+            if not profile_key:
+                profile_key = _default_account_profile_key(DEFAULT_WORKSPACE_ID, platform, target_id)
+                conn.execute(
+                    "UPDATE social_accounts SET profile_key=?, updated_at=? WHERE id=?",
+                    (profile_key, now, target_id),
+                )
             if not profile_path:
                 profile_path = _default_account_profile_path(platform, name, target_id)
                 _ensure_unique_account_profile(conn, profile_path, target_id)
@@ -2059,6 +2290,7 @@ def confirm_social_account(account_id: int, payload: dict[str, Any] | None = Non
         "login_type": payload.get("login_type") or account.get("login_type") or "qrcode",
         "status": payload.get("status") or ("active" if account.get("status") == "active" else account.get("status") or "standby"),
         "proxy_id": payload.get("proxy_id") if "proxy_id" in payload else account.get("proxy_id"),
+        "profile_key": account.get("profile_key") or "",
         "profile_path": payload.get("profile_path") or account.get("profile_path") or "",
         "notes": payload.get("notes") if "notes" in payload else account.get("notes") or "",
         "last_error": payload.get("last_error") if "last_error" in payload else account.get("last_error") or "",
@@ -2108,6 +2340,12 @@ def _default_account_profile_path(platform: str, account_name: str, account_id: 
     slug = re.sub(r"[^a-zA-Z0-9_\-\u4e00-\u9fff]+", "_", slug_source).strip("_") or platform
     slug = slug[:80]
     return str((ACCOUNT_PROFILE_ROOT / platform / slug).resolve())
+
+
+def _default_account_profile_key(workspace_id: int | None, platform: str, account_id: int | None) -> str:
+    workspace = workspace_id or DEFAULT_WORKSPACE_ID
+    account = account_id or 0
+    return f"{workspace}/{platform}/acc_{account}"
 
 
 def delete_social_account(account_id: int) -> None:
@@ -2263,6 +2501,10 @@ def create_login_session(payload: dict[str, Any]) -> dict[str, Any]:
     account_id = _safe_int(payload.get("account_id")) or None
     login_url = (payload.get("login_url") or "").strip()
     profile_path = (payload.get("profile_path") or "").strip()
+    profile_key = (payload.get("profile_key") or "").strip()
+    if account_id and not profile_key:
+        account = get_social_account(account_id, masked=False)
+        profile_key = str((account or {}).get("profile_key") or "")
     message = payload.get("message") or (
         "正在创建平台登录会话；如二维码或验证状态无法回传，可使用网页登录窗口人工处理。"
     )
@@ -2271,9 +2513,9 @@ def create_login_session(payload: dict[str, Any]) -> dict[str, Any]:
         cur = conn.execute(
             """
             INSERT INTO login_sessions (
-                platform, account_id, status, login_url, qr_image, profile_path,
+                platform, account_id, status, login_url, qr_image, profile_key, profile_path,
                 message, created_at, updated_at, expires_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 platform,
@@ -2281,6 +2523,7 @@ def create_login_session(payload: dict[str, Any]) -> dict[str, Any]:
                 "waiting_manual_browser",
                 login_url,
                 payload.get("qr_image") or "",
+                profile_key,
                 profile_path,
                 message,
                 now,

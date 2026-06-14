@@ -4,26 +4,24 @@ Last updated: 2026-06-14
 
 ## Current Phase
 
-Phase 0 documentation is complete. Phase 0.5 - Schema Foundation must be
-implemented before Phase 1-9 work can begin. Current code does not yet provide
-the `users`, `workspaces`, `user_sessions`, `system_settings`, or `audit_logs`
-tables required by the target V1 model.
+Phase 0 documentation is complete. Phase 0.5 - Schema Foundation is complete
+and verified. The active SQLite schema now provides the foundation tables and
+columns required before Phase 1-9 implementation work.
 
 ## Implementation Status
 
 - Phase 0 - Documentation: complete.
-- Phase 0.5 - Schema Foundation: not started; required before Phase 1.
-- Phase 1 - Users And Permissions: blocked by Phase 0.5 implementation, not
-  by permission decisions.
-- Phase 2 - System Settings: blocked by Phase 0.5 implementation until the
-  `system_settings` foundation exists.
+- Phase 0.5 - Schema Foundation: complete and verified.
+- Phase 1 - Users And Permissions: first unblocked implementation phase after
+  Phase 0.5.
+- Phase 2 - System Settings: blocked by Phase 1 completion and Phase 2
+  sequencing, not by missing schema foundation.
 - Phase 5/6 - Account Environment and Server Login: profile key, timeout, and
-  lock-storage decisions are accepted; implementation is still blocked by
-  Phase 0.5 schema foundation and the preceding account/session groundwork.
+  lock-storage decisions are accepted; runtime implementation is still blocked
+  by preceding Phase 1-4 work and Phase 5/6 sequencing.
 
-All Phase 1-9 implementation work depends on Phase 0.5. Phase-specific planning
-may continue, but code changes for those phases should not bypass the schema
-foundation.
+Phase 1 can begin next. Phase 2-9 implementation must still proceed in order
+and must not bypass unfinished earlier phases.
 
 ## Completed
 
@@ -57,19 +55,25 @@ foundation.
 - Permission, workspace, authentication, initial administrator, disabled-user
   behavior, audit-log timing, and runtime settings storage decisions have been
   accepted using the V1 recommended options.
+- Phase 0.5 schema foundation has been implemented in
+  `api/monitoring/database.py`: default workspace, user/session/settings/audit
+  tables, ownership columns, profile keys, run timeout fields, account lock
+  fields, and proxy `resource_locks`.
+- Existing monitoring MVP task/account/login/run/report records still load
+  after the schema foundation migration.
 
 ## In Progress
 
-- Preparing for implementation phases that use the documentation loop as the
-  source of truth.
+- Phase 1 - Users And Permissions is ready to start.
 
 ## Known Risks
 
 - Current code still exposes or handles real profile paths in places.
 - Current code still uses `profile_path` as a primary account/profile identity
   in places; Phase 5 will migrate new account environments to `profile_key`.
-- Current database schema does not have `profile_key` yet; Phase 0.5 adds the
-  column, and Phase 5 changes runtime behavior to use it.
+- Current database schema has `profile_key`, but current runtime code still
+  uses `profile_path` in places; Phase 5 changes runtime behavior to use
+  `profile_key` consistently.
 - Current frontend does not have role-based menu rendering, login page,
   session checks, or `/api/auth/*` flows yet.
 - Scheduler tick interval and global/platform concurrency are still hard-coded
@@ -88,27 +92,28 @@ foundation.
 - Profile migration strategy has been clarified: existing low-volume
   `profile_path` accounts do not need long-term compatibility and can be reset
   or re-logged in under the new `profile_key` model.
-- Phase 5/6 account/profile/proxy behavior has accepted decisions, but code
-  still needs run-level timeout tracking, persisted lock fields, proxy lock
-  records, and startup/scheduler recovery.
+- Phase 5/6 account/profile/proxy behavior has accepted decisions, but runtime
+  code still needs run-level timeout enforcement, persisted lock acquisition,
+  proxy lock usage, and startup/scheduler recovery.
 - Phase 2 Runtime Strategy layout is accepted as administrator-only grouped
   tables, but the settings UI and database-backed settings layer are not yet
   implemented.
 
 ## Next Step
 
-Implement Phase 0.5 first, then Phase 1 and Phase 2 in small increments:
+Implement Phase 1, then Phase 2 in small increments:
 
-1. add schema foundation tables and fields;
-2. add user and role foundation;
+1. add user and role foundation;
+2. add login/session flow;
 3. add menu/route permission controls;
-4. add runtime settings storage and administrator UI;
+4. add runtime settings storage and administrator UI after Phase 1;
 5. keep normal-user task creation simple.
 6. for every new requirement, add or update `CHANGE_REQUESTS.md`,
    `TASKS.md`, `TRACEABILITY.md`, and `TEST_RESULTS.md`.
 7. ask for user confirmation before accepting ambiguous assumptions in
    permissions, deployment, account environment, security, or data model.
-8. Phase 1 can proceed after Phase 0.5 creates the schema foundation.
+8. Phase 1 can proceed now that Phase 0.5 has created and verified the schema
+   foundation.
 9. Accepted Phase 5/6 decisions:
    - `profile_key` format is `{workspace_id}/{platform}/acc_{account_id}`;
    - task timeout is a run-level wall-clock deadline controlled by
@@ -116,10 +121,14 @@ Implement Phase 0.5 first, then Phase 1 and Phase 2 in small increments:
    - lock expiry is the run deadline plus cleanup buffer;
    - account/profile locks use inline `social_accounts` fields;
    - proxy concurrency uses `resource_locks`.
-10. Before Phase 5/6 coding, complete Phase 0.5 schema foundation and verify
-    that run timeout fields, profile keys, lock fields, and `resource_locks`
-    exist.
+10. Before Phase 5/6 coding, re-verify that run timeout fields, profile keys,
+    lock fields, and `resource_locks` exist in the active database.
 
 ## Latest Verification
+
+Phase 0.5 local verification passed on 2026-06-14:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 198 passed, 3 warnings.
 
 No server-like acceptance run has been completed for the new plan yet.
