@@ -17,6 +17,7 @@ Status legend:
 - [x] Add change request intake document.
 - [x] Add requirement/task/test traceability matrix.
 - [x] Add detailed agent workflow document.
+- [x] Add confirmation gate for ambiguous high-impact requirements.
 - [ ] Add `monitor.example.yaml` after the runtime settings schema is finalized.
 - [ ] Add a documentation check script after the first implementation phase.
 

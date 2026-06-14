@@ -39,3 +39,5 @@ This file is append-only. Add new dated decisions instead of rewriting history.
 - Agent work must update project documents as part of the completion criteria.
 - Parallel agent/worktree development is allowed only with clear module/file
   ownership and document updates in each branch.
+- Ambiguous high-impact requirements must be confirmed with the user before
+  they are marked accepted or implemented in stable product documents.

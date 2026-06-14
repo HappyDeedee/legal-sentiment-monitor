@@ -95,6 +95,11 @@ If the user raises a new requirement, first record it in:
 Then connect it to tasks and tests before or during implementation. Meaningful
 new requirements should not exist only in chat history.
 
+If a requirement is ambiguous or requires a product, permission, security,
+deployment, account-environment, or data-model decision, ask the user for
+confirmation before treating it as accepted. Draft assumptions may be recorded,
+but they must be marked as proposed or needing confirmation.
+
 A task is not complete until code, verification, and documentation state agree.
 
 ## Sensitive Data Rule

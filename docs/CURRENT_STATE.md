@@ -24,6 +24,9 @@ Phase 0 - Project Governance.
 - Menu-level product requirements have been documented.
 - Change request intake, traceability, and agent workflow documents have been
   added.
+- A confirmation gate has been added: ambiguous high-impact requirements must
+  be confirmed by the user before becoming accepted product or architecture
+  decisions.
 
 ## In Progress
 
@@ -41,6 +44,8 @@ Phase 0 - Project Governance.
   task creation.
 - The newly added product documents are initial versions and should be refined
   during implementation.
+- Some planned P0 documents still need user-confirmed detail before they should
+  be treated as final specifications.
 
 ## Next Step
 
@@ -52,6 +57,8 @@ Implement Phase 1 and Phase 2 in small increments:
 4. keep normal-user task creation simple.
 5. for every new requirement, add or update `CHANGE_REQUESTS.md`,
    `TASKS.md`, `TRACEABILITY.md`, and `TEST_RESULTS.md`.
+6. ask for user confirmation before accepting ambiguous assumptions in
+   permissions, deployment, account environment, security, or data model.
 
 ## Latest Verification
 

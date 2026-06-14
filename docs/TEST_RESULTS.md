@@ -2,6 +2,20 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-06-14 - Confirmation Gate Added
+
+Environment: local repository documentation update.
+
+Result:
+
+- Added confirmation-gate rule to agent workflow.
+- Updated agent entry instructions.
+- Added CR-004 and traceability entry.
+
+Limitations:
+
+- No application runtime validation was performed.
+
 ## 2026-06-14 - Documentation Loop Expansion
 
 Environment: local repository documentation update.

@@ -30,13 +30,47 @@ When the user gives a new requirement:
 
 1. Decide whether it is already covered by existing documents.
 2. If it is new or changes scope, add an entry to `CHANGE_REQUESTS.md`.
-3. If it changes product behavior, update `PRODUCT_REQUIREMENTS.md`.
-4. If it changes UI rules, update `UI_UX_GUIDELINES.md`.
-5. If it changes a product or technical decision, append to `DECISIONS.md`.
-6. Add or update tasks in `TASKS.md`.
-7. Add or update rows in `TRACEABILITY.md`.
+3. If it is ambiguous, mark it as `Proposed` and ask the user to confirm.
+4. If it changes product behavior, update `PRODUCT_REQUIREMENTS.md` only after
+   the decision is clear, or mark the section as proposed.
+5. If it changes UI rules, update `UI_UX_GUIDELINES.md` only after the decision
+   is clear, or mark the section as proposed.
+6. If it changes a product or technical decision, append to `DECISIONS.md`
+   after user confirmation.
+7. Add or update tasks in `TASKS.md`.
+8. Add or update rows in `TRACEABILITY.md`.
 
 Do not implement meaningful new scope only from chat memory.
+
+## Confirmation Gate
+
+Ask the user before accepting or implementing assumptions that affect:
+
+- product scope;
+- role permissions;
+- server deployment;
+- browser/profile/account behavior;
+- proxy behavior;
+- data model;
+- security;
+- billing or SaaS boundaries;
+- customer-facing wording.
+
+Allowed without confirmation:
+
+- formatting fixes;
+- typo fixes;
+- adding clearly marked draft sections;
+- documenting already-confirmed decisions;
+- updating progress after completed work.
+
+When confirmation is needed, use this flow:
+
+1. record the item as `Proposed` in `CHANGE_REQUESTS.md`;
+2. list assumptions clearly;
+3. ask the user to confirm or correct;
+4. after confirmation, change status to `Accepted`;
+5. then implement or update stable product documents.
 
 ## During Implementation
 
@@ -80,4 +114,3 @@ Rules:
 - merge one feature branch at a time;
 - update documents in every branch;
 - run relevant tests before merge.
-

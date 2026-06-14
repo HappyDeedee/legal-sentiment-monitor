@@ -103,3 +103,35 @@ Acceptance:
 - `AGENT_WORKFLOW.md` defines when to update documents;
 - `AGENTS.md` references the workflow.
 
+## CR-004 - Confirmation Gate For Ambiguous Requirements
+
+Date: 2026-06-14
+
+Source: user conversation
+
+Module: agent workflow
+
+Requirement:
+
+Agents must confirm with the user before turning ambiguous assumptions into
+accepted product, permission, deployment, account-environment, security, or
+data-model requirements.
+
+Reason:
+
+The project is now governed by documents. Incorrect assumptions in documents can
+mislead future coding agents and create product or architecture drift.
+
+Status: Implemented
+
+Related tasks:
+
+- Phase 0 in `TASKS.md`
+
+Acceptance:
+
+- `AGENT_WORKFLOW.md` contains a confirmation gate;
+- `AGENTS.md` tells agents to ask before accepting ambiguous high-impact
+  requirements;
+- assumptions can be drafted only when marked as proposed or needing
+  confirmation.
