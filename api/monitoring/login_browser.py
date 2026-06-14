@@ -6,15 +6,15 @@ from pathlib import Path
 from typing import Any
 
 from .login_state import record_login_window
+from .mediacrawler_login import get_mediacrawler_login_capability
 from .normalizer import PLATFORM_LABELS
 from .platform_status import PROFILE_DIRS, PROJECT_ROOT
 from tools.browser_launcher import BrowserLauncher
 
 
 PLATFORM_LOGIN_URLS = {
-    "dy": "https://www.douyin.com/",
-    "ks": "https://www.kuaishou.com/",
-    "xhs": "https://www.xiaohongshu.com/explore",
+    platform: get_mediacrawler_login_capability(platform)["login_url"]
+    for platform in PROFILE_DIRS
 }
 
 
@@ -35,6 +35,7 @@ def build_login_browser_command(platform: str, debug_port: int | None = None) ->
         "login_url": PLATFORM_LOGIN_URLS[platform],
         "platform": platform,
         "platform_label": PLATFORM_LABELS.get(platform, platform),
+        "login_capability_source": "平台采集服务",
     }
 
 

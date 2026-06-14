@@ -3,28 +3,22 @@ from __future__ import annotations
 import json
 import sqlite3
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from .mediacrawler_login import LOGIN_TYPE_LABELS, PLATFORM_LOGIN_TYPES, SUPPORTED_MONITOR_PLATFORMS, get_mediacrawler_login_capability
 from .prompts import DEFAULT_PROMPT
-from .security import MONITOR_DATA_DIR, decrypt_secret, encrypt_secret, mask_secret, redact_sensitive
+from .security import MONITOR_DATA_DIR, customer_safe_text, decrypt_secret, encrypt_secret, mask_secret, redact_sensitive
 
 
 DB_PATH = MONITOR_DATA_DIR / "monitor.sqlite"
 DEFAULT_EMAIL_SUBJECT_TEMPLATE = "【律所舆情日报】{law_firm_name} - {date}"
+DEFAULT_EMAIL_TEMPLATE_NAME = "标准舆情日报模板"
 JOB_TEMPLATE_PLACEHOLDERS = ("请改成", "目标律所", "律所简称", "律师事务所简称")
-SUPPORTED_MONITOR_PLATFORMS = ("dy", "ks", "xhs")
-PLATFORM_LOGIN_TYPES = {
-    "dy": ("qrcode", "phone", "cookie"),
-    "ks": ("qrcode", "cookie"),
-    "xhs": ("qrcode", "phone", "cookie"),
-}
-LOGIN_TYPE_LABELS = {
-    "qrcode": "浏览器 Profile / 扫码",
-    "phone": "手机号",
-    "cookie": "Cookie",
-}
+JOB_TARGET_TYPES = {"search", "detail", "creator"}
+JOB_OUTPUT_MODES = {"internal", "json", "excel"}
+JOB_BROWSER_MODES = {"server_qrcode", "profile", "local_window"}
 
 ACCOUNT_PROFILE_ROOT = MONITOR_DATA_DIR / "account_profiles"
 
@@ -65,12 +59,23 @@ def init_db() -> None:
                 aliases TEXT NOT NULL DEFAULT '[]',
                 exclude_words TEXT NOT NULL DEFAULT '[]',
                 enable_comments INTEGER NOT NULL DEFAULT 1,
+                enable_sub_comments INTEGER NOT NULL DEFAULT 0,
                 time_window_type TEXT NOT NULL DEFAULT 'recent_1d',
                 custom_start TEXT,
                 custom_end TEXT,
                 frequency TEXT NOT NULL DEFAULT 'daily',
                 cron_expr TEXT,
                 email_time TEXT NOT NULL DEFAULT '09:00',
+                target_type TEXT NOT NULL DEFAULT 'search',
+                max_pages INTEGER NOT NULL DEFAULT 1,
+                max_items INTEGER NOT NULL DEFAULT 50,
+                start_page INTEGER NOT NULL DEFAULT 1,
+                output_mode TEXT NOT NULL DEFAULT 'internal',
+                browser_mode TEXT NOT NULL DEFAULT 'server_qrcode',
+                ai_profile_id INTEGER,
+                email_template_id INTEGER,
+                account_id INTEGER,
+                proxy_id INTEGER,
                 enabled INTEGER NOT NULL DEFAULT 1,
                 is_internal INTEGER NOT NULL DEFAULT 0,
                 next_run_at TEXT,
@@ -131,6 +136,7 @@ def init_db() -> None:
                 platform TEXT PRIMARY KEY,
                 login_type TEXT NOT NULL DEFAULT 'qrcode',
                 cookies_encrypted TEXT NOT NULL DEFAULT '',
+                login_phone_encrypted TEXT NOT NULL DEFAULT '',
                 updated_at TEXT NOT NULL
             );
 
@@ -166,11 +172,19 @@ def init_db() -> None:
                 name TEXT NOT NULL,
                 platform TEXT NOT NULL,
                 login_type TEXT NOT NULL DEFAULT 'qrcode',
+                cookies_encrypted TEXT NOT NULL DEFAULT '',
                 status TEXT NOT NULL DEFAULT 'standby',
                 profile_path TEXT NOT NULL DEFAULT '',
                 proxy_id INTEGER,
+                is_draft INTEGER NOT NULL DEFAULT 0,
+                platform_account_id TEXT NOT NULL DEFAULT '',
+                platform_account_name TEXT NOT NULL DEFAULT '',
+                platform_avatar_url TEXT NOT NULL DEFAULT '',
+                platform_home_url TEXT NOT NULL DEFAULT '',
+                platform_identity_checked_at TEXT,
                 notes TEXT NOT NULL DEFAULT '',
                 last_used_at TEXT,
+                last_checked_at TEXT,
                 last_error TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
@@ -279,12 +293,32 @@ def init_db() -> None:
             """
         )
         _ensure_column(conn, "monitor_jobs", "is_internal", "INTEGER NOT NULL DEFAULT 0")
+        _ensure_column(conn, "monitor_jobs", "enable_sub_comments", "INTEGER NOT NULL DEFAULT 0")
+        _ensure_column(conn, "monitor_jobs", "target_type", "TEXT NOT NULL DEFAULT 'search'")
+        _ensure_column(conn, "monitor_jobs", "max_pages", "INTEGER NOT NULL DEFAULT 1")
+        _ensure_column(conn, "monitor_jobs", "max_items", "INTEGER NOT NULL DEFAULT 50")
+        _ensure_column(conn, "monitor_jobs", "start_page", "INTEGER NOT NULL DEFAULT 1")
+        _ensure_column(conn, "monitor_jobs", "output_mode", "TEXT NOT NULL DEFAULT 'internal'")
+        _ensure_column(conn, "monitor_jobs", "browser_mode", "TEXT NOT NULL DEFAULT 'server_qrcode'")
+        _ensure_column(conn, "monitor_jobs", "ai_profile_id", "INTEGER")
+        _ensure_column(conn, "monitor_jobs", "email_template_id", "INTEGER")
+        _ensure_column(conn, "monitor_jobs", "account_id", "INTEGER")
+        _ensure_column(conn, "monitor_jobs", "proxy_id", "INTEGER")
         _ensure_column(conn, "ai_configs", "last_test_status", "TEXT NOT NULL DEFAULT 'untested'")
         _ensure_column(conn, "ai_configs", "last_test_at", "TEXT")
         _ensure_column(conn, "ai_configs", "last_test_error", "TEXT NOT NULL DEFAULT ''")
         _ensure_column(conn, "email_configs", "last_test_status", "TEXT NOT NULL DEFAULT 'untested'")
         _ensure_column(conn, "email_configs", "last_test_at", "TEXT")
         _ensure_column(conn, "email_configs", "last_test_error", "TEXT NOT NULL DEFAULT ''")
+        _ensure_column(conn, "platform_login_configs", "login_phone_encrypted", "TEXT NOT NULL DEFAULT ''")
+        _ensure_column(conn, "social_accounts", "cookies_encrypted", "TEXT NOT NULL DEFAULT ''")
+        _ensure_column(conn, "social_accounts", "is_draft", "INTEGER NOT NULL DEFAULT 0")
+        _ensure_column(conn, "social_accounts", "last_checked_at", "TEXT")
+        _ensure_column(conn, "social_accounts", "platform_account_id", "TEXT NOT NULL DEFAULT ''")
+        _ensure_column(conn, "social_accounts", "platform_account_name", "TEXT NOT NULL DEFAULT ''")
+        _ensure_column(conn, "social_accounts", "platform_avatar_url", "TEXT NOT NULL DEFAULT ''")
+        _ensure_column(conn, "social_accounts", "platform_home_url", "TEXT NOT NULL DEFAULT ''")
+        _ensure_column(conn, "social_accounts", "platform_identity_checked_at", "TEXT")
         _migrate_raw_contents_unique_by_job(conn)
         mark_selftest_jobs_internal(conn)
         now = utc_now()
@@ -303,6 +337,22 @@ def init_db() -> None:
             """,
             [(platform, now) for platform in SUPPORTED_MONITOR_PLATFORMS],
         )
+        conn.execute("UPDATE platform_login_configs SET login_type='qrcode', updated_at=? WHERE login_type NOT IN ('qrcode', 'cookie')", (now,))
+        conn.execute("UPDATE social_accounts SET login_type='qrcode', updated_at=? WHERE login_type NOT IN ('qrcode', 'cookie')", (now,))
+        if not conn.execute("SELECT 1 FROM email_templates LIMIT 1").fetchone():
+            conn.execute(
+                """
+                INSERT INTO email_templates (name, subject_template, html_template, is_active, created_at, updated_at)
+                VALUES (?, ?, ?, 1, ?, ?)
+                """,
+                (
+                    DEFAULT_EMAIL_TEMPLATE_NAME,
+                    DEFAULT_EMAIL_SUBJECT_TEMPLATE,
+                    _default_email_preview_html(),
+                    now,
+                    now,
+                ),
+            )
 
 
 def row_to_job(conn: sqlite3.Connection, row: sqlite3.Row) -> dict[str, Any]:
@@ -327,6 +377,7 @@ def row_to_job(conn: sqlite3.Connection, row: sqlite3.Row) -> dict[str, Any]:
     result["recipients"] = recipients
     result["enabled"] = bool(result["enabled"])
     result["enable_comments"] = bool(result["enable_comments"])
+    result["enable_sub_comments"] = bool(result.get("enable_sub_comments", 0))
     result["is_internal"] = bool(result.get("is_internal", 0))
     return result
 
@@ -350,15 +401,15 @@ def save_job(payload: dict[str, Any], job_id: int | None = None) -> dict[str, An
     now = utc_now()
     law_firm_name = (payload.get("law_firm_name") or "").strip()
     if not law_firm_name:
-        raise ValueError("law_firm_name is required")
+        raise ValueError("律所名称不能为空")
     keywords = [str(k).strip() for k in payload.get("keywords", []) if str(k).strip()]
     if not keywords:
-        raise ValueError("keywords is required")
+        raise ValueError("平台搜索词不能为空")
     if has_job_template_placeholders({"law_firm_name": law_firm_name, "keywords": keywords}):
-        raise ValueError("请先把验收模板里的律所名称和关键词改成真实内容")
+        raise ValueError("请先把测试数据模板里的律所名称和平台搜索词改成真实内容")
     platforms = [p for p in payload.get("platforms", []) if p in {"dy", "ks", "xhs"}]
     if not platforms:
-        raise ValueError("at least one platform is required")
+        raise ValueError("请至少选择一个采集平台")
     recipients = [str(e).strip() for e in payload.get("recipients", []) if str(e).strip()]
     validate_recipients(recipients)
     aliases = [str(v).strip() for v in payload.get("aliases", []) if str(v).strip()]
@@ -366,6 +417,17 @@ def save_job(payload: dict[str, Any], job_id: int | None = None) -> dict[str, An
     time_window_type = _validate_time_window(payload)
     frequency = _validate_frequency(payload)
     email_time = _validate_email_time(payload.get("email_time") or "09:00")
+    target_type = _validate_choice(_payload_value(payload, "target_type", "job_target_type", default="search"), JOB_TARGET_TYPES, "target_type")
+    max_pages = _validate_positive_int(_payload_value(payload, "max_pages", "job_max_pages", default=1), "max_pages", minimum=1, maximum=100)
+    max_items = _validate_positive_int(_payload_value(payload, "max_items", "job_max_items", default=50), "max_items", minimum=1, maximum=5000)
+    start_page = _validate_positive_int(_payload_value(payload, "start_page", "job_start_page", default=1), "start_page", minimum=1, maximum=100)
+    output_mode = _validate_choice(_payload_value(payload, "output_mode", "job_output_mode", default="internal"), JOB_OUTPUT_MODES, "output_mode")
+    browser_mode = _validate_choice(_payload_value(payload, "browser_mode", "job_browser_mode", default="server_qrcode"), JOB_BROWSER_MODES, "browser_mode")
+    ai_profile_id = _optional_existing_id(payload.get("ai_profile_id") or payload.get("job_ai_profile_id"), "ai_key_profiles", "AI Profile")
+    email_template_id = _optional_existing_id(payload.get("email_template_id") or payload.get("job_email_template_id"), "email_templates", "email template")
+    account_id = _optional_existing_id(payload.get("account_id") or payload.get("job_account_id"), "social_accounts", "social account")
+    proxy_id = _optional_existing_id(payload.get("proxy_id") or payload.get("job_proxy_id"), "proxy_profiles", "proxy profile")
+    enable_sub_comments = bool(payload.get("enable_sub_comments", False))
     with get_conn() as conn:
         if job_id:
             exists = conn.execute("SELECT id FROM monitor_jobs WHERE id=?", (job_id,)).fetchone()
@@ -374,8 +436,10 @@ def save_job(payload: dict[str, Any], job_id: int | None = None) -> dict[str, An
             conn.execute(
                 """
                 UPDATE monitor_jobs SET law_firm_name=?, aliases=?, exclude_words=?,
-                    enable_comments=?, time_window_type=?, custom_start=?, custom_end=?,
-                    frequency=?, cron_expr=?, email_time=?, enabled=?, is_internal=?, updated_at=?
+                    enable_comments=?, enable_sub_comments=?, time_window_type=?, custom_start=?, custom_end=?,
+                    frequency=?, cron_expr=?, email_time=?, target_type=?, max_pages=?, max_items=?,
+                    start_page=?, output_mode=?, browser_mode=?, ai_profile_id=?, email_template_id=?,
+                    account_id=?, proxy_id=?, enabled=?, is_internal=?, updated_at=?
                 WHERE id=?
                 """,
                 (
@@ -383,12 +447,23 @@ def save_job(payload: dict[str, Any], job_id: int | None = None) -> dict[str, An
                     _json_dumps(aliases),
                     _json_dumps(exclude_words),
                     1 if payload.get("enable_comments", True) else 0,
+                    1 if enable_sub_comments else 0,
                     time_window_type,
                     payload.get("custom_start") or None,
                     payload.get("custom_end") or None,
                     frequency,
                     payload.get("cron_expr") or None,
                     email_time,
+                    target_type,
+                    max_pages,
+                    max_items,
+                    start_page,
+                    output_mode,
+                    browser_mode,
+                    ai_profile_id,
+                    email_template_id,
+                    account_id,
+                    proxy_id,
                     1 if payload.get("enabled", True) else 0,
                     1 if payload.get("is_internal", False) else 0,
                     now,
@@ -403,22 +478,35 @@ def save_job(payload: dict[str, Any], job_id: int | None = None) -> dict[str, An
             cur = conn.execute(
                 """
                 INSERT INTO monitor_jobs (
-                    law_firm_name, aliases, exclude_words, enable_comments, time_window_type,
-                    custom_start, custom_end, frequency, cron_expr, email_time, enabled, is_internal,
+                    law_firm_name, aliases, exclude_words, enable_comments, enable_sub_comments, time_window_type,
+                    custom_start, custom_end, frequency, cron_expr, email_time, target_type, max_pages, max_items,
+                    start_page, output_mode, browser_mode, ai_profile_id, email_template_id, account_id, proxy_id,
+                    enabled, is_internal,
                     created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     law_firm_name,
                     _json_dumps(aliases),
                     _json_dumps(exclude_words),
                     1 if payload.get("enable_comments", True) else 0,
+                    1 if enable_sub_comments else 0,
                     time_window_type,
                     payload.get("custom_start") or None,
                     payload.get("custom_end") or None,
                     frequency,
                     payload.get("cron_expr") or None,
                     email_time,
+                    target_type,
+                    max_pages,
+                    max_items,
+                    start_page,
+                    output_mode,
+                    browser_mode,
+                    ai_profile_id,
+                    email_template_id,
+                    account_id,
+                    proxy_id,
                     1 if payload.get("enabled", True) else 0,
                     1 if payload.get("is_internal", False) else 0,
                     now,
@@ -625,6 +713,44 @@ def _validate_email_time(value: str) -> str:
     return value
 
 
+def _validate_choice(value: Any, allowed: set[str], field: str) -> str:
+    normalized = str(value or "").strip()
+    if normalized not in allowed:
+        raise ValueError(f"{field} must be one of: {', '.join(sorted(allowed))}")
+    return normalized
+
+
+def _payload_value(payload: dict[str, Any], key: str, legacy_key: str, default: Any) -> Any:
+    for candidate in (key, legacy_key):
+        if candidate in payload and payload.get(candidate) not in (None, ""):
+            return payload.get(candidate)
+    return default
+
+
+def _validate_positive_int(value: Any, field: str, minimum: int, maximum: int) -> int:
+    try:
+        number = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field} must be a number") from exc
+    if number < minimum or number > maximum:
+        raise ValueError(f"{field} must be between {minimum} and {maximum}")
+    return number
+
+
+def _optional_existing_id(value: Any, table: str, label: str) -> int | None:
+    if value in (None, "", 0, "0"):
+        return None
+    try:
+        target_id = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"invalid {label} id") from exc
+    with get_conn() as conn:
+        row = conn.execute(f"SELECT id FROM {table} WHERE id=?", (target_id,)).fetchone()
+    if not row:
+        raise ValueError(f"{label} not found")
+    return target_id
+
+
 def _parse_date(value: Any) -> datetime | None:
     if not value:
         return None
@@ -750,17 +876,17 @@ def save_ai_config(payload: dict[str, Any]) -> dict[str, Any]:
     api_key = payload.get("api_key")
     next_api_key = str(api_key) if api_key else current.get("api_key")
     encrypted = encrypt_secret(next_api_key)
-    provider = payload.get("provider") or "openai"
+    provider = payload.get("provider") or current.get("provider") or "openai"
     if provider not in {"openai", "anthropic"}:
         raise ValueError("invalid AI provider")
-    temperature = validate_temperature(payload.get("temperature", 0) or 0)
+    temperature = validate_temperature(payload.get("temperature", current.get("temperature", 0)) or 0)
     next_config = {
         "provider": provider,
-        "base_url": (payload.get("base_url") or "").strip(),
+        "base_url": (payload.get("base_url") if payload.get("base_url") is not None else current.get("base_url") or "").strip(),
         "api_key": next_api_key or "",
-        "model": (payload.get("model") or "").strip(),
+        "model": (payload.get("model") if payload.get("model") is not None else current.get("model") or "").strip(),
         "temperature": temperature,
-        "prompt": payload.get("prompt") or "",
+        "prompt": payload.get("prompt") if payload.get("prompt") is not None else current.get("prompt") or "",
     }
     changed = _ai_config_changed(current, next_config)
     test_state = _next_test_state(current, changed)
@@ -901,6 +1027,8 @@ def save_platform_login_config(platform: str, payload: dict[str, Any]) -> dict[s
     _validate_platform(platform)
     current = get_platform_login_config(platform, masked=False)
     login_type = (payload.get("login_type") or current.get("login_type") or "qrcode").strip()
+    if login_type == "phone":
+        raise ValueError("当前版本暂未开放手机号登录，请使用扫码或 Cookie 登录")
     _validate_platform_login_type(platform, login_type)
     if payload.get("clear_cookies"):
         cookies = ""
@@ -913,32 +1041,53 @@ def save_platform_login_config(platform: str, payload: dict[str, Any]) -> dict[s
     with get_conn() as conn:
         conn.execute(
             """
-            INSERT INTO platform_login_configs (platform, login_type, cookies_encrypted, updated_at)
-            VALUES (?, ?, ?, ?)
+            INSERT INTO platform_login_configs (platform, login_type, cookies_encrypted, login_phone_encrypted, updated_at)
+            VALUES (?, ?, ?, ?, ?)
             ON CONFLICT(platform) DO UPDATE SET
                 login_type=excluded.login_type,
                 cookies_encrypted=excluded.cookies_encrypted,
+                login_phone_encrypted=excluded.login_phone_encrypted,
                 updated_at=excluded.updated_at
             """,
-            (platform, login_type, encrypt_secret(cookies), utc_now()),
+            (platform, login_type, encrypt_secret(cookies), "", utc_now()),
         )
     return get_platform_login_config(platform, masked=True)
 
 
 def _row_to_platform_login_config(row: dict[str, Any], masked: bool) -> dict[str, Any]:
     platform = row.get("platform") or ""
+    capability = get_mediacrawler_login_capability(platform)
+    supported_types = tuple(capability.get("supported_login_types") or PLATFORM_LOGIN_TYPES.get(platform, ("qrcode", "cookie")))
     encrypted = row.get("cookies_encrypted") or ""
     cookies = mask_secret(encrypted) if masked else decrypt_secret(encrypted)
     raw_cookies = decrypt_secret(encrypted)
     login_type = row.get("login_type") or "qrcode"
+    if login_type not in {"qrcode", "cookie"}:
+        login_type = "qrcode"
     return {
         "platform": platform,
         "login_type": login_type,
         "login_type_label": LOGIN_TYPE_LABELS.get(login_type, login_type),
-        "supported_login_types": list(PLATFORM_LOGIN_TYPES.get(platform, ("qrcode", "cookie"))),
-        "supported_login_type_labels": {
-            item: LOGIN_TYPE_LABELS.get(item, item) for item in PLATFORM_LOGIN_TYPES.get(platform, ("qrcode", "cookie"))
-        },
+        "supported_login_types": list(supported_types),
+        "supported_login_type_labels": capability.get("supported_login_type_labels")
+        or {item: LOGIN_TYPE_LABELS.get(item, item) for item in supported_types},
+        "login_capability_source": "平台采集服务",
+        "login_url": capability.get("login_url") or "",
+        "login_engine": "平台采集服务登录模块",
+        "login_class": "",
+        "bridge_role": capability.get("bridge_role") or "",
+        "qrcode_capture_method": "页面二维码回传",
+        "qrcode_prepare_method": "平台登录会话",
+        "qrcode_flow_steps": [
+            "打开平台登录页",
+            "等待二维码或平台验证提示",
+            "前端展示二维码、截图或验证状态",
+            "运营扫码或按页面提示处理后，系统保存登录状态",
+        ],
+        "integration_note": "后台只包装平台采集服务已有登录方式；验证码、滑块、短信只回传状态，不自动绕过。",
+        "qrcode_supported": bool(capability.get("qrcode_supported")),
+        "phone_supported": False,
+        "unsupported_reason": _unsupported_login_reason(platform),
         "cookies": cookies,
         "has_cookies": bool(raw_cookies),
         "updated_at": row.get("updated_at"),
@@ -947,7 +1096,7 @@ def _row_to_platform_login_config(row: dict[str, Any], masked: bool) -> dict[str
 
 def _default_platform_login_config(platform: str, masked: bool = True) -> dict[str, Any]:
     return _row_to_platform_login_config(
-        {"platform": platform, "login_type": "qrcode", "cookies_encrypted": "", "updated_at": None},
+        {"platform": platform, "login_type": "qrcode", "cookies_encrypted": "", "login_phone_encrypted": "", "updated_at": None},
         masked,
     )
 
@@ -958,10 +1107,16 @@ def _validate_platform(platform: str) -> None:
 
 
 def _validate_platform_login_type(platform: str, login_type: str) -> None:
-    supported = PLATFORM_LOGIN_TYPES.get(platform, ())
+    supported = tuple(get_mediacrawler_login_capability(platform).get("supported_login_types") or PLATFORM_LOGIN_TYPES.get(platform, ()))
     if login_type not in supported:
         labels = " / ".join(LOGIN_TYPE_LABELS.get(item, item) for item in supported)
-        raise ValueError(f"{platform} does not support login_type={login_type}; supported: {labels}")
+        extra = _unsupported_login_reason(platform)
+        suffix = f"；{extra}" if extra else ""
+        raise ValueError(f"{platform} does not support login_type={login_type}; supported: {labels}{suffix}")
+
+
+def _unsupported_login_reason(platform: str) -> str:
+    return "当前版本暂未开放手机号登录，请使用扫码或 Cookie 登录。"
 
 
 def validate_temperature(value: Any) -> float:
@@ -1013,6 +1168,35 @@ def finish_run(run_id: int, status: str, summary: dict[str, Any], error: str | N
         )
 
 
+def record_skipped_run(job_id: int, reason: str, summary: dict[str, Any] | None = None, cooldown_seconds: int = 300) -> int:
+    payload = dict(summary or {})
+    payload.setdefault("job_id", job_id)
+    payload.setdefault("skipped", True)
+    payload.setdefault("skip_reason", reason)
+    now = utc_now()
+    with get_conn() as conn:
+        if cooldown_seconds > 0:
+            cutoff = (datetime.now(timezone.utc) - timedelta(seconds=cooldown_seconds)).isoformat()
+            existing = conn.execute(
+                """
+                SELECT id FROM crawl_runs
+                WHERE job_id=? AND status='skipped' AND error_message=? AND started_at>=?
+                ORDER BY id DESC LIMIT 1
+                """,
+                (job_id, _trim_error(reason), cutoff),
+            ).fetchone()
+            if existing:
+                return int(existing["id"])
+        cur = conn.execute(
+            """
+            INSERT INTO crawl_runs (job_id, status, started_at, finished_at, summary, error_message)
+            VALUES (?, 'skipped', ?, ?, ?, ?)
+            """,
+            (job_id, now, now, json.dumps(_redact_json(payload), ensure_ascii=False), _trim_error(reason)),
+        )
+        return int(cur.lastrowid)
+
+
 def get_run(run_id: int) -> dict[str, Any] | None:
     with get_conn() as conn:
         row = conn.execute(
@@ -1050,18 +1234,51 @@ def _hydrate_run_row(row: sqlite3.Row) -> dict[str, Any]:
     current_job_id = _safe_int(item.get("job_id"))
     if current_job_id is None and snapshot_job_id is not None:
         item["job_id"] = snapshot_job_id
-    item["summary"] = summary
     if not item.get("law_firm_name"):
         item["law_firm_name"] = summary.get("law_firm_name") or ""
+    item["law_firm_name"] = customer_safe_text(item.get("law_firm_name"))
     if item.get("status") == "running":
         summary["duration_seconds"] = summary.get("duration_seconds") or _elapsed_seconds(item.get("started_at"))
+    item["summary"] = _customer_safe_payload(summary)
     is_legacy_without_snapshot = current_job_id is None and snapshot_job_id is None and not summary.get("selftest")
-    item["display_law_firm_name"] = item.get("law_firm_name") or summary.get("law_firm_name") or (
+    item["display_law_firm_name"] = customer_safe_text(item.get("law_firm_name") or summary.get("law_firm_name") or (
         "旧记录无任务快照" if is_legacy_without_snapshot else ""
-    )
+    ))
     item["job_deleted"] = bool(snapshot_job_id and not current_job_id)
     item["legacy_without_job_snapshot"] = bool(is_legacy_without_snapshot)
+    item["display_status"] = _run_display_status(str(item.get("status") or ""), summary)
+    item["display_error"] = customer_safe_text(_run_display_error(item, summary))
+    item["error_message"] = customer_safe_text(item.get("error_message"))
     return item
+
+
+def _run_display_status(status: str, summary: dict[str, Any]) -> str:
+    if status == "skipped":
+        skip_type = summary.get("skip_type")
+        if skip_type == "preflight_blocked":
+            return "预检拦截"
+        if skip_type == "template_placeholders":
+            return "模板未填写"
+        return "已跳过"
+    labels = {
+        "running": "运行中",
+        "success": "成功",
+        "partial_failed": "部分失败",
+        "failed": "失败",
+        "cancelled": "已停止",
+    }
+    return labels.get(status, status or "")
+
+
+def _run_display_error(item: dict[str, Any], summary: dict[str, Any]) -> str:
+    status = str(item.get("status") or "")
+    if status == "skipped":
+        return str(summary.get("skip_reason") or item.get("error_message") or "")
+    if item.get("error_message"):
+        return str(item.get("error_message") or "")
+    if summary.get("cancel_reason"):
+        return str(summary.get("cancel_reason") or "")
+    return ""
 
 
 def _safe_int(value: Any) -> int | None:
@@ -1129,9 +1346,12 @@ def _hydrate_report_item(item: dict[str, Any]) -> None:
     snapshot_job_id = _safe_int(summary.get("job_id"))
     report_job_id = _safe_int(item.get("job_id"))
     current_job_id = _safe_int(item.get("current_job_id"))
+    item["summary"] = _customer_safe_payload(summary)
     if not item.get("law_firm_name"):
         item["law_firm_name"] = summary.get("law_firm_name") or ""
-    item["display_law_firm_name"] = item.get("law_firm_name") or summary.get("law_firm_name") or ""
+    item["law_firm_name"] = customer_safe_text(item.get("law_firm_name"))
+    item["display_law_firm_name"] = customer_safe_text(item.get("law_firm_name") or summary.get("law_firm_name") or "")
+    item["email_error"] = customer_safe_text(item.get("email_error"))
     item["job_deleted"] = bool((snapshot_job_id or report_job_id) and not current_job_id)
 
 
@@ -1195,9 +1415,21 @@ def list_leads(limit: int = 100) -> list[dict[str, Any]]:
         item = dict(row)
         item["is_related"] = bool(item.get("is_related"))
         item["is_negative"] = bool(item.get("is_negative"))
-        item["evidence_quotes"] = _json_loads(item.get("evidence_quotes"))
+        item["evidence_quotes"] = [customer_safe_text(str(q)) for q in _json_loads(item.get("evidence_quotes"))]
+        for key in ("law_firm_name", "source_keyword", "title", "description", "author_name", "reason", "recommended_action"):
+            item[key] = customer_safe_text(item.get(key))
         result.append(item)
     return result
+
+
+def _customer_safe_payload(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {key: _customer_safe_payload(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_customer_safe_payload(item) for item in value]
+    if isinstance(value, str):
+        return customer_safe_text(value)
+    return value
 
 
 def get_dashboard_summary() -> dict[str, Any]:
@@ -1210,16 +1442,19 @@ def get_dashboard_summary() -> dict[str, Any]:
         pending_review = conn.execute("SELECT COUNT(*) AS n FROM ai_evaluations WHERE status='pending_review'").fetchone()["n"]
         negative_total = conn.execute("SELECT COUNT(*) AS n FROM ai_evaluations WHERE is_related=1 AND is_negative=1").fetchone()["n"]
         high_total = conn.execute("SELECT COUNT(*) AS n FROM ai_evaluations WHERE is_related=1 AND is_negative=1 AND risk_level='high'").fetchone()["n"]
-        social_total = conn.execute("SELECT COUNT(*) AS n FROM social_accounts").fetchone()["n"]
+        social_total = conn.execute("SELECT COUNT(*) AS n FROM social_accounts WHERE COALESCE(is_draft, 0)=0").fetchone()["n"]
         proxy_total = conn.execute("SELECT COUNT(*) AS n FROM proxy_profiles").fetchone()["n"]
         ai_profiles_total = conn.execute("SELECT COUNT(*) AS n FROM ai_key_profiles").fetchone()["n"]
         login_sessions_total = conn.execute("SELECT COUNT(*) AS n FROM login_sessions").fetchone()["n"]
         latest_runs = conn.execute("SELECT status, summary, started_at, finished_at FROM crawl_runs ORDER BY id DESC LIMIT 20").fetchall()
     failed_runs = 0
+    skipped_runs = 0
     platform_counts: dict[str, int] = {}
     for row in latest_runs:
         if row["status"] in {"failed", "partial_failed", "cancelled"}:
             failed_runs += 1
+        if row["status"] == "skipped":
+            skipped_runs += 1
         summary = _json_loads(row["summary"], {})
         for platform in summary.get("platforms") or []:
             platform_counts[platform] = platform_counts.get(platform, 0) + 1
@@ -1233,6 +1468,7 @@ def get_dashboard_summary() -> dict[str, Any]:
         "negative_total": int(negative_total or 0),
         "high_total": int(high_total or 0),
         "failed_runs_recent": failed_runs,
+        "skipped_runs_recent": skipped_runs,
         "platform_counts_recent": platform_counts,
         "social_accounts_total": int(social_total or 0),
         "proxy_profiles_total": int(proxy_total or 0),
@@ -1355,6 +1591,21 @@ def set_active_ai_key_profile(profile_id: int) -> dict[str, Any]:
     return get_ai_key_profile(profile_id, masked=True) or {}
 
 
+def mark_ai_key_profile_test_result(profile_id: int, success: bool, error: str | None = None) -> dict[str, Any]:
+    with get_conn() as conn:
+        row = conn.execute("SELECT id FROM ai_key_profiles WHERE id=?", (profile_id,)).fetchone()
+        if not row:
+            raise ValueError("AI profile not found")
+        conn.execute(
+            """
+            UPDATE ai_key_profiles SET last_test_status=?, last_test_at=?, last_test_error=?, updated_at=?
+            WHERE id=?
+            """,
+            ("success" if success else "failed", utc_now(), "" if success else _trim_error(error), utc_now(), profile_id),
+        )
+    return get_ai_key_profile(profile_id, masked=True) or {}
+
+
 def _row_to_ai_profile(row: dict[str, Any], masked: bool) -> dict[str, Any]:
     encrypted = row.pop("api_key_encrypted", "")
     row["api_key"] = mask_secret(encrypted) if masked else decrypt_secret(encrypted)
@@ -1429,6 +1680,7 @@ def render_email_template_preview(payload: dict[str, Any]) -> dict[str, str]:
         "pending_review_count": "4",
         "platforms": "抖音 / 快手 / 小红书",
         "report_html": _sample_report_html(),
+        "report_body": _sample_report_html(),
         "report_url": "https://example.com/report-preview",
     }
     return {
@@ -1486,10 +1738,25 @@ def _sample_report_html() -> str:
     )
 
 
-def list_social_accounts() -> list[dict[str, Any]]:
+def list_social_accounts(masked: bool = True, include_drafts: bool = False) -> list[dict[str, Any]]:
+    where = "" if include_drafts else "WHERE COALESCE(a.is_draft, 0)=0"
     with get_conn() as conn:
-        rows = conn.execute("SELECT * FROM social_accounts ORDER BY platform, id DESC").fetchall()
-    return [_row_to_pool_item(dict(row)) for row in rows]
+        rows = conn.execute(
+            f"""
+            SELECT
+                a.*,
+                p.name AS proxy_name,
+                p.provider AS proxy_provider,
+                p.status AS proxy_status,
+                p.max_concurrency AS proxy_max_concurrency,
+                p.last_error AS proxy_last_error
+            FROM social_accounts a
+            LEFT JOIN proxy_profiles p ON p.id = a.proxy_id
+            {where}
+            ORDER BY a.platform, a.id DESC
+            """
+        ).fetchall()
+    return [_row_to_pool_item(dict(row), masked=masked) for row in rows]
 
 
 def save_social_account(payload: dict[str, Any], account_id: int | None = None) -> dict[str, Any]:
@@ -1501,30 +1768,54 @@ def save_social_account(payload: dict[str, Any], account_id: int | None = None) 
     login_type = payload.get("login_type") or "qrcode"
     _validate_platform_login_type(platform, login_type)
     status = _validate_pool_status(payload.get("status") or "standby")
+    is_draft = 1 if payload.get("is_draft") else 0
     now = utc_now()
     profile_path = (payload.get("profile_path") or "").strip()
     if account_id and not profile_path:
         profile_path = _default_account_profile_path(platform, name, account_id)
+    proxy_id = _safe_int(payload.get("proxy_id")) or None
+    if proxy_id and not get_proxy_profile(proxy_id, masked=True):
+        raise ValueError("proxy not found")
+    current_cookies = ""
+    if account_id:
+        with get_conn() as conn:
+            row = conn.execute("SELECT cookies_encrypted FROM social_accounts WHERE id=?", (account_id,)).fetchone()
+        if row:
+            current_cookies = decrypt_secret(row["cookies_encrypted"] or "")
+    if payload.get("clear_cookies"):
+        cookies = ""
+    elif "cookies" in payload and str(payload.get("cookies") or "").strip():
+        cookies = str(payload.get("cookies") or "").strip()
+    else:
+        cookies = current_cookies
+    if login_type == "cookie" and not cookies:
+        raise ValueError("Cookie 登录需要先填写 Cookie")
     values = (
         name,
         platform,
         login_type,
+        encrypt_secret(cookies),
         status,
         profile_path,
-        _safe_int(payload.get("proxy_id")) or None,
+        proxy_id,
+        is_draft,
         payload.get("notes") or "",
         payload.get("last_error") or "",
         now,
     )
     with get_conn() as conn:
+        _ensure_unique_account_profile(conn, profile_path, account_id)
         if account_id:
             exists = conn.execute("SELECT id FROM social_accounts WHERE id=?", (account_id,)).fetchone()
             if not exists:
                 raise ValueError("account not found")
+            current_platform = conn.execute("SELECT platform FROM social_accounts WHERE id=?", (account_id,)).fetchone()
+            if current_platform and current_platform["platform"] != platform:
+                raise ValueError("账号平台保存后不可变更，请为新平台新增账号")
             conn.execute(
                 """
-                UPDATE social_accounts SET name=?, platform=?, login_type=?, status=?,
-                    profile_path=?, proxy_id=?, notes=?, last_error=?, updated_at=? WHERE id=?
+                UPDATE social_accounts SET name=?, platform=?, login_type=?, cookies_encrypted=?, status=?,
+                    profile_path=?, proxy_id=?, is_draft=?, notes=?, last_error=?, updated_at=? WHERE id=?
                 """,
                 (*values, account_id),
             )
@@ -1533,15 +1824,16 @@ def save_social_account(payload: dict[str, Any], account_id: int | None = None) 
             cur = conn.execute(
                 """
                 INSERT INTO social_accounts (
-                    name, platform, login_type, status, profile_path, proxy_id, notes,
+                    name, platform, login_type, cookies_encrypted, status, profile_path, proxy_id, is_draft, notes,
                     last_error, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (*values[:-1], now, now),
             )
             target_id = int(cur.lastrowid)
             if not profile_path:
                 profile_path = _default_account_profile_path(platform, name, target_id)
+                _ensure_unique_account_profile(conn, profile_path, target_id)
                 conn.execute(
                     "UPDATE social_accounts SET profile_path=?, updated_at=? WHERE id=?",
                     (profile_path, now, target_id),
@@ -1549,10 +1841,76 @@ def save_social_account(payload: dict[str, Any], account_id: int | None = None) 
     return get_social_account(target_id) or {}
 
 
-def get_social_account(account_id: int) -> dict[str, Any] | None:
+def create_draft_social_account(payload: dict[str, Any]) -> dict[str, Any]:
+    platform = (payload.get("platform") or "").strip()
+    _validate_platform(platform)
+    name = (payload.get("name") or "").strip() or f"{LOGIN_TYPE_LABELS.get('qrcode', '扫码登录')}临时账号"
+    return save_social_account(
+        {
+            **payload,
+            "name": name,
+            "platform": platform,
+            "login_type": "qrcode",
+            "status": "standby",
+            "is_draft": True,
+        }
+    )
+
+
+def confirm_social_account(account_id: int, payload: dict[str, Any] | None = None) -> dict[str, Any]:
+    account = get_social_account(account_id, masked=False)
+    if not account:
+        raise ValueError("account not found")
+    payload = payload or {}
+    merged = {
+        **account,
+        "name": (payload.get("name") or account.get("name") or "").strip(),
+        "platform": account.get("platform"),
+        "login_type": payload.get("login_type") or account.get("login_type") or "qrcode",
+        "status": payload.get("status") or ("active" if account.get("status") == "active" else account.get("status") or "standby"),
+        "proxy_id": payload.get("proxy_id") if "proxy_id" in payload else account.get("proxy_id"),
+        "profile_path": payload.get("profile_path") or account.get("profile_path") or "",
+        "notes": payload.get("notes") if "notes" in payload else account.get("notes") or "",
+        "last_error": payload.get("last_error") if "last_error" in payload else account.get("last_error") or "",
+        "is_draft": False,
+    }
+    if not merged["name"]:
+        raise ValueError("account name is required")
+    return save_social_account(merged, account_id)
+
+
+def get_social_account(account_id: int, masked: bool = True) -> dict[str, Any] | None:
     with get_conn() as conn:
-        row = conn.execute("SELECT * FROM social_accounts WHERE id=?", (account_id,)).fetchone()
-    return _row_to_pool_item(dict(row)) if row else None
+        row = conn.execute(
+            """
+            SELECT
+                a.*,
+                p.name AS proxy_name,
+                p.provider AS proxy_provider,
+                p.status AS proxy_status,
+                p.max_concurrency AS proxy_max_concurrency,
+                p.last_error AS proxy_last_error
+            FROM social_accounts a
+            LEFT JOIN proxy_profiles p ON p.id = a.proxy_id
+            WHERE a.id=?
+            """,
+            (account_id,),
+        ).fetchone()
+    return _row_to_pool_item(dict(row), masked=masked) if row else None
+
+
+def _ensure_unique_account_profile(conn: sqlite3.Connection, profile_path: str, account_id: int | None = None) -> None:
+    profile_path = str(profile_path or "").strip()
+    if not profile_path:
+        return
+    params: list[Any] = [profile_path]
+    sql = "SELECT id FROM social_accounts WHERE lower(profile_path)=lower(?)"
+    if account_id:
+        sql += " AND id<>?"
+        params.append(account_id)
+    row = conn.execute(sql, params).fetchone()
+    if row:
+        raise ValueError("该登录态已被其他账号使用，请为每个账号使用独立登录态")
 
 
 def _default_account_profile_path(platform: str, account_name: str, account_id: int | None = None) -> str:
@@ -1565,6 +1923,73 @@ def _default_account_profile_path(platform: str, account_name: str, account_id: 
 def delete_social_account(account_id: int) -> None:
     with get_conn() as conn:
         conn.execute("DELETE FROM social_accounts WHERE id=?", (account_id,))
+
+
+def update_social_account_login_state(account_id: int | None, status: str, message: str = "") -> dict[str, Any] | None:
+    if not account_id:
+        return None
+    now = utc_now()
+    if status == "success":
+        account_status = "active"
+        last_error = ""
+        last_used_at = now
+    elif status in {"waiting_verification", "waiting_manual_browser", "failed", "expired"}:
+        account_status = "limited" if status == "waiting_verification" else "standby"
+        last_error = customer_safe_text(message)
+        last_used_at = None
+    else:
+        return get_social_account(account_id)
+    with get_conn() as conn:
+        conn.execute(
+            """
+            UPDATE social_accounts
+            SET status=?, last_error=?, last_used_at=COALESCE(?, last_used_at), updated_at=?
+            WHERE id=?
+            """,
+            (account_status, last_error, last_used_at, now, account_id),
+        )
+    return get_social_account(account_id)
+
+
+def update_social_account_check_state(
+    account_id: int,
+    ok: bool,
+    message: str = "",
+    status: str | None = None,
+    identity: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    now = utc_now()
+    account_status = status or ("active" if ok else "limited")
+    account_status = _validate_pool_status(account_status)
+    last_error = "" if ok else customer_safe_text(message)
+    with get_conn() as conn:
+        conn.execute(
+            """
+            UPDATE social_accounts
+            SET status=?, last_error=?, last_checked_at=?, updated_at=?
+            WHERE id=?
+            """,
+            (account_status, last_error, now, now, account_id),
+        )
+        if ok and identity:
+            conn.execute(
+                """
+                UPDATE social_accounts
+                SET platform_account_id=?, platform_account_name=?, platform_avatar_url=?,
+                    platform_home_url=?, platform_identity_checked_at=?, updated_at=?
+                WHERE id=?
+                """,
+                (
+                    str(identity.get("platform_account_id") or "")[:240],
+                    str(identity.get("platform_account_name") or "")[:240],
+                    str(identity.get("platform_avatar_url") or "")[:1000],
+                    str(identity.get("platform_home_url") or "")[:1000],
+                    now,
+                    now,
+                    account_id,
+                ),
+            )
+    return get_social_account(account_id) or {}
 
 
 def list_proxy_profiles(masked: bool = True) -> list[dict[str, Any]]:
@@ -1649,7 +2074,7 @@ def create_login_session(payload: dict[str, Any]) -> dict[str, Any]:
     login_url = (payload.get("login_url") or "").strip()
     profile_path = (payload.get("profile_path") or "").strip()
     message = payload.get("message") or (
-        "当前 MediaCrawler 版本暂未稳定回传网页登录二维码；请先使用本地/远程浏览器窗口完成扫码，后续会升级为页面二维码登录。"
+        "正在创建平台登录会话；如二维码或验证状态无法回传，可使用网页登录窗口人工处理。"
     )
     now = utc_now()
     with get_conn() as conn:
@@ -1683,10 +2108,13 @@ def get_login_session(session_id: int) -> dict[str, Any] | None:
     return dict(row) if row else None
 
 
-def list_login_sessions(limit: int = 20) -> list[dict[str, Any]]:
+def list_login_sessions(limit: int = 20, account_id: int | None = None) -> list[dict[str, Any]]:
     limit = _coerce_limit(limit, 20)
     sql = "SELECT * FROM login_sessions ORDER BY id DESC"
     params: list[Any] = []
+    if account_id:
+        sql = "SELECT * FROM login_sessions WHERE account_id=? ORDER BY id DESC"
+        params.append(account_id)
     if limit > 0:
         sql += " LIMIT ?"
         params.append(limit)
@@ -1695,9 +2123,27 @@ def list_login_sessions(limit: int = 20) -> list[dict[str, Any]]:
     return [dict(row) for row in rows]
 
 
+def latest_successful_login_session_at(platform: str) -> str:
+    _validate_platform(platform)
+    try:
+        with get_conn() as conn:
+            row = conn.execute(
+                """
+                SELECT updated_at FROM login_sessions
+                WHERE platform=? AND status='success'
+                ORDER BY updated_at DESC, id DESC
+                LIMIT 1
+                """,
+                (platform,),
+            ).fetchone()
+    except sqlite3.OperationalError:
+        return ""
+    return str(row["updated_at"] or "") if row else ""
+
+
 def expire_login_sessions_for_account(account_id: int | None, platform: str, profile_path: str = "") -> list[int]:
     _validate_platform(platform)
-    clauses = ["platform=?", "status IN ('waiting_qrcode', 'waiting_manual_browser', 'scanned')"]
+    clauses = ["platform=?", "status IN ('waiting_qrcode', 'waiting_verification', 'waiting_manual_browser', 'scanned')"]
     params: list[Any] = [platform]
     if account_id:
         clauses.append("account_id=?")
@@ -1722,7 +2168,7 @@ def expire_login_sessions_for_account(account_id: int | None, platform: str, pro
 
 
 def update_login_session_status(session_id: int, status: str, message: str = "", qr_image: str = "") -> dict[str, Any]:
-    allowed = {"waiting_qrcode", "waiting_manual_browser", "scanned", "success", "expired", "failed"}
+    allowed = {"waiting_qrcode", "waiting_verification", "waiting_manual_browser", "scanned", "success", "expired", "failed"}
     if status not in allowed:
         raise ValueError("invalid login session status")
     with get_conn() as conn:
@@ -1747,10 +2193,36 @@ def delete_login_session(session_id: int) -> None:
 def _row_to_proxy_profile(row: dict[str, Any], masked: bool) -> dict[str, Any]:
     encrypted = row.pop("proxy_url_encrypted", "")
     row["proxy_url"] = mask_secret(encrypted) if masked else decrypt_secret(encrypted)
-    return _row_to_pool_item(row)
+    return row
 
 
-def _row_to_pool_item(row: dict[str, Any]) -> dict[str, Any]:
+def _row_to_pool_item(row: dict[str, Any], masked: bool = True) -> dict[str, Any]:
+    encrypted = row.pop("cookies_encrypted", "")
+    raw_cookies = decrypt_secret(encrypted)
+    row["cookies"] = mask_secret(encrypted) if masked else raw_cookies
+    row["has_cookies"] = bool(raw_cookies)
+    row["is_draft"] = bool(row.get("is_draft"))
+    platform = row.get("platform")
+    if platform in SUPPORTED_MONITOR_PLATFORMS:
+        capability = get_mediacrawler_login_capability(str(platform))
+        row["login_capability_source"] = "平台采集服务"
+        row["login_boundary"] = capability.get("boundary") or "media_crawler_only"
+        row["captcha_policy"] = capability.get("captcha_policy") or "report_only"
+        row["login_engine"] = "平台采集服务登录模块"
+        row["login_class"] = ""
+        row["bridge_role"] = capability.get("bridge_role") or ""
+        row["qrcode_capture_method"] = "页面二维码回传"
+        row["qrcode_prepare_method"] = "平台登录会话"
+        row["qrcode_flow_steps"] = [
+            "打开平台登录页",
+            "等待二维码或平台验证提示",
+            "前端展示二维码、截图或验证状态",
+            "运营扫码或按页面提示处理后，系统保存登录状态",
+        ]
+        row["integration_note"] = "后台只包装平台采集服务已有登录方式；验证码、滑块、短信只回传状态，不自动绕过。"
+        row["supported_login_types"] = list(capability.get("supported_login_types") or [])
+        row["supported_login_type_labels"] = capability.get("supported_login_type_labels") or {}
+        row["unsupported_reason"] = _unsupported_login_reason(str(platform))
     return row
 
 

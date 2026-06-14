@@ -46,21 +46,125 @@ async def find_login_qrcode(page: Page, selector: str) -> str:
         elements = await page.wait_for_selector(
             selector=selector,
         )
-        login_qrcode_img = str(await elements.get_property("src"))  # type: ignore
-        if "http://" in login_qrcode_img or "https://" in login_qrcode_img:
-            async with make_async_client(follow_redirects=True) as client:
-                utils.logger.info(f"[find_login_qrcode] get qrcode by url:{login_qrcode_img}")
-                resp = await client.get(login_qrcode_img, headers={"User-Agent": get_user_agent()})
-                if resp.status_code == 200:
-                    image_data = resp.content
-                    base64_image = base64.b64encode(image_data).decode('utf-8')
-                    return base64_image
-                raise Exception(f"fetch login image url failed, response message:{resp.text}")
-        return login_qrcode_img
+        for source in await _login_qrcode_image_sources(page, elements):
+            login_qrcode_img = await _login_qrcode_source_to_base64(page, source)
+            if login_qrcode_img:
+                return login_qrcode_img
+        return await _login_qrcode_element_screenshot(elements)
 
     except Exception as e:
         print(e)
         return ""
+
+
+async def _login_qrcode_image_sources(page: Page, element) -> List[str]:
+    sources: List[str] = []
+    for attr in ("src", "currentSrc", "data-src"):
+        try:
+            value = await element.get_attribute(attr)
+            if value:
+                sources.append(str(value))
+        except Exception:
+            continue
+    try:
+        value = await element.evaluate(
+            """el => {
+                const style = window.getComputedStyle(el);
+                const bg = style && style.backgroundImage ? style.backgroundImage : '';
+                const match = bg.match(/url\\(["']?(.*?)["']?\\)/);
+                return el.currentSrc || el.src || el.getAttribute('src') || el.getAttribute('data-src') || (match ? match[1] : '');
+            }"""
+        )
+        if value:
+            sources.append(str(value))
+    except Exception:
+        pass
+
+    cleaned: List[str] = []
+    for source in sources:
+        source = str(source or "").strip()
+        if not source or source.startswith("JSHandle@"):
+            continue
+        if source not in cleaned:
+            cleaned.append(source)
+    return cleaned
+
+
+async def _login_qrcode_source_to_base64(page: Page, source: str) -> str:
+    source = str(source or "").strip()
+    if not source:
+        return ""
+    if source.startswith("data:image"):
+        return _strip_data_url(source)
+    if source.startswith("blob:"):
+        return _strip_data_url(await _login_qrcode_blob_to_data_url(page, source))
+    source = await _login_qrcode_absolute_url(page, source)
+    if source.startswith("http://") or source.startswith("https://"):
+        return await _fetch_login_qrcode_image(page, source)
+    return ""
+
+
+async def _login_qrcode_absolute_url(page: Page, source: str) -> str:
+    if source.startswith("//"):
+        return "https:" + source
+    if source.startswith("http://") or source.startswith("https://") or source.startswith("data:image") or source.startswith("blob:"):
+        return source
+    try:
+        return await page.evaluate("(src) => new URL(src, location.href).toString()", source)
+    except Exception:
+        return source
+
+
+async def _fetch_login_qrcode_image(page: Page, source: str) -> str:
+    try:
+        response = await page.context.request.get(source, headers={"User-Agent": get_user_agent()})
+        if getattr(response, "ok", False):
+            utils.logger.info(f"[find_login_qrcode] get qrcode by browser request:{source}")
+            return base64.b64encode(await response.body()).decode("utf-8")
+    except Exception:
+        pass
+    try:
+        async with make_async_client(follow_redirects=True) as client:
+            utils.logger.info(f"[find_login_qrcode] get qrcode by url:{source}")
+            resp = await client.get(source, headers={"User-Agent": get_user_agent()})
+            if resp.status_code == 200:
+                return base64.b64encode(resp.content).decode("utf-8")
+            raise Exception(f"fetch login image url failed, response message:{resp.text}")
+    except Exception:
+        return ""
+
+
+async def _login_qrcode_blob_to_data_url(page: Page, source: str) -> str:
+    try:
+        return await page.evaluate(
+            """async (src) => {
+                const response = await fetch(src);
+                const blob = await response.blob();
+                const buffer = await blob.arrayBuffer();
+                let binary = '';
+                const bytes = new Uint8Array(buffer);
+                for (let i = 0; i < bytes.byteLength; i += 1) binary += String.fromCharCode(bytes[i]);
+                return `data:${blob.type || 'image/png'};base64,${btoa(binary)}`;
+            }""",
+            source,
+        )
+    except Exception:
+        return ""
+
+
+async def _login_qrcode_element_screenshot(element) -> str:
+    try:
+        screenshot = await element.screenshot()
+        return base64.b64encode(screenshot).decode("utf-8")
+    except Exception:
+        return ""
+
+
+def _strip_data_url(source: str) -> str:
+    source = str(source or "").strip()
+    if ";base64," not in source:
+        return source
+    return source.split(";base64,", 1)[1]
 
 
 async def find_qrcode_img_from_canvas(page: Page, canvas_selector: str) -> str:

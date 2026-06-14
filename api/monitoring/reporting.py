@@ -11,7 +11,7 @@ from openpyxl import Workbook
 from .database import MONITOR_DATA_DIR, get_job, get_report, get_conn, utc_now
 from .mailer import send_report
 from .normalizer import PLATFORM_LABELS
-from .security import redact_sensitive
+from .security import customer_safe_text, redact_sensitive
 
 
 REPORT_DIR = MONITOR_DATA_DIR / "reports"
@@ -91,7 +91,8 @@ def render_html(job: dict[str, Any], summary: dict[str, Any], records: list[dict
     ]
     review_records = [r for r in records if r.get("eval_status") == "pending_review"]
     high_count = sum(1 for r in risk_records if r["risk_level"] == "high")
-    title = f"【律所舆情日报】{job['law_firm_name']} - {datetime.now().date()}"
+    law_firm_name = customer_safe_text(job["law_firm_name"])
+    title = f"【律所舆情日报】{law_firm_name} - {datetime.now().date()}"
     cards = "".join(
         f"<div class='card'><div class='num'>{n}</div><div>{html.escape(label)}</div></div>"
         for label, n in [
@@ -125,7 +126,7 @@ h1{{font-size:22px;margin:0 0 16px}}h2{{font-size:18px;border-bottom:1px solid #
 .empty{{padding:20px;background:#f0fdf4;border:1px solid #bbf7d0}}.warn{{color:#b45309}}.platforms{{border:1px solid #e5e7eb;border-collapse:collapse;width:100%;margin:12px 0}}.platforms th,.platforms td{{border:1px solid #e5e7eb;padding:8px;text-align:left;font-size:13px}}a{{color:#2563eb}}
 </style></head><body><div class="wrap">
 <h1>{html.escape(title)}</h1>
-<p>监控对象：{html.escape(job['law_firm_name'])}</p>
+<p>律所：{html.escape(law_firm_name)}</p>
 <div class="cards">{cards}</div>
 {platform_summary}
 {sections}
@@ -137,7 +138,7 @@ def render_markdown(job: dict[str, Any], summary: dict[str, Any], records: list[
     risks = [r for r in records if r["is_related"] and r["is_negative"]]
     reviews = [r for r in records if r.get("eval_status") == "pending_review"]
     lines = [
-        f"# 【律所舆情日报】{job['law_firm_name']} - {datetime.now().date()}",
+        f"# 【律所舆情日报】{customer_safe_text(job['law_firm_name'])} - {datetime.now().date()}",
         "",
         f"- 新增内容：{summary.get('new_contents', 0)}",
         f"- 疑似负面：{summary.get('negative_count', 0)}",
@@ -154,14 +155,14 @@ def render_markdown(job: dict[str, Any], summary: dict[str, Any], records: list[
     for rec in risks + reviews:
         lines.extend(
             [
-                f"## {rec['title'] or rec['content_url']}",
+                f"## {customer_safe_text(rec['title'] or rec['content_url'])}",
                 f"- 平台：{PLATFORM_LABELS.get(rec['platform'], rec['platform'])}",
                 f"- 风险：{rec['risk_level']}",
                 f"- 状态：{'待人工复核' if rec.get('eval_status') == 'pending_review' else 'AI 已判断'}",
                 f"- 链接：{rec['content_url']}",
                 f"- 封面：{rec['cover_url'] or ''}",
-                f"- 理由：{rec['reason']}",
-                f"- 证据：{'；'.join(rec['evidence_quotes'])}",
+                f"- 理由：{customer_safe_text(rec['reason'])}",
+                f"- 证据：{customer_safe_text('；'.join(rec['evidence_quotes']))}",
                 "",
             ]
         )
@@ -183,13 +184,13 @@ def write_excel(path: Path, records: list[dict[str, Any]]) -> None:
                 PLATFORM_LABELS.get(rec["platform"], rec["platform"]),
                 "待人工复核" if rec.get("eval_status") == "pending_review" else "AI 已判断",
                 rec["risk_level"],
-                rec["title"],
+                customer_safe_text(rec["title"]),
                 rec["content_url"],
                 rec["cover_url"],
                 rec["author_name"],
                 rec["source_keyword"],
-                rec["reason"],
-                "；".join(rec["evidence_quotes"]),
+                customer_safe_text(rec["reason"]),
+                customer_safe_text("；".join(rec["evidence_quotes"])),
             ]
         )
     wb.save(path)
@@ -206,7 +207,7 @@ def _render_platform_summary_html(summary: dict[str, Any]) -> str:
         f"<td>{row['raw_contents']}</td>"
         f"<td>{row['new_contents']}</td>"
         f"<td>{html.escape(row['proxy_label'])}</td>"
-        f"<td>{html.escape(row['error'])}</td>"
+        f"<td>{html.escape(customer_safe_text(row['error']))}</td>"
         "</tr>"
         for row in rows
     )
@@ -224,7 +225,7 @@ def _platform_summary_markdown_lines(summary: dict[str, Any]) -> list[str]:
     return [
         f"- {row['platform_label']}：{row['status_label']}，采集 {row['raw_contents']}，新增 {row['new_contents']}"
         + (f"，代理：{row['proxy_label']}" if row["proxy_label"] else "")
-        + (f"，说明：{row['error']}" if row["error"] else "")
+        + (f"，说明：{customer_safe_text(row['error'])}" if row["error"] else "")
         for row in rows
     ]
 
@@ -245,7 +246,7 @@ def _platform_summary_rows(summary: dict[str, Any]) -> list[dict[str, Any]]:
                 "raw_contents": int(result.get("raw_contents") or 0),
                 "new_contents": int(result.get("new_contents") or 0),
                 "proxy_label": _format_proxy_label(result.get("proxy")),
-                "error": redact_sensitive(str(result.get("error") or "")),
+                "error": customer_safe_text(str(result.get("error") or "")),
             }
         )
     return rows
@@ -288,23 +289,26 @@ def _load_report_records(run_id: int) -> list[dict[str, Any]]:
             item["evidence_quotes"] = []
         item["is_negative"] = bool(item.get("is_negative"))
         item["is_related"] = bool(item.get("is_related"))
+        for key in ("title", "description", "author_name", "source_keyword", "reason", "recommended_action"):
+            item[key] = customer_safe_text(item.get(key))
+        item["evidence_quotes"] = [customer_safe_text(str(q)) for q in item.get("evidence_quotes", [])]
         result.append(item)
     return result
 
 
 def _render_record(item: dict[str, Any]) -> str:
     risk = html.escape(item.get("risk_level") or "low")
-    evidence = "".join(f"<div class='evidence'>{html.escape(str(q))}</div>" for q in item.get("evidence_quotes", []))
-    title = html.escape(item.get("title") or item.get("content_url") or "无标题")
+    evidence = "".join(f"<div class='evidence'>{html.escape(customer_safe_text(str(q)))}</div>" for q in item.get("evidence_quotes", []))
+    title = html.escape(customer_safe_text(item.get("title") or item.get("content_url") or "无标题"))
     url = html.escape(item.get("content_url") or "")
     cover_url = html.escape(item.get("cover_url") or "")
     review_badge = " | 状态：待人工复核" if item.get("eval_status") == "pending_review" else ""
     cover = f'<p class="meta">封面：<a href="{cover_url}">{cover_url}</a></p>' if cover_url else ""
     return f"""<div class="item risk-{risk}">
 <h3>{title}</h3>
-<div class="meta">风险：{risk}{review_badge} | 作者：{html.escape(item.get('author_name') or '')} | 关键词：{html.escape(item.get('source_keyword') or '')}</div>
+<div class="meta">风险：{risk}{review_badge} | 作者：{html.escape(customer_safe_text(item.get('author_name') or ''))} | 关键词：{html.escape(customer_safe_text(item.get('source_keyword') or ''))}</div>
 <p><a href="{url}">{url}</a></p>
 {cover}
-<p>{html.escape(item.get('reason') or '')}</p>
+<p>{html.escape(customer_safe_text(item.get('reason') or ''))}</p>
 {evidence}
 </div>"""

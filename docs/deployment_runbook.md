@@ -1,18 +1,18 @@
-# legal-sentiment-monitor 部署与验收 Runbook
+# legal-sentiment-monitor 部署 Runbook
 
-本文件用于第一版 MVP 的服务器交付。目标是先把单机版本稳定跑通：一个 FastAPI 后台、一个 SQLite 数据目录、三平台浏览器 profile、一个内置调度器或外部 `run-due` 定时器。
+本文用于第一版服务器交付。目标是先把单机版本稳定跑通：一个后台服务、一个数据目录、一个网页登录态目录、一个内置调度器或外部到期任务定时器。
 
 ## 1. 部署边界
 
 第一版推荐单服务器部署：
 
-- Web 后台：`uvicorn api.main:app`
-- 调度：优先使用 Web 后台内置 APScheduler；如需更稳的外部兜底，可启用 `run-due` timer
+- Web 后台：FastAPI 后台服务
+- 调度：优先使用后台内置调度器；如需更稳的外部兜底，可启用到期任务定时器
 - 数据：SQLite 文件
 - 报告：本地 HTML / Excel / Markdown 文件
-- 浏览器登录态：本机 profile 目录
+- 登录态：平台网页登录态目录
 
-第一版不建议同时运行多个 Web 进程，也不要给 `uvicorn` 开多 worker。系统检测到多 worker 环境变量时会自动停用内置调度器，避免重复触发任务；如果确实需要多 worker，请显式设置 `MONITOR_DISABLE_SCHEDULER=true`，并用外部 cron 或 systemd timer 调用 `monitor_cli.bat run-due` / `python -m api.monitoring.cli run-due`。
+第一版不建议同时运行多个 Web 进程。系统检测到多进程环境时会自动停用内置调度器，避免重复触发任务；如果确实需要多进程，请显式关闭内置调度器，并由外部定时器触发到期任务执行。
 
 ## 2. 目录规划
 
@@ -27,8 +27,8 @@
 说明：
 
 - `app`：项目代码。
-- `data`：SQLite、加密密钥、运行日志、报告、任务锁。
-- `browser_data`：抖音、快手、小红书的浏览器 profile。
+- `data`：数据库、加密密钥、运行日志、报告、任务锁。
+- `browser_data`：抖音、快手、小红书网页登录态。
 
 必须备份：
 
@@ -38,18 +38,18 @@
 /opt/legal-sentiment-monitor/browser_data/
 ```
 
-`secret.key` 用于解密后台保存的 AI Key 和 SMTP 密码，丢失后旧密钥无法解密。
+`secret.key` 用于解密后台保存的 AI Key、SMTP 密码、Cookie 和代理 URL，丢失后旧密钥无法解密。
 
-## 3. 环境变量
+## 3. 环境配置
 
-复制示例文件：
+复制示例配置文件：
 
 ```bash
 sudo cp /opt/legal-sentiment-monitor/app/deploy/systemd/legal-sentiment-monitor.env.example /etc/legal-sentiment-monitor.env
 sudo nano /etc/legal-sentiment-monitor.env
 ```
 
-推荐内容：
+推荐配置：
 
 ```text
 MONITOR_HOST=0.0.0.0
@@ -58,6 +58,9 @@ MONITOR_DATA_DIR=/opt/legal-sentiment-monitor/data
 MONITOR_BROWSER_DATA_DIR=/opt/legal-sentiment-monitor/browser_data
 MONITOR_CRAWLER_HEADLESS=true
 MONITOR_CDP_CONNECT_EXISTING=false
+MONITOR_LOGIN_QR_HEADLESS=true
+MONITOR_LOGIN_QR_TIMEOUT_MS=20000
+MONITOR_LOGIN_QR_TTL_SECONDS=600
 MONITOR_CRAWLER_TIMEOUT_SECONDS=900
 MONITOR_CRAWLER_MAX_RETRIES=1
 MONITOR_CRAWLER_RETRY_DELAY_SECONDS=3
@@ -65,13 +68,7 @@ MONITOR_JOB_LOCK_TTL_SECONDS=21600
 MONITOR_DISABLE_SCHEDULER=false
 ```
 
-按平台固定 CDP 端口：
-
-```text
-MONITOR_CDP_DEBUG_PORT_DY=9223
-MONITOR_CDP_DEBUG_PORT_KS=9224
-MONITOR_CDP_DEBUG_PORT_XHS=9225
-```
+AI 是增强能力，不是采集前置条件。未配置或未启用 AI 时，采集和报告仍会继续，内容会进入待人工复核。
 
 ## 4. 启动方式
 
@@ -97,13 +94,13 @@ $env:MONITOR_PORT="8080"
 .\start_monitor_service.bat
 ```
 
-本地开发时也可以继续使用：
+本地开发也可以继续使用：
 
 ```powershell
 .\start_webui.bat
 ```
 
-区别是 `start_webui.bat` 会自动打开浏览器，`start_monitor_service.bat` 不会。
+区别是服务脚本不会自动打开浏览器。
 
 ### Linux systemd
 
@@ -132,72 +129,56 @@ sudo systemctl enable --now legal-sentiment-run-due.timer
 systemctl list-timers | grep legal-sentiment
 ```
 
-注意：如果 Web 内置调度器已经运行，`run-due` timer 只作为兜底；同一任务有锁保护，不会同时跑两份。
+同一任务有锁保护，不会同时跑两份。
 
 ## 5. 首次上线流程
 
-1. 安装依赖：
-
-```bash
-uv sync
-```
-
-2. 启动后台：
-
-```bash
-uv run uvicorn api.main:app --host 0.0.0.0 --port 8080
-```
-
+1. 安装依赖。
+2. 启动后台服务。
 3. 打开后台：
 
 ```text
 http://服务器IP:8080/monitor
 ```
 
-4. 生成本地自测报告：
+4. 进入“系统配置 -> 系统诊断”，确认基础环境、数据目录、数据库、调度器状态正常。
+5. 进入“资源管理 -> 平台账号”，为目标平台准备登录态。
+6. 进入“资源管理 -> AI 接入”，配置模型连接；再进入“系统配置 -> AI 评估规则”，配置 Prompt。
+7. 进入“系统配置 -> 邮件配置 / 邮件模板”，配置 SMTP 和报告模板。
+8. 进入“舆情监控”，创建测试任务并立即运行。
+9. 进入“运行中心”，查看运行状态和日志。
+10. 进入“报告中心”，确认 HTML 预览、线索明细和附件下载正常。
 
-```bash
-uv run python -m api.monitoring.cli selftest-report
-```
+测试数据建议统一使用：
 
-自测报告会使用“海安律所避雷 / 海安律所退费 / 海安律所投诉”样例关键词，只用于验证报告链路，不调用真实平台，也不会发送邮件。
+- 律所：海安律所
+- 关键词：海安律所避雷、海安律所退费、海安律所投诉
 
-5. 查看验收状态：
+## 6. 平台登录态准备
 
-```bash
-uv run python -m api.monitoring.cli readiness
-```
+第一版后台不要求运营人员在每个任务里选择底层登录参数。登录方式放在“资源管理 -> 平台账号”中维护：
 
-6. 运行本机部署诊断：
+- 抖音：二维码、手机号、Cookie、已有网页登录态。
+- 快手：二维码、Cookie、已有网页登录态；手机号登录入口暂不开放。
+- 小红书：二维码、手机号、Cookie、已有网页登录态。
 
-```bash
-uv run python -m api.monitoring.cli doctor
-```
+推荐流程：
 
-`doctor` 会检查项目文件、uv 命令、数据目录写入权限、SQLite 表结构、三平台登录配置、AI/邮件配置、任务、报告链路和单进程调度环境。它不会调用真实平台、AI 或 SMTP，只用于发现部署基础问题。
+1. 打开后台“资源管理 -> 平台账号”。
+2. 添加对应平台账号。
+3. 选择登录方式。
+4. 二维码方式下点击“发起登录”，前端展示二维码、登录状态或验证提示。
+5. 运营人员扫码或按平台提示处理。
+6. 系统轮询登录状态并保存网页登录态。
+7. 回到账号列表刷新状态，再执行真实采集。
 
-如果测试阶段暂时不允许调用外部 AI，可在启动后台前设置 `MONITOR_SKIP_AI_API=true`。该开关只影响 AI 评估和真实 AI 测试，平台采集、报告生成、邮件发送仍可真实联调；关闭该开关后再完成正式 AI 验收。
+如果平台先出现滑块、验证码或短信验证，系统只回传验证状态、截图或提示，不做绕过。人工处理后保持会话打开，继续轮询登录状态。
 
-## 6. 三平台登录态准备
+“本地窗口登录”只作为兜底方案，适合本地开发、远程桌面或二维码回传不稳定时使用。
 
-第一版后台不要求运营人员在每个任务里选择 `qrcode`、`phone` 或 `cookie`。登录方式放在“账号登录”页，按平台统一配置：
+账号池是轻量调度预留，不做复杂轮换。任务可以绑定账号资源；未绑定时系统使用平台默认登录材料。
 
-- 抖音：浏览器 Profile / 扫码、手机号、Cookie。
-- 快手：浏览器 Profile / 扫码、Cookie。MediaCrawler 当前快手手机号分支未实现，所以后台不开放快手手机号模式。
-- 小红书：浏览器 Profile / 扫码、手机号、Cookie。
-
-推荐流程是：
-
-1. 打开后台“账号登录”页。
-2. 不确定时保留默认的“浏览器 Profile / 扫码”。
-3. 分别点击抖音、快手、小红书的“打开登录窗口”。
-4. 在弹出的浏览器中按平台提示完成扫码、手机号或安全验证。
-5. 确认网页已登录后关闭该登录窗口。
-6. 回后台刷新登录状态，再执行真实采集。
-
-这样做的目的，是把 MediaCrawler 的登录模式从“单次命令参数”变成可复用的平台账号配置。定时任务运行时只按平台配置调用 MediaCrawler，不需要运营在每个任务里重复选择登录方式。
-
-默认 profile 目录：
+默认网页登录态目录：
 
 ```text
 {MONITOR_BROWSER_DATA_DIR}/cdp_dy_user_data_dir
@@ -205,105 +186,69 @@ uv run python -m api.monitoring.cli doctor
 {MONITOR_BROWSER_DATA_DIR}/cdp_xhs_user_data_dir
 ```
 
-如果后台无法打开浏览器，或需要排障，可使用 MediaCrawler CLI 的原始登录方式作为备用。可视化登录命令：
-
-```bash
-uv run python main.py --platform dy --lt qrcode --type search --keywords 登录测试 --headless false --cdp_connect_existing false --cdp_debug_port 9223 --save_data_option json --save_data_path /opt/legal-sentiment-monitor/data/login_probe
-uv run python main.py --platform ks --lt qrcode --type search --keywords 登录测试 --headless false --cdp_connect_existing false --cdp_debug_port 9224 --save_data_option json --save_data_path /opt/legal-sentiment-monitor/data/login_probe
-uv run python main.py --platform xhs --lt qrcode --type search --keywords 登录测试 --headless false --cdp_connect_existing false --cdp_debug_port 9225 --save_data_option json --save_data_path /opt/legal-sentiment-monitor/data/login_probe
-```
-
-登录完成后，在后台“平台状态”里应看到三平台登录配置可用。
-
-如果 Linux 服务器没有桌面环境，可选择以下方式之一：
+如果 Linux 服务器没有桌面环境，可选择：
 
 - 使用带桌面环境的服务器或远程桌面完成扫码登录。
-- 在同系统环境的机器上准备好 `browser_data`，再整体同步到服务器的 `MONITOR_BROWSER_DATA_DIR`。
+- 在同系统环境的机器上准备好 `browser_data`，再整体同步到服务器。
 - 临时使用 Xvfb / VNC 完成一次可视化登录，再切回无头模式运行定时任务。
-- 在“账号登录”页切换为 Cookie 登录，保存对应平台 Cookie。Cookie 会加密保存，页面只显示是否已保存。
+- 在账号页面切换为 Cookie 登录并保存 Cookie。
 
 不要把 `browser_data` 提交到 Git 仓库；它包含登录态和 Cookie。
 
-## 7. 业务验收
+## 7. 业务验证顺序
 
 按顺序完成：
 
-1. 后台创建一个测试任务，只勾选抖音，关键词用真实可搜到的低风险词。
-2. 配置 AI。开发测试阶段可先点击“离线自检”；上线验收时点击“真实测试 AI”，直到显示最近测试通过。
-3. 配置邮件，点击“发送测试邮件”，确认收件箱收到邮件。
-4. 运行抖音任务，确认生成报告。
-5. 分别勾选快手、小红书运行一次，确认三平台均有真实报告记录。
-6. 回到“上线验收状态”，确认只剩业务允许的外部限制项；正式交付前应全部通过。
-
-验收命令：
-
-```bash
-uv run python -m api.monitoring.cli readiness
-```
+1. 在“平台账号”页完成抖音登录，并确认状态可用。
+2. 配置 AI 接入并完成连接测试；如暂不配置，采集仍可运行，线索进入待人工复核。
+3. 配置邮件和模板，发送一封测试邮件。
+4. 创建一个只勾选抖音的任务，关键词使用“海安律所避雷、海安律所退费、海安律所投诉”。
+5. 立即运行任务。
+6. 在运行中心确认运行记录、日志、采集数、新增数、失败原因显示正常。
+7. 在报告中心确认报告预览、线索明细和下载正常。
+8. 抖音闭环稳定后，再按同样流程扩展快手和小红书。
 
 ## 8. 日常运维
 
-查看任务：
+建议每天关注：
 
-```bash
-uv run python -m api.monitoring.cli list-jobs
-```
+- 总览页的调度器状态。
+- 最近失败任务。
+- 平台登录状态。
+- 待复核线索。
+- 报告发送记录。
 
-部署诊断：
-
-```bash
-uv run python -m api.monitoring.cli doctor
-```
-
-手动运行：
-
-```bash
-uv run python -m api.monitoring.cli run-job 1
-```
-
-执行到期任务：
-
-```bash
-uv run python -m api.monitoring.cli run-due
-```
-
-清理异常残留锁：
-
-```bash
-ls /opt/legal-sentiment-monitor/data/locks
-```
-
-通常不需要手动删除；超过 `MONITOR_JOB_LOCK_TTL_SECONDS` 后系统会自动回收。只有确认没有采集进程仍在运行时，才可以删除对应锁文件。
+任务失败时，优先查看运行中心日志。常见原因包括登录态失效、平台验证、关键词无结果、采集范围过窄、邮件配置错误或 AI 服务异常。
 
 ## 9. 常见问题
 
-### readiness 显示 AI 未就绪
+### AI 显示未就绪
 
-原因通常是：
+常见原因：
 
 - Base URL 填错。
 - API Key 没权限。
 - Model 名称不正确。
 - 模型输出不是固定 JSON。
 
-处理方式：在后台 AI 配置页点击“真实测试 AI”，查看失败原因。真实测试通过后 readiness 才会变为已就绪；“离线自检”不会调用 AI API，也不会替代验收状态。
+处理方式：在“资源管理 -> AI 接入”页面做连接测试；在“系统配置 -> AI 评估规则”页面测试 Prompt 输出结构。
 
-### readiness 显示邮件未就绪
+### 邮件发送失败
 
-原因通常是：
+常见原因：
 
 - SMTP Host / Port 不正确。
 - SSL 和 STARTTLS 选错。
 - 邮箱服务商要求授权码，不是登录密码。
 - 默认收件人为空。
 
-处理方式：在后台邮件配置页点击“发送测试邮件”，确认真实收到邮件。
+处理方式：在邮件配置页发送测试邮件，确认收件箱收到邮件。
 
 ### 平台显示需重新登录
 
-原因通常是 profile 失效、平台要求验证、扫码登录过期。
+常见原因是网页登录态失效、平台要求验证或扫码登录过期。
 
-处理方式：用第 6 节的可视化命令重新登录对应平台，再运行一次测试任务。
+处理方式：进入平台账号页重新发起登录；如果二维码不可用，可使用本地窗口登录兜底。
 
 ### 报告为空但手动搜索有结果
 
@@ -312,7 +257,7 @@ ls /opt/legal-sentiment-monitor/data/locks
 - 采集范围是否过窄，例如最近 1 天。
 - 关键词是否被排除词过滤。
 - 平台搜索排序是否返回旧内容。
-- 运行日志里是否有登录态失效或风控提示。
+- 运行日志里是否有登录态失效或验证提示。
 
 第一版会在外层做时间过滤和去重，时间范围外内容不会进入报告。
 
@@ -334,8 +279,4 @@ tar -xzf legal-sentiment-backup-YYYY-MM-DD.tar.gz -C /
 sudo systemctl start legal-sentiment-monitor
 ```
 
-恢复后执行：
-
-```bash
-uv run python -m api.monitoring.cli readiness
-```
+恢复后进入后台“系统配置 -> 系统诊断”确认状态。

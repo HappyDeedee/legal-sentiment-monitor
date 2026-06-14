@@ -34,6 +34,109 @@ from tools import utils
 
 
 class XiaoHongShuLogin(AbstractLogin):
+    LOGIN_URL = "https://www.xiaohongshu.com"
+    LOGIN_BUTTON_SELECTOR = "xpath=//*[@id='app']/div[1]/div[2]/div[1]/ul/div[1]/button"
+    QRCODE_SELECTOR = "xpath=//img[contains(@class, 'qrcode-img') or contains(@class, 'qrcode') or contains(@src, 'qr')]"
+    MOBILE_METHOD_SELECTOR = 'xpath=//div[@class="login-container"]//div[@class="other-method"]/div[1]'
+    QRCODE_CAPTURE_METHOD = "tools.utils.find_login_qrcode"
+    QRCODE_FLOW_STEPS = (
+        "打开 LOGIN_URL",
+        "先调用 tools.utils.find_login_qrcode(context_page, QRCODE_SELECTOR)",
+        "二维码未出现时点击 LOGIN_BUTTON_SELECTOR 后再次获取二维码",
+        "使用 check_login_state 的 web_session/UI 规则轮询登录结果",
+    )
+    LOGIN_STATE_SESSION_COOKIE = "web_session"
+    LOGIN_STATE_PROFILE_SELECTOR = "xpath=//a[contains(@href, '/user/profile/')]//span[text()='我']"
+    LOGIN_STATE_ANONYMOUS_SELECTOR = "div.login-container, .login-modal, img.qrcode-img"
+    SUPPORTED_LOGIN_TYPES = ("qrcode", "phone", "cookie")
+    MANUAL_VERIFICATION_URL_MARKERS = ("captcha", "verify", "challenge", "risk")
+    MANUAL_VERIFICATION_LABELS = {
+        "slider": "滑块验证",
+        "sms": "短信验证码",
+        "captcha": "图形/安全验证码",
+    }
+    MANUAL_VERIFICATION_TEXT_MARKERS = {
+        "slider": (
+            "滑块",
+            "滑动",
+            "请按住滑块",
+            "按住滑块",
+            "拖动滑块",
+            "拖动下方滑块",
+            "拖动滑块完成拼图",
+            "请拖动滑块完成拼图",
+            "请拖动滑块完成验证",
+            "拖动滑块完成验证",
+            "拖动滑块至正确位置",
+            "向右拖动",
+            "完成拼图",
+        ),
+        "sms": (
+            "短信验证码",
+            "手机验证码",
+            "输入验证码",
+            "请输入验证码",
+            "获取验证码",
+            "验证码已发送",
+            "重新获取验证码",
+            "发送验证码",
+        ),
+        "captcha": (
+            "安全验证",
+            "安全检测",
+            "风险验证",
+            "智能验证",
+            "验证中间页",
+            "验证码中间页",
+            "请通过验证",
+            "请完成验证",
+            "请完成安全验证",
+            "完成验证",
+            "安全校验",
+            "身份验证",
+            "环境存在风险",
+            "验证失败",
+            "环境异常",
+            "verify",
+            "captcha",
+        ),
+    }
+    MANUAL_VERIFICATION_SELECTORS = {
+        "slider": (
+            "[class*='slider']",
+            "[id*='slider']",
+            "[class*='drag']",
+            "[id*='drag']",
+            "[class*='slide']",
+            "[id*='slide']",
+            ".geetest_panel",
+            ".geetest_box",
+            "[class*='geetest']",
+            "[class*='yidun']",
+            ".yidun_slider",
+        ),
+        "captcha": (
+            "[class*='captcha']",
+            "[id*='captcha']",
+            "[class*='verify']",
+            "[id*='verify']",
+            "[class*='security']",
+            "[id*='security']",
+            "[class*='safe']",
+            "[id*='safe']",
+            "[class*='challenge']",
+            "[id*='challenge']",
+            "[class*='risk']",
+            "[id*='risk']",
+            "iframe[src*='captcha']",
+            "iframe[src*='verify']",
+            "iframe[src*='challenge']",
+            "iframe[src*='risk']",
+            "iframe[src*='slide']",
+            "iframe[src*='security']",
+            "[class*='captcha-container']",
+        ),
+    }
 
     def __init__(self,
                  login_type: str,
@@ -103,14 +206,14 @@ class XiaoHongShuLogin(AbstractLogin):
         try:
             # After entering Xiaohongshu homepage, the login dialog may not pop up automatically, need to manually click login button
             login_button_ele = await self.context_page.wait_for_selector(
-                selector="xpath=//*[@id='app']/div[1]/div[2]/div[1]/ul/div[1]/button",
+                selector=self.LOGIN_BUTTON_SELECTOR,
                 timeout=5000
             )
             await login_button_ele.click()
             # The login dialog has two forms: one shows phone number and verification code directly
             # The other requires clicking to switch to phone login
             element = await self.context_page.wait_for_selector(
-                selector='xpath=//div[@class="login-container"]//div[@class="other-method"]/div[1]',
+                selector=self.MOBILE_METHOD_SELECTOR,
                 timeout=5000
             )
             await element.click()
@@ -167,22 +270,20 @@ class XiaoHongShuLogin(AbstractLogin):
     async def login_by_qrcode(self):
         """login xiaohongshu website and keep webdriver login state"""
         utils.logger.info("[XiaoHongShuLogin.login_by_qrcode] Begin login xiaohongshu by qrcode ...")
-        # login_selector = "div.login-container > div.left > div.qrcode > img"
-        qrcode_img_selector = "xpath=//img[@class='qrcode-img']"
         # find login qrcode
         base64_qrcode_img = await utils.find_login_qrcode(
             self.context_page,
-            selector=qrcode_img_selector
+            selector=self.QRCODE_SELECTOR
         )
         if not base64_qrcode_img:
             utils.logger.info("[XiaoHongShuLogin.login_by_qrcode] login failed , have not found qrcode please check ....")
             # if this website does not automatically popup login dialog box, we will manual click login button
             await asyncio.sleep(0.5)
-            login_button_ele = self.context_page.locator("xpath=//*[@id='app']/div[1]/div[2]/div[1]/ul/div[1]/button")
+            login_button_ele = self.context_page.locator(self.LOGIN_BUTTON_SELECTOR)
             await login_button_ele.click()
             base64_qrcode_img = await utils.find_login_qrcode(
                 self.context_page,
-                selector=qrcode_img_selector
+                selector=self.QRCODE_SELECTOR
             )
             if not base64_qrcode_img:
                 sys.exit()
@@ -209,6 +310,22 @@ class XiaoHongShuLogin(AbstractLogin):
         wait_redirect_seconds = 5
         utils.logger.info(f"[XiaoHongShuLogin.login_by_qrcode] Login successful then wait for {wait_redirect_seconds} seconds redirect ...")
         await asyncio.sleep(wait_redirect_seconds)
+
+    async def prepare_qrcode_login(self, timeout_ms: int = 10000) -> None:
+        """Prepare the MediaCrawler Xiaohongshu QR login dialog without waiting for scan completion."""
+        base64_qrcode_img = await self.capture_qrcode()
+        if base64_qrcode_img:
+            return
+        await asyncio.sleep(0.5)
+        login_button_ele = self.context_page.locator(self.LOGIN_BUTTON_SELECTOR)
+        await login_button_ele.click(timeout=timeout_ms)
+
+    async def capture_qrcode(self) -> str:
+        """Capture the login QR image using MediaCrawler's QR utility."""
+        return await utils.find_login_qrcode(
+            self.context_page,
+            selector=self.QRCODE_SELECTOR
+        )
 
     async def login_by_cookies(self):
         """login xiaohongshu website by cookies"""

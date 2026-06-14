@@ -6,13 +6,15 @@ import json
 from datetime import datetime
 from typing import Any, Sequence
 
-from .database import get_job, has_job_template_placeholders, init_db, list_jobs, set_job_schedule_state
+from .database import get_job, has_job_template_placeholders, init_db, list_jobs, record_skipped_run, set_job_schedule_state
 from .doctor import run_doctor
+from .preflight import build_job_preflight
 from .readiness import get_readiness_status
 from .runner import run_job
 from .scheduler import _is_due, next_run_at
 from .security import redact_sensitive
 from .selftest import create_sample_report
+from .smoke import run_smoke_check
 
 
 def main(argv: Sequence[str] | None = None) -> int:
@@ -36,6 +38,7 @@ def build_parser() -> argparse.ArgumentParser:
     subparsers.add_parser("readiness", help="print deployment readiness status")
     subparsers.add_parser("doctor", help="run local deployment diagnostics")
     subparsers.add_parser("selftest-report", help="generate a local self-test report")
+    subparsers.add_parser("smoke", help="run local smoke checks and generate a self-test report")
     subparsers.add_parser("list-jobs", help="list visible monitor jobs")
 
     run_job_parser = subparsers.add_parser("run-job", help="run one monitor job immediately")
@@ -53,6 +56,8 @@ async def _run_command(args: argparse.Namespace) -> dict[str, Any]:
         return run_doctor()
     if args.command == "selftest-report":
         return await create_sample_report()
+    if args.command == "smoke":
+        return await run_smoke_check()
     if args.command == "list-jobs":
         return {"jobs": list_jobs()}
     if args.command == "run-job":
@@ -63,8 +68,15 @@ async def _run_command(args: argparse.Namespace) -> dict[str, Any]:
 
 
 async def run_one_job(job_id: int) -> dict[str, Any]:
-    if not get_job(job_id):
+    job = get_job(job_id)
+    if not job:
         raise ValueError("job not found")
+    preflight = build_job_preflight(job, [])
+    if preflight["blockers"]:
+        reason = "运行前检查未通过：" + "；".join(preflight["blockers"])
+        run_id = record_skipped_run(job_id, reason, _skip_summary(job, "preflight_blocked", preflight, source="cli"))
+        _refresh_schedule_state(job_id)
+        return {"ok": False, "failed": 1, "ran": 0, "skipped": 1, "results": [{"job_id": job_id, "run_id": run_id, "status": "skipped", "reason": reason, "preflight": preflight}]}
     result = await run_job(job_id)
     _refresh_schedule_state(job_id)
     return {"ok": True, "ran": 1, "results": [{"job_id": job_id, "status": result.get("status"), "result": result}]}
@@ -82,7 +94,15 @@ async def run_due_jobs(now: datetime | None = None) -> dict[str, Any]:
         if not _is_due(job, now):
             continue
         if has_job_template_placeholders(job):
-            results.append({"job_id": job_id, "status": "skipped", "reason": "请先把验收模板里的律所名称和关键词改成真实内容"})
+            reason = "请先把测试数据模板里的律所名称和平台搜索词改成真实内容"
+            run_id = record_skipped_run(job_id, reason, _skip_summary(job, "template_placeholders", source="cli"))
+            results.append({"job_id": job_id, "run_id": run_id, "status": "skipped", "reason": reason})
+            continue
+        preflight = build_job_preflight(job, [])
+        if preflight["blockers"]:
+            reason = "运行前检查未通过：" + "；".join(preflight["blockers"])
+            run_id = record_skipped_run(job_id, reason, _skip_summary(job, "preflight_blocked", preflight, source="cli"))
+            results.append({"job_id": job_id, "run_id": run_id, "status": "skipped", "reason": reason, "preflight": preflight})
             continue
         try:
             result = await run_job(job_id)
@@ -103,6 +123,20 @@ def _refresh_schedule_state(job_id: int) -> None:
         set_job_schedule_state(job_id, next_run_at(refreshed, datetime.now()))
     elif refreshed:
         set_job_schedule_state(job_id, None)
+
+
+def _skip_summary(job: dict[str, Any], skip_type: str, preflight: dict[str, Any] | None = None, source: str = "cli") -> dict[str, Any]:
+    summary = {
+        "job_id": job.get("id"),
+        "law_firm_name": job.get("law_firm_name") or "",
+        "platforms": job.get("platforms", []),
+        "keywords": job.get("keywords", []),
+        "skip_type": skip_type,
+        "source": source,
+    }
+    if preflight:
+        summary["preflight"] = preflight
+    return summary
 
 
 def _print_json(data: Any) -> None:

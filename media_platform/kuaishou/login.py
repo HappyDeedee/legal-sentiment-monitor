@@ -33,6 +33,105 @@ from tools import utils
 
 
 class KuaishouLogin(AbstractLogin):
+    LOGIN_URL = "https://www.kuaishou.com/?isHome=1"
+    LOGIN_BUTTON_SELECTOR = "xpath=//p[text()='登录']"
+    QRCODE_SELECTOR = "xpath=//div[@class='qrcode-img']//img"
+    QRCODE_CAPTURE_METHOD = "tools.utils.find_login_qrcode"
+    QRCODE_FLOW_STEPS = (
+        "打开 LOGIN_URL",
+        "点击 LOGIN_BUTTON_SELECTOR",
+        "调用 tools.utils.find_login_qrcode(context_page, QRCODE_SELECTOR) 获取二维码",
+        "使用 check_login_state 的 passToken Cookie 规则轮询登录结果",
+    )
+    LOGIN_STATE_COOKIE_RULES = {"passToken": None}
+    SUPPORTED_LOGIN_TYPES = ("qrcode", "cookie")
+    MANUAL_VERIFICATION_URL_MARKERS = ("captcha", "verify", "challenge", "risk")
+    MANUAL_VERIFICATION_LABELS = {
+        "slider": "滑块验证",
+        "sms": "短信验证码",
+        "captcha": "图形/安全验证码",
+    }
+    MANUAL_VERIFICATION_TEXT_MARKERS = {
+        "slider": (
+            "滑块",
+            "滑动",
+            "请按住滑块",
+            "按住滑块",
+            "拖动滑块",
+            "拖动下方滑块",
+            "拖动滑块完成拼图",
+            "请拖动滑块完成拼图",
+            "请拖动滑块完成验证",
+            "拖动滑块完成验证",
+            "拖动滑块至正确位置",
+            "向右拖动",
+            "完成拼图",
+        ),
+        "sms": (
+            "短信验证码",
+            "手机验证码",
+            "输入验证码",
+            "请输入验证码",
+            "获取验证码",
+            "验证码已发送",
+            "重新获取验证码",
+            "发送验证码",
+        ),
+        "captcha": (
+            "安全验证",
+            "安全检测",
+            "风险验证",
+            "智能验证",
+            "验证中间页",
+            "验证码中间页",
+            "请通过验证",
+            "请完成验证",
+            "请完成安全验证",
+            "完成验证",
+            "安全校验",
+            "身份验证",
+            "环境存在风险",
+            "验证失败",
+            "环境异常",
+            "verify",
+            "captcha",
+        ),
+    }
+    MANUAL_VERIFICATION_SELECTORS = {
+        "slider": (
+            "[class*='slider']",
+            "[id*='slider']",
+            "[class*='drag']",
+            "[id*='drag']",
+            "[class*='slide']",
+            "[id*='slide']",
+            "[class*='kwai-captcha']",
+        ),
+        "captcha": (
+            "[class*='captcha']",
+            "[id*='captcha']",
+            "[class*='verify']",
+            "[id*='verify']",
+            "[class*='security']",
+            "[id*='security']",
+            "[class*='safe']",
+            "[id*='safe']",
+            "[class*='challenge']",
+            "[id*='challenge']",
+            "[class*='risk']",
+            "[id*='risk']",
+            "iframe[src*='captcha']",
+            "iframe[src*='verify']",
+            "iframe[src*='challenge']",
+            "iframe[src*='risk']",
+            "iframe[src*='slide']",
+            "iframe[src*='security']",
+            "iframe[src*='kuaishou'][src*='captcha']",
+            "iframe[src*='kuaishou'][src*='verify']",
+            "[class*='captcha-container']",
+        ),
+    }
+
     def __init__(self,
                  login_type: str,
                  browser_context: BrowserContext,
@@ -78,15 +177,14 @@ class KuaishouLogin(AbstractLogin):
 
         # click login button
         login_button_ele = self.context_page.locator(
-            "xpath=//p[text()='登录']"
+            self.LOGIN_BUTTON_SELECTOR
         )
         await login_button_ele.click()
 
         # find login qrcode
-        qrcode_img_selector = "//div[@class='qrcode-img']//img"
         base64_qrcode_img = await utils.find_login_qrcode(
             self.context_page,
-            selector=qrcode_img_selector
+            selector=self.QRCODE_SELECTOR
         )
         if not base64_qrcode_img:
             utils.logger.info("[KuaishouLogin.login_by_qrcode] login failed , have not found qrcode please check ....")
@@ -107,6 +205,20 @@ class KuaishouLogin(AbstractLogin):
         wait_redirect_seconds = 5
         utils.logger.info(f"[KuaishouLogin.login_by_qrcode] Login successful then wait for {wait_redirect_seconds} seconds redirect ...")
         await asyncio.sleep(wait_redirect_seconds)
+
+    async def prepare_qrcode_login(self, timeout_ms: int = 10000) -> None:
+        """Prepare the MediaCrawler Kuaishou QR login dialog without waiting for scan completion."""
+        login_button_ele = self.context_page.locator(
+            self.LOGIN_BUTTON_SELECTOR
+        )
+        await login_button_ele.click(timeout=timeout_ms)
+
+    async def capture_qrcode(self) -> str:
+        """Capture the login QR image using MediaCrawler's QR utility."""
+        return await utils.find_login_qrcode(
+            self.context_page,
+            selector=self.QRCODE_SELECTOR
+        )
 
     async def login_by_mobile(self):
         pass

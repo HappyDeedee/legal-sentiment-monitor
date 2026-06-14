@@ -235,6 +235,14 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
                 rich_help_panel="Account Configuration",
             ),
         ] = config.COOKIES,
+        login_phone: Annotated[
+            str,
+            typer.Option(
+                "--login_phone",
+                help="Phone number used by platform mobile-code login",
+                rich_help_panel="Account Configuration",
+            ),
+        ] = getattr(config, "LOGIN_PHONE", ""),
         specified_id: Annotated[
             str,
             typer.Option(
@@ -259,6 +267,14 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
                 rich_help_panel="Comment Configuration",
             ),
         ] = config.CRAWLER_MAX_COMMENTS_COUNT_SINGLENOTES,
+        crawler_max_notes_count: Annotated[
+            int,
+            typer.Option(
+                "--crawler_max_notes_count",
+                help="Maximum number of notes/videos to crawl per keyword",
+                rich_help_panel="Basic Configuration",
+            ),
+        ] = config.CRAWLER_MAX_NOTES_COUNT,
         max_concurrency_num: Annotated[
             int,
             typer.Option(
@@ -359,6 +375,8 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
         config.CDP_HEADLESS = enable_headless
         config.SAVE_DATA_OPTION = save_data_option.value
         config.COOKIES = cookies
+        config.LOGIN_PHONE = login_phone
+        config.CRAWLER_MAX_NOTES_COUNT = crawler_max_notes_count
         config.CRAWLER_MAX_COMMENTS_COUNT_SINGLENOTES = max_comments_count_singlenotes
         config.MAX_CONCURRENCY_NUM = max_concurrency_num
         config.SAVE_DATA_PATH = save_data_path
@@ -407,6 +425,8 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
             save_data_option=config.SAVE_DATA_OPTION,
             init_db=init_db_value,
             cookies=config.COOKIES,
+            login_phone=getattr(config, "LOGIN_PHONE", ""),
+            crawler_max_notes_count=config.CRAWLER_MAX_NOTES_COUNT,
             specified_id=specified_id,
             creator_id=creator_id,
             publish_time_type=getattr(config, "PUBLISH_TIME_TYPE", 0),

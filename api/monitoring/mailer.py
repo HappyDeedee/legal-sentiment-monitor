@@ -5,8 +5,9 @@ from email.message import EmailMessage
 from pathlib import Path
 from typing import Any
 
-from .database import get_active_email_template, get_email_config, validate_port, validate_recipients
+from .database import get_active_email_template, get_email_config, get_email_template, validate_port, validate_recipients
 from .normalizer import PLATFORM_LABELS
+from .security import customer_safe_text
 
 
 def send_report(job: dict[str, Any], report: dict[str, Any]) -> tuple[bool, str | None]:
@@ -17,21 +18,28 @@ def send_report(job: dict[str, Any], report: dict[str, Any]) -> tuple[bool, str 
     if not cfg.get("smtp_host") or not cfg.get("sender"):
         return False, "SMTP 配置未完成"
     try:
-        template = get_active_email_template()
+        template = _job_email_template(job)
         subject_template = (template or {}).get("subject_template") or cfg.get("subject_template") or "【律所舆情日报】{law_firm_name} - {date}"
-        subject = _safe_format(subject_template, _template_values(job, report, ""))
-        msg = build_report_email(cfg, recipients, subject, report)
+        values = _template_values(job, report, "")
+        subject = customer_safe_text(_safe_format(subject_template, values))
+        msg = build_report_email(cfg, recipients, subject, report, job)
         _smtp_send(cfg, msg)
         return True, None
     except Exception as exc:
         return False, f"{type(exc).__name__}: {exc}"
 
 
-def build_report_email(cfg: dict[str, Any], recipients: list[str], subject: str, report: dict[str, Any]) -> EmailMessage:
-    html_body = Path(report["html_path"]).read_text(encoding="utf-8")
-    template = get_active_email_template()
+def build_report_email(
+    cfg: dict[str, Any],
+    recipients: list[str],
+    subject: str,
+    report: dict[str, Any],
+    job: dict[str, Any] | None = None,
+) -> EmailMessage:
+    html_body = customer_safe_text(Path(report["html_path"]).read_text(encoding="utf-8"))
+    template = _job_email_template(job or {})
     if template and template.get("html_template"):
-        html_body = _safe_format(template["html_template"], _template_values({}, report, html_body))
+        html_body = customer_safe_text(_safe_format(template["html_template"], _template_values(job or {}, report, html_body)))
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = cfg["sender"]
@@ -46,6 +54,28 @@ def build_report_email(cfg: dict[str, Any], recipients: list[str], subject: str,
     return msg
 
 
+def render_report_email_preview(job: dict[str, Any], report: dict[str, Any], cfg: dict[str, Any] | None = None) -> dict[str, str]:
+    cfg = cfg or get_email_config(masked=False)
+    template = _job_email_template(job)
+    subject_template = (template or {}).get("subject_template") or cfg.get("subject_template") or "【律所舆情日报】{law_firm_name} - {date}"
+    subject = customer_safe_text(_safe_format(subject_template, _template_values(job, report, "")))
+    sender = cfg.get("sender") or "preview@example.com"
+    msg = build_report_email({"sender": sender}, ["preview@example.com"], subject, report, job)
+    return {"subject": subject, "html": _email_html_body(msg)}
+
+
+def _job_email_template(job: dict[str, Any]) -> dict[str, Any] | None:
+    template_id = job.get("email_template_id")
+    if template_id:
+        try:
+            template = get_email_template(int(template_id))
+        except (TypeError, ValueError):
+            template = None
+        if template:
+            return template
+    return get_active_email_template()
+
+
 def _template_values(job: dict[str, Any], report: dict[str, Any], report_html: str) -> dict[str, Any]:
     summary = report.get("summary") if isinstance(report.get("summary"), dict) else {}
     law_firm_name = (
@@ -57,7 +87,7 @@ def _template_values(job: dict[str, Any], report: dict[str, Any], report_html: s
     )
     platforms = summary.get("platforms") or list((summary.get("platform_results") or {}).keys())
     return {
-        "law_firm_name": law_firm_name,
+        "law_firm_name": customer_safe_text(law_firm_name),
         "date": __import__("datetime").date.today().isoformat(),
         "new_contents": summary.get("new_contents", 0),
         "negative_count": summary.get("negative_count", 0),
@@ -65,6 +95,7 @@ def _template_values(job: dict[str, Any], report: dict[str, Any], report_html: s
         "pending_review_count": summary.get("pending_review_count", 0),
         "platforms": " / ".join(PLATFORM_LABELS.get(platform, platform) for platform in platforms),
         "report_html": report_html,
+        "report_body": report_html,
     }
 
 
@@ -91,6 +122,13 @@ def _attachment_mime(path: Path) -> tuple[str, str]:
     return "application", "octet-stream"
 
 
+def _email_html_body(msg: EmailMessage) -> str:
+    for part in msg.walk():
+        if part.get_content_type() == "text/html":
+            return part.get_content()
+    return ""
+
+
 def send_test_email(payload: dict[str, Any] | None = None) -> None:
     cfg = _merge_test_config(payload or {})
     target = (payload or {}).get("target") or (cfg.get("default_recipients") or [None])[0]
@@ -100,7 +138,7 @@ def send_test_email(payload: dict[str, Any] | None = None) -> None:
     if not cfg.get("smtp_host") or not cfg.get("sender"):
         raise ValueError("SMTP 配置未完成")
     msg = EmailMessage()
-    msg["Subject"] = "legal-sentiment-monitor 测试邮件"
+    msg["Subject"] = "律所舆情运营系统测试邮件"
     msg["From"] = cfg["sender"]
     msg["To"] = target
     msg.set_content("测试邮件发送成功。")

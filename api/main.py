@@ -28,15 +28,15 @@ import uvicorn
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
-from fastapi.responses import FileResponse
+from fastapi.responses import FileResponse, RedirectResponse
 
 from .monitoring.database import init_db
 from .monitoring.scheduler import start_scheduler
 from .routers import crawler_router, data_router, monitor_router, websocket_router
 
 app = FastAPI(
-    title="MediaCrawler WebUI API",
-    description="API for controlling MediaCrawler from WebUI",
+    title="律所舆情监控系统",
+    description="面向运营人员的律所舆情监控后台",
     version="1.0.0"
 )
 
@@ -73,16 +73,7 @@ async def startup_monitoring():
 
 @app.get("/")
 async def serve_frontend():
-    """Return frontend page"""
-    index_path = os.path.join(WEBUI_DIR, "index.html")
-    if os.path.exists(index_path):
-        return FileResponse(index_path)
-    return {
-        "message": "MediaCrawler WebUI API",
-        "version": "1.0.0",
-        "docs": "/docs",
-        "note": "WebUI not found, please build it first: cd webui && npm run build"
-    }
+    return RedirectResponse(url="/monitor")
 
 
 @app.get("/monitor")
@@ -101,7 +92,7 @@ async def health_check():
 
 @app.get("/api/env/check")
 async def check_environment():
-    """Check if MediaCrawler environment is configured correctly"""
+    """Check if the collection runtime is ready."""
     try:
         # Use a thread-backed subprocess call so the check works on Windows
         # when uvicorn reload uses an event loop without async subprocess support.
@@ -119,33 +110,32 @@ async def check_environment():
         if process.returncode == 0:
             return {
                 "success": True,
-                "message": "MediaCrawler environment configured correctly",
-                "output": process.stdout[:500]  # Truncate to first 500 characters
+                "message": "采集运行环境可用",
+                "output": "运行环境检查通过",
             }
         else:
-            error_msg = process.stderr or process.stdout
             return {
                 "success": False,
-                "message": "Environment check failed",
-                "error": error_msg[:500]
+                "message": "采集运行环境检查未通过",
+                "error": "请联系技术人员检查服务依赖",
             }
     except subprocess.TimeoutExpired:
         return {
             "success": False,
-            "message": "Environment check timeout",
-            "error": "Command execution exceeded 30 seconds"
+            "message": "采集运行环境检查超时",
+            "error": "请稍后重试或联系技术人员",
         }
     except FileNotFoundError:
         return {
             "success": False,
-            "message": "uv command not found",
-            "error": "Please ensure uv is installed and configured in system PATH"
+            "message": "运行环境未就绪",
+            "error": "请联系技术人员完成服务依赖安装",
         }
     except Exception as e:
         return {
             "success": False,
-            "message": "Environment check error",
-            "error": f"{type(e).__name__}: {e}",
+            "message": "采集运行环境检查异常",
+            "error": f"{type(e).__name__}",
         }
 
 

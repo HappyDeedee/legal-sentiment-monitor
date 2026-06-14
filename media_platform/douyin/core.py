@@ -101,7 +101,7 @@ class DouYinCrawler(AbstractCrawler):
             if not await self.dy_client.pong(browser_context=self.browser_context):
                 login_obj = DouYinLogin(
                     login_type=config.LOGIN_TYPE,
-                    login_phone="",  # you phone number
+                    login_phone=getattr(config, "LOGIN_PHONE", ""),
                     browser_context=self.browser_context,
                     context_page=self.context_page,
                     cookie_str=config.COOKIES,

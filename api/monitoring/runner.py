@@ -18,6 +18,7 @@ from .database import (
     get_job,
     get_platform_login_config,
     get_proxy_profile,
+    get_social_account,
     list_social_accounts,
     update_run_summary,
     utc_now,
@@ -197,15 +198,17 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
                 attempt_out.mkdir(parents=True, exist_ok=True)
                 try:
                     _raise_if_stop_requested(job["id"])
-                    proxy_binding = _resolve_platform_proxy_binding(platform)
-                    await asyncio.to_thread(_run_crawler_attempt, job, platform, attempt_out, proxy_binding)
+                    account_binding = _resolve_platform_account_binding(platform, job)
+                    await asyncio.to_thread(_run_crawler_attempt, job, platform, attempt_out, account_binding)
                     _raise_if_stop_requested(job["id"])
                     contents, comments = collect_platform_outputs(attempt_out, platform)
                     result = ingest_outputs(job, run_id, platform, contents, comments)
                     result["attempts"] = attempt
                     result["max_retries"] = max_retries
-                    if proxy_binding:
-                        result["proxy"] = _proxy_summary(proxy_binding)
+                    if account_binding:
+                        result["account"] = _account_summary(account_binding)
+                    if account_binding and account_binding.get("proxy_id"):
+                        result["proxy"] = _proxy_summary(account_binding)
                     return result
                 except CrawlerStopped:
                     raise
@@ -222,24 +225,29 @@ def _run_crawler_attempt(
     job: dict[str, Any],
     platform: str,
     out_dir: Path,
-    proxy_binding: dict[str, Any] | None = None,
+    account_binding: dict[str, Any] | None = None,
 ) -> None:
     _raise_if_stop_requested(job["id"])
-    cmd = _build_crawler_cmd(job, platform, out_dir)
-    env = _build_crawler_env(proxy_binding)
+    cmd = _build_crawler_cmd(job, platform, out_dir, account_binding)
+    env = _build_crawler_env(account_binding)
     log_path = out_dir / "crawler.log"
     timeout_seconds = int(os.environ.get("MONITOR_CRAWLER_TIMEOUT_SECONDS") or 900)
     process: subprocess.Popen | None = None
     try:
         creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
         log_lines = [redact_sensitive("Starting crawler: " + " ".join(cmd))]
-        if proxy_binding:
+        if account_binding and account_binding.get("profile_path"):
+            log_lines.append(
+                "[monitor] Account profile enabled: "
+                + redact_sensitive(f"{account_binding.get('account_name') or '-'} {account_binding.get('profile_path') or ''}")
+            )
+        if account_binding and account_binding.get("proxy_id"):
             log_lines.append(
                 "[monitor] Proxy enabled: "
                 + redact_sensitive(
-                    f"{proxy_binding.get('proxy_name') or '-'} "
-                    f"({proxy_binding.get('provider') or '-'}) "
-                    f"{proxy_binding.get('proxy_url') or ''}"
+                    f"{account_binding.get('proxy_name') or '-'} "
+                    f"({account_binding.get('provider') or '-'}) "
+                    f"{account_binding.get('proxy_url') or ''}"
                 )
             )
         log_path.write_text("\n".join(log_lines) + "\n", encoding="utf-8", errors="ignore")
@@ -439,13 +447,27 @@ def _load_comments(platform: str, content_id: str) -> list[dict[str, Any]]:
         ]
 
 
-def _build_crawler_cmd(job: dict[str, Any], platform: str, out_dir: Path) -> list[str]:
+def _build_crawler_cmd(
+    job: dict[str, Any],
+    platform: str,
+    out_dir: Path,
+    account_binding: dict[str, Any] | None = None,
+) -> list[str]:
     headless = os.environ.get("MONITOR_CRAWLER_HEADLESS", "true").lower() not in {"0", "false", "no"}
     connect_existing = os.environ.get("MONITOR_CDP_CONNECT_EXISTING", "false").lower() in {"1", "true", "yes"}
     debug_port = os.environ.get(f"MONITOR_CDP_DEBUG_PORT_{platform.upper()}") or os.environ.get("MONITOR_CDP_DEBUG_PORT")
     debug_port = debug_port or str(PLATFORM_DEBUG_PORTS.get(platform, 9223))
     login_config = get_platform_login_config(platform, masked=False)
-    login_type = login_config.get("login_type") or "qrcode"
+    login_type = (account_binding or {}).get("login_type") or login_config.get("login_type") or "qrcode"
+    if login_type not in {"qrcode", "cookie"}:
+        login_type = "qrcode"
+    target_type = str(job.get("target_type") or "search")
+    output_mode = str(job.get("output_mode") or "internal")
+    save_option = "excel" if output_mode == "excel" else "json"
+    max_items = _job_int(job, "max_items", 50)
+    max_pages = _job_int(job, "max_pages", 1)
+    start_page = _job_int(job, "start_page", 1)
+    crawler_max_items = max(max_items, max_pages * 10)
     cmd = [
         "uv",
         "run",
@@ -456,24 +478,32 @@ def _build_crawler_cmd(job: dict[str, Any], platform: str, out_dir: Path) -> lis
         "--lt",
         login_type,
         "--type",
-        "search",
+        target_type,
         "--save_data_option",
-        "json",
+        save_option,
+        "--start",
+        str(start_page),
         "--keywords",
         ",".join(job.get("keywords", [])),
         "--get_comment",
         "true" if job.get("enable_comments") else "false",
         "--get_sub_comment",
-        "false",
+        "true" if job.get("enable_sub_comments") else "false",
         "--headless",
         "true" if headless else "false",
         "--save_data_path",
         str(out_dir),
         "--max_concurrency_num",
         "1",
+        "--crawler_max_notes_count",
+        str(crawler_max_items),
     ]
+    if target_type == "detail":
+        cmd.extend(["--specified_id", ",".join(job.get("keywords", []))])
+    if target_type == "creator":
+        cmd.extend(["--creator_id", ",".join(job.get("keywords", []))])
     if login_type == "cookie":
-        cookies = login_config.get("cookies") or ""
+        cookies = (account_binding or {}).get("cookies") or login_config.get("cookies") or ""
         if not cookies:
             raise ValueError(f"{platform} Cookie 登录未配置 Cookie")
         cmd.extend(["--cookies", cookies])
@@ -492,50 +522,118 @@ def _build_crawler_cmd(job: dict[str, Any], platform: str, out_dir: Path) -> lis
     return cmd
 
 
-def _build_crawler_env(proxy_binding: dict[str, Any] | None = None) -> dict[str, str]:
+def _job_int(job: dict[str, Any], key: str, default: int) -> int:
+    try:
+        return max(1, int(job.get(key) or default))
+    except (TypeError, ValueError):
+        return default
+
+
+def _build_crawler_env(account_binding: dict[str, Any] | None = None) -> dict[str, str]:
     env = {**os.environ, "PYTHONUNBUFFERED": "1"}
-    if not proxy_binding:
+    if not account_binding:
         return env
-    proxy_url = str(proxy_binding.get("proxy_url") or "").strip()
-    if not proxy_url:
-        return env
-    env.update(
-        {
-            "HTTP_PROXY": proxy_url,
-            "HTTPS_PROXY": proxy_url,
-            "ALL_PROXY": proxy_url,
-            "http_proxy": proxy_url,
-            "https_proxy": proxy_url,
-            "all_proxy": proxy_url,
-            "MONITOR_ACTIVE_PROXY_ID": str(proxy_binding.get("proxy_id") or ""),
-            "MONITOR_ACTIVE_PROXY_NAME": str(proxy_binding.get("proxy_name") or ""),
-        }
-    )
+    profile_path = str(account_binding.get("profile_path") or "").strip()
+    platform = str(account_binding.get("platform") or "").strip()
+    if profile_path:
+        env["MONITOR_CDP_USER_DATA_DIR"] = profile_path
+        if platform:
+            env[f"MONITOR_CDP_USER_DATA_DIR_{platform.upper()}"] = profile_path
+        env["MONITOR_ACTIVE_ACCOUNT_ID"] = str(account_binding.get("account_id") or "")
+        env["MONITOR_ACTIVE_ACCOUNT_NAME"] = str(account_binding.get("account_name") or "")
+    proxy_url = str(account_binding.get("proxy_url") or "").strip()
+    if proxy_url:
+        env.update(
+            {
+                "HTTP_PROXY": proxy_url,
+                "HTTPS_PROXY": proxy_url,
+                "ALL_PROXY": proxy_url,
+                "http_proxy": proxy_url,
+                "https_proxy": proxy_url,
+                "all_proxy": proxy_url,
+                "MONITOR_ACTIVE_PROXY_ID": str(account_binding.get("proxy_id") or ""),
+                "MONITOR_ACTIVE_PROXY_NAME": str(account_binding.get("proxy_name") or ""),
+            }
+        )
     return env
 
 
-def _resolve_platform_proxy_binding(platform: str) -> dict[str, Any] | None:
-    for account in list_social_accounts():
+def _resolve_platform_account_binding(platform: str, job: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    job = job or {}
+    explicit_account_id = _safe_int(job.get("account_id"))
+    explicit_proxy_id = _safe_int(job.get("proxy_id"))
+    accounts: list[dict[str, Any]] = []
+    if explicit_account_id:
+        account = get_social_account(explicit_account_id, masked=False)
+        if account:
+            accounts.append(account)
+    else:
+        accounts.extend(list_social_accounts(masked=False))
+    for account in accounts:
+        if account.get("is_draft"):
+            continue
         if account.get("platform") != platform:
             continue
         if account.get("status") != "active":
             continue
-        proxy_id = account.get("proxy_id")
-        if not proxy_id:
-            continue
-        proxy = get_proxy_profile(int(proxy_id), masked=False)
-        if not proxy or proxy.get("status") != "active" or not proxy.get("proxy_url"):
-            continue
-        return {
+        binding: dict[str, Any] = {
             "account_id": account.get("id"),
             "account_name": account.get("name") or "",
             "platform": platform,
-            "proxy_id": proxy.get("id"),
-            "proxy_name": proxy.get("name") or "",
-            "provider": proxy.get("provider") or "",
-            "proxy_url": proxy.get("proxy_url") or "",
+            "login_type": account.get("login_type") or "qrcode",
+            "cookies": account.get("cookies") or "",
+            "profile_path": account.get("profile_path") or "",
         }
+        proxy_id = explicit_proxy_id or account.get("proxy_id")
+        if proxy_id:
+            proxy = get_proxy_profile(int(proxy_id), masked=False)
+            if proxy and proxy.get("status") == "active" and proxy.get("proxy_url"):
+                binding.update(
+                    {
+                        "proxy_id": proxy.get("id"),
+                        "proxy_name": proxy.get("name") or "",
+                        "provider": proxy.get("provider") or "",
+                        "proxy_url": proxy.get("proxy_url") or "",
+                    }
+                )
+        if binding.get("profile_path") or binding.get("proxy_id") or binding.get("cookies"):
+            return binding
+    if explicit_proxy_id:
+        proxy = get_proxy_profile(explicit_proxy_id, masked=False)
+        if proxy and proxy.get("status") == "active" and proxy.get("proxy_url"):
+            return {
+                "account_id": None,
+                "account_name": "",
+                "platform": platform,
+                "profile_path": "",
+                "proxy_id": proxy.get("id"),
+                "proxy_name": proxy.get("name") or "",
+                "provider": proxy.get("provider") or "",
+                "proxy_url": proxy.get("proxy_url") or "",
+            }
     return None
+
+
+def _resolve_platform_proxy_binding(platform: str, job: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    binding = _resolve_platform_account_binding(platform, job)
+    return binding if binding and binding.get("proxy_id") else None
+
+
+def _safe_int(value: Any) -> int | None:
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError):
+        return None
+    return parsed if parsed > 0 else None
+
+
+def _account_summary(account_binding: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "account_id": account_binding.get("account_id"),
+        "account_name": account_binding.get("account_name") or "",
+        "platform": account_binding.get("platform") or "",
+        "profile_path": str(account_binding.get("profile_path") or ""),
+    }
 
 
 def _proxy_summary(proxy_binding: dict[str, Any]) -> dict[str, Any]:

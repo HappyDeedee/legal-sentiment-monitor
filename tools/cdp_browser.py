@@ -33,6 +33,9 @@ from tools import utils
 
 
 def resolve_cdp_user_data_dir(platform: str) -> str:
+    explicit_dir = os.environ.get(f"MONITOR_CDP_USER_DATA_DIR_{platform.upper()}") or os.environ.get("MONITOR_CDP_USER_DATA_DIR")
+    if explicit_dir:
+        return explicit_dir
     browser_data_root = os.environ.get("MONITOR_BROWSER_DATA_DIR") or os.path.join(os.getcwd(), "browser_data")
     return os.path.join(browser_data_root, f"cdp_{config.USER_DATA_DIR % platform}")
 

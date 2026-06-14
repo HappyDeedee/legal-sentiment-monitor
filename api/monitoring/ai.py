@@ -7,8 +7,9 @@ from typing import Any
 
 import httpx
 
-from .database import get_active_ai_key_profile, get_ai_config, validate_temperature
+from .database import get_active_ai_key_profile, get_ai_config, get_ai_key_profile, validate_temperature
 from .prompts import DEFAULT_PROMPT
+from .security import redact_sensitive
 
 
 def ai_api_disabled() -> bool:
@@ -17,23 +18,14 @@ def ai_api_disabled() -> bool:
 
 async def evaluate_content(job: dict[str, Any], content: dict[str, Any], comments: list[dict[str, Any]]) -> dict[str, Any]:
     if ai_api_disabled():
-        return _fallback("AI API 已通过 MONITOR_SKIP_AI_API 临时关闭，本条内容待人工复核。", content)
+        return _fallback("AI 服务未启用，本条内容待人工复核。", content)
 
-    cfg = get_active_ai_key_profile(masked=False) or get_ai_config(masked=False)
+    cfg = _job_ai_config(job)
     if not cfg.get("api_key") or not cfg.get("model") or not cfg.get("base_url"):
         return _fallback("AI 配置未完成", content)
 
     prompt = cfg.get("prompt") or DEFAULT_PROMPT
-    user_payload = {
-        "law_firm_name": job.get("law_firm_name"),
-        "aliases": job.get("aliases", []),
-        "exclude_words": job.get("exclude_words", []),
-        "platform": content.get("platform_label") or content.get("platform"),
-        "source_keyword": content.get("source_keyword"),
-        "title": content.get("title"),
-        "description": content.get("description"),
-        "comments": [c.get("content", "") for c in comments[:10] if c.get("content")],
-    }
+    user_payload = build_evaluation_payload(job, content, comments)
     try:
         if cfg.get("provider") == "anthropic":
             raw = await _call_anthropic(cfg, prompt, user_payload)
@@ -51,12 +43,12 @@ async def evaluate_content(job: dict[str, Any], content: dict[str, Any], comment
             "raw_response": raw,
         }
     except Exception as exc:
-        return _fallback(f"AI 评估失败：{type(exc).__name__}: {exc}", content)
+        return _fallback(f"AI 评估失败：{type(exc).__name__}: {_redact_ai_error(exc)}", content)
 
 
 async def test_ai(payload: dict[str, Any]) -> dict[str, Any]:
     if ai_api_disabled():
-        raise ValueError("AI API 已通过 MONITOR_SKIP_AI_API 临时关闭；请先使用离线自检，或关闭该开关后再做真实测试 AI")
+        raise ValueError("AI 服务当前未启用；采集不受影响，内容会进入待人工复核。")
 
     cfg = _merge_test_config(payload)
     prompt = cfg.get("prompt") or DEFAULT_PROMPT
@@ -67,6 +59,29 @@ async def test_ai(payload: dict[str, Any]) -> dict[str, Any]:
         raw = await _call_openai(cfg, prompt, sample)
     data = _parse_json(raw)
     return _validate_ai_output(data)
+
+
+async def test_ai_connection(payload: dict[str, Any]) -> dict[str, Any]:
+    if ai_api_disabled():
+        raise ValueError("AI 服务当前未启用；采集不受影响，内容会进入待人工复核。")
+
+    cfg = _merge_test_config(payload)
+    if cfg.get("provider") == "anthropic":
+        raw = await _ping_anthropic(cfg)
+        endpoint = _build_endpoint(str(cfg.get("base_url", "")), "/v1/messages")
+    else:
+        raw = await _ping_openai(cfg)
+        endpoint = _build_endpoint(str(cfg.get("base_url", "")), "/v1/chat/completions")
+    if not str(raw or "").strip():
+        raise ValueError("模型服务已响应，但没有返回文本")
+    return {
+        "ok": True,
+        "provider": cfg.get("provider"),
+        "model": cfg.get("model"),
+        "endpoint": endpoint,
+        "message": "连接测试通过",
+        "response_preview": str(raw).strip()[:200],
+    }
 
 
 def offline_check(payload: dict[str, Any]) -> dict[str, Any]:
@@ -80,7 +95,7 @@ def offline_check(payload: dict[str, Any]) -> dict[str, Any]:
     if not cfg.get("api_key"):
         warnings.append("未填写 API Key；离线自检不会验证密钥是否可用")
     if ai_api_disabled():
-        warnings.append("当前已设置 MONITOR_SKIP_AI_API=true；真实 AI 测试和采集评估会跳过外部 AI")
+        warnings.append("AI 服务当前未启用；采集评估会跳过外部 AI")
     return {
         "ok": True,
         "mode": "offline",
@@ -102,6 +117,24 @@ def offline_check(payload: dict[str, Any]) -> dict[str, Any]:
         ],
         "warnings": warnings,
     }
+
+
+def _job_ai_config(job: dict[str, Any]) -> dict[str, Any]:
+    global_config = get_ai_config(masked=False)
+    profile_id = job.get("ai_profile_id")
+    if profile_id:
+        try:
+            profile = get_ai_key_profile(int(profile_id), masked=False)
+        except (TypeError, ValueError):
+            profile = None
+        if profile:
+            profile["prompt"] = global_config.get("prompt") or DEFAULT_PROMPT
+            return profile
+    active = get_active_ai_key_profile(masked=False)
+    if active:
+        active["prompt"] = global_config.get("prompt") or DEFAULT_PROMPT
+        return active
+    return global_config
 
 
 async def _call_openai(cfg: dict[str, Any], prompt: str, payload: dict[str, Any]) -> str:
@@ -140,6 +173,47 @@ async def _call_anthropic(cfg: dict[str, Any], prompt: str, payload: dict[str, A
                 "temperature": float(cfg.get("temperature", 0) or 0),
                 "system": prompt,
                 "messages": [{"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
+            },
+        )
+        res.raise_for_status()
+        data = res.json()
+    parts = data.get("content") or []
+    return "".join(part.get("text", "") for part in parts if part.get("type") == "text")
+
+
+async def _ping_openai(cfg: dict[str, Any]) -> str:
+    url = _build_endpoint(str(cfg.get("base_url", "")), "/v1/chat/completions")
+    async with httpx.AsyncClient(timeout=30, trust_env=False) as client:
+        res = await client.post(
+            url,
+            headers={"Authorization": f"Bearer {cfg.get('api_key')}", "Content-Type": "application/json"},
+            json={
+                "model": cfg.get("model"),
+                "temperature": 0,
+                "max_tokens": 8,
+                "messages": [{"role": "user", "content": "ping"}],
+            },
+        )
+        res.raise_for_status()
+        data = res.json()
+    return data["choices"][0]["message"]["content"]
+
+
+async def _ping_anthropic(cfg: dict[str, Any]) -> str:
+    url = _build_endpoint(str(cfg.get("base_url", "")), "/v1/messages")
+    async with httpx.AsyncClient(timeout=30, trust_env=False) as client:
+        res = await client.post(
+            url,
+            headers={
+                "x-api-key": cfg.get("api_key"),
+                "anthropic-version": "2023-06-01",
+                "Content-Type": "application/json",
+            },
+            json={
+                "model": cfg.get("model"),
+                "max_tokens": 8,
+                "temperature": 0,
+                "messages": [{"role": "user", "content": "ping"}],
             },
         )
         res.raise_for_status()
@@ -254,16 +328,80 @@ def _coerce_quotes(value: Any) -> list[str]:
 
 
 def _sample_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    return build_evaluation_payload(
+        {
+            "law_firm_name": "海安律所",
+            "aliases": ["海安律师事务所", "海安律师"],
+            "exclude_words": [],
+        },
+        {
+            "platform": "dy",
+            "platform_label": "抖音",
+            "source_keyword": "海安律所避雷",
+            "title": payload.get("sample_title") or "海安律所避雷：退费拖了很久",
+            "description": payload.get("sample_text") or "我想曝光一下，沟通很差，收费也不透明，投诉后一直没人处理。",
+            "author_name": "海安用户",
+            "content_url": "https://www.douyin.com/video/haian-selftest",
+            "cover_url": "https://example.com/haian-cover.jpg",
+            "publish_time": 1781280000,
+            "comment_count": 2,
+        },
+        [
+            {"content": "我也遇到退费慢的问题", "author_name": "评论用户A", "create_time": 1781280100},
+            {"content": "建议先保留沟通证据再投诉", "author_name": "评论用户B", "create_time": 1781280200},
+        ],
+    )
+
+
+def build_evaluation_payload(
+    job: dict[str, Any],
+    content: dict[str, Any],
+    comments: list[dict[str, Any]],
+) -> dict[str, Any]:
+    comment_samples = [
+        {
+            "content": str(comment.get("content") or "")[:500],
+            "author_name": comment.get("author_name") or "",
+            "create_time": comment.get("create_time"),
+        }
+        for comment in comments[:10]
+        if str(comment.get("content") or "").strip()
+    ]
+    comments_text = [item["content"] for item in comment_samples]
+    comment_total = _safe_int(content.get("comment_count"))
+    observed_total = len([comment for comment in comments if str(comment.get("content") or "").strip()])
     return {
-        "law_firm_name": "海安律所",
-        "aliases": ["海安律师事务所", "海安律师"],
-        "exclude_words": [],
-        "platform": "抖音",
-        "source_keyword": "海安律所避雷",
-        "title": payload.get("sample_title") or "海安律所避雷：退费拖了很久",
-        "description": payload.get("sample_text") or "我想曝光一下，沟通很差，收费也不透明，投诉后一直没人处理。",
-        "comments": [],
+        "law_firm_name": job.get("law_firm_name"),
+        "aliases": job.get("aliases", []),
+        "exclude_words": job.get("exclude_words", []),
+        "platform": content.get("platform_label") or content.get("platform"),
+        "platform_code": content.get("platform"),
+        "source_keyword": content.get("source_keyword"),
+        "title": content.get("title"),
+        "description": content.get("description"),
+        "author_name": content.get("author_name"),
+        "content_url": content.get("content_url"),
+        "cover_url": content.get("cover_url"),
+        "publish_time": content.get("publish_time"),
+        "comment_count": comment_total,
+        "comments": comments_text,
+        "comment_samples": comment_samples,
+        "comment_summary": {
+            "declared_count": comment_total,
+            "observed_count": observed_total,
+            "sample_count": len(comment_samples),
+            "sample_text": "；".join(comments_text[:5]),
+        },
     }
+
+
+def _safe_int(value: Any) -> int:
+    try:
+        if value in (None, ""):
+            return 0
+        return int(value)
+    except (TypeError, ValueError):
+        return 0
 
 
 def _merge_test_config(payload: dict[str, Any], require_api_key: bool = True) -> dict[str, Any]:
@@ -302,6 +440,11 @@ def _build_endpoint(base_url: str, endpoint: str) -> str:
 def _normalize_risk(value: Any) -> str:
     raw = str(value or "irrelevant").lower()
     return raw if raw in {"high", "medium", "low", "irrelevant"} else "irrelevant"
+
+
+def _redact_ai_error(exc: Exception) -> str:
+    text = redact_sensitive(str(exc))
+    return re.sub(r"https?://[^\s'\"<>]+", "[AI_ENDPOINT_REDACTED]", text)
 
 
 def _fallback(reason: str, content: dict[str, Any]) -> dict[str, Any]:

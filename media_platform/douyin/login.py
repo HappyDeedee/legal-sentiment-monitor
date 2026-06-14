@@ -35,6 +35,110 @@ from tools import utils
 
 
 class DouYinLogin(AbstractLogin):
+    LOGIN_URL = "https://www.douyin.com"
+    LOGIN_DIALOG_SELECTOR = "xpath=//div[@id='login-panel-new']"
+    LOGIN_BUTTON_SELECTOR = "button:has-text('登录')"
+    LOGIN_BUTTON_FALLBACK_SELECTORS = (
+        "button:has-text('登录')",
+        "xpath=//button[contains(., '登录')]",
+        "xpath=//p[text() = '登录']",
+        "xpath=//*[normalize-space()='登录' and (self::button or self::div or self::p or self::span)]",
+    )
+    QRCODE_SELECTOR = "xpath=//div[@id='animate_qrcode_container']//img"
+    QRCODE_CAPTURE_METHOD = "tools.utils.find_login_qrcode"
+    QRCODE_FLOW_STEPS = (
+        "打开 LOGIN_URL",
+        "等待 LOGIN_DIALOG_SELECTOR；未出现时点击 LOGIN_BUTTON_SELECTOR 或兼容入口",
+        "调用 tools.utils.find_login_qrcode(context_page, QRCODE_SELECTOR) 获取二维码",
+        "使用 check_login_state 的 Cookie/localStorage 规则轮询登录结果",
+    )
+    LOGIN_STATE_COOKIE_RULES = {"LOGIN_STATUS": "1"}
+    LOGIN_STATE_LOCAL_STORAGE_RULES = {"HasUserLogin": "1"}
+    SUPPORTED_LOGIN_TYPES = ("qrcode", "phone", "cookie")
+    MANUAL_VERIFICATION_URL_MARKERS = ("captcha", "verify", "challenge", "risk")
+    MANUAL_VERIFICATION_LABELS = {
+        "slider": "滑块验证",
+        "sms": "短信验证码",
+        "captcha": "图形/安全验证码",
+    }
+    MANUAL_VERIFICATION_TEXT_MARKERS = {
+        "slider": (
+            "滑块",
+            "滑动",
+            "请按住滑块",
+            "按住滑块",
+            "拖动滑块",
+            "拖动下方滑块",
+            "拖动滑块完成拼图",
+            "请拖动滑块完成拼图",
+            "请拖动滑块完成验证",
+            "拖动滑块完成验证",
+            "拖动滑块至正确位置",
+            "向右拖动",
+            "完成拼图",
+        ),
+        "sms": (
+            "短信验证码",
+            "手机验证码",
+            "输入验证码",
+            "请输入验证码",
+            "获取验证码",
+            "验证码已发送",
+            "重新获取验证码",
+            "发送验证码",
+        ),
+        "captcha": (
+            "安全验证",
+            "安全检测",
+            "风险验证",
+            "智能验证",
+            "验证中间页",
+            "验证码中间页",
+            "请通过验证",
+            "请完成验证",
+            "请完成安全验证",
+            "完成验证",
+            "安全校验",
+            "身份验证",
+            "环境存在风险",
+            "验证失败",
+            "环境异常",
+            "verify",
+            "captcha",
+        ),
+    }
+    MANUAL_VERIFICATION_SELECTORS = {
+        "slider": (
+            "#captcha-verify-image",
+            "#captcha_container",
+            "[class*='slider']",
+            "[id*='slider']",
+            "[class*='drag']",
+            "[id*='drag']",
+            "[class*='slide']",
+            "[id*='slide']",
+        ),
+        "captcha": (
+            "[class*='captcha']",
+            "[id*='captcha']",
+            "[class*='verify']",
+            "[id*='verify']",
+            "[class*='security']",
+            "[id*='security']",
+            "[class*='safe']",
+            "[id*='safe']",
+            "[class*='challenge']",
+            "[id*='challenge']",
+            "[class*='risk']",
+            "[id*='risk']",
+            "iframe[src*='captcha']",
+            "iframe[src*='verify']",
+            "iframe[src*='challenge']",
+            "iframe[src*='risk']",
+            "iframe[src*='slide']",
+            "iframe[src*='security']",
+        ),
+    }
 
     def __init__(self,
                  login_type: str,
@@ -110,23 +214,55 @@ class DouYinLogin(AbstractLogin):
 
     async def popup_login_dialog(self):
         """If the login dialog box does not pop up automatically, we will manually click the login button"""
-        dialog_selector = "xpath=//div[@id='login-panel-new']"
         try:
             # check dialog box is auto popup and wait for 10 seconds
-            await self.context_page.wait_for_selector(dialog_selector, timeout=1000 * 10)
+            await self.context_page.wait_for_selector(self.LOGIN_DIALOG_SELECTOR, timeout=1000 * 10)
         except Exception as e:
             utils.logger.error(f"[DouYinLogin.popup_login_dialog] login dialog box does not pop up automatically, error: {e}")
             utils.logger.info("[DouYinLogin.popup_login_dialog] login dialog box does not pop up automatically, we will manually click the login button")
-            login_button_ele = self.context_page.locator("xpath=//p[text() = '登录']")
-            await login_button_ele.click()
+            await self.click_login_button()
             await asyncio.sleep(0.5)
+
+    async def prepare_qrcode_login(self, timeout_ms: int = 10000) -> None:
+        """Prepare the MediaCrawler Douyin QR login dialog without waiting for scan completion."""
+        try:
+            await self.context_page.wait_for_selector(self.LOGIN_DIALOG_SELECTOR, timeout=timeout_ms)
+        except Exception as e:
+            utils.logger.error(f"[DouYinLogin.prepare_qrcode_login] login dialog box does not pop up automatically, error: {e}")
+            await self.click_login_button(timeout_ms=timeout_ms)
+            await asyncio.sleep(0.5)
+
+    async def click_login_button(self, timeout_ms: int = 10000) -> None:
+        """Click the current Douyin web login entry, with legacy selectors as fallback."""
+        last_error: Exception | None = None
+        for selector in self.LOGIN_BUTTON_FALLBACK_SELECTORS:
+            try:
+                login_button_ele = self.context_page.locator(selector).first
+                if not await login_button_ele.count():
+                    continue
+                if not await login_button_ele.is_visible(timeout=500):
+                    continue
+                await login_button_ele.click(timeout=timeout_ms)
+                return
+            except Exception as e:
+                last_error = e
+                continue
+        if last_error:
+            raise last_error
+        raise PlaywrightTimeoutError("Douyin login button not found")
+
+    async def capture_qrcode(self) -> str:
+        """Capture the login QR image using MediaCrawler's QR utility."""
+        return await utils.find_login_qrcode(
+            self.context_page,
+            selector=self.QRCODE_SELECTOR
+        )
 
     async def login_by_qrcode(self):
         utils.logger.info("[DouYinLogin.login_by_qrcode] Begin login douyin by qrcode...")
-        qrcode_img_selector = "xpath=//div[@id='animate_qrcode_container']//img"
         base64_qrcode_img = await utils.find_login_qrcode(
             self.context_page,
-            selector=qrcode_img_selector
+            selector=self.QRCODE_SELECTOR
         )
         if not base64_qrcode_img:
             utils.logger.info("[DouYinLogin.login_by_qrcode] login qrcode not found please confirm ...")

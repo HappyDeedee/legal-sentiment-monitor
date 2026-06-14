@@ -5,7 +5,8 @@ import os
 from datetime import datetime, time, timedelta
 from typing import Any
 
-from .database import get_job, has_job_template_placeholders, list_jobs, set_job_schedule_state
+from .database import get_job, has_job_template_placeholders, list_jobs, record_skipped_run, set_job_schedule_state
+from .preflight import build_job_preflight
 from .runner import clear_stop_request, request_stop_job, run_job
 
 
@@ -58,6 +59,11 @@ async def tick() -> None:
         if not _is_due(job, now):
             continue
         if has_job_template_placeholders(job):
+            record_skipped_run(job["id"], "请先把测试数据模板里的律所名称和平台搜索词改成真实内容", _skip_summary(job, "template_placeholders"))
+            continue
+        preflight = build_job_preflight(job, running_job_ids())
+        if preflight["blockers"]:
+            record_skipped_run(job["id"], "运行前检查未通过：" + "；".join(preflight["blockers"]), _skip_summary(job, "preflight_blocked", preflight))
             continue
         try:
             launch_job(job["id"], source="scheduler")
@@ -70,7 +76,7 @@ def launch_job(job_id: int, source: str = "manual") -> dict[str, Any]:
     if not job:
         raise ValueError("job not found")
     if has_job_template_placeholders(job):
-        raise ValueError("请先把验收模板里的律所名称和关键词改成真实内容")
+        raise ValueError("请先把测试数据模板里的律所名称和平台搜索词改成真实内容")
     if job_id in _running_jobs:
         return {"started": False, "status": "already_running", "job_id": job_id}
     clear_stop_request(job_id)
@@ -161,6 +167,20 @@ def _cleanup_finished_job_tasks() -> None:
         if task.done():
             _running_jobs.discard(job_id)
             _job_tasks.pop(job_id, None)
+
+
+def _skip_summary(job: dict[str, Any], skip_type: str, preflight: dict[str, Any] | None = None) -> dict[str, Any]:
+    summary = {
+        "job_id": job.get("id"),
+        "law_firm_name": job.get("law_firm_name") or "",
+        "platforms": job.get("platforms", []),
+        "keywords": job.get("keywords", []),
+        "skip_type": skip_type,
+        "source": "scheduler",
+    }
+    if preflight:
+        summary["preflight"] = preflight
+    return summary
 
 
 def _is_due(job: dict, now: datetime) -> bool:
