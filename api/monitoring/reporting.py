@@ -33,16 +33,22 @@ def create_report(run_id: int, job: dict[str, Any], summary: dict[str, Any]) -> 
     with get_conn() as conn:
         cur = conn.execute(
             """
-            INSERT INTO reports (run_id, job_id, html_path, markdown_path, excel_path, summary, created_at)
-            VALUES (?, ?, ?, ?, ?, ?, ?)
+            INSERT INTO reports (
+                workspace_id, run_id, job_id, html_path, markdown_path, excel_path,
+                summary, created_by, updated_by, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
+                int(job.get("workspace_id") or 1),
                 run_id,
                 job["id"],
                 str(html_path),
                 str(md_path),
                 str(xlsx_path),
                 json.dumps(summary, ensure_ascii=False),
+                job.get("created_by"),
+                job.get("created_by"),
                 utc_now(),
             ),
         )

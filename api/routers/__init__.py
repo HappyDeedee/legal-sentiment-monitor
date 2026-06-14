@@ -16,9 +16,10 @@
 # 详细许可条款请参阅项目根目录下的LICENSE文件。
 # 使用本代码即表示您同意遵守上述原则和LICENSE中的所有条款。
 
+from .auth import router as auth_router
 from .crawler import router as crawler_router
 from .data import router as data_router
 from .monitor import router as monitor_router
 from .websocket import router as websocket_router
 
-__all__ = ["crawler_router", "data_router", "monitor_router", "websocket_router"]
+__all__ = ["auth_router", "crawler_router", "data_router", "monitor_router", "websocket_router"]

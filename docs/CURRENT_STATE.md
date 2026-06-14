@@ -5,22 +5,23 @@ Last updated: 2026-06-14
 ## Current Phase
 
 Phase 0 documentation is complete. Phase 0.5 - Schema Foundation is complete
-and verified. The active SQLite schema now provides the foundation tables and
-columns required before Phase 1-9 implementation work.
+and verified. Phase 1 - Users And Permissions is complete and verified. The
+active SQLite schema now provides the foundation tables and columns required
+before later implementation work, and the web/API layer now has session login,
+administrator/normal-user roles, menu visibility, and owner-scoped business
+data access.
 
 ## Implementation Status
 
 - Phase 0 - Documentation: complete.
 - Phase 0.5 - Schema Foundation: complete and verified.
-- Phase 1 - Users And Permissions: first unblocked implementation phase after
-  Phase 0.5.
-- Phase 2 - System Settings: blocked by Phase 1 completion and Phase 2
-  sequencing, not by missing schema foundation.
+- Phase 1 - Users And Permissions: complete and verified.
+- Phase 2 - System Settings: next unblocked implementation phase.
 - Phase 5/6 - Account Environment and Server Login: profile key, timeout, and
   lock-storage decisions are accepted; runtime implementation is still blocked
-  by preceding Phase 1-4 work and Phase 5/6 sequencing.
+  by preceding Phase 2-4 work and Phase 5/6 sequencing.
 
-Phase 1 can begin next. Phase 2-9 implementation must still proceed in order
+Phase 2 can begin next. Phase 3-9 implementation must still proceed in order
 and must not bypass unfinished earlier phases.
 
 ## Completed
@@ -61,10 +62,17 @@ and must not bypass unfinished earlier phases.
   fields, and proxy `resource_locks`.
 - Existing monitoring MVP task/account/login/run/report records still load
   after the schema foundation migration.
+- Phase 1 user and permission foundation has been implemented:
+  environment-bootstrap administrator creation, bcrypt password hashes,
+  session-token cookies backed by `user_sessions`, user management APIs,
+  shared FastAPI auth/role dependencies, administrator-only resource APIs,
+  normal-user owner scope for jobs/runs/reports/leads, and frontend login/menu
+  visibility.
+- `scripts/check_docs.py` has been implemented and currently passes.
 
 ## In Progress
 
-- Phase 1 - Users And Permissions is ready to start.
+- Phase 2 - System Settings Center is ready to start.
 
 ## Known Risks
 
@@ -74,8 +82,8 @@ and must not bypass unfinished earlier phases.
 - Current database schema has `profile_key`, but current runtime code still
   uses `profile_path` in places; Phase 5 changes runtime behavior to use
   `profile_key` consistently.
-- Current frontend does not have role-based menu rendering, login page,
-  session checks, or `/api/auth/*` flows yet.
+- Frontend Phase 1 login/menu permissions are implemented, but Phase 4 still
+  needs the simplified normal-user task wizard.
 - Scheduler tick interval and global/platform concurrency are still hard-coded
   in places; Phase 2 moves these values into runtime settings.
 - Current crawler timeout is applied to individual MediaCrawler subprocess
@@ -101,34 +109,40 @@ and must not bypass unfinished earlier phases.
 
 ## Next Step
 
-Implement Phase 1, then Phase 2 in small increments:
+Implement Phase 2 in small increments:
 
-1. add user and role foundation;
-2. add login/session flow;
-3. add menu/route permission controls;
-4. add runtime settings storage and administrator UI after Phase 1;
-5. keep normal-user task creation simple.
-6. for every new requirement, add or update `CHANGE_REQUESTS.md`,
+1. add runtime settings storage;
+2. add settings precedence: defaults, config file, database, environment lock;
+3. add administrator Runtime Strategy grouped table UI;
+4. add read-only deployment diagnostics;
+5. move scheduler tick, concurrency, timeout, retry, QR/session TTL, retention,
+   and lock cleanup settings into the runtime settings layer;
+6. keep normal-user task creation simple until Phase 4.
+7. for every new requirement, add or update `CHANGE_REQUESTS.md`,
    `TASKS.md`, `TRACEABILITY.md`, and `TEST_RESULTS.md`.
-7. ask for user confirmation before accepting ambiguous assumptions in
+8. ask for user confirmation before accepting ambiguous assumptions in
    permissions, deployment, account environment, security, or data model.
-8. Phase 1 can proceed now that Phase 0.5 has created and verified the schema
-   foundation.
-9. Accepted Phase 5/6 decisions:
+9. Phase 2 can proceed now that Phase 1 has implemented and verified basic
+   users, sessions, permissions, and owner-scoped data access.
+10. Accepted Phase 5/6 decisions:
    - `profile_key` format is `{workspace_id}/{platform}/acc_{account_id}`;
    - task timeout is a run-level wall-clock deadline controlled by
      administrator Runtime Strategy;
    - lock expiry is the run deadline plus cleanup buffer;
    - account/profile locks use inline `social_accounts` fields;
    - proxy concurrency uses `resource_locks`.
-10. Before Phase 5/6 coding, re-verify that run timeout fields, profile keys,
+11. Before Phase 5/6 coding, re-verify that run timeout fields, profile keys,
     lock fields, and `resource_locks` exist in the active database.
 
 ## Latest Verification
 
-Phase 0.5 local verification passed on 2026-06-14:
+Phase 1 local verification passed on 2026-06-14:
 
 - `uv run python -m pytest tests/test_monitoring_mvp.py`
-- Result: 198 passed, 3 warnings.
+- Result: 200 passed, 3 warnings.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- Node syntax check for `api/monitor_web/index.html` script block
+- Result: monitor web script parses.
 
 No server-like acceptance run has been completed for the new plan yet.

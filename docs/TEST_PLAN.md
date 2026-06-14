@@ -5,6 +5,15 @@
 Production acceptance must run in a server-like environment. Local Chrome on
 the operator's computer is not a valid acceptance path.
 
+## Phase 0 Documentation Review Tests
+
+- Governance documents exist and can be followed from `AGENTS.md`.
+- Accepted change requests are connected to `TASKS.md`, `TRACEABILITY.md`, and
+  verification notes.
+- Specialist documents referenced by `AGENTS.md` exist.
+- Documentation consistency checks can be run with `python scripts/check_docs.py`
+  once the Phase 1 close-out script is implemented.
+
 ## Phase 0.5 Schema Foundation Tests
 
 - Foundation tables exist: `workspaces`, `users`, `user_sessions`,

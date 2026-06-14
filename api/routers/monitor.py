@@ -3,10 +3,11 @@ from __future__ import annotations
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Query
+from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse
 
 from ..monitoring import ai
+from ..monitoring.auth_context import require_authenticated_user, require_role
 from ..monitoring.prompts import AI_OUTPUT_SCHEMA, DEFAULT_PROMPT, DEFAULT_PROMPT_SECTIONS
 from ..monitoring.database import (
     MONITOR_DATA_DIR,
@@ -91,7 +92,18 @@ from ..monitoring.selftest import create_sample_report
 from ..monitoring.smoke import run_smoke_check
 
 
-router = APIRouter(prefix="/monitor", tags=["monitor"])
+router = APIRouter(
+    prefix="/monitor",
+    tags=["monitor"],
+    dependencies=[Depends(require_authenticated_user)],
+)
+
+AdminUser = Depends(require_role("administrator"))
+CurrentUser = Depends(require_authenticated_user)
+
+
+def _route_actor(user: Any) -> dict[str, Any] | None:
+    return user if isinstance(user, dict) else None
 
 
 @router.get("/health")
@@ -101,18 +113,19 @@ async def health():
 
 
 @router.get("/jobs")
-async def jobs():
+async def jobs(user: dict[str, Any] = CurrentUser):
     init_db()
-    return {"jobs": list_jobs()}
+    return {"jobs": list_jobs(actor=_route_actor(user))}
 
 
 @router.post("/jobs/refresh-schedule")
-async def refresh_jobs_schedule():
+async def refresh_jobs_schedule(user: dict[str, Any] = CurrentUser):
     init_db()
+    actor = _route_actor(user)
     refreshed = []
-    for job in list_jobs():
+    for job in list_jobs(actor=actor):
         _refresh_job_schedule_state(job)
-        updated = get_job(job["id"])
+        updated = get_job(job["id"], actor=actor)
         if updated:
             refreshed.append(updated)
     return {"jobs": refreshed}
@@ -125,7 +138,7 @@ async def platform_status():
 
 
 @router.post("/platform-status/{platform}/login-browser")
-async def platform_login_browser(platform: str, payload: dict[str, Any] | None = None):
+async def platform_login_browser(platform: str, payload: dict[str, Any] | None = None, admin: dict[str, Any] = AdminUser):
     try:
         command = _login_browser_command_for_payload(platform, payload or {})
         return open_login_browser_with_command(command)
@@ -136,13 +149,13 @@ async def platform_login_browser(platform: str, payload: dict[str, Any] | None =
 
 
 @router.get("/platform-login-configs")
-async def platform_login_configs():
+async def platform_login_configs(admin: dict[str, Any] = AdminUser):
     init_db()
     return {"configs": list_platform_login_configs(masked=True)}
 
 
 @router.get("/platform-login-capabilities")
-async def platform_login_capabilities():
+async def platform_login_capabilities(admin: dict[str, Any] = AdminUser):
     return {
         "capabilities": [
             _login_capability_response(str(item.get("platform") or ""))
@@ -152,7 +165,7 @@ async def platform_login_capabilities():
 
 
 @router.get("/platform-login-configs/{platform}")
-async def platform_login_config(platform: str):
+async def platform_login_config(platform: str, admin: dict[str, Any] = AdminUser):
     init_db()
     try:
         return {"config": get_platform_login_config(platform, masked=True)}
@@ -161,7 +174,7 @@ async def platform_login_config(platform: str):
 
 
 @router.put("/platform-login-configs/{platform}")
-async def update_platform_login_config(platform: str, payload: dict[str, Any]):
+async def update_platform_login_config(platform: str, payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     init_db()
     try:
         return {"config": save_platform_login_config(platform, payload)}
@@ -170,36 +183,36 @@ async def update_platform_login_config(platform: str, payload: dict[str, Any]):
 
 
 @router.get("/readiness")
-async def readiness():
+async def readiness(user: dict[str, Any] = CurrentUser):
     init_db()
     return _customer_view_readiness_status(get_readiness_status())
 
 
 @router.get("/acceptance-checklist")
-async def acceptance_checklist():
+async def acceptance_checklist(admin: dict[str, Any] = AdminUser):
     init_db()
     return _customer_view_system_checklist(get_acceptance_checklist())
 
 
 @router.get("/system-checklist")
-async def system_checklist():
+async def system_checklist(admin: dict[str, Any] = AdminUser):
     init_db()
     return _customer_view_system_checklist(get_acceptance_checklist())
 
 
 @router.get("/scheduler-status")
-async def monitor_scheduler_status():
+async def monitor_scheduler_status(user: dict[str, Any] = CurrentUser):
     return scheduler_status()
 
 
 @router.get("/doctor")
-async def doctor():
+async def doctor(admin: dict[str, Any] = AdminUser):
     init_db()
     return _customer_view_doctor(run_doctor())
 
 
 @router.post("/smoke")
-async def smoke():
+async def smoke(admin: dict[str, Any] = AdminUser):
     try:
         return {"result": _customer_view_smoke_result(await run_smoke_check())}
     except Exception as exc:
@@ -207,37 +220,42 @@ async def smoke():
 
 
 @router.get("/dashboard")
-async def dashboard():
+async def dashboard(user: dict[str, Any] = CurrentUser):
     init_db()
     return {
-        "summary": get_dashboard_summary(),
+        "summary": get_dashboard_summary(actor=_route_actor(user)),
         "readiness": _customer_view_readiness_status(get_readiness_status()),
         "scheduler": scheduler_status(),
     }
 
 
 @router.post("/jobs")
-async def create_job(payload: dict[str, Any]):
+async def create_job(payload: dict[str, Any], user: dict[str, Any] = CurrentUser):
     try:
-        job = save_job(payload)
+        actor = _route_actor(user)
+        job = save_job(payload, actor=actor)
         _refresh_job_schedule_state(job)
-        return {"job": get_job(job["id"])}
+        return {"job": get_job(job["id"], actor=actor)}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.put("/jobs/{job_id}")
-async def update_job(job_id: int, payload: dict[str, Any]):
+async def update_job(job_id: int, payload: dict[str, Any], user: dict[str, Any] = CurrentUser):
     try:
-        job = save_job(payload, job_id)
+        actor = _route_actor(user)
+        job = save_job(payload, job_id, actor=actor)
         _refresh_job_schedule_state(job)
-        return {"job": get_job(job["id"])}
+        return {"job": get_job(job["id"], actor=actor)}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
 
 @router.delete("/jobs/{job_id}")
-async def remove_job(job_id: int):
+async def remove_job(job_id: int, user: dict[str, Any] = CurrentUser):
+    actor = _route_actor(user)
+    if actor and not get_job(job_id, actor=actor):
+        raise HTTPException(status_code=404, detail="job not found")
     if job_id in running_job_ids() or has_running_run_for_job(job_id):
         raise HTTPException(status_code=409, detail="任务正在运行，请先停止后再删除")
     delete_job(job_id)
@@ -245,8 +263,8 @@ async def remove_job(job_id: int):
 
 
 @router.post("/jobs/{job_id}/run")
-async def run_job_now(job_id: int):
-    job = get_job(job_id)
+async def run_job_now(job_id: int, user: dict[str, Any] = CurrentUser):
+    job = get_job(job_id, actor=_route_actor(user))
     if not job:
         raise HTTPException(status_code=404, detail="job not found")
     preflight = build_job_preflight(job, running_job_ids())
@@ -262,7 +280,10 @@ async def run_job_now(job_id: int):
 
 
 @router.post("/jobs/{job_id}/stop")
-async def stop_job_now(job_id: int):
+async def stop_job_now(job_id: int, user: dict[str, Any] = CurrentUser):
+    actor = _route_actor(user)
+    if actor and not get_job(job_id, actor=actor):
+        raise HTTPException(status_code=404, detail="job not found")
     result = stop_job(job_id)
     if not result.get("stopped") and has_running_run_for_job(job_id):
         cancelled = cancel_running_runs_for_job(job_id, "服务中没有找到活跃任务，已将残留运行记录标记为停止")
@@ -273,25 +294,27 @@ async def stop_job_now(job_id: int):
 
 
 @router.get("/jobs/{job_id}/preflight")
-async def job_preflight(job_id: int):
-    job = get_job(job_id)
+async def job_preflight(job_id: int, user: dict[str, Any] = CurrentUser):
+    job = get_job(job_id, actor=_route_actor(user))
     if not job:
         raise HTTPException(status_code=404, detail="job not found")
     return {"preflight": build_job_preflight(job, running_job_ids())}
 
 
 @router.post("/jobs/{job_id}/pause")
-async def pause_job(job_id: int):
-    if not get_job(job_id):
+async def pause_job(job_id: int, user: dict[str, Any] = CurrentUser):
+    actor = _route_actor(user)
+    if not get_job(job_id, actor=actor):
         raise HTTPException(status_code=404, detail="job not found")
     set_job_enabled(job_id, False)
-    _refresh_job_schedule_state(get_job(job_id))
+    _refresh_job_schedule_state(get_job(job_id, actor=actor))
     return {"ok": True}
 
 
 @router.post("/jobs/{job_id}/resume")
-async def resume_job(job_id: int):
-    job = get_job(job_id)
+async def resume_job(job_id: int, user: dict[str, Any] = CurrentUser):
+    actor = _route_actor(user)
+    job = get_job(job_id, actor=actor)
     if not job:
         raise HTTPException(status_code=404, detail="job not found")
     preflight_job = {**job, "enabled": True}
@@ -299,13 +322,13 @@ async def resume_job(job_id: int):
     if preflight["blockers"]:
         raise HTTPException(status_code=400, detail="启用前检查未通过：" + "；".join(preflight["blockers"]))
     set_job_enabled(job_id, True)
-    refreshed = get_job(job_id)
+    refreshed = get_job(job_id, actor=actor)
     _refresh_job_schedule_state(refreshed)
-    return {"ok": True, "job": get_job(job_id), "preflight": preflight}
+    return {"ok": True, "job": get_job(job_id, actor=actor), "preflight": preflight}
 
 
 @router.get("/ai-config")
-async def ai_config():
+async def ai_config(admin: dict[str, Any] = AdminUser):
     init_db()
     return {
         "config": get_ai_config(masked=True),
@@ -316,7 +339,7 @@ async def ai_config():
 
 
 @router.put("/ai-config")
-async def update_ai_config(payload: dict[str, Any]):
+async def update_ai_config(payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     try:
         return {"config": save_ai_config(payload)}
     except ValueError as exc:
@@ -324,7 +347,7 @@ async def update_ai_config(payload: dict[str, Any]):
 
 
 @router.post("/ai-config/test")
-async def test_ai_config(payload: dict[str, Any] | None = None):
+async def test_ai_config(payload: dict[str, Any] | None = None, admin: dict[str, Any] = AdminUser):
     payload = payload or {}
     test_targets_saved_config = not payload
     try:
@@ -348,7 +371,7 @@ async def test_ai_config(payload: dict[str, Any] | None = None):
 
 
 @router.post("/ai-config/offline-check")
-async def ai_config_offline_check(payload: dict[str, Any] | None = None):
+async def ai_config_offline_check(payload: dict[str, Any] | None = None, admin: dict[str, Any] = AdminUser):
     try:
         return {"result": ai.offline_check(payload or {})}
     except ValueError as exc:
@@ -356,17 +379,17 @@ async def ai_config_offline_check(payload: dict[str, Any] | None = None):
 
 
 @router.get("/ai-evaluation-config")
-async def ai_evaluation_config():
+async def ai_evaluation_config(admin: dict[str, Any] = AdminUser):
     return await ai_config()
 
 
 @router.put("/ai-evaluation-config")
-async def update_ai_evaluation_config(payload: dict[str, Any]):
+async def update_ai_evaluation_config(payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     return await update_ai_config(payload)
 
 
 @router.post("/ai-evaluation-config/test")
-async def test_ai_evaluation_config(payload: dict[str, Any] | None = None):
+async def test_ai_evaluation_config(payload: dict[str, Any] | None = None, admin: dict[str, Any] = AdminUser):
     try:
         if ai.ai_api_disabled():
             raise ValueError("AI 服务当前未启用；采集不受影响，内容会进入待人工复核。")
@@ -378,7 +401,7 @@ async def test_ai_evaluation_config(payload: dict[str, Any] | None = None):
 
 
 @router.get("/ai-rule-profiles")
-async def ai_rule_profiles():
+async def ai_rule_profiles(admin: dict[str, Any] = AdminUser):
     init_db()
     return {
         "profiles": list_ai_rule_profiles(),
@@ -389,7 +412,7 @@ async def ai_rule_profiles():
 
 
 @router.post("/ai-rule-profiles")
-async def create_ai_rule_profile(payload: dict[str, Any]):
+async def create_ai_rule_profile(payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     try:
         return {"profile": save_ai_rule_profile(payload)}
     except ValueError as exc:
@@ -397,7 +420,7 @@ async def create_ai_rule_profile(payload: dict[str, Any]):
 
 
 @router.put("/ai-rule-profiles/{rule_id}")
-async def update_ai_rule_profile(rule_id: int, payload: dict[str, Any]):
+async def update_ai_rule_profile(rule_id: int, payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     try:
         return {"profile": save_ai_rule_profile(payload, rule_id)}
     except ValueError as exc:
@@ -405,7 +428,7 @@ async def update_ai_rule_profile(rule_id: int, payload: dict[str, Any]):
 
 
 @router.post("/ai-rule-profiles/{rule_id}/activate")
-async def activate_ai_rule_profile(rule_id: int):
+async def activate_ai_rule_profile(rule_id: int, admin: dict[str, Any] = AdminUser):
     try:
         return {"profile": set_active_ai_rule_profile(rule_id)}
     except ValueError as exc:
@@ -413,7 +436,7 @@ async def activate_ai_rule_profile(rule_id: int):
 
 
 @router.delete("/ai-rule-profiles/{rule_id}")
-async def remove_ai_rule_profile(rule_id: int):
+async def remove_ai_rule_profile(rule_id: int, admin: dict[str, Any] = AdminUser):
     try:
         delete_ai_rule_profile(rule_id)
         return {"ok": True}
@@ -422,7 +445,7 @@ async def remove_ai_rule_profile(rule_id: int):
 
 
 @router.post("/ai-rule-profiles/{rule_id}/test")
-async def test_ai_rule_profile(rule_id: int, payload: dict[str, Any] | None = None):
+async def test_ai_rule_profile(rule_id: int, payload: dict[str, Any] | None = None, admin: dict[str, Any] = AdminUser):
     rule = get_ai_rule_profile(rule_id)
     if not rule:
         raise HTTPException(status_code=404, detail="AI rule profile not found")
@@ -441,13 +464,13 @@ async def test_ai_rule_profile(rule_id: int, payload: dict[str, Any] | None = No
 
 
 @router.get("/ai-profiles")
-async def ai_profiles():
+async def ai_profiles(admin: dict[str, Any] = AdminUser):
     init_db()
     return {"profiles": list_ai_key_profiles(masked=True), "active": get_active_ai_key_profile(masked=True)}
 
 
 @router.post("/ai-profiles")
-async def create_ai_profile(payload: dict[str, Any]):
+async def create_ai_profile(payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     try:
         return {"profile": save_ai_key_profile(payload)}
     except ValueError as exc:
@@ -455,7 +478,7 @@ async def create_ai_profile(payload: dict[str, Any]):
 
 
 @router.put("/ai-profiles/{profile_id}")
-async def update_ai_profile(profile_id: int, payload: dict[str, Any]):
+async def update_ai_profile(profile_id: int, payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     try:
         return {"profile": save_ai_key_profile(payload, profile_id)}
     except ValueError as exc:
@@ -463,7 +486,7 @@ async def update_ai_profile(profile_id: int, payload: dict[str, Any]):
 
 
 @router.post("/ai-profiles/{profile_id}/activate")
-async def activate_ai_profile(profile_id: int):
+async def activate_ai_profile(profile_id: int, admin: dict[str, Any] = AdminUser):
     try:
         return {"profile": set_active_ai_key_profile(profile_id)}
     except ValueError as exc:
@@ -471,7 +494,7 @@ async def activate_ai_profile(profile_id: int):
 
 
 @router.post("/ai-profiles/{profile_id}/offline-check")
-async def ai_profile_offline_check(profile_id: int, payload: dict[str, Any] | None = None):
+async def ai_profile_offline_check(profile_id: int, payload: dict[str, Any] | None = None, admin: dict[str, Any] = AdminUser):
     try:
         profile = get_ai_key_profile(profile_id, masked=False)
         if not profile:
@@ -482,7 +505,7 @@ async def ai_profile_offline_check(profile_id: int, payload: dict[str, Any] | No
 
 
 @router.post("/ai-profiles/{profile_id}/test")
-async def test_ai_profile(profile_id: int, payload: dict[str, Any] | None = None):
+async def test_ai_profile(profile_id: int, payload: dict[str, Any] | None = None, admin: dict[str, Any] = AdminUser):
     try:
         if ai.ai_api_disabled():
             raise ValueError("AI 服务当前未启用；采集不受影响，内容会进入待人工复核。")
@@ -509,12 +532,12 @@ async def test_ai_profile(profile_id: int, payload: dict[str, Any] | None = None
 
 
 @router.post("/ai-profiles/{profile_id}/connection-test")
-async def test_ai_profile_connection(profile_id: int, payload: dict[str, Any] | None = None):
+async def test_ai_profile_connection(profile_id: int, payload: dict[str, Any] | None = None, admin: dict[str, Any] = AdminUser):
     return await test_ai_profile(profile_id, payload)
 
 
 @router.post("/ai-profiles/models")
-async def list_ai_profile_models_from_payload(payload: dict[str, Any]):
+async def list_ai_profile_models_from_payload(payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     try:
         return {"result": await ai.list_ai_models(payload)}
     except ValueError as exc:
@@ -524,7 +547,7 @@ async def list_ai_profile_models_from_payload(payload: dict[str, Any]):
 
 
 @router.post("/ai-profiles/{profile_id}/models")
-async def list_ai_profile_models(profile_id: int, payload: dict[str, Any] | None = None):
+async def list_ai_profile_models(profile_id: int, payload: dict[str, Any] | None = None, admin: dict[str, Any] = AdminUser):
     try:
         profile = get_ai_key_profile(profile_id, masked=False)
         if not profile:
@@ -537,19 +560,19 @@ async def list_ai_profile_models(profile_id: int, payload: dict[str, Any] | None
 
 
 @router.delete("/ai-profiles/{profile_id}")
-async def remove_ai_profile(profile_id: int):
+async def remove_ai_profile(profile_id: int, admin: dict[str, Any] = AdminUser):
     delete_ai_key_profile(profile_id)
     return {"ok": True}
 
 
 @router.get("/email-config")
-async def email_config():
+async def email_config(admin: dict[str, Any] = AdminUser):
     init_db()
     return {"config": get_email_config(masked=True)}
 
 
 @router.put("/email-config")
-async def update_email_config(payload: dict[str, Any]):
+async def update_email_config(payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     try:
         return {"config": save_email_config(payload)}
     except ValueError as exc:
@@ -557,7 +580,7 @@ async def update_email_config(payload: dict[str, Any]):
 
 
 @router.post("/email-config/test")
-async def test_email(payload: dict[str, Any] | None = None):
+async def test_email(payload: dict[str, Any] | None = None, admin: dict[str, Any] = AdminUser):
     config_saved = False
     try:
         save_email_config(payload or {})
@@ -577,13 +600,13 @@ async def test_email(payload: dict[str, Any] | None = None):
 
 
 @router.get("/email-templates")
-async def email_templates():
+async def email_templates(admin: dict[str, Any] = AdminUser):
     init_db()
     return {"templates": list_email_templates(), "active": get_active_email_template()}
 
 
 @router.post("/email-templates")
-async def create_email_template(payload: dict[str, Any]):
+async def create_email_template(payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     try:
         return {"template": save_email_template(payload)}
     except ValueError as exc:
@@ -591,7 +614,7 @@ async def create_email_template(payload: dict[str, Any]):
 
 
 @router.put("/email-templates/{template_id}")
-async def update_email_template(template_id: int, payload: dict[str, Any]):
+async def update_email_template(template_id: int, payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     try:
         return {"template": save_email_template(payload, template_id)}
     except ValueError as exc:
@@ -599,24 +622,24 @@ async def update_email_template(template_id: int, payload: dict[str, Any]):
 
 
 @router.delete("/email-templates/{template_id}")
-async def remove_email_template(template_id: int):
+async def remove_email_template(template_id: int, admin: dict[str, Any] = AdminUser):
     delete_email_template(template_id)
     return {"ok": True}
 
 
 @router.post("/email-templates/preview")
-async def email_template_preview(payload: dict[str, Any] | None = None):
+async def email_template_preview(payload: dict[str, Any] | None = None, admin: dict[str, Any] = AdminUser):
     return {"preview": render_email_template_preview(payload or {})}
 
 
 @router.get("/social-accounts")
-async def social_accounts():
+async def social_accounts(admin: dict[str, Any] = AdminUser):
     init_db()
     return {"accounts": list_social_accounts()}
 
 
 @router.post("/social-accounts")
-async def create_social_account(payload: dict[str, Any]):
+async def create_social_account(payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     try:
         return {"account": save_social_account(payload)}
     except ValueError as exc:
@@ -624,7 +647,7 @@ async def create_social_account(payload: dict[str, Any]):
 
 
 @router.put("/social-accounts/{account_id}")
-async def update_social_account(account_id: int, payload: dict[str, Any]):
+async def update_social_account(account_id: int, payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     try:
         return {"account": save_social_account(payload, account_id)}
     except ValueError as exc:
@@ -632,7 +655,7 @@ async def update_social_account(account_id: int, payload: dict[str, Any]):
 
 
 @router.post("/social-accounts/{account_id}/confirm")
-async def confirm_account(account_id: int, payload: dict[str, Any] | None = None):
+async def confirm_account(account_id: int, payload: dict[str, Any] | None = None, admin: dict[str, Any] = AdminUser):
     try:
         return {"account": confirm_social_account(account_id, payload or {})}
     except ValueError as exc:
@@ -640,13 +663,13 @@ async def confirm_account(account_id: int, payload: dict[str, Any] | None = None
 
 
 @router.delete("/social-accounts/{account_id}")
-async def remove_social_account(account_id: int):
+async def remove_social_account(account_id: int, admin: dict[str, Any] = AdminUser):
     delete_social_account(account_id)
     return {"ok": True}
 
 
 @router.post("/social-accounts/{account_id}/check-login")
-async def check_social_account(account_id: int):
+async def check_social_account(account_id: int, admin: dict[str, Any] = AdminUser):
     try:
         return {"result": await check_social_account_login(account_id)}
     except ValueError as exc:
@@ -654,7 +677,7 @@ async def check_social_account(account_id: int):
 
 
 @router.post("/social-accounts/check-login")
-async def check_social_accounts(payload: dict[str, Any] | None = None):
+async def check_social_accounts(payload: dict[str, Any] | None = None, admin: dict[str, Any] = AdminUser):
     account_ids = (payload or {}).get("account_ids") or []
     if not isinstance(account_ids, list) or not account_ids:
         raise HTTPException(status_code=400, detail="请选择要检测的账号")
@@ -680,13 +703,17 @@ async def check_social_accounts(payload: dict[str, Any] | None = None):
 
 
 @router.get("/login-sessions")
-async def login_sessions(limit: int = Query(20, ge=0, le=200), account_id: int | None = Query(None, ge=1)):
+async def login_sessions(
+    limit: int = Query(20, ge=0, le=200),
+    account_id: int | None = Query(None, ge=1),
+    admin: dict[str, Any] = AdminUser,
+):
     init_db()
     return {"sessions": list_login_sessions(limit, account_id=account_id)}
 
 
 @router.post("/login-sessions")
-async def create_platform_login_session(payload: dict[str, Any]):
+async def create_platform_login_session(payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     init_db()
     platform = payload.get("platform")
     try:
@@ -776,7 +803,7 @@ async def create_platform_login_session(payload: dict[str, Any]):
 
 
 @router.get("/login-sessions/{session_id}")
-async def login_session(session_id: int):
+async def login_session(session_id: int, admin: dict[str, Any] = AdminUser):
     init_db()
     session = get_login_session(session_id)
     if not session:
@@ -860,20 +887,20 @@ async def _verify_successful_login_session(session: dict[str, Any]) -> tuple[dic
 
 
 @router.delete("/login-sessions/{session_id}")
-async def remove_login_session(session_id: int):
+async def remove_login_session(session_id: int, admin: dict[str, Any] = AdminUser):
     await close_qrcode_login_session(session_id)
     delete_login_session(session_id)
     return {"ok": True}
 
 
 @router.get("/proxies")
-async def proxies():
+async def proxies(admin: dict[str, Any] = AdminUser):
     init_db()
     return {"proxies": list_proxy_profiles(masked=True)}
 
 
 @router.post("/proxies")
-async def create_proxy(payload: dict[str, Any]):
+async def create_proxy(payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     try:
         return {"proxy": save_proxy_profile(payload)}
     except ValueError as exc:
@@ -881,7 +908,7 @@ async def create_proxy(payload: dict[str, Any]):
 
 
 @router.put("/proxies/{proxy_id}")
-async def update_proxy(proxy_id: int, payload: dict[str, Any]):
+async def update_proxy(proxy_id: int, payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     try:
         return {"proxy": save_proxy_profile(payload, proxy_id)}
     except ValueError as exc:
@@ -889,20 +916,20 @@ async def update_proxy(proxy_id: int, payload: dict[str, Any]):
 
 
 @router.delete("/proxies/{proxy_id}")
-async def remove_proxy(proxy_id: int):
+async def remove_proxy(proxy_id: int, admin: dict[str, Any] = AdminUser):
     delete_proxy_profile(proxy_id)
     return {"ok": True}
 
 
 @router.get("/runs")
-async def runs(limit: int = Query(100, ge=0, le=1000)):
+async def runs(limit: int = Query(100, ge=0, le=1000), user: dict[str, Any] = CurrentUser):
     init_db()
-    return {"runs": [_customer_view_run(item) for item in list_runs(limit)], "running_job_ids": running_job_ids()}
+    return {"runs": [_customer_view_run(item) for item in list_runs(limit, actor=_route_actor(user))], "running_job_ids": running_job_ids()}
 
 
 @router.post("/runs/{run_id}/stop")
-async def stop_run_now(run_id: int):
-    run = get_run(run_id)
+async def stop_run_now(run_id: int, user: dict[str, Any] = CurrentUser):
+    run = get_run(run_id, actor=_route_actor(user))
     if not run:
         raise HTTPException(status_code=404, detail="run not found")
     if run.get("status") != "running":
@@ -921,7 +948,9 @@ async def stop_run_now(run_id: int):
 
 
 @router.get("/runs/{run_id}/logs")
-async def run_logs(run_id: int):
+async def run_logs(run_id: int, user: dict[str, Any] = CurrentUser):
+    if _route_actor(user) and not get_run(run_id, actor=_route_actor(user)):
+        raise HTTPException(status_code=404, detail="run not found")
     run_root = MONITOR_DATA_DIR / "runs"
     logs = []
     for path in run_root.glob(f"**/run_{run_id}_*/**/crawler.log"):
@@ -938,9 +967,10 @@ async def reports(
     risk: str = Query("", description="high|negative|none"),
     date_from: str = "",
     date_to: str = "",
+    user: dict[str, Any] = CurrentUser,
 ):
     init_db()
-    items = list_reports(_query_limit(limit))
+    items = list_reports(_query_limit(limit), actor=_route_actor(user))
     if law_firm:
         items = [r for r in items if law_firm.strip() in (r.get("law_firm_name") or "")]
     if platform:
@@ -980,15 +1010,17 @@ async def leads(
     date_to: str = "",
     run_id: int | None = None,
     report_id: int | None = None,
+    user: dict[str, Any] = CurrentUser,
 ):
     init_db()
+    actor = _route_actor(user)
     target_run_id = run_id
     if report_id:
-        report = get_report(report_id)
+        report = get_report(report_id, actor=actor)
         if not report:
             raise HTTPException(status_code=404, detail="report not found")
         target_run_id = int(report["run_id"])
-    items = list_leads(0 if target_run_id else _query_limit(limit))
+    items = list_leads(0 if target_run_id else _query_limit(limit), actor=actor)
     if target_run_id:
         items = [item for item in items if int(item.get("run_id") or 0) == int(target_run_id)]
     if law_firm:
@@ -1016,7 +1048,7 @@ async def leads(
 
 
 @router.post("/reports/selftest")
-async def report_selftest():
+async def report_selftest(admin: dict[str, Any] = AdminUser):
     try:
         return {"result": _customer_view_system_check_result(await create_sample_report())}
     except Exception as exc:
@@ -1024,7 +1056,7 @@ async def report_selftest():
 
 
 @router.post("/reports/system-check")
-async def report_system_check():
+async def report_system_check(admin: dict[str, Any] = AdminUser):
     try:
         return {"result": _customer_view_system_check_result(await create_sample_report())}
     except Exception as exc:
@@ -1032,8 +1064,8 @@ async def report_system_check():
 
 
 @router.get("/reports/{report_id}")
-async def report_detail(report_id: int):
-    report = get_report(report_id)
+async def report_detail(report_id: int, user: dict[str, Any] = CurrentUser):
+    report = get_report(report_id, actor=_route_actor(user))
     if not report:
         raise HTTPException(status_code=404, detail="report not found")
     html_path = _safe_report_path(report["html_path"])
@@ -1043,8 +1075,8 @@ async def report_detail(report_id: int):
 
 
 @router.get("/reports/{report_id}/email-preview")
-async def report_email_preview(report_id: int):
-    report = get_report(report_id)
+async def report_email_preview(report_id: int, user: dict[str, Any] = CurrentUser):
+    report = get_report(report_id, actor=_route_actor(user))
     if not report:
         raise HTTPException(status_code=404, detail="report not found")
     html_path = _safe_report_path(report["html_path"])
@@ -1063,8 +1095,10 @@ async def report_email_preview(report_id: int):
 
 
 @router.post("/reports/{report_id}/resend-email")
-async def report_resend_email(report_id: int):
+async def report_resend_email(report_id: int, user: dict[str, Any] = CurrentUser):
     try:
+        if _route_actor(user) and not get_report(report_id, actor=_route_actor(user)):
+            raise ValueError("report not found")
         ok, error, report = resend_report_email(report_id)
         return {"ok": ok, "error": customer_safe_text(error), "report": report}
     except ValueError as exc:
@@ -1074,8 +1108,8 @@ async def report_resend_email(report_id: int):
 
 
 @router.get("/reports/{report_id}/download")
-async def report_download(report_id: int, type: str = "excel"):
-    report = get_report(report_id)
+async def report_download(report_id: int, type: str = "excel", user: dict[str, Any] = CurrentUser):
+    report = get_report(report_id, actor=_route_actor(user))
     if not report:
         raise HTTPException(status_code=404, detail="report not found")
     key = {"excel": "excel_path", "markdown": "markdown_path", "html": "html_path"}.get(type)

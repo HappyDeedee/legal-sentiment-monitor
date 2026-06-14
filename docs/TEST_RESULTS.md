@@ -11,6 +11,47 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
   `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-14 - Phase 1 Users And Permissions Verified
+
+Environment: local worktree `E:\myproject\MediaCrawler-worktrees\v1-roadmap`
+using `uv run`, the monitoring SQLite database, and Node script parsing for the
+single-file frontend.
+
+Result:
+
+- Implemented environment-bootstrap administrator creation and bcrypt password
+  hashing.
+- Added session-based authentication with HTTP-only `monitor_session` cookie
+  and hashed session tokens in `user_sessions`.
+- Added `/api/auth/login`, `/api/auth/logout`, `/api/auth/session`, and
+  administrator-only `/api/users` management endpoints.
+- Added shared FastAPI authentication and role dependencies.
+- Protected `/api/monitor/*` routes with session authentication.
+- Restricted platform accounts, proxies, AI, mail, login sessions, system
+  diagnostics, smoke/system checks, and resource operations to administrators.
+- Scoped normal-user jobs, runs, reports, and leads to the owning user in the
+  default workspace.
+- Added frontend login screen, session check, current-user badge, logout, and
+  role-based navigation/menu visibility.
+- Implemented `scripts/check_docs.py`.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 200 passed, 3 warnings.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- Node syntax check for the `api/monitor_web/index.html` script block
+- Result: monitor web script parses.
+
+Limitations:
+
+- Phase 1 does not implement runtime settings, simplified normal-user task
+  wizard, profile-key runtime resolver, server-side QR login primary flow, or
+  server-like acceptance validation. These remain for Phase 2 and later phases.
+- Local development cookie settings still use `secure=false`; production HTTPS
+  cookie behavior remains part of server-like validation and deployment work.
+
 ## 2026-06-14 - Phase 0.5 Schema Foundation Verified
 
 Environment: local worktree `E:\myproject\MediaCrawler-worktrees\v1-roadmap`

@@ -59,13 +59,13 @@ and permission work.
 
 ## Phase 1 - Users And Permissions
 
-- [ ] Add user model.
-- [ ] Add role model with administrator and normal user.
-- [ ] Add workspace field to core business tables.
-- [ ] Add login/session flow.
-- [ ] Hide administrator-only menus from normal users.
-- [ ] Restrict normal users to their own workspace data.
-- [ ] Implement `scripts/check_docs.py` before closing Phase 1.
+- [x] Add user model.
+- [x] Add role model with administrator and normal user.
+- [x] Add workspace field to core business tables.
+- [x] Add login/session flow.
+- [x] Hide administrator-only menus from normal users.
+- [x] Restrict normal users to their own workspace data.
+- [x] Implement `scripts/check_docs.py` before closing Phase 1.
 
 ## Phase 2 - System Settings Center
 

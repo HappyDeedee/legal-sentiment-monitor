@@ -332,12 +332,13 @@ def ingest_outputs(
             cur = conn.execute(
                 """
                 INSERT INTO raw_contents (
-                    platform, content_id, job_id, run_id, law_firm_name, source_keyword, title,
+                    workspace_id, platform, content_id, job_id, run_id, law_firm_name, source_keyword, title,
                     description, author_name, content_url, cover_url, publish_time, comment_count,
-                    raw_json, first_seen_at, last_seen_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    raw_json, first_seen_at, last_seen_at, created_by, updated_by
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
+                    int(job.get("workspace_id") or 1),
                     item["platform"],
                     item["content_id"],
                     job["id"],
@@ -354,6 +355,8 @@ def ingest_outputs(
                     item["raw_json"],
                     now,
                     now,
+                    job.get("created_by"),
+                    job.get("created_by"),
                 ),
             )
             content_db_ids.append(int(cur.lastrowid))
@@ -361,10 +364,12 @@ def ingest_outputs(
             conn.execute(
                 """
                 INSERT OR IGNORE INTO raw_comments (
-                    platform, comment_id, content_id, content, author_name, create_time, raw_json, first_seen_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                    workspace_id, platform, comment_id, content_id, content, author_name, create_time,
+                    raw_json, first_seen_at, created_by, updated_by
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
+                    int(job.get("workspace_id") or 1),
                     comment["platform"],
                     comment["comment_id"],
                     comment["content_id"],
@@ -373,6 +378,8 @@ def ingest_outputs(
                     comment["create_time"],
                     comment["raw_json"],
                     now,
+                    job.get("created_by"),
+                    job.get("created_by"),
                 ),
             )
     return {
@@ -416,11 +423,17 @@ def _save_evaluation(content_db_id: int, run_id: int, evaluation: dict[str, Any]
         conn.execute(
             """
             INSERT OR REPLACE INTO ai_evaluations (
-                raw_content_id, run_id, status, is_related, is_negative, risk_level, reason,
-                evidence_quotes, recommended_action, raw_response, created_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                workspace_id, raw_content_id, run_id, status, is_related, is_negative, risk_level, reason,
+                evidence_quotes, recommended_action, raw_response, created_at, created_by, updated_by
+            ) VALUES (
+                (SELECT workspace_id FROM raw_contents WHERE id=?),
+                ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?,
+                (SELECT created_by FROM raw_contents WHERE id=?),
+                (SELECT created_by FROM raw_contents WHERE id=?)
+            )
             """,
             (
+                content_db_id,
                 content_db_id,
                 run_id,
                 evaluation["status"],
@@ -432,6 +445,8 @@ def _save_evaluation(content_db_id: int, run_id: int, evaluation: dict[str, Any]
                 evaluation["recommended_action"],
                 redact_sensitive(evaluation.get("raw_response", "")),
                 utc_now(),
+                content_db_id,
+                content_db_id,
             ),
         )
 

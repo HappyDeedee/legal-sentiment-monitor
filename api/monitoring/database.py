@@ -7,6 +7,7 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from .auth import generate_session_token, hash_password, hash_session_token, verify_password
 from .mediacrawler_login import LOGIN_TYPE_LABELS, PLATFORM_LOGIN_TYPES, SUPPORTED_MONITOR_PLATFORMS, get_mediacrawler_login_capability
 from .prompts import DEFAULT_PROMPT
 from .security import MONITOR_DATA_DIR, customer_safe_text, decrypt_secret, encrypt_secret, mask_secret, redact_sensitive
@@ -21,6 +22,9 @@ JOB_TEMPLATE_PLACEHOLDERS = ("请改成", "目标律所", "律所简称", "律�
 JOB_TARGET_TYPES = {"search", "detail", "creator"}
 JOB_OUTPUT_MODES = {"internal", "json", "excel"}
 JOB_BROWSER_MODES = {"server_qrcode", "profile", "local_window"}
+USER_ROLES = {"administrator", "normal"}
+USER_STATUSES = {"active", "disabled"}
+SESSION_TTL_SECONDS = 8 * 60 * 60
 
 ACCOUNT_PROFILE_ROOT = MONITOR_DATA_DIR / "account_profiles"
 
@@ -517,22 +521,62 @@ def row_to_job(conn: sqlite3.Connection, row: sqlite3.Row) -> dict[str, Any]:
     return result
 
 
-def list_jobs(include_internal: bool = False) -> list[dict[str, Any]]:
+def _actor_scope_clause(
+    actor: dict[str, Any] | None,
+    table_alias: str = "",
+    owner_column: str = "created_by",
+    workspace_column: str = "workspace_id",
+) -> tuple[str, list[Any]]:
+    if not actor:
+        return "", []
+    prefix = f"{table_alias}." if table_alias else ""
+    workspace_id = _safe_int(actor.get("workspace_id")) or DEFAULT_WORKSPACE_ID
+    clauses = [f"{prefix}{workspace_column}=?"]
+    params: list[Any] = [workspace_id]
+    if actor.get("role") != "administrator":
+        clauses.append(f"{prefix}{owner_column}=?")
+        params.append(_safe_int(actor.get("id")) or 0)
+    return " AND ".join(clauses), params
+
+
+def user_can_access_job(job: dict[str, Any] | None, actor: dict[str, Any] | None) -> bool:
+    if not job or not actor:
+        return False
+    if (_safe_int(job.get("workspace_id")) or DEFAULT_WORKSPACE_ID) != (_safe_int(actor.get("workspace_id")) or DEFAULT_WORKSPACE_ID):
+        return False
+    if actor.get("role") == "administrator":
+        return True
+    return _safe_int(job.get("created_by")) == (_safe_int(actor.get("id")) or 0)
+
+
+def list_jobs(include_internal: bool = False, actor: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     with get_conn() as conn:
-        if include_internal:
-            rows = conn.execute("SELECT * FROM monitor_jobs ORDER BY id DESC").fetchall()
-        else:
-            rows = conn.execute("SELECT * FROM monitor_jobs WHERE is_internal=0 ORDER BY id DESC").fetchall()
+        clauses = []
+        params: list[Any] = []
+        if not include_internal:
+            clauses.append("is_internal=0")
+        actor_clause, actor_params = _actor_scope_clause(actor)
+        if actor_clause:
+            clauses.append(actor_clause)
+            params.extend(actor_params)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        rows = conn.execute(f"SELECT * FROM monitor_jobs{where} ORDER BY id DESC", params).fetchall()
         return [row_to_job(conn, row) for row in rows]
 
 
-def get_job(job_id: int) -> dict[str, Any] | None:
+def get_job(job_id: int, actor: dict[str, Any] | None = None) -> dict[str, Any] | None:
     with get_conn() as conn:
-        row = conn.execute("SELECT * FROM monitor_jobs WHERE id=?", (job_id,)).fetchone()
+        actor_clause, actor_params = _actor_scope_clause(actor)
+        where = "id=?"
+        params: list[Any] = [job_id]
+        if actor_clause:
+            where += f" AND {actor_clause}"
+            params.extend(actor_params)
+        row = conn.execute(f"SELECT * FROM monitor_jobs WHERE {where}", params).fetchone()
         return row_to_job(conn, row) if row else None
 
 
-def save_job(payload: dict[str, Any], job_id: int | None = None) -> dict[str, Any]:
+def save_job(payload: dict[str, Any], job_id: int | None = None, actor: dict[str, Any] | None = None) -> dict[str, Any]:
     now = utc_now()
     law_firm_name = (payload.get("law_firm_name") or "").strip()
     if not law_firm_name:
@@ -563,9 +607,17 @@ def save_job(payload: dict[str, Any], job_id: int | None = None) -> dict[str, An
     account_id = _optional_existing_id(payload.get("account_id") or payload.get("job_account_id"), "social_accounts", "social account")
     proxy_id = _optional_existing_id(payload.get("proxy_id") or payload.get("job_proxy_id"), "proxy_profiles", "proxy profile")
     enable_sub_comments = bool(payload.get("enable_sub_comments", False))
+    workspace_id = (_safe_int((actor or {}).get("workspace_id")) or DEFAULT_WORKSPACE_ID) if actor else DEFAULT_WORKSPACE_ID
+    actor_id = _safe_int((actor or {}).get("id")) if actor else None
     with get_conn() as conn:
         if job_id:
-            exists = conn.execute("SELECT id FROM monitor_jobs WHERE id=?", (job_id,)).fetchone()
+            actor_clause, actor_params = _actor_scope_clause(actor)
+            exists_sql = "SELECT * FROM monitor_jobs WHERE id=?"
+            exists_params: list[Any] = [job_id]
+            if actor_clause:
+                exists_sql += f" AND {actor_clause}"
+                exists_params.extend(actor_params)
+            exists = conn.execute(exists_sql, exists_params).fetchone()
             if not exists:
                 raise ValueError("job not found")
             conn.execute(
@@ -574,7 +626,7 @@ def save_job(payload: dict[str, Any], job_id: int | None = None) -> dict[str, An
                     enable_comments=?, enable_sub_comments=?, time_window_type=?, custom_start=?, custom_end=?,
                     frequency=?, cron_expr=?, email_time=?, target_type=?, max_pages=?, max_items=?,
                     start_page=?, output_mode=?, browser_mode=?, ai_profile_id=?, email_template_id=?,
-                    account_id=?, proxy_id=?, enabled=?, is_internal=?, updated_at=?
+                    account_id=?, proxy_id=?, enabled=?, is_internal=?, updated_by=?, updated_at=?
                 WHERE id=?
                 """,
                 (
@@ -601,6 +653,7 @@ def save_job(payload: dict[str, Any], job_id: int | None = None) -> dict[str, An
                     proxy_id,
                     1 if payload.get("enabled", True) else 0,
                     1 if payload.get("is_internal", False) else 0,
+                    actor_id,
                     now,
                     job_id,
                 ),
@@ -613,14 +666,15 @@ def save_job(payload: dict[str, Any], job_id: int | None = None) -> dict[str, An
             cur = conn.execute(
                 """
                 INSERT INTO monitor_jobs (
-                    law_firm_name, aliases, exclude_words, enable_comments, enable_sub_comments, time_window_type,
+                    workspace_id, law_firm_name, aliases, exclude_words, enable_comments, enable_sub_comments, time_window_type,
                     custom_start, custom_end, frequency, cron_expr, email_time, target_type, max_pages, max_items,
                     start_page, output_mode, browser_mode, ai_profile_id, email_template_id, account_id, proxy_id,
-                    enabled, is_internal,
+                    enabled, is_internal, created_by, updated_by,
                     created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
+                    workspace_id,
                     law_firm_name,
                     _json_dumps(aliases),
                     _json_dumps(exclude_words),
@@ -644,6 +698,8 @@ def save_job(payload: dict[str, Any], job_id: int | None = None) -> dict[str, An
                     proxy_id,
                     1 if payload.get("enabled", True) else 0,
                     1 if payload.get("is_internal", False) else 0,
+                    actor_id,
+                    actor_id,
                     now,
                     now,
                 ),
@@ -788,6 +844,264 @@ def _backfill_login_session_profile_keys(conn: sqlite3.Connection) -> None:
             "UPDATE login_sessions SET profile_key=? WHERE id=?",
             (row["account_profile_key"], row["session_id"]),
         )
+
+
+def bootstrap_admin_from_env(email: str | None, password: str | None, display_name: str | None = None) -> dict[str, Any] | None:
+    normalized_email = _normalize_email(email)
+    if not normalized_email or not password:
+        return None
+    now = utc_now()
+    with get_conn() as conn:
+        existing_admin = conn.execute(
+            "SELECT * FROM users WHERE role='administrator' AND status='active' ORDER BY id LIMIT 1"
+        ).fetchone()
+        if existing_admin:
+            return _row_to_user(dict(existing_admin))
+        row = conn.execute("SELECT * FROM users WHERE lower(email)=lower(?)", (normalized_email,)).fetchone()
+        if row:
+            conn.execute(
+                """
+                UPDATE users SET password_hash=?, role='administrator', status='active',
+                    display_name=COALESCE(NULLIF(?, ''), display_name), updated_at=?
+                WHERE id=?
+                """,
+                (hash_password(password), display_name or "", now, row["id"]),
+            )
+            target_id = int(row["id"])
+        else:
+            cur = conn.execute(
+                """
+                INSERT INTO users (workspace_id, email, display_name, password_hash, role, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, 'administrator', 'active', ?, ?)
+                """,
+                (DEFAULT_WORKSPACE_ID, normalized_email, display_name or normalized_email, hash_password(password), now, now),
+            )
+            target_id = int(cur.lastrowid)
+        _record_audit_log(conn, DEFAULT_WORKSPACE_ID, target_id, "bootstrap_admin", "user", str(target_id), {})
+    return get_user(target_id)
+
+
+def has_active_administrator() -> bool:
+    with get_conn() as conn:
+        row = conn.execute("SELECT 1 FROM users WHERE role='administrator' AND status='active' LIMIT 1").fetchone()
+    return bool(row)
+
+
+def list_users() -> list[dict[str, Any]]:
+    with get_conn() as conn:
+        rows = conn.execute("SELECT * FROM users ORDER BY role, id").fetchall()
+    return [_row_to_user(dict(row)) for row in rows]
+
+
+def get_user(user_id: int | None) -> dict[str, Any] | None:
+    if not user_id:
+        return None
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+    return _row_to_user(dict(row)) if row else None
+
+
+def get_user_by_email(email: str | None) -> dict[str, Any] | None:
+    normalized = _normalize_email(email)
+    if not normalized:
+        return None
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM users WHERE lower(email)=lower(?)", (normalized,)).fetchone()
+    return _row_to_user(dict(row)) if row else None
+
+
+def save_user(payload: dict[str, Any], user_id: int | None = None, actor_id: int | None = None) -> dict[str, Any]:
+    password = str(payload.get("password") or "")
+    now = utc_now()
+    with get_conn() as conn:
+        if user_id:
+            current = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+            if not current:
+                raise ValueError("user not found")
+            email = _normalize_email(payload.get("email") or current["email"])
+            role = _validate_user_role(payload.get("role") or current["role"])
+            status = _validate_user_status(payload.get("status") or current["status"])
+            display_name = str(payload.get("display_name") or current["display_name"] or email).strip()
+            duplicate = conn.execute("SELECT id FROM users WHERE lower(email)=lower(?)", (email,)).fetchone()
+            if duplicate and int(duplicate["id"]) != int(user_id):
+                raise ValueError("email already exists")
+            assignments = [
+                "email=?",
+                "display_name=?",
+                "role=?",
+                "status=?",
+                "updated_at=?",
+            ]
+            values: list[Any] = [email, display_name, role, status, now]
+            if password:
+                assignments.append("password_hash=?")
+                values.append(hash_password(password))
+            values.append(user_id)
+            conn.execute(f"UPDATE users SET {', '.join(assignments)} WHERE id=?", values)
+            target_id = int(user_id)
+            action = "update_user"
+        else:
+            email = _normalize_email(payload.get("email"))
+            if not email:
+                raise ValueError("email is required")
+            role = _validate_user_role(payload.get("role") or "normal")
+            status = _validate_user_status(payload.get("status") or "active")
+            display_name = str(payload.get("display_name") or email).strip()
+            duplicate = conn.execute("SELECT id FROM users WHERE lower(email)=lower(?)", (email,)).fetchone()
+            if duplicate:
+                raise ValueError("email already exists")
+            if not password:
+                raise ValueError("password is required")
+            cur = conn.execute(
+                """
+                INSERT INTO users (workspace_id, email, display_name, password_hash, role, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (DEFAULT_WORKSPACE_ID, email, display_name, hash_password(password), role, status, now, now),
+            )
+            target_id = int(cur.lastrowid)
+            action = "create_user"
+        _record_audit_log(conn, DEFAULT_WORKSPACE_ID, actor_id, action, "user", str(target_id), {"role": role, "status": status})
+    return get_user(target_id) or {}
+
+
+def authenticate_user(email: str | None, password: str | None) -> dict[str, Any] | None:
+    normalized = _normalize_email(email)
+    if not normalized or not password:
+        return None
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM users WHERE lower(email)=lower(?)", (normalized,)).fetchone()
+        if not row or row["status"] != "active":
+            return None
+        if not verify_password(str(password), str(row["password_hash"] or "")):
+            return None
+        now = utc_now()
+        conn.execute("UPDATE users SET last_login_at=?, updated_at=? WHERE id=?", (now, now, row["id"]))
+        refreshed = conn.execute("SELECT * FROM users WHERE id=?", (row["id"],)).fetchone()
+    return _row_to_user(dict(refreshed)) if refreshed else None
+
+
+def create_user_session(
+    user_id: int,
+    user_agent: str = "",
+    ip_address: str = "",
+    ttl_seconds: int = SESSION_TTL_SECONDS,
+) -> tuple[str, dict[str, Any]]:
+    token = generate_session_token()
+    now_dt = datetime.now(timezone.utc)
+    now = now_dt.isoformat()
+    expires_at = (now_dt + timedelta(seconds=ttl_seconds)).isoformat()
+    with get_conn() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO user_sessions (
+                user_id, session_token_hash, status, created_at, expires_at,
+                last_active_at, user_agent, ip_address
+            ) VALUES (?, ?, 'active', ?, ?, ?, ?, ?)
+            """,
+            (user_id, hash_session_token(token), now, expires_at, now, user_agent[:500], ip_address[:120]),
+        )
+        session_id = int(cur.lastrowid)
+        row = conn.execute("SELECT * FROM user_sessions WHERE id=?", (session_id,)).fetchone()
+    return token, dict(row)
+
+
+def get_user_for_session_token(token: str | None) -> dict[str, Any] | None:
+    if not token:
+        return None
+    token_hash = hash_session_token(token)
+    now_dt = datetime.now(timezone.utc)
+    with get_conn() as conn:
+        row = conn.execute(
+            """
+            SELECT s.id AS session_id, s.expires_at, s.status AS session_status, u.*
+            FROM user_sessions s
+            JOIN users u ON u.id = s.user_id
+            WHERE s.session_token_hash=?
+            """,
+            (token_hash,),
+        ).fetchone()
+        if not row:
+            return None
+        expires_at = _parse_iso_datetime(row["expires_at"])
+        if row["session_status"] != "active" or not expires_at or expires_at <= now_dt:
+            conn.execute("UPDATE user_sessions SET status='expired' WHERE id=?", (row["session_id"],))
+            return None
+        if row["status"] != "active":
+            return None
+        now = now_dt.isoformat()
+        conn.execute("UPDATE user_sessions SET last_active_at=? WHERE id=?", (now, row["session_id"]))
+        result = _row_to_user(dict(row))
+        result["session_id"] = int(row["session_id"])
+    return result
+
+
+def invalidate_user_session(token: str | None) -> None:
+    if not token:
+        return
+    with get_conn() as conn:
+        conn.execute("UPDATE user_sessions SET status='expired' WHERE session_token_hash=?", (hash_session_token(token),))
+
+
+def _row_to_user(row: dict[str, Any]) -> dict[str, Any]:
+    row.pop("password_hash", None)
+    return row
+
+
+def _normalize_email(value: Any) -> str:
+    return str(value or "").strip().lower()
+
+
+def _validate_user_role(role: str) -> str:
+    if role not in USER_ROLES:
+        raise ValueError("invalid user role")
+    return role
+
+
+def _validate_user_status(status: str) -> str:
+    if status not in USER_STATUSES:
+        raise ValueError("invalid user status")
+    return status
+
+
+def _record_audit_log(
+    conn: sqlite3.Connection,
+    workspace_id: int,
+    user_id: int | None,
+    action_type: str,
+    resource_type: str,
+    resource_id: str,
+    details: dict[str, Any] | None = None,
+    ip_address: str = "",
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO audit_logs (
+            workspace_id, user_id, action_type, resource_type, resource_id,
+            details_json, ip_address, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            workspace_id,
+            user_id,
+            action_type,
+            resource_type,
+            resource_id,
+            json.dumps(_redact_json(details or {}), ensure_ascii=False),
+            ip_address,
+            utc_now(),
+        ),
+    )
+
+
+def _parse_iso_datetime(value: Any) -> datetime | None:
+    try:
+        parsed = datetime.fromisoformat(str(value or "").replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def _migrate_raw_contents_unique_by_job(conn: sqlite3.Connection) -> None:
@@ -1551,9 +1865,22 @@ def _trim_error(error: str | None) -> str:
 
 def create_run(job_id: int, summary: dict[str, Any] | None = None) -> int:
     with get_conn() as conn:
+        job = conn.execute("SELECT workspace_id, created_by FROM monitor_jobs WHERE id=?", (job_id,)).fetchone()
+        workspace_id = _safe_int(job["workspace_id"]) if job else DEFAULT_WORKSPACE_ID
+        created_by = _safe_int(job["created_by"]) if job else None
         cur = conn.execute(
-            "INSERT INTO crawl_runs (job_id, status, started_at, summary) VALUES (?, 'running', ?, ?)",
-            (job_id, utc_now(), json.dumps(_redact_json(summary or {}), ensure_ascii=False)),
+            """
+            INSERT INTO crawl_runs (workspace_id, job_id, status, started_at, summary, created_by, updated_by)
+            VALUES (?, ?, 'running', ?, ?, ?, ?)
+            """,
+            (
+                workspace_id or DEFAULT_WORKSPACE_ID,
+                job_id,
+                utc_now(),
+                json.dumps(_redact_json(summary or {}), ensure_ascii=False),
+                created_by,
+                created_by,
+            ),
         )
         return int(cur.lastrowid)
 
@@ -1581,6 +1908,9 @@ def record_skipped_run(job_id: int, reason: str, summary: dict[str, Any] | None 
     payload.setdefault("skip_reason", reason)
     now = utc_now()
     with get_conn() as conn:
+        job = conn.execute("SELECT workspace_id, created_by FROM monitor_jobs WHERE id=?", (job_id,)).fetchone()
+        workspace_id = _safe_int(job["workspace_id"]) if job else DEFAULT_WORKSPACE_ID
+        created_by = _safe_int(job["created_by"]) if job else None
         if cooldown_seconds > 0:
             cutoff = (datetime.now(timezone.utc) - timedelta(seconds=cooldown_seconds)).isoformat()
             existing = conn.execute(
@@ -1595,34 +1925,66 @@ def record_skipped_run(job_id: int, reason: str, summary: dict[str, Any] | None 
                 return int(existing["id"])
         cur = conn.execute(
             """
-            INSERT INTO crawl_runs (job_id, status, started_at, finished_at, summary, error_message)
-            VALUES (?, 'skipped', ?, ?, ?, ?)
+            INSERT INTO crawl_runs (workspace_id, job_id, status, started_at, finished_at, summary, error_message, created_by, updated_by)
+            VALUES (?, ?, 'skipped', ?, ?, ?, ?, ?, ?)
             """,
-            (job_id, now, now, json.dumps(_redact_json(payload), ensure_ascii=False), _trim_error(reason)),
+            (
+                workspace_id or DEFAULT_WORKSPACE_ID,
+                job_id,
+                now,
+                now,
+                json.dumps(_redact_json(payload), ensure_ascii=False),
+                _trim_error(reason),
+                created_by,
+                created_by,
+            ),
         )
         return int(cur.lastrowid)
 
 
-def get_run(run_id: int) -> dict[str, Any] | None:
+def get_run(run_id: int, actor: dict[str, Any] | None = None) -> dict[str, Any] | None:
     with get_conn() as conn:
+        actor_clause = ""
+        actor_params: list[Any] = []
+        if actor:
+            actor_clause = "r.workspace_id=? AND (?='administrator' OR COALESCE(j.created_by, r.created_by)=?)"
+            actor_params = [
+                _safe_int(actor.get("workspace_id")) or DEFAULT_WORKSPACE_ID,
+                actor.get("role"),
+                _safe_int(actor.get("id")) or 0,
+            ]
+        where = "r.id=?"
+        params: list[Any] = [run_id]
+        if actor_clause:
+            where += f" AND {actor_clause}"
+            params.extend(actor_params)
         row = conn.execute(
-            """
+            f"""
             SELECT r.*, j.law_firm_name FROM crawl_runs r
             LEFT JOIN monitor_jobs j ON j.id = r.job_id
-            WHERE r.id=?
+            WHERE {where}
             """,
-            (run_id,),
+            params,
         ).fetchone()
     return _hydrate_run_row(row) if row else None
 
 
-def list_runs(limit: int = 100) -> list[dict[str, Any]]:
+def list_runs(limit: int = 100, actor: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     sql = """
         SELECT r.*, j.law_firm_name FROM crawl_runs r
         LEFT JOIN monitor_jobs j ON j.id = r.job_id
-        ORDER BY r.id DESC
     """
     params: list[Any] = []
+    if actor:
+        sql += " WHERE r.workspace_id=? AND (?='administrator' OR COALESCE(j.created_by, r.created_by)=?)"
+        params.extend(
+            [
+                _safe_int(actor.get("workspace_id")) or DEFAULT_WORKSPACE_ID,
+                actor.get("role"),
+                _safe_int(actor.get("id")) or 0,
+            ]
+        )
+    sql += " ORDER BY r.id DESC"
     if limit > 0:
         sql += " LIMIT ?"
         params.append(limit)
@@ -1703,14 +2065,23 @@ def _elapsed_seconds(started_at: Any) -> int:
         return 0
 
 
-def list_reports(limit: int = 100) -> list[dict[str, Any]]:
+def list_reports(limit: int = 100, actor: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     limit = _coerce_limit(limit)
     sql = """
         SELECT reports.*, monitor_jobs.id AS current_job_id, monitor_jobs.law_firm_name FROM reports
         LEFT JOIN monitor_jobs ON monitor_jobs.id = reports.job_id
-        ORDER BY reports.id DESC
     """
     params: list[Any] = []
+    if actor:
+        sql += " WHERE reports.workspace_id=? AND (?='administrator' OR COALESCE(monitor_jobs.created_by, reports.created_by)=?)"
+        params.extend(
+            [
+                _safe_int(actor.get("workspace_id")) or DEFAULT_WORKSPACE_ID,
+                actor.get("role"),
+                _safe_int(actor.get("id")) or 0,
+            ]
+        )
+    sql += " ORDER BY reports.id DESC"
     if limit > 0:
         sql += " LIMIT ?"
         params.append(limit)
@@ -1726,15 +2097,26 @@ def list_reports(limit: int = 100) -> list[dict[str, Any]]:
     return result
 
 
-def get_report(report_id: int) -> dict[str, Any] | None:
+def get_report(report_id: int, actor: dict[str, Any] | None = None) -> dict[str, Any] | None:
     with get_conn() as conn:
+        where = "reports.id=?"
+        params: list[Any] = [report_id]
+        if actor:
+            where += " AND reports.workspace_id=? AND (?='administrator' OR COALESCE(monitor_jobs.created_by, reports.created_by)=?)"
+            params.extend(
+                [
+                    _safe_int(actor.get("workspace_id")) or DEFAULT_WORKSPACE_ID,
+                    actor.get("role"),
+                    _safe_int(actor.get("id")) or 0,
+                ]
+            )
         row = conn.execute(
-            """
+            f"""
             SELECT reports.*, monitor_jobs.id AS current_job_id, monitor_jobs.law_firm_name FROM reports
             LEFT JOIN monitor_jobs ON monitor_jobs.id = reports.job_id
-            WHERE reports.id=?
+            WHERE {where}
             """,
-            (report_id,),
+            params,
         ).fetchone()
     if not row:
         return None
@@ -1794,7 +2176,7 @@ def _attach_report_lead_counts(reports: list[dict[str, Any]]) -> None:
         report["summary"] = summary
 
 
-def list_leads(limit: int = 100) -> list[dict[str, Any]]:
+def list_leads(limit: int = 100, actor: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     limit = _coerce_limit(limit)
     sql = """
         SELECT
@@ -1808,9 +2190,18 @@ def list_leads(limit: int = 100) -> list[dict[str, Any]]:
         FROM raw_contents c
         LEFT JOIN monitor_jobs j ON j.id = c.job_id
         LEFT JOIN ai_evaluations e ON e.raw_content_id = c.id
-        ORDER BY c.id DESC
     """
     params: list[Any] = []
+    if actor:
+        sql += " WHERE c.workspace_id=? AND (?='administrator' OR COALESCE(j.created_by, c.created_by)=?)"
+        params.extend(
+            [
+                _safe_int(actor.get("workspace_id")) or DEFAULT_WORKSPACE_ID,
+                actor.get("role"),
+                _safe_int(actor.get("id")) or 0,
+            ]
+        )
+    sql += " ORDER BY c.id DESC"
     if limit > 0:
         sql += " LIMIT ?"
         params.append(limit)
@@ -1838,21 +2229,101 @@ def _customer_safe_payload(value: Any) -> Any:
     return value
 
 
-def get_dashboard_summary() -> dict[str, Any]:
+def get_dashboard_summary(actor: dict[str, Any] | None = None) -> dict[str, Any]:
+    actor_params: list[Any] = []
+    job_scope = "is_internal=0"
+    run_scope = "1=1"
+    report_scope = "1=1"
+    content_scope = "1=1"
+    eval_scope = "1=1"
+    latest_run_scope = "1=1"
+    if actor:
+        workspace_id = _safe_int(actor.get("workspace_id")) or DEFAULT_WORKSPACE_ID
+        actor_id = _safe_int(actor.get("id")) or 0
+        role = str(actor.get("role") or "")
+        job_scope += " AND workspace_id=?"
+        actor_params.append(workspace_id)
+        if role != "administrator":
+            job_scope += " AND created_by=?"
+            actor_params.append(actor_id)
+        run_scope = "r.workspace_id=? AND (?='administrator' OR COALESCE(j.created_by, r.created_by)=?)"
+        report_scope = "reports.workspace_id=? AND (?='administrator' OR COALESCE(monitor_jobs.created_by, reports.created_by)=?)"
+        content_scope = "c.workspace_id=? AND (?='administrator' OR COALESCE(j.created_by, c.created_by)=?)"
+        eval_scope = "e.workspace_id=? AND (?='administrator' OR COALESCE(j.created_by, c.created_by, e.created_by)=?)"
+        latest_run_scope = run_scope
+        scoped_params = [workspace_id, role, actor_id]
+    else:
+        scoped_params = []
     with get_conn() as conn:
-        jobs_total = conn.execute("SELECT COUNT(*) AS n FROM monitor_jobs WHERE is_internal=0").fetchone()["n"]
-        jobs_enabled = conn.execute("SELECT COUNT(*) AS n FROM monitor_jobs WHERE is_internal=0 AND enabled=1").fetchone()["n"]
-        runs_total = conn.execute("SELECT COUNT(*) AS n FROM crawl_runs").fetchone()["n"]
-        contents_total = conn.execute("SELECT COUNT(*) AS n FROM raw_contents").fetchone()["n"]
-        reports_total = conn.execute("SELECT COUNT(*) AS n FROM reports").fetchone()["n"]
-        pending_review = conn.execute("SELECT COUNT(*) AS n FROM ai_evaluations WHERE status='pending_review'").fetchone()["n"]
-        negative_total = conn.execute("SELECT COUNT(*) AS n FROM ai_evaluations WHERE is_related=1 AND is_negative=1").fetchone()["n"]
-        high_total = conn.execute("SELECT COUNT(*) AS n FROM ai_evaluations WHERE is_related=1 AND is_negative=1 AND risk_level='high'").fetchone()["n"]
-        social_total = conn.execute("SELECT COUNT(*) AS n FROM social_accounts WHERE COALESCE(is_draft, 0)=0").fetchone()["n"]
-        proxy_total = conn.execute("SELECT COUNT(*) AS n FROM proxy_profiles").fetchone()["n"]
-        ai_profiles_total = conn.execute("SELECT COUNT(*) AS n FROM ai_key_profiles").fetchone()["n"]
-        login_sessions_total = conn.execute("SELECT COUNT(*) AS n FROM login_sessions").fetchone()["n"]
-        latest_runs = conn.execute("SELECT status, summary, started_at, finished_at FROM crawl_runs ORDER BY id DESC LIMIT 20").fetchall()
+        jobs_total = conn.execute(f"SELECT COUNT(*) AS n FROM monitor_jobs WHERE {job_scope}", actor_params).fetchone()["n"]
+        jobs_enabled = conn.execute(f"SELECT COUNT(*) AS n FROM monitor_jobs WHERE {job_scope} AND enabled=1", actor_params).fetchone()["n"]
+        runs_total = conn.execute(
+            f"""
+            SELECT COUNT(*) AS n FROM crawl_runs r
+            LEFT JOIN monitor_jobs j ON j.id = r.job_id
+            WHERE {run_scope}
+            """,
+            scoped_params,
+        ).fetchone()["n"]
+        contents_total = conn.execute(
+            f"""
+            SELECT COUNT(*) AS n FROM raw_contents c
+            LEFT JOIN monitor_jobs j ON j.id = c.job_id
+            WHERE {content_scope}
+            """,
+            scoped_params,
+        ).fetchone()["n"]
+        reports_total = conn.execute(
+            f"""
+            SELECT COUNT(*) AS n FROM reports
+            LEFT JOIN monitor_jobs ON monitor_jobs.id = reports.job_id
+            WHERE {report_scope}
+            """,
+            scoped_params,
+        ).fetchone()["n"]
+        pending_review = conn.execute(
+            f"""
+            SELECT COUNT(*) AS n FROM ai_evaluations e
+            LEFT JOIN raw_contents c ON c.id = e.raw_content_id
+            LEFT JOIN monitor_jobs j ON j.id = c.job_id
+            WHERE {eval_scope} AND e.status='pending_review'
+            """,
+            scoped_params,
+        ).fetchone()["n"]
+        negative_total = conn.execute(
+            f"""
+            SELECT COUNT(*) AS n FROM ai_evaluations e
+            LEFT JOIN raw_contents c ON c.id = e.raw_content_id
+            LEFT JOIN monitor_jobs j ON j.id = c.job_id
+            WHERE {eval_scope} AND e.is_related=1 AND e.is_negative=1
+            """,
+            scoped_params,
+        ).fetchone()["n"]
+        high_total = conn.execute(
+            f"""
+            SELECT COUNT(*) AS n FROM ai_evaluations e
+            LEFT JOIN raw_contents c ON c.id = e.raw_content_id
+            LEFT JOIN monitor_jobs j ON j.id = c.job_id
+            WHERE {eval_scope} AND e.is_related=1 AND e.is_negative=1 AND e.risk_level='high'
+            """,
+            scoped_params,
+        ).fetchone()["n"]
+        if actor and actor.get("role") != "administrator":
+            social_total = proxy_total = ai_profiles_total = login_sessions_total = 0
+        else:
+            social_total = conn.execute("SELECT COUNT(*) AS n FROM social_accounts WHERE COALESCE(is_draft, 0)=0").fetchone()["n"]
+            proxy_total = conn.execute("SELECT COUNT(*) AS n FROM proxy_profiles").fetchone()["n"]
+            ai_profiles_total = conn.execute("SELECT COUNT(*) AS n FROM ai_key_profiles").fetchone()["n"]
+            login_sessions_total = conn.execute("SELECT COUNT(*) AS n FROM login_sessions").fetchone()["n"]
+        latest_runs = conn.execute(
+            f"""
+            SELECT r.status, r.summary, r.started_at, r.finished_at FROM crawl_runs r
+            LEFT JOIN monitor_jobs j ON j.id = r.job_id
+            WHERE {latest_run_scope}
+            ORDER BY r.id DESC LIMIT 20
+            """,
+            scoped_params,
+        ).fetchall()
     failed_runs = 0
     skipped_runs = 0
     platform_counts: dict[str, int] = {}

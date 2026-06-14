@@ -92,6 +92,14 @@
     .status.warn { background:#fff7ed; color:#b45309; }
     .status.bad { background:#fef2f2; color:#b42318; }
     .toast { position:fixed; right:18px; top:76px; background:#111827; color:#fff; padding:10px 14px; border-radius:6px; display:none; max-width:460px; z-index:60; }
+    .auth-screen { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:#f8fafc; z-index:70; padding:20px; }
+    .auth-screen.active { display:flex; }
+    .auth-panel { width:min(420px, 100%); border:1px solid var(--line); border-radius:8px; background:#fff; box-shadow:0 24px 60px rgba(15,23,42,.18); padding:24px; }
+    .auth-panel h1 { margin:0 0 8px; font-size:22px; }
+    .auth-panel p { margin:0 0 18px; color:var(--muted); line-height:1.6; }
+    .auth-panel form { display:grid; gap:14px; }
+    .auth-error { min-height:20px; color:var(--danger); font-size:13px; }
+    .is-hidden { display:none !important; }
     iframe { width:100%; min-height:520px; border:1px solid var(--line); border-radius:8px; background:#fff; }
     pre.logbox, pre.resultbox { max-height:360px; overflow:auto; background:#0f172a; color:#e5e7eb; padding:12px; border-radius:6px; white-space:pre-wrap; }
     .test-console { min-height:180px; max-height:360px; overflow:auto; background:#0f172a; color:#dbeafe; padding:14px 16px; border-radius:8px; white-space:pre-wrap; font-family:Consolas,Menlo,monospace; line-height:1.7; }
@@ -387,6 +395,18 @@
   </style>
 </head>
 <body>
+  <div id="auth_screen" class="auth-screen">
+    <div class="auth-panel">
+      <h1>登录舆情监控后台</h1>
+      <p>使用管理员创建的账号进入系统。普通用户只会看到任务、运行和报告相关页面。</p>
+      <form id="login_form">
+        <div><label>邮箱</label><input id="login_email" type="email" autocomplete="username" required></div>
+        <div><label>密码</label><input id="login_password" type="password" autocomplete="current-password" required></div>
+        <div id="login_error" class="auth-error"></div>
+        <button class="primary" type="submit">登录</button>
+      </form>
+    </div>
+  </div>
   <svg aria-hidden="true" width="0" height="0" style="position:absolute;overflow:hidden">
     <symbol id="icon-dashboard" viewBox="0 0 24 24"><path d="M3 13h8V3H3z"></path><path d="M13 21h8V11h-8z"></path><path d="M13 3h8v6h-8z"></path><path d="M3 21h8v-6H3z"></path></symbol>
     <symbol id="icon-monitor" viewBox="0 0 24 24"><path d="M4 19V5"></path><path d="M4 19h16"></path><path d="m7 15 4-4 3 3 5-7"></path></symbol>
@@ -406,32 +426,32 @@
       </div>
       <nav>
         <div class="nav-group">
-          <button class="active" data-tab="dashboard"><span class="ui-icon"><svg><use href="#icon-dashboard"></use></svg></span>总览</button>
+          <button class="active" data-tab="dashboard" data-menu-key="overview"><span class="ui-icon"><svg><use href="#icon-dashboard"></use></svg></span>总览</button>
         </div>
         <div class="nav-group">
-          <button data-tab="jobs"><span class="ui-icon"><svg><use href="#icon-monitor"></use></svg></span>舆情监控</button>
+          <button data-tab="jobs" data-menu-key="monitoring"><span class="ui-icon"><svg><use href="#icon-monitor"></use></svg></span>舆情监控</button>
         </div>
         <div class="nav-group">
-          <button data-tab="runs"><span class="ui-icon"><svg><use href="#icon-run"></use></svg></span>运行中心</button>
+          <button data-tab="runs" data-menu-key="run_center"><span class="ui-icon"><svg><use href="#icon-run"></use></svg></span>运行中心</button>
         </div>
         <div class="nav-group">
-          <button data-tab="reports"><span class="ui-icon"><svg><use href="#icon-report"></use></svg></span>报告中心</button>
+          <button data-tab="reports" data-menu-key="report_center"><span class="ui-icon"><svg><use href="#icon-report"></use></svg></span>报告中心</button>
         </div>
         <div class="nav-group">
-          <button data-menu="resources" data-default-tab="accounts"><span class="ui-icon"><svg><use href="#icon-resource"></use></svg></span>资源管理</button>
+          <button data-menu="resources" data-default-tab="accounts" data-menu-key="platform_accounts"><span class="ui-icon"><svg><use href="#icon-resource"></use></svg></span>资源管理</button>
           <div class="nav-popover" id="nav_menu_resources">
-            <button class="sub" data-tab="accounts">平台账号</button>
-            <button class="sub" data-tab="proxies">代理资源</button>
-            <button class="sub" data-tab="ai">AI 接入</button>
+            <button class="sub" data-tab="accounts" data-menu-key="platform_accounts">平台账号</button>
+            <button class="sub" data-tab="proxies" data-menu-key="proxy_resources">代理资源</button>
+            <button class="sub" data-tab="ai" data-menu-key="ai_access">AI 接入</button>
           </div>
         </div>
         <div class="nav-group">
-          <button data-menu="settings" data-default-tab="ai_rules"><span class="ui-icon"><svg><use href="#icon-settings"></use></svg></span>系统配置</button>
+          <button data-menu="settings" data-default-tab="ai_rules" data-menu-key="ai_rules"><span class="ui-icon"><svg><use href="#icon-settings"></use></svg></span>系统配置</button>
           <div class="nav-popover" id="nav_menu_settings">
-            <button class="sub" data-tab="ai_rules">AI 评估规则</button>
-            <button class="sub" data-tab="email">邮件配置</button>
-            <button class="sub" data-tab="email_templates">邮件模板</button>
-            <button class="sub" data-tab="doctor">系统诊断</button>
+            <button class="sub" data-tab="ai_rules" data-menu-key="ai_rules">AI 评估规则</button>
+            <button class="sub" data-tab="email" data-menu-key="mail_config">邮件配置</button>
+            <button class="sub" data-tab="email_templates" data-menu-key="mail_templates">邮件模板</button>
+            <button class="sub" data-tab="doctor" data-menu-key="system_diagnostics">系统诊断</button>
           </div>
         </div>
       </nav>
@@ -443,8 +463,10 @@
           <span>抖音 / 快手 / 小红书 · 平台采集服务</span>
         </div>
         <div class="row" style="flex:0 0 auto">
+          <div id="current_user_badge" class="small"></div>
           <div id="top_status" class="small"></div>
           <button class="secondary" onclick="loadAll()">刷新全局状态</button>
+          <button class="secondary" onclick="logout()">退出</button>
         </div>
       </header>
       <section id="dashboard" class="active">
@@ -1188,7 +1210,22 @@
     <iframe id="report_preview"></iframe>
   </div>
   <script>
-    const api = (path, options={}) => fetch('/api/monitor' + path, {headers:{'Content-Type':'application/json'}, ...options});
+    let currentSession = null;
+    let authReady = false;
+    async function api(path, options={}){
+      const res = await fetch('/api/monitor' + path, {headers:{'Content-Type':'application/json'}, ...options});
+      if(res.status===401){
+        showLogin();
+        throw new Error('需要重新登录');
+      }
+      if(res.status===403){
+        toast('当前账号没有访问该功能的权限');
+      }
+      return res;
+    }
+    async function authApi(path, options={}){
+      return fetch('/api/auth' + path, {headers:{'Content-Type':'application/json'}, ...options});
+    }
     const jobCache = new Map();
     const runningJobIds = new Set();
     const socialAccountCache = new Map();
@@ -1214,6 +1251,19 @@
     let currentRunLogText = '';
     let accountAttentionOnly = false;
     let openAccountMenuId = null;
+    const TAB_PERMISSION_KEYS = {
+      dashboard: 'overview',
+      jobs: 'monitoring',
+      runs: 'run_center',
+      reports: 'report_center',
+      accounts: 'platform_accounts',
+      proxies: 'proxy_resources',
+      ai: 'ai_access',
+      ai_rules: 'ai_rules',
+      email: 'mail_config',
+      email_templates: 'mail_templates',
+      doctor: 'system_diagnostics'
+    };
     let defaultPromptSections = {
       role:'你是律所舆情线索初筛助手，只负责发现疑似风险线索，不做事实认定。',
       relevance:'优先判断内容是否明确指向目标律所、律所别名、平台搜索词或评论中的相关称呼。同名无关、泛泛法律咨询、普通法律科普和无明显指向的内容应判为不相关。',
@@ -1232,6 +1282,71 @@
     ];
     const lines = id => document.getElementById(id).value.split(/\n|,/).map(s=>s.trim()).filter(Boolean);
     const toast = msg => { const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; setTimeout(()=>el.style.display='none', 3500); };
+    function showLogin(message=''){
+      authReady=false;
+      currentSession=null;
+      document.getElementById('auth_screen').classList.add('active');
+      document.getElementById('login_error').textContent=message;
+      document.getElementById('login_password').value='';
+    }
+    function hideLogin(){
+      document.getElementById('auth_screen').classList.remove('active');
+      document.getElementById('login_error').textContent='';
+    }
+    async function loadSession(){
+      const res=await authApi('/session');
+      if(!res.ok) return null;
+      return (await res.json()).user || null;
+    }
+    async function bootApp(){
+      const user=await loadSession();
+      if(!user){
+        showLogin();
+        return;
+      }
+      currentSession=user;
+      authReady=true;
+      hideLogin();
+      renderCurrentUser();
+      applyMenuPermissions();
+      renderJobAccountOptions([...socialAccountCache.values()].filter(a=>!a.is_draft));
+      renderProxySelectOptions();
+      renderJobAIProfileOptions();
+      renderJobEmailTemplateOptions();
+      await loadAll();
+    }
+    function renderCurrentUser(){
+      const el=document.getElementById('current_user_badge');
+      if(!el || !currentSession) return;
+      const role=currentSession.role==='administrator' ? '管理员' : '普通用户';
+      el.innerHTML=`<span class="status ok">${esc(role)}</span> ${esc(currentSession.display_name || currentSession.email || '')}`;
+    }
+    async function loginWithForm(event){
+      event.preventDefault();
+      const button=event.submitter;
+      const oldText=button ? button.textContent : '';
+      if(button){ button.disabled=true; button.textContent='登录中...'; }
+      try {
+        const res=await authApi('/login',{method:'POST',body:JSON.stringify({email:val('login_email'),password:val('login_password')})});
+        if(!res.ok){
+          document.getElementById('login_error').textContent=await err(res);
+          return;
+        }
+        const data=await res.json();
+        currentSession=data.user;
+        authReady=true;
+        hideLogin();
+        renderCurrentUser();
+        applyMenuPermissions();
+        await loadAll();
+      } finally {
+        if(button){ button.disabled=false; button.textContent=oldText; }
+      }
+    }
+    async function logout(){
+      await authApi('/logout',{method:'POST'});
+      showLogin();
+    }
     async function withButtonFeedback(button, label, work){
       const btn = typeof button === 'string' ? document.querySelector(button) : button;
       const oldHtml = btn ? btn.innerHTML : '';
@@ -1301,6 +1416,10 @@
       document.querySelectorAll('.nav-popover').forEach(menu=>menu.classList.remove('active'));
     }
     function activateNavTab(btn){
+      if(!canOpenTab(btn.dataset.tab)){
+        toast('当前账号没有访问该页面的权限');
+        return;
+      }
       document.querySelectorAll('nav button, section').forEach(x=>x.classList.remove('active'));
       const parent = btn.classList.contains('sub') ? btn.closest('.nav-group')?.querySelector('button[data-menu]') : btn;
       if(parent) parent.classList.add('active');
@@ -1312,6 +1431,7 @@
       loadSectionData(btn.dataset.tab);
     }
     function loadSectionData(tab){
+      if(!canOpenTab(tab)) return;
       if(tab==='dashboard') loadDashboard();
       if(tab==='accounts') { loadProxyPool(); loadAccountsPool(); }
       if(tab==='proxies') loadProxyPool();
@@ -1322,6 +1442,32 @@
       if(tab==='runs') loadRuns();
       if(tab==='reports') loadReports();
       if(tab==='doctor') loadDoctor();
+    }
+
+    function canMenu(key){
+      if(!key) return true;
+      return !!((currentSession && currentSession.menu_permissions || {})[key]);
+    }
+    function canOpenTab(tab){
+      return canMenu(TAB_PERMISSION_KEYS[tab]);
+    }
+    function applyMenuPermissions(){
+      document.querySelectorAll('nav button[data-menu-key]').forEach(btn=>{
+        btn.classList.toggle('is-hidden', !canMenu(btn.dataset.menuKey));
+      });
+      document.querySelectorAll('section[id]').forEach(section=>{
+        if(!canOpenTab(section.id)) section.classList.remove('active');
+      });
+      document.querySelectorAll('.nav-popover').forEach(menu=>{
+        const visible=[...menu.querySelectorAll('button.sub')].some(btn=>!btn.classList.contains('is-hidden'));
+        const trigger=menu.closest('.nav-group')?.querySelector('button[data-menu]');
+        if(trigger) trigger.classList.toggle('is-hidden', !visible);
+      });
+      const active=document.querySelector('nav button.active:not(.is-hidden)');
+      if(!active){
+        const first=document.querySelector('nav button[data-tab]:not(.is-hidden)');
+        if(first) activateNavTab(first);
+      }
     }
 
     function switchSubview(sectionId, viewId){
@@ -1346,25 +1492,30 @@
         return null;
       }
     }
+    function addPermittedLoad(loads, label, key, work){
+      if(canMenu(key)) loads.push(safeLoad(label, work));
+    }
     async function loadAll(){
-      await Promise.all([
+      if(!authReady) return;
+      const loads = [
         safeLoad('总览', loadDashboard),
         safeLoad('运行状态', loadReadiness),
-        safeLoad('系统状态', loadSystemChecklist),
         safeLoad('调度状态', loadSchedulerStatus),
         safeLoad('平台状态', loadPlatformStatus),
-        safeLoad('登录能力', loadPlatformLoginConfigs),
-        safeLoad('账号资源', loadAccountsPool),
-        safeLoad('登录会话', loadLoginSessions),
-        safeLoad('代理资源', loadProxyPool),
-        safeLoad('AI 评估规则', loadAI),
-        safeLoad('AI 接入', loadAIProfiles),
-        safeLoad('邮件配置', loadEmail),
-        safeLoad('邮件模板', loadEmailTemplates),
         safeLoad('运行记录', loadRuns),
-        safeLoad('报告中心', loadReports),
-        safeLoad('系统诊断', loadDoctor)
-      ]);
+        safeLoad('报告中心', loadReports)
+      ];
+      addPermittedLoad(loads, '系统状态', 'system_diagnostics', loadSystemChecklist);
+      addPermittedLoad(loads, '登录能力', 'platform_accounts', loadPlatformLoginConfigs);
+      addPermittedLoad(loads, '账号资源', 'platform_accounts', loadAccountsPool);
+      addPermittedLoad(loads, '登录会话', 'platform_accounts', loadLoginSessions);
+      addPermittedLoad(loads, '代理资源', 'proxy_resources', loadProxyPool);
+      addPermittedLoad(loads, 'AI 评估规则', 'ai_rules', loadAI);
+      addPermittedLoad(loads, 'AI 接入', 'ai_access', loadAIProfiles);
+      addPermittedLoad(loads, '邮件配置', 'mail_config', loadEmail);
+      addPermittedLoad(loads, '邮件模板', 'mail_templates', loadEmailTemplates);
+      addPermittedLoad(loads, '系统诊断', 'system_diagnostics', loadDoctor);
+      await Promise.all(loads);
       await safeLoad('监控任务', loadJobs);
     }
     async function loadDashboard(){
@@ -1388,6 +1539,7 @@
     }
     function metricCard(label, value, note){ return `<div class="metric-card"><div class="metric-label">${esc(label)}</div><div class="metric-value">${esc(value)}</div><div class="metric-note">${note}</div></div>`; }
     async function loadSystemChecklist(){
+      if(!canMenu('system_diagnostics')) return;
       const data=await (await api('/system-checklist')).json();
       const items=data.items||[];
       const mount=document.getElementById('ops_checklist');
@@ -1465,7 +1617,12 @@
       if(btn) btn.click();
     }
     async function loadPlatformStatus(){ const data=await (await api('/platform-status')).json(); const html=platformStatusTable(data.platforms); document.getElementById('platform_status_table').innerHTML=html; }
-    async function loadPlatformLoginConfigs(){ const data=await (await api('/platform-login-configs')).json(); platformLoginConfigCache=data.configs||[]; renderLoginModePanel(); }
+    async function loadPlatformLoginConfigs(){
+      if(!canMenu('platform_accounts')) return;
+      const data=await (await api('/platform-login-configs')).json();
+      platformLoginConfigCache=data.configs||[];
+      renderLoginModePanel();
+    }
     async function loadSchedulerStatus(){
       const data=await (await api('/scheduler-status')).json();
       runningJobIds.clear();
@@ -1549,6 +1706,7 @@
       toast(data.session.status === 'waiting_verification' ? '平台要求先完成验证，请按文字提示处理' : (data.session.qr_image ? '二维码已生成，系统正在自动确认登录结果' : '二维码未生成，请查看文字提示或使用网页登录窗口处理'));
     }
     async function loadLoginSessions(accountId=null){
+      if(!canMenu('platform_accounts')) return;
       const target=document.getElementById('current_account_login_sessions');
       if(!target) return;
       const currentId=Number(accountId || val('social_account_id') || 0);
@@ -1718,6 +1876,7 @@
       await loadLoginSessions(Number(val('social_account_id')||0));
     }
     async function loadAccountsPool(){
+      if(!canMenu('platform_accounts')) return;
       const data=await (await api('/social-accounts')).json();
       const currentId=Number(val('social_account_id')||0);
       const currentDraft=currentId ? socialAccountCache.get(currentId) : null;
@@ -1732,6 +1891,11 @@
     function renderJobAccountOptions(accounts){
       const select=document.getElementById('job_account_id');
       if(!select) return;
+      if(!canMenu('platform_accounts')){
+        select.innerHTML='<option value="">自动选择可用账号</option>';
+        select.value='';
+        return;
+      }
       const current=select.value || '';
       const formal=(accounts||[]).filter(a=>!a.is_draft);
       select.innerHTML=['<option value="">自动选择可用账号</option>'].concat(formal.map(a=>`<option value="${esc(a.id)}">${esc(a.name)}（${esc(formatPlatforms([a.platform]))} / ${esc(poolStatusText(a.status))}）</option>`)).join('');
@@ -2363,6 +2527,7 @@
       renderLoginModePanel();
     }
     async function loadProxyPool(){
+      if(!canMenu('proxy_resources')) return;
       const data=await (await api('/proxies')).json();
       proxyProfileCache.clear();
       (data.proxies||[]).forEach(p=>proxyProfileCache.set(Number(p.id), p));
@@ -2395,6 +2560,11 @@
       ['social_account_proxy_id','job_proxy_id'].forEach(id=>{
         const select=document.getElementById(id);
         if(!select) return;
+        if(id==='job_proxy_id' && !canMenu('proxy_resources')){
+          select.innerHTML='<option value="">跟随账号设置</option>';
+          select.value='';
+          return;
+        }
         const current=select.value || '';
         select.innerHTML=options.join('');
         if(current && proxies.some(p=>String(p.id)===String(current))) select.value=current;
@@ -2643,6 +2813,7 @@
     ];
     function aiPayload(){ syncAIPromptFromRules(); return {provider:val('ai_provider')||'openai',base_url:val('ai_base_url'),api_key:'',model:val('ai_model'),temperature:Number(val('ai_temperature')||0),prompt:val('ai_prompt')}; }
     async function loadAI(){
+      if(!canMenu('ai_rules')) return;
       const res=await api('/ai-evaluation-config');
       if(!res.ok) throw new Error(await err(res));
       const data=await res.json();
@@ -2904,6 +3075,7 @@
       await Promise.all([loadAIRuleProfiles(), loadReadiness()]);
     }
     async function loadAIProfiles(){
+      if(!canMenu('ai_access')) return;
       const data=await (await api('/ai-profiles')).json();
       aiProfileCache.clear();
       (data.profiles||[]).forEach(p=>aiProfileCache.set(Number(p.id), p));
@@ -2934,6 +3106,11 @@
     function renderJobAIProfileOptions(){
       const select=document.getElementById('job_ai_profile_id');
       if(!select) return;
+      if(!canMenu('ai_access')){
+        select.innerHTML='<option value="">使用默认 AI 接入</option>';
+        select.value='';
+        return;
+      }
       const current=select.value || '';
       const profiles=[...aiProfileCache.values()];
       select.innerHTML=['<option value="">使用默认 AI 接入</option>'].concat(profiles.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}${p.is_active?'（默认）':''}</option>`)).join('');
@@ -3165,6 +3342,7 @@
     }
 
     async function loadEmail(){
+      if(!canMenu('mail_config')) return;
       const c=(await (await api('/email-config')).json()).config;
       ['smtp_host','smtp_port','encryption','sender'].forEach(id=>set(id,c[id]||''));
       set('smtp_username',c.username||'');
@@ -3182,6 +3360,7 @@
     async function saveEmail(){ const payload={smtp_host:val('smtp_host'),smtp_port:Number(val('smtp_port')||465),encryption:val('encryption'),sender:val('sender'),username:val('smtp_username'),password:val('smtp_password'),subject_template:val('subject_template'),default_recipients:lines('default_recipients')}; const res=await api('/email-config',{method:'PUT',body:JSON.stringify(payload)}); if(res.ok){ const data=await res.json(); toast(data.config.last_test_status==='success'?'邮件配置已保存，测试状态仍有效':'邮件配置已保存，需重新测试'); } else toast(await err(res)); set('smtp_password',''); await loadEmail(); await loadReadiness(); }
     async function testEmail(){ const payload={smtp_host:val('smtp_host'),smtp_port:Number(val('smtp_port')||465),encryption:val('encryption'),sender:val('sender'),username:val('smtp_username'),password:val('smtp_password'),subject_template:val('subject_template'),default_recipients:lines('default_recipients')}; const res=await api('/email-config/test',{method:'POST',body:JSON.stringify(payload)}); toast(res.ok?'测试邮件已发送并记录通过':await err(res)); set('smtp_password',''); await loadEmail(); await loadReadiness(); }
     async function loadEmailTemplates(){
+      if(!canMenu('mail_templates')) return;
       const data=await (await api('/email-templates')).json();
       emailTemplateCache.clear();
       (data.templates||[]).forEach(t=>emailTemplateCache.set(Number(t.id), t));
@@ -3213,6 +3392,11 @@
     function renderJobEmailTemplateOptions(){
       const select=document.getElementById('job_email_template_id');
       if(!select) return;
+      if(!canMenu('mail_templates')){
+        select.innerHTML='<option value="">使用当前默认</option>';
+        select.value='';
+        return;
+      }
       const current=select.value || '';
       const templates=[...emailTemplateCache.values()];
       select.innerHTML=['<option value="">使用当前默认</option>'].concat(templates.map(t=>`<option value="${esc(t.id)}">${esc(t.name)}${t.is_active?'（当前）':''}</option>`)).join('');
@@ -3452,6 +3636,7 @@
     }
     async function resendReportEmail(id){ const res=await api('/reports/'+id+'/resend-email',{method:'POST'}); if(!res.ok){toast(await err(res));return;} const data=await res.json(); toast(data.ok?'报告邮件已重新发送':'重发失败：'+(data.error||'请检查邮件配置')); loadReports(); }
     async function loadDoctor(){
+      if(!canMenu('system_diagnostics')) return;
       const data=await (await api('/doctor')).json();
       document.getElementById('doctor_summary').innerHTML = data.ok
         ? '<div class="notice ok">基础配置检查已通过。</div>'
@@ -3579,6 +3764,7 @@
     function esc(s){ return String(s??'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
     async function err(res){ try { return (await res.json()).detail || res.statusText; } catch { return res.statusText; } }
     document.getElementById('save_job_btn').addEventListener('click', saveJob);
+    document.getElementById('login_form').addEventListener('submit', loginWithForm);
     document.getElementById('fill_sample_job_btn').addEventListener('click', fillSampleJobTemplate);
     document.getElementById('reset_job_btn').addEventListener('click', resetJobForm);
     document.getElementById('social_account_platform').addEventListener('change', updateSocialLoginTypeOptions);
@@ -3622,7 +3808,7 @@
     resetAIProfileForm();
     resetSocialAccountForm();
     resetProxyForm();
-    loadAll();
+    bootApp();
 </script>
 </body>
 </html>

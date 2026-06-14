@@ -30,9 +30,9 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse
 
-from .monitoring.database import init_db
+from .monitoring.database import bootstrap_admin_from_env, init_db
 from .monitoring.scheduler import start_scheduler
-from .routers import crawler_router, data_router, monitor_router, websocket_router
+from .routers import auth_router, crawler_router, data_router, monitor_router, websocket_router
 
 app = FastAPI(
     title="律所舆情监控系统",
@@ -61,6 +61,7 @@ app.add_middleware(
 # Register routers
 app.include_router(crawler_router, prefix="/api")
 app.include_router(data_router, prefix="/api")
+app.include_router(auth_router, prefix="/api")
 app.include_router(monitor_router, prefix="/api")
 app.include_router(websocket_router, prefix="/api")
 
@@ -68,6 +69,11 @@ app.include_router(websocket_router, prefix="/api")
 @app.on_event("startup")
 async def startup_monitoring():
     init_db()
+    bootstrap_admin_from_env(
+        os.environ.get("MONITOR_ADMIN_EMAIL"),
+        os.environ.get("MONITOR_ADMIN_PASSWORD"),
+        os.environ.get("MONITOR_ADMIN_DISPLAY_NAME"),
+    )
     await start_scheduler()
 
 

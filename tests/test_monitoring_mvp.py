@@ -13,7 +13,8 @@ from fastapi import HTTPException
 
 from api.monitoring.ai import _build_endpoint, _parse_json, _validate_ai_output, build_evaluation_payload, test_ai as run_ai_config_test
 from api.monitoring.ai import DEFAULT_PROMPT
-from api.monitoring.database import create_login_session, create_run, expire_login_sessions_for_account, finish_run, get_active_ai_key_profile, get_ai_config, get_conn, get_dashboard_summary, get_email_config, get_job, get_login_session, get_platform_login_config, get_report, get_run, get_social_account, init_db, list_ai_key_profiles, list_ai_rule_profiles, list_email_templates, list_jobs, list_leads, list_login_sessions, list_platform_login_configs, list_proxy_profiles, list_reports, list_runs, list_social_accounts, mark_selftest_jobs_internal, record_skipped_run, render_email_template_preview, save_ai_config, save_ai_key_profile, save_ai_rule_profile, save_email_config, save_email_template, save_job, save_platform_login_config, save_proxy_profile, save_social_account, set_active_ai_key_profile, set_active_ai_rule_profile, update_social_account_check_state
+from api.monitoring.auth import SESSION_COOKIE_NAME
+from api.monitoring.database import authenticate_user, bootstrap_admin_from_env, create_login_session, create_run, expire_login_sessions_for_account, finish_run, get_active_ai_key_profile, get_ai_config, get_conn, get_dashboard_summary, get_email_config, get_job, get_login_session, get_platform_login_config, get_report, get_run, get_social_account, get_user_by_email, init_db, list_ai_key_profiles, list_ai_rule_profiles, list_email_templates, list_jobs, list_leads, list_login_sessions, list_platform_login_configs, list_proxy_profiles, list_reports, list_runs, list_social_accounts, list_users, mark_selftest_jobs_internal, record_skipped_run, render_email_template_preview, save_ai_config, save_ai_key_profile, save_ai_rule_profile, save_email_config, save_email_template, save_job, save_platform_login_config, save_proxy_profile, save_social_account, save_user, set_active_ai_key_profile, set_active_ai_rule_profile, update_social_account_check_state
 from api.monitoring.mediacrawler_login import get_mediacrawler_login_capability
 from api.monitoring.login_browser import build_login_browser_command, open_login_browser, open_login_browser_with_command
 import api.monitoring.account_check as account_check_module
@@ -236,6 +237,219 @@ def test_phase_05_schema_defaults_keep_existing_mvp_records_compatible(tmp_path)
         _restore_table("social_accounts", snapshots["social_accounts"])
         _restore_table("proxy_profiles", snapshots["proxy_profiles"])
         _restore_monitor_jobs(jobs_snapshot)
+
+
+def test_phase_1_bootstrap_admin_login_session_and_user_management():
+    from api.routers import auth as auth_router
+
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "user_sessions": _snapshot_table("user_sessions"),
+        "users": _snapshot_table("users"),
+    }
+    try:
+        with get_conn() as conn:
+            conn.execute("DELETE FROM user_sessions")
+            conn.execute("DELETE FROM audit_logs")
+            conn.execute("DELETE FROM users")
+
+        admin = bootstrap_admin_from_env("admin@example.com", "StrongPass123!", "Admin")
+        assert admin
+        assert admin["email"] == "admin@example.com"
+        assert admin["role"] == "administrator"
+        assert "password_hash" not in admin
+        assert authenticate_user("admin@example.com", "StrongPass123!")["id"] == admin["id"]
+        assert authenticate_user("admin@example.com", "wrong-password") is None
+
+        login_response = _FakeResponse()
+        login_result = asyncio.run(
+            auth_router.login(
+                {"email": "admin@example.com", "password": "StrongPass123!"},
+                _FakeRequest(),
+                login_response,
+            )
+        )
+        session_cookie = login_response.cookies[SESSION_COOKIE_NAME]["value"]
+        assert login_result["user"]["role"] == "administrator"
+        assert login_result["user"]["menu_permissions"]["users_permissions"] is True
+        assert session_cookie
+        session_user = asyncio.run(auth_router.session(get_user_for_test_session(session_cookie)))["user"]
+        assert session_user["email"] == "admin@example.com"
+
+        normal = asyncio.run(
+            auth_router.create_user(
+                {
+                    "email": "user1@example.com",
+                    "display_name": "User One",
+                    "password": "UserPass123!",
+                    "role": "normal",
+                },
+                admin,
+            )
+        )["user"]
+        assert normal["role"] == "normal"
+        assert normal["status"] == "active"
+        assert authenticate_user("user1@example.com", "UserPass123!")["role"] == "normal"
+
+        disabled = asyncio.run(auth_router.update_user(int(normal["id"]), {"status": "disabled"}, admin))["user"]
+        assert disabled["status"] == "disabled"
+        assert authenticate_user("user1@example.com", "UserPass123!") is None
+        assert any(user["email"] == "user1@example.com" for user in list_users())
+        assert get_user_by_email("user1@example.com")["status"] == "disabled"
+
+        logout_response = _FakeResponse()
+        logout_result = asyncio.run(auth_router.logout(logout_response, admin, session_cookie))
+        assert logout_result["ok"] is True
+        assert SESSION_COOKIE_NAME in logout_response.deleted_cookies
+    finally:
+        _restore_table("user_sessions", snapshots["user_sessions"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
+        _restore_table("users", snapshots["users"])
+
+
+def test_phase_1_http_routes_enforce_sessions_roles_and_owner_scope():
+    from api import main as api_main
+
+    init_db()
+    snapshots = {
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "raw_contents": _snapshot_table("raw_contents"),
+        "ai_evaluations": _snapshot_table("ai_evaluations"),
+        "audit_logs": _snapshot_table("audit_logs"),
+        "user_sessions": _snapshot_table("user_sessions"),
+        "users": _snapshot_table("users"),
+    }
+    jobs_snapshot = _snapshot_monitor_jobs()
+    try:
+        with get_conn() as conn:
+            for table in ["ai_evaluations", "raw_contents", "reports", "crawl_runs", "user_sessions", "audit_logs", "users"]:
+                conn.execute(f"DELETE FROM {table}")
+        _clear_monitor_jobs()
+
+        admin = bootstrap_admin_from_env("admin@example.com", "AdminPass123!", "Admin")
+        user1 = save_user(
+            {
+                "email": "user1@example.com",
+                "display_name": "User One",
+                "password": "UserPass123!",
+                "role": "normal",
+            },
+            actor_id=int(admin["id"]),
+        )
+        user2 = save_user(
+            {
+                "email": "user2@example.com",
+                "display_name": "User Two",
+                "password": "UserPass456!",
+                "role": "normal",
+            },
+            actor_id=int(admin["id"]),
+        )
+        job1 = save_job(
+            {
+                "law_firm_name": "海安律所",
+                "keywords": ["海安律所避雷"],
+                "platforms": ["dy"],
+                "recipients": [],
+            },
+            actor=user1,
+        )
+        job2 = save_job(
+            {
+                "law_firm_name": "恒泰律所",
+                "keywords": ["恒泰律所投诉"],
+                "platforms": ["dy"],
+                "recipients": [],
+            },
+            actor=user2,
+        )
+        run1 = create_run(job1["id"], {"job_id": job1["id"], "law_firm_name": job1["law_firm_name"], "platforms": ["dy"]})
+        run2 = create_run(job2["id"], {"job_id": job2["id"], "law_firm_name": job2["law_firm_name"], "platforms": ["dy"]})
+        finish_run(run1, "success", {"job_id": job1["id"], "law_firm_name": job1["law_firm_name"], "platforms": ["dy"]})
+        finish_run(run2, "success", {"job_id": job2["id"], "law_firm_name": job2["law_firm_name"], "platforms": ["dy"]})
+        report1 = create_report(run1, job1, {"job_id": job1["id"], "law_firm_name": job1["law_firm_name"], "platforms": ["dy"]})
+        report2 = create_report(run2, job2, {"job_id": job2["id"], "law_firm_name": job2["law_firm_name"], "platforms": ["dy"]})
+
+        transport = httpx.ASGITransport(app=api_main.app)
+
+        async def exercise() -> None:
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as anonymous:
+                assert (await anonymous.get("/api/monitor/jobs")).status_code == 401
+
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as normal_client:
+                login = await normal_client.post(
+                    "/api/auth/login",
+                    json={"email": "user1@example.com", "password": "UserPass123!"},
+                )
+                assert login.status_code == 200
+                session = await normal_client.get("/api/auth/session")
+                assert session.status_code == 200
+                permissions = session.json()["user"]["menu_permissions"]
+                assert permissions["overview"] is True
+                assert permissions["platform_accounts"] is False
+                assert (await normal_client.get("/api/monitor/social-accounts")).status_code == 403
+
+                jobs_response = await normal_client.get("/api/monitor/jobs")
+                assert jobs_response.status_code == 200
+                job_ids = {item["id"] for item in jobs_response.json()["jobs"]}
+                assert job_ids == {job1["id"]}
+                assert (await normal_client.get(f"/api/monitor/jobs/{job2['id']}/preflight")).status_code == 404
+
+                runs_response = await normal_client.get("/api/monitor/runs")
+                assert {item["id"] for item in runs_response.json()["runs"]} == {run1}
+                reports_response = await normal_client.get("/api/monitor/reports")
+                assert {item["id"] for item in reports_response.json()["reports"]} == {report1["id"]}
+                assert (await normal_client.get(f"/api/monitor/reports/{report2['id']}")).status_code == 404
+
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as admin_client:
+                login = await admin_client.post(
+                    "/api/auth/login",
+                    json={"email": "admin@example.com", "password": "AdminPass123!"},
+                )
+                assert login.status_code == 200
+                assert (await admin_client.get("/api/monitor/social-accounts")).status_code == 200
+                jobs_response = await admin_client.get("/api/monitor/jobs")
+                assert {item["id"] for item in jobs_response.json()["jobs"]} == {job1["id"], job2["id"]}
+                reports_response = await admin_client.get("/api/monitor/reports")
+                assert {item["id"] for item in reports_response.json()["reports"]} == {report1["id"], report2["id"]}
+
+        asyncio.run(exercise())
+    finally:
+        with get_conn() as conn:
+            user_ids = [
+                row["id"]
+                for row in conn.execute(
+                    "SELECT id FROM users WHERE email IN ('admin@example.com','user1@example.com','user2@example.com')"
+                ).fetchall()
+            ]
+            if user_ids:
+                placeholders = ",".join("?" for _ in user_ids)
+                run_ids = [
+                    row["id"]
+                    for row in conn.execute(
+                        f"SELECT id FROM crawl_runs WHERE created_by IN ({placeholders})",
+                        user_ids,
+                    ).fetchall()
+                ]
+                if run_ids:
+                    run_placeholders = ",".join("?" for _ in run_ids)
+                    conn.execute(f"DELETE FROM ai_evaluations WHERE run_id IN ({run_placeholders})", run_ids)
+                    conn.execute(f"DELETE FROM raw_contents WHERE run_id IN ({run_placeholders})", run_ids)
+                    conn.execute(f"DELETE FROM reports WHERE run_id IN ({run_placeholders})", run_ids)
+                    conn.execute(f"DELETE FROM crawl_runs WHERE id IN ({run_placeholders})", run_ids)
+                conn.execute(f"DELETE FROM user_sessions WHERE user_id IN ({placeholders})", user_ids)
+                conn.execute(f"DELETE FROM audit_logs WHERE user_id IN ({placeholders})", user_ids)
+                conn.execute(f"DELETE FROM users WHERE id IN ({placeholders})", user_ids)
+        _restore_table("users", snapshots["users"])
+        _restore_monitor_jobs(jobs_snapshot)
+        _restore_table("crawl_runs", snapshots["crawl_runs"])
+        _restore_table("reports", snapshots["reports"])
+        _restore_table("raw_contents", snapshots["raw_contents"])
+        _restore_table("ai_evaluations", snapshots["ai_evaluations"])
+        _restore_table("user_sessions", snapshots["user_sessions"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
 
 
 def test_custom_window_and_millisecond_timestamps():
@@ -7214,6 +7428,14 @@ def _table_columns(conn, table: str) -> set[str]:
     return {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
 
 
+def get_user_for_test_session(token: str) -> dict:
+    from api.monitoring.database import get_user_for_session_token
+
+    user = get_user_for_session_token(token)
+    assert user
+    return user
+
+
 def _restore_table(table: str, snapshot: list[dict]) -> None:
     with get_conn() as conn:
         conn.execute(f"DELETE FROM {table}")
@@ -7276,3 +7498,24 @@ def _clear_monitor_jobs() -> None:
     with get_conn() as conn:
         for table in ["job_recipients", "job_platforms", "job_keywords", "monitor_jobs"]:
             conn.execute(f"DELETE FROM {table}")
+
+
+class _FakeClient:
+    host = "127.0.0.1"
+
+
+class _FakeRequest:
+    headers = {"user-agent": "pytest"}
+    client = _FakeClient()
+
+
+class _FakeResponse:
+    def __init__(self) -> None:
+        self.cookies: dict[str, dict[str, object]] = {}
+        self.deleted_cookies: set[str] = set()
+
+    def set_cookie(self, key: str, value: str, **kwargs) -> None:
+        self.cookies[key] = {"value": value, **kwargs}
+
+    def delete_cookie(self, key: str, **kwargs) -> None:
+        self.deleted_cookies.add(key)
