@@ -136,7 +136,7 @@ def _platform_profile_check(job: dict[str, Any]) -> dict[str, Any]:
 
 
 def _bound_account_profile_check(account_id: int, selected: set[str]) -> dict[str, Any]:
-    account = get_social_account(account_id)
+    account = get_social_account(account_id, masked=False)
     if not account:
         return _check("platform_profiles", "平台登录态", "blocking", "任务绑定的账号已不存在，请重新选择账号")
     platform = str(account.get("platform") or "")
@@ -195,8 +195,8 @@ def _proxy_binding_check(job: dict[str, Any]) -> dict[str, Any]:
 def _candidate_accounts_for_job(job: dict[str, Any]) -> list[dict[str, Any]]:
     account_id = _safe_int(job.get("account_id"))
     if not account_id:
-        return list_social_accounts()
-    account = get_social_account(account_id)
+        return list_social_accounts(masked=False)
+    account = get_social_account(account_id, masked=False)
     return [account] if account else []
 
 

@@ -11,6 +11,46 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
   `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-14 - Phase 5 Account Environment Verified
+
+Environment: local worktree `E:\myproject\MediaCrawler-worktrees\v1-roadmap`
+using `uv run`, the monitoring SQLite database, and Node script parsing for the
+single-file frontend.
+
+Result:
+
+- Added a `profile_key` runtime path resolver for
+  `{workspace_id}/{platform}/acc_{account_id}` account profiles.
+- Changed new account environments so arbitrary submitted profile paths are not
+  the account identity; account names remain display-only.
+- Kept real profile paths internal to crawler/login/check code paths while
+  customer-facing account, run, and login-session responses use profile-key or
+  configured-state wording instead of raw server paths.
+- Added account/profile lock acquisition and release through
+  `social_accounts.locked_by_run_id`, `locked_at`, and `lock_expires_at`.
+- Added proxy concurrency control through `resource_locks` with
+  `proxy_profiles.max_concurrency`.
+- Added startup and scheduler recovery for timed-out running runs and persisted
+  locks, releasing locks only after the owning run is terminal or recovered.
+- Ensured account-bound proxy information is passed into both login command
+  preparation and crawler execution.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 211 passed, 3 warnings.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- Node syntax check for the `api/monitor_web/index.html` script block
+- Result: monitor web script parses.
+
+Limitations:
+
+- Phase 5 does not implement the full Phase 6 structured server-login state
+  machine or production-mode local-login hiding.
+- Phase 5 does not complete server-like acceptance validation; profile reuse
+  across service/container restart remains Phase 8 acceptance work.
+
 ## 2026-06-14 - Phase 4 Normal User Task Wizard Verified
 
 Environment: local worktree `E:\myproject\MediaCrawler-worktrees\v1-roadmap`

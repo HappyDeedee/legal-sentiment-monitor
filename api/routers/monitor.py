@@ -34,6 +34,7 @@ from ..monitoring.database import (
     get_job,
     get_login_session,
     get_platform_login_config,
+    get_proxy_profile,
     get_report,
     get_run,
     get_social_account,
@@ -167,7 +168,7 @@ async def platform_status():
 async def platform_login_browser(platform: str, payload: dict[str, Any] | None = None, admin: dict[str, Any] = AdminUser):
     try:
         command = _login_browser_command_for_payload(platform, payload or {})
-        return open_login_browser_with_command(command)
+        return _customer_view_login_session(open_login_browser_with_command(command))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
@@ -750,7 +751,7 @@ async def login_sessions(
     admin: dict[str, Any] = AdminUser,
 ):
     init_db()
-    return {"sessions": list_login_sessions(limit, account_id=account_id)}
+    return {"sessions": [_customer_view_login_session(item) for item in list_login_sessions(limit, account_id=account_id)]}
 
 
 @router.post("/login-sessions")
@@ -764,7 +765,6 @@ async def create_platform_login_session(payload: dict[str, Any], admin: dict[str
                     "name": payload.get("name") or "未命名账号",
                     "platform": platform,
                     "proxy_id": payload.get("proxy_id"),
-                    "profile_path": payload.get("profile_path") or "",
                     "notes": payload.get("notes") or "",
                 }
             )
@@ -775,6 +775,7 @@ async def create_platform_login_session(payload: dict[str, Any], admin: dict[str
             int(account["id"]) if account else None,
             str(platform),
             str(command.get("profile_path") or ""),
+            str(command.get("profile_key") or ""),
         )
         for expired_session_id in expired_session_ids:
             await close_qrcode_login_session(expired_session_id)
@@ -783,6 +784,7 @@ async def create_platform_login_session(payload: dict[str, Any], admin: dict[str
                 "platform": platform,
                 "account_id": payload.get("account_id"),
                 "login_url": command["login_url"],
+                "profile_key": command.get("profile_key") or "",
                 "profile_path": command["profile_path"],
                 "message": "正在生成登录二维码。",
             }
@@ -823,7 +825,7 @@ async def create_platform_login_session(payload: dict[str, Any], admin: dict[str
                 str(session.get("message") or ""),
             )
         return {
-            "session": session,
+            "session": _customer_view_login_session(session),
             "account_status": account_status,
             "capabilities": {
                 **_login_capability_response(str(platform), qr_result),
@@ -889,8 +891,8 @@ async def login_session(session_id: int, admin: dict[str, Any] = AdminUser):
     platform_status = statuses.get(platform) or {}
     status = session.get("status") or "waiting_manual_browser"
     return {
-        "session": {**session, "status": status},
-        "platform_status": platform_status,
+        "session": _customer_view_login_session({**session, "status": status}),
+        "platform_status": _customer_view_platform_status(platform_status) if platform_status else {},
         "account_status": account_status,
         "capabilities": {
             **_login_capability_response(str(platform), qr_poll),
@@ -1181,13 +1183,29 @@ def _login_browser_command_for_payload(platform: str, payload: dict[str, Any]) -
     account_id = payload.get("account_id")
     if not account_id:
         return command
-    account = get_social_account(int(account_id))
+    account = get_social_account(int(account_id), masked=False)
     if not account:
         raise ValueError("account not found")
     if account.get("platform") != platform:
         raise ValueError("account platform does not match login platform")
     if account.get("profile_path"):
-        command = {**command, "profile_path": str(account["profile_path"])}
+        command = {
+            **command,
+            "account_id": account.get("id"),
+            "account_name": account.get("name") or "",
+            "profile_key": account.get("profile_key") or "",
+            "profile_path": str(account["profile_path"]),
+        }
+    if account.get("proxy_id"):
+        proxy = get_proxy_profile(int(account["proxy_id"]), masked=False)
+        if proxy and proxy.get("status") == "active" and proxy.get("proxy_url"):
+            command = {
+                **command,
+                "proxy_id": proxy.get("id"),
+                "proxy_name": proxy.get("name") or "",
+                "provider": proxy.get("provider") or "",
+                "proxy_url": proxy.get("proxy_url") or "",
+            }
     return command
 
 
@@ -1200,6 +1218,10 @@ def _platform_status_matches_login_session(session: dict[str, Any], platform_sta
         return str(session_account_id) == str(status_account_id or "")
     if status_account_id:
         return False
+    session_profile_key = str(session.get("profile_key") or "").strip()
+    status_profile_key = str(platform_status.get("profile_key") or "").strip()
+    if session_profile_key or status_profile_key:
+        return bool(session_profile_key and status_profile_key and session_profile_key == status_profile_key)
     session_profile = str(session.get("profile_path") or "").strip()
     status_profile = str(platform_status.get("profile_path") or "").strip()
     return bool(session_profile and status_profile and session_profile == status_profile)
@@ -1350,6 +1372,15 @@ def _customer_view_platform_status(item: dict[str, Any]) -> dict[str, Any]:
     view["login_material_error"] = customer_safe_text(item.get("login_material_error"))
     view["active_proxy_error"] = customer_safe_text(item.get("active_proxy_error"))
     view["login_capability_source"] = "平台采集服务"
+    return view
+
+
+def _customer_view_login_session(item: dict[str, Any]) -> dict[str, Any]:
+    view = _customer_safe_value(dict(item))
+    profile_key = str(item.get("profile_key") or "")
+    profile_path = str(item.get("profile_path") or "")
+    view["profile_path"] = "网页登录态已配置" if profile_key or profile_path else ""
+    view["profile_path_configured"] = bool(profile_key or profile_path)
     return view
 
 

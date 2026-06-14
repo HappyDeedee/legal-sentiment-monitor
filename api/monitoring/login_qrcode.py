@@ -93,14 +93,17 @@ async def start_qrcode_login_session_with_profile(
         playwright = await async_playwright().start()
         profile_path = Path(command["profile_path"])
         profile_path.mkdir(parents=True, exist_ok=True)
-        context = await playwright.chromium.launch_persistent_context(
-            user_data_dir=str(profile_path),
-            executable_path=command["browser_path"],
-            accept_downloads=True,
-            headless=headless,
-            viewport={"width": 1920, "height": 1080},
-            user_agent=utils.get_user_agent(),
-        )
+        launch_options: dict[str, Any] = {
+            "user_data_dir": str(profile_path),
+            "executable_path": command["browser_path"],
+            "accept_downloads": True,
+            "headless": headless,
+            "viewport": {"width": 1920, "height": 1080},
+            "user_agent": utils.get_user_agent(),
+        }
+        if command.get("proxy_url"):
+            launch_options["proxy"] = {"server": str(command.get("proxy_url") or "")}
+        context = await playwright.chromium.launch_persistent_context(**launch_options)
         page = context.pages[0] if context.pages else await context.new_page()
         page.set_default_timeout(timeout)
         await page.goto(QR_SELECTORS[platform]["url"], wait_until="domcontentloaded", timeout=timeout)

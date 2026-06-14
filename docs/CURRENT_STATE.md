@@ -8,13 +8,15 @@ Phase 0 documentation is complete. Phase 0.5 - Schema Foundation is complete
 and verified. Phase 1 - Users And Permissions is complete and verified. Phase
 2 - System Settings Center is complete and verified. Phase 3 - Administrator
 Resource Center is complete and verified. Phase 4 - Normal User Task Wizard is
-complete and verified. The active SQLite schema now provides the foundation
-tables and columns required before later implementation work, and the web/API
-layer now has session login, administrator/normal-user roles, menu visibility,
+complete and verified. Phase 5 - Account Environment is complete and verified.
+The active SQLite schema now provides the foundation tables and columns
+required before later implementation work, and the web/API layer now has
+session login, administrator/normal-user roles, menu visibility,
 owner-scoped business data access, administrator-managed runtime strategy
 settings, administrator resource pages with consistent summary, toolbar, modal,
-and test interactions, and a normal-user task wizard with administrator-only
-advanced options.
+and test interactions, a normal-user task wizard with administrator-only
+advanced options, and profile-key based account environments with persisted
+account/profile/proxy locks and stale-run recovery.
 
 ## Implementation Status
 
@@ -24,12 +26,13 @@ advanced options.
 - Phase 2 - System Settings: complete and verified.
 - Phase 3 - Administrator Resource Center: complete and verified.
 - Phase 4 - Normal User Task Wizard: complete and verified.
-- Phase 5 - Account Environment: next unblocked implementation phase.
+- Phase 5 - Account Environment: complete and verified.
+- Phase 6 - Server Login Flow: next unblocked implementation phase.
 - Phase 5/6 - Account Environment and Server Login: profile key, timeout, and
-  lock-storage decisions are accepted; runtime implementation can now begin
-  with Phase 5 account environment work before Phase 6 login-flow changes.
+  lock-storage decisions are accepted; Phase 5 account environment runtime is
+  complete, and Phase 6 login-flow changes can now begin.
 
-Phase 5 can begin next. Phase 6-9 implementation must still proceed in order
+Phase 6 can begin next. Phase 7-9 implementation must still proceed in order
 and must not bypass unfinished earlier phases.
 
 ## Completed
@@ -101,70 +104,62 @@ and must not bypass unfinished earlier phases.
   boundaries; account/proxy/AI/template/browser fields are hidden from normal
   users; the API also clears those advanced fields for normal-user create/edit
   requests; administrators still keep advanced task binding controls.
+- Phase 5 account environment runtime has been implemented:
+  account profile runtime paths are derived from stable `profile_key` values,
+  new account environments ignore arbitrary customer-provided profile paths,
+  account names are display labels only, account/profile summaries no longer
+  expose real server paths, account/profile locks use inline
+  `social_accounts` fields, proxy concurrency uses `resource_locks`, run
+  cleanup releases locks, and startup/scheduler recovery reconciles timed-out
+  running runs before releasing persisted locks.
 
 ## In Progress
 
-- Phase 5 - Account Environment is ready to start.
+- Phase 6 - Server Login Flow is ready to start.
 
 ## Known Risks
 
-- Current code still exposes or handles real profile paths in places.
-- Current code still uses `profile_path` as a primary account/profile identity
-  in places; Phase 5 will migrate new account environments to `profile_key`.
-- Current database schema has `profile_key`, but current runtime code still
-  uses `profile_path` in places; Phase 5 changes runtime behavior to use
-  `profile_key` consistently.
-- Phase 4 normal-user wizard is implemented, but Phase 5 still needs runtime
-  account/profile/proxy environment behavior.
+- Phase 5 still stores `profile_path` as a transition-only internal runtime
+  field for existing login/crawler code paths, but new identity and path
+  resolution are `profile_key` based and customer-facing responses mask real
+  paths.
 - Current system is closer to a single-team MVP than a production multi-user
   system.
 - Server-side QR login and profile persistence need container/server validation.
-- Account/profile/proxy runtime use still needs Phase 5 lock and profile-key
-  implementation.
 - The newly added product documents are initial versions and should be refined
   during implementation.
 - Profile migration strategy has been clarified: existing low-volume
   `profile_path` accounts do not need long-term compatibility and can be reset
   or re-logged in under the new `profile_key` model.
-- Phase 5/6 account/profile/proxy behavior has accepted decisions, but runtime
-  code still needs persisted account/profile lock acquisition, proxy lock
-  usage, and startup/scheduler recovery.
+- Phase 6 still needs the primary server-side QR login state machine and
+  browser-session UX; Phase 5 only aligned account profile path resolution,
+  proxy reuse, locking, and recovery primitives.
 - Phase 2 retention settings are configurable and stored, but automated
   retention cleanup jobs remain for later operations work.
 
 ## Next Step
 
-Implement Phase 5 in small increments:
+Implement Phase 6 in small increments:
 
-1. add the `profile_key` runtime path resolver;
-2. stop exposing real profile paths in customer-facing UI/API paths touched by
-   Phase 5;
-3. ensure each platform account resolves to one server profile keyed by
-   `{workspace_id}/{platform}/acc_{account_id}`;
-4. add account/profile lock acquisition and release around runs;
-5. add proxy concurrency control through `resource_locks`;
-6. add startup and scheduler recovery for stale running runs and expired locks;
-7. ensure login and crawling use the same account proxy when configured;
-8. for every new requirement, add or update `CHANGE_REQUESTS.md`,
+1. make server-side QR login the primary administrator flow;
+2. return structured login states to the frontend;
+3. support waiting QR, waiting scan, waiting confirmation, success,
+   verification required, QR failure, timeout, and platform error states;
+4. persist the profile after successful login using the Phase 5
+   `profile_key` runtime path;
+5. verify profile reuse after browser close;
+6. hide local-window login from production mode;
+7. for every new requirement, add or update `CHANGE_REQUESTS.md`,
    `TASKS.md`, `TRACEABILITY.md`, and `TEST_RESULTS.md`;
-9. ask for user confirmation before accepting ambiguous assumptions in
-   permissions, deployment, account environment, security, or data model;
-10. Accepted Phase 5/6 decisions:
-   - `profile_key` format is `{workspace_id}/{platform}/acc_{account_id}`;
-   - task timeout is a run-level wall-clock deadline controlled by
-     administrator Runtime Strategy;
-   - lock expiry is the run deadline plus cleanup buffer;
-   - account/profile locks use inline `social_accounts` fields;
-   - proxy concurrency uses `resource_locks`.
-11. Before Phase 5/6 coding, re-verify that run timeout fields, profile keys,
-    lock fields, and `resource_locks` exist in the active database.
+8. ask for user confirmation before accepting ambiguous assumptions in
+   permissions, deployment, account environment, security, or data model.
 
 ## Latest Verification
 
-Phase 4 local verification passed on 2026-06-14:
+Phase 5 local verification passed on 2026-06-14:
 
 - `uv run python -m pytest tests/test_monitoring_mvp.py`
-- Result: 207 passed, 3 warnings.
+- Result: 211 passed, 3 warnings.
 - `uv run python scripts/check_docs.py`
 - Result: PASS docs consistency.
 - Node syntax check for `api/monitor_web/index.html` script block

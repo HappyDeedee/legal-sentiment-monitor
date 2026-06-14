@@ -30,7 +30,7 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse
 
-from .monitoring.database import bootstrap_admin_from_env, init_db
+from .monitoring.database import bootstrap_admin_from_env, init_db, recover_stale_runs_and_locks
 from .monitoring.scheduler import start_scheduler
 from .routers import auth_router, crawler_router, data_router, monitor_router, websocket_router
 
@@ -74,6 +74,7 @@ async def startup_monitoring():
         os.environ.get("MONITOR_ADMIN_PASSWORD"),
         os.environ.get("MONITOR_ADMIN_DISPLAY_NAME"),
     )
+    recover_stale_runs_and_locks("startup_recovery")
     await start_scheduler()
 
 

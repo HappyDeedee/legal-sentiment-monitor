@@ -737,7 +737,7 @@
                 <div id="social_account_error_summary" class="account-error-summary">最近暂无异常。</div>
                 <details class="advanced">
                   <summary>高级设置</summary>
-                  <label>网页登录态</label><input id="social_account_profile_path" placeholder="留空由系统生成">
+                  <div class="small">网页登录态由系统按账号自动创建和复用，不需要手动填写路径。</div>
                   <label>异常记录</label><textarea id="social_account_last_error" placeholder="最近一次登录或采集异常，可留空"></textarea>
                 </details>
                 </details>
@@ -1848,7 +1848,6 @@
         platform,
         name:val('social_account_name'),
         proxy_id:val('social_account_proxy_id'),
-        profile_path:val('social_account_profile_path'),
         notes:val('social_account_notes')
       };
       const res=await api('/login-sessions',{method:'POST',body:JSON.stringify(payload)});
@@ -1856,7 +1855,6 @@
       const data=await res.json();
       if(data.account_status && data.account_status.id){
         set('social_account_id', data.account_status.id);
-        set('social_account_profile_path', data.account_status.profile_path || '');
         socialAccountCache.set(Number(data.account_status.id), data.account_status);
       }
       renderLoginSessionResult(data.session, data.capabilities);
@@ -2030,7 +2028,6 @@
         name:val('social_account_name'),
         login_type:val('social_account_login_type') || 'qrcode',
         proxy_id:val('social_account_proxy_id'),
-        profile_path:val('social_account_profile_path') || (socialAccountCache.get(Number(accountId))||{}).profile_path || '',
         notes:val('social_account_notes'),
         status:'active'
       };
@@ -2201,7 +2198,7 @@
       if((account.login_type||'qrcode')==='cookie'){
         return account.has_cookies ? '<span class="status ok">Cookie 已配置</span>' : '<span class="status warn">Cookie 待填写</span>';
       }
-      return account.profile_path ? '<span class="status ok">网页登录态</span>' : '<span class="status warn">未登录</span>';
+      return accountProfileConfigured(account) ? '<span class="status ok">网页登录态</span>' : '<span class="status warn">未登录</span>';
     }
     function accountIdentityCell(account){
       const name=account.platform_account_name || '';
@@ -2241,7 +2238,7 @@
     function accountAvailability(account){
       const error=String(account.last_error||'');
       const lower=error.toLowerCase();
-      const hasLoginSource=(account.login_type||'qrcode')==='cookie' ? !!account.has_cookies : !!account.profile_path;
+      const hasLoginSource=(account.login_type||'qrcode')==='cookie' ? !!account.has_cookies : accountProfileConfigured(account);
       if(account.status==='disabled') return {key:'disabled', label:'停用', cls:'bad', hint:'不会被采集任务使用'};
       if(error.includes('滑块') || error.includes('验证码') || error.includes('短信') || lower.includes('captcha') || lower.includes('verify')) return {key:'verification', label:'需要人工验证', cls:'warn', hint:'进入重新登录处理平台验证'};
       if(!hasLoginSource) return {key:'relogin', label:'需重新登录', cls:'warn', hint:'缺少可复用登录态'};
@@ -2299,7 +2296,6 @@
         login_type:loginType,
         status:val('social_account_status'),
         proxy_id:val('social_account_proxy_id'),
-        profile_path:val('social_account_profile_path'),
         notes:val('social_account_notes'),
         last_error:val('social_account_last_error'),
         ...overrides
@@ -2321,7 +2317,7 @@
       const loginType=a.login_type||'qrcode';
       if([...loginSelect.options].some(option=>option.value===loginType)) set('social_account_login_type', loginType);
       set('social_account_status', a.status||'standby');
-      set('social_account_proxy_id', a.proxy_id||''); set('social_account_profile_path', a.profile_path||''); set('social_account_notes', a.notes||''); set('social_account_last_error', a.last_error||'');
+      set('social_account_proxy_id', a.proxy_id||''); set('social_account_notes', a.notes||''); set('social_account_last_error', a.last_error||'');
       renderLoginModePanel();
       updateAccountDetailHeader(a);
       updateAccountModalActions(a);
@@ -2453,10 +2449,12 @@
         login_type:account.login_type || 'qrcode',
         status,
         proxy_id:account.proxy_id || null,
-        profile_path:account.profile_path || '',
         notes:account.notes || '',
         last_error:account.last_error || ''
       };
+    }
+    function accountProfileConfigured(account){
+      return !!(account && (account.profile_path_configured || account.profile_configured || account.profile_path));
     }
     async function openCurrentAccountLoginBrowser(){
       let account=socialAccountCache.get(Number(val('social_account_id')||0));
@@ -2674,7 +2672,7 @@
     }
     function resetSocialAccountForm(){
       stopLoginSessionPolling({closeRemote:true});
-      ['social_account_id','social_account_name','social_account_proxy_id','social_account_profile_path','social_account_notes','social_account_last_error'].forEach(id=>set(id,''));
+      ['social_account_id','social_account_name','social_account_proxy_id','social_account_notes','social_account_last_error'].forEach(id=>set(id,''));
       set('social_account_cookie_input','');
       const clearCookie=document.getElementById('social_account_clear_cookie');
       if(clearCookie) clearCookie.checked=false;

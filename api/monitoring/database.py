@@ -7,6 +7,12 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from .account_environment import (
+    ACCOUNT_PROFILE_ROOT,
+    account_profile_environment,
+    default_account_profile_key,
+    resolve_account_profile_path,
+)
 from .auth import generate_session_token, hash_password, hash_session_token, verify_password
 from .mediacrawler_login import LOGIN_TYPE_LABELS, PLATFORM_LOGIN_TYPES, SUPPORTED_MONITOR_PLATFORMS, get_mediacrawler_login_capability
 from .prompts import DEFAULT_PROMPT
@@ -31,8 +37,6 @@ JOB_BROWSER_MODES = {"server_qrcode", "profile", "local_window"}
 USER_ROLES = {"administrator", "normal"}
 USER_STATUSES = {"active", "disabled"}
 SESSION_TTL_SECONDS = 8 * 60 * 60
-
-ACCOUNT_PROFILE_ROOT = MONITOR_DATA_DIR / "account_profiles"
 
 
 def utc_now() -> str:
@@ -1962,6 +1966,20 @@ def create_run(job_id: int, summary: dict[str, Any] | None = None, timeout_secon
         return int(cur.lastrowid)
 
 
+def set_run_resource_bindings(run_id: int, account_id: int | None = None, proxy_id: int | None = None) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            """
+            UPDATE crawl_runs
+            SET account_id=COALESCE(?, account_id),
+                proxy_id=COALESCE(?, proxy_id),
+                updated_by=updated_by
+            WHERE id=?
+            """,
+            (account_id, proxy_id, run_id),
+        )
+
+
 def update_run_summary(run_id: int, summary: dict[str, Any]) -> None:
     with get_conn() as conn:
         conn.execute(
@@ -2021,6 +2039,217 @@ def record_skipped_run(job_id: int, reason: str, summary: dict[str, Any] | None 
             ),
         )
         return int(cur.lastrowid)
+
+
+def acquire_account_lock(account_id: int | None, run_id: int, lock_expires_at: str | None = None) -> bool:
+    if not account_id:
+        return True
+    now = utc_now()
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT locked_by_run_id FROM social_accounts WHERE id=?",
+            (account_id,),
+        ).fetchone()
+        if not row:
+            return False
+        if row["locked_by_run_id"] and int(row["locked_by_run_id"]) != int(run_id):
+            return False
+        cur = conn.execute(
+            """
+            UPDATE social_accounts
+            SET locked_by_run_id=?, locked_at=?, lock_expires_at=?, updated_at=?
+            WHERE id=? AND (
+                locked_by_run_id IS NULL
+                OR locked_by_run_id=?
+            )
+            """,
+            (run_id, now, lock_expires_at or "", now, account_id, run_id),
+        )
+        return cur.rowcount == 1
+
+
+def release_account_lock(account_id: int | None, run_id: int | None = None) -> None:
+    if not account_id:
+        return
+    with get_conn() as conn:
+        if run_id:
+            conn.execute(
+                """
+                UPDATE social_accounts
+                SET locked_by_run_id=NULL, locked_at=NULL, lock_expires_at=NULL, updated_at=?
+                WHERE id=? AND locked_by_run_id=?
+                """,
+                (utc_now(), account_id, run_id),
+            )
+        else:
+            conn.execute(
+                """
+                UPDATE social_accounts
+                SET locked_by_run_id=NULL, locked_at=NULL, lock_expires_at=NULL, updated_at=?
+                WHERE id=?
+                """,
+                (utc_now(), account_id),
+            )
+
+
+def acquire_proxy_lock(proxy_id: int | None, run_id: int, expires_at: str | None = None, workspace_id: int | None = None) -> bool:
+    if not proxy_id:
+        return True
+    now = utc_now()
+    with get_conn() as conn:
+        proxy = conn.execute(
+            "SELECT workspace_id, max_concurrency, status FROM proxy_profiles WHERE id=?",
+            (proxy_id,),
+        ).fetchone()
+        if not proxy or proxy["status"] != "active":
+            return False
+        limit = max(1, _safe_int(proxy["max_concurrency"]) or 1)
+        existing = conn.execute(
+            """
+            SELECT id FROM resource_locks
+            WHERE resource_type='proxy' AND resource_id=? AND run_id=?
+            """,
+            (proxy_id, run_id),
+        ).fetchone()
+        if existing:
+            return True
+        active_count = conn.execute(
+            """
+            SELECT COUNT(*) AS n
+            FROM resource_locks l
+            JOIN crawl_runs r ON r.id = l.run_id
+            WHERE l.resource_type='proxy'
+              AND l.resource_id=?
+              AND r.status='running'
+            """,
+            (proxy_id,),
+        ).fetchone()["n"]
+        if int(active_count or 0) >= limit:
+            return False
+        try:
+            conn.execute(
+                """
+                INSERT INTO resource_locks (workspace_id, resource_type, resource_id, run_id, locked_at, expires_at)
+                VALUES (?, 'proxy', ?, ?, ?, ?)
+                """,
+                (_safe_int(workspace_id) or _safe_int(proxy["workspace_id"]) or DEFAULT_WORKSPACE_ID, proxy_id, run_id, now, expires_at or ""),
+            )
+        except sqlite3.IntegrityError:
+            return True
+        return True
+
+
+def release_proxy_locks(run_id: int, proxy_id: int | None = None) -> None:
+    with get_conn() as conn:
+        if proxy_id:
+            conn.execute(
+                "DELETE FROM resource_locks WHERE resource_type='proxy' AND resource_id=? AND run_id=?",
+                (proxy_id, run_id),
+            )
+        else:
+            conn.execute("DELETE FROM resource_locks WHERE run_id=?", (run_id,))
+
+
+def release_run_resource_locks(run_id: int) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            """
+            UPDATE social_accounts
+            SET locked_by_run_id=NULL, locked_at=NULL, lock_expires_at=NULL, updated_at=?
+            WHERE locked_by_run_id=?
+            """,
+            (utc_now(), run_id),
+        )
+        conn.execute("DELETE FROM resource_locks WHERE run_id=?", (run_id,))
+
+
+def recover_stale_runs_and_locks(reason: str = "scheduler_recovery") -> dict[str, int]:
+    now_dt = datetime.now(timezone.utc)
+    now = now_dt.isoformat()
+    recovered_runs = 0
+    released_account_locks = 0
+    released_proxy_locks = 0
+    with get_conn() as conn:
+        running_rows = conn.execute(
+            """
+            SELECT id, summary, deadline_at
+            FROM crawl_runs
+            WHERE status='running'
+            """
+        ).fetchall()
+        for row in running_rows:
+            deadline = _parse_iso_datetime(row["deadline_at"])
+            if deadline and deadline <= now_dt:
+                summary = _json_loads(row["summary"], {})
+                if not isinstance(summary, dict):
+                    summary = {}
+                summary["timeout"] = True
+                summary["timeout_reason"] = "任务达到系统运行时间上限，恢复流程已释放资源锁"
+                summary["recovered_by"] = reason
+                cur = conn.execute(
+                    """
+                    UPDATE crawl_runs
+                    SET status='timeout', finished_at=?, summary=?, error_message=?, timeout_reason=COALESCE(timeout_reason, ?)
+                    WHERE id=? AND status='running'
+                    """,
+                    (
+                        now,
+                        json.dumps(_redact_json(summary), ensure_ascii=False),
+                        _trim_error(summary["timeout_reason"]),
+                        _trim_error(reason),
+                        row["id"],
+                    ),
+                )
+                if cur.rowcount:
+                    recovered_runs += 1
+        terminal_statuses = ("success", "partial_failed", "failed", "timeout", "cancelled", "interrupted", "skipped")
+        placeholders = ",".join("?" for _ in terminal_statuses)
+        rows = conn.execute(
+            f"""
+            SELECT a.id
+            FROM social_accounts a
+            LEFT JOIN crawl_runs r ON r.id = a.locked_by_run_id
+            WHERE a.locked_by_run_id IS NOT NULL
+              AND (
+                r.id IS NULL
+                OR r.status IN ({placeholders})
+              )
+            """,
+            terminal_statuses,
+        ).fetchall()
+        account_ids = [int(row["id"]) for row in rows]
+        if account_ids:
+            conn.execute(
+                f"""
+                UPDATE social_accounts
+                SET locked_by_run_id=NULL, locked_at=NULL, lock_expires_at=NULL, updated_at=?
+                WHERE id IN ({",".join("?" for _ in account_ids)})
+                """,
+                [now, *account_ids],
+            )
+            released_account_locks = len(account_ids)
+        proxy_rows = conn.execute(
+            f"""
+            SELECT l.id
+            FROM resource_locks l
+            LEFT JOIN crawl_runs r ON r.id = l.run_id
+            WHERE r.id IS NULL
+               OR r.status IN ({placeholders})
+            """,
+            terminal_statuses,
+        ).fetchall()
+        proxy_lock_ids = [int(row["id"]) for row in proxy_rows]
+        if proxy_lock_ids:
+            conn.execute(
+                f"DELETE FROM resource_locks WHERE id IN ({','.join('?' for _ in proxy_lock_ids)})",
+                proxy_lock_ids,
+            )
+            released_proxy_locks = len(proxy_lock_ids)
+    return {
+        "recovered_runs": recovered_runs,
+        "released_account_locks": released_account_locks,
+        "released_proxy_locks": released_proxy_locks,
+    }
 
 
 def get_run(run_id: int, actor: dict[str, Any] | None = None) -> dict[str, Any] | None:
@@ -2731,9 +2960,6 @@ def save_social_account(payload: dict[str, Any], account_id: int | None = None) 
     status = _validate_pool_status(payload.get("status") or "standby")
     is_draft = 1 if payload.get("is_draft") else 0
     now = utc_now()
-    profile_path = (payload.get("profile_path") or "").strip()
-    if account_id and not profile_path:
-        profile_path = _default_account_profile_path(platform, name, account_id)
     profile_key = (payload.get("profile_key") or "").strip()
     if account_id and not profile_key:
         with get_conn() as conn:
@@ -2742,6 +2968,9 @@ def save_social_account(payload: dict[str, Any], account_id: int | None = None) 
             profile_key = str(row["profile_key"])
         else:
             profile_key = _default_account_profile_key(_safe_int(row["workspace_id"]) if row else DEFAULT_WORKSPACE_ID, platform, account_id)
+    profile_path = ""
+    if profile_key:
+        profile_path = str(resolve_account_profile_path(profile_key))
     proxy_id = _safe_int(payload.get("proxy_id")) or None
     if proxy_id and not get_proxy_profile(proxy_id, masked=True):
         raise ValueError("proxy not found")
@@ -2774,7 +3003,7 @@ def save_social_account(payload: dict[str, Any], account_id: int | None = None) 
         now,
     )
     with get_conn() as conn:
-        _ensure_unique_account_profile(conn, profile_path, account_id)
+        _ensure_unique_account_profile(conn, profile_key, account_id)
         if account_id:
             exists = conn.execute("SELECT id FROM social_accounts WHERE id=?", (account_id,)).fetchone()
             if not exists:
@@ -2803,16 +3032,10 @@ def save_social_account(payload: dict[str, Any], account_id: int | None = None) 
             target_id = int(cur.lastrowid)
             if not profile_key:
                 profile_key = _default_account_profile_key(DEFAULT_WORKSPACE_ID, platform, target_id)
+                profile_path = str(resolve_account_profile_path(profile_key))
                 conn.execute(
-                    "UPDATE social_accounts SET profile_key=?, updated_at=? WHERE id=?",
-                    (profile_key, now, target_id),
-                )
-            if not profile_path:
-                profile_path = _default_account_profile_path(platform, name, target_id)
-                _ensure_unique_account_profile(conn, profile_path, target_id)
-                conn.execute(
-                    "UPDATE social_accounts SET profile_path=?, updated_at=? WHERE id=?",
-                    (profile_path, now, target_id),
+                    "UPDATE social_accounts SET profile_key=?, profile_path=?, updated_at=? WHERE id=?",
+                    (profile_key, profile_path, now, target_id),
                 )
     return get_social_account(target_id) or {}
 
@@ -2846,7 +3069,7 @@ def confirm_social_account(account_id: int, payload: dict[str, Any] | None = Non
         "status": payload.get("status") or ("active" if account.get("status") == "active" else account.get("status") or "standby"),
         "proxy_id": payload.get("proxy_id") if "proxy_id" in payload else account.get("proxy_id"),
         "profile_key": account.get("profile_key") or "",
-        "profile_path": payload.get("profile_path") or account.get("profile_path") or "",
+        "profile_path": account.get("profile_path") or "",
         "notes": payload.get("notes") if "notes" in payload else account.get("notes") or "",
         "last_error": payload.get("last_error") if "last_error" in payload else account.get("last_error") or "",
         "is_draft": False,
@@ -2876,12 +3099,12 @@ def get_social_account(account_id: int, masked: bool = True) -> dict[str, Any] |
     return _row_to_pool_item(dict(row), masked=masked) if row else None
 
 
-def _ensure_unique_account_profile(conn: sqlite3.Connection, profile_path: str, account_id: int | None = None) -> None:
-    profile_path = str(profile_path or "").strip()
-    if not profile_path:
+def _ensure_unique_account_profile(conn: sqlite3.Connection, profile_key: str, account_id: int | None = None) -> None:
+    profile_key = str(profile_key or "").strip()
+    if not profile_key:
         return
-    params: list[Any] = [profile_path]
-    sql = "SELECT id FROM social_accounts WHERE lower(profile_path)=lower(?)"
+    params: list[Any] = [profile_key]
+    sql = "SELECT id FROM social_accounts WHERE lower(profile_key)=lower(?)"
     if account_id:
         sql += " AND id<>?"
         params.append(account_id)
@@ -2898,9 +3121,7 @@ def _default_account_profile_path(platform: str, account_name: str, account_id: 
 
 
 def _default_account_profile_key(workspace_id: int | None, platform: str, account_id: int | None) -> str:
-    workspace = workspace_id or DEFAULT_WORKSPACE_ID
-    account = account_id or 0
-    return f"{workspace}/{platform}/acc_{account}"
+    return default_account_profile_key(workspace_id or DEFAULT_WORKSPACE_ID, platform, account_id)
 
 
 def delete_social_account(account_id: int) -> None:
@@ -3055,11 +3276,14 @@ def create_login_session(payload: dict[str, Any]) -> dict[str, Any]:
     _validate_platform(platform)
     account_id = _safe_int(payload.get("account_id")) or None
     login_url = (payload.get("login_url") or "").strip()
-    profile_path = (payload.get("profile_path") or "").strip()
     profile_key = (payload.get("profile_key") or "").strip()
+    account = None
     if account_id and not profile_key:
         account = get_social_account(account_id, masked=False)
         profile_key = str((account or {}).get("profile_key") or "")
+    profile_path = ""
+    if profile_key:
+        profile_path = str(resolve_account_profile_path(profile_key))
     message = payload.get("message") or (
         "正在创建平台登录会话；如二维码或验证状态无法回传，可使用网页登录窗口人工处理。"
     )
@@ -3129,13 +3353,16 @@ def latest_successful_login_session_at(platform: str) -> str:
     return str(row["updated_at"] or "") if row else ""
 
 
-def expire_login_sessions_for_account(account_id: int | None, platform: str, profile_path: str = "") -> list[int]:
+def expire_login_sessions_for_account(account_id: int | None, platform: str, profile_path: str = "", profile_key: str = "") -> list[int]:
     _validate_platform(platform)
     clauses = ["platform=?", "status IN ('waiting_qrcode', 'waiting_verification', 'waiting_manual_browser', 'scanned')"]
     params: list[Any] = [platform]
     if account_id:
         clauses.append("account_id=?")
         params.append(account_id)
+    elif profile_key:
+        clauses.append("profile_key=?")
+        params.append(profile_key)
     elif profile_path:
         clauses.append("profile_path=?")
         params.append(profile_path)
@@ -3190,6 +3417,14 @@ def _row_to_pool_item(row: dict[str, Any], masked: bool = True) -> dict[str, Any
     row["cookies"] = mask_secret(encrypted) if masked else raw_cookies
     row["has_cookies"] = bool(raw_cookies)
     row["is_draft"] = bool(row.get("is_draft"))
+    try:
+        profile_env = account_profile_environment(row)
+    except ValueError:
+        profile_env = {"profile_key": row.get("profile_key") or "", "runtime_path": "", "profile_path": "", "profile_configured": False}
+    row["profile_key"] = profile_env.get("profile_key") or row.get("profile_key") or ""
+    row["profile_configured"] = bool(profile_env.get("profile_configured"))
+    row["profile_runtime_path"] = "" if masked else str(profile_env.get("runtime_path") or "")
+    row["profile_path"] = "" if masked else str(profile_env.get("profile_path") or "")
     platform = row.get("platform")
     if platform in SUPPORTED_MONITOR_PLATFORMS:
         capability = get_mediacrawler_login_capability(str(platform))

@@ -14,7 +14,8 @@ from fastapi import HTTPException
 from api.monitoring.ai import _build_endpoint, _parse_json, _validate_ai_output, build_evaluation_payload, test_ai as run_ai_config_test
 from api.monitoring.ai import DEFAULT_PROMPT
 from api.monitoring.auth import SESSION_COOKIE_NAME
-from api.monitoring.database import authenticate_user, bootstrap_admin_from_env, create_login_session, create_run, expire_login_sessions_for_account, finish_run, get_active_ai_key_profile, get_ai_config, get_conn, get_dashboard_summary, get_email_config, get_job, get_login_session, get_platform_login_config, get_report, get_run, get_runtime_setting_value, get_social_account, get_user_by_email, init_db, list_ai_key_profiles, list_ai_rule_profiles, list_email_templates, list_jobs, list_leads, list_login_sessions, list_platform_login_configs, list_proxy_profiles, list_reports, list_runtime_settings, list_runs, list_social_accounts, list_users, mark_selftest_jobs_internal, record_skipped_run, render_email_template_preview, save_ai_config, save_ai_key_profile, save_ai_rule_profile, save_email_config, save_email_template, save_job, save_platform_login_config, save_proxy_profile, save_runtime_settings, save_social_account, save_user, set_active_ai_key_profile, set_active_ai_rule_profile, update_social_account_check_state
+from api.monitoring.account_environment import resolve_account_profile_path
+from api.monitoring.database import acquire_account_lock, acquire_proxy_lock, authenticate_user, bootstrap_admin_from_env, create_login_session, create_run, expire_login_sessions_for_account, finish_run, get_active_ai_key_profile, get_ai_config, get_conn, get_dashboard_summary, get_email_config, get_job, get_login_session, get_platform_login_config, get_report, get_run, get_runtime_setting_value, get_social_account, get_user_by_email, init_db, list_ai_key_profiles, list_ai_rule_profiles, list_email_templates, list_jobs, list_leads, list_login_sessions, list_platform_login_configs, list_proxy_profiles, list_reports, list_runtime_settings, list_runs, list_social_accounts, list_users, mark_selftest_jobs_internal, record_skipped_run, recover_stale_runs_and_locks, release_account_lock, release_proxy_locks, release_run_resource_locks, render_email_template_preview, save_ai_config, save_ai_key_profile, save_ai_rule_profile, save_email_config, save_email_template, save_job, save_platform_login_config, save_proxy_profile, save_runtime_settings, save_social_account, save_user, set_active_ai_key_profile, set_active_ai_rule_profile, update_social_account_check_state
 from api.monitoring.mediacrawler_login import get_mediacrawler_login_capability
 from api.monitoring.login_browser import build_login_browser_command, open_login_browser, open_login_browser_with_command
 import api.monitoring.account_check as account_check_module
@@ -1179,9 +1180,6 @@ def test_platform_status_supports_custom_browser_data_dir(tmp_path, monkeypatch)
 def test_platform_status_uses_active_account_profile_when_present(tmp_path):
     init_db()
     snapshot = _snapshot_table("social_accounts")
-    account_profile = tmp_path / "account_profile"
-    account_profile.mkdir(parents=True)
-    (account_profile / "state").write_text("ok", encoding="utf-8")
     try:
         account = save_social_account(
             {
@@ -1189,16 +1187,19 @@ def test_platform_status_uses_active_account_profile_when_present(tmp_path):
                 "platform": "dy",
                 "login_type": "qrcode",
                 "status": "active",
-                "profile_path": str(account_profile),
             }
         )
+        expected_path = resolve_account_profile_path(f"1/dy/acc_{account['id']}")
+        expected_path.mkdir(parents=True, exist_ok=True)
+        (expected_path / "state").write_text("ok", encoding="utf-8")
 
-        statuses = list_platform_status(tmp_path, [])
+        statuses = list_platform_status(recent_runs=[])
     finally:
         _restore_table("social_accounts", snapshot)
     dy = next(item for item in statuses if item["platform"] == "dy")
 
-    assert dy["profile_path"] == str(account_profile)
+    assert dy["profile_key"] == f"1/dy/acc_{account['id']}"
+    assert dy["profile_path"] == str(expected_path)
     assert dy["profile_exists"] is True
     assert dy["using_account_profile"] is True
     assert dy["active_account_id"] == account["id"]
@@ -1288,7 +1289,8 @@ def test_login_browser_route_can_use_social_account_profile(tmp_path, monkeypatc
         result = asyncio.run(monitor_router.platform_login_browser("dy", {"account_id": account["id"]}))
 
         assert result["pid"] == 12345
-        assert seen["profile_path"] == str(tmp_path / "account_profile")
+        assert seen["profile_path"] == str(resolve_account_profile_path(f"1/dy/acc_{account['id']}"))
+        assert result["profile_path"] == "网页登录态已配置"
     finally:
         for table, snapshot in snapshots.items():
             _restore_table(table, snapshot)
@@ -1650,11 +1652,15 @@ def test_runner_injects_active_account_profile_for_cdp(tmp_path):
         _restore_table("social_accounts", snapshot)
 
     assert binding["account_id"] == account["id"]
-    assert binding["profile_path"] == str(tmp_path / "dy_account_profile")
-    assert env["MONITOR_CDP_USER_DATA_DIR"] == str(tmp_path / "dy_account_profile")
-    assert env["MONITOR_CDP_USER_DATA_DIR_DY"] == str(tmp_path / "dy_account_profile")
+    expected_profile_path = str(resolve_account_profile_path(f"1/dy/acc_{account['id']}"))
+    assert binding["profile_key"] == f"1/dy/acc_{account['id']}"
+    assert binding["profile_path"] == expected_profile_path
+    assert env["MONITOR_CDP_USER_DATA_DIR"] == expected_profile_path
+    assert env["MONITOR_CDP_USER_DATA_DIR_DY"] == expected_profile_path
     assert env["MONITOR_ACTIVE_ACCOUNT_ID"] == str(account["id"])
     assert summary["account_name"] == "抖音采集号"
+    assert summary["profile_key"] == f"1/dy/acc_{account['id']}"
+    assert "profile_path" not in summary
 
 
 def test_crawler_command_uses_platform_search_terms_only(tmp_path):
@@ -1742,9 +1748,159 @@ def test_runner_prefers_job_bound_account_and_proxy(tmp_path):
 
     assert fallback_account["id"] != bound_account["id"]
     assert binding["account_id"] == bound_account["id"]
-    assert binding["profile_path"] == str(tmp_path / "bound_profile")
+    assert binding["profile_key"] == f"1/dy/acc_{bound_account['id']}"
+    assert binding["profile_path"] == str(resolve_account_profile_path(binding["profile_key"]))
     assert binding["proxy_id"] == job_proxy["id"]
     assert env["HTTP_PROXY"] == "http://job:pass@127.0.0.1:8082"
+
+
+def test_phase_5_account_lock_blocks_concurrent_profile_use():
+    init_db()
+    snapshots = {
+        "social_accounts": _snapshot_table("social_accounts"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+    }
+    jobs_snapshot = _snapshot_monitor_jobs()
+    run1 = None
+    run2 = None
+    try:
+        _clear_monitor_jobs()
+        account = save_social_account({"name": "抖音锁定号", "platform": "dy", "login_type": "qrcode", "status": "active"})
+        job = save_job(
+            {
+                "law_firm_name": "锁定测试律所",
+                "keywords": ["锁定测试律所避雷"],
+                "platforms": ["dy"],
+                "recipients": [],
+            }
+        )
+        run1 = create_run(job["id"], timeout_seconds=120)
+        run2 = create_run(job["id"], timeout_seconds=120)
+        deadline = get_run(run1)["deadline_at"]
+
+        assert acquire_account_lock(account["id"], run1, deadline) is True
+        assert acquire_account_lock(account["id"], run2, deadline) is False
+
+        release_account_lock(account["id"], run1)
+
+        assert acquire_account_lock(account["id"], run2, deadline) is True
+    finally:
+        for run_id in [run1, run2]:
+            if run_id:
+                release_run_resource_locks(run_id)
+        _restore_monitor_jobs(jobs_snapshot)
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+
+def test_phase_5_proxy_resource_locks_respect_max_concurrency():
+    init_db()
+    snapshots = {
+        "proxy_profiles": _snapshot_table("proxy_profiles"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "resource_locks": _snapshot_table("resource_locks"),
+    }
+    jobs_snapshot = _snapshot_monitor_jobs()
+    run1 = None
+    run2 = None
+    try:
+        _clear_monitor_jobs()
+        proxy = save_proxy_profile(
+            {
+                "name": "单并发代理",
+                "provider": "manual",
+                "proxy_url": "http://user:pass@127.0.0.1:8081",
+                "status": "active",
+                "max_concurrency": 1,
+            }
+        )
+        job = save_job(
+            {
+                "law_firm_name": "代理并发测试律所",
+                "keywords": ["代理并发测试律所避雷"],
+                "platforms": ["dy"],
+                "recipients": [],
+            }
+        )
+        run1 = create_run(job["id"], timeout_seconds=120)
+        run2 = create_run(job["id"], timeout_seconds=120)
+        deadline = get_run(run1)["deadline_at"]
+
+        assert acquire_proxy_lock(proxy["id"], run1, deadline) is True
+        assert acquire_proxy_lock(proxy["id"], run2, deadline) is False
+
+        release_proxy_locks(run1)
+
+        assert acquire_proxy_lock(proxy["id"], run2, deadline) is True
+    finally:
+        for run_id in [run1, run2]:
+            if run_id:
+                release_run_resource_locks(run_id)
+        _restore_monitor_jobs(jobs_snapshot)
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+
+def test_phase_5_recovery_marks_expired_running_run_before_releasing_locks():
+    init_db()
+    snapshots = {
+        "proxy_profiles": _snapshot_table("proxy_profiles"),
+        "social_accounts": _snapshot_table("social_accounts"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "resource_locks": _snapshot_table("resource_locks"),
+    }
+    jobs_snapshot = _snapshot_monitor_jobs()
+    try:
+        _clear_monitor_jobs()
+        proxy = save_proxy_profile(
+            {
+                "name": "恢复代理",
+                "provider": "manual",
+                "proxy_url": "http://user:pass@127.0.0.1:8081",
+                "status": "active",
+                "max_concurrency": 1,
+            }
+        )
+        account = save_social_account(
+            {
+                "name": "恢复账号",
+                "platform": "dy",
+                "login_type": "qrcode",
+                "status": "active",
+                "proxy_id": proxy["id"],
+            }
+        )
+        job = save_job(
+            {
+                "law_firm_name": "恢复测试律所",
+                "keywords": ["恢复测试律所避雷"],
+                "platforms": ["dy"],
+                "recipients": [],
+                "account_id": account["id"],
+                "proxy_id": proxy["id"],
+            }
+        )
+        run_id = create_run(job["id"], timeout_seconds=120)
+        expired_at = (datetime.now(timezone.utc) - timedelta(seconds=30)).isoformat()
+        with get_conn() as conn:
+            conn.execute("UPDATE crawl_runs SET deadline_at=? WHERE id=?", (expired_at, run_id))
+        assert acquire_account_lock(account["id"], run_id, expired_at) is True
+        assert acquire_proxy_lock(proxy["id"], run_id, expired_at) is True
+
+        recovered = recover_stale_runs_and_locks("pytest_recovery")
+        run = get_run(run_id)
+        account_after = get_social_account(account["id"], masked=False)
+        with get_conn() as conn:
+            proxy_locks = conn.execute("SELECT COUNT(*) AS n FROM resource_locks WHERE run_id=?", (run_id,)).fetchone()["n"]
+
+        assert recovered["recovered_runs"] == 1
+        assert run["status"] == "timeout"
+        assert account_after["locked_by_run_id"] is None
+        assert proxy_locks == 0
+    finally:
+        _restore_monitor_jobs(jobs_snapshot)
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
 
 
 def test_ai_and_email_test_paths_reuse_config_validation():
@@ -4203,9 +4359,10 @@ def test_login_session_uses_social_account_profile(monkeypatch, tmp_path):
 
         created = asyncio.run(monitor_router.create_platform_login_session({"platform": "dy", "account_id": account["id"]}))
 
-        assert seen["profile_path"] == str(account_profile)
+        assert seen["profile_path"] == str(resolve_account_profile_path(f"1/dy/acc_{account['id']}"))
         assert created["session"]["account_id"] == account["id"]
-        assert created["session"]["profile_path"] == str(account_profile)
+        assert created["session"]["profile_key"] == f"1/dy/acc_{account['id']}"
+        assert created["session"]["profile_path"] == "网页登录态已配置"
         assert created["session"]["qr_image"].startswith("data:image")
     finally:
         for table, snapshot in snapshots.items():
@@ -4265,13 +4422,14 @@ def test_login_session_list_account_id_can_reopen_account_profile(monkeypatch, t
         assert listed["id"] == session["id"]
         assert listed["account_id"] == account["id"]
         assert result["pid"] == 23456
-        assert seen["profile_path"] == str(account_profile)
+        assert seen["profile_path"] == str(resolve_account_profile_path(f"1/dy/acc_{account['id']}"))
+        assert result["profile_path"] == "网页登录态已配置"
     finally:
         for table, snapshot in snapshots.items():
             _restore_table(table, snapshot)
 
 
-def test_social_account_profile_path_auto_generated_when_empty():
+def test_phase_5_social_account_profile_key_drives_runtime_path():
     init_db()
     snapshot = _snapshot_table("social_accounts")
     try:
@@ -4283,19 +4441,30 @@ def test_social_account_profile_path_auto_generated_when_empty():
                 "status": "standby",
             }
         )
-        assert "account_profiles" in account["profile_path"]
-        assert "海安律所小红书采集号" in account["profile_path"]
+        expected_key = f"1/xhs/acc_{account['id']}"
+        expected_path = str(resolve_account_profile_path(expected_key))
+        assert account["profile_key"] == expected_key
+        assert account["profile_path"] == ""
+        assert account["profile_configured"] is True
+        assert get_social_account(account["id"], masked=False)["profile_path"] == expected_path
         assert account["login_capability_source"] == "平台采集服务"
         assert account["login_boundary"] == "media_crawler_only"
         assert account["captcha_policy"] == "report_only"
         assert "qrcode" in account["supported_login_types"]
 
-        updated = save_social_account({**account, "profile_path": ""}, int(account["id"]))
+        updated = save_social_account({**account, "name": "新展示名", "profile_path": str(Path("ignored"))}, int(account["id"]))
 
-        assert updated["profile_path"]
-        assert str(account["id"]) in updated["profile_path"]
+        assert updated["profile_key"] == expected_key
+        assert get_social_account(account["id"], masked=False)["profile_path"] == expected_path
     finally:
         _restore_table("social_accounts", snapshot)
+
+
+def test_phase_5_profile_key_resolver_rejects_path_traversal(tmp_path):
+    assert resolve_account_profile_path("1/dy/acc_123", root=tmp_path) == tmp_path / "1" / "dy" / "acc_123"
+    for bad_key in ["../dy/acc_1", "1/dy/../../x", "1/dy/acc_bad", "1/DY/acc_1"]:
+        with pytest.raises(ValueError, match="invalid account profile key"):
+            resolve_account_profile_path(bad_key, root=tmp_path)
 
 
 def test_social_account_login_type_must_follow_mediacrawler_capability():
@@ -7487,7 +7656,7 @@ def test_run_platform_attaches_bound_proxy_summary(tmp_path, monkeypatch):
                 "max_concurrency": 1,
             }
         )
-        save_social_account(
+        account = save_social_account(
             {
                 "name": "抖音采集号",
                 "platform": "dy",
@@ -7508,9 +7677,12 @@ def test_run_platform_attaches_bound_proxy_summary(tmp_path, monkeypatch):
             _restore_table(table, snapshot)
 
     assert seen["proxy_binding"]["proxy_url"] == "http://user:pass@127.0.0.1:8081"
-    assert seen["proxy_binding"]["profile_path"] == str(tmp_path / "dy_account_profile")
+    assert seen["proxy_binding"]["profile_key"] == f"1/dy/acc_{account['id']}"
+    assert seen["proxy_binding"]["profile_path"] == str(resolve_account_profile_path(seen["proxy_binding"]["profile_key"]))
     assert result["account"]["account_name"] == "抖音采集号"
-    assert result["account"]["profile_path"] == str(tmp_path / "dy_account_profile")
+    assert result["account"]["profile_key"] == f"1/dy/acc_{account['id']}"
+    assert result["account"]["profile_configured"] is True
+    assert "profile_path" not in result["account"]
     assert result["proxy"]["proxy_id"] == proxy["id"]
     assert "user:pass" not in result["proxy"]["proxy_url"]
     assert result["new_contents"] == 1

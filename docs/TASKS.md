@@ -106,16 +106,16 @@ and permission work.
 
 ## Phase 5 - Account Environment
 
-- [ ] Add `profile_key` and runtime path resolver.
-- [ ] Stop exposing real profile paths in the customer-facing UI.
-- [ ] Create one profile per platform account.
-- [ ] Ensure account name is display-only and not the profile identity.
-- [ ] Add account lock.
-- [ ] Add profile lock.
-- [ ] Add proxy concurrency control.
-- [ ] Add startup and scheduler recovery for stale running runs and expired
+- [x] Add `profile_key` and runtime path resolver.
+- [x] Stop exposing real profile paths in the customer-facing UI.
+- [x] Create one profile per platform account.
+- [x] Ensure account name is display-only and not the profile identity.
+- [x] Add account lock.
+- [x] Add profile lock.
+- [x] Add proxy concurrency control.
+- [x] Add startup and scheduler recovery for stale running runs and expired
       locks.
-- [ ] Ensure login and crawling use the same account proxy when configured.
+- [x] Ensure login and crawling use the same account proxy when configured.
 
 ## Phase 6 - Server Login Flow
 

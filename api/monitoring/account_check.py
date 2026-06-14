@@ -18,6 +18,7 @@ from .database import get_social_account, update_social_account_check_state
 from .mediacrawler_login import call_mediacrawler_check_login_state, get_mediacrawler_login_capability
 from .normalizer import PLATFORM_LABELS
 from .security import customer_safe_text, redact_sensitive
+from .account_environment import account_profile_environment
 
 
 COOKIE_DOMAINS = {
@@ -68,7 +69,7 @@ async def check_social_account_login(account_id: int, timeout_ms: int = 15000, a
 
 async def _check_profile_account(account: dict[str, Any], timeout_ms: int) -> dict[str, Any]:
     platform = str(account.get("platform") or "")
-    profile_path = Path(str(account.get("profile_path") or ""))
+    profile_path = Path(str(account_profile_environment(account).get("runtime_path") or ""))
     if not str(profile_path).strip() or not profile_path.exists():
         return _result(False, "未找到该账号的网页登录态，请重新扫码登录。", "missing_profile")
     browser_path = _browser_path()

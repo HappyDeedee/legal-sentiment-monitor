@@ -12,6 +12,8 @@ from typing import Any
 
 from .ai import evaluate_content
 from .database import (
+    acquire_account_lock,
+    acquire_proxy_lock,
     create_run,
     finish_run,
     get_conn,
@@ -21,6 +23,10 @@ from .database import (
     get_runtime_setting_value,
     get_social_account,
     list_social_accounts,
+    release_account_lock,
+    release_proxy_locks,
+    release_run_resource_locks,
+    set_run_resource_bindings,
     update_run_summary,
     utc_now,
 )
@@ -91,6 +97,7 @@ def _runtime_setting_int(key: str, default: int) -> int:
             "crawler_retry_count": "MONITOR_CRAWLER_MAX_RETRIES",
             "crawler_retry_delay_seconds": "MONITOR_CRAWLER_RETRY_DELAY_SECONDS",
             "global_crawl_concurrency": "MONITOR_GLOBAL_CRAWL_CONCURRENCY",
+            "lock_cleanup_buffer_seconds": "MONITOR_LOCK_CLEANUP_BUFFER_SECONDS",
             "per_platform_concurrency.dy": "MONITOR_PLATFORM_CONCURRENCY_DY",
             "per_platform_concurrency.xhs": "MONITOR_PLATFORM_CONCURRENCY_XHS",
             "per_platform_concurrency.ks": "MONITOR_PLATFORM_CONCURRENCY_KS",
@@ -259,6 +266,8 @@ async def _run_job_locked(job_id: int) -> dict[str, Any]:
         finish_run(run_id, "failed", summary, f"{type(exc).__name__}: {redact_sensitive(str(exc))}")
         _touch_job_last_run(job_id)
         raise
+    finally:
+        release_run_resource_locks(run_id)
 
 
 async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir: Path) -> dict[str, Any]:
@@ -269,46 +278,78 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
             _raise_if_stop_requested(job["id"])
             _raise_if_deadline_passed(run_id)
             _ensure_login_window_closed(platform)
+            account_binding = _resolve_platform_account_binding(platform, job)
+            lock_expires_at = _lock_expires_at(run_id)
+            account_lock_acquired = False
+            proxy_lock_acquired = False
             platform_root = run_dir / platform
             platform_root.mkdir(parents=True, exist_ok=True)
             max_retries = _crawler_max_retries()
             total_attempts = max_retries + 1
             last_error = ""
-            for attempt in range(1, total_attempts + 1):
-                attempt_out = _attempt_output_dir(platform_root, attempt, total_attempts)
-                attempt_out.mkdir(parents=True, exist_ok=True)
-                try:
-                    _raise_if_stop_requested(job["id"])
-                    attempt_timeout = _remaining_run_seconds(run_id)
-                    account_binding = _resolve_platform_account_binding(platform, job)
-                    attempt_job = {**job, "_crawler_timeout_seconds": attempt_timeout}
-                    await asyncio.to_thread(_run_crawler_attempt, attempt_job, platform, attempt_out, account_binding)
-                    _raise_if_stop_requested(job["id"])
-                    _raise_if_deadline_passed(run_id)
-                    contents, comments = collect_platform_outputs(attempt_out, platform)
-                    result = ingest_outputs(job, run_id, platform, contents, comments)
-                    result["attempts"] = attempt
-                    result["max_retries"] = max_retries
-                    result["timeout_seconds"] = _run_timeout_seconds(run_id)
-                    result["deadline_at"] = _run_deadline_at(run_id)
-                    if account_binding:
-                        result["account"] = _account_summary(account_binding)
-                    if account_binding and account_binding.get("proxy_id"):
-                        result["proxy"] = _proxy_summary(account_binding)
-                    return result
-                except CrawlerStopped:
-                    raise
-                except CrawlerTimedOut:
-                    raise
-                except RuntimeError as exc:
-                    last_error = redact_sensitive(str(exc))
-                    if not _should_retry_crawler_error(last_error) or attempt >= total_attempts:
-                        break
-                    _raise_if_stop_requested(job["id"])
-                    _raise_if_deadline_passed(run_id)
-                    await asyncio.sleep(_crawler_retry_delay_seconds())
-                    _raise_if_deadline_passed(run_id)
-            raise RuntimeError(f"MediaCrawler failed after {attempt} attempt(s): {last_error}")
+            try:
+                if account_binding and account_binding.get("account_id"):
+                    account_lock_acquired = acquire_account_lock(int(account_binding["account_id"]), run_id, lock_expires_at)
+                    if not account_lock_acquired:
+                        raise RuntimeError("账号网页登录态正在被其他任务使用，请等待本轮结束后重试")
+                else:
+                    account_lock_acquired = True
+                if account_binding and account_binding.get("proxy_id"):
+                    proxy_lock_acquired = acquire_proxy_lock(
+                        int(account_binding["proxy_id"]),
+                        run_id,
+                        lock_expires_at,
+                        _safe_int(job.get("workspace_id")),
+                    )
+                    if not proxy_lock_acquired:
+                        raise RuntimeError("代理资源已达到并发上限，请等待其他任务结束后重试")
+                else:
+                    proxy_lock_acquired = True
+                if account_binding:
+                    set_run_resource_bindings(
+                        run_id,
+                        _safe_int(account_binding.get("account_id")),
+                        _safe_int(account_binding.get("proxy_id")),
+                    )
+                for attempt in range(1, total_attempts + 1):
+                    attempt_out = _attempt_output_dir(platform_root, attempt, total_attempts)
+                    attempt_out.mkdir(parents=True, exist_ok=True)
+                    try:
+                        _raise_if_stop_requested(job["id"])
+                        attempt_timeout = _remaining_run_seconds(run_id)
+                        attempt_job = {**job, "_crawler_timeout_seconds": attempt_timeout}
+                        await asyncio.to_thread(_run_crawler_attempt, attempt_job, platform, attempt_out, account_binding)
+                        _raise_if_stop_requested(job["id"])
+                        _raise_if_deadline_passed(run_id)
+                        contents, comments = collect_platform_outputs(attempt_out, platform)
+                        result = ingest_outputs(job, run_id, platform, contents, comments)
+                        result["attempts"] = attempt
+                        result["max_retries"] = max_retries
+                        result["timeout_seconds"] = _run_timeout_seconds(run_id)
+                        result["deadline_at"] = _run_deadline_at(run_id)
+                        if account_binding:
+                            result["account"] = _account_summary(account_binding)
+                        if account_binding and account_binding.get("proxy_id"):
+                            result["proxy"] = _proxy_summary(account_binding)
+                        return result
+                    except CrawlerStopped:
+                        raise
+                    except CrawlerTimedOut:
+                        raise
+                    except RuntimeError as exc:
+                        last_error = redact_sensitive(str(exc))
+                        if not _should_retry_crawler_error(last_error) or attempt >= total_attempts:
+                            break
+                        _raise_if_stop_requested(job["id"])
+                        _raise_if_deadline_passed(run_id)
+                        await asyncio.sleep(_crawler_retry_delay_seconds())
+                        _raise_if_deadline_passed(run_id)
+                raise RuntimeError(f"MediaCrawler failed after {attempt} attempt(s): {last_error}")
+            finally:
+                if account_binding and account_binding.get("account_id") and account_lock_acquired:
+                    release_account_lock(int(account_binding["account_id"]), run_id)
+                if account_binding and account_binding.get("proxy_id") and proxy_lock_acquired:
+                    release_proxy_locks(run_id, int(account_binding["proxy_id"]))
 
 
 def _run_crawler_attempt(
@@ -329,7 +370,7 @@ def _run_crawler_attempt(
         if account_binding and account_binding.get("profile_path"):
             log_lines.append(
                 "[monitor] Account profile enabled: "
-                + redact_sensitive(f"{account_binding.get('account_name') or '-'} {account_binding.get('profile_path') or ''}")
+                + redact_sensitive(f"{account_binding.get('account_name') or '-'} {account_binding.get('profile_key') or ''}")
             )
         if account_binding and account_binding.get("proxy_id"):
             log_lines.append(
@@ -687,6 +728,8 @@ def _resolve_platform_account_binding(platform: str, job: dict[str, Any] | None 
             "platform": platform,
             "login_type": account.get("login_type") or "qrcode",
             "cookies": account.get("cookies") or "",
+            "profile_key": account.get("profile_key") or "",
+            "profile_configured": bool(account.get("profile_configured")),
             "profile_path": account.get("profile_path") or "",
         }
         proxy_id = explicit_proxy_id or account.get("proxy_id")
@@ -737,7 +780,8 @@ def _account_summary(account_binding: dict[str, Any]) -> dict[str, Any]:
         "account_id": account_binding.get("account_id"),
         "account_name": account_binding.get("account_name") or "",
         "platform": account_binding.get("platform") or "",
-        "profile_path": str(account_binding.get("profile_path") or ""),
+        "profile_key": str(account_binding.get("profile_key") or ""),
+        "profile_configured": bool(account_binding.get("profile_path") or account_binding.get("profile_configured")),
     }
 
 
@@ -800,6 +844,14 @@ def _run_deadline_at(run_id: int) -> str:
     except Exception:
         return ""
     return str(row["deadline_at"] or "") if row else ""
+
+
+def _lock_expires_at(run_id: int) -> str:
+    raw_deadline = _run_deadline_at(run_id)
+    deadline = _parse_run_deadline(run_id)
+    if not deadline:
+        return raw_deadline
+    return (deadline + timedelta(seconds=max(60, _runtime_setting_int("lock_cleanup_buffer_seconds", 300)))).isoformat()
 
 
 def _remaining_run_seconds(run_id: int) -> int:

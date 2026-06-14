@@ -5,7 +5,7 @@ import os
 from datetime import datetime, time, timedelta
 from typing import Any
 
-from .database import get_job, get_runtime_setting_value, has_job_template_placeholders, list_jobs, record_skipped_run, set_job_schedule_state
+from .database import get_job, get_runtime_setting_value, has_job_template_placeholders, list_jobs, record_skipped_run, recover_stale_runs_and_locks, set_job_schedule_state
 from .preflight import build_job_preflight
 from .runner import clear_stop_request, request_stop_job, run_job
 
@@ -18,6 +18,7 @@ _job_tasks: dict[int, asyncio.Task] = {}
 
 async def start_scheduler() -> None:
     global _scheduler_task, _apscheduler
+    recover_stale_runs_and_locks("startup_recovery")
     if scheduler_disabled_reason():
         return
     tick_seconds = _scheduler_tick_seconds()
@@ -49,6 +50,7 @@ async def _loop() -> None:
 
 
 async def tick() -> None:
+    recover_stale_runs_and_locks("scheduler_recovery")
     now = datetime.now()
     for job in list_jobs():
         if not job.get("enabled"):
