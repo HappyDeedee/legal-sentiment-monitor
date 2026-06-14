@@ -6,7 +6,7 @@ import os
 import subprocess
 import threading
 from collections import defaultdict
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
@@ -18,6 +18,7 @@ from .database import (
     get_job,
     get_platform_login_config,
     get_proxy_profile,
+    get_runtime_setting_value,
     get_social_account,
     list_social_accounts,
     update_run_summary,
@@ -39,8 +40,8 @@ from .security import MONITOR_DATA_DIR, redact_sensitive
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
 RUNS_DIR = MONITOR_DATA_DIR / "runs"
 LOCKS_DIR = MONITOR_DATA_DIR / "locks"
-GLOBAL_SEMAPHORE = asyncio.Semaphore(2)
-PLATFORM_LOCKS: dict[str, asyncio.Lock] = defaultdict(asyncio.Lock)
+GLOBAL_SEMAPHORES: dict[int, asyncio.Semaphore] = {}
+PLATFORM_SEMAPHORES: dict[tuple[str, int], asyncio.Semaphore] = {}
 PLATFORM_DEBUG_PORTS = {"dy": 9223, "ks": 9224, "xhs": 9225}
 JOB_LOCK_TTL_SECONDS = int(os.environ.get("MONITOR_JOB_LOCK_TTL_SECONDS") or 21600)
 DEFAULT_CRAWLER_MAX_RETRIES = 1
@@ -52,6 +53,10 @@ PROCESS_LOCK = threading.Lock()
 
 class CrawlerStopped(Exception):
     """Raised when an operator requests the current job to stop."""
+
+
+class CrawlerTimedOut(Exception):
+    """Raised when the run-level deadline is reached."""
 
 
 def clear_stop_request(job_id: int) -> None:
@@ -75,6 +80,42 @@ def request_stop_job(job_id: int) -> int:
 def is_stop_requested(job_id: int) -> bool:
     with PROCESS_LOCK:
         return int(job_id) in STOP_REQUESTS
+
+
+def _runtime_setting_int(key: str, default: int) -> int:
+    try:
+        return int(get_runtime_setting_value(key))
+    except Exception:
+        env_map = {
+            "crawler_timeout_seconds": "MONITOR_CRAWLER_TIMEOUT_SECONDS",
+            "crawler_retry_count": "MONITOR_CRAWLER_MAX_RETRIES",
+            "crawler_retry_delay_seconds": "MONITOR_CRAWLER_RETRY_DELAY_SECONDS",
+            "global_crawl_concurrency": "MONITOR_GLOBAL_CRAWL_CONCURRENCY",
+            "per_platform_concurrency.dy": "MONITOR_PLATFORM_CONCURRENCY_DY",
+            "per_platform_concurrency.xhs": "MONITOR_PLATFORM_CONCURRENCY_XHS",
+            "per_platform_concurrency.ks": "MONITOR_PLATFORM_CONCURRENCY_KS",
+        }
+        env_value = os.environ.get(env_map.get(key, ""))
+        try:
+            return int(env_value) if env_value not in (None, "") else default
+        except ValueError:
+            return default
+
+
+def _global_crawl_semaphore() -> asyncio.Semaphore:
+    concurrency = max(1, _runtime_setting_int("global_crawl_concurrency", 2))
+    if concurrency not in GLOBAL_SEMAPHORES:
+        GLOBAL_SEMAPHORES[concurrency] = asyncio.Semaphore(concurrency)
+    return GLOBAL_SEMAPHORES[concurrency]
+
+
+def _platform_crawl_semaphore(platform: str) -> asyncio.Semaphore:
+    key = f"per_platform_concurrency.{platform}"
+    concurrency = max(1, _runtime_setting_int(key, 1))
+    cache_key = (platform, concurrency)
+    if cache_key not in PLATFORM_SEMAPHORES:
+        PLATFORM_SEMAPHORES[cache_key] = asyncio.Semaphore(concurrency)
+    return PLATFORM_SEMAPHORES[cache_key]
 
 
 async def run_job(job_id: int) -> dict[str, Any]:
@@ -109,7 +150,12 @@ async def _run_job_locked(job_id: int) -> dict[str, Any]:
         "cancelled_platforms": [],
         "platform_results": {},
     }
-    run_id = create_run(job_id, summary)
+    timeout_seconds = _runtime_setting_int("crawler_timeout_seconds", 900)
+    started_at = datetime.now(timezone.utc)
+    deadline_at = started_at + timedelta(seconds=timeout_seconds)
+    summary["timeout_seconds"] = timeout_seconds
+    summary["deadline_at"] = deadline_at.isoformat()
+    run_id = create_run(job_id, summary, timeout_seconds=timeout_seconds)
     run_dir = RUNS_DIR / f"job_{job_id}" / f"run_{run_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     run_dir.mkdir(parents=True, exist_ok=True)
     summary["run_dir"] = str(run_dir)
@@ -120,11 +166,20 @@ async def _run_job_locked(job_id: int) -> dict[str, Any]:
         results = await asyncio.gather(*tasks, return_exceptions=True)
         content_ids_for_eval: list[int] = []
         stopped = is_stop_requested(job_id)
+        timed_out = False
+        timeout_reason = ""
         for platform, result in zip(job.get("platforms", []), results):
             if isinstance(result, CrawlerStopped):
                 stopped = True
                 summary["cancelled_platforms"].append(platform)
                 summary["platform_results"][platform] = {"status": "cancelled", "error": redact_sensitive(str(result))}
+                continue
+            if isinstance(result, CrawlerTimedOut):
+                error = redact_sensitive(str(result))
+                timed_out = True
+                timeout_reason = timeout_reason or error
+                summary["failed_platforms"].append(platform)
+                summary["platform_results"][platform] = {"status": "timeout", "error": error}
                 continue
             if isinstance(result, Exception):
                 error = redact_sensitive(str(result))
@@ -139,6 +194,9 @@ async def _run_job_locked(job_id: int) -> dict[str, Any]:
             content_ids_for_eval.extend(result.get("content_db_ids", []))
         update_run_summary(run_id, summary)
 
+        if timed_out:
+            raise CrawlerTimedOut(timeout_reason or _timeout_message(run_id))
+
         if stopped:
             summary["cancelled"] = True
             summary["duration_seconds"] = _run_duration_seconds(run_id)
@@ -147,9 +205,11 @@ async def _run_job_locked(job_id: int) -> dict[str, Any]:
             return {"run_id": run_id, "status": "cancelled", "summary": summary, "report": None}
 
         _raise_if_stop_requested(job_id)
+        _raise_if_deadline_passed(run_id)
         eval_summary = await evaluate_new_contents(job, run_id, content_ids_for_eval)
         summary.update(eval_summary)
         _raise_if_stop_requested(job_id)
+        _raise_if_deadline_passed(run_id)
         report = create_report(run_id, job, summary)
         ok, error = send_report(job, report)
         error = redact_sensitive(error)
@@ -168,6 +228,25 @@ async def _run_job_locked(job_id: int) -> dict[str, Any]:
         finish_run(run_id, "cancelled", summary, redact_sensitive(str(exc)))
         _touch_job_last_run(job_id)
         return {"run_id": run_id, "status": "cancelled", "summary": summary, "report": None}
+    except CrawlerTimedOut as exc:
+        summary["timeout"] = True
+        summary["timeout_reason"] = redact_sensitive(str(exc))
+        summary["duration_seconds"] = _run_duration_seconds(run_id)
+        report = None
+        try:
+            report = create_report(run_id, job, summary)
+            ok, error = send_report(job, report)
+            error = redact_sensitive(error)
+            update_report_email_status(report["id"], "sent" if ok else "failed", error)
+            summary["email_status"] = "sent" if ok else "failed"
+            if error:
+                summary["email_error"] = error
+        except Exception as report_exc:
+            summary["email_status"] = "failed"
+            summary["email_error"] = redact_sensitive(f"超时后报告生成或发送失败：{type(report_exc).__name__}")
+        finish_run(run_id, "timeout", summary, summary["timeout_reason"], summary["timeout_reason"])
+        _touch_job_last_run(job_id)
+        return {"run_id": run_id, "status": "timeout", "summary": summary, "report": report}
     except asyncio.CancelledError:
         request_stop_job(job_id)
         summary["cancelled"] = True
@@ -184,9 +263,11 @@ async def _run_job_locked(job_id: int) -> dict[str, Any]:
 
 async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir: Path) -> dict[str, Any]:
     _raise_if_stop_requested(job["id"])
-    async with GLOBAL_SEMAPHORE:
-        async with PLATFORM_LOCKS[platform]:
+    _raise_if_deadline_passed(run_id)
+    async with _global_crawl_semaphore():
+        async with _platform_crawl_semaphore(platform):
             _raise_if_stop_requested(job["id"])
+            _raise_if_deadline_passed(run_id)
             _ensure_login_window_closed(platform)
             platform_root = run_dir / platform
             platform_root.mkdir(parents=True, exist_ok=True)
@@ -198,13 +279,18 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
                 attempt_out.mkdir(parents=True, exist_ok=True)
                 try:
                     _raise_if_stop_requested(job["id"])
+                    attempt_timeout = _remaining_run_seconds(run_id)
                     account_binding = _resolve_platform_account_binding(platform, job)
-                    await asyncio.to_thread(_run_crawler_attempt, job, platform, attempt_out, account_binding)
+                    attempt_job = {**job, "_crawler_timeout_seconds": attempt_timeout}
+                    await asyncio.to_thread(_run_crawler_attempt, attempt_job, platform, attempt_out, account_binding)
                     _raise_if_stop_requested(job["id"])
+                    _raise_if_deadline_passed(run_id)
                     contents, comments = collect_platform_outputs(attempt_out, platform)
                     result = ingest_outputs(job, run_id, platform, contents, comments)
                     result["attempts"] = attempt
                     result["max_retries"] = max_retries
+                    result["timeout_seconds"] = _run_timeout_seconds(run_id)
+                    result["deadline_at"] = _run_deadline_at(run_id)
                     if account_binding:
                         result["account"] = _account_summary(account_binding)
                     if account_binding and account_binding.get("proxy_id"):
@@ -212,12 +298,16 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
                     return result
                 except CrawlerStopped:
                     raise
+                except CrawlerTimedOut:
+                    raise
                 except RuntimeError as exc:
                     last_error = redact_sensitive(str(exc))
                     if not _should_retry_crawler_error(last_error) or attempt >= total_attempts:
                         break
                     _raise_if_stop_requested(job["id"])
+                    _raise_if_deadline_passed(run_id)
                     await asyncio.sleep(_crawler_retry_delay_seconds())
+                    _raise_if_deadline_passed(run_id)
             raise RuntimeError(f"MediaCrawler failed after {attempt} attempt(s): {last_error}")
 
 
@@ -231,7 +321,7 @@ def _run_crawler_attempt(
     cmd = _build_crawler_cmd(job, platform, out_dir, account_binding)
     env = _build_crawler_env(account_binding)
     log_path = out_dir / "crawler.log"
-    timeout_seconds = int(os.environ.get("MONITOR_CRAWLER_TIMEOUT_SECONDS") or 900)
+    timeout_seconds = max(1, _safe_int(job.get("_crawler_timeout_seconds")) or _runtime_setting_int("crawler_timeout_seconds", 900))
     process: subprocess.Popen | None = None
     try:
         creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
@@ -271,13 +361,13 @@ def _run_crawler_attempt(
                     pass
                 log_file.write(f"\n[monitor] MediaCrawler timed out after {timeout_seconds}s\n")
                 log_file.flush()
-                raise RuntimeError(f"MediaCrawler timed out after {timeout_seconds}s; see {log_path}") from exc
+                raise CrawlerTimedOut(f"任务达到系统运行时间上限，已停止未完成的采集进程；see {log_path}") from exc
     except subprocess.TimeoutExpired as exc:
-        raise RuntimeError(f"MediaCrawler timed out after {timeout_seconds}s; see {log_path}") from exc
+        raise CrawlerTimedOut(f"任务达到系统运行时间上限，已停止未完成的采集进程；see {log_path}") from exc
     except RuntimeError:
         raise
     except Exception as exc:
-        if isinstance(exc, CrawlerStopped):
+        if isinstance(exc, (CrawlerStopped, CrawlerTimedOut)):
             raise
         safe_error = redact_sensitive(f"{type(exc).__name__}: {exc}")
         log_path.write_text(safe_error, encoding="utf-8", errors="ignore")
@@ -694,6 +784,60 @@ def _run_duration_seconds(run_id: int) -> int:
         return 0
 
 
+def _run_timeout_seconds(run_id: int) -> int | None:
+    try:
+        with get_conn() as conn:
+            row = conn.execute("SELECT timeout_seconds FROM crawl_runs WHERE id=?", (run_id,)).fetchone()
+    except Exception:
+        return None
+    return _safe_int(row["timeout_seconds"]) if row else None
+
+
+def _run_deadline_at(run_id: int) -> str:
+    try:
+        with get_conn() as conn:
+            row = conn.execute("SELECT deadline_at FROM crawl_runs WHERE id=?", (run_id,)).fetchone()
+    except Exception:
+        return ""
+    return str(row["deadline_at"] or "") if row else ""
+
+
+def _remaining_run_seconds(run_id: int) -> int:
+    deadline = _parse_run_deadline(run_id)
+    if not deadline:
+        return _runtime_setting_int("crawler_timeout_seconds", 900)
+    remaining = int((deadline - datetime.now(timezone.utc)).total_seconds())
+    if remaining <= 0:
+        raise CrawlerTimedOut(_timeout_message(run_id))
+    return max(1, remaining)
+
+
+def _raise_if_deadline_passed(run_id: int) -> None:
+    deadline = _parse_run_deadline(run_id)
+    if deadline and datetime.now(timezone.utc) >= deadline:
+        raise CrawlerTimedOut(_timeout_message(run_id))
+
+
+def _parse_run_deadline(run_id: int) -> datetime | None:
+    raw_deadline = _run_deadline_at(run_id)
+    if not raw_deadline:
+        return None
+    try:
+        parsed = datetime.fromisoformat(raw_deadline.replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
+
+
+def _timeout_message(run_id: int) -> str:
+    timeout_seconds = _run_timeout_seconds(run_id)
+    if timeout_seconds:
+        return f"任务达到系统运行时间上限（{timeout_seconds} 秒），已停止未完成的采集进程"
+    return "任务达到系统运行时间上限，已停止未完成的采集进程"
+
+
 def _looks_like_login_required(log_text: str) -> bool:
     lower = log_text.lower()
     markers = [
@@ -710,14 +854,11 @@ def _looks_like_login_required(log_text: str) -> bool:
 
 
 def _crawler_max_retries() -> int:
-    return max(0, _int_env("MONITOR_CRAWLER_MAX_RETRIES", DEFAULT_CRAWLER_MAX_RETRIES))
+    return max(0, _runtime_setting_int("crawler_retry_count", DEFAULT_CRAWLER_MAX_RETRIES))
 
 
 def _crawler_retry_delay_seconds() -> float:
-    try:
-        return max(0.0, float(os.environ.get("MONITOR_CRAWLER_RETRY_DELAY_SECONDS") or DEFAULT_CRAWLER_RETRY_DELAY_SECONDS))
-    except ValueError:
-        return DEFAULT_CRAWLER_RETRY_DELAY_SECONDS
+    return max(0.0, float(_runtime_setting_int("crawler_retry_delay_seconds", int(DEFAULT_CRAWLER_RETRY_DELAY_SECONDS))))
 
 
 def _should_retry_crawler_error(error: str) -> bool:

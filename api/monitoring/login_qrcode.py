@@ -21,6 +21,7 @@ from .mediacrawler_login import (
 )
 from .normalizer import PLATFORM_LABELS
 from .security import redact_sensitive
+from .database import get_runtime_setting_value
 
 
 @dataclass
@@ -84,7 +85,7 @@ async def start_qrcode_login_session_with_profile(
     if platform not in QR_SELECTORS:
         raise ValueError("unsupported platform")
     capability = MEDIACRAWLER_LOGIN_FLOWS[platform]
-    timeout = int(timeout_ms or os.environ.get("MONITOR_LOGIN_QR_TIMEOUT_MS") or 20000)
+    timeout = int(timeout_ms or _login_qr_timeout_ms())
     headless = _login_qr_headless()
     playwright: Playwright | None = None
     context: BrowserContext | None = None
@@ -574,6 +575,13 @@ def _login_qr_headless() -> bool:
     return str(os.environ.get("MONITOR_LOGIN_QR_HEADLESS") or "true").lower() not in {"0", "false", "no"}
 
 
+def _login_qr_timeout_ms() -> int:
+    try:
+        return max(5000, int(get_runtime_setting_value("login_qr_timeout_seconds")) * 1000)
+    except Exception:
+        return int(os.environ.get("MONITOR_LOGIN_QR_TIMEOUT_MS") or 20000)
+
+
 def _failure(platform: str, command: dict[str, Any], message: str, diagnostic_image: str = "") -> dict[str, Any]:
     capability = MEDIACRAWLER_LOGIN_FLOWS.get(platform) or {}
     return {
@@ -659,8 +667,15 @@ async def _is_logged_in(platform: str, context: BrowserContext, page: Page, logi
 
 
 def _session_expired(handle: LoginSessionHandle) -> bool:
-    ttl_seconds = int(os.environ.get("MONITOR_LOGIN_QR_TTL_SECONDS") or 600)
+    ttl_seconds = _login_session_ttl_seconds()
     return datetime.now(timezone.utc) - handle.created_at > timedelta(seconds=ttl_seconds)
+
+
+def _login_session_ttl_seconds() -> int:
+    try:
+        return max(60, int(get_runtime_setting_value("login_session_ttl_seconds")))
+    except Exception:
+        return int(os.environ.get("MONITOR_LOGIN_QR_TTL_SECONDS") or 600)
 
 
 async def _close_context(playwright: Playwright | None, context: BrowserContext | None) -> None:

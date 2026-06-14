@@ -11,6 +11,51 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
   `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-14 - Phase 2 System Settings Center Verified
+
+Environment: local worktree `E:\myproject\MediaCrawler-worktrees\v1-roadmap`
+using `uv run`, the monitoring SQLite database, and Node script parsing for the
+single-file frontend.
+
+Result:
+
+- Added database-backed runtime settings with defaults, `monitor.yaml` loading,
+  database overrides, validation ranges, apply scopes, environment locks, and
+  audit logging.
+- Added administrator-only `/api/monitor/runtime-settings` read/update APIs and
+  a grouped Runtime Strategy page for Crawling, Login, Scheduler, and
+  Retention settings.
+- Kept Runtime Strategy inaccessible to normal users through both API role
+  checks and menu permissions.
+- Moved scheduler tick/disable, global crawl concurrency, per-platform
+  concurrency, crawler timeout, crawler retry count/delay, QR timeout, login
+  session TTL, lock cleanup buffer, and retention settings into the runtime
+  settings layer.
+- Changed newly started crawl runs to store `timeout_seconds` and
+  `deadline_at`, allocate remaining run time to platform crawler attempts, and
+  mark deadline-exceeded runs as `timeout` while preserving partial platform
+  summaries.
+- Updated safe environment examples with the deployment-lock variables for
+  Phase 2 runtime settings.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 206 passed, 3 warnings.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- Node syntax check for the `api/monitor_web/index.html` script block
+- Result: monitor web script parses.
+
+Limitations:
+
+- Phase 2 does not implement Phase 3 administrator resource-page refinements,
+  Phase 4 simplified normal-user task wizard, Phase 5 persisted
+  account/profile/proxy lock acquisition, or Phase 6 primary server-login flow.
+- Retention settings are configurable and visible, but automated cleanup jobs
+  remain for later operations work.
+- No server-like acceptance validation was performed in this phase.
+
 ## 2026-06-14 - Phase 1 Users And Permissions Verified
 
 Environment: local worktree `E:\myproject\MediaCrawler-worktrees\v1-roadmap`

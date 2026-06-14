@@ -451,6 +451,7 @@
             <button class="sub" data-tab="ai_rules" data-menu-key="ai_rules">AI 评估规则</button>
             <button class="sub" data-tab="email" data-menu-key="mail_config">邮件配置</button>
             <button class="sub" data-tab="email_templates" data-menu-key="mail_templates">邮件模板</button>
+            <button class="sub" data-tab="runtime" data-menu-key="runtime_strategy">运行策略</button>
             <button class="sub" data-tab="doctor" data-menu-key="system_diagnostics">系统诊断</button>
           </div>
         </div>
@@ -1064,6 +1065,19 @@
         </div>
       </section>
 
+      <section id="runtime">
+        <div class="page-head">
+          <div><h2>运行策略</h2><p>配置采集并发、运行超时、登录会话、调度间隔和保留周期。</p></div>
+          <div class="page-actions">
+            <button class="secondary" onclick="loadRuntimeSettings()">刷新策略</button>
+            <button class="primary" onclick="saveRuntimeSettings()">保存策略</button>
+          </div>
+        </div>
+        <div class="panel">
+          <div id="runtime_settings_table"></div>
+        </div>
+      </section>
+
       <section id="runs">
         <div class="page-head">
           <div><h2>运行中心</h2><p>查看每次采集运行状态、失败原因和日志。运行记录会保留，即使原任务已删除。</p></div>
@@ -1262,8 +1276,10 @@
       ai_rules: 'ai_rules',
       email: 'mail_config',
       email_templates: 'mail_templates',
+      runtime: 'runtime_strategy',
       doctor: 'system_diagnostics'
     };
+    let runtimeSettingsCache = {};
     let defaultPromptSections = {
       role:'你是律所舆情线索初筛助手，只负责发现疑似风险线索，不做事实认定。',
       relevance:'优先判断内容是否明确指向目标律所、律所别名、平台搜索词或评论中的相关称呼。同名无关、泛泛法律咨询、普通法律科普和无明显指向的内容应判为不相关。',
@@ -1439,6 +1455,7 @@
       if(tab==='ai_rules') loadAIRuleProfiles();
       if(tab==='email') loadEmail();
       if(tab==='email_templates') loadEmailTemplates();
+      if(tab==='runtime') loadRuntimeSettings();
       if(tab==='runs') loadRuns();
       if(tab==='reports') loadReports();
       if(tab==='doctor') loadDoctor();
@@ -1514,6 +1531,7 @@
       addPermittedLoad(loads, 'AI 接入', 'ai_access', loadAIProfiles);
       addPermittedLoad(loads, '邮件配置', 'mail_config', loadEmail);
       addPermittedLoad(loads, '邮件模板', 'mail_templates', loadEmailTemplates);
+      addPermittedLoad(loads, '运行策略', 'runtime_strategy', loadRuntimeSettings);
       addPermittedLoad(loads, '系统诊断', 'system_diagnostics', loadDoctor);
       await Promise.all(loads);
       await safeLoad('监控任务', loadJobs);
@@ -3401,6 +3419,66 @@
       const templates=[...emailTemplateCache.values()];
       select.innerHTML=['<option value="">使用当前默认</option>'].concat(templates.map(t=>`<option value="${esc(t.id)}">${esc(t.name)}${t.is_active?'（当前）':''}</option>`)).join('');
       if(current && templates.some(t=>String(t.id)===String(current))) select.value=current;
+    }
+    async function loadRuntimeSettings(){
+      if(!canMenu('runtime_strategy')) return;
+      const data=await (await api('/runtime-settings')).json();
+      runtimeSettingsCache=data.settings||{};
+      renderRuntimeSettings(runtimeSettingsCache);
+    }
+    function renderRuntimeSettings(settings){
+      const mount=document.getElementById('runtime_settings_table');
+      if(!mount) return;
+      const groups=['Crawling','Login','Scheduler','Retention'];
+      const groupLabels={Crawling:'采集',Login:'登录',Scheduler:'调度',Retention:'保留周期'};
+      mount.innerHTML=groups.map(group=>{
+        const items=Object.values(settings||{}).filter(item=>item.group===group);
+        if(!items.length) return '';
+        const rows=items.map(item=>runtimeSettingRow(item));
+        return `<div class="settings-card" style="margin-bottom:14px">
+          <h3>${esc(groupLabels[group]||group)}</h3>
+          ${table(['设置','当前值','调整','范围','生效','锁定'], rows)}
+        </div>`;
+      }).join('');
+    }
+    function runtimeSettingRow(item){
+      const disabled=item.is_locked ? ' disabled' : '';
+      const value=item.value_type==='boolean' ? String(!!item.value) : String(item.value ?? '');
+      const input=item.value_type==='boolean'
+        ? `<select data-runtime-key="${esc(item.key)}"${disabled}><option value="false"${value==='false'?' selected':''}>否</option><option value="true"${value==='true'?' selected':''}>是</option></select>`
+        : `<input data-runtime-key="${esc(item.key)}" type="number" min="${esc(item.minimum)}" max="${esc(item.maximum)}" value="${esc(value)}"${disabled}>`;
+      const lock=item.is_locked ? '<span class="status warn">部署锁定</span>' : '<span class="status ok">可编辑</span>';
+      return [
+        `<strong>${esc(item.label)}</strong><div class="small">${esc(item.key)}</div>`,
+        `<span class="code">${esc(value)}</span><div class="small">${esc(item.source||'default')}</div>`,
+        input,
+        esc(item.range||'-'),
+        esc(runtimeApplyScopeLabel(item.apply_scope)),
+        `${lock}${item.lock_reason?'<div class="small">'+esc(item.lock_reason)+'</div>':''}`
+      ];
+    }
+    function runtimeApplyScopeLabel(scope){
+      return {
+        'immediate':'立即生效',
+        'next run':'下次运行',
+        'next session':'下次登录会话',
+        'scheduler reload or restart':'调度重载或重启',
+        'cleanup job':'清理任务'
+      }[scope] || scope || '-';
+    }
+    async function saveRuntimeSettings(){
+      const payload={};
+      document.querySelectorAll('[data-runtime-key]').forEach(input=>{
+        if(input.disabled) return;
+        payload[input.dataset.runtimeKey]=input.value;
+      });
+      const res=await api('/runtime-settings',{method:'PUT',body:JSON.stringify(payload)});
+      if(!res.ok){ toast(await err(res)); return; }
+      const data=await res.json();
+      runtimeSettingsCache=data.settings||{};
+      renderRuntimeSettings(runtimeSettingsCache);
+      toast('运行策略已保存');
+      await Promise.all([loadDashboard(), loadSchedulerStatus()]);
     }
     async function saveEmailTemplate(){
       const id=val('email_template_id');

@@ -5,23 +5,26 @@ Last updated: 2026-06-14
 ## Current Phase
 
 Phase 0 documentation is complete. Phase 0.5 - Schema Foundation is complete
-and verified. Phase 1 - Users And Permissions is complete and verified. The
-active SQLite schema now provides the foundation tables and columns required
-before later implementation work, and the web/API layer now has session login,
-administrator/normal-user roles, menu visibility, and owner-scoped business
-data access.
+and verified. Phase 1 - Users And Permissions is complete and verified. Phase
+2 - System Settings Center is complete and verified. The active SQLite schema
+now provides the foundation tables and columns required before later
+implementation work, and the web/API layer now has session login,
+administrator/normal-user roles, menu visibility, owner-scoped business data
+access, and administrator-managed runtime strategy settings.
 
 ## Implementation Status
 
 - Phase 0 - Documentation: complete.
 - Phase 0.5 - Schema Foundation: complete and verified.
 - Phase 1 - Users And Permissions: complete and verified.
-- Phase 2 - System Settings: next unblocked implementation phase.
+- Phase 2 - System Settings: complete and verified.
+- Phase 3 - Administrator Resource Center: next unblocked implementation
+  phase.
 - Phase 5/6 - Account Environment and Server Login: profile key, timeout, and
   lock-storage decisions are accepted; runtime implementation is still blocked
-  by preceding Phase 2-4 work and Phase 5/6 sequencing.
+  by preceding Phase 3-4 work and Phase 5/6 sequencing.
 
-Phase 2 can begin next. Phase 3-9 implementation must still proceed in order
+Phase 3 can begin next. Phase 4-9 implementation must still proceed in order
 and must not bypass unfinished earlier phases.
 
 ## Completed
@@ -69,10 +72,22 @@ and must not bypass unfinished earlier phases.
   normal-user owner scope for jobs/runs/reports/leads, and frontend login/menu
   visibility.
 - `scripts/check_docs.py` has been implemented and currently passes.
+- Phase 2 runtime strategy has been implemented:
+  `api/monitoring/settings.py` defines runtime defaults, YAML mapping,
+  validation ranges, apply scopes, and environment locks; `system_settings`
+  stores database overrides with audit logging; administrators can edit grouped
+  Runtime Strategy tables; normal users cannot access runtime settings APIs;
+  scheduler tick/disable, crawl concurrency, crawler retry, run-level timeout,
+  QR timeout, login session TTL, lock cleanup buffer, and retention settings
+  now read through the runtime settings layer.
+- Newly started crawl runs copy `crawler_timeout_seconds` into
+  `crawl_runs.timeout_seconds`, compute `deadline_at`, allocate remaining run
+  time to platform crawler attempts, and mark deadline-exceeded runs as
+  `timeout` while preserving partial platform results.
 
 ## In Progress
 
-- Phase 2 - System Settings Center is ready to start.
+- Phase 3 - Administrator Resource Center is ready to start.
 
 ## Known Risks
 
@@ -84,15 +99,9 @@ and must not bypass unfinished earlier phases.
   `profile_key` consistently.
 - Frontend Phase 1 login/menu permissions are implemented, but Phase 4 still
   needs the simplified normal-user task wizard.
-- Scheduler tick interval and global/platform concurrency are still hard-coded
-  in places; Phase 2 moves these values into runtime settings.
-- Current crawler timeout is applied to individual MediaCrawler subprocess
-  attempts; Phase 2 changes the target behavior to one run-level wall-clock
-  deadline with remaining-time allocation.
 - Current system is closer to a single-team MVP than a production multi-user
   system.
 - Server-side QR login and profile persistence need container/server validation.
-- Runtime settings are still partly hard-coded or environment-driven.
 - Existing UI may still mix administrator resource management and normal-user
   task creation.
 - The newly added product documents are initial versions and should be refined
@@ -101,29 +110,28 @@ and must not bypass unfinished earlier phases.
   `profile_path` accounts do not need long-term compatibility and can be reset
   or re-logged in under the new `profile_key` model.
 - Phase 5/6 account/profile/proxy behavior has accepted decisions, but runtime
-  code still needs run-level timeout enforcement, persisted lock acquisition,
-  proxy lock usage, and startup/scheduler recovery.
-- Phase 2 Runtime Strategy layout is accepted as administrator-only grouped
-  tables, but the settings UI and database-backed settings layer are not yet
-  implemented.
+  code still needs persisted account/profile lock acquisition, proxy lock
+  usage, and startup/scheduler recovery.
+- Phase 2 retention settings are configurable and stored, but automated
+  retention cleanup jobs remain for later operations work.
 
 ## Next Step
 
-Implement Phase 2 in small increments:
+Implement Phase 3 in small increments:
 
-1. add runtime settings storage;
-2. add settings precedence: defaults, config file, database, environment lock;
-3. add administrator Runtime Strategy grouped table UI;
-4. add read-only deployment diagnostics;
-5. move scheduler tick, concurrency, timeout, retry, QR/session TTL, retention,
-   and lock cleanup settings into the runtime settings layer;
+1. refine administrator platform account pool page;
+2. refine proxy resource page;
+3. refine AI access page;
+4. refine mail configuration page;
+5. refine email template page;
 6. keep normal-user task creation simple until Phase 4.
 7. for every new requirement, add or update `CHANGE_REQUESTS.md`,
    `TASKS.md`, `TRACEABILITY.md`, and `TEST_RESULTS.md`.
 8. ask for user confirmation before accepting ambiguous assumptions in
    permissions, deployment, account environment, security, or data model.
-9. Phase 2 can proceed now that Phase 1 has implemented and verified basic
-   users, sessions, permissions, and owner-scoped data access.
+9. Phase 3 can proceed now that Phase 2 has implemented and verified runtime
+   settings, administrator-only Runtime Strategy APIs/UI, and setting-backed
+   scheduler/runner/login timing.
 10. Accepted Phase 5/6 decisions:
    - `profile_key` format is `{workspace_id}/{platform}/acc_{account_id}`;
    - task timeout is a run-level wall-clock deadline controlled by
@@ -136,10 +144,10 @@ Implement Phase 2 in small increments:
 
 ## Latest Verification
 
-Phase 1 local verification passed on 2026-06-14:
+Phase 2 local verification passed on 2026-06-14:
 
 - `uv run python -m pytest tests/test_monitoring_mvp.py`
-- Result: 200 passed, 3 warnings.
+- Result: 206 passed, 3 warnings.
 - `uv run python scripts/check_docs.py`
 - Result: PASS docs consistency.
 - Node syntax check for `api/monitor_web/index.html` script block

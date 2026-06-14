@@ -11,6 +11,12 @@ from .auth import generate_session_token, hash_password, hash_session_token, ver
 from .mediacrawler_login import LOGIN_TYPE_LABELS, PLATFORM_LOGIN_TYPES, SUPPORTED_MONITOR_PLATFORMS, get_mediacrawler_login_capability
 from .prompts import DEFAULT_PROMPT
 from .security import MONITOR_DATA_DIR, customer_safe_text, decrypt_secret, encrypt_secret, mask_secret, redact_sensitive
+from .settings import (
+    DEFINITIONS_BY_KEY,
+    effective_runtime_settings,
+    setting_value_json,
+    validate_runtime_setting,
+)
 
 
 DB_PATH = MONITOR_DATA_DIR / "monitor.sqlite"
@@ -1043,6 +1049,70 @@ def invalidate_user_session(token: str | None) -> None:
         conn.execute("UPDATE user_sessions SET status='expired' WHERE session_token_hash=?", (hash_session_token(token),))
 
 
+def list_runtime_settings() -> dict[str, dict[str, Any]]:
+    db_values: dict[str, Any] = {}
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT key, value_json FROM system_settings WHERE workspace_id=?",
+            (DEFAULT_WORKSPACE_ID,),
+        ).fetchall()
+    for row in rows:
+        key = str(row["key"] or "")
+        if key not in DEFINITIONS_BY_KEY:
+            continue
+        db_values[key] = _json_loads(row["value_json"], DEFINITIONS_BY_KEY[key].default)
+    return effective_runtime_settings(db_values=db_values)
+
+
+def get_runtime_setting_value(key: str) -> Any:
+    settings = list_runtime_settings()
+    if key not in settings:
+        raise ValueError(f"unknown runtime setting: {key}")
+    return settings[key]["value"]
+
+
+def save_runtime_settings(payload: dict[str, Any], actor_id: int | None = None) -> dict[str, dict[str, Any]]:
+    if not isinstance(payload, dict):
+        raise ValueError("settings payload must be an object")
+    current = list_runtime_settings()
+    now = utc_now()
+    changed: dict[str, Any] = {}
+    with get_conn() as conn:
+        for key, raw_value in payload.items():
+            if key not in DEFINITIONS_BY_KEY:
+                raise ValueError(f"unknown runtime setting: {key}")
+            if current[key]["is_locked"]:
+                raise ValueError(f"{key} is locked by deployment configuration")
+            value = validate_runtime_setting(key, raw_value)
+            changed[key] = value
+            conn.execute(
+                """
+                INSERT INTO system_settings (
+                    workspace_id, key, value_json, value_type, is_locked, source,
+                    updated_by, updated_at
+                ) VALUES (?, ?, ?, ?, 0, 'database', ?, ?)
+                ON CONFLICT(workspace_id, key) DO UPDATE SET
+                    value_json=excluded.value_json,
+                    value_type=excluded.value_type,
+                    is_locked=0,
+                    source='database',
+                    updated_by=excluded.updated_by,
+                    updated_at=excluded.updated_at
+                """,
+                (
+                    DEFAULT_WORKSPACE_ID,
+                    key,
+                    setting_value_json(value),
+                    DEFINITIONS_BY_KEY[key].value_type,
+                    actor_id,
+                    now,
+                ),
+            )
+        if changed:
+            _record_audit_log(conn, DEFAULT_WORKSPACE_ID, actor_id, "update_runtime_settings", "system_settings", "runtime", changed)
+    return list_runtime_settings()
+
+
 def _row_to_user(row: dict[str, Any]) -> dict[str, Any]:
     row.pop("password_hash", None)
     return row
@@ -1863,21 +1933,28 @@ def _trim_error(error: str | None) -> str:
     return redact_sensitive(str(error or ""))[:1000]
 
 
-def create_run(job_id: int, summary: dict[str, Any] | None = None) -> int:
+def create_run(job_id: int, summary: dict[str, Any] | None = None, timeout_seconds: int | None = None) -> int:
     with get_conn() as conn:
         job = conn.execute("SELECT workspace_id, created_by FROM monitor_jobs WHERE id=?", (job_id,)).fetchone()
         workspace_id = _safe_int(job["workspace_id"]) if job else DEFAULT_WORKSPACE_ID
         created_by = _safe_int(job["created_by"]) if job else None
+        started_at = datetime.now(timezone.utc)
+        deadline_at = (started_at + timedelta(seconds=int(timeout_seconds))).isoformat() if timeout_seconds else None
         cur = conn.execute(
             """
-            INSERT INTO crawl_runs (workspace_id, job_id, status, started_at, summary, created_by, updated_by)
-            VALUES (?, ?, 'running', ?, ?, ?, ?)
+            INSERT INTO crawl_runs (
+                workspace_id, job_id, status, started_at, summary,
+                timeout_seconds, deadline_at, created_by, updated_by
+            )
+            VALUES (?, ?, 'running', ?, ?, ?, ?, ?, ?)
             """,
             (
                 workspace_id or DEFAULT_WORKSPACE_ID,
                 job_id,
-                utc_now(),
+                started_at.isoformat(),
                 json.dumps(_redact_json(summary or {}), ensure_ascii=False),
+                timeout_seconds,
+                deadline_at,
                 created_by,
                 created_by,
             ),
@@ -1893,11 +1970,15 @@ def update_run_summary(run_id: int, summary: dict[str, Any]) -> None:
         )
 
 
-def finish_run(run_id: int, status: str, summary: dict[str, Any], error: str | None = None) -> None:
+def finish_run(run_id: int, status: str, summary: dict[str, Any], error: str | None = None, timeout_reason: str | None = None) -> None:
     with get_conn() as conn:
         conn.execute(
-            "UPDATE crawl_runs SET status=?, finished_at=?, summary=?, error_message=? WHERE id=?",
-            (status, utc_now(), json.dumps(_redact_json(summary), ensure_ascii=False), _trim_error(error), run_id),
+            """
+            UPDATE crawl_runs
+            SET status=?, finished_at=?, summary=?, error_message=?, timeout_reason=COALESCE(?, timeout_reason)
+            WHERE id=?
+            """,
+            (status, utc_now(), json.dumps(_redact_json(summary), ensure_ascii=False), _trim_error(error), _trim_error(timeout_reason), run_id),
         )
 
 
@@ -2034,6 +2115,7 @@ def _run_display_status(status: str, summary: dict[str, Any]) -> str:
         "partial_failed": "部分失败",
         "failed": "失败",
         "cancelled": "已停止",
+        "timeout": "已超时",
     }
     return labels.get(status, status or "")
 
@@ -2042,6 +2124,8 @@ def _run_display_error(item: dict[str, Any], summary: dict[str, Any]) -> str:
     status = str(item.get("status") or "")
     if status == "skipped":
         return str(summary.get("skip_reason") or item.get("error_message") or "")
+    if status == "timeout":
+        return str(summary.get("timeout_reason") or item.get("timeout_reason") or item.get("error_message") or "")
     if item.get("error_message"):
         return str(item.get("error_message") or "")
     if summary.get("cancel_reason"):

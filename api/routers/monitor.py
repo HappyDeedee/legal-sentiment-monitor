@@ -48,6 +48,7 @@ from ..monitoring.database import (
     list_platform_login_configs,
     list_proxy_profiles,
     list_reports,
+    list_runtime_settings,
     list_runs,
     list_social_accounts,
     mark_ai_key_profile_test_result,
@@ -63,6 +64,7 @@ from ..monitoring.database import (
     save_job,
     save_platform_login_config,
     save_proxy_profile,
+    save_runtime_settings,
     save_social_account,
     set_active_ai_key_profile,
     set_active_ai_rule_profile,
@@ -630,6 +632,19 @@ async def remove_email_template(template_id: int, admin: dict[str, Any] = AdminU
 @router.post("/email-templates/preview")
 async def email_template_preview(payload: dict[str, Any] | None = None, admin: dict[str, Any] = AdminUser):
     return {"preview": render_email_template_preview(payload or {})}
+
+
+@router.get("/runtime-settings")
+async def runtime_settings(admin: dict[str, Any] = AdminUser):
+    return {"settings": list_runtime_settings()}
+
+
+@router.put("/runtime-settings")
+async def update_runtime_settings(payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
+    try:
+        return {"settings": save_runtime_settings(payload, actor_id=int(admin["id"]))}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=redact_sensitive(str(exc)))
 
 
 @router.get("/social-accounts")

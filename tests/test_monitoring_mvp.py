@@ -14,7 +14,7 @@ from fastapi import HTTPException
 from api.monitoring.ai import _build_endpoint, _parse_json, _validate_ai_output, build_evaluation_payload, test_ai as run_ai_config_test
 from api.monitoring.ai import DEFAULT_PROMPT
 from api.monitoring.auth import SESSION_COOKIE_NAME
-from api.monitoring.database import authenticate_user, bootstrap_admin_from_env, create_login_session, create_run, expire_login_sessions_for_account, finish_run, get_active_ai_key_profile, get_ai_config, get_conn, get_dashboard_summary, get_email_config, get_job, get_login_session, get_platform_login_config, get_report, get_run, get_social_account, get_user_by_email, init_db, list_ai_key_profiles, list_ai_rule_profiles, list_email_templates, list_jobs, list_leads, list_login_sessions, list_platform_login_configs, list_proxy_profiles, list_reports, list_runs, list_social_accounts, list_users, mark_selftest_jobs_internal, record_skipped_run, render_email_template_preview, save_ai_config, save_ai_key_profile, save_ai_rule_profile, save_email_config, save_email_template, save_job, save_platform_login_config, save_proxy_profile, save_social_account, save_user, set_active_ai_key_profile, set_active_ai_rule_profile, update_social_account_check_state
+from api.monitoring.database import authenticate_user, bootstrap_admin_from_env, create_login_session, create_run, expire_login_sessions_for_account, finish_run, get_active_ai_key_profile, get_ai_config, get_conn, get_dashboard_summary, get_email_config, get_job, get_login_session, get_platform_login_config, get_report, get_run, get_runtime_setting_value, get_social_account, get_user_by_email, init_db, list_ai_key_profiles, list_ai_rule_profiles, list_email_templates, list_jobs, list_leads, list_login_sessions, list_platform_login_configs, list_proxy_profiles, list_reports, list_runtime_settings, list_runs, list_social_accounts, list_users, mark_selftest_jobs_internal, record_skipped_run, render_email_template_preview, save_ai_config, save_ai_key_profile, save_ai_rule_profile, save_email_config, save_email_template, save_job, save_platform_login_config, save_proxy_profile, save_runtime_settings, save_social_account, save_user, set_active_ai_key_profile, set_active_ai_rule_profile, update_social_account_check_state
 from api.monitoring.mediacrawler_login import get_mediacrawler_login_capability
 from api.monitoring.login_browser import build_login_browser_command, open_login_browser, open_login_browser_with_command
 import api.monitoring.account_check as account_check_module
@@ -450,6 +450,270 @@ def test_phase_1_http_routes_enforce_sessions_roles_and_owner_scope():
         _restore_table("ai_evaluations", snapshots["ai_evaluations"])
         _restore_table("user_sessions", snapshots["user_sessions"])
         _restore_table("audit_logs", snapshots["audit_logs"])
+
+
+def test_phase_2_runtime_settings_storage_validation_and_environment_locks(monkeypatch):
+    init_db()
+    snapshot = _snapshot_table("system_settings")
+    audit_snapshot = _snapshot_table("audit_logs")
+    try:
+        with get_conn() as conn:
+            conn.execute("DELETE FROM system_settings")
+            conn.execute("DELETE FROM audit_logs")
+
+        settings = list_runtime_settings()
+        assert settings["global_crawl_concurrency"]["value"] == 2
+        assert settings["crawler_timeout_seconds"]["value"] == 900
+        assert settings["scheduler_disabled"]["value"] is False
+
+        updated = save_runtime_settings(
+            {
+                "global_crawl_concurrency": 3,
+                "crawler_timeout_seconds": 1200,
+                "scheduler_disabled": True,
+            },
+            actor_id=123,
+        )
+        assert updated["global_crawl_concurrency"]["value"] == 3
+        assert get_runtime_setting_value("crawler_timeout_seconds") == 1200
+        assert updated["scheduler_disabled"]["source"] == "database"
+        with get_conn() as conn:
+            audit = conn.execute("SELECT action_type, resource_type FROM audit_logs ORDER BY id DESC LIMIT 1").fetchone()
+        assert dict(audit) == {"action_type": "update_runtime_settings", "resource_type": "system_settings"}
+
+        with pytest.raises(ValueError, match="at most"):
+            save_runtime_settings({"global_crawl_concurrency": 99})
+
+        monkeypatch.setenv("MONITOR_CRAWLER_TIMEOUT_SECONDS", "1800")
+        locked = list_runtime_settings()["crawler_timeout_seconds"]
+        assert locked["value"] == 1800
+        assert locked["is_locked"] is True
+        assert locked["source"] == "environment"
+        with pytest.raises(ValueError, match="locked"):
+            save_runtime_settings({"crawler_timeout_seconds": 900})
+    finally:
+        _restore_table("system_settings", snapshot)
+        _restore_table("audit_logs", audit_snapshot)
+
+
+def test_phase_2_runtime_settings_api_is_admin_only():
+    from api import main as api_main
+
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "system_settings": _snapshot_table("system_settings"),
+        "user_sessions": _snapshot_table("user_sessions"),
+        "users": _snapshot_table("users"),
+    }
+    try:
+        with get_conn() as conn:
+            for table in ["audit_logs", "system_settings", "user_sessions", "users"]:
+                conn.execute(f"DELETE FROM {table}")
+        admin = bootstrap_admin_from_env("admin@example.com", "AdminPass123!", "Admin")
+        save_user(
+            {
+                "email": "user1@example.com",
+                "display_name": "User One",
+                "password": "UserPass123!",
+                "role": "normal",
+            },
+            actor_id=int(admin["id"]),
+        )
+        transport = httpx.ASGITransport(app=api_main.app)
+
+        async def exercise() -> None:
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as normal_client:
+                login = await normal_client.post("/api/auth/login", json={"email": "user1@example.com", "password": "UserPass123!"})
+                assert login.status_code == 200
+                assert (await normal_client.get("/api/monitor/runtime-settings")).status_code == 403
+
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as admin_client:
+                login = await admin_client.post("/api/auth/login", json={"email": "admin@example.com", "password": "AdminPass123!"})
+                assert login.status_code == 200
+                get_response = await admin_client.get("/api/monitor/runtime-settings")
+                assert get_response.status_code == 200
+                assert get_response.json()["settings"]["scheduler_tick_seconds"]["value"] == 60
+                put_response = await admin_client.put(
+                    "/api/monitor/runtime-settings",
+                    json={"scheduler_tick_seconds": 30, "crawler_retry_count": 2},
+                )
+                assert put_response.status_code == 200
+                data = put_response.json()["settings"]
+                assert data["scheduler_tick_seconds"]["value"] == 30
+                assert data["crawler_retry_count"]["value"] == 2
+
+        asyncio.run(exercise())
+    finally:
+        _restore_table("users", snapshots["users"])
+        _restore_table("user_sessions", snapshots["user_sessions"])
+        _restore_table("system_settings", snapshots["system_settings"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
+
+
+def test_phase_2_scheduler_uses_runtime_settings(monkeypatch):
+    init_db()
+    snapshot = _snapshot_table("system_settings")
+    try:
+        with get_conn() as conn:
+            conn.execute("DELETE FROM system_settings")
+        save_runtime_settings({"scheduler_tick_seconds": 30})
+        monkeypatch.delenv("MONITOR_DISABLE_SCHEDULER", raising=False)
+        monkeypatch.delenv("WEB_CONCURRENCY", raising=False)
+        monkeypatch.delenv("UVICORN_WORKERS", raising=False)
+
+        status = scheduler_status()
+
+        assert status["enabled"] is True
+        assert status["tick_seconds"] == 30
+        assert "30 秒" in status["message"]
+
+        save_runtime_settings({"scheduler_disabled": True})
+
+        assert "暂停自动调度" in scheduler_disabled_reason()
+        assert scheduler_status()["enabled"] is False
+    finally:
+        _restore_table("system_settings", snapshot)
+
+
+def test_phase_2_qrcode_timeout_and_ttl_use_runtime_settings():
+    init_db()
+    snapshot = _snapshot_table("system_settings")
+    try:
+        with get_conn() as conn:
+            conn.execute("DELETE FROM system_settings")
+        save_runtime_settings({"login_qr_timeout_seconds": 12, "login_session_ttl_seconds": 60})
+        handle = login_qrcode_module.LoginSessionHandle(
+            platform="dy",
+            playwright=object(),
+            context=object(),
+            page=object(),
+            profile_path="browser_data/test",
+            created_at=datetime.now(timezone.utc) - timedelta(seconds=61),
+        )
+
+        assert login_qrcode_module._login_qr_timeout_ms() == 12000
+        assert login_qrcode_module._session_expired(handle) is True
+    finally:
+        _restore_table("system_settings", snapshot)
+
+
+def test_phase_2_run_platform_uses_settings_for_retry_and_deadline(tmp_path, monkeypatch):
+    init_db()
+    snapshot = _snapshot_table("system_settings")
+    job = save_job(
+        {
+            "law_firm_name": "运行策略测试律所",
+            "keywords": ["运行策略测试律所避雷"],
+            "platforms": ["dy"],
+            "recipients": [],
+            "enable_comments": False,
+            "time_window_type": "recent_1d",
+        }
+    )
+    run_id = create_run(job["id"], {"job_id": job["id"]}, timeout_seconds=120)
+    calls: list[dict[str, Any]] = []
+
+    def fake_run_attempt(job_arg, platform_arg, out_dir, proxy_binding=None):
+        calls.append({"timeout": job_arg.get("_crawler_timeout_seconds"), "out_dir": out_dir})
+        if len(calls) == 1:
+            raise RuntimeError("temporary network error")
+        json_dir = out_dir / "douyin" / "json"
+        json_dir.mkdir(parents=True)
+        (json_dir / "search_contents_runtime_settings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "aweme_id": "pytest_runtime_settings_retry_001",
+                        "title": "运行策略测试律所避雷",
+                        "desc": "第二次成功",
+                        "create_time": int(datetime.now(timezone.utc).timestamp()),
+                    }
+                ],
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+    try:
+        with get_conn() as conn:
+            conn.execute("DELETE FROM system_settings")
+        save_runtime_settings({"crawler_retry_count": 1, "crawler_retry_delay_seconds": 0})
+        monkeypatch.setattr(runner_module, "list_platform_status", lambda: [{"platform": "dy", "login_window_open": False}])
+        monkeypatch.setattr(runner_module, "_run_crawler_attempt", fake_run_attempt)
+
+        result = asyncio.run(runner_module.run_platform(job, run_id, "dy", tmp_path))
+
+        assert len(calls) == 2
+        assert all(1 <= int(call["timeout"]) <= 120 for call in calls)
+        assert result["attempts"] == 2
+        assert result["max_retries"] == 1
+        assert result["timeout_seconds"] == 120
+        assert result["new_contents"] == 1
+    finally:
+        _cleanup_test_records(job["id"], "pytest_runtime_settings_retry_001")
+        _restore_table("system_settings", snapshot)
+
+
+def test_phase_2_run_job_marks_run_timeout_with_partial_results(monkeypatch):
+    init_db()
+    snapshots = {
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "raw_contents": _snapshot_table("raw_contents"),
+        "raw_comments": _snapshot_table("raw_comments"),
+        "ai_evaluations": _snapshot_table("ai_evaluations"),
+        "system_settings": _snapshot_table("system_settings"),
+    }
+    jobs_snapshot = _snapshot_monitor_jobs()
+    try:
+        with get_conn() as conn:
+            for table in ["reports", "crawl_runs", "raw_contents", "raw_comments", "ai_evaluations", "system_settings"]:
+                conn.execute(f"DELETE FROM {table}")
+        save_runtime_settings({"crawler_timeout_seconds": 60})
+        job = save_job(
+            {
+                "law_firm_name": "超时测试律所",
+                "keywords": ["超时测试律所避雷"],
+                "platforms": ["dy", "ks"],
+                "recipients": [],
+                "enable_comments": False,
+                "time_window_type": "recent_1d",
+            }
+        )
+
+        async def fake_run_platform(job_arg, run_id, platform, run_dir):
+            if platform == "dy":
+                return {
+                    "status": "success",
+                    "raw_contents": 1,
+                    "filtered_contents": 1,
+                    "excluded_contents": 0,
+                    "new_contents": 1,
+                    "content_db_ids": [],
+                }
+            raise runner_module.CrawlerTimedOut("任务达到系统运行时间上限（60 秒），已停止未完成的采集进程")
+
+        monkeypatch.setattr(runner_module, "run_platform", fake_run_platform)
+        monkeypatch.setattr(runner_module, "create_report", lambda run_id, job, summary: {"id": 9876, "run_id": run_id, "job_id": job["id"], "summary": summary})
+        monkeypatch.setattr(runner_module, "send_report", lambda job, report: (False, "未配置收件人"))
+        monkeypatch.setattr(runner_module, "update_report_email_status", lambda *args, **kwargs: None)
+
+        result = asyncio.run(runner_module.run_job(job["id"]))
+        run = get_run(result["run_id"])
+
+        assert result["status"] == "timeout"
+        assert run["status"] == "timeout"
+        assert run["timeout_seconds"] == 60
+        assert run["deadline_at"]
+        assert "系统运行时间上限" in (run["timeout_reason"] or "")
+        assert result["summary"]["new_contents"] == 1
+        assert result["summary"]["platform_results"]["dy"]["status"] == "success"
+        assert result["summary"]["platform_results"]["ks"]["status"] == "timeout"
+    finally:
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+        _restore_monitor_jobs(jobs_snapshot)
 
 
 def test_custom_window_and_millisecond_timestamps():

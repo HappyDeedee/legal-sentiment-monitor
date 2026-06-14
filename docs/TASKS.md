@@ -28,7 +28,7 @@ Status legend:
 - [x] Add API authentication and authorization implementation guide.
 - [x] Add server deployment and server-like validation guide.
 - [x] Add documentation consistency check specification.
-- [ ] Add a documentation check script during Phase 1 close-out, after Phase
+- [x] Add a documentation check script during Phase 1 close-out, after Phase
       0.5 schema foundation and basic auth/session implementation are verified.
 
 ## Phase 0.5 - Schema Foundation
@@ -69,20 +69,20 @@ and permission work.
 
 ## Phase 2 - System Settings Center
 
-- [ ] Add runtime settings storage.
-- [ ] Add settings precedence: defaults, config file, database, environment lock.
-- [ ] Add runtime strategy page for administrators.
-- [ ] Add read-only deployment diagnostics.
-- [ ] Support configurable global concurrency, platform concurrency, timeouts,
+- [x] Add runtime settings storage.
+- [x] Add settings precedence: defaults, config file, database, environment lock.
+- [x] Add runtime strategy page for administrators.
+- [x] Add read-only deployment diagnostics.
+- [x] Support configurable global concurrency, platform concurrency, timeouts,
       retries, QR timeout, session TTL, and retention days.
-- [ ] Treat `crawler_timeout_seconds` as a run-level wall-clock deadline for
+- [x] Treat `crawler_timeout_seconds` as a run-level wall-clock deadline for
       newly started runs.
-- [ ] Add `lock_cleanup_buffer_seconds` for stale-lock recovery.
-- [ ] Replace hard-coded global crawl semaphore with
+- [x] Add `lock_cleanup_buffer_seconds` for stale-lock recovery.
+- [x] Replace hard-coded global crawl semaphore with
       `global_crawl_concurrency` from runtime settings.
-- [ ] Replace hard-coded platform locks/concurrency with per-platform runtime
+- [x] Replace hard-coded platform locks/concurrency with per-platform runtime
       settings.
-- [ ] Replace hard-coded scheduler tick interval with `scheduler_tick_seconds`.
+- [x] Replace hard-coded scheduler tick interval with `scheduler_tick_seconds`.
 
 ## Phase 3 - Administrator Resource Center
 
