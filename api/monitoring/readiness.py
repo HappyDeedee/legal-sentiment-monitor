@@ -23,6 +23,8 @@ def get_readiness_status() -> dict[str, Any]:
     empty_real_platforms = _empty_real_platforms(real_reports) - real_platforms
     checks = [
         _check("platform_profiles", "平台登录配置", _platform_profiles_ready(platforms), _platform_message(platforms)),
+        _check("account_alerts", "账号状态告警", _account_alerts_ok(platforms), _account_alerts_message(platforms)),
+        _check("proxy_alerts", "代理状态告警", _proxy_alerts_ok(platforms), _proxy_alerts_message(platforms)),
         _check("ai_config", "AI 接入", _ai_ready(ai_config), _ai_message(ai_config)),
         _check("email_config", "邮件配置", _email_ready(email_config), _email_message(email_config)),
         _check("selftest_report", "系统自检报告链路", bool(selftest_reports), _selftest_message(selftest_reports)),
@@ -172,6 +174,10 @@ def _next_actions(
             actions.append("进入资源管理的 AI 接入页，保存连接资源并完成连接测试。")
     if "email_config" in failed:
         actions.append("进入邮件配置页，填写 SMTP 和收件人并发送测试邮件。")
+    if "account_alerts" in failed:
+        actions.append("进入平台账号页，处理失效、受限或最近检测失败的账号。")
+    if "proxy_alerts" in failed:
+        actions.append("进入代理资源页，处理最近报错的账号绑定代理或停用异常代理。")
     if "selftest_report" in failed:
         actions.append("进入报告中心，点击生成系统自检报告，验证 HTML、Excel、Markdown 链路。")
     missing_real = REQUIRED_REAL_PLATFORMS - real_platforms
@@ -223,6 +229,50 @@ def _platform_profiles_ready(platforms: list[dict[str, Any]]) -> bool:
         return False
     required_platforms = _required_platform_items(platforms)
     return bool(required_platforms) and all(_platform_login_ready(p) for p in required_platforms)
+
+
+def _account_alerts_ok(platforms: list[dict[str, Any]]) -> bool:
+    return not _account_alert_items(platforms)
+
+
+def _account_alerts_message(platforms: list[dict[str, Any]]) -> str:
+    alerts = _account_alert_items(platforms)
+    if not alerts:
+        return "账号状态暂无异常告警"
+    return "账号需处理：" + "、".join(alerts)
+
+
+def _proxy_alerts_ok(platforms: list[dict[str, Any]]) -> bool:
+    return not _proxy_alert_items(platforms)
+
+
+def _proxy_alerts_message(platforms: list[dict[str, Any]]) -> str:
+    alerts = _proxy_alert_items(platforms)
+    if not alerts:
+        return "代理状态暂无异常告警"
+    return "代理需处理：" + "、".join(alerts)
+
+
+def _account_alert_items(platforms: list[dict[str, Any]]) -> list[str]:
+    alerts: list[str] = []
+    for platform in platforms:
+        label = platform.get("platform_label") or _platform_label(str(platform.get("platform") or ""))
+        if platform.get("needs_login"):
+            alerts.append(f"{label}可能需要重新登录")
+        error = customer_safe_text(platform.get("last_error") or platform.get("login_material_error") or "")
+        if error:
+            alerts.append(f"{label}{error[:80]}")
+    return alerts
+
+
+def _proxy_alert_items(platforms: list[dict[str, Any]]) -> list[str]:
+    alerts: list[str] = []
+    for platform in platforms:
+        label = platform.get("platform_label") or _platform_label(str(platform.get("platform") or ""))
+        error = customer_safe_text(platform.get("active_proxy_error") or "")
+        if error:
+            alerts.append(f"{label}{error[:80]}")
+    return alerts
 
 
 def _required_platform_items(platforms: list[dict[str, Any]]) -> list[dict[str, Any]]:

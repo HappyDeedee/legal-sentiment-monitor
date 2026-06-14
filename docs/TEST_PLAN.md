@@ -176,6 +176,12 @@ Use the standard permission test data:
 - Cookies are not displayed after save.
 - Logs do not contain raw API keys, cookies, SMTP passwords, or proxy passwords.
 - Normal users cannot call administrator-only APIs.
+- Administrator resource operations write audit logs without storing plaintext
+  secrets.
+- Readiness surfaces account invalidation and proxy-error alert paths with
+  customer-safe wording.
+- System diagnostics include disk-space, backup-set, and retention-setting
+  checks.
 
 ## Server-Like Acceptance Tests
 

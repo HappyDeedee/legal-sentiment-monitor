@@ -149,9 +149,9 @@ and permission work.
 
 ## Phase 9 - Security And Operations
 
-- [ ] Add audit log for administrator operations.
-- [ ] Mask sensitive values in UI and logs.
-- [ ] Add backup notes for database, profiles, reports, and encryption key.
-- [ ] Add account invalidation alert path.
-- [ ] Add proxy error alert path.
-- [ ] Add disk and retention diagnostics.
+- [x] Add audit log for administrator operations.
+- [x] Mask sensitive values in UI and logs.
+- [x] Add backup notes for database, profiles, reports, and encryption key.
+- [x] Add account invalidation alert path.
+- [x] Add proxy error alert path.
+- [x] Add disk and retention diagnostics.

@@ -12,7 +12,7 @@ complete and verified. Phase 5 - Account Environment is complete and verified.
 Phase 6 - Server Login Flow is complete and verified locally. Phase 7 - Runs,
 Reports, And AI is complete and verified locally. Phase 8 - Server-Like
 Validation is complete and verified through an isolated server-like service
-process.
+process. Phase 9 - Security And Operations is complete and verified locally.
 The active SQLite schema now provides the foundation tables and columns
 required before later implementation work, and the web/API layer now has
 session login, administrator/normal-user roles, menu visibility,
@@ -27,7 +27,9 @@ fallback, email-failure-tolerant report generation, report-specific lead
 preview switching, run log refresh/copy/download controls, and an automated
 server-like validation script that starts the real FastAPI service with
 production login flags, persistent profile roots, service restart checks, and
-headless browser verification.
+headless browser verification, administrator-operation audit logs, sensitive
+value redaction, resource-alert diagnostics, backup guidance, disk-space
+diagnostics, and retention-setting diagnostics.
 
 ## Implementation Status
 
@@ -42,14 +44,14 @@ headless browser verification.
 - Phase 7 - Runs, Reports, And AI: complete and verified locally.
 - Phase 8 - Server-Like Validation: complete and verified through automated
   server-like validation.
-- Phase 9 - Security And Operations: next unblocked implementation phase.
+- Phase 9 - Security And Operations: complete and verified locally.
 - Phase 5/6 - Account Environment and Server Login: profile key, timeout, and
   lock-storage decisions are accepted; Phase 5 account environment runtime and
   Phase 6 login-flow runtime are complete.
 
-Phase 9 can begin next. It must stay within security and operations scope and
-must not add post-V1 SaaS, billing, high-concurrency, captcha/SMS bypass, or
-field-level permission behavior.
+The documented V1 roadmap is implemented through Phase 9 in this worktree.
+Production pilot handoff still requires live platform, SMTP, and AI-provider
+validation with real deployment credentials.
 
 ## Completed
 
@@ -152,10 +154,18 @@ field-level permission behavior.
   same-platform account profile separation, profile metadata persistence across
   service restart, account/profile/proxy runtime lock enforcement, and
   headless Playwright Chromium availability.
+- Phase 9 security and operations has been implemented and verified:
+  administrator resource changes write minimal `audit_logs` records without
+  plaintext secrets, sensitive text redaction covers API keys, passwords,
+  cookies, proxy credentials, encrypted-field labels, and Chinese secret
+  labels, readiness now surfaces account invalidation and proxy-error alert
+  paths, doctor diagnostics include disk-space, retention-setting, backup-set,
+  and resource-alert checks, and deployment docs describe database, profile,
+  report, encryption-key, and configuration backups.
 
 ## In Progress
 
-- Phase 9 - Security And Operations is ready to start.
+- None for the documented V1 roadmap.
 
 ## Known Risks
 
@@ -173,8 +183,8 @@ field-level permission behavior.
 - Profile migration strategy has been clarified: existing low-volume
   `profile_path` accounts do not need long-term compatibility and can be reset
   or re-logged in under the new `profile_key` model.
-- Phase 2 retention settings are configurable and stored, but automated
-  retention cleanup jobs remain for later operations work.
+- Phase 2/9 retention settings are configurable and visible in diagnostics,
+  but automated retention cleanup jobs remain for later operations work.
 - Docker/container validation could not be run on this machine. Phase 8 used
   an isolated real FastAPI service process with persistent temp data instead.
 - Phase 7 and Phase 8 automated checks do not prove real AI provider, SMTP,
@@ -183,19 +193,21 @@ field-level permission behavior.
 
 ## Next Step
 
-Implement Phase 9 in small increments:
+Prepare for pilot deployment:
 
-1. add or verify audit logs for administrator operations;
-2. harden masking of sensitive values in UI, API responses, and logs;
-3. add backup notes for database, profiles, reports, and encryption key;
-4. add account invalidation and proxy error alert paths;
-5. add disk and retention diagnostics;
-6. record verification in `TEST_RESULTS.md` before marking V1 complete.
+1. deploy the worktree branch to the target single-server environment;
+2. configure real platform account, proxy, AI, SMTP, and domain/HTTPS settings;
+3. run `scripts/server_like_validation.py` on the target host if possible;
+4. complete one real web QR scan, crawl, report, and email-send loop;
+5. record pilot results and any production-only blockers in `TEST_RESULTS.md`
+   before customer handoff.
 
 ## Latest Verification
 
-Phase 8 server-like validation passed on 2026-06-14:
+Phase 9 security and operations verification passed on 2026-06-14:
 
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_9 or doctor_reports_deployment_diagnostics or readiness_status_reports_checks or sensitive_text_is_redacted"`
+- Result: 6 passed, 210 deselected, 1 warning.
 - `uv run python scripts/server_like_validation.py`
 - Result: PASS, 11 checks passed: service web UI reachable, administrator
   login over HTTP, web QR/status login flow primary, local-window login
@@ -205,8 +217,9 @@ Phase 8 server-like validation passed on 2026-06-14:
   survives restart, no local Chrome dependency, and headless Playwright
   Chromium available.
 - `uv run python -m pytest tests/test_monitoring_mvp.py`
-- Result: 213 passed, 3 warnings.
+- Result: 216 passed, 3 warnings.
 - `uv run python scripts/check_docs.py`
 - Result: PASS docs consistency.
 
-Phase 7 local verification remains recorded in `docs/TEST_RESULTS.md`.
+Earlier Phase 7 and Phase 8 verification remains recorded in
+`docs/TEST_RESULTS.md`.

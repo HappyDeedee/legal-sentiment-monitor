@@ -440,6 +440,9 @@ Content:
 - scheduler state;
 - browser/runtime state;
 - data directory state;
+- disk-space state;
+- backup-set guidance;
+- retention-setting state;
 - account resource warnings;
 - proxy warnings;
 - recent failures;

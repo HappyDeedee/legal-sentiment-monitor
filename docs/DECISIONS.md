@@ -94,3 +94,9 @@ short `Superseded by` note rather than deleting history.
   persistence across service restart, runtime locks, and headless browser
   availability, but it does not replace live pilot validation for real platform
   QR scanning, real platform crawling, real AI provider, or real SMTP delivery.
+- Phase 9 completes V1 security and operations with minimal administrator
+  audit logs, secret redaction, resource-alert diagnostics, backup guidance,
+  disk-space diagnostics, and retention-setting diagnostics. Automated
+  retention cleanup jobs are not added in V1; operators should use the
+  diagnostics and backup guidance during pilot operations until a later cleanup
+  job is explicitly planned.

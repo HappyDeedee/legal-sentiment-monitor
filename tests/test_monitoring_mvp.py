@@ -2233,7 +2233,7 @@ def test_report_path_guard_rejects_files_outside_report_dir(tmp_path, monkeypatc
 
 
 def test_sensitive_text_is_redacted():
-    text = "Authorization: Bearer sk-secret123456789 api_key=abc123 password=hunter2 cookie=session=abc token=mytoken"
+    text = "Authorization: Bearer sk-secret123456789 api_key=abc123 password=hunter2 cookie=session=abc token=mytoken 密码：明文密码 代理地址=http://user:pass@example.com"
     proxy_text = "proxy=http://user:pass@127.0.0.1:8081"
     redacted = redact_sensitive(text)
     redacted_proxy = redact_sensitive(proxy_text)
@@ -2243,9 +2243,112 @@ def test_sensitive_text_is_redacted():
     assert "hunter2" not in redacted
     assert "session=abc" not in redacted
     assert "mytoken" not in redacted
+    assert "明文密码" not in redacted
+    assert "user:pass@example.com" not in redacted
     assert "user:pass" not in redacted_proxy
     assert "http://[REDACTED]@127.0.0.1:8081" in redacted_proxy
     assert "[REDACTED]" in redacted
+
+
+def test_phase_9_admin_resource_operations_are_audited_without_secrets():
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "social_accounts": _snapshot_table("social_accounts"),
+        "proxy_profiles": _snapshot_table("proxy_profiles"),
+        "ai_key_profiles": _snapshot_table("ai_key_profiles"),
+        "email_configs": _snapshot_singleton_table("email_configs"),
+        "email_templates": _snapshot_table("email_templates"),
+    }
+    admin = {"id": 901, "workspace_id": 1, "role": "administrator"}
+    try:
+        with get_conn() as conn:
+            conn.execute("DELETE FROM audit_logs")
+
+        proxy = asyncio.run(
+            monitor_router.create_proxy(
+                {
+                    "name": "Phase9 Proxy",
+                    "provider": "manual",
+                    "proxy_url": "http://secret-user:secret-pass@127.0.0.1:8081",
+                    "status": "active",
+                    "max_concurrency": 1,
+                    "last_error": "代理地址=http://secret-user:secret-pass@127.0.0.1:8081",
+                },
+                admin=admin,
+            )
+        )["proxy"]
+        account = asyncio.run(
+            monitor_router.create_social_account(
+                {
+                    "name": "Phase9 Account",
+                    "platform": "dy",
+                    "login_type": "cookie",
+                    "cookies": "sessionid=secret-cookie",
+                    "status": "active",
+                    "proxy_id": proxy["id"],
+                },
+                admin=admin,
+            )
+        )["account"]
+        profile = asyncio.run(
+            monitor_router.create_ai_profile(
+                {
+                    "name": "Phase9 AI",
+                    "provider": "openai",
+                    "base_url": "https://example.com",
+                    "api_key": "sk-phase9-secret-key",
+                    "model": "phase9-model",
+                },
+                admin=admin,
+            )
+        )["profile"]
+        asyncio.run(
+            monitor_router.update_email_config(
+                {
+                    "smtp_host": "smtp.example.com",
+                    "smtp_port": 465,
+                    "encryption": "ssl",
+                    "sender": "sender@example.com",
+                    "username": "sender@example.com",
+                    "password": "smtp-secret",
+                    "default_recipients": ["target@example.com"],
+                },
+                admin=admin,
+            )
+        )
+        template = asyncio.run(
+            monitor_router.create_email_template(
+                {"name": "Phase9 Template", "subject_template": "日报 {law_firm_name}", "html_template": "{report_body}"},
+                admin=admin,
+            )
+        )["template"]
+
+        with get_conn() as conn:
+            rows = [dict(row) for row in conn.execute("SELECT * FROM audit_logs ORDER BY id").fetchall()]
+        actions = {row["action_type"] for row in rows}
+        assert {
+            "create_proxy",
+            "create_social_account",
+            "create_ai_profile",
+            "update_email_config",
+            "create_email_template",
+        } <= actions
+        serialized = json.dumps(rows, ensure_ascii=False)
+        for forbidden in ["secret-pass", "secret-cookie", "sk-phase9-secret-key", "smtp-secret"]:
+            assert forbidden not in serialized
+        assert all(row["user_id"] == admin["id"] for row in rows)
+        assert str(proxy["id"]) in {row["resource_id"] for row in rows}
+        assert str(account["id"]) in {row["resource_id"] for row in rows}
+        assert str(profile["id"]) in {row["resource_id"] for row in rows}
+        assert str(template["id"]) in {row["resource_id"] for row in rows}
+    finally:
+        _restore_table("audit_logs", snapshots["audit_logs"])
+        _restore_table("social_accounts", snapshots["social_accounts"])
+        _restore_table("proxy_profiles", snapshots["proxy_profiles"])
+        _restore_table("ai_key_profiles", snapshots["ai_key_profiles"])
+        _restore_singleton_table("email_configs", snapshots["email_configs"])
+        _restore_table("email_templates", snapshots["email_templates"])
 
 
 def test_run_summary_and_log_api_redact_sensitive_values(tmp_path, monkeypatch):
@@ -5311,7 +5414,7 @@ def test_readiness_status_reports_checks():
     status = get_readiness_status()
     keys = {check["key"] for check in status["checks"]}
 
-    assert {"platform_profiles", "ai_config", "email_config", "selftest_report", "real_report"} <= keys
+    assert {"platform_profiles", "account_alerts", "proxy_alerts", "ai_config", "email_config", "selftest_report", "real_report"} <= keys
     assert isinstance(status["ready"], bool)
     assert isinstance(status["next_actions"], list)
     assert len(status["platforms"]) == 3
@@ -5478,6 +5581,35 @@ def test_job_preflight_blocks_active_account_with_disabled_proxy(monkeypatch):
             _restore_table(table, snapshot)
 
 
+def test_phase_9_readiness_reports_account_and_proxy_alerts(monkeypatch):
+    statuses = [
+        {
+            "platform": "dy",
+            "platform_label": "抖音",
+            "login_type": "qrcode",
+            "profile_exists": True,
+            "needs_login": True,
+            "login_window_open": False,
+            "last_error": "登录态失效 password=hunter2",
+            "active_proxy_error": "代理超时 密码：secret",
+        }
+    ]
+    monkeypatch.setattr(readiness_module, "list_platform_status", lambda: statuses)
+
+    readiness = get_readiness_status()
+    account_check = next(check for check in readiness["checks"] if check["key"] == "account_alerts")
+    proxy_check = next(check for check in readiness["checks"] if check["key"] == "proxy_alerts")
+
+    assert account_check["ok"] is False
+    assert proxy_check["ok"] is False
+    visible = json.dumps({"checks": readiness["checks"], "actions": readiness["next_actions"]}, ensure_ascii=False)
+    assert "登录态失效" in visible
+    assert "hunter2" not in visible
+    assert "secret" not in visible
+    assert any("平台账号页" in action for action in readiness["next_actions"])
+    assert any("代理资源页" in action for action in readiness["next_actions"])
+
+
 def test_job_preflight_warns_active_account_with_limited_proxy_error(monkeypatch):
     init_db()
     snapshots = {
@@ -5527,7 +5659,22 @@ def test_doctor_reports_deployment_diagnostics():
     status = run_doctor()
     keys = {check["key"] for check in status["checks"]}
 
-    assert {"project_files", "uv", "data_dir", "database", "gitignore_runtime_data", "platform_login", "browser_profiles", "ai_config", "email_config", "reports"} <= keys
+    assert {
+        "project_files",
+        "uv",
+        "data_dir",
+        "database",
+        "disk_space",
+        "retention_settings",
+        "backup_set",
+        "gitignore_runtime_data",
+        "platform_login",
+        "browser_profiles",
+        "resource_alerts",
+        "ai_config",
+        "email_config",
+        "reports",
+    } <= keys
     assert "readiness" in status
     assert "paths" in status
     assert status["paths"]["monitor_data_dir"]
@@ -5540,6 +5687,37 @@ def test_doctor_reports_deployment_diagnostics():
     assert all(str(item["login_class"]).startswith("media_platform.") for item in capabilities)
     assert all(str(item["qrcode_prepare_method"]).endswith(".prepare_qrcode_login") for item in capabilities)
     assert all(item["qrcode_capture_method"] == "tools.utils.find_login_qrcode" for item in capabilities)
+    retention_check = next(check for check in status["checks"] if check["key"] == "retention_settings")
+    assert "运行日志保留" in retention_check["message"]
+    disk_check = next(check for check in status["checks"] if check["key"] == "disk_space")
+    assert "GB" in disk_check["message"]
+    backup_check = next(check for check in status["checks"] if check["key"] == "backup_set")
+    assert "数据库" in backup_check["message"]
+
+
+def test_phase_9_doctor_resource_alerts_are_customer_safe(monkeypatch):
+    statuses = [
+        {
+            "platform": "dy",
+            "platform_label": "抖音",
+            "login_type": "qrcode",
+            "profile_exists": True,
+            "needs_login": True,
+            "login_window_open": False,
+            "last_error": "cookie=session-secret",
+            "active_proxy_error": "proxy=http://user:pass@127.0.0.1:8081",
+        }
+    ]
+    monkeypatch.setattr("api.monitoring.doctor.list_platform_status", lambda: statuses)
+
+    status = run_doctor()
+    check = next(item for item in status["checks"] if item["key"] == "resource_alerts")
+
+    assert check["ok"] is False
+    visible = json.dumps({"check": check, "tips": status["recommendations"]}, ensure_ascii=False)
+    assert "session-secret" not in visible
+    assert "user:pass" not in visible
+    assert "平台账号和代理资源页" in visible
 
 
 def test_doctor_checks_gitignore_runtime_data(monkeypatch, tmp_path):

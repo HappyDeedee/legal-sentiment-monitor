@@ -1067,6 +1067,40 @@ def invalidate_user_session(token: str | None) -> None:
         conn.execute("UPDATE user_sessions SET status='expired' WHERE session_token_hash=?", (hash_session_token(token),))
 
 
+def record_audit_log(
+    action_type: str,
+    resource_type: str,
+    resource_id: str | int,
+    details: dict[str, Any] | None = None,
+    user_id: int | None = None,
+    workspace_id: int = DEFAULT_WORKSPACE_ID,
+    ip_address: str = "",
+) -> None:
+    with get_conn() as conn:
+        _record_audit_log(
+            conn,
+            workspace_id,
+            user_id,
+            action_type,
+            resource_type,
+            str(resource_id),
+            details or {},
+            ip_address=ip_address,
+        )
+
+
+def list_audit_logs(limit: int = 100) -> list[dict[str, Any]]:
+    limit = _coerce_limit(limit, 100)
+    sql = "SELECT * FROM audit_logs ORDER BY id DESC"
+    params: list[Any] = []
+    if limit > 0:
+        sql += " LIMIT ?"
+        params.append(limit)
+    with get_conn() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return [dict(row) for row in rows]
+
+
 def list_runtime_settings() -> dict[str, dict[str, Any]]:
     db_values: dict[str, Any] = {}
     with get_conn() as conn:

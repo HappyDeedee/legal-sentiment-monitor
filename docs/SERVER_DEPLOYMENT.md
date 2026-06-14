@@ -165,7 +165,9 @@ Restore validation must include:
 - service starts after restore;
 - administrator login works;
 - account profiles can be reused;
-- a report can be opened from restored data.
+- a report can be opened from restored data;
+- System Diagnostics shows acceptable database, disk-space, backup-set,
+  retention-setting, account-alert, and proxy-alert checks before pilot use.
 
 ## Encryption Key Management
 

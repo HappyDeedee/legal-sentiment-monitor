@@ -11,6 +11,49 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
   `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-14 - Phase 9 Security And Operations Verified
+
+Environment: local worktree `E:\myproject\MediaCrawler-worktrees\v1-roadmap`
+using `uv run`, the monitoring SQLite database, and automated readiness/doctor
+diagnostic checks.
+
+Result:
+
+- Added minimal administrator-operation audit logging for resource and
+  security-sensitive operations, including platform login configuration,
+  platform accounts, login sessions, proxy resources, AI profiles/rules, mail
+  configuration/templates, runtime settings, and administrator-triggered report
+  resend.
+- Kept audit details intentionally small and non-secret; tests verify API keys,
+  SMTP passwords, proxy credentials, and cookies are not written to audit
+  logs.
+- Hardened sensitive text redaction for encrypted-field names, proxy URLs, and
+  Chinese secret labels such as password, key, token, cookie, and proxy address.
+- Added account invalidation and proxy-error alert paths to readiness checks.
+- Added disk-space, retention-setting, backup-set, and resource-alert checks to
+  doctor diagnostics.
+- Updated deployment guidance so database, account profiles, reports,
+  encryption key, and deployment configuration are explicit backup targets.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_9 or doctor_reports_deployment_diagnostics or readiness_status_reports_checks or sensitive_text_is_redacted"`
+- Result: 6 passed, 210 deselected, 1 warning.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 216 passed, 3 warnings.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- `uv run python scripts/server_like_validation.py`
+- Result: PASS, 11 checks passed.
+
+Limitations:
+
+- Phase 9 does not add automated retention cleanup jobs; retention settings and
+  diagnostics are visible, while cleanup execution remains future operations
+  work.
+- Real account invalidation, proxy-provider behavior, SMTP delivery, AI
+  provider behavior, and platform crawling still require live pilot validation.
+
 ## 2026-06-14 - Phase 8 Server-Like Validation Verified
 
 Environment: isolated server-like service process in local worktree

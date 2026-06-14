@@ -53,6 +53,7 @@ from ..monitoring.database import (
     list_runtime_settings,
     list_runs,
     list_social_accounts,
+    record_audit_log,
     mark_ai_key_profile_test_result,
     mark_ai_rule_profile_test_result,
     mark_ai_test_result,
@@ -129,6 +130,28 @@ def _local_login_window_allowed() -> bool:
     if value is None:
         return True
     return str(value).strip().lower() not in {"0", "false", "no", "off"}
+
+
+def _audit_admin(
+    admin: dict[str, Any] | Any,
+    action_type: str,
+    resource_type: str,
+    resource_id: str | int,
+    details: dict[str, Any] | None = None,
+) -> None:
+    if not isinstance(admin, dict):
+        return
+    try:
+        record_audit_log(
+            action_type,
+            resource_type,
+            resource_id,
+            details or {},
+            user_id=int(admin.get("id") or 0) or None,
+            workspace_id=int(admin.get("workspace_id") or 1),
+        )
+    except Exception:
+        return
 
 
 def _task_payload_for_role(payload: dict[str, Any], user: dict[str, Any] | None) -> dict[str, Any]:
@@ -228,7 +251,9 @@ async def platform_login_config(platform: str, admin: dict[str, Any] = AdminUser
 async def update_platform_login_config(platform: str, payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     init_db()
     try:
-        return {"config": save_platform_login_config(platform, payload)}
+        config = save_platform_login_config(platform, payload)
+        _audit_admin(admin, "update_platform_login_config", "platform_login_config", platform, {"platform": platform, "login_type": config.get("login_type")})
+        return {"config": config}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=redact_sensitive(str(exc)))
 
@@ -467,7 +492,9 @@ async def ai_rule_profiles(admin: dict[str, Any] = AdminUser):
 @router.post("/ai-rule-profiles")
 async def create_ai_rule_profile(payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     try:
-        return {"profile": save_ai_rule_profile(payload)}
+        profile = save_ai_rule_profile(payload)
+        _audit_admin(admin, "create_ai_rule_profile", "ai_rule_profile", profile.get("id"), {"is_active": profile.get("is_active")})
+        return {"profile": profile}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -475,7 +502,9 @@ async def create_ai_rule_profile(payload: dict[str, Any], admin: dict[str, Any] 
 @router.put("/ai-rule-profiles/{rule_id}")
 async def update_ai_rule_profile(rule_id: int, payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     try:
-        return {"profile": save_ai_rule_profile(payload, rule_id)}
+        profile = save_ai_rule_profile(payload, rule_id)
+        _audit_admin(admin, "update_ai_rule_profile", "ai_rule_profile", rule_id, {"is_active": profile.get("is_active")})
+        return {"profile": profile}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -483,7 +512,9 @@ async def update_ai_rule_profile(rule_id: int, payload: dict[str, Any], admin: d
 @router.post("/ai-rule-profiles/{rule_id}/activate")
 async def activate_ai_rule_profile(rule_id: int, admin: dict[str, Any] = AdminUser):
     try:
-        return {"profile": set_active_ai_rule_profile(rule_id)}
+        profile = set_active_ai_rule_profile(rule_id)
+        _audit_admin(admin, "activate_ai_rule_profile", "ai_rule_profile", rule_id)
+        return {"profile": profile}
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
 
@@ -492,6 +523,7 @@ async def activate_ai_rule_profile(rule_id: int, admin: dict[str, Any] = AdminUs
 async def remove_ai_rule_profile(rule_id: int, admin: dict[str, Any] = AdminUser):
     try:
         delete_ai_rule_profile(rule_id)
+        _audit_admin(admin, "delete_ai_rule_profile", "ai_rule_profile", rule_id)
         return {"ok": True}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
@@ -506,13 +538,16 @@ async def test_ai_rule_profile(rule_id: int, payload: dict[str, Any] | None = No
     try:
         result = await ai.test_ai(payload)
         profile = mark_ai_rule_profile_test_result(rule_id, True)
+        _audit_admin(admin, "test_ai_rule_profile", "ai_rule_profile", rule_id, {"status": "success"})
         return {"result": result, "profile": profile}
     except ValueError as exc:
         mark_ai_rule_profile_test_result(rule_id, False, str(exc))
+        _audit_admin(admin, "test_ai_rule_profile", "ai_rule_profile", rule_id, {"status": "failed", "error": str(exc)})
         raise HTTPException(status_code=400, detail=redact_sensitive(str(exc)))
     except Exception as exc:
         message = redact_sensitive(f"{type(exc).__name__}: {exc}")
         mark_ai_rule_profile_test_result(rule_id, False, message)
+        _audit_admin(admin, "test_ai_rule_profile", "ai_rule_profile", rule_id, {"status": "failed", "error": message})
         raise HTTPException(status_code=400, detail=message)
 
 
@@ -525,7 +560,9 @@ async def ai_profiles(admin: dict[str, Any] = AdminUser):
 @router.post("/ai-profiles")
 async def create_ai_profile(payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     try:
-        return {"profile": save_ai_key_profile(payload)}
+        profile = save_ai_key_profile(payload)
+        _audit_admin(admin, "create_ai_profile", "ai_key_profile", profile.get("id"), {"provider": profile.get("provider"), "model": profile.get("model")})
+        return {"profile": profile}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=redact_sensitive(str(exc)))
 
@@ -533,7 +570,9 @@ async def create_ai_profile(payload: dict[str, Any], admin: dict[str, Any] = Adm
 @router.put("/ai-profiles/{profile_id}")
 async def update_ai_profile(profile_id: int, payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     try:
-        return {"profile": save_ai_key_profile(payload, profile_id)}
+        profile = save_ai_key_profile(payload, profile_id)
+        _audit_admin(admin, "update_ai_profile", "ai_key_profile", profile_id, {"provider": profile.get("provider"), "model": profile.get("model")})
+        return {"profile": profile}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=redact_sensitive(str(exc)))
 
@@ -541,7 +580,9 @@ async def update_ai_profile(profile_id: int, payload: dict[str, Any], admin: dic
 @router.post("/ai-profiles/{profile_id}/activate")
 async def activate_ai_profile(profile_id: int, admin: dict[str, Any] = AdminUser):
     try:
-        return {"profile": set_active_ai_key_profile(profile_id)}
+        profile = set_active_ai_key_profile(profile_id)
+        _audit_admin(admin, "activate_ai_profile", "ai_key_profile", profile_id, {"provider": profile.get("provider"), "model": profile.get("model")})
+        return {"profile": profile}
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
 
@@ -567,11 +608,13 @@ async def test_ai_profile(profile_id: int, payload: dict[str, Any] | None = None
             raise ValueError("AI profile not found")
         result = await ai.test_ai_connection({**profile, **(payload or {})})
         profile_masked = mark_ai_key_profile_test_result(profile_id, True)
+        _audit_admin(admin, "test_ai_profile", "ai_key_profile", profile_id, {"status": "success", "provider": profile_masked.get("provider")})
         return {"result": result, "profile": profile_masked}
     except ValueError as exc:
         if "not found" not in str(exc):
             try:
                 mark_ai_key_profile_test_result(profile_id, False, str(exc))
+                _audit_admin(admin, "test_ai_profile", "ai_key_profile", profile_id, {"status": "failed", "error": str(exc)})
             except ValueError:
                 pass
         raise HTTPException(status_code=404 if "not found" in str(exc) else 400, detail=redact_sensitive(str(exc)))
@@ -579,6 +622,7 @@ async def test_ai_profile(profile_id: int, payload: dict[str, Any] | None = None
         message = redact_sensitive(f"{type(exc).__name__}: {exc}")
         try:
             mark_ai_key_profile_test_result(profile_id, False, message)
+            _audit_admin(admin, "test_ai_profile", "ai_key_profile", profile_id, {"status": "failed", "error": message})
         except ValueError:
             pass
         raise HTTPException(status_code=400, detail=message)
@@ -615,6 +659,7 @@ async def list_ai_profile_models(profile_id: int, payload: dict[str, Any] | None
 @router.delete("/ai-profiles/{profile_id}")
 async def remove_ai_profile(profile_id: int, admin: dict[str, Any] = AdminUser):
     delete_ai_key_profile(profile_id)
+    _audit_admin(admin, "delete_ai_profile", "ai_key_profile", profile_id)
     return {"ok": True}
 
 
@@ -627,7 +672,9 @@ async def email_config(admin: dict[str, Any] = AdminUser):
 @router.put("/email-config")
 async def update_email_config(payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     try:
-        return {"config": save_email_config(payload)}
+        config = save_email_config(payload)
+        _audit_admin(admin, "update_email_config", "email_config", "default", {"smtp_host": config.get("smtp_host"), "sender": config.get("sender")})
+        return {"config": config}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -640,15 +687,18 @@ async def test_email(payload: dict[str, Any] | None = None, admin: dict[str, Any
         config_saved = True
         send_test_email({})
         config = mark_email_test_result(True)
+        _audit_admin(admin, "test_email_config", "email_config", "default", {"status": "success", "smtp_host": config.get("smtp_host")})
         return {"ok": True, "config": config}
     except ValueError as exc:
         if config_saved:
             mark_email_test_result(False, str(exc))
+            _audit_admin(admin, "test_email_config", "email_config", "default", {"status": "failed", "error": str(exc)})
         raise HTTPException(status_code=400, detail=redact_sensitive(str(exc)))
     except Exception as exc:
         message = redact_sensitive(f"{type(exc).__name__}: {exc}")
         if config_saved:
             mark_email_test_result(False, message)
+            _audit_admin(admin, "test_email_config", "email_config", "default", {"status": "failed", "error": message})
         raise HTTPException(status_code=400, detail=message)
 
 
@@ -661,7 +711,9 @@ async def email_templates(admin: dict[str, Any] = AdminUser):
 @router.post("/email-templates")
 async def create_email_template(payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     try:
-        return {"template": save_email_template(payload)}
+        template = save_email_template(payload)
+        _audit_admin(admin, "create_email_template", "email_template", template.get("id"), {"is_active": template.get("is_active")})
+        return {"template": template}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -669,7 +721,9 @@ async def create_email_template(payload: dict[str, Any], admin: dict[str, Any] =
 @router.put("/email-templates/{template_id}")
 async def update_email_template(template_id: int, payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     try:
-        return {"template": save_email_template(payload, template_id)}
+        template = save_email_template(payload, template_id)
+        _audit_admin(admin, "update_email_template", "email_template", template_id, {"is_active": template.get("is_active")})
+        return {"template": template}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -677,6 +731,7 @@ async def update_email_template(template_id: int, payload: dict[str, Any], admin
 @router.delete("/email-templates/{template_id}")
 async def remove_email_template(template_id: int, admin: dict[str, Any] = AdminUser):
     delete_email_template(template_id)
+    _audit_admin(admin, "delete_email_template", "email_template", template_id)
     return {"ok": True}
 
 
@@ -707,7 +762,9 @@ async def social_accounts(admin: dict[str, Any] = AdminUser):
 @router.post("/social-accounts")
 async def create_social_account(payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     try:
-        return {"account": save_social_account(payload)}
+        account = save_social_account(payload)
+        _audit_admin(admin, "create_social_account", "social_account", account.get("id"), {"platform": account.get("platform"), "login_type": account.get("login_type")})
+        return {"account": account}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -715,7 +772,9 @@ async def create_social_account(payload: dict[str, Any], admin: dict[str, Any] =
 @router.put("/social-accounts/{account_id}")
 async def update_social_account(account_id: int, payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     try:
-        return {"account": save_social_account(payload, account_id)}
+        account = save_social_account(payload, account_id)
+        _audit_admin(admin, "update_social_account", "social_account", account_id, {"platform": account.get("platform"), "status": account.get("status")})
+        return {"account": account}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -723,7 +782,9 @@ async def update_social_account(account_id: int, payload: dict[str, Any], admin:
 @router.post("/social-accounts/{account_id}/confirm")
 async def confirm_account(account_id: int, payload: dict[str, Any] | None = None, admin: dict[str, Any] = AdminUser):
     try:
-        return {"account": confirm_social_account(account_id, payload or {})}
+        account = confirm_social_account(account_id, payload or {})
+        _audit_admin(admin, "confirm_social_account", "social_account", account_id, {"platform": account.get("platform"), "status": account.get("status")})
+        return {"account": account}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -731,13 +792,16 @@ async def confirm_account(account_id: int, payload: dict[str, Any] | None = None
 @router.delete("/social-accounts/{account_id}")
 async def remove_social_account(account_id: int, admin: dict[str, Any] = AdminUser):
     delete_social_account(account_id)
+    _audit_admin(admin, "delete_social_account", "social_account", account_id)
     return {"ok": True}
 
 
 @router.post("/social-accounts/{account_id}/check-login")
 async def check_social_account(account_id: int, admin: dict[str, Any] = AdminUser):
     try:
-        return {"result": await check_social_account_login(account_id)}
+        result = await check_social_account_login(account_id)
+        _audit_admin(admin, "check_social_account_login", "social_account", account_id, {"status": result.get("status"), "ok": result.get("ok")})
+        return {"result": result}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=redact_sensitive(str(exc)))
 
@@ -813,6 +877,7 @@ async def create_platform_login_session(payload: dict[str, Any], admin: dict[str
                 "message": "正在生成登录二维码。",
             }
         )
+        _audit_admin(admin, "create_login_session", "login_session", session.get("id"), {"platform": platform, "account_id": payload.get("account_id")})
         qr_result = await start_qrcode_login_session_with_profile(int(session["id"]), str(platform), command)
         verification_image = ""
         account_status = None
@@ -948,6 +1013,7 @@ async def _verify_successful_login_session(session: dict[str, Any]) -> tuple[dic
 async def remove_login_session(session_id: int, admin: dict[str, Any] = AdminUser):
     await close_qrcode_login_session(session_id)
     delete_login_session(session_id)
+    _audit_admin(admin, "delete_login_session", "login_session", session_id)
     return {"ok": True}
 
 
@@ -960,7 +1026,9 @@ async def proxies(admin: dict[str, Any] = AdminUser):
 @router.post("/proxies")
 async def create_proxy(payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     try:
-        return {"proxy": save_proxy_profile(payload)}
+        proxy = save_proxy_profile(payload)
+        _audit_admin(admin, "create_proxy", "proxy_profile", proxy.get("id"), {"provider": proxy.get("provider"), "status": proxy.get("status"), "max_concurrency": proxy.get("max_concurrency")})
+        return {"proxy": proxy}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=redact_sensitive(str(exc)))
 
@@ -968,7 +1036,9 @@ async def create_proxy(payload: dict[str, Any], admin: dict[str, Any] = AdminUse
 @router.put("/proxies/{proxy_id}")
 async def update_proxy(proxy_id: int, payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     try:
-        return {"proxy": save_proxy_profile(payload, proxy_id)}
+        proxy = save_proxy_profile(payload, proxy_id)
+        _audit_admin(admin, "update_proxy", "proxy_profile", proxy_id, {"provider": proxy.get("provider"), "status": proxy.get("status"), "max_concurrency": proxy.get("max_concurrency")})
+        return {"proxy": proxy}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=redact_sensitive(str(exc)))
 
@@ -976,6 +1046,7 @@ async def update_proxy(proxy_id: int, payload: dict[str, Any], admin: dict[str, 
 @router.delete("/proxies/{proxy_id}")
 async def remove_proxy(proxy_id: int, admin: dict[str, Any] = AdminUser):
     delete_proxy_profile(proxy_id)
+    _audit_admin(admin, "delete_proxy", "proxy_profile", proxy_id)
     return {"ok": True}
 
 
@@ -1158,6 +1229,8 @@ async def report_resend_email(report_id: int, user: dict[str, Any] = CurrentUser
         if _route_actor(user) and not get_report(report_id, actor=_route_actor(user)):
             raise ValueError("report not found")
         ok, error, report = resend_report_email(report_id)
+        if is_administrator(user):
+            _audit_admin(user, "resend_report_email", "report", report_id, {"status": "sent" if ok else "failed", "error": error or ""})
         return {"ok": ok, "error": customer_safe_text(error), "report": report}
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))

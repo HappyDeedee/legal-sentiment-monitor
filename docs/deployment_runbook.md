@@ -270,7 +270,8 @@ MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=false
 
 常见原因是网页登录态失效、平台要求验证或扫码登录过期。
 
-处理方式：进入平台账号页重新发起登录；如果二维码不可用，可使用本地窗口登录兜底。
+处理方式：进入平台账号页重新发起网页登录二维码；如果平台要求验证，
+系统只回传状态并等待人工处理。生产环境不要依赖本地窗口登录。
 
 ### 报告为空但手动搜索有结果
 
@@ -285,12 +286,24 @@ MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=false
 
 ## 11. 备份与恢复
 
+最小备份范围：
+
+- 数据库：`/opt/legal-sentiment-monitor/data/monitor.sqlite`
+- 加密密钥：`/opt/legal-sentiment-monitor/data/secret.key`
+- 账号 Profile / 网页登录态：`/opt/legal-sentiment-monitor/browser_data/`
+- 报告与运行产物：`/opt/legal-sentiment-monitor/data/reports/`、运行日志目录
+- 部署配置：`/etc/legal-sentiment-monitor.env` 和实际使用的 `monitor.yaml`
+
+`secret.key` 必须和数据库一起备份；丢失后已保存的 AI Key、SMTP 密码、
+Cookie 和代理 URL 无法解密。
+
 备份：
 
 ```bash
 tar -czf legal-sentiment-backup-$(date +%F).tar.gz \
   /opt/legal-sentiment-monitor/data \
-  /opt/legal-sentiment-monitor/browser_data
+  /opt/legal-sentiment-monitor/browser_data \
+  /etc/legal-sentiment-monitor.env
 ```
 
 恢复：
@@ -301,4 +314,6 @@ tar -xzf legal-sentiment-backup-YYYY-MM-DD.tar.gz -C /
 sudo systemctl start legal-sentiment-monitor
 ```
 
-恢复后进入后台“系统配置 -> 系统诊断”确认状态。
+恢复后进入后台“系统配置 -> 系统诊断”确认数据库、密钥、磁盘空间、保留
+策略、账号告警、代理告警和报告链路状态；再完成一次真实平台采集和报告
+预览验证。

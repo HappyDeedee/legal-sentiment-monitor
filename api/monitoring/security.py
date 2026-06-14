@@ -62,6 +62,11 @@ def redact_sensitive(text: str | None) -> str:
         (r"(?i)(cookie\s*[:=]\s*)[^\r\n]+", r"\1[REDACTED]"),
         (r"(?i)(token\s*[:=]\s*)[^\s,;'\"]+", r"\1[REDACTED]"),
         (r"(?i)(secret\s*[:=]\s*)[^\s,;'\"]+", r"\1[REDACTED]"),
+        (r"(?i)(proxy[_-]?url\s*[:=]\s*)[^\s,;'\"]+", r"\1[REDACTED]"),
+        (r"(?i)(cookies?[_-]?encrypted\s*[:=]\s*)[^\s,;'\"]+", r"\1[REDACTED]"),
+        (r"(?i)(api[_-]?key[_-]?encrypted\s*[:=]\s*)[^\s,;'\"]+", r"\1[REDACTED]"),
+        (r"(?i)(password[_-]?encrypted\s*[:=]\s*)[^\s,;'\"]+", r"\1[REDACTED]"),
+        (r"(密钥|密码|令牌|授权|Cookie|代理地址)\s*[：:=]\s*[^\s,;，；'\"]+", r"\1=[REDACTED]"),
         (r"\bsk-[A-Za-z0-9_\-]{12,}\b", "sk-[REDACTED]"),
     ]
     for pattern, repl in patterns:
