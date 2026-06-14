@@ -47,6 +47,10 @@ and permission work.
 - [ ] Add `workspace_id`, `created_by`, and `updated_by` to priority business
       tables.
 - [ ] Add `profile_key` to `social_accounts` and `login_sessions`.
+- [ ] Add run-level timeout fields to `crawl_runs`: `timeout_seconds`,
+      `deadline_at`, and `timeout_reason`.
+- [ ] Add account/profile lock fields to `social_accounts`.
+- [ ] Create `resource_locks` for proxy concurrency.
 - [ ] Backfill existing data into the default workspace with `workspace_id = 1`.
 - [ ] Keep old fields during the first migration step, but stop using
       `profile_path` as the identity for new account environments.
@@ -71,6 +75,9 @@ and permission work.
 - [ ] Add read-only deployment diagnostics.
 - [ ] Support configurable global concurrency, platform concurrency, timeouts,
       retries, QR timeout, session TTL, and retention days.
+- [ ] Treat `crawler_timeout_seconds` as a run-level wall-clock deadline for
+      newly started runs.
+- [ ] Add `lock_cleanup_buffer_seconds` for stale-lock recovery.
 - [ ] Replace hard-coded global crawl semaphore with
       `global_crawl_concurrency` from runtime settings.
 - [ ] Replace hard-coded platform locks/concurrency with per-platform runtime
@@ -91,6 +98,8 @@ and permission work.
 - [ ] Replace complex task form for normal users with a simplified wizard.
 - [ ] Include law firm, aliases, platform search terms, platforms, frequency,
       crawl range, comments, and recipient emails.
+- [ ] Explain crawl range boundaries: max items is a cap, max pages is
+      approximate, start page and time window depend on platform support.
 - [ ] Hide account, proxy, AI profile, template, and browser options from normal
       users.
 - [ ] Keep administrator advanced task settings available.
@@ -104,6 +113,8 @@ and permission work.
 - [ ] Add account lock.
 - [ ] Add profile lock.
 - [ ] Add proxy concurrency control.
+- [ ] Add startup and scheduler recovery for stale running runs and expired
+      locks.
 - [ ] Ensure login and crawling use the same account proxy when configured.
 
 ## Phase 6 - Server Login Flow

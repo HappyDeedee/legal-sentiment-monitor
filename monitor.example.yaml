@@ -7,8 +7,14 @@ runtime:
   # Recommended V1 default: 2.
   global_crawl_concurrency: 2
 
-  # Per-crawl timeout in seconds. Applies to newly started runs.
+  # Run-level crawl timeout in seconds. Applies to newly started runs.
+  # Platform crawler attempts should use the remaining run time, not a fresh
+  # timeout budget per platform.
   crawler_timeout_seconds: 900
+
+  # Extra recovery window after the run deadline before a persisted account,
+  # profile, or proxy lock is considered stale.
+  lock_cleanup_buffer_seconds: 300
 
   # Retry count after a crawler failure. 0 disables retry.
   crawler_retry_count: 1

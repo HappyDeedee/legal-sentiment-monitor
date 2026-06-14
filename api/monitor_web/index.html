@@ -10,6 +10,9 @@
       --bg:#f4f6fa; --surface:#fff; --subtle:#f8fafc; --line:#dde3ec;
       --text:#172033; --muted:#647084; --primary:#2563eb; --primary-weak:#eff6ff;
       --success:#047857; --warning:#b45309; --danger:#b42318; --nav:#111827;
+      --shadow-sm:0 1px 2px rgba(15,23,42,.04);
+      --shadow-md:0 16px 36px rgba(15,23,42,.14);
+      --radius:8px; --radius-sm:6px;
     }
     * { box-sizing: border-box; }
     body { margin:0; font-family:"Inter","Microsoft YaHei",Arial,sans-serif; background:var(--bg); color:var(--text); font-size:14px; }
@@ -21,7 +24,7 @@
     nav { display:grid; gap:10px; }
     .nav-group { display:grid; gap:3px; position:relative; }
     .nav-label { color:#94a3b8; font-size:12px; padding:8px 10px 3px; }
-    nav button { width:100%; display:flex; align-items:center; gap:10px; text-align:left; border:0; background:transparent; color:#cbd5e1; padding:10px 12px; border-radius:6px; cursor:pointer; margin:0; }
+    nav button { width:100%; display:flex; align-items:center; gap:10px; text-align:left; border:0; background:transparent; color:#cbd5e1; padding:10px 12px; border-radius:6px; cursor:pointer; margin:0; white-space:nowrap; font-weight:650; }
     nav button.sub { padding:9px 10px; color:#334155; font-size:13px; border-radius:6px; }
     nav button.active, nav button:hover { background:#1f2937; color:#fff; }
     .nav-popover {
@@ -49,11 +52,11 @@
     section.active { display:block; }
     .page-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:16px; }
     .page-head h2 { margin:0; font-size:22px; }
-    .page-head p { margin:6px 0 0; color:var(--muted); }
+    .page-head p { margin:6px 0 0; color:var(--muted); max-width:760px; line-height:1.6; }
     .grid { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:14px; }
     .grid-3 { display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:14px; }
     .grid-4 { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:14px; }
-    .panel, .metric-card { background:var(--surface); border:1px solid var(--line); border-radius:8px; padding:16px; margin-bottom:16px; box-shadow:0 1px 2px rgba(15,23,42,.04); }
+    .panel, .metric-card { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:16px; margin-bottom:16px; box-shadow:var(--shadow-sm); }
     .metric-card { min-height:104px; }
     .metric-label { color:var(--muted); font-size:12px; }
     .metric-value { margin-top:8px; font-size:28px; font-weight:700; }
@@ -63,17 +66,26 @@
     input, textarea, select { width:100%; border:1px solid var(--line); border-radius:6px; padding:9px 10px; font:inherit; background:#fff; color:var(--text); }
     textarea { min-height:86px; resize:vertical; }
     .row { display:flex; gap:10px; align-items:center; flex-wrap:wrap; }
-    .row > * { flex:1; }
+    .row > * { flex:0 1 auto; }
+    .row > div { flex:1 1 180px; min-width:180px; }
+    .row > button, .row > a { flex:0 0 auto; }
     .checks label { display:inline-flex; align-items:center; gap:6px; margin-right:14px; color:#263244; font-weight:500; }
     .checks input, input[type=checkbox] { width:auto; }
-    button.primary, button.secondary, button.danger { border-radius:6px; padding:8px 12px; cursor:pointer; font-weight:600; transition:background .15s ease,border-color .15s ease,opacity .15s ease; }
+    button.primary, button.secondary, button.danger { min-width:76px; min-height:36px; display:inline-flex; align-items:center; justify-content:center; gap:6px; border-radius:var(--radius-sm); padding:8px 12px; cursor:pointer; font-weight:650; line-height:1.2; white-space:nowrap; word-break:keep-all; transition:background .15s ease,border-color .15s ease,opacity .15s ease,box-shadow .15s ease; }
     button.primary { background:var(--primary); color:#fff; border:1px solid var(--primary); }
     button.secondary { background:#fff; color:#263244; border:1px solid var(--line); }
     button.danger { background:#fff7ed; color:var(--danger); border:1px solid #fed7aa; }
+    button.primary:hover, button.secondary:hover, button.danger:hover { box-shadow:0 2px 8px rgba(15,23,42,.08); }
     button:disabled { opacity:.62; cursor:progress; }
+    .ui-icon { width:16px; height:16px; display:inline-block; flex:0 0 auto; vertical-align:-3px; }
+    .ui-icon svg { width:16px; height:16px; display:block; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
+    .btn-compact { min-width:60px !important; min-height:32px !important; padding:6px 9px !important; font-size:12px; }
+    .btn-icon { min-width:36px !important; width:36px; padding:0 !important; }
     table { width:100%; border-collapse:separate; border-spacing:0; font-size:13px; }
-    th, td { border-bottom:1px solid var(--line); text-align:left; padding:10px; vertical-align:top; }
-    th { color:var(--muted); font-weight:700; background:#f8fafc; }
+    th, td { min-width:72px; border-bottom:1px solid var(--line); text-align:left; padding:10px; vertical-align:top; word-break:normal; overflow-wrap:break-word; }
+    th { color:var(--muted); font-weight:700; background:#f8fafc; white-space:nowrap; }
+    td.col-actions, th.col-actions { position:sticky; right:0; width:1%; min-width:132px; white-space:nowrap; background:#fff; z-index:3; box-shadow:-10px 0 18px rgba(15,23,42,.08); }
+    th.col-actions { background:#f8fafc; z-index:4; }
     .muted { color:var(--muted); }
     .status, .pill { display:inline-block; padding:2px 8px; border-radius:999px; background:#eef2ff; color:#3730a3; font-size:12px; }
     .status.ok { background:#ecfdf5; color:#047857; }
@@ -82,8 +94,65 @@
     .toast { position:fixed; right:18px; top:76px; background:#111827; color:#fff; padding:10px 14px; border-radius:6px; display:none; max-width:460px; z-index:60; }
     iframe { width:100%; min-height:520px; border:1px solid var(--line); border-radius:8px; background:#fff; }
     pre.logbox, pre.resultbox { max-height:360px; overflow:auto; background:#0f172a; color:#e5e7eb; padding:12px; border-radius:6px; white-space:pre-wrap; }
+    .test-console { min-height:180px; max-height:360px; overflow:auto; background:#0f172a; color:#dbeafe; padding:14px 16px; border-radius:8px; white-space:pre-wrap; font-family:Consolas,Menlo,monospace; line-height:1.7; }
+    .test-console .muted-line { color:#94a3b8; }
+    .test-console .ok-line { color:#86efac; }
+    .test-console .warn-line { color:#fbbf24; }
+    .test-console .response-line { color:#67e8f9; }
+    .ai-test-card { display:flex; align-items:center; justify-content:space-between; gap:12px; border:1px solid var(--line); border-radius:8px; background:#f8fafc; padding:12px; margin:10px 0 14px; }
+    .ai-test-card strong { display:block; font-size:15px; }
+    .ai-test-card span { display:inline-block; margin-top:4px; color:var(--muted); font-size:12px; }
+    .ai-test-icon { width:42px; height:42px; border-radius:8px; background:#0d9488; color:#fff; display:flex; align-items:center; justify-content:center; font-weight:800; flex:0 0 auto; }
+    .ai-test-main { display:flex; align-items:center; gap:12px; min-width:0; }
+    .ai-test-meta { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:12px 0; }
+    .ai-test-meta div { border:1px solid var(--line); border-radius:8px; background:#fff; padding:10px; min-height:64px; }
+    .ai-test-meta strong { display:block; font-size:12px; color:var(--muted); margin-bottom:5px; }
+    .ai-test-meta span { display:block; word-break:break-all; }
+    .ai-test-actions { position:sticky; bottom:-18px; z-index:5; display:flex; align-items:center; justify-content:space-between; gap:12px; border-top:1px solid var(--line); margin:16px -18px -18px; padding:14px 18px; background:#fff; }
+    .model-combobox { position:relative; display:flex; gap:6px; align-items:stretch; }
+    .model-combobox input { flex:1; min-width:0; }
+    .model-combobox button.combo-trigger { flex:0 0 72px; padding-left:8px; padding-right:8px; white-space:nowrap; }
+    .model-options { position:absolute; left:0; right:0; top:calc(100% + 6px); display:none; max-height:220px; overflow:auto; padding:6px; background:#fff; border:1px solid var(--line); border-radius:8px; box-shadow:0 18px 38px rgba(15,23,42,.18); z-index:45; }
+    .model-options.active { display:grid; gap:4px; }
+    .model-options button { width:100%; border:0; border-radius:6px; background:#fff; color:var(--text); padding:9px 10px; text-align:left; cursor:pointer; }
+    .model-options button:hover, .model-options button.active { background:var(--primary-weak); color:#1d4ed8; }
+    .model-option-empty { padding:10px; color:var(--muted); font-size:12px; }
+    .ai-profile-advanced { margin-top:10px; }
+    .rule-flow { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin:12px 0 16px; }
+    .rule-flow-card { border:1px solid var(--line); border-radius:8px; background:#fff; padding:12px; min-height:88px; }
+    .rule-flow-card strong { display:block; margin-bottom:6px; }
+    .rule-flow-card span { color:var(--muted); font-size:12px; line-height:1.6; }
+    .rule-builder-grid { display:grid; grid-template-columns:minmax(0,1fr) 390px; gap:16px; align-items:start; }
+    .rule-sections { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:12px; }
+    .rule-sections textarea { min-height:118px; }
+    .schema-list { display:grid; gap:6px; }
+    .schema-item { display:grid; grid-template-columns:minmax(130px,.8fr) 92px minmax(0,1.5fr); gap:8px; align-items:start; border:1px solid var(--line); border-radius:8px; background:#fbfdff; padding:8px 10px; font-size:12px; }
+    .schema-item strong { display:block; margin:0; }
+    .schema-item code { color:#1d4ed8; }
+    .schema-item .small { margin-top:3px; }
+    .sample-box { display:grid; gap:10px; margin-top:12px; }
+    .sample-meta { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+    .sample-meta div { border:1px solid var(--line); border-radius:6px; background:#f8fafc; padding:8px; }
+    .prompt-preview { max-height:260px; overflow:auto; background:#0f172a; color:#dbeafe; padding:12px; border-radius:8px; white-space:pre-wrap; font-family:Consolas,Menlo,monospace; line-height:1.65; }
+    .rule-modal-flow { display:grid; grid-template-columns:1fr; gap:12px; align-items:start; }
+    .rule-main-column, .rule-side-column { display:grid; gap:12px; }
+    .rule-editor-stack, .rule-test-stack { display:grid; gap:12px; }
+    .rule-section-card { border:1px solid var(--line); border-radius:8px; background:#fff; padding:12px; }
+    .rule-section-card h3 { margin-bottom:6px; }
+    .rule-section-head { display:flex; align-items:flex-start; justify-content:space-between; gap:10px; margin-bottom:10px; }
+    .rule-section-head .small { max-width:620px; }
+    .rule-accordion { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+    .rule-accordion details { border:1px solid var(--line); border-radius:8px; background:#fbfdff; padding:8px 10px; }
+    .rule-accordion summary { cursor:pointer; font-weight:700; color:var(--text); }
+    .rule-accordion textarea { margin-top:8px; min-height:86px; background:#fff; }
+    .rule-output-compact { max-height:256px; overflow:auto; }
+    .rule-modal-actions { position:sticky; bottom:-18px; margin:14px -18px -18px; padding:14px 18px; border-top:1px solid var(--line); background:#fff; display:flex; align-items:center; justify-content:space-between; gap:12px; z-index:5; }
     .toolbar { display:flex; gap:10px; align-items:end; flex-wrap:wrap; margin-bottom:12px; }
     .toolbar > div { min-width:150px; flex:1; }
+    .page-toolbar { display:flex; gap:10px; align-items:end; flex-wrap:wrap; margin-bottom:12px; }
+    .page-toolbar > div { min-width:150px; flex:1 1 160px; }
+    .page-toolbar .toolbar-actions { flex:0 0 auto; display:flex; gap:8px; align-items:center; justify-content:flex-end; }
+    .toolbar-actions { display:flex; gap:8px; align-items:center; justify-content:flex-end; flex-wrap:wrap; }
     .readiness-summary { display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap; margin:12px 0; padding:12px; border:1px solid var(--line); border-radius:8px; background:#fbfdff; }
     .readiness-summary.ready { border-color:#86efac; background:#f0fdf4; }
     .readiness-summary.pending { border-color:#fed7aa; background:#fff7ed; }
@@ -106,6 +175,35 @@
     .notice.warn { border-color:#fed7aa; background:#fff7ed; color:#9a3412; }
     .small { font-size:12px; color:var(--muted); }
     .split { display:grid; grid-template-columns:minmax(0,1fr) 420px; gap:16px; align-items:start; }
+    .settings-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:10px; margin-bottom:12px; }
+    .settings-stat { border:1px solid var(--line); border-radius:8px; background:#fbfdff; padding:10px; min-height:62px; }
+    .settings-stat strong { display:block; font-size:12px; color:var(--muted); margin-bottom:5px; }
+    .settings-stat span { display:block; font-weight:700; word-break:break-word; }
+    .settings-panel-grid { display:grid; grid-template-columns:minmax(0,1.1fr) minmax(300px,.9fr); gap:14px; align-items:start; }
+    .settings-card { border:1px solid var(--line); border-radius:8px; background:#fff; padding:12px; }
+    .settings-card h3 { margin-bottom:8px; }
+    .settings-actions { display:flex; gap:8px; align-items:center; justify-content:flex-end; flex-wrap:wrap; margin-top:12px; }
+    .template-editor-layout { display:grid; grid-template-columns:1fr; gap:14px; align-items:start; }
+    .template-editor-layout textarea { min-height:300px; }
+    .template-preview-panel { position:static; }
+    .template-preview-panel iframe { min-height:420px; }
+    .template-variable-row { display:flex; gap:6px; flex-wrap:wrap; margin:8px 0 10px; }
+    .template-variable-row code { border:1px solid var(--line); border-radius:999px; padding:3px 7px; background:#fbfdff; color:#334155; font-size:12px; }
+    .diagnostic-layout { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(320px,.8fr); gap:14px; align-items:start; }
+    .report-hint { display:flex; align-items:flex-start; gap:10px; border:1px solid var(--line); border-radius:var(--radius); background:#fbfdff; padding:12px; color:var(--muted); line-height:1.6; }
+    .report-hint strong { display:block; color:var(--text); margin-bottom:3px; }
+    .inline-status { display:flex; gap:8px; align-items:center; flex-wrap:wrap; color:var(--muted); font-size:12px; }
+    .diagnostic-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
+    .diagnostic-item { border:1px solid var(--line); border-radius:8px; background:#fff; padding:10px; min-height:82px; }
+    .diagnostic-item.ok { border-color:#bbf7d0; background:#f0fdf4; }
+    .diagnostic-item.todo { border-color:#fed7aa; background:#fffbeb; }
+    .diagnostic-item-head { display:flex; justify-content:space-between; gap:8px; align-items:flex-start; margin-bottom:6px; }
+    .diagnostic-item strong { display:block; }
+    .diagnostic-recommendations { margin:0; padding-left:18px; line-height:1.7; }
+    .artifact-grid { display:grid; grid-template-columns:repeat(3,minmax(0,1fr)); gap:8px; margin-top:10px; }
+    .artifact-card { border:1px solid var(--line); border-radius:8px; background:#fff; padding:10px; }
+    .artifact-card strong { display:flex; justify-content:space-between; gap:8px; margin-bottom:6px; }
+    .email-template-modal { width:min(1280px, calc(100% - 36px)); }
     .preview-frame { min-height:420px; }
     .empty { padding:18px; border:1px dashed var(--line); border-radius:8px; color:var(--muted); background:#fbfdff; }
     .code { font-family:Consolas,Menlo,monospace; font-size:12px; color:#334155; }
@@ -115,27 +213,34 @@
     .subview { display:none; }
     .subview.active { display:block; }
     .page-actions { display:flex; gap:8px; align-items:center; justify-content:flex-end; flex-wrap:wrap; }
-    .table-wrap { overflow:auto; border:1px solid var(--line); border-radius:8px; background:#fff; }
+    .table-wrap { position:relative; overflow:auto; border:1px solid var(--line); border-radius:8px; background:#fff; }
     .table-wrap table { min-width:920px; }
     .truncate { max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
-    .wide-actions { display:flex; gap:6px; flex-wrap:wrap; }
-    .account-console { display:grid; grid-template-columns:1fr; gap:16px; align-items:start; }
+    .wide-actions { display:inline-flex; gap:6px; align-items:center; flex-wrap:nowrap; white-space:nowrap; }
+    .wide-actions button, .drawer-actions button, td.col-actions button, .account-actions > button { min-width:68px; min-height:34px; padding:7px 10px; }
+    .wide-actions a { min-height:34px; display:inline-flex; align-items:center; justify-content:center; border:1px solid var(--line); border-radius:6px; padding:7px 10px; color:#1d4ed8; text-decoration:none; font-weight:600; white-space:nowrap; }
+    .account-console { display:grid; grid-template-columns:minmax(0,1fr); gap:16px; align-items:start; max-width:100%; min-width:0; }
     .account-list-panel { margin-top:16px; }
     .account-filter { display:grid; grid-template-columns:1.4fr 1fr 1fr 1fr; gap:10px; margin-bottom:12px; }
     .account-ledger-head { display:flex; justify-content:space-between; gap:12px; align-items:flex-start; margin-bottom:12px; }
     .account-ledger-head h3 { margin-bottom:4px; }
     .account-bulk-bar { display:flex; align-items:center; justify-content:space-between; gap:12px; padding:10px 12px; margin:10px 0 12px; border:1px solid var(--line); border-radius:8px; background:#fbfdff; }
     .account-bulk-bar .row { flex:0 0 auto; }
-    .account-bulk-toolbar { display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; }
+    .account-bulk-toolbar { display:flex; align-items:center; justify-content:flex-end; gap:8px; flex-wrap:wrap; min-width:0; }
     .account-bulk-count { color:var(--muted); font-size:12px; min-width:92px; text-align:right; }
     .account-select-cell { width:42px; text-align:center; }
     .account-quick-filter { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 12px; }
     .account-quick-filter button { border:1px solid var(--line); background:#fff; color:#263244; border-radius:999px; padding:6px 10px; cursor:pointer; font-weight:600; }
     .account-quick-filter button.active { border-color:#93c5fd; background:var(--primary-weak); color:#1d4ed8; }
-    .account-actions { position:relative; display:flex; gap:6px; flex-wrap:wrap; align-items:center; }
+    .account-actions { position:relative; display:flex; gap:6px; flex-wrap:nowrap; align-items:center; justify-content:flex-end; }
     .account-action-menu { position:absolute; right:0; top:36px; min-width:154px; display:none; padding:6px; background:#fff; border:1px solid var(--line); border-radius:8px; box-shadow:0 18px 38px rgba(15,23,42,.18); z-index:8; }
     .account-action-menu.active { display:grid; gap:4px; }
     .account-action-menu button { width:100%; justify-content:flex-start; text-align:left; }
+    .action-menu-host { position:relative; display:inline-flex; }
+    .action-menu { position:absolute; right:0; top:36px; min-width:150px; display:none; padding:6px; background:#fff; border:1px solid var(--line); border-radius:8px; box-shadow:0 18px 38px rgba(15,23,42,.18); z-index:9; }
+    .action-menu.active { display:grid; gap:4px; }
+    .action-menu a, .action-menu button { width:100%; min-height:32px; display:flex; align-items:center; justify-content:flex-start; border:0; border-radius:6px; background:#fff; color:var(--text); padding:7px 9px; text-align:left; text-decoration:none; font-weight:650; cursor:pointer; }
+    .action-menu a:hover, .action-menu button:hover { background:var(--primary-weak); color:#1d4ed8; }
     .account-table tr.active td { background:#eff6ff; }
     .account-name-cell strong { display:block; font-size:13px; }
     .account-name-cell span { display:block; margin-top:3px; color:var(--muted); font-size:12px; }
@@ -156,12 +261,12 @@
     .account-section details.advanced { margin-top:0; border-top:0; padding-top:0; }
     .account-section details.advanced summary { color:var(--text); font-size:16px; margin-bottom:10px; }
     .account-section-actions { display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap; margin-top:12px; }
-    .account-flow-actions { border:1px solid var(--line); border-radius:8px; background:#fbfdff; padding:12px 14px; margin-top:16px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+    .account-flow-actions { position:sticky; bottom:-18px; z-index:5; border-top:1px solid var(--line); border-left:0; border-right:0; border-bottom:0; border-radius:0; background:#fff; padding:14px 18px; margin:16px -18px -18px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
     .account-flow-actions .row { flex:0 0 auto; justify-content:flex-end; }
     .account-readonly-field { border:1px solid var(--line); border-radius:6px; background:#f8fafc; padding:9px 10px; min-height:38px; color:var(--muted); word-break:break-all; }
     .account-error-summary { border:1px solid var(--line); border-radius:8px; background:#fbfdff; padding:10px 12px; color:var(--muted); margin-top:8px; }
     .login-card { background:#fbfdff; border-color:#bfdbfe; }
-    .login-card-grid { display:grid; grid-template-columns:minmax(260px, 360px) minmax(0,1fr); gap:16px; align-items:start; }
+    .login-card-grid { display:grid; grid-template-columns:1fr; gap:14px; align-items:start; }
     .login-method-guide { border:1px solid var(--line); border-radius:8px; padding:12px; background:#fff; }
     .login-method-guide strong { display:block; margin-bottom:6px; }
     .login-method-guide ul { margin:8px 0 0 18px; padding:0; color:var(--muted); font-size:12px; line-height:1.7; }
@@ -197,7 +302,7 @@
     details.advanced summary { cursor:pointer; color:var(--muted); font-weight:700; }
     .modal-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; margin-bottom:6px; }
     .modal-head h3 { margin-bottom:4px; }
-    .modal-close { border:1px solid var(--line); background:#fff; border-radius:6px; width:34px; height:34px; cursor:pointer; font-size:20px; line-height:1; }
+    .modal-close { min-width:34px; min-height:34px; border:1px solid var(--line); background:#fff; border-radius:6px; width:34px; height:34px; cursor:pointer; font-size:20px; line-height:1; padding:0; }
     .detail-tabs { display:flex; gap:8px; border-bottom:1px solid var(--line); margin:12px 0 16px; }
     .detail-tabs button { border:0; background:transparent; padding:10px 12px; cursor:pointer; color:var(--muted); font-weight:700; }
     .detail-tabs button.active { color:var(--primary); border-bottom:2px solid var(--primary); }
@@ -235,6 +340,7 @@
     .drawer .logbox { flex:1; min-height:420px; max-height:none; margin:0; }
     .log-modal { height:min(760px, calc(100vh - 72px)); }
     .template-modal { width:min(1160px, calc(100% - 36px)); }
+    .ai-test-modal { width:min(720px, calc(100% - 36px)); }
     .form-drawer {
       width:min(980px, calc(100% - 36px));
     }
@@ -246,14 +352,19 @@
     .section-note { color:var(--muted); font-size:12px; line-height:1.6; margin:0 0 12px; }
     .section-note strong { color:var(--text); }
     .field-hint { color:var(--muted); font-size:12px; line-height:1.6; margin:6px 0 12px; }
-    @media (max-width: 1100px) { .shell { grid-template-columns:minmax(0,1fr); width:100%; overflow:hidden; } .shell > aside { position:static; height:auto; width:100%; max-width:100%; min-width:0; overflow:visible; } nav { display:flex; width:100%; max-width:100%; min-width:0; overflow-x:auto; overflow-y:hidden; } .nav-group { flex:0 0 auto; } nav button { min-width:max-content; } .nav-popover { position:fixed; top:78px; left:12px; right:12px; width:auto; max-width:360px; } .grid, .grid-3, .grid-4, .split { grid-template-columns:1fr; } section { padding:16px; } }
-    @media (max-width: 1100px) { .account-filter, .account-modal-grid, .login-card-grid { grid-template-columns:1fr; } }
+    .config-section .section-note, .config-section .field-hint { display:none; }
+    .form-actions { position:sticky; bottom:-18px; z-index:5; margin:16px -18px -18px; display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap; border-top:1px solid var(--line); padding:14px 18px; background:#fff; }
+    .rule-modal-actions .row, .ai-test-actions .row, .account-flow-actions .row { width:auto; flex:0 0 auto; justify-content:flex-end; }
+    .rule-modal-actions > .small, .ai-test-actions > .small, .account-flow-actions .small { max-width:620px; }
+    @media (max-width: 1100px) { .shell { grid-template-columns:minmax(0,1fr); width:100%; overflow:hidden; } .shell > aside { position:static; height:auto; width:100%; max-width:100%; min-width:0; overflow:visible; } nav { display:flex; width:100%; max-width:100%; min-width:0; overflow-x:auto; overflow-y:hidden; } .nav-group { flex:0 0 auto; } nav button { min-width:max-content; } .nav-popover { position:fixed; top:78px; left:12px; right:12px; width:auto; max-width:360px; } .grid, .grid-3, .grid-4, .split, .settings-panel-grid, .template-editor-layout, .diagnostic-layout, .settings-grid, .artifact-grid { grid-template-columns:1fr; } section { padding:16px; } }
+    @media (max-width: 1100px) { .account-filter, .account-modal-grid, .login-card-grid, .rule-builder-grid, .rule-flow, .rule-sections, .rule-modal-flow, .rule-accordion, .diagnostic-grid { grid-template-columns:1fr; } .template-preview-panel { position:static; } }
     @media (max-width: 720px) {
       body { font-size:13px; }
       header { height:auto; min-height:60px; padding:12px 14px; align-items:flex-start; gap:10px; flex-direction:column; }
       .page-head, .account-ledger-head { flex-direction:column; align-items:stretch; }
       .page-actions, .row { width:100%; }
-      .row > * { flex:1 1 100%; }
+      .row > div { flex:1 1 100%; min-width:100%; }
+      .row > button, .row > a { flex:0 0 auto; }
       .drawer {
         width:calc(100% - 18px);
         max-height:calc(100vh - 18px);
@@ -265,10 +376,28 @@
       .metric-value { font-size:24px; }
       .toolbar > div { min-width:100%; }
       .wide-actions { min-width:220px; }
+      .account-bulk-toolbar { justify-content:flex-start; }
+      .account-bulk-toolbar button { flex:0 0 auto; }
+      .rule-modal-actions, .ai-test-actions, .account-flow-actions { align-items:stretch; }
+      .rule-modal-actions > .small, .ai-test-actions > .small, .account-flow-actions .small { display:none; }
+      .rule-modal-actions .row, .ai-test-actions .row, .account-flow-actions .row { width:100%; }
+      .rule-modal-actions button, .ai-test-actions button, .account-flow-actions button { flex:1 1 auto; }
+      .schema-item { grid-template-columns:1fr; }
     }
   </style>
 </head>
 <body>
+  <svg aria-hidden="true" width="0" height="0" style="position:absolute;overflow:hidden">
+    <symbol id="icon-dashboard" viewBox="0 0 24 24"><path d="M3 13h8V3H3z"></path><path d="M13 21h8V11h-8z"></path><path d="M13 3h8v6h-8z"></path><path d="M3 21h8v-6H3z"></path></symbol>
+    <symbol id="icon-monitor" viewBox="0 0 24 24"><path d="M4 19V5"></path><path d="M4 19h16"></path><path d="m7 15 4-4 3 3 5-7"></path></symbol>
+    <symbol id="icon-run" viewBox="0 0 24 24"><path d="M5 12h14"></path><path d="m13 6 6 6-6 6"></path></symbol>
+    <symbol id="icon-report" viewBox="0 0 24 24"><path d="M6 3h9l3 3v15H6z"></path><path d="M14 3v4h4"></path><path d="M9 12h6"></path><path d="M9 16h6"></path></symbol>
+    <symbol id="icon-resource" viewBox="0 0 24 24"><path d="M12 3 4 7l8 4 8-4z"></path><path d="M4 12l8 4 8-4"></path><path d="M4 17l8 4 8-4"></path></symbol>
+    <symbol id="icon-settings" viewBox="0 0 24 24"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"></path><path d="M19.4 15a1.7 1.7 0 0 0 .3 1.9l.1.1a2 2 0 0 1-2.8 2.8l-.1-.1a1.7 1.7 0 0 0-1.9-.3 1.7 1.7 0 0 0-1 1.6v.3a2 2 0 0 1-4 0V21a1.7 1.7 0 0 0-1-1.6 1.7 1.7 0 0 0-1.9.3l-.1.1A2 2 0 0 1 4.2 17l.1-.1a1.7 1.7 0 0 0 .3-1.9 1.7 1.7 0 0 0-1.6-1H3a2 2 0 0 1 0-4h.3a1.7 1.7 0 0 0 1.6-1 1.7 1.7 0 0 0-.3-1.9l-.1-.1A2 2 0 0 1 7.3 4.2l.1.1a1.7 1.7 0 0 0 1.9.3 1.7 1.7 0 0 0 1-1.6V3a2 2 0 0 1 4 0v.3a1.7 1.7 0 0 0 1 1.6 1.7 1.7 0 0 0 1.9-.3l.1-.1A2 2 0 0 1 20 7.3l-.1.1a1.7 1.7 0 0 0-.3 1.9 1.7 1.7 0 0 0 1.6 1h.3a2 2 0 0 1 0 4h-.3a1.7 1.7 0 0 0-1.8 1Z"></path></symbol>
+    <symbol id="icon-plus" viewBox="0 0 24 24"><path d="M12 5v14"></path><path d="M5 12h14"></path></symbol>
+    <symbol id="icon-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.6 6"></path><path d="M3 12a9 9 0 0 1 15.6-6"></path><path d="M3 4v6h6"></path><path d="M21 20v-6h-6"></path></symbol>
+    <symbol id="icon-more" viewBox="0 0 24 24"><path d="M12 12h.01"></path><path d="M19 12h.01"></path><path d="M5 12h.01"></path></symbol>
+  </svg>
   <div class="shell">
     <aside>
       <div class="brand">
@@ -277,19 +406,19 @@
       </div>
       <nav>
         <div class="nav-group">
-          <button class="active" data-tab="dashboard">总览</button>
+          <button class="active" data-tab="dashboard"><span class="ui-icon"><svg><use href="#icon-dashboard"></use></svg></span>总览</button>
         </div>
         <div class="nav-group">
-          <button data-tab="jobs">舆情监控</button>
+          <button data-tab="jobs"><span class="ui-icon"><svg><use href="#icon-monitor"></use></svg></span>舆情监控</button>
         </div>
         <div class="nav-group">
-          <button data-tab="runs">运行中心</button>
+          <button data-tab="runs"><span class="ui-icon"><svg><use href="#icon-run"></use></svg></span>运行中心</button>
         </div>
         <div class="nav-group">
-          <button data-tab="reports">报告中心</button>
+          <button data-tab="reports"><span class="ui-icon"><svg><use href="#icon-report"></use></svg></span>报告中心</button>
         </div>
         <div class="nav-group">
-          <button data-menu="resources" data-default-tab="accounts">资源管理</button>
+          <button data-menu="resources" data-default-tab="accounts"><span class="ui-icon"><svg><use href="#icon-resource"></use></svg></span>资源管理</button>
           <div class="nav-popover" id="nav_menu_resources">
             <button class="sub" data-tab="accounts">平台账号</button>
             <button class="sub" data-tab="proxies">代理资源</button>
@@ -297,7 +426,7 @@
           </div>
         </div>
         <div class="nav-group">
-          <button data-menu="settings" data-default-tab="ai_rules">系统配置</button>
+          <button data-menu="settings" data-default-tab="ai_rules"><span class="ui-icon"><svg><use href="#icon-settings"></use></svg></span>系统配置</button>
           <div class="nav-popover" id="nav_menu_settings">
             <button class="sub" data-tab="ai_rules">AI 评估规则</button>
             <button class="sub" data-tab="email">邮件配置</button>
@@ -471,7 +600,7 @@
               <div><label>邮件模板</label><select id="job_email_template_id"><option value="">使用当前启用模板</option></select></div>
             </div>
           </div>
-          <div class="row" style="margin-top:12px">
+          <div class="form-actions">
             <button id="save_job_btn" class="primary" type="button">保存任务</button>
             <button id="fill_sample_job_btn" class="secondary" type="button">填入海安律所样例</button>
             <button id="reset_job_btn" class="secondary" type="button">清空</button>
@@ -645,7 +774,7 @@
           </div>
           <label>备注</label><textarea id="proxy_notes" placeholder="记录供应商、地区、套餐、过期时间"></textarea>
           <label>错误信息</label><textarea id="proxy_last_error" placeholder="记录最近一次代理检测异常，可留空"></textarea>
-          <div class="row" style="margin-top:12px">
+          <div class="form-actions">
             <button class="primary" onclick="saveProxyProfile()">保存代理</button>
             <button class="secondary" onclick="resetProxyForm()">清空</button>
           </div>
@@ -654,7 +783,7 @@
 
       <section id="ai">
         <div class="page-head">
-          <div><h2>AI 接入</h2><p>维护 OpenAI Compatible / Anthropic 的 API 连接资源，可被监控任务绑定。</p></div>
+          <div><h2>AI 接入</h2><p>维护 OpenAI-compatible / Anthropic-compatible 协议的模型连接资源，可被监控任务绑定。</p></div>
           <div class="page-actions">
             <button class="primary" onclick="openAIProfileDrawer()">新增 AI 接入</button>
             <button class="secondary" onclick="loadAIProfiles()">刷新 AI 接入</button>
@@ -663,9 +792,42 @@
         <div class="panel">
           <h3>AI 接入资源</h3>
           <div id="ai_profiles_table" style="margin-top:12px"></div>
-          <pre id="ai_result" class="resultbox" style="margin-top:12px">选择一个 AI 接入资源后，可进行连接测试。</pre>
         </div>
       </section>
+
+      <div id="ai_connection_test_backdrop" class="drawer-backdrop" onclick="closeAIConnectionTestModal()"></div>
+      <div id="ai_connection_test_modal" class="drawer ai-test-modal" role="dialog" aria-modal="true" aria-label="AI 连接测试">
+        <div class="drawer-head">
+          <div>
+            <h3>测试 AI 接入</h3>
+            <div class="small">系统会发送一条最小测试消息，确认鉴权、接口、模型和文本返回是否正常。</div>
+          </div>
+          <button class="modal-close" onclick="closeAIConnectionTestModal()" title="关闭">×</button>
+        </div>
+        <div class="ai-test-card">
+          <div class="ai-test-main">
+            <div class="ai-test-icon">AI</div>
+            <div>
+              <strong id="ai_test_profile_name">未选择 AI 接入</strong>
+              <span id="ai_test_profile_meta">请选择一个 AI 接入资源进行测试</span>
+            </div>
+          </div>
+          <span id="ai_test_status_badge" class="status">未开始</span>
+        </div>
+        <div class="ai-test-meta">
+          <div><strong>测试模型</strong><span id="ai_test_model">-</span></div>
+          <div><strong>接口协议</strong><span id="ai_test_provider">-</span></div>
+          <div><strong>测试消息</strong><span id="ai_test_message">hi</span></div>
+        </div>
+        <pre id="ai_test_console" class="test-console"><span class="muted-line">准备测试。点击“开始测试”后，系统会发送最小消息并等待模型返回文本。</span></pre>
+        <div class="ai-test-actions">
+          <div class="small">连接测试只验证 API 是否能返回文本，不使用舆情评估 Prompt。</div>
+          <div class="row" style="flex:0 0 auto">
+            <button class="secondary" onclick="closeAIConnectionTestModal()">关闭</button>
+            <button class="primary" id="ai_test_start_btn" onclick="runAIConnectionTest()">开始测试</button>
+          </div>
+        </div>
+      </div>
 
       <div id="ai_profile_drawer_backdrop" class="drawer-backdrop" onclick="closeAIProfileDrawer()"></div>
       <div id="ai_profile_drawer" class="drawer form-drawer" role="dialog" aria-modal="true" aria-label="AI 接入">
@@ -680,15 +842,32 @@
           <input type="hidden" id="ai_profile_id">
           <div class="grid-3">
             <div><label>接入名称</label><input id="ai_profile_name" placeholder="例如：DeepSeek 主账号"></div>
-            <div><label>Provider</label><select id="ai_profile_provider"><option value="openai">OpenAI Compatible</option><option value="anthropic">Anthropic</option></select></div>
-            <div><label>Model</label><input id="ai_profile_model" placeholder="模型名称"></div>
+            <div><label>接口协议</label><select id="ai_profile_provider"><option value="openai">OpenAI-compatible</option><option value="anthropic">Anthropic-compatible</option></select></div>
+            <div>
+              <label>模型名称</label>
+              <div class="model-combobox">
+                <input id="ai_profile_model" placeholder="可手动输入，或获取列表后选择">
+                <button type="button" id="ai_profile_model_toggle" class="secondary combo-trigger">选择</button>
+                <div id="ai_profile_model_options" class="model-options" role="listbox"></div>
+              </div>
+            </div>
             <div><label>Base URL</label><input id="ai_profile_base_url" placeholder="https://api.openai.com"></div>
             <div><label>API Key</label><input id="ai_profile_api_key" type="password" placeholder="留空不修改"></div>
-            <div><label>Temperature</label><input id="ai_profile_temperature" value="0"></div>
           </div>
+          <div class="row" style="margin-top:8px">
+            <button class="secondary" onclick="loadAIProfileModels(this)">获取模型列表</button>
+            <span id="ai_profile_model_status" class="small">部分服务不提供模型列表；获取失败时仍可手动填写模型名称。</span>
+          </div>
+          <details class="advanced ai-profile-advanced">
+            <summary>高级参数</summary>
+            <div class="grid-3">
+              <div><label>评估随机性</label><input id="ai_profile_temperature" type="number" min="0" max="2" step="0.1" value="0"></div>
+            </div>
+            <div class="small">仅影响后续舆情评估输出；连接测试固定使用稳定参数，方便判断接口是否可用。</div>
+          </details>
           <input type="hidden" id="ai_profile_prompt">
           <label><input type="checkbox" id="ai_profile_active"> 设为默认 AI 接入</label>
-          <div class="row" style="margin-top:12px">
+          <div class="form-actions">
             <button class="primary" onclick="saveAIProfile()">保存 AI 接入</button>
             <button class="secondary" onclick="resetAIProfileForm()">清空</button>
           </div>
@@ -697,25 +876,114 @@
 
       <section id="ai_rules">
         <div class="page-head">
-          <div><h2>AI 评估规则</h2><p>配置相关性、负面判断和风险等级 Prompt；API Key 在资源管理的 AI 接入里维护。</p></div>
+          <div><h2>AI 评估规则</h2><p>维护可复用的舆情判断规则。当前默认规则会用于任务采集后的 AI 初筛。</p></div>
           <div class="page-actions">
-            <button class="primary" onclick="saveAI()">保存评估规则</button>
-            <button class="secondary" onclick="testAI()">测试评估规则</button>
-            <button class="secondary" onclick="resetAIPrompt()">恢复默认规则</button>
+            <button class="primary" onclick="openNewAIRuleModal()">新增评估规则</button>
+            <button class="secondary" onclick="loadAIRuleProfiles()">刷新规则</button>
           </div>
         </div>
         <div class="panel">
-          <h3>评估 Prompt</h3>
-          <input type="hidden" id="ai_provider">
-          <input type="hidden" id="ai_base_url">
-          <input type="hidden" id="ai_api_key">
-          <input type="hidden" id="ai_model">
-          <input type="hidden" id="ai_temperature">
-          <textarea id="ai_prompt" style="min-height:360px"></textarea>
-          <div id="ai_status" class="small" style="margin-top:8px"></div>
-          <pre id="ai_rules_result" class="resultbox" style="margin-top:12px">可使用海安律所样例测试评估规则输出结构。</pre>
+          <div class="account-ledger-head">
+            <div>
+              <h3>评估规则列表</h3>
+              <div class="small">列表只管理规则资源；固定输出字段和样例测试在规则详情中维护。</div>
+            </div>
+            <div class="account-bulk-toolbar">
+              <span id="ai_rules_summary" class="account-bulk-count">-</span>
+            </div>
+          </div>
+          <div id="ai_rules_table"></div>
         </div>
       </section>
+
+      <div id="ai_rule_modal_backdrop" class="drawer-backdrop" onclick="closeAIRuleModal()"></div>
+      <div id="ai_rule_modal" class="drawer template-modal" role="dialog" aria-modal="true" aria-label="AI 评估规则">
+        <div class="drawer-head">
+          <div>
+            <h3 id="ai_rule_modal_title">新增评估规则</h3>
+            <div class="small">规则只影响模型如何判断和填写字段；输出字段由系统固定校验。</div>
+          </div>
+          <button class="modal-close" onclick="closeAIRuleModal()" title="关闭">×</button>
+        </div>
+        <input type="hidden" id="ai_rule_id">
+        <input type="hidden" id="ai_rule_is_active">
+        <input type="hidden" id="ai_provider">
+        <input type="hidden" id="ai_base_url">
+        <input type="hidden" id="ai_api_key">
+        <input type="hidden" id="ai_model">
+        <input type="hidden" id="ai_temperature">
+        <textarea id="ai_prompt" style="display:none"></textarea>
+        <div class="rule-modal-flow">
+          <div class="rule-editor-stack">
+            <div class="rule-section-card">
+              <div class="rule-section-head">
+                <div>
+                  <h3>基础信息</h3>
+                  <div class="small">命名并确认当前状态。</div>
+                </div>
+                <span id="ai_rule_status_badge" class="status">未保存</span>
+              </div>
+              <div class="grid">
+                <div><label>规则名称</label><input id="ai_rule_name" placeholder="例如：律所舆情默认规则"></div>
+              </div>
+              <div id="ai_status" class="small" style="margin-top:8px"></div>
+            </div>
+            <div class="rule-section-card">
+              <div class="rule-section-head">
+                <div>
+                  <h3>规则配置</h3>
+                  <div class="small">按判断步骤填写；固定输出结构由系统校验。</div>
+                </div>
+              </div>
+              <div class="rule-accordion">
+                <details open><summary>1. 角色定位</summary><textarea id="ai_rule_role"></textarea></details>
+                <details open><summary>2. 相关性判断</summary><textarea id="ai_rule_relevance"></textarea></details>
+                <details open><summary>3. 疑似负面判断</summary><textarea id="ai_rule_negative"></textarea></details>
+                <details open><summary>4. 风险等级规则</summary><textarea id="ai_rule_risk"></textarea></details>
+                <details><summary>5. 证据摘录规则</summary><textarea id="ai_rule_evidence"></textarea></details>
+                <details><summary>6. 处理建议规则</summary><textarea id="ai_rule_action"></textarea></details>
+              </div>
+              <details class="advanced">
+                <summary>生成后的 Prompt 预览</summary>
+                <pre id="ai_prompt_preview" class="prompt-preview"></pre>
+              </details>
+            </div>
+            <div class="rule-section-card">
+              <h3>固定输出字段</h3>
+              <div id="ai_output_schema_table" class="schema-list rule-output-compact" style="margin-top:10px"></div>
+            </div>
+          </div>
+          <div class="rule-test-stack">
+            <div class="rule-section-card">
+              <h3>测试样例</h3>
+              <div class="small">手动填写一条采集内容和评论样本，用来验证规则是否符合预期；平台只作为样例上下文，不会触发采集或导入数据。</div>
+              <div class="sample-box">
+                <div class="grid">
+                  <div><label>样例律所</label><input id="ai_sample_law_firm_name" value="海安律所"></div>
+                  <div><label>平台</label><select id="ai_sample_platform"><option value="dy">抖音</option><option value="ks">快手</option><option value="xhs">小红书</option></select></div>
+                </div>
+                <div><label>平台搜索词</label><input id="ai_sample_source_keyword" value="海安律所避雷"></div>
+                <div><label>样例标题</label><input id="ai_sample_title" value="海安律所避雷：退费拖了很久"></div>
+                <div><label>样例正文</label><textarea id="ai_sample_text">我想曝光一下，沟通很差，收费也不透明，投诉后一直没人处理。</textarea></div>
+                <div><label>评论样本</label><textarea id="ai_sample_comments">我也遇到退费慢的问题
+建议先保留沟通证据再投诉</textarea></div>
+              </div>
+            </div>
+            <div class="rule-section-card">
+              <h3>测试结果</h3>
+              <pre id="ai_rules_result" class="resultbox" style="margin-top:8px">调整规则或样例内容后，点击“测试评估规则”查看模型返回的结构化结果。</pre>
+            </div>
+          </div>
+        </div>
+        <div class="rule-modal-actions">
+          <div class="small">保存后可设为默认规则；测试会使用当前样例内容，不影响真实任务。</div>
+          <div class="row" style="flex:0 0 auto">
+            <button class="secondary" onclick="testAIRuleFromModal()">测试评估规则</button>
+            <button class="secondary" onclick="resetAIPrompt()">恢复默认规则</button>
+            <button class="primary" onclick="saveAIRuleFromModal()">保存规则</button>
+          </div>
+        </div>
+      </div>
 
       <section id="email">
         <div class="page-head">
@@ -723,21 +991,33 @@
           <button class="secondary" onclick="loadEmail()">刷新配置</button>
         </div>
         <div class="panel">
-          <h3>SMTP 配置</h3>
-          <div class="grid">
-            <div><label>SMTP Host</label><input id="smtp_host"></div>
-            <div><label>SMTP Port</label><input id="smtp_port" value="465"></div>
-            <div><label>加密方式</label><select id="encryption"><option value="ssl">SSL</option><option value="starttls">STARTTLS</option><option value="none">None</option></select></div>
-            <div><label>发件人</label><input id="sender"></div>
-            <div><label>用户名</label><input id="smtp_username"></div>
-            <div><label>密码</label><input id="smtp_password" type="password" placeholder="留空表示不修改"></div>
+          <div class="settings-grid">
+            <div class="settings-stat"><strong>测试状态</strong><span id="email_status_label">未测试</span></div>
+            <div class="settings-stat"><strong>发件身份</strong><span id="email_sender_summary">-</span></div>
+            <div class="settings-stat"><strong>默认收件人</strong><span id="email_recipient_summary">0 个</span></div>
           </div>
-          <label>默认收件人（多行）</label><textarea id="default_recipients"></textarea>
-          <label>标题模板</label><input id="subject_template" value="【律所舆情日报】{law_firm_name} - {date}">
-          <div id="email_status" class="small" style="margin-top:8px"></div>
-          <div class="row" style="margin-top:12px">
-            <button class="primary" onclick="saveEmail()">保存邮件配置</button>
-            <button class="secondary" onclick="testEmail()">发送测试邮件</button>
+          <div class="settings-panel-grid">
+            <div class="settings-card">
+              <h3>SMTP 连接</h3>
+              <div class="grid-3">
+                <div><label>SMTP Host</label><input id="smtp_host"></div>
+                <div><label>SMTP Port</label><input id="smtp_port" value="465"></div>
+                <div><label>加密方式</label><select id="encryption"><option value="ssl">SSL</option><option value="starttls">STARTTLS</option><option value="none">None</option></select></div>
+                <div><label>发件人</label><input id="sender"></div>
+                <div><label>用户名</label><input id="smtp_username"></div>
+                <div><label>密码</label><input id="smtp_password" type="password" placeholder="留空表示不修改"></div>
+              </div>
+            </div>
+            <div class="settings-card">
+              <h3>发送默认值</h3>
+              <label>默认收件人</label><textarea id="default_recipients" style="min-height:136px"></textarea>
+              <label>标题模板</label><input id="subject_template" value="【律所舆情日报】{law_firm_name} - {date}">
+              <div id="email_status" class="small" style="margin-top:8px"></div>
+              <div class="settings-actions">
+                <button class="primary" onclick="saveEmail()">保存配置</button>
+                <button class="secondary" onclick="testEmail()">发送测试邮件</button>
+              </div>
+            </div>
           </div>
         </div>
       </section>
@@ -756,16 +1036,22 @@
               <h3>HTML 邮件模板</h3>
               <p class="small">报告发送时优先使用当前启用模板；点击编辑可查看实时预览。</p>
             </div>
-            <button class="primary" onclick="openEmailTemplateDrawer()">新增模板</button>
+            <div class="inline-status"><span id="email_template_summary">-</span></div>
           </div>
           <div id="email_templates_table"></div>
         </div>
       </section>
 
       <section id="runs">
+        <div class="page-head">
+          <div><h2>运行中心</h2><p>查看每次采集运行状态、失败原因和日志。运行记录会保留，即使原任务已删除。</p></div>
+          <div class="page-actions">
+            <button class="secondary" onclick="loadRuns()">刷新运行记录</button>
+          </div>
+        </div>
+        <div id="running_summary"></div>
         <div class="panel">
-          <h2>运行中心</h2>
-          <div class="toolbar">
+          <div class="page-toolbar">
             <div>
               <label>显示范围</label>
               <select id="run_limit" onchange="loadRuns()">
@@ -775,53 +1061,70 @@
                 <option value="0">全部运行记录</option>
               </select>
             </div>
-            <button class="secondary" onclick="loadRuns()">刷新</button>
+            <div class="toolbar-actions"><button class="secondary" onclick="loadRuns()">刷新</button></div>
           </div>
-          <div id="running_summary"></div>
           <div id="runs_table"></div>
         </div>
       </section>
       <section id="reports">
+        <div class="page-head">
+          <div><h2>报告中心</h2><p>筛选报告、预览邮件正文、查看线索明细，并按需下载归档文件。</p></div>
+          <div class="page-actions">
+            <button class="secondary" onclick="loadReports()">刷新报告</button>
+          </div>
+        </div>
         <div class="panel">
-          <h2>报告中心</h2>
-          <div class="toolbar">
+          <div class="page-toolbar">
             <div><label>律所</label><input id="report_law_firm" placeholder="输入律所名称"></div>
             <div><label>平台</label><select id="report_platform"><option value="">全部</option><option value="dy">抖音</option><option value="ks">快手</option><option value="xhs">小红书</option></select></div>
             <div><label>风险</label><select id="report_risk"><option value="">全部</option><option value="high">高风险</option><option value="negative">疑似负面</option><option value="pending">待人工复核</option><option value="none">无风险</option></select></div>
             <div><label>开始日期</label><input id="report_date_from" type="date"></div>
             <div><label>结束日期</label><input id="report_date_to" type="date"></div>
             <div><label>显示范围</label><select id="report_limit"><option value="100" selected>最近 100 条</option><option value="200">最近 200 条</option><option value="500">最近 500 条</option><option value="0">全部报告和线索</option></select></div>
-            <button class="secondary" onclick="loadReports()">筛选</button>
+            <div class="toolbar-actions"><button class="secondary" onclick="loadReports()">筛选</button></div>
           </div>
+        </div>
+        <div class="panel">
+          <h3>报告列表</h3>
           <div id="reports_table"></div>
         </div>
-        <div class="panel"><h3>线索明细</h3><div id="leads_scope" class="small"></div><div id="leads_table"></div></div>
         <div class="panel">
-          <h3>报告预览</h3>
-          <div class="notice">点击报告列表中的“预览”，系统会在悬浮窗展示对应报告邮件和线索明细。</div>
+          <h3>线索明细</h3>
+          <div id="leads_scope" class="small"></div>
+          <div id="leads_table"></div>
+        </div>
+        <div class="panel">
+          <div class="report-hint">
+            <span class="status">预览</span>
+            <div><strong>选择报告后查看正文</strong><span>点击报告列表中的“预览”，悬浮窗会展示对应报告邮件。</span></div>
+          </div>
         </div>
       </section>
       <section id="doctor">
-        <div class="panel">
-          <h2>系统诊断</h2>
-          <div class="row" style="margin-bottom:10px">
+        <div class="page-head">
+          <div><h2>系统诊断</h2><p>检查基础配置、运行状态和报告链路，便于管理员快速定位待处理项。</p></div>
+          <div class="page-actions">
             <button class="secondary" onclick="loadDoctor()">重新诊断</button>
             <button class="primary" onclick="runSmokeCheck()">运行系统诊断</button>
           </div>
-          <div id="doctor_summary"></div>
-          <div id="smoke_result"></div>
-          <div id="doctor_table"></div>
         </div>
-        <div class="panel">
-          <h3>下一步处理</h3>
-          <div id="doctor_recommendations"></div>
+        <div class="diagnostic-layout">
+          <div class="panel">
+            <div id="doctor_summary"></div>
+            <div id="smoke_result"></div>
+            <div id="doctor_table"></div>
+          </div>
+          <div class="panel">
+            <h3>下一步处理</h3>
+            <div id="doctor_recommendations"></div>
+          </div>
         </div>
       </section>
     </div>
   </div>
   <div id="toast" class="toast"></div>
   <div id="email_template_drawer_backdrop" class="drawer-backdrop" onclick="closeEmailTemplateDrawer()"></div>
-  <div id="email_template_drawer" class="drawer template-modal" role="dialog" aria-modal="true" aria-label="邮件模板">
+  <div id="email_template_drawer" class="drawer template-modal email-template-modal" role="dialog" aria-modal="true" aria-label="邮件模板">
     <div class="drawer-head">
       <div>
         <h3 id="email_template_drawer_title">新增邮件模板</h3>
@@ -829,7 +1132,7 @@
       </div>
       <button class="modal-close" onclick="closeEmailTemplateDrawer()" title="关闭">×</button>
     </div>
-    <div class="split">
+    <div class="template-editor-layout">
       <div>
         <input type="hidden" id="email_template_id">
         <div class="grid">
@@ -837,16 +1140,18 @@
           <div><label>邮件标题模板</label><input id="email_template_subject" value="【律所舆情日报】{law_firm_name} - {date}"></div>
         </div>
         <label>HTML 模板</label>
-        <textarea id="email_html_template" style="min-height:340px" placeholder="<main>{report_body}</main>"></textarea>
-        <div class="small">可用变量：{law_firm_name}、{date}、{new_contents}、{negative_count}、{high_count}、{pending_review_count}、{platforms}、{report_body}、{report_html}</div>
+        <textarea id="email_html_template" placeholder="<main>{report_body}</main>"></textarea>
+        <div class="template-variable-row">
+          <code>{law_firm_name}</code><code>{date}</code><code>{new_contents}</code><code>{negative_count}</code><code>{high_count}</code><code>{pending_review_count}</code><code>{platforms}</code><code>{report_body}</code><code>{report_html}</code>
+        </div>
         <label><input type="checkbox" id="email_template_active"> 设为当前邮件模板</label>
-        <div class="row" style="margin-top:12px">
+        <div class="form-actions">
           <button class="primary" onclick="saveEmailTemplate()">保存模板</button>
           <button class="secondary" onclick="previewEmailTemplate()">刷新预览</button>
           <button class="secondary" onclick="resetEmailTemplateForm()">清空</button>
         </div>
       </div>
-      <div>
+      <div class="template-preview-panel">
         <h3>实时预览</h3>
         <div id="email_preview_subject" class="notice"></div>
         <iframe id="email_template_preview" class="preview-frame"></iframe>
@@ -891,32 +1196,55 @@
     const checkingSocialAccountIds = new Set();
     const proxyProfileCache = new Map();
     const aiProfileCache = new Map();
+    const aiRuleProfileCache = new Map();
+    let activeAIConnectionProfileId = null;
+    let aiProfileModelOptions = [];
     const emailTemplateCache = new Map();
     let platformLoginConfigCache = [];
     let runPollTimer = null;
     let loginSessionPollTimer = null;
     let activeLoginSessionId = null;
     let emailPreviewTimer = null;
+    let openReportMenuId = null;
+    let openJobMenuId = null;
+    let openAIRuleMenuId = null;
+    let currentReports = [];
     let defaultAIPrompt = '';
     let currentRunLogId = null;
     let currentRunLogText = '';
     let accountAttentionOnly = false;
     let openAccountMenuId = null;
+    let defaultPromptSections = {
+      role:'你是律所舆情线索初筛助手，只负责发现疑似风险线索，不做事实认定。',
+      relevance:'优先判断内容是否明确指向目标律所、律所别名、平台搜索词或评论中的相关称呼。同名无关、泛泛法律咨询、普通法律科普和无明显指向的内容应判为不相关。',
+      negative:'疑似负面包括投诉、避雷、退费、收费争议、服务差、欺诈质疑、维权、曝光、失联、承诺未兑现等。普通咨询、广告、招聘、合作推广、无明确负面体验的内容不要标为疑似负面。',
+      risk:'high：出现明确投诉、退费纠纷、欺诈质疑、多人附和或可能扩散的高风险线索；medium：出现明显不满、服务争议、收费争议但证据有限；low：相关但负面较弱或需要人工确认；irrelevant：不相关或无法判断为目标律所相关。',
+      evidence:'证据摘录必须来自输入内容本身，优先选择标题、正文和评论中的原话短句。不要编造证据，不要把模型推断当成证据。',
+      action:'处理建议要面向运营复核，例如人工核对原文、查看评论扩散、联系业务负责人确认、加入日报观察等。所有结论都使用“疑似”“线索”“待复核”等措辞。'
+    };
+    let aiOutputSchema = [
+      {field:'is_related', type:'boolean', description:'内容是否与目标律所或其别名相关。', used_for:'决定是否进入相关线索范围。'},
+      {field:'is_negative', type:'boolean', description:'内容是否属于疑似负面舆情线索。', used_for:'统计疑似负面数，并进入报告线索列表。'},
+      {field:'risk_level', type:'high | medium | low | irrelevant', description:'线索风险等级，只能使用固定枚举。', used_for:'统计高风险数、排序报告线索和筛选风险等级。'},
+      {field:'reason', type:'string', description:'简要说明判断依据，避免事实定性。', used_for:'展示在报告线索明细中。'},
+      {field:'evidence_quotes', type:'string[]', description:'从标题、正文或评论中摘录的关键证据短句。', used_for:'报告中的证据摘录。'},
+      {field:'recommended_action', type:'string', description:'建议运营人员下一步如何复核或处理。', used_for:'报告中的处理建议。'}
+    ];
     const lines = id => document.getElementById(id).value.split(/\n|,/).map(s=>s.trim()).filter(Boolean);
     const toast = msg => { const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; setTimeout(()=>el.style.display='none', 3500); };
     async function withButtonFeedback(button, label, work){
       const btn = typeof button === 'string' ? document.querySelector(button) : button;
-      const oldText = btn ? btn.textContent : '';
+      const oldHtml = btn ? btn.innerHTML : '';
       if(btn){
         btn.disabled = true;
-        btn.textContent = label || '处理中...';
+        btn.innerHTML = label || '处理中...';
       }
       try {
         return await work();
       } finally {
         if(btn){
           btn.disabled = false;
-          btn.textContent = oldText;
+          btn.innerHTML = oldHtml;
         }
       }
     }
@@ -956,6 +1284,11 @@
           renderAccountList();
         }
       }
+      if(!event.target.closest('.action-menu-host')){
+        if(openReportMenuId !== null){ openReportMenuId = null; renderReportsTable(); }
+        if(openJobMenuId !== null){ openJobMenuId = null; renderJobsTable(); }
+        if(openAIRuleMenuId !== null){ openAIRuleMenuId = null; renderAIRuleProfiles([...aiRuleProfileCache.values()]); }
+      }
     });
 
     function toggleNavMenu(menu){
@@ -983,7 +1316,7 @@
       if(tab==='accounts') { loadProxyPool(); loadAccountsPool(); }
       if(tab==='proxies') loadProxyPool();
       if(tab==='ai') loadAIProfiles();
-      if(tab==='ai_rules') loadAI();
+      if(tab==='ai_rules') loadAIRuleProfiles();
       if(tab==='email') loadEmail();
       if(tab==='email_templates') loadEmailTemplates();
       if(tab==='runs') loadRuns();
@@ -1097,7 +1430,7 @@
         cards.push(actionCard('去账号池处理登录', platformLoginActionNote(readiness), 'accounts'));
       }
       if(failed.has('ai_config')){
-        cards.push(actionCard('检查 AI 接入', '维护 OpenAI Compatible / Anthropic 连接资源；未配置时采集不受影响，线索进入待人工复核。', 'ai'));
+        cards.push(actionCard('检查 AI 接入', '维护 OpenAI-compatible / Anthropic-compatible 协议的模型连接资源；未配置时采集不受影响，线索进入待人工复核。', 'ai'));
       }
       if(failed.has('email_config')){
         cards.push(actionCard('配置测试邮件', '填写 SMTP、发件人、默认收件人，并发送测试邮件。', 'email'));
@@ -1140,7 +1473,7 @@
       const details=(data.running_jobs||[]).map(j=>`${j.job_id}${j.law_firm_name?' / '+j.law_firm_name:''}${j.job_deleted?'（任务已删除）':''}`).join('；') || '无';
       document.getElementById('scheduler_status').innerHTML = `<div class="${data.enabled?'notice':'notice warn'}"><strong>${data.enabled?'自动调度已启用':'自动调度未启用'}</strong><div>${esc(data.message)}</div><div class="small">正在运行的任务：${esc(details)}</div></div>`;
     }
-    function platformStatusTable(platforms){ return table(['平台','登录方式','登录材料','最近状态','更新时间','操作'], platforms.map(p=>[esc(p.platform_label), esc(p.login_type_label||p.login_type||'扫码登录'), loginMaterialCell(p), platformStatusCell(p), esc((p.profile_last_modified||'').replace('T',' ').slice(0,19)), `<button class="secondary" onclick="switchTab('accounts')">管理账号</button><div class="small">到平台账号中维护具体账号登录态。</div>`])); }
+    function platformStatusTable(platforms){ return table(['平台','登录方式','登录材料','最近状态','更新时间','操作'], platforms.map(p=>[esc(p.platform_label), esc(p.login_type_label||p.login_type||'扫码登录'), loginMaterialCell(p), platformStatusCell(p), esc((p.profile_last_modified||'').replace('T',' ').slice(0,19)), `<div class="wide-actions"><button class="secondary" onclick="switchTab('accounts')">管理账号</button></div>`])); }
     function loginMaterialCell(p){
       const profile=p.profile_exists ? '<span class="status">登录态已配置</span>' : '<span class="status">登录态未配置</span>';
       const profileSource=p.using_account_profile ? `当前使用账号：${p.active_account_name||p.active_account_id||'-'}` : '尚未绑定具体账号';
@@ -1475,13 +1808,13 @@
     function accountLedgerTable(accounts, selectedId){
       const rows=accounts.map(a=>accountLedgerRow(a, selectedId)).join('');
       const allSelected=accounts.length && accounts.every(a=>selectedSocialAccountIds.has(Number(a.id)));
-      return `<table class="account-table">
+      return `<div class="table-wrap"><table class="account-table">
         <thead><tr>
           <th class="account-select-cell"><input type="checkbox" ${allSelected?'checked':''} onchange="toggleAllFilteredAccounts(this.checked)"></th>
-          <th>账号</th><th>平台身份</th><th>平台 / 登录方式</th><th>可用性</th><th>登录态来源</th><th>绑定代理</th><th>绑定任务</th><th>最近验活</th><th>最近采集</th><th>最近异常</th><th>操作</th>
+          <th>账号</th><th>平台身份</th><th>平台 / 登录方式</th><th>可用性</th><th>登录态来源</th><th>绑定代理</th><th>绑定任务</th><th>最近验活</th><th>最近采集</th><th>最近异常</th><th class="col-actions">操作</th>
         </tr></thead>
         <tbody>${rows}</tbody>
-      </table>`;
+      </table></div>`;
     }
     function accountLedgerRow(a, selectedId){
       const id=Number(a.id);
@@ -1503,12 +1836,12 @@
         <td>${a.last_checked_at ? esc(formatTime(a.last_checked_at)) : '<span class="muted">未检测</span>'}</td>
         <td>${a.last_used_at ? esc(formatTime(a.last_used_at)) : '<span class="muted">暂无</span>'}</td>
         <td>${a.last_error ? `<span class="status warn">需处理</span><div class="small">${esc(cleanCustomerText(a.last_error)).slice(0,120)}</div>` : '<span class="muted">-</span>'}</td>
-        <td onclick="event.stopPropagation()">
+        <td class="col-actions" onclick="event.stopPropagation()">
           <div class="account-actions">
             <button class="secondary" onclick="editSocialAccount(${id})">详情</button>
-            <button class="secondary" ${checking?'disabled':''} onclick="checkSocialAccountLogin(${id})">${checking?'检测中':'检测'}</button>
             <button class="secondary" onclick="toggleAccountActionMenu(${id})">更多</button>
             <div id="account_menu_${id}" class="account-action-menu${menuOpen?' active':''}">
+              <button class="secondary" ${checking?'disabled':''} onclick="checkSocialAccountLogin(${id})">${checking?'检测中':'检测登录态'}</button>
               <button class="secondary" onclick="reloginSocialAccount(${id})">重新登录</button>
               <button class="secondary" onclick="setSocialAccountStatus(${id}, '${a.status==='disabled'?'standby':'disabled'}')">${a.status==='disabled'?'启用账号':'停用账号'}</button>
               <button class="danger" onclick="deleteSocialAccount(${id})">删除账号</button>
@@ -2152,7 +2485,12 @@
       jobCache.clear();
       (data.jobs || []).forEach(j => jobCache.set(Number(j.id), j));
       if(document.getElementById('accounts')?.classList.contains('active')) renderAccountList();
-      document.getElementById('jobs_table').innerHTML = table(['任务ID','律所','平台','平台搜索词','频率','上次运行','下次运行','状态','操作'], filteredJobs(data.jobs||[]).map(j=>jobRow(j)));
+      renderJobsTable();
+    }
+    function renderJobsTable(){
+      const target=document.getElementById('jobs_table');
+      if(!target) return;
+      target.innerHTML = table(['任务ID','律所','平台','平台搜索词','频率','上次运行','下次运行','状态','操作'], filteredJobs([...jobCache.values()]).map(j=>jobRow(j)));
     }
     function filteredJobs(jobs){
       const query=(val('job_search')||'').trim().toLowerCase();
@@ -2171,13 +2509,28 @@
       const id=Number(j.id);
       const running=runningJobIds.has(id);
       const status=running ? '<span class="status">运行中</span>' : (j.enabled?'启用':'暂停');
-      const actions=[
-        `<button class="secondary" onclick="editJob(${id})">编辑</button>`,
-        running ? `<button class="danger" onclick="stopJob(${id})">停止</button>` : `<button class="secondary" onclick="runJob(${id})">立即运行</button>`,
-        `<button class="secondary" onclick="toggleJob(${id}, ${j.enabled})">${j.enabled?'暂停':'恢复'}</button>`,
-        `<button class="danger" onclick="deleteJob(${id})">删除</button>`
-      ].join(' ');
-      return [id, esc(j.law_firm_name), esc(formatPlatforms(j.platforms)), esc(j.keywords.join(' / ')), esc(formatFrequency(j)), esc(formatTime(j.last_run_at)), esc(j.enabled ? formatTime(j.next_run_at) : '已暂停'), status, actions];
+      const keywords=(j.keywords||[]).join(' / ');
+      return [id, esc(j.law_firm_name), esc(formatPlatforms(j.platforms)), `<div class="truncate" title="${esc(keywords)}">${esc(keywords)}</div>`, esc(formatFrequency(j)), esc(formatTime(j.last_run_at)), esc(j.enabled ? formatTime(j.next_run_at) : '已暂停'), status, jobActions(j, running)];
+    }
+    function jobActions(j, running){
+      const id=Number(j.id);
+      const open=openJobMenuId===id;
+      const primary=running ? `<button class="danger" onclick="stopJob(${id})">停止</button>` : `<button class="secondary" onclick="runJob(${id})">运行</button>`;
+      return `<div class="wide-actions">
+        ${primary}
+        <span class="action-menu-host">
+          <button class="secondary" onclick="toggleJobActionMenu(${id})">更多</button>
+          <span id="job_menu_${id}" class="action-menu${open?' active':''}">
+            <button type="button" onclick="editJob(${id})">编辑任务</button>
+            <button type="button" onclick="toggleJob(${id}, ${j.enabled})">${j.enabled?'暂停任务':'恢复任务'}</button>
+            <button type="button" onclick="deleteJob(${id})">删除任务</button>
+          </span>
+        </span>
+      </div>`;
+    }
+    function toggleJobActionMenu(id){
+      openJobMenuId = openJobMenuId===Number(id) ? null : Number(id);
+      renderJobsTable();
     }
     async function refreshJobSchedule(){ const res=await api('/jobs/refresh-schedule',{method:'POST'}); if(!res.ok){toast(await err(res));return;} toast('调度时间已刷新'); await Promise.all([loadJobs(), loadSchedulerStatus(), loadDashboard()]); }
     function editJob(id){
@@ -2280,27 +2633,283 @@
     }
     window.fillSampleJobTemplate = fillSampleJobTemplate;
 
-    function aiPayload(){ return {provider:val('ai_provider')||'openai',base_url:val('ai_base_url'),api_key:'',model:val('ai_model'),temperature:Number(val('ai_temperature')||0),prompt:val('ai_prompt')}; }
+    const aiRuleFields = [
+      ['role','ai_rule_role','角色'],
+      ['relevance','ai_rule_relevance','相关性判断'],
+      ['negative','ai_rule_negative','疑似负面判断'],
+      ['risk','ai_rule_risk','风险等级规则'],
+      ['evidence','ai_rule_evidence','证据摘录规则'],
+      ['action','ai_rule_action','处理建议规则']
+    ];
+    function aiPayload(){ syncAIPromptFromRules(); return {provider:val('ai_provider')||'openai',base_url:val('ai_base_url'),api_key:'',model:val('ai_model'),temperature:Number(val('ai_temperature')||0),prompt:val('ai_prompt')}; }
     async function loadAI(){
       const res=await api('/ai-evaluation-config');
       if(!res.ok) throw new Error(await err(res));
       const data=await res.json();
       const c=data.config || data || {};
       defaultAIPrompt=data.default_prompt || c.default_prompt || defaultAIPrompt || '';
+      defaultPromptSections=data.prompt_sections || defaultPromptSections || {};
+      aiOutputSchema=data.output_schema || aiOutputSchema || [];
       set('ai_provider',c.provider||'openai'); set('ai_base_url',c.base_url||''); set('ai_model',c.model||''); set('ai_temperature',c.temperature ?? 0); set('ai_api_key',''); set('ai_prompt',c.prompt || defaultAIPrompt);
+      applyPromptToRuleFields(c.prompt || defaultAIPrompt);
+      renderAIOutputSchema();
+      updateAIPromptPreview();
       const status=document.getElementById('ai_status');
-      if(status) status.textContent = '评估规则会用于相关性、疑似负面和风险等级判断；AI 接入资源未配置时，采集仍会继续，线索进入待人工复核。';
+      if(status) status.textContent = '系统会把固定输出结构、评估规则和每条采集内容一起交给模型；AI 接入异常时，内容进入待人工复核。';
+    }
+    function composeAIPromptFromRules(){
+      const sections=aiRuleFields.map(([key,id,label])=>`【${label}】\n${(val(id)||defaultPromptSections[key]||'').trim()}`);
+      sections.push('【固定输出要求】\n只输出 JSON，不要输出解释性前后缀。\n字段：is_related(boolean), is_negative(boolean), risk_level(high|medium|low|irrelevant), reason(string), evidence_quotes(string[]), recommended_action(string)。');
+      return sections.join('\n\n');
+    }
+    function syncAIPromptFromRules(){
+      set('ai_prompt', composeAIPromptFromRules());
+      updateAIPromptPreview();
+    }
+    function parsePromptSections(prompt){
+      const text=String(prompt||'');
+      const labels=aiRuleFields.map(([key,,label])=>({key,label}));
+      const parsed={};
+      labels.forEach(({key,label}, index)=>{
+        const startToken=`【${label}】`;
+        const start=text.indexOf(startToken);
+        if(start < 0) return;
+        const contentStart=start + startToken.length;
+        const restLabels=labels.slice(index+1).map(item=>`【${item.label}】`).concat(['【固定输出要求】']);
+        let end=text.length;
+        restLabels.forEach(token=>{
+          const pos=text.indexOf(token, contentStart);
+          if(pos >= 0 && pos < end) end=pos;
+        });
+        parsed[key]=text.slice(contentStart, end).trim();
+      });
+      return parsed;
+    }
+    function applyPromptToRuleFields(prompt){
+      const parsed=parsePromptSections(prompt);
+      const hasStructured=aiRuleFields.some(([key])=>parsed[key]);
+      aiRuleFields.forEach(([key,id])=>{
+        set(id, hasStructured ? (parsed[key] || defaultPromptSections[key] || '') : (defaultPromptSections[key] || ''));
+      });
+      if(!hasStructured && prompt && prompt !== defaultAIPrompt){
+        const status=document.getElementById('ai_status');
+        if(status) status.textContent='已载入旧版完整 Prompt。建议按分段规则确认后重新保存，便于后续维护。';
+      }
+    }
+    function updateAIPromptPreview(){
+      const prompt=composeAIPromptFromRules();
+      set('ai_prompt', prompt);
+      const preview=document.getElementById('ai_prompt_preview');
+      if(preview) preview.textContent=prompt;
+    }
+    function renderAIOutputSchema(){
+      const target=document.getElementById('ai_output_schema_table');
+      if(!target) return;
+      const rows=(aiOutputSchema||[]).map(item=>`
+        <div class="schema-item">
+          <strong><code>${esc(item.field)}</code></strong>
+          <span class="pill">${esc(item.type)}</span>
+          <div>
+            <div>${esc(item.description||'')}</div>
+            <div class="small">用于：${esc(item.used_for||'线索入库和报告生成')}</div>
+          </div>
+        </div>
+      `).join('');
+      target.innerHTML=rows || '<div class="empty">固定输出字段由系统维护。</div>';
     }
     async function saveAI(){ const res=await api('/ai-evaluation-config',{method:'PUT',body:JSON.stringify(aiPayload())}); if(res.ok){ toast('AI 评估规则已保存'); } else toast(await err(res)); set('ai_api_key',''); await loadAI(); await loadReadiness(); }
-    async function testAI(){ const res=await api('/ai-evaluation-config/test',{method:'POST',body:JSON.stringify({prompt:val('ai_prompt')})}); const target=document.getElementById('ai_rules_result'); if(target) target.textContent = res.ok ? JSON.stringify((await res.json()).result,null,2) : cleanCustomerText(await err(res)); await loadReadiness(); if(res.ok) toast('AI 评估规则测试通过'); }
-    function resetAIPrompt(){ set('ai_prompt', defaultAIPrompt); toast('已恢复默认评估规则，保存后生效'); }
+    async function testAI(){
+      syncAIPromptFromRules();
+      const payload={
+        prompt:val('ai_prompt'),
+        sample_law_firm_name:val('ai_sample_law_firm_name'),
+        sample_platform:val('ai_sample_platform'),
+        sample_source_keyword:val('ai_sample_source_keyword'),
+        sample_title:val('ai_sample_title'),
+        sample_text:val('ai_sample_text'),
+        sample_comments:val('ai_sample_comments')
+      };
+      const res=await api('/ai-evaluation-config/test',{method:'POST',body:JSON.stringify(payload)});
+      const target=document.getElementById('ai_rules_result');
+      if(target) target.textContent = res.ok ? JSON.stringify((await res.json()).result,null,2) : cleanCustomerText(await err(res));
+      await loadReadiness();
+      if(res.ok) toast('AI 评估规则测试通过');
+    }
+    function resetAIPrompt(){ applyPromptToRuleFields(defaultAIPrompt); updateAIPromptPreview(); toast('已恢复默认评估规则，保存后生效'); }
+    async function loadAIRuleProfiles(){
+      const data=await (await api('/ai-rule-profiles')).json();
+      defaultAIPrompt=data.default_prompt || defaultAIPrompt;
+      defaultPromptSections=data.prompt_sections || defaultPromptSections;
+      aiOutputSchema=data.output_schema || aiOutputSchema;
+      aiRuleProfileCache.clear();
+      (data.profiles||[]).forEach(rule=>aiRuleProfileCache.set(Number(rule.id), rule));
+      renderAIRuleProfiles(data.profiles||[]);
+    }
+    function renderAIRuleProfiles(rules){
+      const summary=document.getElementById('ai_rules_summary');
+      if(summary){
+        const active=rules.find(rule=>rule.is_active);
+        summary.textContent=`共 ${rules.length} 套规则${active ? '，当前默认：' + active.name : ''}`;
+      }
+      const target=document.getElementById('ai_rules_table');
+      if(!target) return;
+      if(!rules.length){
+        target.innerHTML='<div class="empty">还没有评估规则。新增一套规则后，可设为默认用于采集后的 AI 初筛。</div>';
+        return;
+      }
+      target.innerHTML=table(
+        ['ID','规则名称','状态','最近测试','更新时间','操作'],
+        rules.map(rule=>[
+          rule.id,
+          `<strong>${esc(rule.name)}</strong><div class="small">${esc((rule.prompt||'').replace(/\\s+/g,' ').slice(0,90))}</div>`,
+          rule.is_active ? '<span class="status ok">默认规则</span>' : '<span class="status">备用</span>',
+          esc(formatTestStatus(rule, '评估规则')),
+          esc(formatTime(rule.updated_at)),
+          aiRuleActions(rule)
+        ])
+      );
+    }
+    function aiRuleActions(rule){
+      const id=Number(rule.id);
+      const open=openAIRuleMenuId===id;
+      return `<div class="wide-actions">
+        <button class="secondary" onclick="editAIRuleProfile(${id})">详情</button>
+        <span class="action-menu-host">
+          <button class="secondary" onclick="toggleAIRuleActionMenu(${id})">更多</button>
+          <span id="ai_rule_menu_${id}" class="action-menu${open?' active':''}">
+            <button type="button" onclick="testAIRuleProfile(${id})">测试规则</button>
+            ${rule.is_active ? '' : `<button type="button" onclick="activateAIRuleProfile(${id})">设为默认</button>`}
+            <button type="button" onclick="deleteAIRuleProfile(${id})">删除规则</button>
+          </span>
+        </span>
+      </div>`;
+    }
+    function toggleAIRuleActionMenu(id){
+      openAIRuleMenuId = openAIRuleMenuId===Number(id) ? null : Number(id);
+      renderAIRuleProfiles([...aiRuleProfileCache.values()]);
+    }
+    function openNewAIRuleModal(){
+      resetAIRuleModal();
+      set('ai_rule_name','新评估规则');
+      updateAIRuleStatusBadge('未保存', '');
+      document.getElementById('ai_rule_modal_title').textContent='新增评估规则';
+      openAIRuleModal();
+    }
+    function editAIRuleProfile(id){
+      const rule=aiRuleProfileCache.get(Number(id));
+      if(!rule){ toast('评估规则已刷新，请重新选择'); loadAIRuleProfiles(); return; }
+      set('ai_rule_id', rule.id);
+      set('ai_rule_name', rule.name || '');
+      set('ai_rule_is_active', rule.is_active ? '1' : '');
+      updateAIRuleStatusBadge(rule.is_active ? '默认规则' : '备用规则', rule.is_active ? 'ok' : '');
+      set('ai_prompt', rule.prompt || defaultAIPrompt);
+      applyPromptToRuleFields(rule.prompt || defaultAIPrompt);
+      renderAIOutputSchema();
+      updateAIPromptPreview();
+      document.getElementById('ai_rules_result').textContent='可修改规则或样例内容后点击“测试评估规则”。';
+      document.getElementById('ai_rule_modal_title').textContent='编辑评估规则';
+      openAIRuleModal();
+    }
+    function openAIRuleModal(){
+      document.getElementById('ai_rule_modal_backdrop').classList.add('active');
+      document.getElementById('ai_rule_modal').classList.add('active');
+      document.body.style.overflow='hidden';
+    }
+    function closeAIRuleModal(){
+      document.getElementById('ai_rule_modal_backdrop').classList.remove('active');
+      document.getElementById('ai_rule_modal').classList.remove('active');
+      document.body.style.overflow='';
+    }
+    function resetAIRuleModal(){
+      ['ai_rule_id','ai_rule_name','ai_rule_is_active'].forEach(id=>set(id,''));
+      updateAIRuleStatusBadge('未保存', '');
+      applyPromptToRuleFields(defaultAIPrompt);
+      renderAIOutputSchema();
+      updateAIPromptPreview();
+      set('ai_sample_law_firm_name','海安律所');
+      set('ai_sample_platform','dy');
+      set('ai_sample_source_keyword','海安律所避雷');
+      set('ai_sample_title','海安律所避雷：退费拖了很久');
+      set('ai_sample_text','我想曝光一下，沟通很差，收费也不透明，投诉后一直没人处理。');
+      set('ai_sample_comments','我也遇到退费慢的问题\n建议先保留沟通证据再投诉');
+      const result=document.getElementById('ai_rules_result');
+      if(result) result.textContent='调整规则或样例内容后，点击“测试评估规则”查看模型返回的结构化结果。';
+    }
+    function updateAIRuleStatusBadge(text, cls){
+      const badge=document.getElementById('ai_rule_status_badge');
+      if(!badge) return;
+      badge.textContent=text || '未保存';
+      badge.className='status ' + (cls || '');
+    }
+    function aiRulePayloadFromModal(){
+      syncAIPromptFromRules();
+      return {
+        name:val('ai_rule_name') || '未命名评估规则',
+        prompt:val('ai_prompt'),
+        is_active:val('ai_rule_is_active') === '1'
+      };
+    }
+    async function saveAIRuleFromModal(){
+      const id=val('ai_rule_id');
+      const payload=aiRulePayloadFromModal();
+      const res=await api(id?'/ai-rule-profiles/'+id:'/ai-rule-profiles',{method:id?'PUT':'POST',body:JSON.stringify(payload)});
+      if(!res.ok){ toast(await err(res)); return; }
+      toast('评估规则已保存');
+      const data=await res.json();
+      set('ai_rule_id', (data.profile||{}).id || id);
+      await Promise.all([loadAIRuleProfiles(), loadAI(), loadReadiness()]);
+    }
+    async function activateAIRuleProfile(id){
+      const res=await api('/ai-rule-profiles/'+id+'/activate',{method:'POST'});
+      if(!res.ok){ toast(await err(res)); return; }
+      toast('已设为默认评估规则');
+      await Promise.all([loadAIRuleProfiles(), loadAI(), loadReadiness(), loadDashboard()]);
+    }
+    async function deleteAIRuleProfile(id){
+      if(!confirm('确认删除这套评估规则？至少需要保留一套规则。')) return;
+      const res=await api('/ai-rule-profiles/'+id,{method:'DELETE'});
+      toast(res.ok?'评估规则已删除':await err(res));
+      await Promise.all([loadAIRuleProfiles(), loadAI(), loadReadiness()]);
+    }
+    function aiRuleSamplePayload(){
+      return {
+        sample_law_firm_name:val('ai_sample_law_firm_name'),
+        sample_platform:val('ai_sample_platform'),
+        sample_source_keyword:val('ai_sample_source_keyword'),
+        sample_title:val('ai_sample_title'),
+        sample_text:val('ai_sample_text'),
+        sample_comments:val('ai_sample_comments')
+      };
+    }
+    async function testAIRuleProfile(id){
+      const rule=aiRuleProfileCache.get(Number(id));
+      if(!rule){ toast('评估规则已刷新，请重新选择'); loadAIRuleProfiles(); return; }
+      const res=await api('/ai-rule-profiles/'+id+'/test',{method:'POST',body:JSON.stringify(aiRuleSamplePayload())});
+      toast(res.ok?'评估规则测试通过':'评估规则测试失败');
+      await loadAIRuleProfiles();
+      if(!res.ok) console.warn(await err(res));
+    }
+    async function testAIRuleFromModal(){
+      const id=val('ai_rule_id');
+      const resultBox=document.getElementById('ai_rules_result');
+      let res;
+      if(id){
+        res=await api('/ai-rule-profiles/'+id+'/test',{method:'POST',body:JSON.stringify(aiRuleSamplePayload())});
+      } else {
+        syncAIPromptFromRules();
+        res=await api('/ai-evaluation-config/test',{method:'POST',body:JSON.stringify({prompt:val('ai_prompt'), ...aiRuleSamplePayload()})});
+      }
+      if(resultBox) resultBox.textContent = res.ok ? JSON.stringify((await res.json()).result,null,2) : cleanCustomerText(await err(res));
+      toast(res.ok?'评估规则测试通过':'评估规则测试失败');
+      await Promise.all([loadAIRuleProfiles(), loadReadiness()]);
+    }
     async function loadAIProfiles(){
       const data=await (await api('/ai-profiles')).json();
       aiProfileCache.clear();
       (data.profiles||[]).forEach(p=>aiProfileCache.set(Number(p.id), p));
       renderJobAIProfileOptions();
       document.getElementById('ai_profiles_table').innerHTML = table(
-        ['ID','名称','Provider','模型','Base URL','Key','状态','测试','操作'],
+        ['ID','名称','接口协议','模型','Base URL','Key','状态','测试','操作'],
         (data.profiles||[]).map(p=>[
           p.id,
           esc(p.name),
@@ -2310,12 +2919,12 @@
           esc(p.api_key||'未填写'),
           p.is_active ? '<span class="status ok">默认接入</span>' : '<span class="status">备用</span>',
           esc(formatTestStatus(p, 'AI 接入')),
-          [
+          `<div class="wide-actions">${[
             `<button class="secondary" onclick="editAIProfile(${Number(p.id)})">编辑</button>`,
             `<button class="secondary" onclick="testAIProfile(${Number(p.id)})">连接测试</button>`,
             p.is_active ? '' : `<button class="secondary" onclick="activateAIProfile(${Number(p.id)})">设为默认</button>`,
             `<button class="danger" onclick="deleteAIProfile(${Number(p.id)})">删除</button>`
-          ].join(' ')
+          ].join(' ')}</div>`
         ])
       );
       if(!(data.profiles||[]).length){
@@ -2329,6 +2938,68 @@
       const profiles=[...aiProfileCache.values()];
       select.innerHTML=['<option value="">使用默认 AI 接入</option>'].concat(profiles.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}${p.is_active?'（默认）':''}</option>`)).join('');
       if(current && profiles.some(p=>String(p.id)===String(current))) select.value=current;
+    }
+    async function loadAIProfileModels(button){
+      const status=document.getElementById('ai_profile_model_status');
+      if(status) status.textContent='正在获取模型列表...';
+      aiProfileModelOptions = [];
+      renderAIProfileModelOptions(false);
+      const id=val('ai_profile_id');
+      const payload={
+        provider:val('ai_profile_provider'),
+        base_url:val('ai_profile_base_url')
+      };
+      if(val('ai_profile_api_key')) payload.api_key=val('ai_profile_api_key');
+      const path=id?'/ai-profiles/'+id+'/models':'/ai-profiles/models';
+      const res=await api(path,{method:'POST',body:JSON.stringify(payload)});
+      if(!res.ok){
+        const message=cleanCustomerText(await err(res));
+        if(status) status.textContent='未获取到模型列表：' + message + '。可继续手动填写模型名称。';
+        toast('模型列表获取失败，可手动填写模型名称');
+        return;
+      }
+      const data=await res.json();
+      const models=((data.result||{}).models||[]).filter(Boolean);
+      if(!val('ai_profile_model') && models.length) set('ai_profile_model', models[0]);
+      aiProfileModelOptions = models;
+      renderAIProfileModelOptions(!!models.length, false);
+      if(status) status.textContent=models.length ? `已获取 ${models.length} 个模型，可在模型名称中直接选择或继续手动输入。` : '没有获取到模型名称，可手动填写。';
+      toast(models.length ? '模型列表已更新' : '没有获取到模型名称');
+    }
+    function renderAIProfileModelOptions(open=false, filter=false){
+      const panel=document.getElementById('ai_profile_model_options');
+      const input=document.getElementById('ai_profile_model');
+      if(!panel) return;
+      if(!aiProfileModelOptions.length){
+        panel.innerHTML='<div class="model-option-empty">请先获取模型列表，或直接手动输入模型名称。</div>';
+        panel.classList.remove('active');
+        return;
+      }
+      const keyword=filter ? String(input?.value||'').trim().toLowerCase() : '';
+      const matched=aiProfileModelOptions.filter(model=>!keyword || String(model).toLowerCase().includes(keyword));
+      const visible=filter ? matched : aiProfileModelOptions;
+      if(!visible.length){
+        panel.innerHTML='<div class="model-option-empty">没有匹配的模型，可直接保存当前输入内容。</div>';
+        panel.classList.toggle('active', !!open);
+        return;
+      }
+      panel.innerHTML=visible.map(model=>{
+        const active=String(model)===String(input?.value||'') ? ' active' : '';
+        return `<button type="button" class="${active}" data-model="${esc(model)}" role="option">${esc(model)}</button>`;
+      }).join('');
+      panel.classList.toggle('active', !!open);
+    }
+    function toggleAIProfileModelOptions(){
+      if(!aiProfileModelOptions.length){
+        toast('请先获取模型列表，或直接手动输入模型名称');
+        return;
+      }
+      const panel=document.getElementById('ai_profile_model_options');
+      renderAIProfileModelOptions(!(panel && panel.classList.contains('active')), false);
+    }
+    function selectAIProfileModel(model){
+      if(model) set('ai_profile_model', model);
+      renderAIProfileModelOptions(false);
     }
     async function saveAIProfile(){
       const id=val('ai_profile_id');
@@ -2355,6 +3026,10 @@
       set('ai_profile_id', p.id); set('ai_profile_name', p.name); set('ai_profile_provider', p.provider);
       set('ai_profile_base_url', p.base_url||''); set('ai_profile_model', p.model||''); set('ai_profile_temperature', p.temperature ?? 0);
       set('ai_profile_prompt', ''); set('ai_profile_api_key','');
+      aiProfileModelOptions = [];
+      renderAIProfileModelOptions(false);
+      const modelStatus=document.getElementById('ai_profile_model_status');
+      if(modelStatus) modelStatus.textContent='可获取当前接入下的模型列表；如果服务不支持列表接口，可保持手动填写。';
       document.getElementById('ai_profile_active').checked=!!p.is_active;
       openAIProfileDrawer('编辑 AI 接入');
       toast('已载入 AI 接入，API Key 留空表示不修改');
@@ -2366,10 +3041,97 @@
       await Promise.all([loadAIProfiles(), loadAI(), loadReadiness(), loadDashboard()]);
     }
     async function testAIProfile(id){
+      openAIConnectionTestModal(id);
+    }
+    function openAIConnectionTestModal(id){
+      const profile=aiProfileCache.get(Number(id));
+      if(!profile){ toast('AI 接入已刷新，请重新选择'); loadAIProfiles(); return; }
+      activeAIConnectionProfileId=Number(id);
+      document.getElementById('ai_test_profile_name').textContent = profile.name || '未命名 AI 接入';
+      document.getElementById('ai_test_profile_meta').textContent = `${providerLabel(profile.provider)} · ${profile.base_url || '未填写 Base URL'}`;
+      document.getElementById('ai_test_model').textContent = profile.model || '-';
+      document.getElementById('ai_test_provider').textContent = providerLabel(profile.provider || '');
+      document.getElementById('ai_test_message').textContent = 'hi';
+      const badge=document.getElementById('ai_test_status_badge');
+      badge.textContent='未开始';
+      badge.className='status';
+      const consoleBox=document.getElementById('ai_test_console');
+      consoleBox.textContent = [
+        `准备测试：${profile.name || '未命名 AI 接入'}`,
+        `接口协议：${providerLabel(profile.provider || '')}`,
+        `模型：${profile.model || '-'}`,
+        '测试消息："hi"',
+        '',
+        '点击“开始测试”后，系统会向模型发送最小消息，并在这里展示模型返回文本。'
+      ].join('\n');
+      const startBtn=document.getElementById('ai_test_start_btn');
+      startBtn.disabled=false;
+      startBtn.textContent='开始测试';
+      document.getElementById('ai_connection_test_backdrop').classList.add('active');
+      document.getElementById('ai_connection_test_modal').classList.add('active');
+    }
+    function closeAIConnectionTestModal(){
+      document.getElementById('ai_connection_test_backdrop').classList.remove('active');
+      document.getElementById('ai_connection_test_modal').classList.remove('active');
+    }
+    async function runAIConnectionTest(){
+      const id=Number(activeAIConnectionProfileId || 0);
+      if(!id){ toast('请先选择一个 AI 接入资源'); return; }
+      const profile=aiProfileCache.get(id) || {};
+      const startBtn=document.getElementById('ai_test_start_btn');
+      const badge=document.getElementById('ai_test_status_badge');
+      const consoleBox=document.getElementById('ai_test_console');
+      startBtn.disabled=true;
+      startBtn.textContent='测试中...';
+      badge.textContent='测试中';
+      badge.className='status warn';
+      consoleBox.textContent = [
+        `开始测试 AI 接入：${profile.name || '未命名 AI 接入'}`,
+        `接口协议：${providerLabel(profile.provider || '')}`,
+        `使用模型：${profile.model || '-'}`,
+        '发送测试消息："hi"',
+        '',
+        '等待模型返回文本...'
+      ].join('\n');
       const res=await api('/ai-profiles/'+id+'/connection-test',{method:'POST',body:JSON.stringify({})});
-      document.getElementById('ai_result').textContent = res.ok ? JSON.stringify((await res.json()).result,null,2) : cleanCustomerText(await err(res));
+      if(res.ok){
+        const data=await res.json();
+        const rendered=renderAIConnectionResult(data.result || {});
+        consoleBox.textContent = rendered;
+        badge.textContent='测试通过';
+        badge.className='status ok';
+        startBtn.textContent='重新测试';
+        toast('AI 接入连接测试通过，模型已返回文本');
+      } else {
+        const message=cleanCustomerText(await err(res));
+        consoleBox.textContent = [
+          `开始测试 AI 接入：${profile.name || '未命名 AI 接入'}`,
+          `接口协议：${providerLabel(profile.provider || '')}`,
+          `使用模型：${profile.model || '-'}`,
+          '发送测试消息："hi"',
+          '',
+          '测试失败：',
+          message
+        ].join('\n');
+        badge.textContent='测试失败';
+        badge.className='status bad';
+        startBtn.textContent='重新测试';
+        toast('AI 接入连接测试失败，请检查配置');
+      }
+      startBtn.disabled=false;
       await Promise.all([loadAIProfiles(), loadReadiness()]);
-      if(res.ok) toast('AI 接入连接测试通过');
+    }
+    function renderAIConnectionResult(result){
+      const response=String(result.response_text || result.response_preview || '').trim();
+      return [
+        '连接测试通过',
+        '接口协议：' + providerLabel(result.protocol || result.provider || ''),
+        '模型：' + (result.model || '-'),
+        '测试消息：' + (result.request_message || 'hi'),
+        '模型返回：',
+        response || '模型服务已响应，但未返回可展示文本。',
+        '接口：' + (result.endpoint || '-')
+      ].join('\n');
     }
     async function deleteAIProfile(id){
       if(!confirm('确认删除这个 AI 接入资源？')) return;
@@ -2381,6 +3143,10 @@
     function resetAIProfileForm(){
       ['ai_profile_id','ai_profile_name','ai_profile_base_url','ai_profile_api_key','ai_profile_model'].forEach(id=>set(id,''));
       set('ai_profile_provider','openai'); set('ai_profile_temperature','0'); set('ai_profile_prompt', '');
+      aiProfileModelOptions = [];
+      renderAIProfileModelOptions(false);
+      const modelStatus=document.getElementById('ai_profile_model_status');
+      if(modelStatus) modelStatus.textContent='部分服务不提供模型列表；获取失败时仍可手动填写模型名称。';
       document.getElementById('ai_profile_active').checked=false;
       const title=document.getElementById('ai_profile_drawer_title');
       if(title) title.textContent='新增 AI 接入';
@@ -2394,10 +3160,25 @@
     function closeAIProfileDrawer(){
       document.getElementById('ai_profile_drawer_backdrop').classList.remove('active');
       document.getElementById('ai_profile_drawer').classList.remove('active');
+      renderAIProfileModelOptions(false);
       document.body.style.overflow='';
     }
 
-    async function loadEmail(){ const c=(await (await api('/email-config')).json()).config; ['smtp_host','smtp_port','encryption','sender'].forEach(id=>set(id,c[id]||'')); set('smtp_username',c.username||''); set('subject_template',c.subject_template||''); set('default_recipients',(c.default_recipients||[]).join('\n')); document.getElementById('email_status').textContent = formatTestStatus(c, '邮件'); }
+    async function loadEmail(){
+      const c=(await (await api('/email-config')).json()).config;
+      ['smtp_host','smtp_port','encryption','sender'].forEach(id=>set(id,c[id]||''));
+      set('smtp_username',c.username||'');
+      set('subject_template',c.subject_template||'');
+      set('default_recipients',(c.default_recipients||[]).join('\n'));
+      const statusText=formatTestStatus(c, '邮件');
+      document.getElementById('email_status').textContent = statusText;
+      const statusLabel=document.getElementById('email_status_label');
+      if(statusLabel) statusLabel.textContent = c.last_test_status==='success' ? '最近测试通过' : (c.last_test_status==='failed' ? '最近测试失败' : '尚未测试');
+      const senderSummary=document.getElementById('email_sender_summary');
+      if(senderSummary) senderSummary.textContent = c.sender || c.username || '-';
+      const recipientSummary=document.getElementById('email_recipient_summary');
+      if(recipientSummary) recipientSummary.textContent = `${(c.default_recipients||[]).length} 个`;
+    }
     async function saveEmail(){ const payload={smtp_host:val('smtp_host'),smtp_port:Number(val('smtp_port')||465),encryption:val('encryption'),sender:val('sender'),username:val('smtp_username'),password:val('smtp_password'),subject_template:val('subject_template'),default_recipients:lines('default_recipients')}; const res=await api('/email-config',{method:'PUT',body:JSON.stringify(payload)}); if(res.ok){ const data=await res.json(); toast(data.config.last_test_status==='success'?'邮件配置已保存，测试状态仍有效':'邮件配置已保存，需重新测试'); } else toast(await err(res)); set('smtp_password',''); await loadEmail(); await loadReadiness(); }
     async function testEmail(){ const payload={smtp_host:val('smtp_host'),smtp_port:Number(val('smtp_port')||465),encryption:val('encryption'),sender:val('sender'),username:val('smtp_username'),password:val('smtp_password'),subject_template:val('subject_template'),default_recipients:lines('default_recipients')}; const res=await api('/email-config/test',{method:'POST',body:JSON.stringify(payload)}); toast(res.ok?'测试邮件已发送并记录通过':await err(res)); set('smtp_password',''); await loadEmail(); await loadReadiness(); }
     async function loadEmailTemplates(){
@@ -2405,6 +3186,11 @@
       emailTemplateCache.clear();
       (data.templates||[]).forEach(t=>emailTemplateCache.set(Number(t.id), t));
       renderJobEmailTemplateOptions();
+      const summary=document.getElementById('email_template_summary');
+      if(summary){
+        const active=(data.templates||[]).find(t=>t.is_active);
+        summary.textContent=`共 ${(data.templates||[]).length} 个模板${active ? '，当前使用：' + active.name : ''}`;
+      }
       document.getElementById('email_templates_table').innerHTML = (data.templates||[]).length ? table(
         ['ID','模板名称','标题模板','状态','更新时间','操作'],
         data.templates.map(t=>[
@@ -2413,10 +3199,10 @@
           `<span class="code">${esc(t.subject_template||'')}</span>`,
           t.is_active ? '<span class="status ok">当前使用</span>' : '<span class="status">备用</span>',
           esc(formatTime(t.updated_at)),
-          [
+          `<div class="wide-actions">${[
             `<button class="secondary" onclick="editEmailTemplate(${Number(t.id)})">编辑</button>`,
             `<button class="danger" onclick="deleteEmailTemplate(${Number(t.id)})">删除</button>`
-          ].join(' ')
+          ].join(' ')}</div>`
         ])
       ) : '<div class="empty">还没有 HTML 邮件模板。系统会先使用默认报告 HTML。</div>';
       if(!val('email_template_id') && data.active){
@@ -2588,10 +3374,49 @@
       const qs = new URLSearchParams({law_firm:val('report_law_firm'), platform:val('report_platform'), risk:val('report_risk'), date_from:val('report_date_from'), date_to:val('report_date_to'), limit:val('report_limit') || '100'});
       const [reportData, leadData]=await Promise.all([(await api('/reports?'+qs.toString())).json(), (await api('/leads?'+qs.toString())).json()]);
       const data=reportData;
-      document.getElementById('reports_table').innerHTML=table(['报告 ID','律所','新增','疑似负面','高风险','待复核','邮件','创建时间','操作'], data.reports.map(r=>[r.id,esc(r.display_law_firm_name||r.law_firm_name||''),esc((r.summary||{}).new_contents||0),esc((r.summary||{}).negative_count||0),esc((r.summary||{}).high_count||0),esc((r.summary||{}).pending_review_count||0),esc(emailStatusLabel(r.email_status)),esc(formatTime(r.created_at)),`<div class="wide-actions"><button class="secondary" onclick="previewReport(${r.id})">预览</button> <button class="secondary" onclick="resendReportEmail(${r.id})">重发邮件</button> <a href="/api/monitor/reports/${r.id}/download?type=html">HTML</a> <a href="/api/monitor/reports/${r.id}/download?type=excel">Excel</a> <a href="/api/monitor/reports/${r.id}/download?type=markdown">Markdown</a></div>`]));
+      currentReports=data.reports||[];
+      renderReportsTable();
       renderLeads(leadData.leads||[], '当前筛选条件下的线索');
     }
-    async function createSystemCheckReport(){ const res=await api('/reports/system-check',{method:'POST'}); if(!res.ok){toast(await err(res));return;} toast('系统自检报告已生成'); await Promise.all([loadReports(), loadRuns(), loadReadiness(), loadDoctor(), loadDashboard()]); }
+    function renderReportsTable(){
+      const target=document.getElementById('reports_table');
+      if(!target) return;
+      target.innerHTML=table(['报告 ID','律所','新增','疑似负面','高风险','待复核','邮件','创建时间','操作'], (currentReports||[]).map(reportRow));
+    }
+    function reportRow(r){
+      return [
+        r.id,
+        esc(r.display_law_firm_name||r.law_firm_name||''),
+        esc((r.summary||{}).new_contents||0),
+        esc((r.summary||{}).negative_count||0),
+        esc((r.summary||{}).high_count||0),
+        esc((r.summary||{}).pending_review_count||0),
+        esc(emailStatusLabel(r.email_status)),
+        esc(formatTime(r.created_at)),
+        reportActions(r.id)
+      ];
+    }
+    function reportActions(id){
+      const reportId=Number(id);
+      const open=openReportMenuId===reportId;
+      return `<div class="wide-actions">
+        <button class="secondary" onclick="previewReport(${reportId})">预览</button>
+        <span class="action-menu-host">
+          <button class="secondary" onclick="toggleReportActionMenu(${reportId})">更多</button>
+          <span id="report_menu_${reportId}" class="action-menu${open?' active':''}">
+            <button type="button" onclick="resendReportEmail(${reportId})">重发邮件</button>
+            <a href="/api/monitor/reports/${reportId}/download?type=html" target="_blank">下载 HTML</a>
+            <a href="/api/monitor/reports/${reportId}/download?type=excel" target="_blank">下载 Excel</a>
+            <a href="/api/monitor/reports/${reportId}/download?type=markdown" target="_blank">下载 Markdown</a>
+          </span>
+        </span>
+      </div>`;
+    }
+    function toggleReportActionMenu(id){
+      openReportMenuId = openReportMenuId===Number(id) ? null : Number(id);
+      renderReportsTable();
+    }
+    async function createSystemCheckReport(){ const res=await api('/reports/system-check',{method:'POST'}); if(!res.ok){toast(await err(res));return;} toast('系统诊断报告已生成'); await Promise.all([loadReports(), loadRuns(), loadReadiness(), loadDoctor(), loadDashboard()]); }
     async function previewReport(id){
       openReportPreviewDrawer(id);
       document.getElementById('report_preview').srcdoc = '正在加载报告...';
@@ -2629,15 +3454,26 @@
     async function loadDoctor(){
       const data=await (await api('/doctor')).json();
       document.getElementById('doctor_summary').innerHTML = data.ok
-        ? '<div class="notice">基础配置检查已通过，可继续查看系统运行状态。</div>'
-        : '<div class="notice warn">还有基础配置未完成，按下方建议处理。</div>';
-      document.getElementById('doctor_table').innerHTML=table(['检查项','状态','说明'], (data.checks||[]).map(c=>[esc(cleanCustomerText(c.label)), c.ok ? '<span class="status">正常</span>' : '<span class="status">待处理</span>', esc(cleanCustomerText(c.message))]));
+        ? '<div class="notice ok">基础配置检查已通过。</div>'
+        : '<div class="notice warn">还有基础配置未完成。</div>';
+      document.getElementById('doctor_table').innerHTML=renderDiagnosticChecks(data.checks||[]);
       const tips=data.recommendations||[];
-      document.getElementById('doctor_recommendations').innerHTML = tips.length ? `<ul>${tips.map(x=>`<li>${esc(cleanCustomerText(x))}</li>`).join('')}</ul>` : '<span class="muted">暂无建议。</span>';
+      document.getElementById('doctor_recommendations').innerHTML = tips.length ? `<ul class="diagnostic-recommendations">${tips.map(x=>`<li>${esc(cleanCustomerText(x))}</li>`).join('')}</ul>` : '<span class="muted">暂无建议。</span>';
+    }
+    function renderDiagnosticChecks(checks){
+      if(!checks.length) return '<div class="empty">暂无诊断项。</div>';
+      return `<div class="diagnostic-grid">${checks.map(c=>`
+        <div class="diagnostic-item ${c.ok?'ok':'todo'}">
+          <div class="diagnostic-item-head">
+            <strong>${esc(cleanCustomerText(c.label))}</strong>
+            ${c.ok ? '<span class="status ok">正常</span>' : '<span class="status warn">待处理</span>'}
+          </div>
+          <div class="small">${esc(cleanCustomerText(c.message))}</div>
+        </div>`).join('')}</div>`;
     }
     async function runSmokeCheck(){
       const mount=document.getElementById('smoke_result');
-      mount.innerHTML='<div class="notice">正在运行系统诊断，会生成一份海安律所诊断报告...</div>';
+      mount.innerHTML='<div class="notice">正在运行系统诊断，请稍候。</div>';
       const res=await api('/smoke',{method:'POST'});
       if(!res.ok){ mount.innerHTML='<div class="notice warn">系统诊断失败。</div>'; toast(await err(res)); return; }
       const data=(await res.json()).result || {};
@@ -2648,18 +3484,18 @@
     function renderSmokeResult(data){
       const systemCheck=data.system_check||{};
       const artifacts=systemCheck.artifacts||{};
-      const artifactRows=Object.entries(artifacts).map(([type,item])=>[
-        esc(type.toUpperCase()),
-        item.exists ? '<span class="status">已生成</span>' : '<span class="status">缺失</span>',
-        esc(formatBytes(item.size||0)),
-        item.exists ? `<a href="${esc(item.download_url)}" target="_blank">下载</a>` : '-'
-      ]);
+      const artifactCards=Object.entries(artifacts).map(([type,item])=>`
+        <div class="artifact-card">
+          <strong>${esc(type.toUpperCase())}${item.exists ? '<span class="status ok">已生成</span>' : '<span class="status warn">缺失</span>'}</strong>
+          <div class="small">大小：${esc(formatBytes(item.size||0))}</div>
+          ${item.exists ? `<div class="wide-actions" style="margin-top:8px"><a href="${esc(item.download_url)}" target="_blank">下载</a></div>` : ''}
+        </div>`).join('');
       const doctorFailures=(data.doctor&&data.doctor.failed_checks)||[];
       const readinessFailures=(data.readiness&&data.readiness.failed_checks)||[];
       return `<div class="${data.ok?'notice':'notice warn'}">
         <strong>系统诊断${data.ok?'已通过':'有异常'}</strong>
         <div class="small">报告 ID：${esc(systemCheck.report_id||'-')}；运行 ID：${esc(systemCheck.run_id||'-')}。本项只验证数据库、报告生成、附件和诊断汇总链路。</div>
-        <div style="margin-top:10px">${table(['产物','状态','大小','操作'], artifactRows)}</div>
+        <div class="artifact-grid">${artifactCards || '<div class="empty">暂无产物。</div>'}</div>
         <div class="small" style="margin-top:8px">基础配置待处理：${esc(doctorFailures.length)} 项；运行状态待处理：${esc(readinessFailures.length)} 项。</div>
       </div>`;
     }
@@ -2677,7 +3513,10 @@
       }, 3000);
     }
 
-    function table(headers, rows){ return `<div class="table-wrap"><table><thead><tr>${headers.map(h=>`<th>${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map(c=>`<td>${c??''}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`; }
+    function table(headers, rows){
+      const minWidth=Math.max(920, (headers||[]).length * 112);
+      return `<div class="table-wrap"><table style="min-width:${minWidth}px"><thead><tr>${headers.map(h=>`<th class="${h==='操作'?'col-actions':''}">${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map((c,i)=>`<td class="${headers[i]==='操作'?'col-actions':''}">${c??''}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    }
     function formatPlatforms(platforms){ const labels={dy:'抖音',ks:'快手',xhs:'小红书'}; return (platforms||[]).map(p=>labels[p]||p).join(' / '); }
     function formatPlatformCounts(counts){ const items=Object.entries(counts||{}).map(([p,n])=>`${formatPlatforms([p])} ${n}`); return items.length?items.join(' / '):'暂无'; }
     function formatFrequency(job){ const anchor=job.email_time||'09:00'; const labels={daily:`每天 ${anchor}`,'12h':`每 12 小时，起点 ${anchor}`,'6h':`每 6 小时，起点 ${anchor}`,cron:`cron ${job.cron_expr||''}`}; return labels[job.frequency] || job.frequency || ''; }
@@ -2699,7 +3538,7 @@
         .replace(new RegExp('de'+'bug','ig'),'诊断');
     }
     function formatTestStatus(config, label){ const status=config.last_test_status||'untested'; if(status==='success') return `${label} 最近测试通过：${(config.last_test_at||'').replace('T',' ').slice(0,19)}`; if(status==='failed') return `${label} 最近测试失败：${cleanCustomerText(config.last_test_error)||'请检查配置'}`; return `${label} 尚未测试，配置更新后需要重新测试。`; }
-    function providerLabel(provider){ return provider==='anthropic'?'Anthropic':'OpenAI Compatible'; }
+    function providerLabel(provider){ return provider==='anthropic'?'Anthropic-compatible':'OpenAI-compatible'; }
     function loginTypeLabel(loginType){ return {qrcode:'扫码登录',cookie:'Cookie'}[loginType]||loginType||'-'; }
     function poolStatusText(status){ return {active:'可用',standby:'待机',limited:'受限',disabled:'停用'}[status]||status||'-'; }
     function poolStatusBadge(status){ const labels={active:'可用',standby:'待机',limited:'受限',disabled:'停用'}; const cls=status==='active'?'ok':(status==='limited'?'warn':(status==='disabled'?'bad':'')); return `<span class="status ${cls}">${esc(labels[status]||status||'-')}</span>`; }
@@ -2735,7 +3574,7 @@
     function formatFailures(summary){ const results=summary.platform_results||{}; const failed=summary.failed_platforms||[]; const cancelled=summary.cancelled_platforms||[]; const rows=[]; failed.forEach(p=>rows.push(`<div><strong>${esc(formatPlatforms([p]))}</strong>：${esc(cleanCustomerText((results[p]||{}).error||'失败'))}</div>`)); cancelled.forEach(p=>rows.push(`<div><strong>${esc(formatPlatforms([p]))}</strong>：已停止</div>`)); if(summary.cancel_reason) rows.push(`<div>${esc(cleanCustomerText(summary.cancel_reason))}</div>`); return rows.join(''); }
     function emailStatusLabel(status){ return {pending:'待发送',sent:'已发送',failed:'发送失败',skipped:'未发送'}[status] || status || '-'; }
     function formatLeadStatus(item){ if(item.eval_status==='pending_review') return '待人工复核'; if(item.is_related && item.is_negative) return item.risk_level==='high' ? '高风险' : '疑似负面'; return '无风险'; }
-    function leadLinks(item){ const links=[]; if(item.content_url) links.push(`<a href="${esc(item.content_url)}" target="_blank">内容</a>`); if(item.cover_url) links.push(`<a href="${esc(item.cover_url)}" target="_blank">封面</a>`); return links.join(' '); }
+    function leadLinks(item){ const links=[]; if(item.content_url) links.push(`<a href="${esc(item.content_url)}" target="_blank">内容</a>`); if(item.cover_url) links.push(`<a href="${esc(item.cover_url)}" target="_blank">封面</a>`); return links.length ? `<div class="wide-actions">${links.join(' ')}</div>` : '-'; }
     function val(id){ return document.getElementById(id).value; } function set(id,v){ document.getElementById(id).value = v ?? ''; }
     function esc(s){ return String(s??'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
     async function err(res){ try { return (await res.json()).detail || res.statusText; } catch { return res.statusText; } }
@@ -2754,11 +3593,36 @@
       const el=document.getElementById(id);
       if(el) el.addEventListener('input', scheduleEmailPreview);
     });
+    ['ai_rule_role','ai_rule_relevance','ai_rule_negative','ai_rule_risk','ai_rule_evidence','ai_rule_action'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el) el.addEventListener('input', updateAIPromptPreview);
+    });
+    document.getElementById('ai_profile_model_toggle')?.addEventListener('click', event=>{
+      event.preventDefault();
+      event.stopPropagation();
+      toggleAIProfileModelOptions();
+    });
+    document.getElementById('ai_profile_model')?.addEventListener('input', ()=>{
+      renderAIProfileModelOptions(!!aiProfileModelOptions.length, true);
+    });
+    document.getElementById('ai_profile_model')?.addEventListener('focus', ()=>{
+      if(aiProfileModelOptions.length) renderAIProfileModelOptions(true, false);
+    });
+    document.getElementById('ai_profile_model_options')?.addEventListener('click', event=>{
+      const option=event.target.closest('button[data-model]');
+      if(!option) return;
+      event.preventDefault();
+      event.stopPropagation();
+      selectAIProfileModel(option.dataset.model || '');
+    });
+    document.addEventListener('click', event=>{
+      if(!event.target.closest('.model-combobox')) renderAIProfileModelOptions(false);
+    });
     resetEmailTemplateForm();
     resetAIProfileForm();
     resetSocialAccountForm();
     resetProxyForm();
     loadAll();
-  </script>
+</script>
 </body>
 </html>

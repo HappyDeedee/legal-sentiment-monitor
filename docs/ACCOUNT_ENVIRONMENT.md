@@ -19,7 +19,7 @@ Rules:
 
 ## Profile Identity
 
-Proposed target design, pending CR-012A confirmation:
+Confirmed target design:
 
 ```text
 profile_key = {workspace_id}/{platform}/acc_{account_id}
@@ -138,20 +138,61 @@ Minimum V1 locks:
 - profile lock;
 - proxy concurrency lock.
 
-Proposed lock behavior, pending CR-012B and CR-012C confirmation:
+Confirmed lock behavior:
 
-- lock by account ID;
-- lock by profile key;
-- lock by proxy ID and enforce `max_concurrency`;
-- lock timeout follows task timeout plus cleanup buffer;
-- stale locks are released by run recovery logic.
+- account/profile locks use inline fields on `social_accounts`;
+- the account row lock also protects the account's `profile_key`;
+- proxy concurrency uses `resource_locks` and enforces `max_concurrency`;
+- task timeout is a run-level wall-clock deadline controlled by administrator
+  Runtime Strategy;
+- lock expiry follows the run deadline plus `lock_cleanup_buffer_seconds`;
+- expired locks are recovery signals only and must not be reused until recovery
+  verifies the owning run state.
 
-Open confirmation:
+Account/profile lock fields:
 
-- CR-012B: should lock timeout default to task timeout plus cleanup buffer,
-  fixed 6 hours, or a runtime setting?
-- CR-012C: should locks use inline account/profile fields, a generic
-  `resource_locks` table, or a hybrid strategy?
+- `locked_by_run_id`;
+- `locked_at`;
+- `lock_expires_at`.
+
+Proxy lock records:
+
+- `resource_type = "proxy"`;
+- `resource_id = proxy_profiles.id`;
+- `run_id`;
+- `locked_at`;
+- `expires_at`.
+
+Expired lock recovery rules:
+
+1. Find expired account/profile or proxy locks.
+2. Check the owning run.
+3. If the run is `success`, `partial_failed`, `failed`, `timeout`,
+   `cancelled`, or `interrupted`, release the lock.
+4. If the run is still `running`, verify whether the owning process or job task
+   is still alive.
+5. If the process is no longer alive, mark the run as `interrupted` or
+   `timeout`, then release the lock.
+6. If the process is alive but the run deadline has passed, stop the process,
+   mark the run as `timeout`, then release the lock.
+7. Do not let a new run acquire an expired lock directly before recovery has
+   reconciled the owning run.
+
+Startup recovery must scan `running` runs and persisted locks after service
+restart because in-memory process tracking is lost across restarts.
+
+Implementation guidance:
+
+- put shared recovery logic in `api/monitoring/recovery.py`, or another single
+  recovery module imported by the scheduler and application startup path;
+- call startup recovery before `start_scheduler()` begins launching due jobs;
+- call stale-lock recovery from each scheduler tick before checking due jobs;
+- recovery should query `crawl_runs.status = "running"`, compare `deadline_at`
+  with current time, reconcile live process/job tracking when available, then
+  release locks only after the owning run state is corrected;
+- current MVP process tracking is in-memory and job-based, so Phase 5/6
+  implementation must not assume run-level process tracking exists until it is
+  added.
 
 ## Migration From profile_path
 

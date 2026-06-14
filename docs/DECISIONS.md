@@ -64,3 +64,22 @@ short `Superseded by` note rather than deleting history.
 - MVP includes minimal audit logging for security-sensitive administrator
   actions.
 - Runtime settings use a flexible key-value `system_settings` table in V1.
+- Account profile keys use `{workspace_id}/{platform}/acc_{account_id}`.
+- Normal-user crawl range settings are capability-bounded controls, not exact
+  cross-platform guarantees. `max_items` is a content-count cap, `start_page`
+  applies where the platform crawler honors it, `max_pages` is approximate, and
+  time windows may be implemented by platform-native filters, monitoring-layer
+  filtering, or both.
+- Administrator task timeout is a run-level wall-clock deadline. V1 does not
+  auto-compute timeout from crawl range because platform behavior, keyword
+  volume, account state, network conditions, and anti-abuse checks vary too
+  much for reliable estimation.
+- Account/profile lock expiry follows the run deadline plus a cleanup buffer.
+  Expired locks are recovery signals only; they must not be reused until the
+  owning run is verified as finished, timed out, failed, cancelled, interrupted,
+  or no longer alive.
+- Account/profile locks use inline fields on `social_accounts`. Proxy
+  concurrency uses a `resource_locks` table because one proxy can allow multiple
+  concurrent runs up to its configured limit.
+- Runtime Strategy is administrator-only and uses grouped table sections for
+  Crawling, Login, Scheduler, and Retention settings.

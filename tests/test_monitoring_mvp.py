@@ -13,7 +13,7 @@ from fastapi import HTTPException
 
 from api.monitoring.ai import _build_endpoint, _parse_json, _validate_ai_output, build_evaluation_payload, test_ai as run_ai_config_test
 from api.monitoring.ai import DEFAULT_PROMPT
-from api.monitoring.database import create_login_session, create_run, expire_login_sessions_for_account, finish_run, get_active_ai_key_profile, get_ai_config, get_conn, get_dashboard_summary, get_email_config, get_job, get_login_session, get_platform_login_config, get_report, get_run, get_social_account, init_db, list_ai_key_profiles, list_email_templates, list_jobs, list_leads, list_login_sessions, list_platform_login_configs, list_proxy_profiles, list_reports, list_runs, list_social_accounts, mark_selftest_jobs_internal, record_skipped_run, render_email_template_preview, save_ai_config, save_ai_key_profile, save_email_config, save_email_template, save_job, save_platform_login_config, save_proxy_profile, save_social_account, set_active_ai_key_profile, update_social_account_check_state
+from api.monitoring.database import create_login_session, create_run, expire_login_sessions_for_account, finish_run, get_active_ai_key_profile, get_ai_config, get_conn, get_dashboard_summary, get_email_config, get_job, get_login_session, get_platform_login_config, get_report, get_run, get_social_account, init_db, list_ai_key_profiles, list_ai_rule_profiles, list_email_templates, list_jobs, list_leads, list_login_sessions, list_platform_login_configs, list_proxy_profiles, list_reports, list_runs, list_social_accounts, mark_selftest_jobs_internal, record_skipped_run, render_email_template_preview, save_ai_config, save_ai_key_profile, save_ai_rule_profile, save_email_config, save_email_template, save_job, save_platform_login_config, save_proxy_profile, save_social_account, set_active_ai_key_profile, set_active_ai_rule_profile, update_social_account_check_state
 from api.monitoring.mediacrawler_login import get_mediacrawler_login_capability
 from api.monitoring.login_browser import build_login_browser_command, open_login_browser, open_login_browser_with_command
 import api.monitoring.account_check as account_check_module
@@ -1552,6 +1552,55 @@ def test_ai_test_uses_haian_sample_payload(monkeypatch):
     assert seen["comment_summary"]["sample_count"] == 2
 
 
+def test_ai_test_accepts_editable_sample_context(monkeypatch):
+    init_db()
+    seen: dict[str, Any] = {}
+
+    async def fake_call_openai(cfg, prompt, payload):
+        seen.update(payload)
+        return json.dumps(
+            {
+                "is_related": True,
+                "is_negative": True,
+                "risk_level": "medium",
+                "reason": "样例命中",
+                "evidence_quotes": [payload["source_keyword"]],
+                "recommended_action": "人工复核",
+            },
+            ensure_ascii=False,
+        )
+
+    monkeypatch.setattr("api.monitoring.ai._call_openai", fake_call_openai)
+
+    result = asyncio.run(
+        run_ai_config_test(
+            {
+                "provider": "openai",
+                "base_url": "https://example.com",
+                "api_key": "sk-test",
+                "model": "test-model",
+                "temperature": 0,
+                "prompt": DEFAULT_PROMPT,
+                "sample_law_firm_name": "测试律所",
+                "sample_platform": "xhs",
+                "sample_source_keyword": "测试律所投诉",
+                "sample_title": "测试律所投诉样例",
+                "sample_text": "收费争议需要复核",
+                "sample_comments": "自定义评论一\n自定义评论二",
+            }
+        )
+    )
+
+    assert result["risk_level"] == "medium"
+    assert seen["law_firm_name"] == "测试律所"
+    assert seen["platform"] == "小红书"
+    assert seen["platform_code"] == "xhs"
+    assert seen["source_keyword"] == "测试律所投诉"
+    assert seen["title"] == "测试律所投诉样例"
+    assert seen["description"] == "收费争议需要复核"
+    assert seen["comments"] == ["自定义评论一", "自定义评论二"]
+
+
 def test_ai_evaluation_payload_includes_content_and_comment_context():
     payload = build_evaluation_payload(
         {
@@ -1688,6 +1737,63 @@ def test_ai_profiles_can_be_selected_and_used_for_evaluation(monkeypatch):
         assert seen["model"] == "profile-model"
         assert result["risk_level"] == "high"
     finally:
+        _restore_table("ai_key_profiles", profile_snapshot)
+
+
+def test_ai_rule_test_uses_global_evaluation_prompt_with_active_profile(monkeypatch):
+    init_db()
+    ai_snapshot = _snapshot_singleton_table("ai_configs")
+    profile_snapshot = _snapshot_table("ai_key_profiles")
+    email_snapshot = _snapshot_singleton_table("email_configs")
+    seen: dict[str, Any] = {}
+
+    async def fake_call_openai(cfg, prompt, payload):
+        seen["prompt"] = prompt
+        seen["model"] = cfg.get("model")
+        return json.dumps(
+            {
+                "is_related": True,
+                "is_negative": False,
+                "risk_level": "low",
+                "reason": "按当前规则判断",
+                "evidence_quotes": [],
+                "recommended_action": "人工复核",
+            },
+            ensure_ascii=False,
+        )
+
+    try:
+        save_ai_config(
+            {
+                "provider": "openai",
+                "base_url": "",
+                "api_key": "",
+                "model": "",
+                "temperature": 0,
+                "prompt": "全局评估规则 Prompt",
+            }
+        )
+        save_ai_key_profile(
+            {
+                "name": "默认 AI 接入",
+                "provider": "openai",
+                "base_url": "https://profile.example.com",
+                "api_key": "sk-profile",
+                "model": "profile-model",
+                "temperature": 0,
+                "prompt": "不应使用的接入 Prompt",
+                "is_active": True,
+            }
+        )
+        monkeypatch.setattr("api.monitoring.ai._call_openai", fake_call_openai)
+
+        result = asyncio.run(run_ai_config_test({}))
+
+        assert result["risk_level"] == "low"
+        assert seen["model"] == "profile-model"
+        assert seen["prompt"] == "全局评估规则 Prompt"
+    finally:
+        _restore_singleton_table("ai_configs", ai_snapshot)
         _restore_table("ai_key_profiles", profile_snapshot)
 
 
@@ -1856,6 +1962,262 @@ def test_ai_profile_offline_check_uses_profile_without_calling_provider(monkeypa
         assert result["api_key_present"] is True
     finally:
         _restore_table("ai_key_profiles", profile_snapshot)
+
+
+def test_ai_connection_test_returns_request_and_model_text(monkeypatch):
+    monkeypatch.delenv("MONITOR_SKIP_AI_API", raising=False)
+
+    async def fake_ping_openai(cfg):
+        assert cfg["model"] == "deepseek-test"
+        return {"choices": [{"message": {"content": "pong from model"}}]}
+
+    monkeypatch.setattr(ai_module, "_ping_openai", fake_ping_openai)
+
+    result = asyncio.run(
+        ai_module.test_ai_connection(
+            {
+                "provider": "openai",
+                "base_url": "https://api.example.com",
+                "api_key": "sk-test",
+                "model": "deepseek-test",
+                "temperature": 0,
+            }
+        )
+    )
+
+    assert result["ok"] is True
+    assert result["protocol"] == "openai"
+    assert result["request_message"] == "hi"
+    assert result["response_text"] == "pong from model"
+    assert result["response_preview"] == "pong from model"
+    assert "返回文本" in result["message"]
+
+
+def test_ai_connection_test_reports_empty_response_shape(monkeypatch):
+    monkeypatch.delenv("MONITOR_SKIP_AI_API", raising=False)
+
+    async def fake_ping_openai(cfg):
+        return {"id": "chatcmpl-empty", "choices": [{"message": {"content": ""}}]}
+
+    monkeypatch.setattr(ai_module, "_ping_openai", fake_ping_openai)
+
+    with pytest.raises(ValueError) as exc:
+        asyncio.run(
+            ai_module.test_ai_connection(
+                {
+                    "provider": "openai",
+                    "base_url": "https://api.example.com",
+                    "api_key": "sk-test",
+                    "model": "deepseek-test",
+                    "temperature": 0,
+                }
+            )
+        )
+
+    assert "没有返回文本" in str(exc.value)
+    assert "chatcmpl-empty" in str(exc.value)
+
+
+def test_anthropic_connection_test_uses_content_blocks_and_larger_token_budget(monkeypatch):
+    captured = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"content": [{"type": "text", "text": "Hi"}]}
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            captured["client_kwargs"] = kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def post(self, url, headers, json):
+            captured["url"] = url
+            captured["headers"] = headers
+            captured["json"] = json
+            return FakeResponse()
+
+    monkeypatch.setattr(ai_module.httpx, "AsyncClient", FakeClient)
+
+    result = asyncio.run(
+        ai_module.test_ai_connection(
+            {
+                "provider": "anthropic",
+                "base_url": "https://api.example.com/anthropic",
+                "api_key": "sk-test",
+                "model": "compatible-model",
+                "temperature": 0,
+            }
+        )
+    )
+
+    assert result["response_text"] == "Hi"
+    assert result["protocol"] == "anthropic"
+    assert captured["url"] == "https://api.example.com/anthropic/v1/messages"
+    assert captured["json"]["max_tokens"] == ai_module.AI_CONNECTION_TEST_MAX_TOKENS
+    assert captured["json"]["messages"] == [
+        {"role": "user", "content": [{"type": "text", "text": "hi"}]}
+    ]
+
+
+def test_ai_model_text_extractor_supports_anthropic_and_compatible_shapes():
+    assert ai_module._extract_model_text({"content": [{"text": "Hi there"}]}) == "Hi there"
+    assert ai_module._extract_model_text({"content": "Hi from string"}) == "Hi from string"
+    assert ai_module._extract_model_text({"choices": [{"message": {"content": [{"type": "text", "text": "Hi from array"}]}}]}) == "Hi from array"
+    assert ai_module._extract_model_text({"choices": [{"text": "Hi from choice"}]}) == "Hi from choice"
+
+
+def test_ai_model_list_fetches_openai_compatible_models(monkeypatch):
+    captured = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"data": [{"id": "deepseek-v4-flash"}, {"id": "deepseek-reasoner"}]}
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            captured["client_kwargs"] = kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def get(self, url, headers):
+            captured["url"] = url
+            captured["headers"] = headers
+            return FakeResponse()
+
+    monkeypatch.setattr(ai_module.httpx, "AsyncClient", FakeClient)
+
+    result = asyncio.run(
+        ai_module.list_ai_models(
+            {
+                "provider": "openai",
+                "base_url": "https://api.example.com",
+                "api_key": "sk-test",
+            }
+        )
+    )
+
+    assert result["models"] == ["deepseek-v4-flash", "deepseek-reasoner"]
+    assert result["endpoint"] == "https://api.example.com/v1/models"
+    assert captured["headers"]["Authorization"] == "Bearer sk-test"
+
+
+def test_ai_model_list_fetches_anthropic_compatible_models(monkeypatch):
+    captured = {}
+
+    class FakeResponse:
+        def raise_for_status(self):
+            return None
+
+        def json(self):
+            return {"data": [{"id": "claude-compatible"}, {"name": "custom-model"}]}
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            captured["client_kwargs"] = kwargs
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def get(self, url, headers):
+            captured["url"] = url
+            captured["headers"] = headers
+            return FakeResponse()
+
+    monkeypatch.setattr(ai_module.httpx, "AsyncClient", FakeClient)
+
+    result = asyncio.run(
+        ai_module.list_ai_models(
+            {
+                "provider": "anthropic",
+                "base_url": "https://api.example.com/anthropic",
+                "api_key": "sk-test",
+            }
+        )
+    )
+
+    assert result["models"] == ["claude-compatible", "custom-model"]
+    assert result["endpoint"] == "https://api.example.com/anthropic/v1/models"
+    assert captured["headers"]["x-api-key"] == "sk-test"
+    assert captured["headers"]["Authorization"] == "Bearer sk-test"
+    assert captured["headers"]["anthropic-version"] == "2023-06-01"
+
+
+def test_ai_model_list_falls_back_from_adapter_path_to_parent_models(monkeypatch):
+    attempts = []
+
+    class FakeResponse:
+        def __init__(self, url: str, ok: bool):
+            self.url = url
+            self.ok = ok
+
+        def raise_for_status(self):
+            if self.ok:
+                return None
+            request = httpx.Request("GET", self.url)
+            response = httpx.Response(404, request=request)
+            raise httpx.HTTPStatusError("not found", request=request, response=response)
+
+        def json(self):
+            return {"data": [{"id": "deepseek-v4-flash"}]}
+
+    class FakeClient:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return None
+
+        async def get(self, url, headers):
+            attempts.append(url)
+            return FakeResponse(url, ok=url == "https://api.example.com/models")
+
+    monkeypatch.setattr(ai_module.httpx, "AsyncClient", FakeClient)
+
+    result = asyncio.run(
+        ai_module.list_ai_models(
+            {
+                "provider": "anthropic",
+                "base_url": "https://api.example.com/anthropic",
+                "api_key": "sk-test",
+            }
+        )
+    )
+
+    assert result["models"] == ["deepseek-v4-flash"]
+    assert result["endpoint"] == "https://api.example.com/models"
+    assert attempts[:3] == [
+        "https://api.example.com/anthropic/v1/models",
+        "https://api.example.com/anthropic/models",
+        "https://api.example.com/models",
+    ]
+
+
+def test_ai_model_list_requires_connection_fields(monkeypatch):
+    with pytest.raises(ValueError) as exc:
+        asyncio.run(ai_module.list_ai_models({"provider": "openai", "base_url": "", "api_key": ""}))
+
+    assert "AI 接入未配置完整" in str(exc.value)
 
 
 def test_ai_profile_real_test_respects_skip_env_and_records_result(monkeypatch):
@@ -3499,6 +3861,7 @@ def test_ai_email_test_results_are_persisted_for_readiness(monkeypatch):
                     "api_key": "sk-test",
                     "model": "test-model",
                     "temperature": 0,
+                    "prompt": DEFAULT_PROMPT,
                 }
             )
         )
@@ -3611,6 +3974,108 @@ def test_ai_config_api_exposes_default_prompt():
 
     assert result["default_prompt"] == DEFAULT_PROMPT
     assert "负面" in result["default_prompt"]
+    assert result["prompt_sections"]["role"]
+    assert any(item["field"] == "risk_level" for item in result["output_schema"])
+    assert any(item["field"] == "recommended_action" for item in result["output_schema"])
+
+
+def test_ai_evaluation_config_test_preserves_editable_sample_context(monkeypatch):
+    seen: dict[str, Any] = {}
+
+    async def fake_ai_test(payload):
+        seen.update(payload)
+        return {
+            "is_related": True,
+            "is_negative": True,
+            "risk_level": "high",
+            "reason": payload["sample_law_firm_name"],
+            "evidence_quotes": [payload["sample_title"]],
+            "recommended_action": "人工复核",
+        }
+
+    monkeypatch.setattr(monitor_router.ai, "ai_api_disabled", lambda: False)
+    monkeypatch.setattr(monitor_router.ai, "test_ai", fake_ai_test)
+
+    result = asyncio.run(
+        monitor_router.test_ai_evaluation_config(
+            {
+                "prompt": "只按当前样例判断",
+                "sample_law_firm_name": "平安",
+                "sample_platform": "dy",
+                "sample_source_keyword": "平安律师避雷",
+                "sample_title": "平安律师避雷：退费拖了很久",
+                "sample_text": "我想曝光一下。",
+                "sample_comments": "扫码后仍然没有确认\n评论区有人补充投诉",
+            }
+        )
+    )
+
+    assert result["result"]["reason"] == "平安"
+    assert seen["sample_law_firm_name"] == "平安"
+    assert seen["sample_title"] == "平安律师避雷：退费拖了很久"
+    assert seen["sample_comments"] == "扫码后仍然没有确认\n评论区有人补充投诉"
+
+
+def test_ai_rule_profiles_can_be_managed_and_selected():
+    init_db()
+    ai_snapshot = _snapshot_singleton_table("ai_configs")
+    rule_snapshot = _snapshot_table("ai_rule_profiles")
+
+    try:
+        rule_a = save_ai_rule_profile({"name": "海安默认规则", "prompt": "规则 A", "is_active": True})
+        rule_b = save_ai_rule_profile({"name": "投诉高敏规则", "prompt": "规则 B"})
+
+        listed = list_ai_rule_profiles()
+        assert any(item["id"] == rule_a["id"] for item in listed)
+        assert any(item["id"] == rule_b["id"] for item in listed)
+        assert get_ai_config()["prompt"] == "规则 A"
+
+        active = set_active_ai_rule_profile(rule_b["id"])
+
+        assert active["is_active"] is True
+        assert get_ai_config()["prompt"] == "规则 B"
+        assert next(item for item in list_ai_rule_profiles() if item["id"] == rule_a["id"])["is_active"] is False
+    finally:
+        _restore_table("ai_rule_profiles", rule_snapshot)
+        _restore_singleton_table("ai_configs", ai_snapshot)
+
+
+def test_ai_rule_profile_routes_expose_profiles_and_test_status(monkeypatch):
+    init_db()
+    ai_snapshot = _snapshot_singleton_table("ai_configs")
+    rule_snapshot = _snapshot_table("ai_rule_profiles")
+
+    async def fake_ai_test(payload):
+        assert payload["prompt"] == "规则测试 Prompt"
+        return {
+            "is_related": True,
+            "is_negative": True,
+            "risk_level": "medium",
+            "reason": "测试通过",
+            "evidence_quotes": ["测试"],
+            "recommended_action": "继续复核",
+        }
+
+    try:
+        monkeypatch.setattr(monitor_router.ai, "test_ai", fake_ai_test)
+        created = asyncio.run(
+            monitor_router.create_ai_rule_profile(
+                {"name": "规则测试", "prompt": "规则测试 Prompt", "is_active": True}
+            )
+        )["profile"]
+
+        listed = asyncio.run(monitor_router.ai_rule_profiles())
+        assert any(item["id"] == created["id"] for item in listed["profiles"])
+        assert listed["output_schema"]
+
+        tested = asyncio.run(monitor_router.test_ai_rule_profile(created["id"], {}))
+
+        assert tested["result"]["risk_level"] == "medium"
+        refreshed = next(item for item in list_ai_rule_profiles() if item["id"] == created["id"])
+        assert refreshed["last_test_status"] == "success"
+    finally:
+        _restore_table("ai_rule_profiles", rule_snapshot)
+        _restore_singleton_table("ai_configs", ai_snapshot)
 
 
 def test_failed_ai_test_is_recorded_after_saving_valid_config(monkeypatch):
@@ -4679,9 +5144,11 @@ def test_job_preflight_warns_but_allows_missing_ai_email(monkeypatch):
         }
     )
     ai_snapshot = _snapshot_singleton_table("ai_configs")
+    profile_snapshot = _snapshot_table("ai_key_profiles")
     email_snapshot = _snapshot_singleton_table("email_configs")
 
     try:
+        _restore_table("ai_key_profiles", [])
         save_ai_config({"provider": "openai", "base_url": "", "api_key": "", "model": ""})
         save_email_config({"smtp_host": "", "sender": "", "default_recipients": []})
         monkeypatch.setattr(
@@ -4696,6 +5163,7 @@ def test_job_preflight_warns_but_allows_missing_ai_email(monkeypatch):
         preflight = build_job_preflight(job, [])
         api_result = asyncio.run(monitor_router.job_preflight(job["id"]))["preflight"]
     finally:
+        _restore_table("ai_key_profiles", profile_snapshot)
         _restore_singleton_table("ai_configs", ai_snapshot)
         _restore_singleton_table("email_configs", email_snapshot)
         _cleanup_test_records(job["id"], "")
@@ -4708,6 +5176,10 @@ def test_job_preflight_warns_but_allows_missing_ai_email(monkeypatch):
 
 
 def test_job_preflight_blocks_missing_platform_search_terms_not_missing_ai_email(monkeypatch):
+    init_db()
+    ai_snapshot = _snapshot_singleton_table("ai_configs")
+    profile_snapshot = _snapshot_table("ai_key_profiles")
+    email_snapshot = _snapshot_singleton_table("email_configs")
     job = {
         "id": 1008,
         "law_firm_name": "海安律所",
@@ -4725,7 +5197,15 @@ def test_job_preflight_blocks_missing_platform_search_terms_not_missing_ai_email
         lambda: [{"platform": "dy", "platform_label": "抖音", "profile_exists": True, "needs_login": False, "login_window_open": False}],
     )
 
-    preflight = build_job_preflight(job, [])
+    try:
+        _restore_table("ai_key_profiles", [])
+        save_ai_config({"provider": "openai", "base_url": "", "api_key": "", "model": ""})
+        save_email_config({"smtp_host": "", "sender": "", "default_recipients": []})
+        preflight = build_job_preflight(job, [])
+    finally:
+        _restore_table("ai_key_profiles", profile_snapshot)
+        _restore_singleton_table("ai_configs", ai_snapshot)
+        _restore_singleton_table("email_configs", email_snapshot)
 
     assert preflight["can_run"] is False
     assert any("未配置平台搜索词" in blocker for blocker in preflight["blockers"])
@@ -5149,7 +5629,7 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "平台账号概览" not in page
     assert "账号资源台账" not in page
     assert "account_platform_overview" not in page
-    assert ".account-console { display:grid; grid-template-columns:1fr;" in page
+    assert ".account-console { display:grid; grid-template-columns:minmax(0,1fr);" in page
     assert ".account-list-panel" in page
     assert "account_modal" in page
     assert "drawer-backdrop" in page
@@ -5169,6 +5649,7 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "账号名称已填写，可以生成二维码；扫码后系统会自动确认登录结果。" in page
     assert "qrButton.disabled=!nameReady" in page
     assert "checkSocialAccountLogin" in page
+    assert "检测登录态" in page
     assert "checkCurrentSocialAccountLogin" not in page
     assert "account_check_result" not in page
     assert "checkSelectedSocialAccountLogins" in page
@@ -5198,6 +5679,8 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "startLoginSessionFromSelected" not in page
     assert "openSelectedAccountLoginBrowser" not in page
     assert "accountLedgerTable" in page
+    assert 'return `<div class="table-wrap"><table class="account-table">' in page
+    assert '<th class="col-actions">操作</th>' in page
     assert "点击“详情”进入单个账号的登录、Cookie、代理和状态维护" in page
     assert "startLoginSessionForAccount" in page
     assert "openCurrentAccountLoginBrowser" in page
@@ -5318,6 +5801,8 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "runStatusBadge" in page
     assert "runDisplayError" in page
     assert "登录态/配置阻断" in page
+    assert "jobActions" in page
+    assert "toggleJobActionMenu" in page
     assert "/jobs/'+id+'/stop" in page
     assert "/runs/'+id+'/stop" in page
     assert "await Promise.all([loadRuns(), loadSchedulerStatus(), loadDashboard()]);" in page
@@ -5329,6 +5814,7 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "smoke_result" in page
     assert "api('/smoke'" in page
     assert "renderSmokeResult" in page
+    assert "正在运行系统诊断，请稍候。" in page
     assert "formatBytes" in page
     assert "preflight" in page
     assert "运行前提示" in page
@@ -5354,7 +5840,74 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "恢复默认规则" in page
     assert "default_prompt" in page
     assert "resetAIPrompt" in page
+    assert "维护可复用的舆情判断规则" in page
+    assert "基础信息" in page
+    assert "规则只影响模型如何判断和填写字段" in page
+    assert "评估规则列表" in page
+    assert "openNewAIRuleModal" in page
+    assert "loadAIRuleProfiles" in page
+    assert "ai-rule-profiles" in page
+    assert "ai_rule_modal" in page
+    assert "rule-modal-flow" in page
+    assert "rule-modal-layout" not in page
+    assert "rule-editor-stack" in page
+    assert "rule-test-stack" in page
+    assert "rule-side-stack" not in page
+    assert "ai_rule_active_label" not in page
+    assert "rule-accordion" in page
+    assert "testAIRuleFromModal" in page
+    assert "saveAIRuleFromModal" in page
+    assert "activateAIRuleProfile" in page
+    assert "deleteAIRuleProfile" in page
+    assert "aiRuleActions" in page
+    assert "toggleAIRuleActionMenu" in page
+    assert "测试规则" in page
+    assert "规则配置" in page
+    assert "角色定位" in page
+    assert "相关性判断" in page
+    assert "疑似负面判断" in page
+    assert "风险等级规则" in page
+    assert "证据摘录规则" in page
+    assert "处理建议规则" in page
+    assert "生成后的 Prompt 预览" in page
+    assert "composeAIPromptFromRules" in page
+    assert "parsePromptSections" in page
+    assert "applyPromptToRuleFields" in page
+    assert "renderAIOutputSchema" in page
+    assert "prompt_sections" in page
+    assert "output_schema" in page
+    ai_rule_modal = page[page.index('id="ai_rule_modal"') : page.index('id="email"')]
+    assert ai_rule_modal.index("基础信息") < ai_rule_modal.index("规则配置") < ai_rule_modal.index("固定输出字段") < ai_rule_modal.index("测试样例") < ai_rule_modal.index("测试结果")
+    assert "测试样例" in page
+    assert "手动填写一条采集内容和评论样本，用来验证规则是否符合预期" in page
+    assert "平台只作为样例上下文，不会触发采集或导入数据" in page
+    assert "ai_sample_law_firm_name" in page
+    assert "ai_sample_platform" in page
+    assert "ai_sample_source_keyword" in page
+    assert "ai_sample_title" in page
+    assert "ai_sample_text" in page
+    assert "ai_sample_comments" in page
+    assert "海安律所避雷：退费拖了很久" in page
+    assert "sample_law_firm_name:val('ai_sample_law_firm_name')" in page
+    assert "sample_platform:val('ai_sample_platform')" in page
+    assert "sample_source_keyword:val('ai_sample_source_keyword')" in page
+    assert "sample_title:val('ai_sample_title')" in page
+    assert "sample_text:val('ai_sample_text')" in page
+    assert "sample_comments:val('ai_sample_comments')" in page
+    assert "is_related(boolean), is_negative(boolean), risk_level(high|medium|low|irrelevant)" in page
+    assert "规则只影响模型如何判断和填写字段" in page
+    assert "字段由系统固定校验" in page
     assert "AI 接入资源" in page
+    assert "接口协议" in page
+    assert "OpenAI-compatible / Anthropic-compatible 协议的模型连接资源" in page
+    assert "Provider" not in page
+    assert "获取模型列表" in page
+    assert "ai_profile_model_options" in page
+    assert "toggleAIProfileModelOptions" in page
+    assert "selectAIProfileModel" in page
+    assert "loadAIProfileModels" in page
+    assert "ai-profiles/models" in page
+    assert "models" in page
     assert "ai-profiles" in page
     assert "loadAIProfiles" in page
     assert "activateAIProfile" in page
@@ -5362,15 +5915,35 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "testAIProfile" in page
     assert "ai-profiles/'+id+'/connection-test" in page
     assert "ai-profiles/'+id+'/connection-test" in page
+    assert "ai_connection_test_modal" in page
+    assert "ai_result" not in page
+    assert "openAIConnectionTestModal" in page
+    assert "runAIConnectionTest" in page
+    assert "closeAIConnectionTestModal" in page
+    assert "测试 AI 接入" in page
+    assert "开始测试" in page
+    assert "测试消息" in page
+    assert "模型返回" in page
+    assert "模型已返回文本" in page
+    assert "连接测试只验证 API 是否能返回文本，不使用舆情评估 Prompt。" in page
     assert "连接测试" in page
     assert "连接测试" in page
     assert "ai-evaluation-config/test" in page
     assert "testAI" in page
     assert "HTML 邮件模板" in page
+    assert "email_template_summary" in page
     assert "email-templates/preview" in page
     assert "email_template_preview" in page
     assert "scheduleEmailPreview" in page
     assert "线索明细" in page
+    reports_section = page[page.index('<section id="reports"') : page.index('<section id="doctor"')]
+    assert reports_section.index("<h3>报告列表</h3>") < reports_section.index("<h3>线索明细</h3>") < reports_section.index("选择报告后查看正文")
+    assert "report-workspace" not in page
+    assert "reportActions" in page
+    assert "renderReportsTable" in page
+    assert "currentReports" in page
+    assert "action-menu-host" in page
+    assert "下载 Markdown" in page
     assert "api('/leads?" in page
     assert "待人工复核" in page
     assert "待复核" in page
@@ -5378,6 +5951,43 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "reports/system-check" in page
     assert "loadReports(), loadRuns(), loadReadiness(), loadDoctor(), loadDashboard()" in page
     assert "重发邮件" in page
+    assert "系统自检报告已生成" not in page
+
+
+def test_monitor_page_uses_consistent_buttons_tables_and_modal_actions():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+
+    assert "white-space:nowrap" in page
+    assert "word-break:keep-all" in page
+    assert "min-height:36px" in page
+    assert ".row > * { flex:0 1 auto; }" in page
+    assert ".row > button, .row > a { flex:0 0 auto; }" in page
+    assert ".wide-actions { display:inline-flex; gap:6px; align-items:center; flex-wrap:nowrap;" in page
+    assert "td.col-actions, th.col-actions" in page
+    assert "position:sticky; right:0" in page
+    assert "th.col-actions { background:#f8fafc; z-index:4; }" in page
+    assert "headers[i]==='操作'?'col-actions':''" in page
+    assert "Math.max(920, (headers||[]).length * 112)" in page
+    assert "class=\"form-actions\"" in page
+    assert ".form-actions { position:sticky;" in page
+    assert ".account-flow-actions { position:sticky;" in page
+    assert ".ai-test-actions { position:sticky;" in page
+    assert ".rule-modal-actions { position:sticky;" in page
+    assert ".config-section .section-note, .config-section .field-hint { display:none; }" in page
+    assert ".ui-icon svg" in page
+    assert '<symbol id="icon-dashboard"' in page
+    assert '<use href="#icon-monitor">' in page
+    assert ".page-toolbar { display:flex;" in page
+    assert "report-workspace" not in page
+    assert ".schema-item { grid-template-columns:1fr; }" in page
+    assert ".action-menu-host" in page
+    assert ".action-menu.active" in page
+    assert "openReportMenuId" in page
+    assert "oldHtml = btn ? btn.innerHTML : ''" in page
+    assert "btn.innerHTML = oldHtml" in page
+    assert "<div class=\"wide-actions\"><button class=\"secondary\" onclick=\"switchTab('accounts')\">管理账号</button></div>" in page
+    assert "jobActions(j, running)" in page
+    assert "leadLinks(item)" in page
     assert "resendReportEmail" in page
     assert "resend-email" in page
     assert "邮件预览" in page

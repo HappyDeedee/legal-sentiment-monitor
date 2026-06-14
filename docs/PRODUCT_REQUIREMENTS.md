@@ -74,7 +74,11 @@ Normal-user task wizard:
 2. Collection Content
    - platforms;
    - platform search terms;
-   - crawl range;
+   - crawl range:
+     - max items;
+     - start page;
+     - max pages;
+     - time window;
    - comment collection.
 3. Schedule
    - frequency;
@@ -88,9 +92,6 @@ Administrator advanced options:
 - proxy binding;
 - AI access override;
 - email template override;
-- max pages;
-- max items;
-- start page;
 - browser mode;
 - output mode.
 
@@ -99,9 +100,32 @@ Rules:
 - law firm name and aliases are evaluation/report context;
 - platform search terms are the actual platform search input;
 - exclude words are post-collection filters;
+- crawl range is a user-facing scope control, not a timeout estimator;
+- `max_items` is a content-count cap and may still produce fewer usable results
+  after platform limits, deduplication, exclusion words, and time filtering;
+- `start_page` applies when the platform crawler honors it;
+- `max_pages` is approximate in V1 and may be converted into an item-count cap;
+- `time_window` may use platform-native search filters where available, but V1
+  must also treat it as monitoring-layer result filtering because platform
+  support is not uniform;
+- user-facing copy must not promise exact cross-platform page or time-window
+  behavior;
+- task timeout is controlled by administrator Runtime Strategy and is not
+  computed from the user's crawl range;
 - AI and email are optional for collection start;
 - missing platform resources should block only affected platforms and give a
   clear message.
+
+Crawl range capability matrix:
+
+| Platform | max_items | start_page | max_pages | time_window |
+| --- | --- | --- | --- | --- |
+| Douyin | content-count cap | platform crawler start page when honored | approximate item-count conversion | platform publish-time filter where possible plus monitoring-layer filter |
+| Xiaohongshu | content-count cap | platform crawler start page when honored | approximate item-count conversion | time-descending sort plus monitoring-layer filter |
+| Kuaishou | content-count cap | platform crawler start page when honored | approximate item-count conversion | monitoring-layer filter unless native support is implemented later |
+
+If platform behavior changes in MediaCrawler, update this matrix and the
+corresponding tests before changing customer-facing copy.
 
 Acceptance:
 
@@ -361,7 +385,8 @@ Editable settings:
 
 - global crawl concurrency;
 - per-platform concurrency;
-- task timeout;
+- task timeout as a run-level wall-clock deadline;
+- lock cleanup buffer;
 - retry count;
 - retry delay;
 - QR timeout;
@@ -372,9 +397,12 @@ Editable settings:
 
 Layout:
 
+- administrator-only grouped table layout;
 - group settings by Crawling, Login, Scheduler, and Retention;
 - show each setting with label, current value, input control, range hint, and
   apply scope;
+- each grouped table should include columns for setting, current value, input,
+  valid range, apply scope, and lock state;
 - display apply scope as:
   - immediate;
   - next run;
@@ -382,6 +410,15 @@ Layout:
   - scheduler reload or restart;
 - locked settings are read-only with a lock indicator and a short explanation
   that deployment configuration controls the value.
+
+Task-timeout rules:
+
+- `crawler_timeout_seconds` is copied into each new run as its run-level
+  wall-clock timeout;
+- V1 does not estimate timeout from `max_items`, `max_pages`, or time window;
+- timeout runs may still have partial results and should show a customer-safe
+  message that the system stopped the task after reaching the configured time
+  limit.
 
 Read-only/locked settings:
 

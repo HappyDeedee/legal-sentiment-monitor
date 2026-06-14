@@ -57,7 +57,7 @@ or:
 
 ```text
 FAIL docs consistency
-- [P0] CR-012B is Needs Confirmation but CURRENT_STATE says Phase 5 can start.
+- [P0] A CR is Needs Confirmation but CURRENT_STATE says its phase can start.
 - [P1] A specialist document is not referenced by AGENTS.md.
 ```
 

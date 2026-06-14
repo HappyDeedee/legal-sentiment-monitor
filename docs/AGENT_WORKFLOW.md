@@ -101,6 +101,8 @@ When confirmation is needed, use this flow:
   `user_sessions`, `system_settings`, and `audit_logs`.
 - Do not implement authentication, RBAC, or workspace filtering on top of the
   pre-Phase-0.5 schema.
+- If the next implementation phase is ambiguous or blocked, stop and report the
+  issue instead of selecting a later phase opportunistically.
 - Keep changes scoped to the related task.
 - Do not expand V1 scope without a change request and decision.
 - Do not expose secrets, raw server paths, local browser assumptions, or

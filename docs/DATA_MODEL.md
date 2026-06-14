@@ -17,7 +17,10 @@ Phase 0.5 will add:
 - `audit_logs`;
 - `workspace_id`, `created_by`, and `updated_by` fields on priority business
   tables;
-- `profile_key` on account/login-session tables.
+- `profile_key` on account/login-session tables;
+- run-level timeout fields on `crawl_runs`;
+- account/profile lock fields on `social_accounts`;
+- `resource_locks` for proxy concurrency.
 
 Current code should be checked before implementation work begins. Do not assume
 these tables or columns already exist until Phase 0.5 is completed and verified.
@@ -126,6 +129,9 @@ notes
 last_login_at
 last_checked_at
 last_error
+locked_by_run_id
+locked_at
+lock_expires_at
 created_by
 updated_by
 created_at
@@ -135,6 +141,7 @@ updated_at
 `profile_path_legacy` is optional during transition only. The confirmed
 direction is to use new `profile_key` profiles and require old low-volume
 accounts to re-login instead of preserving long-term legacy path compatibility.
+The inline lock fields protect both the account and its `profile_key`.
 
 ### proxy_profiles
 
@@ -180,6 +187,25 @@ expires_at
 
 See `SYSTEM_SETTINGS.md`.
 
+### resource_locks
+
+Proxy concurrency locks:
+
+```text
+id
+workspace_id
+resource_type
+resource_id
+run_id
+locked_at
+expires_at
+```
+
+V1 uses `resource_type = "proxy"` for proxy concurrency. The table can be
+extended later for other shared resources. Use a unique constraint on
+`resource_type + resource_id + run_id` and indexes for active lock lookup and
+expiry cleanup.
+
 ### audit_logs
 
 Minimal MVP audit fields:
@@ -207,7 +233,13 @@ workspace_id
 created_by
 account_id
 proxy_id
+timeout_seconds
+deadline_at
+timeout_reason
 ```
+
+Run status should include `timeout` for runs stopped by the run-level wall-clock
+deadline. Timeout runs may still have partial results.
 
 ### raw_contents
 
@@ -244,9 +276,16 @@ send_status
   the new `profile_key` model.
 - Do not expose legacy paths in UI.
 - Keep secret values encrypted.
+- Do not treat expired locks as directly reusable; recover the owning run before
+  releasing persisted locks.
 
 ## Confirmed Items
 
 - V1 uses one default workspace.
 - Normal users can delete their own non-running tasks.
 - MVP includes minimal audit log for security-sensitive administrator actions.
+- Profile keys use `{workspace_id}/{platform}/acc_{account_id}`.
+- Account/profile locks use inline fields; proxy concurrency uses
+  `resource_locks`.
+- Administrator task timeout is a run-level wall-clock deadline and is not
+  estimated from crawl range.

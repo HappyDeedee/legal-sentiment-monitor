@@ -15,10 +15,15 @@ tables required by the target V1 model.
 - Phase 0.5 - Schema Foundation: not started; required before Phase 1.
 - Phase 1 - Users And Permissions: blocked by Phase 0.5 implementation, not
   by permission decisions.
-- Phase 2 - System Settings: can begin after the schema/settings foundation is
-  available.
-- Phase 5/6 - Account Environment and Server Login: blocked by CR-012A,
-  CR-012B, and CR-012C before coding profile/lock behavior.
+- Phase 2 - System Settings: blocked by Phase 0.5 implementation until the
+  `system_settings` foundation exists.
+- Phase 5/6 - Account Environment and Server Login: profile key, timeout, and
+  lock-storage decisions are accepted; implementation is still blocked by
+  Phase 0.5 schema foundation and the preceding account/session groundwork.
+
+All Phase 1-9 implementation work depends on Phase 0.5. Phase-specific planning
+may continue, but code changes for those phases should not bypass the schema
+foundation.
 
 ## Completed
 
@@ -69,6 +74,9 @@ tables required by the target V1 model.
   session checks, or `/api/auth/*` flows yet.
 - Scheduler tick interval and global/platform concurrency are still hard-coded
   in places; Phase 2 moves these values into runtime settings.
+- Current crawler timeout is applied to individual MediaCrawler subprocess
+  attempts; Phase 2 changes the target behavior to one run-level wall-clock
+  deadline with remaining-time allocation.
 - Current system is closer to a single-team MVP than a production multi-user
   system.
 - Server-side QR login and profile persistence need container/server validation.
@@ -80,11 +88,12 @@ tables required by the target V1 model.
 - Profile migration strategy has been clarified: existing low-volume
   `profile_path` accounts do not need long-term compatibility and can be reset
   or re-logged in under the new `profile_key` model.
-- Phase 5/6 still need user confirmation for CR-012A final `profile_key`
-  format, CR-012B lock timeout behavior, and CR-012C lock storage strategy
-  before coding the account/profile/proxy locking layer.
-- Phase 2 Runtime Strategy detailed layout still needs CR-017 confirmation
-  before UI implementation.
+- Phase 5/6 account/profile/proxy behavior has accepted decisions, but code
+  still needs run-level timeout tracking, persisted lock fields, proxy lock
+  records, and startup/scheduler recovery.
+- Phase 2 Runtime Strategy layout is accepted as administrator-only grouped
+  tables, but the settings UI and database-backed settings layer are not yet
+  implemented.
 
 ## Next Step
 
@@ -100,17 +109,16 @@ Implement Phase 0.5 first, then Phase 1 and Phase 2 in small increments:
 7. ask for user confirmation before accepting ambiguous assumptions in
    permissions, deployment, account environment, security, or data model.
 8. Phase 1 can proceed after Phase 0.5 creates the schema foundation.
-9. Before starting Phase 5/6 implementation, confirm:
-   - CR-012A `profile_key` format, recommended:
-     `{workspace_id}/{platform}/acc_{account_id}`;
-   - CR-012B lock timeout strategy, recommended:
-     task timeout plus cleanup buffer;
-   - CR-012C lock storage strategy, recommended:
-     inline fields for account/profile locks and `resource_locks` for proxy
-     concurrency.
-10. Until CR-012A/B/C are confirmed, prioritize Phase 0.5, Phase 1, Phase 2,
-    Phase 3, Phase 4, Phase 7, Phase 8, and Phase 9 work that does not depend
-    on account/profile/proxy lock details.
+9. Accepted Phase 5/6 decisions:
+   - `profile_key` format is `{workspace_id}/{platform}/acc_{account_id}`;
+   - task timeout is a run-level wall-clock deadline controlled by
+     administrator Runtime Strategy;
+   - lock expiry is the run deadline plus cleanup buffer;
+   - account/profile locks use inline `social_accounts` fields;
+   - proxy concurrency uses `resource_locks`.
+10. Before Phase 5/6 coding, complete Phase 0.5 schema foundation and verify
+    that run timeout fields, profile keys, lock fields, and `resource_locks`
+    exist.
 
 ## Latest Verification
 

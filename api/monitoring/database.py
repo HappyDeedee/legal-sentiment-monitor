@@ -157,6 +157,18 @@ def init_db() -> None:
                 updated_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS ai_rule_profiles (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                prompt TEXT NOT NULL DEFAULT '',
+                is_active INTEGER NOT NULL DEFAULT 0,
+                last_test_status TEXT NOT NULL DEFAULT 'untested',
+                last_test_at TEXT,
+                last_test_error TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS email_templates (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 name TEXT NOT NULL,
@@ -326,6 +338,7 @@ def init_db() -> None:
             "INSERT OR IGNORE INTO ai_configs (id, updated_at) VALUES (1, ?)",
             (now,),
         )
+        _ensure_default_ai_rule_profile(conn)
         conn.execute(
             "INSERT OR IGNORE INTO email_configs (id, updated_at) VALUES (1, ?)",
             (now,),
@@ -825,8 +838,30 @@ def get_ai_config(masked: bool = True) -> dict[str, Any]:
     with get_conn() as conn:
         row = conn.execute("SELECT * FROM ai_configs WHERE id=1").fetchone()
         data = dict(row)
+        active_rule = conn.execute("SELECT id, name, prompt FROM ai_rule_profiles WHERE is_active=1 ORDER BY id DESC LIMIT 1").fetchone()
+        if active_rule:
+            data["prompt"] = active_rule["prompt"] or data.get("prompt") or ""
+            data["ai_rule_profile_id"] = active_rule["id"]
+            data["ai_rule_profile_name"] = active_rule["name"]
     data["api_key"] = mask_secret(data.pop("api_key_encrypted")) if masked else decrypt_secret(data.pop("api_key_encrypted"))
     return data
+
+
+def _ensure_default_ai_rule_profile(conn: sqlite3.Connection) -> None:
+    row = conn.execute("SELECT id FROM ai_rule_profiles WHERE is_active=1 ORDER BY id DESC LIMIT 1").fetchone()
+    if row:
+        return
+    legacy = conn.execute("SELECT prompt FROM ai_configs WHERE id=1").fetchone()
+    prompt = (legacy["prompt"] if legacy else "") or DEFAULT_PROMPT
+    now = utc_now()
+    conn.execute(
+        """
+        INSERT INTO ai_rule_profiles (
+            name, prompt, is_active, last_test_status, last_test_at, last_test_error, created_at, updated_at
+        ) VALUES (?, ?, 1, 'untested', NULL, '', ?, ?)
+        """,
+        ("默认评估规则", prompt, now, now),
+    )
 
 
 def _effective_ai_prompt(value: str | None) -> str:
@@ -910,6 +945,23 @@ def save_ai_config(payload: dict[str, Any]) -> dict[str, Any]:
                 utc_now(),
             ),
         )
+        if payload.get("prompt") is not None:
+            _ensure_default_ai_rule_profile(conn)
+            conn.execute(
+                """
+                UPDATE ai_rule_profiles SET prompt=?, last_test_status=?, last_test_at=?,
+                    last_test_error=?, updated_at=? WHERE id=(
+                        SELECT id FROM ai_rule_profiles WHERE is_active=1 ORDER BY id DESC LIMIT 1
+                    )
+                """,
+                (
+                    next_config["prompt"],
+                    test_state["last_test_status"],
+                    test_state["last_test_at"],
+                    test_state["last_test_error"],
+                    utc_now(),
+                ),
+            )
     return get_ai_config(masked=True)
 
 
@@ -922,7 +974,145 @@ def mark_ai_test_result(success: bool, error: str | None = None) -> dict[str, An
             """,
             ("success" if success else "failed", utc_now(), "" if success else _trim_error(error)),
         )
+        row = conn.execute("SELECT id FROM ai_rule_profiles WHERE is_active=1 ORDER BY id DESC LIMIT 1").fetchone()
+        if row:
+            conn.execute(
+                """
+                UPDATE ai_rule_profiles SET last_test_status=?, last_test_at=?, last_test_error=?, updated_at=?
+                WHERE id=?
+                """,
+                ("success" if success else "failed", utc_now(), "" if success else _trim_error(error), utc_now(), row["id"]),
+            )
     return get_ai_config(masked=True)
+
+
+def list_ai_rule_profiles() -> list[dict[str, Any]]:
+    with get_conn() as conn:
+        _ensure_default_ai_rule_profile(conn)
+        rows = conn.execute("SELECT * FROM ai_rule_profiles ORDER BY is_active DESC, id DESC").fetchall()
+    return [_row_to_ai_rule_profile(dict(row)) for row in rows]
+
+
+def get_ai_rule_profile(rule_id: int) -> dict[str, Any] | None:
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM ai_rule_profiles WHERE id=?", (rule_id,)).fetchone()
+    return _row_to_ai_rule_profile(dict(row)) if row else None
+
+
+def get_active_ai_rule_profile() -> dict[str, Any] | None:
+    with get_conn() as conn:
+        _ensure_default_ai_rule_profile(conn)
+        row = conn.execute("SELECT * FROM ai_rule_profiles WHERE is_active=1 ORDER BY id DESC LIMIT 1").fetchone()
+    return _row_to_ai_rule_profile(dict(row)) if row else None
+
+
+def save_ai_rule_profile(payload: dict[str, Any], rule_id: int | None = None) -> dict[str, Any]:
+    current = get_ai_rule_profile(rule_id) if rule_id else {}
+    name = (payload.get("name") or (current or {}).get("name") or "").strip()
+    if not name:
+        raise ValueError("rule name is required")
+    prompt = (payload.get("prompt") if payload.get("prompt") is not None else (current or {}).get("prompt") or "").strip()
+    if not prompt:
+        prompt = DEFAULT_PROMPT
+    is_active = bool(payload.get("is_active", (current or {}).get("is_active", False)))
+    changed = not current or (current.get("prompt") or "") != prompt or (current.get("name") or "") != name
+    test_state = _next_test_state(current or {}, changed)
+    now = utc_now()
+    with get_conn() as conn:
+        if is_active:
+            conn.execute("UPDATE ai_rule_profiles SET is_active=0")
+        if rule_id:
+            exists = conn.execute("SELECT id FROM ai_rule_profiles WHERE id=?", (rule_id,)).fetchone()
+            if not exists:
+                raise ValueError("AI rule profile not found")
+            conn.execute(
+                """
+                UPDATE ai_rule_profiles SET name=?, prompt=?, is_active=?, last_test_status=?,
+                    last_test_at=?, last_test_error=?, updated_at=? WHERE id=?
+                """,
+                (
+                    name,
+                    prompt,
+                    1 if is_active else 0,
+                    test_state["last_test_status"],
+                    test_state["last_test_at"],
+                    test_state["last_test_error"],
+                    now,
+                    rule_id,
+                ),
+            )
+            target_id = rule_id
+        else:
+            cur = conn.execute(
+                """
+                INSERT INTO ai_rule_profiles (
+                    name, prompt, is_active, last_test_status, last_test_at, last_test_error, created_at, updated_at
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (
+                    name,
+                    prompt,
+                    1 if is_active else 0,
+                    test_state["last_test_status"],
+                    test_state["last_test_at"],
+                    test_state["last_test_error"],
+                    now,
+                    now,
+                ),
+            )
+            target_id = int(cur.lastrowid)
+        if is_active:
+            conn.execute("UPDATE ai_configs SET prompt=?, updated_at=? WHERE id=1", (prompt, now))
+    return get_ai_rule_profile(target_id) or {}
+
+
+def delete_ai_rule_profile(rule_id: int) -> None:
+    with get_conn() as conn:
+        active_count = conn.execute("SELECT COUNT(*) AS n FROM ai_rule_profiles").fetchone()["n"]
+        if int(active_count or 0) <= 1:
+            raise ValueError("至少保留一套评估规则")
+        row = conn.execute("SELECT is_active FROM ai_rule_profiles WHERE id=?", (rule_id,)).fetchone()
+        if not row:
+            raise ValueError("AI rule profile not found")
+        conn.execute("DELETE FROM ai_rule_profiles WHERE id=?", (rule_id,))
+        if row["is_active"]:
+            fallback = conn.execute("SELECT id, prompt FROM ai_rule_profiles ORDER BY id DESC LIMIT 1").fetchone()
+            if fallback:
+                conn.execute("UPDATE ai_rule_profiles SET is_active=1, updated_at=? WHERE id=?", (utc_now(), fallback["id"]))
+                conn.execute("UPDATE ai_configs SET prompt=?, updated_at=? WHERE id=1", (fallback["prompt"], utc_now()))
+
+
+def set_active_ai_rule_profile(rule_id: int) -> dict[str, Any]:
+    with get_conn() as conn:
+        row = conn.execute("SELECT id, prompt FROM ai_rule_profiles WHERE id=?", (rule_id,)).fetchone()
+        if not row:
+            raise ValueError("AI rule profile not found")
+        now = utc_now()
+        conn.execute("UPDATE ai_rule_profiles SET is_active=0")
+        conn.execute("UPDATE ai_rule_profiles SET is_active=1, updated_at=? WHERE id=?", (now, rule_id))
+        conn.execute("UPDATE ai_configs SET prompt=?, updated_at=? WHERE id=1", (row["prompt"], now))
+    return get_ai_rule_profile(rule_id) or {}
+
+
+def mark_ai_rule_profile_test_result(rule_id: int, success: bool, error: str | None = None) -> dict[str, Any]:
+    with get_conn() as conn:
+        row = conn.execute("SELECT id FROM ai_rule_profiles WHERE id=?", (rule_id,)).fetchone()
+        if not row:
+            raise ValueError("AI rule profile not found")
+        conn.execute(
+            """
+            UPDATE ai_rule_profiles SET last_test_status=?, last_test_at=?, last_test_error=?, updated_at=?
+            WHERE id=?
+            """,
+            ("success" if success else "failed", utc_now(), "" if success else _trim_error(error), utc_now(), rule_id),
+        )
+    return get_ai_rule_profile(rule_id) or {}
+
+
+def _row_to_ai_rule_profile(row: dict[str, Any]) -> dict[str, Any]:
+    row["is_active"] = bool(row.get("is_active"))
+    row["last_test_error"] = customer_safe_text(row.get("last_test_error"))
+    return row
 
 
 def get_email_config(masked: bool = True) -> dict[str, Any]:

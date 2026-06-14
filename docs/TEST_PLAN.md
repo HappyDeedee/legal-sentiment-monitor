@@ -12,6 +12,10 @@ the operator's computer is not a valid acceptance path.
 - Priority business tables have `workspace_id`, `created_by`, and `updated_by`
   columns.
 - `social_accounts` and `login_sessions` have `profile_key`.
+- `crawl_runs` has `timeout_seconds`, `deadline_at`, and `timeout_reason`.
+- `social_accounts` has account/profile lock fields:
+  `locked_by_run_id`, `locked_at`, and `lock_expires_at`.
+- `resource_locks` exists for proxy concurrency.
 - Existing `monitor_jobs`, `social_accounts`, `crawl_runs`, and `reports`
   still load without runtime errors.
 - Default workspace exists with `id = 1` or equivalent configured default.
@@ -22,6 +26,14 @@ the operator's computer is not a valid acceptance path.
 - A test monitoring job can still be created through the existing API.
 - Scheduler can still load jobs after migration.
 - Runs and reports pages load without runtime errors after migration.
+- Existing monitoring API JSON response shapes remain compatible for job list,
+  job detail, run list, report list, and scheduler status endpoints.
+- Existing job creation payloads do not need new required fields from the
+  schema foundation; missing workspace/user fields are backfilled or defaulted.
+- Existing legacy `crawl_runs.summary` JSON remains readable for runs created
+  before Phase 0.5.
+- Existing stop, resend, refresh, and diagnostics APIs return customer-safe
+  errors instead of stack traces after migration.
 
 ## Role And Permission Tests
 
@@ -86,6 +98,7 @@ Use the standard permission test data:
 ## Account Environment Tests
 
 - Each platform account has a unique profile.
+- Profile key format is `{workspace_id}/{platform}/acc_{account_id}`.
 - Creating a second account on the same platform does not reuse the first
   profile.
 - Same account cannot run two tasks at the same time.
@@ -93,6 +106,25 @@ Use the standard permission test data:
 - Task-bound proxy overrides account proxy.
 - Account proxy is used when task proxy is absent.
 - Proxy concurrency limit is respected.
+- Account/profile locks are acquired through inline `social_accounts` fields.
+- Proxy locks are acquired through `resource_locks`.
+- Expired account/profile locks are not reused until recovery verifies the
+  owning run state.
+- Startup recovery reconciles persisted `running` runs and locks after service
+  restart.
+- Scheduler recovery marks stale running runs as `timeout` or `interrupted`
+  before releasing locks.
+
+## Runtime Strategy Settings Tests
+
+- Administrator can edit runtime settings in grouped tables for Crawling,
+  Login, Scheduler, and Retention.
+- `crawler_timeout_seconds` applies to newly started runs as a run-level
+  wall-clock deadline.
+- `lock_cleanup_buffer_seconds` is added to the run deadline when calculating
+  lock expiry.
+- Environment-locked settings are read-only and show a lock indicator.
+- Normal users cannot access Runtime Strategy.
 
 ## Run And Report Tests
 
@@ -103,6 +135,24 @@ Use the standard permission test data:
 - Run logs can be refreshed, copied, and downloaded.
 - Different report previews switch correctly.
 - Report wording uses suspected negative leads and avoids factual conclusions.
+- A run that exceeds `deadline_at` is marked `timeout`, not generic `failed`.
+- Timeout runs preserve already collected partial results.
+- Timeout reports show a customer-safe message that the task reached the system
+  time limit.
+- Multi-platform runs share one run-level deadline; each platform attempt uses
+  remaining run time rather than a fresh full timeout budget.
+- Retry does not start when the run deadline has already passed.
+
+## Crawl Range Tests
+
+- Normal users can set `max_items`, `start_page`, `max_pages`, and time window
+  in the task wizard.
+- `max_items` is validated as a content-count cap.
+- `max_pages` is treated as approximate and does not require exact platform page
+  parity.
+- Time-window behavior is tested as platform-native where supported and as
+  monitoring-layer filtering where native support is missing.
+- UI copy does not promise exact cross-platform page or time-window behavior.
 
 ## Security Tests
 

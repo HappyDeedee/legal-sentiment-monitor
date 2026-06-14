@@ -7,7 +7,7 @@ from fastapi import APIRouter, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse
 
 from ..monitoring import ai
-from ..monitoring.ai import DEFAULT_PROMPT
+from ..monitoring.prompts import AI_OUTPUT_SCHEMA, DEFAULT_PROMPT, DEFAULT_PROMPT_SECTIONS
 from ..monitoring.database import (
     MONITOR_DATA_DIR,
     cancel_run,
@@ -17,6 +17,7 @@ from ..monitoring.database import (
     create_draft_social_account,
     delete_job,
     delete_ai_key_profile,
+    delete_ai_rule_profile,
     delete_email_template,
     delete_login_session,
     delete_proxy_profile,
@@ -28,6 +29,7 @@ from ..monitoring.database import (
     get_active_ai_key_profile,
     get_active_email_template,
     get_ai_key_profile,
+    get_ai_rule_profile,
     get_job,
     get_login_session,
     get_platform_login_config,
@@ -39,6 +41,7 @@ from ..monitoring.database import (
     list_jobs,
     list_leads,
     list_ai_key_profiles,
+    list_ai_rule_profiles,
     list_email_templates,
     list_login_sessions,
     list_platform_login_configs,
@@ -47,11 +50,13 @@ from ..monitoring.database import (
     list_runs,
     list_social_accounts,
     mark_ai_key_profile_test_result,
+    mark_ai_rule_profile_test_result,
     mark_ai_test_result,
     mark_email_test_result,
     render_email_template_preview,
     save_ai_config,
     save_ai_key_profile,
+    save_ai_rule_profile,
     save_email_config,
     save_email_template,
     save_job,
@@ -59,6 +64,7 @@ from ..monitoring.database import (
     save_proxy_profile,
     save_social_account,
     set_active_ai_key_profile,
+    set_active_ai_rule_profile,
     set_job_enabled,
     set_job_schedule_state,
     update_login_session_status,
@@ -301,7 +307,12 @@ async def resume_job(job_id: int):
 @router.get("/ai-config")
 async def ai_config():
     init_db()
-    return {"config": get_ai_config(masked=True), "default_prompt": DEFAULT_PROMPT}
+    return {
+        "config": get_ai_config(masked=True),
+        "default_prompt": DEFAULT_PROMPT,
+        "prompt_sections": DEFAULT_PROMPT_SECTIONS,
+        "output_schema": AI_OUTPUT_SCHEMA,
+    }
 
 
 @router.put("/ai-config")
@@ -322,7 +333,7 @@ async def test_ai_config(payload: dict[str, Any] | None = None):
         if payload:
             save_ai_config(payload)
             test_targets_saved_config = True
-        result = await ai.test_ai({})
+        result = await ai.test_ai(payload if payload else {})
         config = mark_ai_test_result(True)
         return {"result": result, "config": config}
     except ValueError as exc:
@@ -356,7 +367,77 @@ async def update_ai_evaluation_config(payload: dict[str, Any]):
 
 @router.post("/ai-evaluation-config/test")
 async def test_ai_evaluation_config(payload: dict[str, Any] | None = None):
-    return await test_ai_config(payload)
+    try:
+        if ai.ai_api_disabled():
+            raise ValueError("AI 服务当前未启用；采集不受影响，内容会进入待人工复核。")
+        return {"result": await ai.test_ai(payload or {})}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=redact_sensitive(str(exc)))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=redact_sensitive(f"{type(exc).__name__}: {exc}"))
+
+
+@router.get("/ai-rule-profiles")
+async def ai_rule_profiles():
+    init_db()
+    return {
+        "profiles": list_ai_rule_profiles(),
+        "default_prompt": DEFAULT_PROMPT,
+        "prompt_sections": DEFAULT_PROMPT_SECTIONS,
+        "output_schema": AI_OUTPUT_SCHEMA,
+    }
+
+
+@router.post("/ai-rule-profiles")
+async def create_ai_rule_profile(payload: dict[str, Any]):
+    try:
+        return {"profile": save_ai_rule_profile(payload)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.put("/ai-rule-profiles/{rule_id}")
+async def update_ai_rule_profile(rule_id: int, payload: dict[str, Any]):
+    try:
+        return {"profile": save_ai_rule_profile(payload, rule_id)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/ai-rule-profiles/{rule_id}/activate")
+async def activate_ai_rule_profile(rule_id: int):
+    try:
+        return {"profile": set_active_ai_rule_profile(rule_id)}
+    except ValueError as exc:
+        raise HTTPException(status_code=404, detail=str(exc))
+
+
+@router.delete("/ai-rule-profiles/{rule_id}")
+async def remove_ai_rule_profile(rule_id: int):
+    try:
+        delete_ai_rule_profile(rule_id)
+        return {"ok": True}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/ai-rule-profiles/{rule_id}/test")
+async def test_ai_rule_profile(rule_id: int, payload: dict[str, Any] | None = None):
+    rule = get_ai_rule_profile(rule_id)
+    if not rule:
+        raise HTTPException(status_code=404, detail="AI rule profile not found")
+    payload = {**(payload or {}), "prompt": rule.get("prompt") or DEFAULT_PROMPT}
+    try:
+        result = await ai.test_ai(payload)
+        profile = mark_ai_rule_profile_test_result(rule_id, True)
+        return {"result": result, "profile": profile}
+    except ValueError as exc:
+        mark_ai_rule_profile_test_result(rule_id, False, str(exc))
+        raise HTTPException(status_code=400, detail=redact_sensitive(str(exc)))
+    except Exception as exc:
+        message = redact_sensitive(f"{type(exc).__name__}: {exc}")
+        mark_ai_rule_profile_test_result(rule_id, False, message)
+        raise HTTPException(status_code=400, detail=message)
 
 
 @router.get("/ai-profiles")
@@ -430,6 +511,29 @@ async def test_ai_profile(profile_id: int, payload: dict[str, Any] | None = None
 @router.post("/ai-profiles/{profile_id}/connection-test")
 async def test_ai_profile_connection(profile_id: int, payload: dict[str, Any] | None = None):
     return await test_ai_profile(profile_id, payload)
+
+
+@router.post("/ai-profiles/models")
+async def list_ai_profile_models_from_payload(payload: dict[str, Any]):
+    try:
+        return {"result": await ai.list_ai_models(payload)}
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=redact_sensitive(str(exc)))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=redact_sensitive(f"{type(exc).__name__}: {exc}"))
+
+
+@router.post("/ai-profiles/{profile_id}/models")
+async def list_ai_profile_models(profile_id: int, payload: dict[str, Any] | None = None):
+    try:
+        profile = get_ai_key_profile(profile_id, masked=False)
+        if not profile:
+            raise ValueError("AI profile not found")
+        return {"result": await ai.list_ai_models({**profile, **(payload or {})})}
+    except ValueError as exc:
+        raise HTTPException(status_code=404 if "not found" in str(exc) else 400, detail=redact_sensitive(str(exc)))
+    except Exception as exc:
+        raise HTTPException(status_code=400, detail=redact_sensitive(f"{type(exc).__name__}: {exc}"))
 
 
 @router.delete("/ai-profiles/{profile_id}")

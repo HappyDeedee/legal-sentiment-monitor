@@ -16,6 +16,34 @@ Before changing code or UI, read these files in order:
 6. `docs/TRACEABILITY.md`
 7. `docs/TEST_PLAN.md`
 
+## Start Rule
+
+Before making code changes, determine the first unblocked phase.
+
+Required checks:
+
+1. Read `docs/CURRENT_STATE.md`.
+2. Read `docs/TASKS.md`.
+3. If Phase 0.5 is not complete, start with Phase 0.5 only.
+4. Do not start Phase 1-9 implementation before Phase 0.5 is completed,
+   verified, and reflected in `docs/TASKS.md`, `docs/CURRENT_STATE.md`,
+   `docs/TRACEABILITY.md`, and `docs/TEST_RESULTS.md`.
+5. If the next phase is unclear, stop and report the blocking ambiguity instead
+   of choosing a later task opportunistically.
+
+Phase 0.5 is complete only when:
+
+- every Phase 0.5 task in `docs/TASKS.md` is marked `[x]`;
+- `docs/CURRENT_STATE.md` states Phase 0.5 is complete;
+- `docs/TEST_RESULTS.md` contains the Phase 0.5 verification entry;
+- `docs/TRACEABILITY.md` marks Phase 0.5-related requirements as implemented
+  or verified;
+- the active database schema has the foundation tables and columns described in
+  `docs/DATA_MODEL.md`.
+
+Current rule: Phase 0.5 is the first implementation phase until the schema
+foundation is complete.
+
 Read the relevant specialist document before touching a related area:
 
 - UI changes: `docs/UI_UX_GUIDELINES.md`

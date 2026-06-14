@@ -82,6 +82,42 @@ Avoid:
 - repeated menus and tabs for the same function;
 - showing administrator resource details to normal users.
 
+## Runtime Strategy Page
+
+Runtime Strategy is administrator-only.
+
+Use grouped table sections:
+
+- Crawling;
+- Login;
+- Scheduler;
+- Retention.
+
+Each group should use a compact operations-table layout with these columns:
+
+- setting;
+- current value;
+- input control;
+- valid range;
+- apply scope;
+- lock state.
+
+Apply scope should be shown as short operational labels:
+
+- immediate;
+- next run;
+- next session;
+- scheduler reload or restart;
+- cleanup job.
+
+Locked deployment settings are read-only and show a lock indicator with a short
+tooltip explaining that deployment configuration controls the value.
+
+Do not show raw environment variable names, file paths, profile paths, command
+lines, or internal lock identifiers in normal customer-facing text. Trusted
+administrator diagnostics may expose limited technical detail only when needed
+for operations.
+
 ## Modal Rules
 
 Use modal dialogs consistently for:

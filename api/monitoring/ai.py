@@ -4,12 +4,17 @@ import json
 import os
 import re
 from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 import httpx
 
 from .database import get_active_ai_key_profile, get_ai_config, get_ai_key_profile, validate_temperature
 from .prompts import DEFAULT_PROMPT
 from .security import redact_sensitive
+
+
+AI_CONNECTION_TEST_MESSAGE = "hi"
+AI_CONNECTION_TEST_MAX_TOKENS = 1000
 
 
 def ai_api_disabled() -> bool:
@@ -67,20 +72,46 @@ async def test_ai_connection(payload: dict[str, Any]) -> dict[str, Any]:
 
     cfg = _merge_test_config(payload)
     if cfg.get("provider") == "anthropic":
-        raw = await _ping_anthropic(cfg)
+        raw_response = await _ping_anthropic(cfg)
         endpoint = _build_endpoint(str(cfg.get("base_url", "")), "/v1/messages")
     else:
-        raw = await _ping_openai(cfg)
+        raw_response = await _ping_openai(cfg)
         endpoint = _build_endpoint(str(cfg.get("base_url", "")), "/v1/chat/completions")
+    raw = _extract_model_text(raw_response) if isinstance(raw_response, (dict, list)) else str(raw_response or "")
     if not str(raw or "").strip():
-        raise ValueError("模型服务已响应，但没有返回文本")
+        raise ValueError("模型服务已响应，但没有返回文本；返回结构：" + _compact_response_preview(raw_response))
     return {
         "ok": True,
         "provider": cfg.get("provider"),
+        "protocol": cfg.get("provider"),
         "model": cfg.get("model"),
         "endpoint": endpoint,
-        "message": "连接测试通过",
+        "message": "连接测试通过，模型已返回文本",
+        "request_message": AI_CONNECTION_TEST_MESSAGE,
+        "response_text": str(raw).strip(),
         "response_preview": str(raw).strip()[:200],
+    }
+
+
+async def list_ai_models(payload: dict[str, Any]) -> dict[str, Any]:
+    if ai_api_disabled():
+        raise ValueError("AI 服务当前未启用；暂不能获取模型列表。")
+
+    cfg = _merge_model_list_config(payload)
+    if cfg.get("provider") == "anthropic":
+        endpoint, raw_response = await _fetch_anthropic_models(cfg)
+    else:
+        endpoint, raw_response = await _fetch_openai_models(cfg)
+    models = _extract_model_ids(raw_response)
+    if not models:
+        raise ValueError("模型列表接口已响应，但没有返回模型名称；返回结构：" + _compact_response_preview(raw_response))
+    return {
+        "ok": True,
+        "provider": cfg.get("provider"),
+        "protocol": cfg.get("provider"),
+        "endpoint": endpoint,
+        "models": models,
+        "count": len(models),
     }
 
 
@@ -154,7 +185,7 @@ async def _call_openai(cfg: dict[str, Any], prompt: str, payload: dict[str, Any]
         )
         res.raise_for_status()
         data = res.json()
-    return data["choices"][0]["message"]["content"]
+    return _extract_model_text(data)
 
 
 async def _call_anthropic(cfg: dict[str, Any], prompt: str, payload: dict[str, Any]) -> str:
@@ -172,16 +203,15 @@ async def _call_anthropic(cfg: dict[str, Any], prompt: str, payload: dict[str, A
                 "max_tokens": 800,
                 "temperature": float(cfg.get("temperature", 0) or 0),
                 "system": prompt,
-                "messages": [{"role": "user", "content": json.dumps(payload, ensure_ascii=False)}],
+                "messages": [{"role": "user", "content": _anthropic_text_content(json.dumps(payload, ensure_ascii=False))}],
             },
         )
         res.raise_for_status()
         data = res.json()
-    parts = data.get("content") or []
-    return "".join(part.get("text", "") for part in parts if part.get("type") == "text")
+    return _extract_model_text(data)
 
 
-async def _ping_openai(cfg: dict[str, Any]) -> str:
+async def _ping_openai(cfg: dict[str, Any]) -> Any:
     url = _build_endpoint(str(cfg.get("base_url", "")), "/v1/chat/completions")
     async with httpx.AsyncClient(timeout=30, trust_env=False) as client:
         res = await client.post(
@@ -190,16 +220,15 @@ async def _ping_openai(cfg: dict[str, Any]) -> str:
             json={
                 "model": cfg.get("model"),
                 "temperature": 0,
-                "max_tokens": 8,
-                "messages": [{"role": "user", "content": "ping"}],
+                "max_tokens": 32,
+                "messages": [{"role": "user", "content": AI_CONNECTION_TEST_MESSAGE}],
             },
         )
         res.raise_for_status()
-        data = res.json()
-    return data["choices"][0]["message"]["content"]
+        return res.json()
 
 
-async def _ping_anthropic(cfg: dict[str, Any]) -> str:
+async def _ping_anthropic(cfg: dict[str, Any]) -> Any:
     url = _build_endpoint(str(cfg.get("base_url", "")), "/v1/messages")
     async with httpx.AsyncClient(timeout=30, trust_env=False) as client:
         res = await client.post(
@@ -211,15 +240,142 @@ async def _ping_anthropic(cfg: dict[str, Any]) -> str:
             },
             json={
                 "model": cfg.get("model"),
-                "max_tokens": 8,
+                "max_tokens": AI_CONNECTION_TEST_MAX_TOKENS,
                 "temperature": 0,
-                "messages": [{"role": "user", "content": "ping"}],
+                "messages": [{"role": "user", "content": _anthropic_text_content(AI_CONNECTION_TEST_MESSAGE)}],
             },
         )
         res.raise_for_status()
-        data = res.json()
-    parts = data.get("content") or []
-    return "".join(part.get("text", "") for part in parts if part.get("type") == "text")
+        return res.json()
+
+
+async def _fetch_openai_models(cfg: dict[str, Any]) -> tuple[str, Any]:
+    headers = {"Authorization": f"Bearer {cfg.get('api_key')}", "Content-Type": "application/json"}
+    return await _fetch_models_from_candidates(str(cfg.get("base_url", "")), headers)
+
+
+async def _fetch_anthropic_models(cfg: dict[str, Any]) -> tuple[str, Any]:
+    api_key = cfg.get("api_key")
+    headers = {
+        "x-api-key": api_key,
+        "Authorization": f"Bearer {api_key}",
+        "anthropic-version": "2023-06-01",
+        "Content-Type": "application/json",
+    }
+    return await _fetch_models_from_candidates(str(cfg.get("base_url", "")), headers)
+
+
+async def _fetch_models_from_candidates(base_url: str, headers: dict[str, str]) -> tuple[str, Any]:
+    last_error: Exception | None = None
+    async with httpx.AsyncClient(timeout=30, trust_env=False) as client:
+        for url in _model_endpoint_candidates(base_url):
+            try:
+                res = await client.get(url, headers=headers)
+                res.raise_for_status()
+                return url, res.json()
+            except httpx.HTTPStatusError as exc:
+                last_error = exc
+                if exc.response.status_code in {404, 405}:
+                    continue
+                raise
+    if last_error:
+        raise last_error
+    raise ValueError("AI 接入未配置完整：base_url")
+
+
+def _anthropic_text_content(text: str) -> list[dict[str, str]]:
+    return [{"type": "text", "text": text}]
+
+
+def _extract_model_text(data: Any) -> str:
+    texts: list[str] = []
+
+    def collect(value: Any) -> None:
+        if value is None:
+            return
+        if isinstance(value, str):
+            if value.strip():
+                texts.append(value.strip())
+            return
+        if isinstance(value, list):
+            for item in value:
+                collect(item)
+            return
+        if not isinstance(value, dict):
+            return
+        for key in ("text", "output_text", "completion", "answer"):
+            raw = value.get(key)
+            if isinstance(raw, str) and raw.strip():
+                texts.append(raw.strip())
+        message = value.get("message")
+        if isinstance(message, dict):
+            collect(message.get("content"))
+        elif isinstance(message, str):
+            collect(message)
+        content = value.get("content")
+        if content is not None:
+            collect(content)
+        delta = value.get("delta")
+        if isinstance(delta, dict):
+            collect(delta.get("content"))
+
+    if isinstance(data, dict):
+        choices = data.get("choices")
+        if isinstance(choices, list):
+            for choice in choices:
+                collect(choice)
+        collect(data.get("content"))
+        for key in ("output", "output_text", "text", "completion", "answer", "message"):
+            collect(data.get(key))
+    else:
+        collect(data)
+    deduped: list[str] = []
+    for text in texts:
+        if text not in deduped:
+            deduped.append(text)
+    return "\n".join(deduped).strip()
+
+
+def _compact_response_preview(data: Any, limit: int = 800) -> str:
+    try:
+        text = json.dumps(data, ensure_ascii=False)
+    except TypeError:
+        text = str(data)
+    text = redact_sensitive(text)
+    text = re.sub(r"\s+", " ", text).strip()
+    return (text[:limit] + "...") if len(text) > limit else (text or "空响应")
+
+
+def _extract_model_ids(data: Any) -> list[str]:
+    models: list[str] = []
+
+    def collect(value: Any) -> None:
+        if value is None:
+            return
+        if isinstance(value, str):
+            if value.strip():
+                models.append(value.strip())
+            return
+        if isinstance(value, list):
+            for item in value:
+                collect(item)
+            return
+        if not isinstance(value, dict):
+            return
+        for key in ("id", "name", "model"):
+            raw = value.get(key)
+            if isinstance(raw, str) and raw.strip():
+                models.append(raw.strip())
+                return
+        for key in ("data", "models", "items"):
+            collect(value.get(key))
+
+    collect(data)
+    deduped: list[str] = []
+    for model in models:
+        if model not in deduped:
+            deduped.append(model)
+    return deduped
 
 
 def _parse_json(raw: str) -> dict[str, Any]:
@@ -328,29 +484,58 @@ def _coerce_quotes(value: Any) -> list[str]:
 
 
 def _sample_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    platform_code = str(payload.get("sample_platform") or "dy").strip()
+    platform_labels = {"dy": "抖音", "ks": "快手", "xhs": "小红书"}
+    if platform_code not in platform_labels:
+        platform_code = "dy"
+    law_firm_name = str(payload.get("sample_law_firm_name") or "海安律所").strip() or "海安律所"
+    source_keyword = str(payload.get("sample_source_keyword") or "海安律所避雷").strip() or "海安律所避雷"
+    comments = _sample_comments(payload)
     return build_evaluation_payload(
         {
-            "law_firm_name": "海安律所",
+            "law_firm_name": law_firm_name,
             "aliases": ["海安律师事务所", "海安律师"],
             "exclude_words": [],
         },
         {
-            "platform": "dy",
-            "platform_label": "抖音",
-            "source_keyword": "海安律所避雷",
+            "platform": platform_code,
+            "platform_label": platform_labels[platform_code],
+            "source_keyword": source_keyword,
             "title": payload.get("sample_title") or "海安律所避雷：退费拖了很久",
             "description": payload.get("sample_text") or "我想曝光一下，沟通很差，收费也不透明，投诉后一直没人处理。",
             "author_name": "海安用户",
             "content_url": "https://www.douyin.com/video/haian-selftest",
             "cover_url": "https://example.com/haian-cover.jpg",
             "publish_time": 1781280000,
-            "comment_count": 2,
+            "comment_count": len(comments),
         },
-        [
-            {"content": "我也遇到退费慢的问题", "author_name": "评论用户A", "create_time": 1781280100},
-            {"content": "建议先保留沟通证据再投诉", "author_name": "评论用户B", "create_time": 1781280200},
-        ],
+        comments,
     )
+
+
+def _sample_comments(payload: dict[str, Any]) -> list[dict[str, Any]]:
+    if "sample_comments" not in payload:
+        items = ["我也遇到退费慢的问题", "建议先保留沟通证据再投诉"]
+    else:
+        raw = payload.get("sample_comments")
+        if isinstance(raw, list):
+            items = []
+            for item in raw:
+                if isinstance(item, dict):
+                    text = str(item.get("content") or item.get("text") or "").strip()
+                else:
+                    text = str(item or "").strip()
+                if text:
+                    items.append(text)
+        else:
+            text = str(raw or "")
+            for sep in ("；", ";"):
+                text = text.replace(sep, "\n")
+            items = [line.strip() for line in text.splitlines() if line.strip()]
+    return [
+        {"content": content, "author_name": f"评论用户{index + 1}", "create_time": 1781280100 + index * 100}
+        for index, content in enumerate(items[:10])
+    ]
 
 
 def build_evaluation_payload(
@@ -405,8 +590,11 @@ def _safe_int(value: Any) -> int:
 
 
 def _merge_test_config(payload: dict[str, Any], require_api_key: bool = True) -> dict[str, Any]:
-    current = get_active_ai_key_profile(masked=False) or get_ai_config(masked=False)
-    cfg = dict(current)
+    global_config = get_ai_config(masked=False)
+    active_profile = get_active_ai_key_profile(masked=False)
+    cfg = dict(active_profile or global_config)
+    if active_profile:
+        cfg["prompt"] = global_config.get("prompt") or DEFAULT_PROMPT
     for key in ("provider", "base_url", "api_key", "model", "temperature", "prompt"):
         value = payload.get(key)
         if value not in (None, ""):
@@ -423,6 +611,21 @@ def _merge_test_config(payload: dict[str, Any], require_api_key: bool = True) ->
     return cfg
 
 
+def _merge_model_list_config(payload: dict[str, Any]) -> dict[str, Any]:
+    cfg: dict[str, Any] = {}
+    for key in ("provider", "base_url", "api_key"):
+        value = payload.get(key)
+        if value is not None:
+            cfg[key] = str(value).strip()
+    cfg["provider"] = cfg.get("provider") or "openai"
+    if cfg.get("provider") not in {"openai", "anthropic"}:
+        raise ValueError("invalid AI provider")
+    missing = [key for key in ("base_url", "api_key") if not cfg.get(key)]
+    if missing:
+        raise ValueError("AI 接入未配置完整：" + "、".join(missing))
+    return cfg
+
+
 def _build_endpoint(base_url: str, endpoint: str) -> str:
     base = base_url.rstrip("/")
     if not base:
@@ -435,6 +638,29 @@ def _build_endpoint(base_url: str, endpoint: str) -> str:
     if lower_base.endswith("/v1") and lower_endpoint.startswith("/v1/"):
         return f"{base}{endpoint[3:]}"
     return f"{base}{endpoint}"
+
+
+def _model_endpoint_candidates(base_url: str) -> list[str]:
+    base = base_url.rstrip("/")
+    candidates = [
+        _build_endpoint(base, "/v1/models"),
+        _build_endpoint(base, "/models"),
+    ]
+    parsed = urlsplit(base)
+    path = parsed.path.rstrip("/")
+    if path:
+        parent_path = path.rsplit("/", 1)[0]
+        parent_base = urlunsplit((parsed.scheme, parsed.netloc, parent_path, "", ""))
+        if parent_base and parent_base != base:
+            candidates.extend([
+                _build_endpoint(parent_base, "/models"),
+                _build_endpoint(parent_base, "/v1/models"),
+            ])
+    deduped: list[str] = []
+    for candidate in candidates:
+        if candidate not in deduped:
+            deduped.append(candidate)
+    return deduped
 
 
 def _normalize_risk(value: Any) -> str:

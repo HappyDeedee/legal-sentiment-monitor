@@ -108,9 +108,27 @@ Confirmed:
 
 - use the flexible key-value `system_settings` table for V1.
 
-### Step 5 - Add Lock Fields
+### Step 5 - Add Run Timeout And Lock Fields
 
-Proposed fields for account/profile locking, pending CR-012C confirmation:
+Add run-level timeout tracking to `crawl_runs`:
+
+```text
+timeout_seconds INTEGER
+deadline_at TEXT
+timeout_reason TEXT
+```
+
+Rules:
+
+- `timeout_seconds` stores the effective administrator timeout copied at run
+  start;
+- `deadline_at` stores `started_at + timeout_seconds`;
+- `timeout_reason` records `subprocess_timeout`, `scheduler_check`,
+  `startup_recovery`, or another safe internal reason;
+- V1 should support `status = "timeout"` for runs that exceed the run-level
+  wall-clock deadline.
+
+Confirmed fields for account/profile locking:
 
 ```text
 social_accounts.locked_by_run_id
@@ -118,7 +136,9 @@ social_accounts.locked_at
 social_accounts.lock_expires_at
 ```
 
-Proposed table for proxy concurrency, pending CR-012C confirmation:
+The account row lock also protects its `profile_key`.
+
+Confirmed table for proxy concurrency:
 
 ```text
 resource_locks
@@ -130,21 +150,33 @@ resource_locks
   expires_at
 ```
 
-Recommended approach:
+Recommended indexes/constraints:
+
+```text
+idx_account_lock_status on social_accounts(locked_by_run_id, lock_expires_at)
+unique resource_locks(resource_type, resource_id, run_id)
+idx_resource_lock_lookup on resource_locks(resource_type, resource_id, expires_at)
+idx_resource_lock_cleanup on resource_locks(expires_at)
+```
+
+Confirmed approach:
 
 - use inline lock fields for single-resource account/profile locks;
 - use `resource_locks` for proxy concurrency because multiple runs may share a
-  proxy up to `max_concurrency`.
+  proxy up to `max_concurrency`;
+- acquire proxy locks inside a transaction so concurrent runs cannot both pass
+  the capacity check before inserting a lock.
 
-Recommended timeout behavior, pending CR-012B confirmation:
+Confirmed timeout behavior:
 
-- lock timeout follows task timeout plus a cleanup buffer;
-- stale locks are released by run recovery logic.
-
-Open confirmation:
-
-- CR-012B: lock timeout behavior.
-- CR-012C: final lock storage strategy.
+- task timeout is a run-level wall-clock deadline from administrator Runtime
+  Strategy;
+- V1 does not estimate timeout from crawl range;
+- `lock_expires_at = deadline_at + lock_cleanup_buffer_seconds`;
+- expired locks are released only by recovery logic after verifying the owning
+  run state;
+- startup recovery must reconcile persisted `running` runs and locks after a
+  service restart.
 
 ## Profile Migration Strategy
 
@@ -170,15 +202,15 @@ After migration:
 
 ## Blocking Decisions
 
-Before implementation, still confirm:
-
-- CR-012A final `profile_key` format;
-- CR-012B lock timeout behavior;
-- CR-012C lock storage strategy.
+No CR-012 account-environment decisions remain open.
 
 Confirmed:
 
 - workspace strategy uses one default workspace;
 - authentication strategy uses session-based auth;
 - profile migration uses the direct new `profile_key` model;
+- final `profile_key` format is `{workspace_id}/{platform}/acc_{account_id}`;
+- account/profile locks use inline fields;
+- proxy concurrency uses `resource_locks`;
+- lock timeout follows the run deadline plus cleanup buffer;
 - minimal audit log is included in MVP.

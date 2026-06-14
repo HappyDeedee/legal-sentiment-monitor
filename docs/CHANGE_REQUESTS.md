@@ -34,6 +34,7 @@ Status values:
 - CR-015: Documentation Consistency Check Specification
 - CR-016: Phase 0.5 And Code-State Documentation Hardening
 - CR-017: Runtime Strategy Page Layout Detail
+- CR-018: Crawl Range Capability Boundaries
 
 ## CR-001 - Documentation Governance Bootstrap
 
@@ -402,7 +403,7 @@ Reason:
 The product direction is accepted, but the exact key format affects filesystem
 layout, database values, diagnostics, and migration scripts.
 
-Status: Needs Confirmation
+Status: Accepted
 
 Related tasks:
 
@@ -411,7 +412,7 @@ Related tasks:
 
 Acceptance:
 
-- user confirms final format, with current recommendation:
+- user confirmed final format:
   `{workspace_id}/{platform}/acc_{account_id}`;
 - examples are updated in `ACCOUNT_ENVIRONMENT.md`;
 - path resolver tests use the confirmed format.
@@ -434,7 +435,7 @@ Reason:
 Lock timeout affects failed-run recovery and whether a stuck browser session can
 block future scheduled runs.
 
-Status: Needs Confirmation
+Status: Accepted
 
 Related tasks:
 
@@ -443,10 +444,12 @@ Related tasks:
 
 Acceptance:
 
-- user confirms timeout strategy, with current recommendation:
-  task timeout plus cleanup buffer;
-- stale lock cleanup behavior is documented;
-- timeout setting source is documented in `SYSTEM_SETTINGS.md` if configurable.
+- administrator timeout is a run-level wall-clock deadline for newly started
+  runs;
+- V1 does not auto-compute timeout from crawl range;
+- lock expiry follows the run deadline plus `lock_cleanup_buffer_seconds`;
+- stale lock cleanup verifies the owning run state before releasing locks;
+- timeout setting source is documented in `SYSTEM_SETTINGS.md`.
 
 ## CR-012C - Account/Profile/Proxy Lock Storage
 
@@ -466,7 +469,7 @@ Reason:
 Inline lock fields and a dedicated lock table have different migration,
 querying, and proxy concurrency tradeoffs.
 
-Status: Needs Confirmation
+Status: Accepted
 
 Related tasks:
 
@@ -475,7 +478,7 @@ Related tasks:
 
 Acceptance:
 
-- user confirms storage strategy, with current recommendation:
+- user confirmed storage strategy:
   inline fields for single account/profile locks and `resource_locks` table for
   proxy concurrency;
 - schema migration plan is updated with the confirmed fields/tables;
@@ -629,7 +632,7 @@ The settings fields and categories are documented, but the exact UI pattern
 for grouping, apply-scope display, and locked-setting display should be clear
 before implementation.
 
-Status: Needs Confirmation
+Status: Accepted
 
 Related tasks:
 
@@ -637,8 +640,45 @@ Related tasks:
 
 Acceptance:
 
-- user confirms whether Runtime Strategy uses a dense table, grouped form
-  sections, or another layout;
+- user confirmed Runtime Strategy is administrator-only and uses grouped table
+  sections;
 - `PRODUCT_REQUIREMENTS.md` and `UI_UX_GUIDELINES.md` are updated with the
   confirmed layout;
 - Phase 2 UI implementation follows the confirmed layout.
+
+## CR-018 - Crawl Range Capability Boundaries
+
+Date: 2026-06-14
+
+Source: user conversation and code/document review
+
+Module: monitoring task creation
+
+Requirement:
+
+Document the actual V1 meaning of normal-user crawl range fields and prevent
+future agents from describing them as exact cross-platform guarantees.
+
+Reason:
+
+MediaCrawler platform support is not uniform. `max_items`, `start_page`,
+`max_pages`, and time windows may be implemented by platform-native options,
+monitoring-layer filtering, approximate conversion, or a combination of these.
+Product copy, tests, and implementation plans must avoid overpromising exact
+page or time-window behavior.
+
+Status: Accepted
+
+Related tasks:
+
+- Phase 4 in `TASKS.md`
+- Phase 7 in `TASKS.md`
+
+Acceptance:
+
+- `PRODUCT_REQUIREMENTS.md` distinguishes content-count cap, start-page support,
+  approximate page count, and hybrid time-window filtering;
+- normal-user UI copy should explain that some platforms may return fewer or
+  approximate results within the selected range;
+- tests cover range validation and timeout behavior without assuming exact
+  platform-native page/time filtering on every platform.

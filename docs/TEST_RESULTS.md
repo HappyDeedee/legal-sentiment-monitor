@@ -2,6 +2,60 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+How to read this file:
+
+- entries are reverse chronological, newest first;
+- use the topmost relevant entry for current status;
+- older entries are historical snapshots and may mention states that were later
+  superseded by newer entries above them;
+- use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
+  `docs/TRACEABILITY.md` for final current-state decisions.
+
+## 2026-06-14 - Documentation Review Follow-Up For Timeout And Range
+
+Environment: local repository documentation update.
+
+Result:
+
+- Added a concrete run-level timeout example showing remaining-time allocation
+  across platform crawler attempts.
+- Clarified that current MVP timeout is subprocess-level and Phase 2 should
+  migrate it to a run-level wall-clock deadline.
+- Added startup and scheduler recovery implementation guidance for stale
+  running runs and persisted locks.
+- Added crawl range platform capability matrix for Douyin, Xiaohongshu, and
+  Kuaishou.
+- Added Phase 0.5 monitoring API response-shape regression checks.
+- Added YAML-to-database runtime settings mapping.
+
+Limitations:
+
+- No code or runtime validation was performed.
+- The review item claiming CR-012A/B/C were missing from `TRACEABILITY.md` was
+  not applied because the current matrix already contains separate accepted
+  CR-012A, CR-012B, and CR-012C rows.
+
+## 2026-06-14 - CR-012 Timeout Lock And Crawl Range Documentation
+
+Environment: local repository documentation update.
+
+Result:
+
+- Accepted CR-012A profile key format:
+  `{workspace_id}/{platform}/acc_{account_id}`.
+- Accepted CR-012B as run-level wall-clock timeout plus lock cleanup buffer.
+- Accepted CR-012C as inline account/profile locks plus `resource_locks` for
+  proxy concurrency.
+- Accepted CR-017 Runtime Strategy administrator-only grouped table layout.
+- Added CR-018 for crawl range capability boundaries.
+- Updated data model, schema migration, system settings, product requirements,
+  UI guidelines, traceability, tasks, and tests.
+
+Limitations:
+
+- No code or runtime validation was performed.
+- Phase 0.5 schema foundation is still not implemented.
+
 ## 2026-06-14 - Review Follow-Up Minor Documentation Gaps
 
 Environment: local repository documentation update.
