@@ -121,6 +121,8 @@ celerybeat.pid
 
 # Environments
 .env
+.env.*
+!.env.example
 .venv
 env/
 venv/
@@ -166,6 +168,14 @@ cython_debug/
 /browser_data/
 /data/
 /monitor_data/
+/account_profiles/
+/runs/
+/reports/
+/logs/
+monitor.yaml
+!monitor.example.yaml
+*.sqlite
+*.sqlite3
 
 */.DS_Store
 .vscode
