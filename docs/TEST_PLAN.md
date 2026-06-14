@@ -18,6 +18,10 @@ the operator's computer is not a valid acceptance path.
 - Existing `profile_path` data is preserved during the first schema foundation
   step but is not used for new account environments.
 - Existing MVP monitoring pages still load after migration.
+- Existing monitoring list API returns without runtime errors.
+- A test monitoring job can still be created through the existing API.
+- Scheduler can still load jobs after migration.
+- Runs and reports pages load without runtime errors after migration.
 
 ## Role And Permission Tests
 
@@ -69,6 +73,12 @@ Use the standard permission test data:
 - Successful login persists the account profile on the server.
 - Closing the browser does not delete login state.
 - Restarting the service/container does not delete login state.
+- Login flow uses server-side Playwright with headless mode enabled in
+  server/container deployment.
+- Server deployment sets `MONITOR_LOGIN_QR_HEADLESS=true` or equivalent
+  production behavior.
+- QR login works in a container/server-like environment without X11 or desktop
+  GUI dependency.
 
 ## Account Environment Tests
 

@@ -3,6 +3,25 @@
 This document describes the target data model for V1. It is a planning document
 and may require migration from the current schema.
 
+## Implementation Status
+
+This is a target planning document. Most Phase 0.5 tables and fields described
+here do not exist in the current codebase yet.
+
+Phase 0.5 will add:
+
+- `workspaces`;
+- `users`;
+- `user_sessions`;
+- `system_settings`;
+- `audit_logs`;
+- `workspace_id`, `created_by`, and `updated_by` fields on priority business
+  tables;
+- `profile_key` on account/login-session tables.
+
+Current code should be checked before implementation work begins. Do not assume
+these tables or columns already exist until Phase 0.5 is completed and verified.
+
 ## Scope
 
 V1 should support:

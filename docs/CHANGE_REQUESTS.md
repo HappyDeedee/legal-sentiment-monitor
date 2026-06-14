@@ -13,6 +13,27 @@ Status values:
 - Deferred
 - Rejected
 
+## Quick Index
+
+- CR-001: Documentation Governance Bootstrap
+- CR-002: Full Menu Product Coverage
+- CR-003: Requirement Intake And Documentation Loop
+- CR-004: Confirmation Gate For Ambiguous Requirements
+- CR-005: P0 Implementation Specification Documents
+- CR-006: User And Workspace Permission Design
+- CR-007: Account Environment And Profile Migration Direction
+- CR-008: Runtime Settings Specification
+- CR-009: Permission Confirmation Pack
+- CR-010: Compatible Schema Migration Plan
+- CR-011: Runtime Config Example
+- CR-012A: Account Environment Profile Key Format
+- CR-012B: Account And Profile Lock Timeout
+- CR-012C: Account/Profile/Proxy Lock Storage
+- CR-013: API Authentication Implementation Guide
+- CR-014: Server Deployment Guide
+- CR-015: Documentation Consistency Check Specification
+- CR-016: Phase 0.5 And Code-State Documentation Hardening
+
 ## CR-001 - Documentation Governance Bootstrap
 
 Date: 2026-06-14
@@ -553,3 +574,37 @@ Acceptance:
 - `DOCUMENTATION_CHECKS.md` exists;
 - it defines required checks, severity levels, output format, and run timing;
 - the script implementation remains explicitly pending in `TASKS.md`.
+
+## CR-016 - Phase 0.5 And Code-State Documentation Hardening
+
+Date: 2026-06-14
+
+Source: external documentation review
+
+Module: project governance
+
+Requirement:
+
+Make the documentation more explicit that Phase 0.5 is not implemented yet and
+is a blocking prerequisite before Phase 1-9 implementation work.
+
+Reason:
+
+The documents described the target architecture, but coding agents could still
+misread planning completion as code implementation completion.
+
+Status: Implemented
+
+Related tasks:
+
+- Phase 0 in `TASKS.md`
+- Phase 0.5 in `TASKS.md`
+
+Acceptance:
+
+- `CURRENT_STATE.md` states that Phase 0.5 is not implemented yet;
+- `TASKS.md` marks Phase 0.5 as a blocking prerequisite;
+- `TEST_PLAN.md` includes Phase 0.5 migration regression checks;
+- `DATA_MODEL.md` states that target tables and fields are not assumed to
+  exist before Phase 0.5;
+- `AGENT_WORKFLOW.md` prevents Phase 1-9 work from skipping Phase 0.5.

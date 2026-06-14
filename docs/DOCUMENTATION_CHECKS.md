@@ -35,6 +35,15 @@ The command should be safe to run locally and in CI. It should not modify files.
 8. No customer-facing UI rules allow raw profile paths, local paths, command
    lines, cookies, API keys, SMTP passwords, or proxy credentials.
 9. Internal markdown links and referenced document filenames exist.
+10. Tables marked as implemented or required for the active phase exist in
+    `api/monitoring/database.py` or are clearly marked as not yet implemented.
+11. Fields marked as Phase 0.5 required in `SCHEMA_MIGRATION.md` exist in the
+    corresponding schema creation or migration code after Phase 0.5 is marked
+    complete.
+12. Editable runtime settings in `SYSTEM_SETTINGS.md` have matching config keys
+    in `monitor.example.yaml` or a documented reason why they are database-only.
+13. `CURRENT_STATE.md` implementation claims match actual code evidence for
+    schema, auth, settings, profile, and deployment work.
 
 ## Suggested Output
 
@@ -47,7 +56,7 @@ or:
 ```text
 FAIL docs consistency
 - [P0] CR-012B is Needs Confirmation but CURRENT_STATE says Phase 5 can start.
-- [P1] TASKS Phase 0.5 has no TEST_PLAN coverage.
+- [P1] A specialist document is not referenced by AGENTS.md.
 ```
 
 ## Severity

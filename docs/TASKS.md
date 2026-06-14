@@ -32,6 +32,12 @@ Status legend:
 
 ## Phase 0.5 - Schema Foundation
 
+Blocking prerequisite:
+
+Phase 0.5 must be completed before starting Phase 1-9 implementation. Without
+these tables and fields, authentication, permissions, workspace filtering,
+runtime settings, and profile-key migration cannot function safely.
+
 This phase is the required implementation foundation before full Phase 1 user
 and permission work.
 
@@ -63,6 +69,11 @@ and permission work.
 - [ ] Add read-only deployment diagnostics.
 - [ ] Support configurable global concurrency, platform concurrency, timeouts,
       retries, QR timeout, session TTL, and retention days.
+- [ ] Replace hard-coded global crawl semaphore with
+      `global_crawl_concurrency` from runtime settings.
+- [ ] Replace hard-coded platform locks/concurrency with per-platform runtime
+      settings.
+- [ ] Replace hard-coded scheduler tick interval with `scheduler_tick_seconds`.
 
 ## Phase 3 - Administrator Resource Center
 

@@ -82,6 +82,18 @@ structured `needs_verification` state instead of attempting bypass behavior.
 
 ## Container Checklist
 
+Minimum container build requirements:
+
+- base image provides Python 3.11 or newer;
+- install application dependencies;
+- install Playwright Chromium and required system dependencies;
+- copy application code into the image;
+- expose `MONITOR_PORT`;
+- mount persistent storage for `MONITOR_DATA_DIR`;
+- provide deployment environment variables through an env file or secret
+  manager;
+- start the FastAPI service through the same command used by production.
+
 The first container/server-like environment should verify:
 
 1. service starts with no desktop browser on the operator machine;

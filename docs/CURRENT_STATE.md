@@ -4,8 +4,10 @@ Last updated: 2026-06-14
 
 ## Current Phase
 
-Phase 0 is complete for planning purposes. The next implementation foundation
-is Phase 0.5 - Schema Foundation.
+Phase 0 documentation is complete. Phase 0.5 - Schema Foundation must be
+implemented before Phase 1-9 work can begin. Current code does not yet provide
+the `users`, `workspaces`, `user_sessions`, `system_settings`, or `audit_logs`
+tables required by the target V1 model.
 
 ## Implementation Status
 
@@ -61,6 +63,12 @@ is Phase 0.5 - Schema Foundation.
 - Current code still exposes or handles real profile paths in places.
 - Current code still uses `profile_path` as a primary account/profile identity
   in places; Phase 5 will migrate new account environments to `profile_key`.
+- Current database schema does not have `profile_key` yet; Phase 0.5 adds the
+  column, and Phase 5 changes runtime behavior to use it.
+- Current frontend does not have role-based menu rendering, login page,
+  session checks, or `/api/auth/*` flows yet.
+- Scheduler tick interval and global/platform concurrency are still hard-coded
+  in places; Phase 2 moves these values into runtime settings.
 - Current system is closer to a single-team MVP than a production multi-user
   system.
 - Server-side QR login and profile persistence need container/server validation.
@@ -90,8 +98,17 @@ Implement Phase 0.5 first, then Phase 1 and Phase 2 in small increments:
 7. ask for user confirmation before accepting ambiguous assumptions in
    permissions, deployment, account environment, security, or data model.
 8. Phase 1 can proceed after Phase 0.5 creates the schema foundation.
-9. For Phase 5/6, still confirm profile key format, lock timeout details, and
-   lock storage strategy before coding the account/profile locking layer.
+9. Before starting Phase 5/6 implementation, confirm:
+   - CR-012A `profile_key` format, recommended:
+     `{workspace_id}/{platform}/acc_{account_id}`;
+   - CR-012B lock timeout strategy, recommended:
+     task timeout plus cleanup buffer;
+   - CR-012C lock storage strategy, recommended:
+     inline fields for account/profile locks and `resource_locks` for proxy
+     concurrency.
+10. Until CR-012A/B/C are confirmed, prioritize Phase 0.5, Phase 1, Phase 2,
+    Phase 3, Phase 4, Phase 7, Phase 8, and Phase 9 work that does not depend
+    on account/profile/proxy lock details.
 
 ## Latest Verification
 

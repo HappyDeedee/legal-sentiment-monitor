@@ -89,6 +89,13 @@ When confirmation is needed, use this flow:
 
 ## During Implementation
 
+- Before starting Phase 1-9 work, verify Phase 0.5 tasks are marked `[x]` in
+  `TASKS.md`.
+- Before implementing authentication, RBAC, workspace filtering, or runtime
+  settings, verify the active schema creates `users`, `workspaces`,
+  `user_sessions`, `system_settings`, and `audit_logs`.
+- Do not implement authentication, RBAC, or workspace filtering on top of the
+  pre-Phase-0.5 schema.
 - Keep changes scoped to the related task.
 - Do not expand V1 scope without a change request and decision.
 - Do not expose secrets, raw server paths, local browser assumptions, or
@@ -121,6 +128,11 @@ Recommended branches/worktrees:
 - `codex/runtime-settings`
 - `codex/server-deployment`
 - `codex/docs-governance`
+
+Cross-phase examples:
+
+- `codex/schema-and-auth` for Phase 0.5 plus Phase 1 work;
+- `codex/settings-and-ui` for Phase 2 plus related administrator UI work.
 
 Rules:
 

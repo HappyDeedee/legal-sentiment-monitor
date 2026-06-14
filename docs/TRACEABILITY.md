@@ -9,7 +9,7 @@ Use this file to connect requirements, tasks, code areas, and tests.
 | CR-003 | Agent workflow | Phase 0 | docs, AGENTS.md | Documentation review | Implemented |
 | CR-004 | Agent confirmation gate | Phase 0 | AGENTS.md, docs/AGENT_WORKFLOW.md | Documentation review | Implemented |
 | CR-005 | P0 implementation specifications | Phase 0 | docs/ROLES_AND_PERMISSIONS.md, docs/ACCOUNT_ENVIRONMENT.md, docs/SYSTEM_SETTINGS.md, docs/DATA_MODEL.md | Documentation review | Implemented |
-| CR-006 | User and workspace permissions | Phase 1 after Phase 0.5 | docs/ROLES_AND_PERMISSIONS.md, docs/PERMISSIONS_CONFIRMATION.md | Permission tests | Accepted; Phase 1 can start after schema foundation |
+| CR-006 | User and workspace permissions | Phase 1 after Phase 0.5 | docs/ROLES_AND_PERMISSIONS.md, docs/PERMISSIONS_CONFIRMATION.md | Permission tests | Accepted; Phase 0.5 not yet implemented, so Phase 1 is blocked until schema foundation exists |
 | CR-007 | Account environment and profile migration direction | Phase 5, Phase 6 | docs/ACCOUNT_ENVIRONMENT.md, docs/DATA_MODEL.md | Account/login/server tests | Accepted |
 | CR-008 | Runtime settings specification | Phase 2 | docs/SYSTEM_SETTINGS.md | Runtime settings tests | Accepted |
 | CR-009 | Permission confirmation pack | Phase 1 | docs/PERMISSIONS_CONFIRMATION.md | Documentation review | Implemented |
@@ -21,6 +21,7 @@ Use this file to connect requirements, tasks, code areas, and tests.
 | CR-013 | API authentication implementation guide | Phase 1 | docs/API_AUTHENTICATION.md, docs/ROLES_AND_PERMISSIONS.md | Auth and permission tests | Implemented |
 | CR-014 | Server deployment guide | Phase 8 | docs/SERVER_DEPLOYMENT.md, docs/TEST_PLAN.md | Server-like acceptance tests | Implemented |
 | CR-015 | Documentation consistency check specification | Phase 0 | docs/DOCUMENTATION_CHECKS.md, docs/AGENT_WORKFLOW.md | Documentation review | Implemented |
+| CR-016 | Phase 0.5 and code-state documentation hardening | Phase 0, Phase 0.5 | docs/CURRENT_STATE.md, docs/TASKS.md, docs/TEST_PLAN.md, docs/DATA_MODEL.md, docs/AGENT_WORKFLOW.md | Documentation review, migration tests | Implemented |
 
 ## Rules
 

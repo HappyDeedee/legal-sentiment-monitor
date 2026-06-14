@@ -2,6 +2,30 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-06-14 - Attached Review Follow-Up
+
+Environment: local repository documentation update.
+
+Result:
+
+- Strengthened Phase 0.5 wording as a blocking prerequisite before Phase 1-9.
+- Added explicit current-code gaps for missing auth/workspace/settings/profile
+  schema and hard-coded scheduler/concurrency settings.
+- Added migration regression checks for existing monitoring APIs, scheduler,
+  runs, and reports.
+- Added server QR login headless/container validation checks.
+- Added code-document consistency checks to `DOCUMENTATION_CHECKS.md`.
+- Added container build requirements and current frontend technology-stack
+  guidance.
+- Added CR quick index and CR-016 to preserve the review follow-up in the
+  documentation loop.
+
+Limitations:
+
+- No code or runtime validation was performed.
+- Phase 0.5 schema foundation is still not implemented.
+- Phase 5/6 still need CR-012A, CR-012B, and CR-012C confirmation.
+
 ## 2026-06-14 - Review Follow-Up Documentation Hardening
 
 Environment: local repository documentation update.

@@ -13,6 +13,19 @@ Design goals:
 - consistent interaction patterns;
 - role-appropriate complexity.
 
+## Frontend Technology Stack
+
+Current implementation:
+
+- vanilla JavaScript;
+- inline or local CSS;
+- no external UI component framework in V1 unless a later decision changes the
+  frontend stack;
+- custom modal and table interactions should follow the rules in this document.
+
+Do not introduce a new UI framework or component library only for a single page
+without a change request and decision.
+
 ## Global Layout
 
 Use a consistent admin layout:
