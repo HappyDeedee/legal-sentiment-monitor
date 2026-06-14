@@ -63,8 +63,9 @@ Target fields:
 - created_by;
 - updated_by.
 
-Existing `profile_path` should be treated as a compatibility field during
-migration.
+Existing `profile_path` is a transition-only legacy field. New account
+environments must use `profile_key`, and old low-volume accounts can be
+re-created or re-logged in instead of receiving long-term compatibility logic.
 
 ## Login Types
 

@@ -25,7 +25,25 @@ Status legend:
 - [x] Add permissions confirmation pack.
 - [x] Add compatible schema migration plan.
 - [x] Add `monitor.example.yaml`.
+- [x] Add API authentication and authorization implementation guide.
+- [x] Add server deployment and server-like validation guide.
 - [ ] Add a documentation check script after the first implementation phase.
+
+## Phase 0.5 - Schema Foundation
+
+This phase is the required implementation foundation before full Phase 1 user
+and permission work.
+
+- [ ] Create `workspaces`, `users`, `user_sessions`, `system_settings`, and
+      minimal `audit_logs` tables.
+- [ ] Add `workspace_id`, `created_by`, and `updated_by` to priority business
+      tables.
+- [ ] Add `profile_key` to `social_accounts` and `login_sessions`.
+- [ ] Backfill existing data into the default workspace with `workspace_id = 1`.
+- [ ] Keep old fields during the first migration step, but stop using
+      `profile_path` as the identity for new account environments.
+- [ ] Verify existing tasks, accounts, runs, and reports still load after the
+      schema foundation change.
 
 ## Phase 1 - Users And Permissions
 

@@ -206,7 +206,7 @@ Acceptance:
   ownership;
 - MVP includes minimal audit log.
 
-## CR-007 - Account Environment And Profile Design
+## CR-007 - Account Environment And Profile Migration Direction
 
 Date: 2026-06-14
 
@@ -216,15 +216,15 @@ Module: account environment
 
 Requirement:
 
-Define platform account, profile, proxy, browser session, login session, lock,
-and migration behavior before implementing Phase 5 and Phase 6.
+Define platform account, profile, proxy, browser session, login session, and
+profile migration behavior before implementing Phase 5 and Phase 6.
 
 Reason:
 
 The current code still has legacy `profile_path` concepts, while product
 decisions require stable `profile_key` and hidden real paths.
 
-Status: Needs Confirmation
+Status: Accepted
 
 Related tasks:
 
@@ -233,10 +233,10 @@ Related tasks:
 
 Acceptance:
 
-- user confirms profile key format;
-- user confirms lock timeout behavior;
 - user has confirmed legacy profile migration can be direct-new-profile rather
-  than compatibility-preserving.
+  than compatibility-preserving;
+- new account environments use `profile_key`;
+- customer-facing UI and API should stop accepting arbitrary profile paths.
 
 ## CR-008 - Runtime Settings Specification
 
@@ -297,7 +297,7 @@ Acceptance:
 
 - `PERMISSIONS_CONFIRMATION.md` exists;
 - every blocking item has a recommended option and alternative;
-- status is clearly marked as Needs Confirmation.
+- accepted V1 decisions are recorded after user confirmation.
 
 ## CR-010 - Compatible Schema Migration Plan
 
@@ -361,3 +361,99 @@ Acceptance:
 - `monitor.example.yaml` exists;
 - the file contains runtime, platform, login, scheduler, and retention examples;
 - deployment-only values remain environment-variable based.
+
+## CR-012 - Account Environment Locking Details
+
+Date: 2026-06-14
+
+Source: external documentation review
+
+Module: account environment
+
+Requirement:
+
+Confirm the remaining Phase 5/6 account-environment details before coding the
+account/profile/proxy locking layer.
+
+Reason:
+
+The product direction is accepted, but lock storage and timeout behavior affect
+database schema, run recovery, and proxy concurrency correctness.
+
+Status: Needs Confirmation
+
+Related tasks:
+
+- Phase 5 in `TASKS.md`
+- Phase 6 in `TASKS.md`
+
+Acceptance:
+
+- user confirms final `profile_key` format;
+- user confirms lock timeout behavior;
+- user confirms lock table vs lock fields.
+
+## CR-013 - API Authentication Implementation Guide
+
+Date: 2026-06-14
+
+Source: external documentation review
+
+Module: users and permissions
+
+Requirement:
+
+Create an implementation guide for V1 session-based authentication, API
+authorization, workspace/user data scope, bootstrap administrator creation, and
+audit behavior.
+
+Reason:
+
+`ROLES_AND_PERMISSIONS.md` defines permissions, but coding agents also need a
+concrete API/auth contract to avoid inconsistent FastAPI implementations.
+
+Status: Implemented
+
+Related tasks:
+
+- Phase 0 in `TASKS.md`
+- Phase 1 in `TASKS.md`
+
+Acceptance:
+
+- `API_AUTHENTICATION.md` exists;
+- it documents session storage, cookie behavior, API endpoints,
+  authorization dependencies, data-scope rules, errors, audit, and
+  implementation order.
+
+## CR-014 - Server Deployment Guide
+
+Date: 2026-06-14
+
+Source: external documentation review
+
+Module: server deployment
+
+Requirement:
+
+Create a server deployment and server-like validation guide covering
+container/systemd deployment, persistent profile storage, environment
+variables, browser requirements, backup, reverse proxy, and acceptance checks.
+
+Reason:
+
+The product must be deployed on a server and validated through the web UI, not
+through the operator's local browser.
+
+Status: Implemented
+
+Related tasks:
+
+- Phase 0 in `TASKS.md`
+- Phase 8 in `TASKS.md`
+
+Acceptance:
+
+- `SERVER_DEPLOYMENT.md` exists;
+- it documents server-like acceptance requirements and persistent data;
+- `AGENTS.md` and `AGENT_WORKFLOW.md` route deployment work to the document.

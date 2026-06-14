@@ -3,29 +3,49 @@
 # Do not commit monitor.yaml with real deployment values.
 
 runtime:
+  # Maximum number of crawl jobs running at the same time.
+  # Recommended V1 default: 2.
   global_crawl_concurrency: 2
+
+  # Per-crawl timeout in seconds. Applies to newly started runs.
   crawler_timeout_seconds: 900
+
+  # Retry count after a crawler failure. 0 disables retry.
   crawler_retry_count: 1
+
+  # Delay between retries in seconds.
   crawler_retry_delay_seconds: 3
 
 platforms:
   dy:
+    # Platform-level crawl concurrency for Douyin.
     max_concurrency: 1
   xhs:
+    # Platform-level crawl concurrency for Xiaohongshu.
     max_concurrency: 1
   ks:
+    # Platform-level crawl concurrency for Kuaishou.
     max_concurrency: 1
 
 login:
+  # QR code wait timeout in seconds for a login session.
   qr_timeout_seconds: 20
+
+  # Server-side login session TTL in seconds.
   session_ttl_seconds: 600
 
 scheduler:
+  # Scheduler polling interval in seconds.
   tick_seconds: 60
+
+  # Disable scheduled runs while keeping the web UI available.
   disabled: false
 
 retention:
+  # Retain run logs for this many days.
   run_log_days: 90
+
+  # Retain generated reports for this many days.
   report_days: 180
 
 # Deployment-level values should be configured through environment variables

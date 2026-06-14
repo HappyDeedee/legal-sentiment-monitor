@@ -12,15 +12,17 @@ Recommended reading order for contributors and coding agents:
 6. `TRACEABILITY.md` - requirement, task, and test mapping.
 7. `PRODUCT_REQUIREMENTS.md` - menu and page-level product behavior.
 8. `ROLES_AND_PERMISSIONS.md` - role, menu, action, API, and data-scope rules.
-9. `ACCOUNT_ENVIRONMENT.md` - account, profile, proxy, login, and browser rules.
-10. `SYSTEM_SETTINGS.md` - runtime setting and configuration rules.
-11. `DATA_MODEL.md` - target schema and migration planning.
-12. `PERMISSIONS_CONFIRMATION.md` - user confirmation items for Phase 1.
-13. `SCHEMA_MIGRATION.md` - compatible schema migration plan.
-14. `UI_UX_GUIDELINES.md` - UI and interaction rules.
-15. `AGENT_WORKFLOW.md` - how agents read and update documents.
-16. `TEST_PLAN.md` - acceptance and regression test plan.
-17. `TEST_RESULTS.md` - latest verification notes.
+9. `API_AUTHENTICATION.md` - session auth, API authorization, and data scope.
+10. `ACCOUNT_ENVIRONMENT.md` - account, profile, proxy, login, and browser rules.
+11. `SYSTEM_SETTINGS.md` - runtime setting and configuration rules.
+12. `DATA_MODEL.md` - target schema and migration planning.
+13. `PERMISSIONS_CONFIRMATION.md` - user confirmation items for Phase 1.
+14. `SCHEMA_MIGRATION.md` - compatible schema migration plan.
+15. `SERVER_DEPLOYMENT.md` - server/container deployment and validation rules.
+16. `UI_UX_GUIDELINES.md` - UI and interaction rules.
+17. `AGENT_WORKFLOW.md` - how agents read and update documents.
+18. `TEST_PLAN.md` - acceptance and regression test plan.
+19. `TEST_RESULTS.md` - latest verification notes.
 
 Existing crawler-origin documents remain in this directory for reference, but
 the files above are the active project governance documents for the monitoring

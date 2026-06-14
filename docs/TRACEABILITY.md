@@ -9,12 +9,15 @@ Use this file to connect requirements, tasks, code areas, and tests.
 | CR-003 | Agent workflow | Phase 0 | docs, AGENTS.md | Documentation review | Implemented |
 | CR-004 | Agent confirmation gate | Phase 0 | AGENTS.md, docs/AGENT_WORKFLOW.md | Documentation review | Implemented |
 | CR-005 | P0 implementation specifications | Phase 0 | docs/ROLES_AND_PERMISSIONS.md, docs/ACCOUNT_ENVIRONMENT.md, docs/SYSTEM_SETTINGS.md, docs/DATA_MODEL.md | Documentation review | Implemented |
-| CR-006 | User and workspace permissions | Phase 1 | docs/ROLES_AND_PERMISSIONS.md, docs/PERMISSIONS_CONFIRMATION.md | Permission tests | Accepted |
-| CR-007 | Account environment and profile design | Phase 5, Phase 6 | docs/ACCOUNT_ENVIRONMENT.md, docs/DATA_MODEL.md | Account/login/server tests | Needs Confirmation |
+| CR-006 | User and workspace permissions | Phase 1 after Phase 0.5 | docs/ROLES_AND_PERMISSIONS.md, docs/PERMISSIONS_CONFIRMATION.md | Permission tests | Accepted; Phase 1 can start after schema foundation |
+| CR-007 | Account environment and profile migration direction | Phase 5, Phase 6 | docs/ACCOUNT_ENVIRONMENT.md, docs/DATA_MODEL.md | Account/login/server tests | Accepted |
 | CR-008 | Runtime settings specification | Phase 2 | docs/SYSTEM_SETTINGS.md | Runtime settings tests | Accepted |
 | CR-009 | Permission confirmation pack | Phase 1 | docs/PERMISSIONS_CONFIRMATION.md | Documentation review | Implemented |
-| CR-010 | Compatible schema migration plan | Phase 1, Phase 5 | docs/SCHEMA_MIGRATION.md, docs/DATA_MODEL.md | Migration tests | Implemented |
+| CR-010 | Compatible schema migration plan | Phase 0.5, Phase 1, Phase 5 | docs/SCHEMA_MIGRATION.md, docs/DATA_MODEL.md | Migration tests | Implemented |
 | CR-011 | Runtime config example | Phase 0, Phase 2 | monitor.example.yaml, docs/SYSTEM_SETTINGS.md | Configuration loading tests | Implemented |
+| CR-012 | Account environment locking details | Phase 5, Phase 6 | docs/ACCOUNT_ENVIRONMENT.md, docs/SCHEMA_MIGRATION.md | Account/profile/proxy lock tests | Needs Confirmation |
+| CR-013 | API authentication implementation guide | Phase 1 | docs/API_AUTHENTICATION.md, docs/ROLES_AND_PERMISSIONS.md | Auth and permission tests | Implemented |
+| CR-014 | Server deployment guide | Phase 8 | docs/SERVER_DEPLOYMENT.md, docs/TEST_PLAN.md | Server-like acceptance tests | Implemented |
 
 ## Rules
 

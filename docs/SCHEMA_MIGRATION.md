@@ -36,11 +36,6 @@ workspaces
 users
 user_sessions
 system_settings
-```
-
-Optional, pending user confirmation:
-
-```text
 audit_logs
 ```
 
@@ -109,9 +104,9 @@ updated_by
 updated_at
 ```
 
-Open confirmation:
+Confirmed:
 
-- flexible key-value settings vs strongly typed runtime settings table.
+- use the flexible key-value `system_settings` table for V1.
 
 ### Step 5 - Add Lock Fields
 
@@ -155,7 +150,8 @@ After migration:
 
 - existing tasks still load;
 - existing accounts still display;
-- existing login profiles can still be resolved;
+- old profile-path-based accounts are clearly marked as needing re-login or
+  reset;
 - new accounts use `profile_key`;
 - normal-user UI never sees raw profile paths;
 - server-like login/profile reuse test passes.
@@ -164,6 +160,8 @@ After migration:
 
 Before implementation, still confirm:
 
+- final `profile_key` format;
+- lock timeout behavior;
 - lock table vs lock fields.
 
 Confirmed:

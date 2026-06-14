@@ -4,7 +4,8 @@ Last updated: 2026-06-14
 
 ## Current Phase
 
-Phase 0 - Project Governance.
+Phase 0 is complete for planning purposes. The next implementation foundation
+is Phase 0.5 - Schema Foundation.
 
 ## Completed
 
@@ -31,6 +32,11 @@ Phase 0 - Project Governance.
   settings, and data model have been added as planning documents.
 - A permission confirmation pack, compatible schema migration plan, and runtime
   configuration example have been added.
+- API authentication/authorization and server deployment guides have been
+  added.
+- Permission, workspace, authentication, initial administrator, disabled-user
+  behavior, audit-log timing, and runtime settings storage decisions have been
+  accepted using the V1 recommended options.
 
 ## In Progress
 
@@ -48,33 +54,29 @@ Phase 0 - Project Governance.
   task creation.
 - The newly added product documents are initial versions and should be refined
   during implementation.
-- Some planned P0 documents still need user-confirmed detail before they should
-  be treated as final specifications.
-- Several high-impact items are marked as Needs Confirmation in
-  `CHANGE_REQUESTS.md`: workspace strategy, profile key details, lock timeout,
-  profile migration, and settings storage.
 - Profile migration strategy has been clarified: existing low-volume
   `profile_path` accounts do not need long-term compatibility and can be reset
   or re-logged in under the new `profile_key` model.
-- Phase 1 permission/workspace/auth confirmation items have been accepted using
-  the recommended V1 options.
+- Phase 5/6 still need user confirmation for final `profile_key` format, lock
+  timeout behavior, and lock table vs lock fields before coding the
+  account/profile locking layer.
 
 ## Next Step
 
-Implement Phase 1 and Phase 2 in small increments:
+Implement Phase 0.5 first, then Phase 1 and Phase 2 in small increments:
 
-1. add user and role foundation;
-2. add menu/route permission controls;
-3. add runtime settings storage and administrator UI;
-4. keep normal-user task creation simple.
-5. for every new requirement, add or update `CHANGE_REQUESTS.md`,
+1. add schema foundation tables and fields;
+2. add user and role foundation;
+3. add menu/route permission controls;
+4. add runtime settings storage and administrator UI;
+5. keep normal-user task creation simple.
+6. for every new requirement, add or update `CHANGE_REQUESTS.md`,
    `TASKS.md`, `TRACEABILITY.md`, and `TEST_RESULTS.md`.
-6. ask for user confirmation before accepting ambiguous assumptions in
+7. ask for user confirmation before accepting ambiguous assumptions in
    permissions, deployment, account environment, security, or data model.
-7. Phase 1 can proceed after implementation tasks are narrowed to the accepted
-   V1 permission model.
-8. For Phase 5/6, still confirm profile key format and lock timeout details
-   before coding the account/profile locking layer.
+8. Phase 1 can proceed after Phase 0.5 creates the schema foundation.
+9. For Phase 5/6, still confirm profile key format, lock timeout details, and
+   lock storage strategy before coding the account/profile locking layer.
 
 ## Latest Verification
 

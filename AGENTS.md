@@ -21,14 +21,27 @@ Read the relevant specialist document before touching a related area:
 - UI changes: `docs/UI_UX_GUIDELINES.md`
 - Product/page behavior: `docs/PRODUCT_REQUIREMENTS.md`
 - Role or permission changes: `docs/ROLES_AND_PERMISSIONS.md`
+- API authentication or authorization changes: `docs/API_AUTHENTICATION.md`
 - Permission decisions awaiting user confirmation:
   `docs/PERMISSIONS_CONFIRMATION.md`
 - Account, profile, proxy, or login changes: `docs/ACCOUNT_ENVIRONMENT.md`
 - Data model changes: `docs/DATA_MODEL.md`
 - Schema migration changes: `docs/SCHEMA_MIGRATION.md`
-- Server deployment or browser login changes: `docs/TEST_PLAN.md`
+- Server deployment or browser login changes: `docs/SERVER_DEPLOYMENT.md` and
+  `docs/TEST_PLAN.md`
 - System setting changes: `docs/SYSTEM_SETTINGS.md`
 - Agent process details: `docs/AGENT_WORKFLOW.md`
+
+Before Phase 1 implementation, complete the Phase 0.5 schema foundation in
+`docs/TASKS.md` and `docs/SCHEMA_MIGRATION.md`.
+
+If documents conflict, use this order:
+
+1. `docs/DECISIONS.md`
+2. relevant specialist documents
+3. `docs/CURRENT_STATE.md`
+4. `docs/TASKS.md`
+5. general product or workflow documents
 
 ## Product Boundary
 

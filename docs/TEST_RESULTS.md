@@ -2,6 +2,30 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-06-14 - Phase 0.5 Documentation Alignment
+
+Environment: local repository documentation update.
+
+Result:
+
+- Added Phase 0.5 schema foundation to the implementation task list.
+- Updated current-state wording so Phase 1 is no longer shown as blocked by
+  accepted permission decisions.
+- Split accepted account/profile migration direction from still-unconfirmed
+  account/profile/proxy lock details.
+- Aligned runtime settings documentation with `monitor.example.yaml`, including
+  `scheduler.disabled`.
+- Clarified that MVP includes minimal audit logs and session-based
+  authentication fields.
+- Added `API_AUTHENTICATION.md` and `SERVER_DEPLOYMENT.md` for Phase 1 and
+  Phase 8 implementation guidance.
+
+Limitations:
+
+- No application runtime validation was performed.
+- Phase 5/6 still need confirmation for final `profile_key` format, lock
+  timeout behavior, and lock table vs lock fields.
+
 ## 2026-06-14 - Permission Confirmation Accepted
 
 Environment: local repository documentation update.
@@ -32,7 +56,8 @@ Result:
 
 Limitations:
 
-- Workspace strategy itself is not yet confirmed.
+- At the time of this entry, workspace strategy was not yet confirmed; it was
+  later accepted as single-workspace V1.
 - No code or runtime validation was performed.
 
 ## 2026-06-14 - Review Follow-Up P0 Additions

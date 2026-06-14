@@ -15,10 +15,11 @@ Effective configuration is built in this order:
 Environment locks override UI and database values. When a value is locked by
 deployment configuration, the UI should show it as read-only.
 
-Open confirmation:
+Confirmed V1 direction:
 
-- Should environment variables only lock values, or should all environment
-  values override database values?
+- environment variables lock deployment-level or explicitly locked values;
+- ordinary runtime values can be edited through the database-backed
+  administrator UI unless locked by deployment configuration.
 
 ## Editable Runtime Settings
 
@@ -34,6 +35,7 @@ Open confirmation:
 | login_qr_timeout_seconds | integer | 20 | 5-300 | next session |
 | login_session_ttl_seconds | integer | 600 | 60-3600 | next session |
 | scheduler_tick_seconds | integer | 60 | 10-600 | restart or scheduler reload |
+| scheduler_disabled | boolean | false | true/false | restart or scheduler reload |
 | run_log_retention_days | integer | 90 | 1-3650 | cleanup job |
 | report_retention_days | integer | 180 | 1-3650 | cleanup job |
 
@@ -79,9 +81,10 @@ stabilizes and needs stricter schema enforcement.
 
 ## monitor.yaml Shape
 
-The final `monitor.example.yaml` should be created after schema confirmation.
+`monitor.example.yaml` is the committed safe example. Real deployments may copy
+it to `monitor.yaml`, but must not commit deployment-specific values or secrets.
 
-Draft shape:
+Example shape:
 
 ```yaml
 runtime:
@@ -102,10 +105,18 @@ login:
   qr_timeout_seconds: 20
   session_ttl_seconds: 600
 
+scheduler:
+  tick_seconds: 60
+  disabled: false
+
 retention:
   run_log_days: 90
   report_days: 180
 ```
+
+The database keys should use stable snake_case names such as
+`scheduler_tick_seconds` and `scheduler_disabled`; the YAML file may use nested
+sections for operator readability.
 
 Do not commit real secrets in `monitor.yaml`; commit only `monitor.example.yaml`.
 
@@ -113,6 +124,7 @@ Do not commit real secrets in `monitor.yaml`; commit only `monitor.example.yaml`
 
 Runtime setting changes should be auditable in production.
 
-Open confirmation:
+Confirmed V1 direction:
 
-- Is audit log required in MVP, or can it be Phase 9?
+- include minimal audit logging in MVP for security-sensitive administrator
+  actions, including runtime setting changes.

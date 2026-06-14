@@ -56,6 +56,25 @@ Confirmed authentication direction:
 
 - use email/password login with session-based authentication for V1;
 - use secure HTTP-only cookie for the browser session.
+- store password hashes using bcrypt or argon2, never plaintext passwords.
+
+### user_sessions
+
+Target fields:
+
+```text
+id
+user_id
+session_token_hash
+status
+created_at
+expires_at
+last_active_at
+user_agent
+ip_address
+```
+
+Only the session token hash should be stored in the database.
 
 ### monitor_jobs
 
@@ -141,6 +160,24 @@ expires_at
 ### system_settings
 
 See `SYSTEM_SETTINGS.md`.
+
+### audit_logs
+
+Minimal MVP audit fields:
+
+```text
+id
+workspace_id
+user_id
+action_type
+resource_type
+resource_id
+details_json
+ip_address
+created_at
+```
+
+Audit logs are required for security-sensitive administrator actions in MVP.
 
 ### crawl_runs
 

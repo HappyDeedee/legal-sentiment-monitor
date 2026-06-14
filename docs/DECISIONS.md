@@ -48,6 +48,9 @@ This file is append-only. Add new dated decisions instead of rewriting history.
   current account count is low and the project is still in agile development,
   existing profile-path-based accounts can be reset or re-logged in under the
   new `profile_key` model.
+- Do not design long-term fallback behavior around legacy `profile_path`.
+  New account environments should use `profile_key`; old low-volume accounts
+  should be re-created or re-logged in instead of physically migrated.
 - V1 uses one default workspace, with `workspace_id` reserved in data models
   but no visible multi-workspace management UI.
 - V1 uses session-based authentication with secure HTTP-only cookie.

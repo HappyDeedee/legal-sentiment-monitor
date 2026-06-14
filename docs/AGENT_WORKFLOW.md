@@ -14,17 +14,29 @@ Before implementation, read:
 5. `docs/DECISIONS.md`
 6. Relevant specialist documents.
 
+Phase 1 user and permission implementation must start only after Phase 0.5
+schema foundation work is complete.
+
 Specialist document routing:
 
 - UI/page work: `docs/UI_UX_GUIDELINES.md` and
   `docs/PRODUCT_REQUIREMENTS.md`
 - user/permission work: `docs/ROLES_AND_PERMISSIONS.md` and
   `docs/PERMISSIONS_CONFIRMATION.md`
+- API authentication/authorization work: `docs/API_AUTHENTICATION.md`
 - account/login/profile/proxy work: `docs/ACCOUNT_ENVIRONMENT.md` and
   `docs/TEST_PLAN.md`
-- server/deployment work: `docs/TEST_PLAN.md` and future deployment docs
+- server/deployment work: `docs/SERVER_DEPLOYMENT.md` and `docs/TEST_PLAN.md`
 - runtime setting work: `docs/SYSTEM_SETTINGS.md`
 - data-model work: `docs/DATA_MODEL.md` and `docs/SCHEMA_MIGRATION.md`
+
+If documents conflict, follow this priority:
+
+1. `docs/DECISIONS.md`
+2. relevant specialist documents
+3. `docs/CURRENT_STATE.md`
+4. `docs/TASKS.md`
+5. general product or workflow documents
 
 ## New Requirement Intake
 

@@ -1,7 +1,7 @@
 # Roles And Permissions
 
-This document defines V1 user roles, menu visibility, action permissions, data
-scope, and unresolved confirmation items.
+This document defines V1 user roles, menu visibility, action permissions, and
+data scope.
 
 ## V1 Role Model
 
@@ -19,17 +19,12 @@ Reserved roles:
 
 ## Workspace Scope
 
-V1 implementation assumption, pending user confirmation:
+Confirmed V1 strategy:
 
 - start with one default workspace;
 - add `workspace_id` to business data now;
 - keep the model ready for future multi-workspace use;
 - do not build complex SaaS tenant onboarding in V1.
-
-Open confirmation:
-
-- Should V1 be single-workspace multi-user only, or should multiple workspaces
-  be visible in the first release?
 
 ## Menu Permissions
 
@@ -64,7 +59,7 @@ Open confirmation:
 | View all run logs | yes | no |
 | View own reports | yes | yes |
 | View all reports | yes | no |
-| Resend report email | yes | own reports only, pending product confirmation |
+| Resend report email | yes | own reports only |
 | Manage platform accounts | yes | no |
 | Manage proxies | yes | no |
 | Manage AI access | yes | no |
@@ -73,11 +68,6 @@ Open confirmation:
 | Manage runtime strategy | yes | no |
 | Manage users | yes | no |
 | View system diagnostics | yes | no |
-
-Open confirmation:
-
-- Should normal users be allowed to delete tasks, or only pause them?
-- Should normal users be allowed to resend report emails?
 
 ## Data Scope
 
@@ -120,18 +110,11 @@ Endpoint groups:
 
 ## User Lifecycle
 
-Minimum V1 flow, pending implementation:
+Minimum V1 flow:
 
-1. create initial administrator by bootstrap command or first-run setup;
+1. create initial administrator through environment bootstrap variables;
 2. administrator creates normal users;
 3. disabled users cannot log in;
-4. disabled users' existing scheduled tasks should be paused or reassigned,
-   pending user confirmation;
+4. disabled users' existing scheduled tasks continue under workspace ownership
+   until an administrator pauses, transfers, or deletes them;
 5. deleting a user should not delete historical reports automatically.
-
-Open confirmation:
-
-- Initial administrator creation method: bootstrap CLI, environment variable, or
-  first-run web setup?
-- Disabled-user task behavior: pause tasks or keep running under workspace?
-
