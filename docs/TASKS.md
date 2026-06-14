@@ -22,7 +22,9 @@ Status legend:
 - [x] Add account environment specification.
 - [x] Add runtime settings specification.
 - [x] Add target data model planning document.
-- [ ] Add `monitor.example.yaml` after the runtime settings schema is finalized.
+- [x] Add permissions confirmation pack.
+- [x] Add compatible schema migration plan.
+- [x] Add `monitor.example.yaml`.
 - [ ] Add a documentation check script after the first implementation phase.
 
 ## Phase 1 - Users And Permissions

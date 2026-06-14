@@ -262,3 +262,96 @@ Acceptance:
 - user confirms configuration precedence;
 - user confirms flexible key-value vs typed settings table;
 - user confirms whether audit logs are required in MVP.
+
+## CR-009 - Permission Confirmation Pack
+
+Date: 2026-06-14
+
+Source: external documentation review
+
+Module: users and permissions
+
+Requirement:
+
+Gather Phase 1 blocking permission, workspace, initial administrator, auth, and
+disabled-user behavior questions into a single confirmation document with
+recommended and alternative options.
+
+Reason:
+
+Phase 1 cannot start safely until high-impact permission decisions are
+confirmed.
+
+Status: Implemented
+
+Related tasks:
+
+- Phase 1 in `TASKS.md`
+
+Acceptance:
+
+- `PERMISSIONS_CONFIRMATION.md` exists;
+- every blocking item has a recommended option and alternative;
+- status is clearly marked as Needs Confirmation.
+
+## CR-010 - Compatible Schema Migration Plan
+
+Date: 2026-06-14
+
+Source: external documentation review
+
+Module: data model
+
+Requirement:
+
+Create a compatible schema migration plan before user, workspace, profile_key,
+system settings, and lock fields are implemented.
+
+Reason:
+
+The target data model is ahead of the current schema. A migration plan is needed
+to avoid breaking existing monitoring data and account profiles.
+
+Status: Implemented
+
+Related tasks:
+
+- Phase 1 in `TASKS.md`
+- Phase 5 in `TASKS.md`
+
+Acceptance:
+
+- `SCHEMA_MIGRATION.md` exists;
+- migration steps add fields before removing legacy fields;
+- legacy `profile_path` compatibility is documented.
+
+## CR-011 - Runtime Config Example
+
+Date: 2026-06-14
+
+Source: external documentation review
+
+Module: system settings
+
+Requirement:
+
+Add a committed `monitor.example.yaml` that documents the intended runtime
+configuration shape without real secrets.
+
+Reason:
+
+Phase 2 needs a concrete configuration example and deployment operators need a
+safe starting point.
+
+Status: Implemented
+
+Related tasks:
+
+- Phase 0 in `TASKS.md`
+- Phase 2 in `TASKS.md`
+
+Acceptance:
+
+- `monitor.example.yaml` exists;
+- the file contains runtime, platform, login, scheduler, and retention examples;
+- deployment-only values remain environment-variable based.

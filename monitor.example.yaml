@@ -1,0 +1,39 @@
+# Legal Sentiment Monitor runtime configuration example.
+# Copy this file to monitor.yaml for local/server deployment.
+# Do not commit monitor.yaml with real deployment values.
+
+runtime:
+  global_crawl_concurrency: 2
+  crawler_timeout_seconds: 900
+  crawler_retry_count: 1
+  crawler_retry_delay_seconds: 3
+
+platforms:
+  dy:
+    max_concurrency: 1
+  xhs:
+    max_concurrency: 1
+  ks:
+    max_concurrency: 1
+
+login:
+  qr_timeout_seconds: 20
+  session_ttl_seconds: 600
+
+scheduler:
+  tick_seconds: 60
+  disabled: false
+
+retention:
+  run_log_days: 90
+  report_days: 180
+
+# Deployment-level values should be configured through environment variables
+# or deployment secrets instead of this file:
+#
+# MONITOR_DATA_DIR
+# MONITOR_DATABASE_URL
+# MONITOR_SECRET_KEY_PATH
+# MONITOR_BROWSER_EXECUTABLE
+# MONITOR_PORT
+# MONITOR_CORS_ORIGINS

@@ -2,6 +2,22 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-06-14 - Review Follow-Up P0 Additions
+
+Environment: local repository documentation update.
+
+Result:
+
+- Added permission confirmation pack.
+- Added compatible schema migration plan.
+- Added `monitor.example.yaml`.
+- Updated document routing, traceability, current state, decisions, and tasks.
+
+Limitations:
+
+- Confirmation items remain unresolved.
+- No code or runtime validation was performed.
+
 ## 2026-06-14 - P0 Specialist Documents Added
 
 Environment: local repository documentation update.

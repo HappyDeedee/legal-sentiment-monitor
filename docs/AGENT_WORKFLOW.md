@@ -18,12 +18,13 @@ Specialist document routing:
 
 - UI/page work: `docs/UI_UX_GUIDELINES.md` and
   `docs/PRODUCT_REQUIREMENTS.md`
-- user/permission work: `docs/ROLES_AND_PERMISSIONS.md`
+- user/permission work: `docs/ROLES_AND_PERMISSIONS.md` and
+  `docs/PERMISSIONS_CONFIRMATION.md`
 - account/login/profile/proxy work: `docs/ACCOUNT_ENVIRONMENT.md` and
   `docs/TEST_PLAN.md`
 - server/deployment work: `docs/TEST_PLAN.md` and future deployment docs
 - runtime setting work: `docs/SYSTEM_SETTINGS.md`
-- data-model work: `docs/DATA_MODEL.md`
+- data-model work: `docs/DATA_MODEL.md` and `docs/SCHEMA_MIGRATION.md`
 
 ## New Requirement Intake
 

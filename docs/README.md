@@ -15,10 +15,12 @@ Recommended reading order for contributors and coding agents:
 9. `ACCOUNT_ENVIRONMENT.md` - account, profile, proxy, login, and browser rules.
 10. `SYSTEM_SETTINGS.md` - runtime setting and configuration rules.
 11. `DATA_MODEL.md` - target schema and migration planning.
-12. `UI_UX_GUIDELINES.md` - UI and interaction rules.
-13. `AGENT_WORKFLOW.md` - how agents read and update documents.
-14. `TEST_PLAN.md` - acceptance and regression test plan.
-15. `TEST_RESULTS.md` - latest verification notes.
+12. `PERMISSIONS_CONFIRMATION.md` - user confirmation items for Phase 1.
+13. `SCHEMA_MIGRATION.md` - compatible schema migration plan.
+14. `UI_UX_GUIDELINES.md` - UI and interaction rules.
+15. `AGENT_WORKFLOW.md` - how agents read and update documents.
+16. `TEST_PLAN.md` - acceptance and regression test plan.
+17. `TEST_RESULTS.md` - latest verification notes.
 
 Existing crawler-origin documents remain in this directory for reference, but
 the files above are the active project governance documents for the monitoring

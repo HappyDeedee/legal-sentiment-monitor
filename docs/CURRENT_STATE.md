@@ -29,6 +29,8 @@ Phase 0 - Project Governance.
   decisions.
 - P0 implementation specifications for roles, account environment, runtime
   settings, and data model have been added as planning documents.
+- A permission confirmation pack, compatible schema migration plan, and runtime
+  configuration example have been added.
 
 ## In Progress
 
@@ -51,6 +53,8 @@ Phase 0 - Project Governance.
 - Several high-impact items are marked as Needs Confirmation in
   `CHANGE_REQUESTS.md`: workspace strategy, profile key details, lock timeout,
   profile migration, and settings storage.
+- Phase 1 remains blocked until permission/workspace/auth confirmation items in
+  `PERMISSIONS_CONFIRMATION.md` are resolved.
 
 ## Next Step
 
@@ -66,6 +70,8 @@ Implement Phase 1 and Phase 2 in small increments:
    permissions, deployment, account environment, security, or data model.
 7. confirm CR-006, CR-007, and CR-008 before coding Phase 1, Phase 2, Phase 5,
    or Phase 6.
+8. confirm `PERMISSIONS_CONFIRMATION.md` before implementing user login and
+   role enforcement.
 
 ## Latest Verification
 

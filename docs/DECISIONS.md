@@ -44,3 +44,5 @@ This file is append-only. Add new dated decisions instead of rewriting history.
 - P0 specialist documents may contain proposed implementation details, but
   sections marked as open confirmation items must be confirmed before coding
   the affected phase.
+- Schema migration should be compatible-first: add new fields and compatibility
+  resolvers before removing or replacing legacy fields such as `profile_path`.
