@@ -94,9 +94,15 @@ Verification states must be returned to the UI rather than bypassed.
 | waiting_confirm | scanned and waiting for mobile confirmation |
 | success | login succeeded and profile is persisted |
 | needs_verification | platform requires slider, captcha, SMS, or manual action |
-| expired | login session expired |
-| failed | login failed |
+| qrcode_failed | QR code could not be generated or the QR browser session disappeared |
+| timeout | login session expired or was replaced by a newer session |
+| platform_error | login verification or platform state check failed |
 | invalid | existing login state is no longer usable |
+
+Legacy login-session values are normalized for compatibility:
+`waiting_manual_browser` maps to `qrcode_failed`, `waiting_verification` maps
+to `needs_verification`, `scanned` maps to `waiting_confirm`, `expired` maps to
+`timeout`, and `failed` maps to `platform_error`.
 
 ## New Account Flow
 

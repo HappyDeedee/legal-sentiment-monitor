@@ -11,6 +11,48 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
   `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-14 - Phase 6 Server Login Flow Verified
+
+Environment: local worktree `E:\myproject\MediaCrawler-worktrees\v1-roadmap`
+using `uv run`, the monitoring SQLite database, and Node script parsing for the
+single-file frontend.
+
+Result:
+
+- Made server-side QR login the primary administrator account-login flow.
+- Added structured login-session states: `preparing`, `waiting_qrcode`,
+  `waiting_scan`, `waiting_confirm`, `success`, `needs_verification`,
+  `qrcode_failed`, `timeout`, and `platform_error`.
+- Normalized legacy login states for compatibility while returning structured
+  states to the API and frontend.
+- Kept login sessions tied to Phase 5 `profile_key` runtime paths, closed the
+  server browser after successful login, and re-checked existing profiles
+  before marking accounts active.
+- Hid local-window login controls and blocked the local-window login endpoint
+  when `MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=false`.
+- Updated deployment and account-environment documentation for the production
+  login boundary.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 212 passed, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "login_session or qrcode or phase_6 or local_login"`
+- Result: 34 passed, 178 deselected, 1 warning.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- `uv run python -m py_compile api/monitoring/database.py api/monitoring/login_qrcode.py api/monitoring/login_status.py api/routers/monitor.py`
+- Result: Python compile check passed.
+- Node syntax check for the `api/monitor_web/index.html` script block
+- Result: monitor web script parses.
+
+Limitations:
+
+- Phase 6 verification is local and mocked where platform login would require
+  real QR scanning. It does not replace Phase 8 server-like acceptance.
+- Service/container restart validation, no-local-Chrome production acceptance,
+  and real profile reuse across restart remain Phase 8 tasks.
+
 ## 2026-06-14 - Phase 5 Account Environment Verified
 
 Environment: local worktree `E:\myproject\MediaCrawler-worktrees\v1-roadmap`

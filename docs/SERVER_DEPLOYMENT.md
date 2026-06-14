@@ -58,10 +58,22 @@ MONITOR_ADMIN_EMAIL
 MONITOR_ADMIN_PASSWORD
 MONITOR_PORT
 MONITOR_CORS_ORIGINS
+MONITOR_LOGIN_QR_HEADLESS
+MONITOR_ALLOW_LOCAL_LOGIN_WINDOW
 ```
 
 Deployment variables that lock settings should be visible as read-only in the
 administrator settings UI.
+
+Production deployments should set:
+
+```text
+MONITOR_LOGIN_QR_HEADLESS=true
+MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=false
+```
+
+`MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=true` is only a development fallback for
+operators working on a desktop machine. It is not an acceptance path for V1.
 
 ## Browser Requirements
 
@@ -79,6 +91,9 @@ Acceptance requirements:
 
 If the platform requires manual verification, the server should return a
 structured `needs_verification` state instead of attempting bypass behavior.
+If QR generation fails, the server should return `qrcode_failed` and a
+customer-safe message. In production mode, local-window login endpoints should
+return a permission error and direct administrators back to the web QR flow.
 
 ## Container Checklist
 
@@ -108,7 +123,9 @@ The first container/server-like environment should verify:
 6. QR login can be completed through the web UI;
 7. profile survives service/container restart;
 8. scheduled task can run using the server-side profile;
-9. logs do not expose secrets, cookies, proxy credentials, or raw profile paths.
+9. local-window login fallback is disabled;
+10. logs do not expose secrets, cookies, proxy credentials, or raw profile
+    paths.
 
 ## systemd Checklist
 

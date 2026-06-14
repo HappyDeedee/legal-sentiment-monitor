@@ -15,6 +15,20 @@ from .account_environment import (
 )
 from .auth import generate_session_token, hash_password, hash_session_token, verify_password
 from .mediacrawler_login import LOGIN_TYPE_LABELS, PLATFORM_LOGIN_TYPES, SUPPORTED_MONITOR_PLATFORMS, get_mediacrawler_login_capability
+from .login_status import (
+    LOGIN_STATE_NEEDS_VERIFICATION,
+    LOGIN_STATE_PLATFORM_ERROR,
+    LOGIN_STATE_PREPARING,
+    LOGIN_STATE_QRCODE_FAILED,
+    LOGIN_STATE_SUCCESS,
+    LOGIN_STATE_TIMEOUT,
+    LOGIN_STATE_WAITING_CONFIRM,
+    LOGIN_STATE_WAITING_QRCODE,
+    LOGIN_STATE_WAITING_SCAN,
+    PENDING_LOGIN_STATES,
+    STRUCTURED_LOGIN_STATES,
+    normalize_login_state,
+)
 from .prompts import DEFAULT_PROMPT
 from .security import MONITOR_DATA_DIR, customer_safe_text, decrypt_secret, encrypt_secret, mask_secret, redact_sensitive
 from .settings import (
@@ -314,7 +328,7 @@ def init_db() -> None:
                 workspace_id INTEGER NOT NULL DEFAULT 1,
                 platform TEXT NOT NULL,
                 account_id INTEGER,
-                status TEXT NOT NULL DEFAULT 'waiting_manual_browser',
+                status TEXT NOT NULL DEFAULT 'preparing',
                 login_url TEXT NOT NULL DEFAULT '',
                 qr_image TEXT NOT NULL DEFAULT '',
                 profile_key TEXT NOT NULL DEFAULT '',
@@ -3133,12 +3147,13 @@ def update_social_account_login_state(account_id: int | None, status: str, messa
     if not account_id:
         return None
     now = utc_now()
-    if status == "success":
+    status = normalize_login_state(status)
+    if status == LOGIN_STATE_SUCCESS:
         account_status = "active"
         last_error = ""
         last_used_at = now
-    elif status in {"waiting_verification", "waiting_manual_browser", "failed", "expired"}:
-        account_status = "limited" if status == "waiting_verification" else "standby"
+    elif status in {LOGIN_STATE_NEEDS_VERIFICATION, LOGIN_STATE_QRCODE_FAILED, LOGIN_STATE_TIMEOUT, LOGIN_STATE_PLATFORM_ERROR}:
+        account_status = "limited" if status == LOGIN_STATE_NEEDS_VERIFICATION else "standby"
         last_error = customer_safe_text(message)
         last_used_at = None
     else:
@@ -3299,7 +3314,7 @@ def create_login_session(payload: dict[str, Any]) -> dict[str, Any]:
             (
                 platform,
                 account_id,
-                "waiting_manual_browser",
+                normalize_login_state(payload.get("status") or LOGIN_STATE_PREPARING),
                 login_url,
                 payload.get("qr_image") or "",
                 profile_key,
@@ -3355,8 +3370,10 @@ def latest_successful_login_session_at(platform: str) -> str:
 
 def expire_login_sessions_for_account(account_id: int | None, platform: str, profile_path: str = "", profile_key: str = "") -> list[int]:
     _validate_platform(platform)
-    clauses = ["platform=?", "status IN ('waiting_qrcode', 'waiting_verification', 'waiting_manual_browser', 'scanned')"]
+    pending_statuses = tuple(PENDING_LOGIN_STATES | {"waiting_qrcode", "waiting_verification", "waiting_manual_browser", "scanned"})
+    clauses = [f"platform=?", f"status IN ({','.join('?' for _ in pending_statuses)})"]
     params: list[Any] = [platform]
+    params.extend(pending_statuses)
     if account_id:
         clauses.append("account_id=?")
         params.append(account_id)
@@ -3376,14 +3393,19 @@ def expire_login_sessions_for_account(account_id: int | None, platform: str, pro
         if ids:
             placeholders = ",".join("?" for _ in ids)
             conn.execute(
-                f"UPDATE login_sessions SET status='expired', message=?, updated_at=? WHERE id IN ({placeholders})",
-                ["已被新的登录会话替换", now, *ids],
+                f"UPDATE login_sessions SET status=?, message=?, updated_at=? WHERE id IN ({placeholders})",
+                [LOGIN_STATE_TIMEOUT, "已被新的登录会话替换", now, *ids],
             )
     return ids
 
 
 def update_login_session_status(session_id: int, status: str, message: str = "", qr_image: str = "") -> dict[str, Any]:
-    allowed = {"waiting_qrcode", "waiting_verification", "waiting_manual_browser", "scanned", "success", "expired", "failed"}
+    status = normalize_login_state(status)
+    allowed = STRUCTURED_LOGIN_STATES | {
+        LOGIN_STATE_WAITING_QRCODE,
+        LOGIN_STATE_WAITING_SCAN,
+        LOGIN_STATE_WAITING_CONFIRM,
+    }
     if status not in allowed:
         raise ValueError("invalid login session status")
     with get_conn() as conn:

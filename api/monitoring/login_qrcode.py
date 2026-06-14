@@ -19,6 +19,16 @@ from .mediacrawler_login import (
     call_mediacrawler_check_login_state,
     get_mediacrawler_login_capability,
 )
+from .login_status import (
+    LOGIN_STATE_NEEDS_VERIFICATION,
+    LOGIN_STATE_PLATFORM_ERROR,
+    LOGIN_STATE_QRCODE_FAILED,
+    LOGIN_STATE_SUCCESS,
+    LOGIN_STATE_TIMEOUT,
+    LOGIN_STATE_WAITING_CONFIRM,
+    LOGIN_STATE_WAITING_QRCODE,
+    LOGIN_STATE_WAITING_SCAN,
+)
 from .normalizer import PLATFORM_LABELS
 from .security import redact_sensitive
 from .database import get_runtime_setting_value
@@ -115,6 +125,7 @@ async def start_qrcode_login_session_with_profile(
             await _close_context(playwright, context)
             return {
                 "ok": True,
+                "status": LOGIN_STATE_SUCCESS,
                 "already_logged_in": True,
                 "platform": platform,
                 "platform_label": PLATFORM_LABELS.get(platform, platform),
@@ -159,6 +170,7 @@ async def start_qrcode_login_session_with_profile(
         )
         return {
             "ok": True,
+            "status": LOGIN_STATE_WAITING_QRCODE,
             "platform": platform,
             "platform_label": PLATFORM_LABELS.get(platform, platform),
             "login_capability_source": "平台采集服务",
@@ -177,21 +189,38 @@ async def start_qrcode_login_session_with_profile(
 async def poll_qrcode_login_session(session_id: int) -> dict[str, Any]:
     handle = ACTIVE_LOGIN_SESSIONS.get(int(session_id))
     if not handle:
-        return {"active": False, "success": False, "message": "二维码浏览器会话不在运行，请重新生成二维码或打开登录窗口。"}
+        return {
+            "active": False,
+            "success": False,
+            "status": LOGIN_STATE_QRCODE_FAILED,
+            "message": "二维码浏览器会话不在运行，请重新生成二维码或打开登录窗口。",
+        }
     if _session_expired(handle):
         await close_qrcode_login_session(session_id)
-        return {"active": False, "success": False, "expired": True, "message": "二维码已过期，请重新生成。"}
+        return {
+            "active": False,
+            "success": False,
+            "expired": True,
+            "status": LOGIN_STATE_TIMEOUT,
+            "message": "二维码已过期，请重新生成。",
+        }
     try:
         success = await _is_logged_in(handle.platform, handle.context, handle.page, handle.login_baseline)
         if success:
             await close_qrcode_login_session(session_id)
-            return {"active": False, "success": True, "message": "登录成功，Profile 已保存。"}
+            return {
+                "active": False,
+                "success": True,
+                "status": LOGIN_STATE_SUCCESS,
+                "message": "登录成功，Profile 已保存。",
+            }
         login_adapter = _build_mediacrawler_login_adapter(handle.platform, handle.context, handle.page)
         qr_image = await _find_login_qrcode(handle.page, handle.platform, 5000, login_adapter)
         if qr_image:
             return {
                 "active": True,
                 "success": False,
+                "status": LOGIN_STATE_WAITING_SCAN,
                 "qr_image": _as_data_url(qr_image),
                 "message": "二维码已生成，请扫码登录。",
             }
@@ -209,15 +238,27 @@ async def poll_qrcode_login_session(session_id: int) -> dict[str, Any]:
             return {
                 "active": True,
                 "success": False,
+                "status": LOGIN_STATE_WAITING_SCAN,
                 "qr_image": _as_data_url(qr_image),
                 "message": "二维码已生成，请扫码登录。",
             }
         verification = await _detect_manual_verification(handle.platform, handle.page)
         if verification.get("needs_verification"):
             return await _manual_verification_poll_response(handle, verification)
-        return {"active": True, "success": False, "message": "等待扫码确认。"}
+        return {
+            "active": True,
+            "success": False,
+            "status": LOGIN_STATE_WAITING_CONFIRM,
+            "message": "等待扫码确认。",
+        }
     except Exception as exc:
-        return {"active": True, "success": False, "message": redact_sensitive(f"{type(exc).__name__}: {exc}")}
+        return {
+            "active": True,
+            "success": False,
+            "status": LOGIN_STATE_PLATFORM_ERROR,
+            "platform_error": True,
+            "message": redact_sensitive(f"{type(exc).__name__}: {exc}"),
+        }
 
 
 async def close_qrcode_login_session(session_id: int) -> None:
@@ -262,6 +303,7 @@ async def _manual_verification_response(
     )
     return {
         "ok": True,
+        "status": LOGIN_STATE_NEEDS_VERIFICATION,
         "needs_verification": True,
         "verification_type": (verification or {}).get("verification_type") or "manual",
         "verification_label": (verification or {}).get("verification_label") or "平台验证",
@@ -283,6 +325,7 @@ async def _manual_verification_poll_response(handle: LoginSessionHandle, verific
     return {
         "active": True,
         "success": False,
+        "status": LOGIN_STATE_NEEDS_VERIFICATION,
         "needs_verification": True,
         "verification_type": verification.get("verification_type") or "manual",
         "verification_label": verification.get("verification_label") or "平台验证",
@@ -589,6 +632,7 @@ def _failure(platform: str, command: dict[str, Any], message: str, diagnostic_im
     capability = MEDIACRAWLER_LOGIN_FLOWS.get(platform) or {}
     return {
         "ok": False,
+        "status": LOGIN_STATE_QRCODE_FAILED,
         "platform": platform,
         "platform_label": PLATFORM_LABELS.get(platform, platform),
         "login_capability_source": "平台采集服务",

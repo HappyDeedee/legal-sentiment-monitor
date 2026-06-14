@@ -83,3 +83,7 @@ short `Superseded by` note rather than deleting history.
   concurrent runs up to its configured limit.
 - Runtime Strategy is administrator-only and uses grouped table sections for
   Crawling, Login, Scheduler, and Retention settings.
+- Phase 6 makes server-side QR login the primary administrator login flow.
+  Local-window login is a development-only fallback controlled by
+  `MONITOR_ALLOW_LOCAL_LOGIN_WINDOW`; production deployments should set it to
+  false and use the web QR/status flow for acceptance.

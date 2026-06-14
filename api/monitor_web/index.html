@@ -756,7 +756,7 @@
                     <div id="login_panel_qrcode" class="login-mode-panel platform-login-panel active">
                       <div class="login-actions">
                         <button id="account_qrcode_button" class="primary" onclick="startLoginSessionFromForm()">生成二维码并登录</button>
-                        <button class="secondary" onclick="openCurrentAccountLoginBrowser()">打开登录窗口</button>
+                        <button id="account_local_login_button" class="secondary" onclick="openCurrentAccountLoginBrowser()">打开登录窗口</button>
                       </div>
                       <div id="account_login_prereq_hint" class="small" style="margin-top:8px"></div>
                       <div id="login_session_result" class="login-result"><div class="small">点击“生成登录二维码”后在这里扫码。</div></div>
@@ -1384,6 +1384,7 @@
     let aiProfileModelOptions = [];
     const emailTemplateCache = new Map();
     let platformLoginConfigCache = [];
+    let platformLoginCapabilityCache = [];
     let runPollTimer = null;
     let loginSessionPollTimer = null;
     let activeLoginSessionId = null;
@@ -1790,8 +1791,14 @@
     async function loadPlatformStatus(){ const data=await (await api('/platform-status')).json(); const html=platformStatusTable(data.platforms); document.getElementById('platform_status_table').innerHTML=html; }
     async function loadPlatformLoginConfigs(){
       if(!canMenu('platform_accounts')) return;
-      const data=await (await api('/platform-login-configs')).json();
+      const [configData, capabilityData]=await Promise.all([
+        (await api('/platform-login-configs')).json(),
+        (await api('/platform-login-capabilities')).json()
+      ]);
+      const data=configData||{};
       platformLoginConfigCache=data.configs||[];
+      platformLoginCapabilityCache=(capabilityData&&capabilityData.capabilities)||[];
+      updateJobBrowserModeOptions();
       renderLoginModePanel();
     }
     async function loadSchedulerStatus(){
@@ -1825,6 +1832,10 @@
       renderLoginModePanel();
     }
     async function openPlatformLoginBrowser(platform, accountId=null){
+      if(!localLoginWindowAllowed(platform)){
+        toast('生产模式已关闭本地登录窗口，请使用网页二维码完成登录');
+        return;
+      }
       const body=accountId ? JSON.stringify({account_id:accountId}) : JSON.stringify({});
       const res=await api('/platform-status/'+platform+'/login-browser',{method:'POST',body});
       if(!res.ok){ toast(await err(res)); return; }
@@ -1872,7 +1883,7 @@
       renderLoginSessionResult(data.session, data.capabilities);
       await loadLoginSessions(Number(account.id));
       pollLoginSession(Number(data.session.id));
-      toast(data.session.status === 'waiting_verification' ? '平台要求先完成验证，请按文字提示处理' : (data.session.qr_image ? '二维码已生成，系统正在自动确认登录结果' : '二维码未生成，请查看文字提示或使用网页登录窗口处理'));
+      toast(normalizeLoginSessionStatus(data.session.status) === 'needs_verification' ? '平台要求先完成验证，请按文字提示处理' : (data.session.qr_image ? '二维码已生成，系统正在自动确认登录结果' : '二维码未生成，请查看文字提示或使用网页登录窗口处理'));
     }
     async function loadLoginSessions(accountId=null){
       if(!canMenu('platform_accounts')) return;
@@ -1894,6 +1905,10 @@
       ) : '<div class="empty">当前账号还没有登录记录。</div>';
     }
     async function openLoginSessionBrowser(sessionId, platform, accountId=null){
+      if(!localLoginWindowAllowed(platform)){
+        toast('生产模式已关闭本地登录窗口，请使用网页二维码完成登录');
+        return;
+      }
       await openPlatformLoginBrowser(platform, accountId || null);
       if(sessionId) await pollLoginSession(Number(sessionId));
     }
@@ -1911,7 +1926,7 @@
         syncAccountFromResponse(data.account_status);
         renderLoginSessionResult(data.session, data.capabilities, data.platform_status);
         await loadPlatformStatus();
-        return data.session.status === 'success' || data.session.status === 'failed' || data.session.status === 'expired';
+        return isLoginSessionTerminal(data.session.status);
       };
       if(await update()){
         activeLoginSessionId=null;
@@ -1941,51 +1956,58 @@
         if(badge) badge.textContent='未开始';
         return;
       }
+      const status=normalizeLoginSessionStatus(session.status);
       if(badge){
-        badge.textContent=loginSessionText(session.status);
-        badge.className='status ' + (session.status==='success'?'ok':(session.status==='failed'||session.status==='expired'?'bad':'warn'));
+        badge.textContent=loginSessionText(status);
+        badge.className='status ' + loginSessionStatusClass(status);
       }
       const verificationLabel=capabilities.verification_label || '平台验证';
       const verificationDetail=capabilities.verification_detail ? `<div class="small">页面提示：${esc(capabilities.verification_detail)}</div>` : '';
-      const status=String(session.status||'');
       const pending=isLoginSessionPending(status);
+      const localLoginAction=localLoginButton('打开登录窗口处理', session.id, session.platform, session.account_id || null);
       let actionBlock='';
       if(status==='success'){
         actionBlock=`<div class="notice ok">
           <strong>登录成功，账号已保存</strong>
           <div class="small">当前账号已经可以被任务绑定使用。你可以关闭窗口，或继续在基础资料中维护备注、代理等信息。</div>
         </div>`;
-      } else if(status==='expired'){
+      } else if(status==='timeout'){
         actionBlock=`<div class="notice warn">
           <strong>二维码已过期</strong>
           <div class="small">请点击“重新生成二维码”后再次扫码。</div>
         </div>`;
-      } else if(status==='failed'){
+      } else if(status==='platform_error'){
         actionBlock=`<div class="notice warn">
-          <strong>登录失败</strong>
-          <div class="small">请根据提示重新生成二维码；如平台要求人工验证，可打开登录窗口处理。</div>
+          <strong>平台登录状态异常</strong>
+          <div class="small">请根据提示重新生成二维码；如平台要求人工验证，可按页面提示处理。</div>
         </div>`;
-      } else if(status==='waiting_verification'){
+      } else if(status==='needs_verification'){
         actionBlock=`<div class="notice warn">
           <strong>平台要求先完成${esc(verificationLabel)}</strong>
           <div class="small">请按照平台页面完成确认，完成后点击下方按钮继续确认。</div>
           ${verificationDetail}
           <div class="login-actions" style="margin-top:10px">
             <button class="secondary" onclick="pollLoginSession(${Number(session.id)})">我已处理，继续确认</button>
-            <button class="secondary" onclick="openLoginSessionBrowser(${Number(session.id)}, '${esc(session.platform)}', ${session.account_id ? Number(session.account_id) : 'null'})">打开登录窗口处理</button>
+            ${localLoginAction}
           </div>
         </div>`;
-      } else if(status==='waiting_qrcode' && capabilities.qr_image_supported && session.qr_image){
+      } else if(['waiting_qrcode','waiting_scan'].includes(status) && capabilities.qr_image_supported && session.qr_image){
         actionBlock=`<div style="text-align:center">
           <img alt="登录二维码" src="${esc(session.qr_image)}">
           <div class="small" style="margin-top:8px">请用 ${esc(formatPlatforms([session.platform]))} 手机端扫码。扫码后保持本窗口打开，系统会自动确认是否登录成功。</div>
         </div>`;
+      } else if(status==='waiting_confirm'){
+        actionBlock=`<div class="notice warn">
+          <strong>等待手机端确认</strong>
+          <div class="small">请在手机端完成登录确认。确认后系统会自动保存登录态。</div>
+        </div>`;
       } else {
+        const localFallback=localLoginButton('打开登录窗口', session.id, session.platform, session.account_id || null);
         actionBlock=`<div class="notice warn">
           <strong>当前没有拿到二维码</strong>
-          <div class="small">请根据文字提示处理；如果平台要求人工验证，可打开登录窗口完成。</div>
+          <div class="small">请根据文字提示重新生成二维码；如果平台要求人工验证，请按页面提示完成后继续确认。</div>
           <div class="login-actions" style="margin-top:10px">
-            <button class="secondary" onclick="openLoginSessionBrowser(${Number(session.id)}, '${esc(session.platform)}', ${session.account_id ? Number(session.account_id) : 'null'})">打开登录窗口</button>
+            ${localFallback}
             <button class="secondary" onclick="pollLoginSession(${Number(session.id)})">继续确认</button>
           </div>
         </div>`;
@@ -1999,7 +2021,7 @@
             <strong>${esc(formatPlatforms([session.platform]))} · ${esc(loginSessionText(status))}</strong>
             <div class="small">${esc(cleanCustomerText(session.message||''))}</div>
           </div>
-          <span class="status ${status==='success'?'ok':(status==='failed'||status==='expired'?'bad':'warn')}">${esc(loginSessionText(status))}</span>
+          <span class="status ${loginSessionStatusClass(status)}">${esc(loginSessionText(status))}</span>
         </div>
         ${loginFlowSteps(status)}
         ${pollingLine}
@@ -2462,11 +2484,19 @@
         toast('请先打开已有账号详情，或使用二维码登录完成后自动保存');
         return;
       }
+      if(!localLoginWindowAllowed(account.platform)){
+        toast('生产模式已关闭本地登录窗口，请使用网页二维码完成登录');
+        return;
+      }
       await openPlatformLoginBrowser(account.platform, Number(account.id));
     }
     async function openAccountLoginBrowser(id){
       const account=socialAccountCache.get(Number(id));
       if(!account){ toast('账号池已刷新，请重新选择'); loadAccountsPool(); return; }
+      if(!localLoginWindowAllowed(account.platform)){
+        toast('生产模式已关闭本地登录窗口，请使用网页二维码完成登录');
+        return;
+      }
       editSocialAccount(id, true);
       await openPlatformLoginBrowser(account.platform, Number(account.id));
     }
@@ -2562,6 +2592,35 @@
     function platformLoginConfig(platform){
       return (platformLoginConfigCache||[]).find(item=>item.platform===platform) || {};
     }
+    function platformLoginCapability(platform){
+      return (platformLoginCapabilityCache||[]).find(item=>item.platform===platform) || {};
+    }
+    function localLoginWindowAllowed(platform=''){
+      const caps=platform ? platformLoginCapability(platform) : {};
+      if(caps && Object.prototype.hasOwnProperty.call(caps,'local_login_window_allowed')){
+        return !!caps.local_login_window_allowed;
+      }
+      if((platformLoginCapabilityCache||[]).length){
+        return platformLoginCapabilityCache.some(item=>item.local_login_window_allowed !== false);
+      }
+      return true;
+    }
+    function localLoginButton(label, sessionId, platform, accountId=null){
+      if(!localLoginWindowAllowed(platform)) return '';
+      return `<button class="secondary" onclick="openLoginSessionBrowser(${Number(sessionId)}, '${esc(platform)}', ${accountId ? Number(accountId) : 'null'})">${esc(label)}</button>`;
+    }
+    function updateJobBrowserModeOptions(){
+      const select=document.getElementById('job_browser_mode');
+      if(!select) return;
+      const current=select.value || 'server_qrcode';
+      const allowLocal=localLoginWindowAllowed();
+      select.innerHTML=[
+        '<option value="server_qrcode">网页登录态 / 扫码</option>',
+        '<option value="profile">已有网页登录态</option>',
+        allowLocal ? '<option value="local_window">本地登录窗口</option>' : ''
+      ].join('');
+      select.value=(current==='local_window' && !allowLocal) ? 'server_qrcode' : current;
+    }
     function supportedSocialLoginTypes(platform){
       const cfg=platformLoginConfig(platform);
       const types=(cfg.supported_login_types || ['qrcode','cookie']).filter(t=>['qrcode','cookie'].includes(t));
@@ -2615,7 +2674,8 @@
       const capabilityHint=document.getElementById('login_capability_hint');
       if(capabilityHint){
         const supported=(cfg.supported_login_types||['qrcode','cookie']).filter(t=>['qrcode','cookie'].includes(t)).map(loginTypeLabel).join(' / ') || '扫码登录 / Cookie';
-        capabilityHint.textContent=`当前账号可使用：${supported}。登录过程中如平台需要额外确认，请按页面提示完成后继续确认。`;
+        const localWindowText=localLoginWindowAllowed(platform) ? '开发环境可打开本地登录窗口辅助处理。' : '生产模式不显示本地登录窗口入口。';
+        capabilityHint.textContent=`当前账号可使用：${supported}。网页登录二维码是主流程；如平台需要额外确认，请按页面提示完成后继续确认。${localWindowText}`;
       }
       renderSocialLoginMethodOptions(loginType, platform);
       ['qrcode','cookie'].forEach(type=>{
@@ -2629,7 +2689,9 @@
       const badge=document.getElementById('login_status_badge');
       const account=socialAccountCache.get(Number(val('social_account_id')||0));
       const qrButton=document.getElementById('account_qrcode_button');
+      const localButton=document.getElementById('account_local_login_button');
       if(qrButton) qrButton.textContent = account ? '重新生成二维码' : '生成二维码并登录';
+      if(localButton) localButton.style.display = localLoginWindowAllowed(platform) ? 'inline-flex' : 'none';
       if(badge){
         if(loginType==='qrcode'){
           badge.textContent = account ? poolStatusText(account.status) : '未保存';
@@ -4136,18 +4198,26 @@
     function loginTypeLabel(loginType){ return {qrcode:'扫码登录',cookie:'Cookie'}[loginType]||loginType||'-'; }
     function poolStatusText(status){ return {active:'可用',standby:'待机',limited:'受限',disabled:'停用'}[status]||status||'-'; }
     function poolStatusBadge(status){ const labels={active:'可用',standby:'待机',limited:'受限',disabled:'停用'}; const cls=status==='active'?'ok':(status==='limited'?'warn':(status==='disabled'?'bad':'')); return `<span class="status ${cls}">${esc(labels[status]||status||'-')}</span>`; }
-    function isLoginSessionPending(status){ return ['waiting_qrcode','waiting_verification','waiting_manual_browser','scanned'].includes(status); }
+    function normalizeLoginSessionStatus(status){
+      const aliases={waiting_verification:'needs_verification',waiting_manual_browser:'qrcode_failed',scanned:'waiting_confirm',expired:'timeout',failed:'platform_error'};
+      const value=String(status||'');
+      return aliases[value] || value || 'preparing';
+    }
+    function isLoginSessionPending(status){ return ['preparing','waiting_qrcode','waiting_scan','waiting_confirm','needs_verification'].includes(normalizeLoginSessionStatus(status)); }
+    function isLoginSessionTerminal(status){ return ['success','qrcode_failed','timeout','platform_error'].includes(normalizeLoginSessionStatus(status)); }
+    function loginSessionStatusClass(status){ const value=normalizeLoginSessionStatus(status); return value==='success'?'ok':(isLoginSessionTerminal(value)?'bad':'warn'); }
     function loginFlowSteps(status){
+      status=normalizeLoginSessionStatus(status);
       const steps=[
-        {label:'生成二维码', note:'创建账号登录会话', done:['waiting_qrcode','scanned','waiting_verification','success'].includes(status), active:status==='waiting_manual_browser'},
-        {label:'手机扫码确认', note:'等待平台返回结果', done:status==='success', active:['waiting_qrcode','scanned','waiting_verification'].includes(status)},
+        {label:'生成二维码', note:'创建账号登录会话', done:['waiting_qrcode','waiting_scan','waiting_confirm','needs_verification','success'].includes(status), active:status==='preparing'},
+        {label:'手机扫码确认', note:'等待平台返回结果', done:['waiting_confirm','success'].includes(status), active:['waiting_qrcode','waiting_scan','needs_verification'].includes(status)},
         {label:'保存登录态', note:'账号可被任务复用', done:status==='success', active:status==='success'}
       ];
-      if(status==='failed' || status==='expired') steps.forEach(step=>{ step.active=false; step.done=false; });
+      if(['qrcode_failed','timeout','platform_error'].includes(status)) steps.forEach(step=>{ step.active=false; step.done=false; });
       return `<div class="login-stepper">${steps.map((step,index)=>`<div class="login-step ${step.done?'done':(step.active?'active':'')}"><strong>${index+1}. ${esc(step.label)}</strong><span>${esc(step.note)}</span></div>`).join('')}</div>`;
     }
-    function loginSessionText(status){ return {waiting_qrcode:'等待扫码',waiting_verification:'等待验证',waiting_manual_browser:'等待登录窗口',scanned:'已扫码',success:'登录成功',expired:'已过期',failed:'失败'}[status]||status||'-'; }
-    function loginSessionBadge(status){ const cls=status==='success'?'ok':(status==='failed'||status==='expired'?'bad':'warn'); return `<span class="status ${cls}">${esc(loginSessionText(status))}</span>`; }
+    function loginSessionText(status){ const value=normalizeLoginSessionStatus(status); return {preparing:'准备中',waiting_qrcode:'等待二维码',waiting_scan:'等待扫码',waiting_confirm:'等待确认',needs_verification:'等待验证',qrcode_failed:'二维码失败',success:'登录成功',timeout:'已超时',platform_error:'平台异常'}[value]||value||'-'; }
+    function loginSessionBadge(status){ return `<span class="status ${loginSessionStatusClass(status)}">${esc(loginSessionText(status))}</span>`; }
     function defaultEmailTemplateHtml(){ return `<div style="font-family:Arial,'Microsoft YaHei',sans-serif;background:#f4f6fa;padding:24px;color:#172033">
   <div style="max-width:760px;margin:0 auto;background:#fff;border:1px solid #dde3ec;border-radius:8px;overflow:hidden">
     <div style="padding:20px 24px;border-bottom:1px solid #dde3ec;background:#111827;color:#fff">

@@ -119,13 +119,13 @@ and permission work.
 
 ## Phase 6 - Server Login Flow
 
-- [ ] Make server-side QR login the primary flow.
-- [ ] Return structured login states to the frontend.
-- [ ] Support waiting QR, waiting scan, waiting confirmation, success,
+- [x] Make server-side QR login the primary flow.
+- [x] Return structured login states to the frontend.
+- [x] Support waiting QR, waiting scan, waiting confirmation, success,
       verification required, QR failure, timeout, and platform error.
-- [ ] Persist profile after successful login.
-- [ ] Verify profile reuse after browser close.
-- [ ] Hide local-window login from production mode.
+- [x] Persist profile after successful login.
+- [x] Verify profile reuse after browser close.
+- [x] Hide local-window login from production mode.
 
 ## Phase 7 - Runs, Reports, And AI
 

@@ -97,9 +97,15 @@ expired lock before recovery verifies the owning run state.
 | database_url | deployment-level infrastructure |
 | encryption_key_path | security-sensitive |
 | browser_executable_path | deployment/runtime concern |
+| local_login_window_fallback | development-only login fallback |
 | service_port | process manager concern |
 | cors_origins | deployment/security concern |
 | worker_count | scheduler duplication risk |
+
+Local-window login fallback is controlled by the deployment environment
+variable `MONITOR_ALLOW_LOCAL_LOGIN_WINDOW`. It is not an editable runtime
+strategy setting because production acceptance must use the server-side web QR
+flow.
 
 ## Database Storage
 

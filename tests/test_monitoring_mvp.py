@@ -3276,7 +3276,7 @@ def test_login_sessions_are_persisted_for_server_side_login_flow():
         listed = list_login_sessions()
         summary = get_dashboard_summary()
 
-        assert session["status"] == "waiting_manual_browser"
+        assert session["status"] == "preparing"
         assert get_login_session(session["id"])["platform"] == "dy"
         assert listed[0]["id"] == session["id"]
         assert summary["login_sessions_total"] >= 1
@@ -3310,8 +3310,8 @@ def test_login_sessions_can_be_expired_for_same_account():
         expired = expire_login_sessions_for_account(10001, "dy", "browser_data/account_10001")
 
         assert expired == [first["id"]]
-        assert get_login_session(first["id"])["status"] == "expired"
-        assert get_login_session(other["id"])["status"] == "waiting_manual_browser"
+        assert get_login_session(first["id"])["status"] == "timeout"
+        assert get_login_session(other["id"])["status"] == "preparing"
     finally:
         _restore_table("login_sessions", snapshot)
 
@@ -3371,7 +3371,7 @@ def test_login_session_routes_create_pollable_session(monkeypatch):
         assert created["capabilities"]["qr_image_supported"] is True
         assert created["session"]["status"] == "waiting_qrcode"
         assert created["session"]["qr_image"].startswith("data:image")
-        assert polled["session"]["status"] == "waiting_qrcode"
+        assert polled["session"]["status"] == "waiting_scan"
         assert polled["platform_status"]["platform"] == "dy"
         assert polled["capabilities"]["login_capability_source"] == "平台采集服务"
         assert polled["capabilities"]["login_boundary"] == "复用平台采集服务登录能力"
@@ -3414,11 +3414,25 @@ def test_login_session_route_falls_back_when_qrcode_unavailable(monkeypatch):
         assert created["capabilities"]["qr_image_supported"] is False
         assert created["capabilities"]["diagnostic_image_supported"] is False
         assert created["capabilities"]["diagnostic_image"] == ""
-        assert created["session"]["status"] == "waiting_manual_browser"
+        assert created["session"]["status"] == "qrcode_failed"
         assert "网页登录窗口处理" in created["session"]["message"]
     finally:
         for table, snapshot in snapshots.items():
             _restore_table(table, snapshot)
+
+
+def test_phase_6_production_mode_hides_local_login_window(monkeypatch):
+    monkeypatch.setenv("MONITOR_ALLOW_LOCAL_LOGIN_WINDOW", "false")
+
+    caps = monitor_router._login_capability_response("dy")
+
+    assert caps["primary_login_flow"] == "server_qrcode"
+    assert caps["manual_browser_fallback"] is False
+    assert caps["local_login_window_allowed"] is False
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(monitor_router.platform_login_browser("dy", {}))
+    assert exc.value.status_code == 403
+    assert "网页登录二维码" in exc.value.detail
 
 
 def test_account_login_session_does_not_inherit_default_platform_success(monkeypatch, tmp_path):
@@ -3476,7 +3490,7 @@ def test_account_login_session_does_not_inherit_default_platform_success(monkeyp
         for table, snapshot in snapshots.items():
             _restore_table(table, snapshot)
 
-    assert polled["session"]["status"] == "waiting_manual_browser"
+    assert polled["session"]["status"] == "qrcode_failed"
     assert "TargetClosedError" in polled["session"]["message"]
     assert polled["platform_status"]["login_ready"] is True
 
@@ -3521,7 +3535,7 @@ def test_terminal_login_session_lookup_does_not_downgrade_checked_account(monkey
         for table, snapshot in snapshots.items():
             _restore_table(table, snapshot)
 
-    assert polled["session"]["status"] == "expired"
+    assert polled["session"]["status"] == "timeout"
     assert refreshed["status"] == "active"
     assert refreshed["last_error"] == ""
     assert refreshed["last_checked_at"]
@@ -3569,7 +3583,7 @@ def test_default_login_session_does_not_turn_manual_failure_into_success(monkeyp
     finally:
         _restore_table("login_sessions", snapshot)
 
-    assert polled["session"]["status"] == "waiting_manual_browser"
+    assert polled["session"]["status"] == "qrcode_failed"
     assert "TargetClosedError" in polled["session"]["message"]
     assert polled["platform_status"]["login_ready"] is True
 
@@ -3613,7 +3627,7 @@ def test_waiting_qrcode_session_does_not_inherit_platform_success(monkeypatch, t
     finally:
         _restore_table("login_sessions", snapshot)
 
-    assert polled["session"]["status"] == "waiting_qrcode"
+    assert polled["session"]["status"] == "waiting_scan"
     assert polled["session"]["qr_image"].startswith("data:image")
     assert polled["platform_status"]["login_ready"] is True
 
@@ -3695,7 +3709,7 @@ def test_login_session_route_maps_manual_verification_then_qrcode(monkeypatch):
         created = asyncio.run(monitor_router.create_platform_login_session({"platform": "ks", "account_id": account["id"]}))
         polled = asyncio.run(monitor_router.login_session(int(created["session"]["id"])))
 
-        assert created["session"]["status"] == "waiting_verification"
+        assert created["session"]["status"] == "needs_verification"
         assert created["capabilities"]["qr_image_supported"] is False
         assert created["capabilities"]["verification_image_supported"] is False
         assert created["capabilities"]["verification_image"] == ""
@@ -3703,7 +3717,7 @@ def test_login_session_route_maps_manual_verification_then_qrcode(monkeypatch):
         assert created["capabilities"]["verification_label"] == "滑块验证"
         assert "拖动滑块" in created["capabilities"]["verification_detail"]
         assert "滑块" in created["session"]["message"]
-        assert polled["session"]["status"] == "waiting_qrcode"
+        assert polled["session"]["status"] == "waiting_scan"
         assert polled["session"]["qr_image"].startswith("data:image")
         assert polled["capabilities"]["qr_image_supported"] is True
     finally:
@@ -3850,7 +3864,7 @@ def test_login_session_route_keeps_manual_verification_status_when_window_is_ope
 
         polled = asyncio.run(monitor_router.login_session(int(session["id"])))
 
-        assert polled["session"]["status"] == "waiting_verification"
+        assert polled["session"]["status"] == "needs_verification"
         assert "短信验证码" in polled["session"]["message"]
         assert polled["capabilities"]["verification_type"] == "sms"
         assert polled["capabilities"]["verification_label"] == "短信验证码"
@@ -4307,7 +4321,7 @@ def test_login_session_success_requires_account_check(monkeypatch):
 
         created = asyncio.run(monitor_router.create_platform_login_session({"platform": "xhs", "account_id": account["id"]}))
 
-        assert created["session"]["status"] == "failed"
+        assert created["session"]["status"] == "platform_error"
         assert "重新扫码登录" in created["session"]["message"]
         assert created["account_status"]["status"] == "limited"
     finally:
@@ -6580,7 +6594,8 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "startLoginSessionForAccount" in page
     assert "openCurrentAccountLoginBrowser" in page
     assert "openLoginSessionBrowser" in page
-    assert "session.account_id ? Number(session.account_id) : 'null'" in page
+    assert "localLoginWindowAllowed" in page
+    assert "account_local_login_button" in page
     assert "打开登录窗口" in page
     assert "打开登录窗口兜底" not in page
     assert "先按平台和状态定位账号资源" not in page
@@ -6636,7 +6651,9 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "生成二维码" in page
     assert "手机扫码确认" in page
     assert "保存登录态" in page
-    assert "waiting_verification" in page
+    assert "needs_verification" in page
+    assert "waiting_scan" in page
+    assert "waiting_confirm" in page
     assert "等待验证" in page
     assert "平台要求先完成验证，请按文字提示处理" in page
     assert "平台验证页面截图" not in page
@@ -6689,7 +6706,7 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "打开登录窗口" in page
     assert "用于默认登录态维护；账号资源请在账号详情里发起登录。" not in page
     assert "平台默认登录态" not in page
-    assert "登录过程中如平台需要额外确认，请按页面提示完成后继续确认。" in page
+    assert "网页登录二维码是主流程" in page
     assert "如平台需要额外确认，系统会提示下一步操作。" in page
     assert "login-browser" in page
     assert "openPlatformLoginBrowser" in page

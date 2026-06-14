@@ -9,6 +9,7 @@ and verified. Phase 1 - Users And Permissions is complete and verified. Phase
 2 - System Settings Center is complete and verified. Phase 3 - Administrator
 Resource Center is complete and verified. Phase 4 - Normal User Task Wizard is
 complete and verified. Phase 5 - Account Environment is complete and verified.
+Phase 6 - Server Login Flow is complete and verified locally.
 The active SQLite schema now provides the foundation tables and columns
 required before later implementation work, and the web/API layer now has
 session login, administrator/normal-user roles, menu visibility,
@@ -16,7 +17,9 @@ owner-scoped business data access, administrator-managed runtime strategy
 settings, administrator resource pages with consistent summary, toolbar, modal,
 and test interactions, a normal-user task wizard with administrator-only
 advanced options, and profile-key based account environments with persisted
-account/profile/proxy locks and stale-run recovery.
+account/profile/proxy locks, stale-run recovery, server-side QR login as the
+primary administrator flow, structured login states, profile persistence/reuse
+checks, and deployment gating for local-window login fallback.
 
 ## Implementation Status
 
@@ -27,12 +30,13 @@ account/profile/proxy locks and stale-run recovery.
 - Phase 3 - Administrator Resource Center: complete and verified.
 - Phase 4 - Normal User Task Wizard: complete and verified.
 - Phase 5 - Account Environment: complete and verified.
-- Phase 6 - Server Login Flow: next unblocked implementation phase.
+- Phase 6 - Server Login Flow: complete and verified locally.
+- Phase 7 - Runs, Reports, And AI: next unblocked implementation phase.
 - Phase 5/6 - Account Environment and Server Login: profile key, timeout, and
-  lock-storage decisions are accepted; Phase 5 account environment runtime is
-  complete, and Phase 6 login-flow changes can now begin.
+  lock-storage decisions are accepted; Phase 5 account environment runtime and
+  Phase 6 login-flow runtime are complete.
 
-Phase 6 can begin next. Phase 7-9 implementation must still proceed in order
+Phase 7 can begin next. Phase 8-9 implementation must still proceed in order
 and must not bypass unfinished earlier phases.
 
 ## Completed
@@ -112,10 +116,19 @@ and must not bypass unfinished earlier phases.
   `social_accounts` fields, proxy concurrency uses `resource_locks`, run
   cleanup releases locks, and startup/scheduler recovery reconciles timed-out
   running runs before releasing persisted locks.
+- Phase 6 server login flow has been implemented:
+  administrator account login now starts from server-side QR sessions by
+  default, login APIs and the frontend use structured states (`preparing`,
+  `waiting_qrcode`, `waiting_scan`, `waiting_confirm`, `success`,
+  `needs_verification`, `qrcode_failed`, `timeout`, and `platform_error`),
+  legacy login states are normalized for compatibility, successful login is
+  re-checked before the account is marked active, profile-key paths are reused
+  after the browser session closes, and `MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=false`
+  hides and blocks local-window login fallback for production mode.
 
 ## In Progress
 
-- Phase 6 - Server Login Flow is ready to start.
+- Phase 7 - Runs, Reports, And AI is ready to start.
 
 ## Known Risks
 
@@ -125,43 +138,43 @@ and must not bypass unfinished earlier phases.
   paths.
 - Current system is closer to a single-team MVP than a production multi-user
   system.
-- Server-side QR login and profile persistence need container/server validation.
+- Server-side QR login and profile persistence have local automated coverage,
+  but still need container/server validation before production acceptance.
 - The newly added product documents are initial versions and should be refined
   during implementation.
 - Profile migration strategy has been clarified: existing low-volume
   `profile_path` accounts do not need long-term compatibility and can be reset
   or re-logged in under the new `profile_key` model.
-- Phase 6 still needs the primary server-side QR login state machine and
-  browser-session UX; Phase 5 only aligned account profile path resolution,
-  proxy reuse, locking, and recovery primitives.
 - Phase 2 retention settings are configurable and stored, but automated
   retention cleanup jobs remain for later operations work.
+- Production acceptance still requires Phase 8 server-like validation with no
+  dependency on the operator's local Chrome.
 
 ## Next Step
 
-Implement Phase 6 in small increments:
+Implement Phase 7 in small increments:
 
-1. make server-side QR login the primary administrator flow;
-2. return structured login states to the frontend;
-3. support waiting QR, waiting scan, waiting confirmation, success,
-   verification required, QR failure, timeout, and platform error states;
-4. persist the profile after successful login using the Phase 5
-   `profile_key` runtime path;
-5. verify profile reuse after browser close;
-6. hide local-window login from production mode;
-7. for every new requirement, add or update `CHANGE_REQUESTS.md`,
-   `TASKS.md`, `TRACEABILITY.md`, and `TEST_RESULTS.md`;
-8. ask for user confirmation before accepting ambiguous assumptions in
-   permissions, deployment, account environment, security, or data model.
+1. ensure tasks run and reports generate when AI is missing or fails;
+2. mark AI failures as manual-review leads instead of blocking collection;
+3. ensure missing or failing email does not block report generation;
+4. keep report wording as suspected negative leads;
+5. verify report preview switching across reports;
+6. verify run logs can be refreshed, copied, and downloaded;
+7. update `TASKS.md`, `CURRENT_STATE.md`, `TEST_RESULTS.md`, and
+   `TRACEABILITY.md` after each validated checkpoint.
 
 ## Latest Verification
 
-Phase 5 local verification passed on 2026-06-14:
+Phase 6 local verification passed on 2026-06-14:
 
 - `uv run python -m pytest tests/test_monitoring_mvp.py`
-- Result: 211 passed, 3 warnings.
+- Result: 212 passed, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "login_session or qrcode or phase_6 or local_login"`
+- Result: 34 passed, 178 deselected, 1 warning.
 - `uv run python scripts/check_docs.py`
 - Result: PASS docs consistency.
+- `uv run python -m py_compile api/monitoring/database.py api/monitoring/login_qrcode.py api/monitoring/login_status.py api/routers/monitor.py`
+- Result: Python compile check passed.
 - Node syntax check for `api/monitor_web/index.html` script block
 - Result: monitor web script parses.
 

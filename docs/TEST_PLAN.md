@@ -91,6 +91,9 @@ Use the standard permission test data:
 
 - QR login is initiated from the web UI.
 - QR code or structured status is returned to the web UI.
+- Structured login-session statuses include `preparing`, `waiting_qrcode`,
+  `waiting_scan`, `waiting_confirm`, `success`, `needs_verification`,
+  `qrcode_failed`, `timeout`, and `platform_error`.
 - Scanning succeeds without using the operator's local Chrome.
 - Verification states are returned when the platform requires captcha, slider,
   SMS, or manual confirmation.
@@ -101,6 +104,8 @@ Use the standard permission test data:
   server/container deployment.
 - Server deployment sets `MONITOR_LOGIN_QR_HEADLESS=true` or equivalent
   production behavior.
+- Server deployment sets `MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=false`, and the
+  local-window login endpoint is unavailable in production mode.
 - QR login works in a container/server-like environment without X11 or desktop
   GUI dependency.
 
