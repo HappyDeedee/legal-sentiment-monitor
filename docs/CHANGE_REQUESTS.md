@@ -190,7 +190,7 @@ Reason:
 
 Without this, Phase 1 requires guessing user, role, and workspace behavior.
 
-Status: Needs Confirmation
+Status: Accepted
 
 Related tasks:
 
@@ -198,9 +198,13 @@ Related tasks:
 
 Acceptance:
 
-- user confirms V1 workspace strategy;
-- user confirms initial administrator creation flow;
-- user confirms disabled-user task behavior.
+- V1 uses one default workspace;
+- initial administrator is created through environment bootstrap;
+- normal users can delete own non-running tasks;
+- normal users can resend own reports;
+- disabled users cannot log in but existing tasks continue under workspace
+  ownership;
+- MVP includes minimal audit log.
 
 ## CR-007 - Account Environment And Profile Design
 
@@ -252,7 +256,7 @@ Reason:
 Runtime settings are currently spread across code defaults and environment
 variables.
 
-Status: Needs Confirmation
+Status: Accepted
 
 Related tasks:
 
@@ -260,9 +264,9 @@ Related tasks:
 
 Acceptance:
 
-- user confirms configuration precedence;
-- user confirms flexible key-value vs typed settings table;
-- user confirms whether audit logs are required in MVP.
+- user confirms flexible key-value settings table;
+- MVP audit log direction is confirmed for security-sensitive administrator
+  actions.
 
 ## CR-009 - Permission Confirmation Pack
 

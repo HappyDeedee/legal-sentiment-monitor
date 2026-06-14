@@ -8,6 +8,7 @@ Status values:
 - Recommended: proposed default for V1.
 - Alternative: valid option with tradeoffs.
 - Needs Confirmation: do not implement until user confirms.
+- Accepted: user has confirmed the option.
 
 ## C-001 - Workspace Strategy
 
@@ -47,7 +48,11 @@ Tradeoff:
 
 - More complete SaaS foundation, but increases Phase 1 complexity.
 
-Status: Needs Confirmation
+Confirmed:
+
+- Use the recommended single-workspace V1 strategy.
+
+Status: Accepted
 
 ## C-002 - Normal User Task Deletion
 
@@ -65,7 +70,13 @@ Alternative:
 
 - Normal users can only pause tasks; administrators delete tasks.
 
-Status: Needs Confirmation
+Confirmed:
+
+- Normal users can delete their own non-running tasks.
+- Running tasks must be stopped before deletion.
+- Historical runs and reports remain visible.
+
+Status: Accepted
 
 ## C-003 - Normal User Report Resend
 
@@ -83,7 +94,14 @@ Alternative:
 
 - Only administrators can resend emails.
 
-Status: Needs Confirmation
+Confirmed:
+
+- Normal users can resend their own reports when email configuration is
+  available.
+- Administrators can resend all workspace reports.
+- Resend actions should be logged.
+
+Status: Accepted
 
 ## C-004 - Initial Administrator Creation
 
@@ -111,7 +129,12 @@ Tradeoff:
 
 - Easier for non-technical users, but riskier if exposed publicly before setup.
 
-Status: Needs Confirmation
+Confirmed:
+
+- Use environment bootstrap with `MONITOR_ADMIN_EMAIL` and
+  `MONITOR_ADMIN_PASSWORD`.
+
+Status: Accepted
 
 ## C-005 - Authentication Strategy
 
@@ -137,7 +160,11 @@ Tradeoff:
 
 - Better for external API clients, but adds token lifecycle complexity.
 
-Status: Needs Confirmation
+Confirmed:
+
+- Use session-based authentication with secure HTTP-only cookie for V1.
+
+Status: Accepted
 
 ## C-006 - Disabled User Task Behavior
 
@@ -155,7 +182,13 @@ Alternative:
 
 - Automatically pause all tasks owned by the disabled user.
 
-Status: Needs Confirmation
+Confirmed:
+
+- Disabled users cannot log in.
+- Existing enabled tasks continue under workspace ownership.
+- Administrators can pause, transfer, or delete them.
+
+Status: Accepted
 
 ## C-007 - Audit Log Timing
 
@@ -176,4 +209,9 @@ Alternative:
 
 - Defer full audit log to Phase 9.
 
-Status: Needs Confirmation
+Confirmed:
+
+- Include minimal audit log in MVP for security-sensitive administrator
+  actions.
+
+Status: Accepted

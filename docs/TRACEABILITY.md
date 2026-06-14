@@ -9,9 +9,9 @@ Use this file to connect requirements, tasks, code areas, and tests.
 | CR-003 | Agent workflow | Phase 0 | docs, AGENTS.md | Documentation review | Implemented |
 | CR-004 | Agent confirmation gate | Phase 0 | AGENTS.md, docs/AGENT_WORKFLOW.md | Documentation review | Implemented |
 | CR-005 | P0 implementation specifications | Phase 0 | docs/ROLES_AND_PERMISSIONS.md, docs/ACCOUNT_ENVIRONMENT.md, docs/SYSTEM_SETTINGS.md, docs/DATA_MODEL.md | Documentation review | Implemented |
-| CR-006 | User and workspace permissions | Phase 1 | docs/ROLES_AND_PERMISSIONS.md | Permission tests | Needs Confirmation |
+| CR-006 | User and workspace permissions | Phase 1 | docs/ROLES_AND_PERMISSIONS.md, docs/PERMISSIONS_CONFIRMATION.md | Permission tests | Accepted |
 | CR-007 | Account environment and profile design | Phase 5, Phase 6 | docs/ACCOUNT_ENVIRONMENT.md, docs/DATA_MODEL.md | Account/login/server tests | Needs Confirmation |
-| CR-008 | Runtime settings specification | Phase 2 | docs/SYSTEM_SETTINGS.md | Runtime settings tests | Needs Confirmation |
+| CR-008 | Runtime settings specification | Phase 2 | docs/SYSTEM_SETTINGS.md | Runtime settings tests | Accepted |
 | CR-009 | Permission confirmation pack | Phase 1 | docs/PERMISSIONS_CONFIRMATION.md | Documentation review | Implemented |
 | CR-010 | Compatible schema migration plan | Phase 1, Phase 5 | docs/SCHEMA_MIGRATION.md, docs/DATA_MODEL.md | Migration tests | Implemented |
 | CR-011 | Runtime config example | Phase 0, Phase 2 | monitor.example.yaml, docs/SYSTEM_SETTINGS.md | Configuration loading tests | Implemented |

@@ -48,3 +48,14 @@ This file is append-only. Add new dated decisions instead of rewriting history.
   current account count is low and the project is still in agile development,
   existing profile-path-based accounts can be reset or re-logged in under the
   new `profile_key` model.
+- V1 uses one default workspace, with `workspace_id` reserved in data models
+  but no visible multi-workspace management UI.
+- V1 uses session-based authentication with secure HTTP-only cookie.
+- Initial administrator creation uses environment bootstrap variables.
+- Normal users can delete their own non-running tasks and resend their own
+  reports.
+- Disabled users cannot log in, while their existing enabled tasks continue
+  under workspace ownership until an administrator changes them.
+- MVP includes minimal audit logging for security-sensitive administrator
+  actions.
+- Runtime settings use a flexible key-value `system_settings` table in V1.

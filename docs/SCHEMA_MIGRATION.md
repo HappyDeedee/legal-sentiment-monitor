@@ -21,6 +21,12 @@ data during the first migration step.
 
 This phase should happen before full Phase 1 development.
 
+Confirmed:
+
+- Phase 0.5 can proceed using compatibility-safe schema additions before full
+  Phase 1 feature implementation.
+- Do not remove old fields in the first schema foundation step.
+
 ### Step 1 - Add Foundation Tables
 
 Create:
@@ -156,9 +162,13 @@ After migration:
 
 ## Blocking Decisions
 
-Before implementation, confirm:
+Before implementation, still confirm:
 
-- workspace strategy;
-- authentication strategy;
-- lock table vs lock fields;
-- audit log MVP scope.
+- lock table vs lock fields.
+
+Confirmed:
+
+- workspace strategy uses one default workspace;
+- authentication strategy uses session-based auth;
+- profile migration uses the direct new `profile_key` model;
+- minimal audit log is included in MVP.

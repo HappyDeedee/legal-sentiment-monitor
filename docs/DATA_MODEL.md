@@ -19,7 +19,7 @@ V1 should support:
 
 ## Workspace Strategy
 
-Proposed V1 strategy, pending user confirmation:
+Confirmed V1 strategy:
 
 - create one default workspace;
 - add `workspace_id` to business tables now;
@@ -52,9 +52,10 @@ created_at
 updated_at
 ```
 
-Open confirmation:
+Confirmed authentication direction:
 
-- Use email/password session login for V1, or another authentication method?
+- use email/password login with session-based authentication for V1;
+- use secure HTTP-only cookie for the browser session.
 
 ### monitor_jobs
 
@@ -188,8 +189,8 @@ send_status
 - Do not expose legacy paths in UI.
 - Keep secret values encrypted.
 
-## Open Confirmation Items
+## Confirmed Items
 
-- Is V1 single-workspace multi-user, or should multiple workspaces be visible?
-- Should normal-user deletion of tasks be allowed?
-- Should audit log be implemented in the first permission phase or later?
+- V1 uses one default workspace.
+- Normal users can delete their own non-running tasks.
+- MVP includes minimal audit log for security-sensitive administrator actions.

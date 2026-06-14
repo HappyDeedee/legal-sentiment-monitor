@@ -56,8 +56,8 @@ Phase 0 - Project Governance.
 - Profile migration strategy has been clarified: existing low-volume
   `profile_path` accounts do not need long-term compatibility and can be reset
   or re-logged in under the new `profile_key` model.
-- Phase 1 remains blocked until permission/workspace/auth confirmation items in
-  `PERMISSIONS_CONFIRMATION.md` are resolved.
+- Phase 1 permission/workspace/auth confirmation items have been accepted using
+  the recommended V1 options.
 
 ## Next Step
 
@@ -71,12 +71,10 @@ Implement Phase 1 and Phase 2 in small increments:
    `TASKS.md`, `TRACEABILITY.md`, and `TEST_RESULTS.md`.
 6. ask for user confirmation before accepting ambiguous assumptions in
    permissions, deployment, account environment, security, or data model.
-7. confirm CR-006, CR-007, and CR-008 before coding Phase 1, Phase 2, Phase 5,
-   or Phase 6.
-8. confirm `PERMISSIONS_CONFIRMATION.md` before implementing user login and
-   role enforcement.
-9. confirm whether C-001 single-workspace V1 is accepted after reviewing the
-   workspace explanation.
+7. Phase 1 can proceed after implementation tasks are narrowed to the accepted
+   V1 permission model.
+8. For Phase 5/6, still confirm profile key format and lock timeout details
+   before coding the account/profile locking layer.
 
 ## Latest Verification
 

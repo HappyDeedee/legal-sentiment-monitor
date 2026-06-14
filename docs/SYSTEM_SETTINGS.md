@@ -53,7 +53,11 @@ not be editable in V1.
 | cors_origins | deployment/security concern |
 | worker_count | scheduler duplication risk |
 
-## Proposed Database Storage
+## Database Storage
+
+Confirmed V1 direction:
+
+- use a flexible key-value `system_settings` table.
 
 Target table:
 
@@ -70,13 +74,8 @@ system_settings
   updated_at
 ```
 
-Alternative:
-
-- one strongly typed `runtime_settings` row.
-
-Open confirmation:
-
-- Prefer flexible key-value settings or strongly typed table fields?
+Strongly typed runtime settings can be reconsidered later if the settings model
+stabilizes and needs stricter schema enforcement.
 
 ## monitor.yaml Shape
 
@@ -117,4 +116,3 @@ Runtime setting changes should be auditable in production.
 Open confirmation:
 
 - Is audit log required in MVP, or can it be Phase 9?
-

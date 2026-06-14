@@ -2,6 +2,24 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-06-14 - Permission Confirmation Accepted
+
+Environment: local repository documentation update.
+
+Result:
+
+- Marked permission confirmation items C-001 to C-007 as accepted.
+- Confirmed single-workspace V1, session auth, environment bootstrap admin,
+  normal-user task deletion, normal-user report resend, disabled-user task
+  behavior, and minimal MVP audit log.
+- Confirmed flexible key-value system settings table.
+
+Limitations:
+
+- Profile key format and lock timeout details still need confirmation before
+  coding the account/profile locking layer.
+- No code or runtime validation was performed.
+
 ## 2026-06-14 - Profile Migration Decision Updated
 
 Environment: local repository documentation update.
