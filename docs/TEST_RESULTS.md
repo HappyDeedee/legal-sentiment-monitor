@@ -2,6 +2,23 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-06-14 - P0 Specialist Documents Added
+
+Environment: local repository documentation update.
+
+Result:
+
+- Added roles and permissions specification.
+- Added account environment specification.
+- Added runtime settings specification.
+- Added target data model planning document.
+- Updated document routing and traceability.
+
+Limitations:
+
+- Several high-impact assumptions remain marked as needing user confirmation.
+- No application runtime validation was performed.
+
 ## 2026-06-14 - Confirmation Gate Added
 
 Environment: local repository documentation update.

@@ -18,6 +18,10 @@ Status legend:
 - [x] Add requirement/task/test traceability matrix.
 - [x] Add detailed agent workflow document.
 - [x] Add confirmation gate for ambiguous high-impact requirements.
+- [x] Add roles and permissions specification.
+- [x] Add account environment specification.
+- [x] Add runtime settings specification.
+- [x] Add target data model planning document.
 - [ ] Add `monitor.example.yaml` after the runtime settings schema is finalized.
 - [ ] Add a documentation check script after the first implementation phase.
 

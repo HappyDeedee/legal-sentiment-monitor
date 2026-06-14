@@ -5,6 +5,7 @@ Record every meaningful new requirement here before implementation.
 Status values:
 
 - Proposed
+- Needs Confirmation
 - Accepted
 - In Progress
 - Implemented
@@ -135,3 +136,129 @@ Acceptance:
   requirements;
 - assumptions can be drafted only when marked as proposed or needing
   confirmation.
+
+## CR-005 - P0 Implementation Specification Documents
+
+Date: 2026-06-14
+
+Source: external documentation review
+
+Module: project governance
+
+Requirement:
+
+Create P0 specialist documents for roles and permissions, account environment,
+system settings, and data model so coding agents do not need to guess critical
+implementation details.
+
+Reason:
+
+The review found that the project governance loop exists, but implementation
+specifications for Phase 1, Phase 2, and Phase 5 were missing or too high-level.
+
+Status: Implemented
+
+Related tasks:
+
+- Phase 0 in `TASKS.md`
+- Phase 1 in `TASKS.md`
+- Phase 2 in `TASKS.md`
+- Phase 5 in `TASKS.md`
+
+Acceptance:
+
+- `ROLES_AND_PERMISSIONS.md` exists;
+- `ACCOUNT_ENVIRONMENT.md` exists;
+- `SYSTEM_SETTINGS.md` exists;
+- `DATA_MODEL.md` exists;
+- open assumptions are marked as needing user confirmation.
+
+## CR-006 - User And Workspace Permission Design
+
+Date: 2026-06-14
+
+Source: external documentation review
+
+Module: users and permissions
+
+Requirement:
+
+Define role permissions, workspace data scope, menu visibility, API access
+policy, and user lifecycle before implementing Phase 1.
+
+Reason:
+
+Without this, Phase 1 requires guessing user, role, and workspace behavior.
+
+Status: Needs Confirmation
+
+Related tasks:
+
+- Phase 1 in `TASKS.md`
+
+Acceptance:
+
+- user confirms V1 workspace strategy;
+- user confirms initial administrator creation flow;
+- user confirms disabled-user task behavior.
+
+## CR-007 - Account Environment And Profile Design
+
+Date: 2026-06-14
+
+Source: external documentation review
+
+Module: account environment
+
+Requirement:
+
+Define platform account, profile, proxy, browser session, login session, lock,
+and migration behavior before implementing Phase 5 and Phase 6.
+
+Reason:
+
+The current code still has legacy `profile_path` concepts, while product
+decisions require stable `profile_key` and hidden real paths.
+
+Status: Needs Confirmation
+
+Related tasks:
+
+- Phase 5 in `TASKS.md`
+- Phase 6 in `TASKS.md`
+
+Acceptance:
+
+- user confirms profile key format;
+- user confirms lock timeout behavior;
+- user confirms legacy profile migration approach.
+
+## CR-008 - Runtime Settings Specification
+
+Date: 2026-06-14
+
+Source: external documentation review
+
+Module: system settings
+
+Requirement:
+
+Define runtime settings, configuration precedence, editable fields, locked
+fields, validation ranges, and config-file shape before implementing Phase 2.
+
+Reason:
+
+Runtime settings are currently spread across code defaults and environment
+variables.
+
+Status: Needs Confirmation
+
+Related tasks:
+
+- Phase 2 in `TASKS.md`
+
+Acceptance:
+
+- user confirms configuration precedence;
+- user confirms flexible key-value vs typed settings table;
+- user confirms whether audit logs are required in MVP.

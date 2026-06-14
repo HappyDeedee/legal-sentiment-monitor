@@ -20,9 +20,11 @@ Read the relevant specialist document before touching a related area:
 
 - UI changes: `docs/UI_UX_GUIDELINES.md`
 - Product/page behavior: `docs/PRODUCT_REQUIREMENTS.md`
-- Role or permission changes: `docs/GOAL.md` and `docs/TASKS.md`
+- Role or permission changes: `docs/ROLES_AND_PERMISSIONS.md`
+- Account, profile, proxy, or login changes: `docs/ACCOUNT_ENVIRONMENT.md`
+- Data model changes: `docs/DATA_MODEL.md`
 - Server deployment or browser login changes: `docs/TEST_PLAN.md`
-- System setting changes: `docs/GOAL.md`
+- System setting changes: `docs/SYSTEM_SETTINGS.md`
 - Agent process details: `docs/AGENT_WORKFLOW.md`
 
 ## Product Boundary

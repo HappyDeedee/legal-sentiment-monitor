@@ -8,6 +8,10 @@ Use this file to connect requirements, tasks, code areas, and tests.
 | CR-002 | Product requirements | Phase 0 | docs/PRODUCT_REQUIREMENTS.md | Documentation review | Implemented |
 | CR-003 | Agent workflow | Phase 0 | docs, AGENTS.md | Documentation review | Implemented |
 | CR-004 | Agent confirmation gate | Phase 0 | AGENTS.md, docs/AGENT_WORKFLOW.md | Documentation review | Implemented |
+| CR-005 | P0 implementation specifications | Phase 0 | docs/ROLES_AND_PERMISSIONS.md, docs/ACCOUNT_ENVIRONMENT.md, docs/SYSTEM_SETTINGS.md, docs/DATA_MODEL.md | Documentation review | Implemented |
+| CR-006 | User and workspace permissions | Phase 1 | docs/ROLES_AND_PERMISSIONS.md | Permission tests | Needs Confirmation |
+| CR-007 | Account environment and profile design | Phase 5, Phase 6 | docs/ACCOUNT_ENVIRONMENT.md, docs/DATA_MODEL.md | Account/login/server tests | Needs Confirmation |
+| CR-008 | Runtime settings specification | Phase 2 | docs/SYSTEM_SETTINGS.md | Runtime settings tests | Needs Confirmation |
 
 ## Rules
 

@@ -41,3 +41,6 @@ This file is append-only. Add new dated decisions instead of rewriting history.
   ownership and document updates in each branch.
 - Ambiguous high-impact requirements must be confirmed with the user before
   they are marked accepted or implemented in stable product documents.
+- P0 specialist documents may contain proposed implementation details, but
+  sections marked as open confirmation items must be confirmed before coding
+  the affected phase.

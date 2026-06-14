@@ -27,6 +27,8 @@ Phase 0 - Project Governance.
 - A confirmation gate has been added: ambiguous high-impact requirements must
   be confirmed by the user before becoming accepted product or architecture
   decisions.
+- P0 implementation specifications for roles, account environment, runtime
+  settings, and data model have been added as planning documents.
 
 ## In Progress
 
@@ -46,6 +48,9 @@ Phase 0 - Project Governance.
   during implementation.
 - Some planned P0 documents still need user-confirmed detail before they should
   be treated as final specifications.
+- Several high-impact items are marked as Needs Confirmation in
+  `CHANGE_REQUESTS.md`: workspace strategy, profile key details, lock timeout,
+  profile migration, and settings storage.
 
 ## Next Step
 
@@ -59,6 +64,8 @@ Implement Phase 1 and Phase 2 in small increments:
    `TASKS.md`, `TRACEABILITY.md`, and `TEST_RESULTS.md`.
 6. ask for user confirmation before accepting ambiguous assumptions in
    permissions, deployment, account environment, security, or data model.
+7. confirm CR-006, CR-007, and CR-008 before coding Phase 1, Phase 2, Phase 5,
+   or Phase 6.
 
 ## Latest Verification
 

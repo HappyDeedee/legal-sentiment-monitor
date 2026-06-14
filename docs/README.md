@@ -11,10 +11,14 @@ Recommended reading order for contributors and coding agents:
 5. `CHANGE_REQUESTS.md` - requirement intake and status.
 6. `TRACEABILITY.md` - requirement, task, and test mapping.
 7. `PRODUCT_REQUIREMENTS.md` - menu and page-level product behavior.
-8. `UI_UX_GUIDELINES.md` - UI and interaction rules.
-9. `AGENT_WORKFLOW.md` - how agents read and update documents.
-10. `TEST_PLAN.md` - acceptance and regression test plan.
-11. `TEST_RESULTS.md` - latest verification notes.
+8. `ROLES_AND_PERMISSIONS.md` - role, menu, action, API, and data-scope rules.
+9. `ACCOUNT_ENVIRONMENT.md` - account, profile, proxy, login, and browser rules.
+10. `SYSTEM_SETTINGS.md` - runtime setting and configuration rules.
+11. `DATA_MODEL.md` - target schema and migration planning.
+12. `UI_UX_GUIDELINES.md` - UI and interaction rules.
+13. `AGENT_WORKFLOW.md` - how agents read and update documents.
+14. `TEST_PLAN.md` - acceptance and regression test plan.
+15. `TEST_RESULTS.md` - latest verification notes.
 
 Existing crawler-origin documents remain in this directory for reference, but
 the files above are the active project governance documents for the monitoring

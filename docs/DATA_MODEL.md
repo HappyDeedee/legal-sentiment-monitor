@@ -1,0 +1,196 @@
+# Data Model
+
+This document describes the target data model for V1. It is a planning document
+and may require migration from the current schema.
+
+## Scope
+
+V1 should support:
+
+- users and roles;
+- workspace-ready business data;
+- administrator-managed platform accounts and proxies;
+- runtime settings;
+- monitoring tasks;
+- crawl runs;
+- raw content;
+- AI evaluations;
+- reports.
+
+## Workspace Strategy
+
+Proposed V1 strategy, pending user confirmation:
+
+- create one default workspace;
+- add `workspace_id` to business tables now;
+- do not build public SaaS onboarding in V1.
+
+## Core Tables
+
+### workspaces
+
+```text
+id
+name
+status
+created_at
+updated_at
+```
+
+### users
+
+```text
+id
+workspace_id
+email
+display_name
+password_hash
+role
+status
+last_login_at
+created_at
+updated_at
+```
+
+Open confirmation:
+
+- Use email/password session login for V1, or another authentication method?
+
+### monitor_jobs
+
+Existing job table should add:
+
+```text
+workspace_id
+created_by
+updated_by
+```
+
+Normal-user jobs should not require direct account/proxy/AI/template selection.
+
+### social_accounts
+
+Target fields:
+
+```text
+id
+workspace_id
+name
+platform
+login_type
+status
+profile_key
+profile_path_legacy
+proxy_id
+cookies_encrypted
+notes
+last_login_at
+last_checked_at
+last_error
+created_by
+updated_by
+created_at
+updated_at
+```
+
+`profile_path_legacy` is optional compatibility only. New logic should use
+`profile_key`.
+
+### proxy_profiles
+
+Target fields:
+
+```text
+id
+workspace_id
+name
+provider
+proxy_url_encrypted
+status
+max_concurrency
+notes
+last_checked_at
+last_error
+created_by
+updated_by
+created_at
+updated_at
+```
+
+### login_sessions
+
+Target fields:
+
+```text
+id
+workspace_id
+account_id
+platform
+status
+current_step
+qr_image
+message
+profile_key
+created_at
+updated_at
+expires_at
+```
+
+### system_settings
+
+See `SYSTEM_SETTINGS.md`.
+
+### crawl_runs
+
+Existing run table should add:
+
+```text
+workspace_id
+created_by
+account_id
+proxy_id
+```
+
+### raw_contents
+
+Content identity:
+
+```text
+workspace_id
+platform
+content_id
+```
+
+Unique constraint:
+
+```text
+workspace_id + platform + content_id
+```
+
+### reports
+
+Reports should include:
+
+```text
+workspace_id
+job_id
+run_id
+created_by
+send_status
+```
+
+## Migration Principles
+
+- Add new fields without deleting current fields first.
+- Keep compatibility with current `profile_path` until account re-login or
+  migration is completed.
+- Do not expose legacy paths in UI.
+- Keep secret values encrypted.
+
+## Open Confirmation Items
+
+- Is V1 single-workspace multi-user, or should multiple workspaces be visible?
+- Should existing `profile_path` directories be moved to the new profile root?
+- Should normal-user deletion of tasks be allowed?
+- Should audit log be implemented in the first permission phase or later?
+
