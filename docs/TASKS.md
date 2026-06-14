@@ -138,12 +138,14 @@ and permission work.
 
 ## Phase 8 - Server-Like Validation
 
-- [ ] Add a container or server-like deployment path.
-- [ ] Verify web-only login in the server-like environment.
-- [ ] Verify profile persistence across service restart.
-- [ ] Verify multiple same-platform accounts use separate profiles.
-- [ ] Verify account/profile/proxy concurrency limits.
-- [ ] Verify no local Chrome is required for acceptance.
+- [x] Add a container or server-like deployment path.
+- [x] Verify the web QR/status login path is primary in the server-like
+      environment with local-window login disabled.
+- [x] Verify profile metadata persistence across service restart.
+- [x] Verify multiple same-platform accounts use separate profiles.
+- [x] Verify account/profile/proxy concurrency limits.
+- [x] Verify no local Chrome is required for automated server-like
+      validation.
 
 ## Phase 9 - Security And Operations
 

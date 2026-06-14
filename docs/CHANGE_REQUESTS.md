@@ -114,7 +114,7 @@ Reason:
 Requirements should not exist only in chat. The project needs a closed-loop
 documentation mechanism.
 
-Status: Implemented
+Status: Verified
 
 Related tasks:
 
@@ -555,6 +555,9 @@ Acceptance:
 - `SERVER_DEPLOYMENT.md` exists;
 - it documents server-like acceptance requirements and persistent data;
 - `AGENTS.md` and `AGENT_WORKFLOW.md` route deployment work to the document.
+- `scripts/server_like_validation.py` verifies the automated server-like HTTP
+  service path, production login flags, profile restart persistence, runtime
+  locks, and no-local-Chrome validation boundary.
 
 ## CR-015 - Documentation Consistency Check Specification
 

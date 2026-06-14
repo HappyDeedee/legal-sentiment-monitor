@@ -193,6 +193,20 @@ Automated key rotation is deferred until after V1.
 Before production handoff, run the server-like tests in `TEST_PLAN.md` and
 record results in `TEST_RESULTS.md`.
 
+Automated server-like validation can be run from the deployment worktree with:
+
+```bash
+uv run python scripts/server_like_validation.py
+```
+
+The script starts a real FastAPI HTTP service with isolated persistent data
+directories, `MONITOR_LOGIN_QR_HEADLESS=true`,
+`MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=false`, scheduler disabled, AI skipped, and
+server-side profile roots. It validates web reachability, administrator login,
+web QR/status login capability, local-window login blocking, separate
+same-platform profiles, profile metadata across service restart, runtime
+account/profile/proxy locks, and headless Chromium availability.
+
 Acceptance cannot be marked complete until:
 
 - local desktop Chrome is not used;

@@ -10,7 +10,9 @@ and verified. Phase 1 - Users And Permissions is complete and verified. Phase
 Resource Center is complete and verified. Phase 4 - Normal User Task Wizard is
 complete and verified. Phase 5 - Account Environment is complete and verified.
 Phase 6 - Server Login Flow is complete and verified locally. Phase 7 - Runs,
-Reports, And AI is complete and verified locally.
+Reports, And AI is complete and verified locally. Phase 8 - Server-Like
+Validation is complete and verified through an isolated server-like service
+process.
 The active SQLite schema now provides the foundation tables and columns
 required before later implementation work, and the web/API layer now has
 session login, administrator/normal-user roles, menu visibility,
@@ -22,7 +24,10 @@ account/profile/proxy locks, stale-run recovery, server-side QR login as the
 primary administrator flow, structured login states, profile persistence/reuse
 checks, deployment gating for local-window login fallback, AI/manual-review
 fallback, email-failure-tolerant report generation, report-specific lead
-preview switching, and run log refresh/copy/download controls.
+preview switching, run log refresh/copy/download controls, and an automated
+server-like validation script that starts the real FastAPI service with
+production login flags, persistent profile roots, service restart checks, and
+headless browser verification.
 
 ## Implementation Status
 
@@ -35,13 +40,16 @@ preview switching, and run log refresh/copy/download controls.
 - Phase 5 - Account Environment: complete and verified.
 - Phase 6 - Server Login Flow: complete and verified locally.
 - Phase 7 - Runs, Reports, And AI: complete and verified locally.
-- Phase 8 - Server-Like Validation: next unblocked implementation phase.
+- Phase 8 - Server-Like Validation: complete and verified through automated
+  server-like validation.
+- Phase 9 - Security And Operations: next unblocked implementation phase.
 - Phase 5/6 - Account Environment and Server Login: profile key, timeout, and
   lock-storage decisions are accepted; Phase 5 account environment runtime and
   Phase 6 login-flow runtime are complete.
 
-Phase 8 can begin next. Phase 9 implementation must still proceed in order
-and must not bypass unfinished earlier phases.
+Phase 9 can begin next. It must stay within security and operations scope and
+must not add post-V1 SaaS, billing, high-concurrency, captcha/SMS bypass, or
+field-level permission behavior.
 
 ## Completed
 
@@ -135,10 +143,19 @@ and must not bypass unfinished earlier phases.
   "suspected negative leads" semantics and avoids factual conclusions, report
   preview requests load leads scoped to the selected report ID, and run logs
   expose refresh, copy, and download controls with customer-safe text.
+- Phase 8 server-like validation has been implemented and verified:
+  `scripts/server_like_validation.py` starts the real FastAPI app as an HTTP
+  service with isolated persistent data directories, production login flags
+  (`MONITOR_LOGIN_QR_HEADLESS=true` and
+  `MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=false`), bootstrap administrator login,
+  web QR/status capability checks, local-window login blocking,
+  same-platform account profile separation, profile metadata persistence across
+  service restart, account/profile/proxy runtime lock enforcement, and
+  headless Playwright Chromium availability.
 
 ## In Progress
 
-- Phase 8 - Server-Like Validation is ready to start.
+- Phase 9 - Security And Operations is ready to start.
 
 ## Known Risks
 
@@ -148,8 +165,9 @@ and must not bypass unfinished earlier phases.
   paths.
 - Current system is closer to a single-team MVP than a production multi-user
   system.
-- Server-side QR login and profile persistence have local automated coverage,
-  but still need container/server validation before production acceptance.
+- Server-side QR/login capability and profile persistence now have automated
+  server-like validation, but real platform QR scanning and real platform
+  crawling still require a live server/account pilot.
 - The newly added product documents are initial versions and should be refined
   during implementation.
 - Profile migration strategy has been clarified: existing low-volume
@@ -157,35 +175,38 @@ and must not bypass unfinished earlier phases.
   or re-logged in under the new `profile_key` model.
 - Phase 2 retention settings are configurable and stored, but automated
   retention cleanup jobs remain for later operations work.
-- Production acceptance still requires Phase 8 server-like validation with no
-  dependency on the operator's local Chrome.
-- Phase 7 has local automated coverage but does not prove real AI provider,
-  SMTP, or platform behavior in a server-like environment; those remain
+- Docker/container validation could not be run on this machine. Phase 8 used
+  an isolated real FastAPI service process with persistent temp data instead.
+- Phase 7 and Phase 8 automated checks do not prove real AI provider, SMTP,
+  real platform QR scanning, or real platform crawling behavior; those remain
   deployment and pilot risks.
 
 ## Next Step
 
-Implement Phase 8 in small increments:
+Implement Phase 9 in small increments:
 
-1. add or confirm a container/server-like deployment path;
-2. verify web-only login in the server-like environment;
-3. verify profile persistence across service restart;
-4. verify multiple same-platform accounts use separate profiles;
-5. verify account/profile/proxy concurrency limits;
-6. verify no local Chrome is required for acceptance;
-7. record results in `TEST_RESULTS.md` without marking Phase 9 complete.
+1. add or verify audit logs for administrator operations;
+2. harden masking of sensitive values in UI, API responses, and logs;
+3. add backup notes for database, profiles, reports, and encryption key;
+4. add account invalidation and proxy error alert paths;
+5. add disk and retention diagnostics;
+6. record verification in `TEST_RESULTS.md` before marking V1 complete.
 
 ## Latest Verification
 
-Phase 7 local verification passed on 2026-06-14:
+Phase 8 server-like validation passed on 2026-06-14:
 
+- `uv run python scripts/server_like_validation.py`
+- Result: PASS, 11 checks passed: service web UI reachable, administrator
+  login over HTTP, web QR/status login flow primary, local-window login
+  disabled, same-platform profiles separated, profile-key runtime paths under
+  the persistent profile root, account/profile lock limit enforced through
+  runtime API, proxy lock enforced through `resource_locks`, profile metadata
+  survives restart, no local Chrome dependency, and headless Playwright
+  Chromium available.
 - `uv run python -m pytest tests/test_monitoring_mvp.py`
 - Result: 213 passed, 3 warnings.
-- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_7 or pending_review or report_scope or monitor_page_uses_tob"`
-- Result: 4 passed, 209 deselected, 1 warning.
 - `uv run python scripts/check_docs.py`
 - Result: PASS docs consistency.
-- Node syntax check for `api/monitor_web/index.html` script block
-- Result: monitor web script parses.
 
-No server-like acceptance run has been completed for the new plan yet.
+Phase 7 local verification remains recorded in `docs/TEST_RESULTS.md`.

@@ -11,6 +11,46 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
   `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-14 - Phase 8 Server-Like Validation Verified
+
+Environment: isolated server-like service process in local worktree
+`E:\myproject\MediaCrawler-worktrees\v1-roadmap` using `uv run`, a temporary
+persistent data directory, real FastAPI/uvicorn HTTP service startup,
+production login flags, and headless Playwright Chromium.
+
+Result:
+
+- Added `scripts/server_like_validation.py` to start the real FastAPI app with
+  isolated persistent data/profile roots and production-oriented environment
+  flags.
+- Verified `/monitor` is reachable over HTTP and a bootstrap administrator can
+  log in through the API.
+- Verified web QR/status login capability is advertised as the primary
+  `server_qrcode` flow while local-window login is hidden and blocked with
+  `MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=false`.
+- Verified two same-platform accounts receive separate `profile_key` values
+  and runtime profile paths under the persistent account-profile root.
+- Verified profile metadata survives service restart.
+- Verified account/profile locks and proxy concurrency limits through the
+  runtime lock APIs, with proxy locks backed by `resource_locks`.
+- Verified the automated validation path does not require the operator's local
+  Chrome and that Playwright Chromium can launch headless.
+
+Verification:
+
+- `uv run python scripts/server_like_validation.py`
+- Result: PASS, 11 checks passed.
+
+Limitations:
+
+- Docker/container validation could not be performed on this machine, so Phase
+  8 used an isolated real service process as the server-like path.
+- The automated run verifies the web QR/status path and production local-login
+  gating, but it does not complete a real platform QR scan or real platform
+  crawl with a live account.
+- Real AI provider, SMTP, platform login, and platform crawling behavior remain
+  deployment/pilot validation risks.
+
 ## 2026-06-14 - Phase 7 Runs Reports And AI Verified
 
 Environment: local worktree `E:\myproject\MediaCrawler-worktrees\v1-roadmap`

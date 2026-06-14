@@ -59,6 +59,7 @@ MONITOR_BROWSER_DATA_DIR=/opt/legal-sentiment-monitor/browser_data
 MONITOR_CRAWLER_HEADLESS=true
 MONITOR_CDP_CONNECT_EXISTING=false
 MONITOR_LOGIN_QR_HEADLESS=true
+MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=false
 MONITOR_LOGIN_QR_TIMEOUT_MS=20000
 MONITOR_LOGIN_QR_TTL_SECONDS=600
 MONITOR_CRAWLER_TIMEOUT_SECONDS=900
@@ -174,7 +175,9 @@ http://服务器IP:8080/monitor
 
 如果平台先出现滑块、验证码或短信验证，系统只回传验证状态、截图或提示，不做绕过。人工处理后保持会话打开，继续轮询登录状态。
 
-“本地窗口登录”只作为兜底方案，适合本地开发、远程桌面或二维码回传不稳定时使用。
+“本地窗口登录”只作为开发兜底方案，生产环境应保持
+`MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=false`，通过后台网页二维码和结构化状态完成
+登录验收。
 
 账号池是轻量调度预留，不做复杂轮换。任务可以绑定账号资源；未绑定时系统使用平台默认登录材料。
 
@@ -208,7 +211,26 @@ http://服务器IP:8080/monitor
 7. 在报告中心确认报告预览、线索明细和下载正常。
 8. 抖音闭环稳定后，再按同样流程扩展快手和小红书。
 
-## 8. 日常运维
+## 8. 自动化服务器式验证
+
+上线前可以先在部署工作目录运行：
+
+```powershell
+uv run python scripts/server_like_validation.py
+```
+
+该脚本会启动真实后台 HTTP 服务，使用隔离的数据目录和网页登录态目录，并强制：
+
+```text
+MONITOR_LOGIN_QR_HEADLESS=true
+MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=false
+```
+
+验证项包括后台页面可访问、管理员登录、网页登录二维码/状态通道为主流程、本地窗口登录被禁用、同平台多账号使用不同 `profile_key`、重启后账号 Profile 元数据仍存在、账号/Profile/代理锁生效，以及无本地 Chrome 依赖。
+
+脚本通过不等于真实平台扫码和真实采集已经完成；正式试点前仍要使用真实平台账号完成一次网页扫码、采集、报告和邮件闭环。
+
+## 9. 日常运维
 
 建议每天关注：
 
@@ -220,7 +242,7 @@ http://服务器IP:8080/monitor
 
 任务失败时，优先查看运行中心日志。常见原因包括登录态失效、平台验证、关键词无结果、采集范围过窄、邮件配置错误或 AI 服务异常。
 
-## 9. 常见问题
+## 10. 常见问题
 
 ### AI 显示未就绪
 
@@ -261,7 +283,7 @@ http://服务器IP:8080/monitor
 
 第一版会在外层做时间过滤和去重，时间范围外内容不会进入报告。
 
-## 10. 备份与恢复
+## 11. 备份与恢复
 
 备份：
 
