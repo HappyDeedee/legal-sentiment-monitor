@@ -8,11 +8,14 @@ data during the first migration step.
 
 ## Migration Principles
 
-- Add fields before removing or renaming fields.
-- Keep legacy `profile_path` readable during transition.
-- Backfill existing data into default workspace.
-- Do not expose legacy profile paths in UI.
-- Keep migration reversible until server-like validation passes.
+- Add new fields before deleting old fields.
+- Backfill existing data into default workspace when workspace strategy is
+  confirmed.
+- Do not expose profile paths in UI.
+- Because the current account count is low and the project is still in agile
+  development, long-term `profile_path` compatibility is not required.
+- Existing account profiles may be reset or re-logged in under the new
+  `profile_key` model.
 
 ## Phase 0.5 - Schema Foundation
 
@@ -81,13 +84,8 @@ Add to `login_sessions`:
 profile_key TEXT
 ```
 
-Keep:
-
-```text
-profile_path TEXT
-```
-
-as legacy compatibility until migration is confirmed.
+Existing `profile_path` can remain temporarily during schema transition, but it
+should not be used as the primary identity for new account environments.
 
 ### Step 4 - Add Runtime Settings
 
@@ -137,20 +135,13 @@ Open confirmation:
 
 ## Profile Migration Strategy
 
-Recommended compatibility strategy:
+Confirmed direction:
 
-1. Existing accounts keep `profile_path`.
+1. Existing low-volume account profiles do not need compatibility migration.
 2. New accounts use `profile_key`.
-3. A resolver chooses:
-   - if `profile_key` exists, resolve under account profile root;
-   - else if legacy `profile_path` exists, use it as compatibility fallback.
-4. After successful re-login or verified migration, set `profile_key`.
-5. Later remove UI and API support for arbitrary profile paths.
-
-Open confirmation:
-
-- Should old profile directories be physically moved, or should compatibility
-  fallback remain until re-login?
+3. Old accounts can be marked as needing re-login.
+4. New login creates a new server-side profile under the new profile root.
+5. UI and API should stop accepting arbitrary profile paths.
 
 ## Verification
 
@@ -169,7 +160,5 @@ Before implementation, confirm:
 
 - workspace strategy;
 - authentication strategy;
-- profile migration strategy;
 - lock table vs lock fields;
 - audit log MVP scope.
-

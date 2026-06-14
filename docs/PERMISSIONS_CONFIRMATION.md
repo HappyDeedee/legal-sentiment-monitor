@@ -16,6 +16,17 @@ Question:
 - Should V1 be single-workspace multi-user, or should multiple workspaces be
   visible and manageable in the first release?
 
+Explanation:
+
+- A workspace is the organization-level data boundary.
+- Single-workspace V1 means the system has one hidden default workspace.
+- Administrators manage all resources in this workspace.
+- Normal users belong to the same workspace but still only see what their role
+  allows, such as their own tasks and reports.
+- Platform accounts, proxies, AI access, email settings, and runtime strategy
+  are shared administrator-managed resources inside this workspace.
+- This does not mean every normal user can see administrator resources.
+
 Recommended:
 
 - V1 uses one default workspace.
@@ -166,4 +177,3 @@ Alternative:
 - Defer full audit log to Phase 9.
 
 Status: Needs Confirmation
-

@@ -53,6 +53,9 @@ Phase 0 - Project Governance.
 - Several high-impact items are marked as Needs Confirmation in
   `CHANGE_REQUESTS.md`: workspace strategy, profile key details, lock timeout,
   profile migration, and settings storage.
+- Profile migration strategy has been clarified: existing low-volume
+  `profile_path` accounts do not need long-term compatibility and can be reset
+  or re-logged in under the new `profile_key` model.
 - Phase 1 remains blocked until permission/workspace/auth confirmation items in
   `PERMISSIONS_CONFIRMATION.md` are resolved.
 
@@ -72,6 +75,8 @@ Implement Phase 1 and Phase 2 in small increments:
    or Phase 6.
 8. confirm `PERMISSIONS_CONFIRMATION.md` before implementing user login and
    role enforcement.
+9. confirm whether C-001 single-workspace V1 is accepted after reviewing the
+   workspace explanation.
 
 ## Latest Verification
 

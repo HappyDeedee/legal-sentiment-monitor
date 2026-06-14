@@ -152,19 +152,22 @@ Open confirmation:
 
 ## Migration From profile_path
 
+Confirmed direction:
+
+- Do not keep long-term legacy compatibility for `profile_path`.
+- The current account count is low and the project is still in agile
+  development.
+- New account environments should use `profile_key`.
+- Existing accounts can be re-created or re-logged in under the new profile
+  model instead of physically moving old profile directories.
+
 Migration strategy:
 
-1. keep existing `profile_path` for compatibility;
-2. add `profile_key`;
-3. new accounts use `profile_key`;
-4. existing accounts with `profile_path` are migrated or resolved through a
-   compatibility resolver;
-5. UI stops accepting arbitrary profile paths.
-
-Open confirmation:
-
-- Should existing profiles be physically moved into the new profile root, or
-  should old absolute paths remain as compatibility links until re-login?
+1. add `profile_key`;
+2. stop accepting arbitrary profile paths from the customer-facing UI;
+3. create new account profiles under the new profile root;
+4. mark old profile-path-based accounts as needing re-login or manual reset;
+5. remove legacy profile-path dependence after validation.
 
 ## Server Acceptance
 
@@ -176,4 +179,3 @@ Server-like acceptance must verify:
 - two same-platform accounts have different profiles;
 - same account/profile cannot run concurrently;
 - proxy binding is respected during login and crawl.
-

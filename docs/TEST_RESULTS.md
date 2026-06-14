@@ -2,6 +2,21 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-06-14 - Profile Migration Decision Updated
+
+Environment: local repository documentation update.
+
+Result:
+
+- Updated account environment and schema migration documents to reflect the
+  confirmed direct-new-profile migration direction.
+- Added workspace explanation to the permission confirmation document.
+
+Limitations:
+
+- Workspace strategy itself is not yet confirmed.
+- No code or runtime validation was performed.
+
 ## 2026-06-14 - Review Follow-Up P0 Additions
 
 Environment: local repository documentation update.

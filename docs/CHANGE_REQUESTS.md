@@ -231,7 +231,8 @@ Acceptance:
 
 - user confirms profile key format;
 - user confirms lock timeout behavior;
-- user confirms legacy profile migration approach.
+- user has confirmed legacy profile migration can be direct-new-profile rather
+  than compatibility-preserving.
 
 ## CR-008 - Runtime Settings Specification
 
@@ -323,7 +324,8 @@ Acceptance:
 
 - `SCHEMA_MIGRATION.md` exists;
 - migration steps add fields before removing legacy fields;
-- legacy `profile_path` compatibility is documented.
+- direct-new-profile migration direction is documented for low-volume existing
+  accounts.
 
 ## CR-011 - Runtime Config Example
 

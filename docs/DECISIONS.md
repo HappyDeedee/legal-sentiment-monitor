@@ -44,5 +44,7 @@ This file is append-only. Add new dated decisions instead of rewriting history.
 - P0 specialist documents may contain proposed implementation details, but
   sections marked as open confirmation items must be confirmed before coding
   the affected phase.
-- Schema migration should be compatible-first: add new fields and compatibility
-  resolvers before removing or replacing legacy fields such as `profile_path`.
+- Profile migration does not need long-term legacy compatibility. Because the
+  current account count is low and the project is still in agile development,
+  existing profile-path-based accounts can be reset or re-logged in under the
+  new `profile_key` model.

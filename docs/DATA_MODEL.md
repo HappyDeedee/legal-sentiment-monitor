@@ -93,8 +93,9 @@ created_at
 updated_at
 ```
 
-`profile_path_legacy` is optional compatibility only. New logic should use
-`profile_key`.
+`profile_path_legacy` is optional during transition only. The confirmed
+direction is to use new `profile_key` profiles and require old low-volume
+accounts to re-login instead of preserving long-term legacy path compatibility.
 
 ### proxy_profiles
 
@@ -182,15 +183,13 @@ send_status
 ## Migration Principles
 
 - Add new fields without deleting current fields first.
-- Keep compatibility with current `profile_path` until account re-login or
-  migration is completed.
+- Current low-volume `profile_path` accounts can be reset or re-logged in under
+  the new `profile_key` model.
 - Do not expose legacy paths in UI.
 - Keep secret values encrypted.
 
 ## Open Confirmation Items
 
 - Is V1 single-workspace multi-user, or should multiple workspaces be visible?
-- Should existing `profile_path` directories be moved to the new profile root?
 - Should normal-user deletion of tasks be allowed?
 - Should audit log be implemented in the first permission phase or later?
-
