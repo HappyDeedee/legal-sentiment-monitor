@@ -5182,6 +5182,70 @@ def test_leads_api_lists_pending_review_items():
     assert all(item["id"] != result["report"]["id"] for item in no_risk_reports)
 
 
+def test_phase_7_run_job_generates_report_without_ai_or_email(monkeypatch):
+    init_db()
+    monkeypatch.setenv("MONITOR_SKIP_AI_API", "true")
+    job = save_job(
+        {
+            "law_firm_name": "海安律所",
+            "aliases": ["海安律师事务所"],
+            "exclude_words": [],
+            "keywords": ["海安律所避雷"],
+            "platforms": ["dy"],
+            "recipients": [],
+            "enable_comments": False,
+            "time_window_type": "recent_1d",
+            "frequency": "daily",
+            "email_time": "09:00",
+            "enabled": True,
+        }
+    )
+    content_id = "pytest_phase7_no_ai_email_001"
+    now_ts = int(datetime.now(timezone.utc).timestamp())
+
+    async def fake_run_platform(job_arg, run_id, platform, run_dir):
+        return ingest_outputs(
+            job_arg,
+            run_id,
+            platform,
+            [
+                {
+                    "aweme_id": content_id,
+                    "title": "海安律所退费投诉",
+                    "desc": "收费争议需要人工复核",
+                    "create_time": now_ts,
+                    "share_url": "https://www.douyin.com/video/phase7",
+                }
+            ],
+            [],
+        )
+
+    def fake_send_report(job_arg, report):
+        return False, "SMTP 配置未完成"
+
+    try:
+        monkeypatch.setattr(runner_module, "run_platform", fake_run_platform)
+        monkeypatch.setattr(runner_module, "send_report", fake_send_report)
+
+        result = asyncio.run(run_monitor_job(job["id"]))
+        run = get_run(int(result["run_id"]))
+        report = get_report(int(result["report"]["id"]))
+        html = Path(result["report"]["html_path"]).read_text(encoding="utf-8")
+    finally:
+        _cleanup_test_records(job["id"], content_id)
+
+    assert result["status"] == "success"
+    assert run and run["status"] == "success"
+    assert result["report"]
+    assert report and report["email_status"] == "failed"
+    assert result["summary"]["new_contents"] == 1
+    assert result["summary"]["pending_review_count"] == 1
+    assert result["summary"]["email_status"] == "failed"
+    assert "SMTP 配置未完成" in result["summary"]["email_error"]
+    assert "待人工复核" in html
+    assert "AI 结果仅用于舆情线索筛查" in html
+
+
 def test_selftest_report_generates_downloadable_artifacts():
     asyncio.run(_selftest_report_check())
 
@@ -6910,6 +6974,8 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "action-menu-host" in page
     assert "下载 Markdown" in page
     assert "api('/leads?" in page
+    assert "report_id:String(id)" in page
+    assert "报告 ID ${id} 的线索明细" in page
     assert "待人工复核" in page
     assert "待复核" in page
     assert "运行系统诊断" in page

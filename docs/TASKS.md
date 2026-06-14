@@ -129,12 +129,12 @@ and permission work.
 
 ## Phase 7 - Runs, Reports, And AI
 
-- [ ] Ensure tasks run even when AI is missing.
-- [ ] Mark AI failures as manual-review leads.
-- [ ] Ensure tasks run and reports generate even when email is missing.
-- [ ] Keep report wording as suspected negative leads.
-- [ ] Verify report preview switches correctly across reports.
-- [ ] Ensure logs can be refreshed, copied, and downloaded.
+- [x] Ensure tasks run even when AI is missing.
+- [x] Mark AI failures as manual-review leads.
+- [x] Ensure tasks run and reports generate even when email is missing.
+- [x] Keep report wording as suspected negative leads.
+- [x] Verify report preview switches correctly across reports.
+- [x] Ensure logs can be refreshed, copied, and downloaded.
 
 ## Phase 8 - Server-Like Validation
 

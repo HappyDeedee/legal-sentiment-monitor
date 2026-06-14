@@ -11,6 +11,42 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
   `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-14 - Phase 7 Runs Reports And AI Verified
+
+Environment: local worktree `E:\myproject\MediaCrawler-worktrees\v1-roadmap`
+using `uv run`, the monitoring SQLite database, and Node script parsing for the
+single-file frontend.
+
+Result:
+
+- Verified that a monitoring run can finish and generate a report when AI is
+  disabled and email sending is unavailable.
+- Verified AI-disabled or AI-failure content is stored as `pending_review`
+  manual-review material instead of blocking report generation.
+- Verified report wording keeps "疑似负面线索" and "AI 仅作线索筛查，不代表事实认定"
+  semantics.
+- Verified selected report previews load leads scoped by `report_id`.
+- Verified run-log UI keeps refresh, copy, and download controls and log API
+  output remains customer-safe.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 213 passed, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_7 or pending_review or report_scope or monitor_page_uses_tob"`
+- Result: 4 passed, 209 deselected, 1 warning.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- Node syntax check for the `api/monitor_web/index.html` script block
+- Result: monitor web script parses.
+
+Limitations:
+
+- Phase 7 verification uses local and mocked execution paths where external
+  platform, AI provider, or SMTP behavior would otherwise be required.
+- Real provider/SMTP reliability and end-to-end server deployment remain pilot
+  and Phase 8 validation risks.
+
 ## 2026-06-14 - Phase 6 Server Login Flow Verified
 
 Environment: local worktree `E:\myproject\MediaCrawler-worktrees\v1-roadmap`

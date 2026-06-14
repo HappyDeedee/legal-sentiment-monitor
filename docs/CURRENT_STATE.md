@@ -9,7 +9,8 @@ and verified. Phase 1 - Users And Permissions is complete and verified. Phase
 2 - System Settings Center is complete and verified. Phase 3 - Administrator
 Resource Center is complete and verified. Phase 4 - Normal User Task Wizard is
 complete and verified. Phase 5 - Account Environment is complete and verified.
-Phase 6 - Server Login Flow is complete and verified locally.
+Phase 6 - Server Login Flow is complete and verified locally. Phase 7 - Runs,
+Reports, And AI is complete and verified locally.
 The active SQLite schema now provides the foundation tables and columns
 required before later implementation work, and the web/API layer now has
 session login, administrator/normal-user roles, menu visibility,
@@ -19,7 +20,9 @@ and test interactions, a normal-user task wizard with administrator-only
 advanced options, and profile-key based account environments with persisted
 account/profile/proxy locks, stale-run recovery, server-side QR login as the
 primary administrator flow, structured login states, profile persistence/reuse
-checks, and deployment gating for local-window login fallback.
+checks, deployment gating for local-window login fallback, AI/manual-review
+fallback, email-failure-tolerant report generation, report-specific lead
+preview switching, and run log refresh/copy/download controls.
 
 ## Implementation Status
 
@@ -31,12 +34,13 @@ checks, and deployment gating for local-window login fallback.
 - Phase 4 - Normal User Task Wizard: complete and verified.
 - Phase 5 - Account Environment: complete and verified.
 - Phase 6 - Server Login Flow: complete and verified locally.
-- Phase 7 - Runs, Reports, And AI: next unblocked implementation phase.
+- Phase 7 - Runs, Reports, And AI: complete and verified locally.
+- Phase 8 - Server-Like Validation: next unblocked implementation phase.
 - Phase 5/6 - Account Environment and Server Login: profile key, timeout, and
   lock-storage decisions are accepted; Phase 5 account environment runtime and
   Phase 6 login-flow runtime are complete.
 
-Phase 7 can begin next. Phase 8-9 implementation must still proceed in order
+Phase 8 can begin next. Phase 9 implementation must still proceed in order
 and must not bypass unfinished earlier phases.
 
 ## Completed
@@ -125,10 +129,16 @@ and must not bypass unfinished earlier phases.
   re-checked before the account is marked active, profile-key paths are reused
   after the browser session closes, and `MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=false`
   hides and blocks local-window login fallback for production mode.
+- Phase 7 runs, reports, and AI behavior has been verified:
+  jobs can complete with AI disabled and email unavailable, new contents enter
+  `pending_review` instead of blocking report generation, report wording keeps
+  "suspected negative leads" semantics and avoids factual conclusions, report
+  preview requests load leads scoped to the selected report ID, and run logs
+  expose refresh, copy, and download controls with customer-safe text.
 
 ## In Progress
 
-- Phase 7 - Runs, Reports, And AI is ready to start.
+- Phase 8 - Server-Like Validation is ready to start.
 
 ## Known Risks
 
@@ -149,32 +159,32 @@ and must not bypass unfinished earlier phases.
   retention cleanup jobs remain for later operations work.
 - Production acceptance still requires Phase 8 server-like validation with no
   dependency on the operator's local Chrome.
+- Phase 7 has local automated coverage but does not prove real AI provider,
+  SMTP, or platform behavior in a server-like environment; those remain
+  deployment and pilot risks.
 
 ## Next Step
 
-Implement Phase 7 in small increments:
+Implement Phase 8 in small increments:
 
-1. ensure tasks run and reports generate when AI is missing or fails;
-2. mark AI failures as manual-review leads instead of blocking collection;
-3. ensure missing or failing email does not block report generation;
-4. keep report wording as suspected negative leads;
-5. verify report preview switching across reports;
-6. verify run logs can be refreshed, copied, and downloaded;
-7. update `TASKS.md`, `CURRENT_STATE.md`, `TEST_RESULTS.md`, and
-   `TRACEABILITY.md` after each validated checkpoint.
+1. add or confirm a container/server-like deployment path;
+2. verify web-only login in the server-like environment;
+3. verify profile persistence across service restart;
+4. verify multiple same-platform accounts use separate profiles;
+5. verify account/profile/proxy concurrency limits;
+6. verify no local Chrome is required for acceptance;
+7. record results in `TEST_RESULTS.md` without marking Phase 9 complete.
 
 ## Latest Verification
 
-Phase 6 local verification passed on 2026-06-14:
+Phase 7 local verification passed on 2026-06-14:
 
 - `uv run python -m pytest tests/test_monitoring_mvp.py`
-- Result: 212 passed, 3 warnings.
-- `uv run python -m pytest tests/test_monitoring_mvp.py -k "login_session or qrcode or phase_6 or local_login"`
-- Result: 34 passed, 178 deselected, 1 warning.
+- Result: 213 passed, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_7 or pending_review or report_scope or monitor_page_uses_tob"`
+- Result: 4 passed, 209 deselected, 1 warning.
 - `uv run python scripts/check_docs.py`
 - Result: PASS docs consistency.
-- `uv run python -m py_compile api/monitoring/database.py api/monitoring/login_qrcode.py api/monitoring/login_status.py api/routers/monitor.py`
-- Result: Python compile check passed.
 - Node syntax check for `api/monitor_web/index.html` script block
 - Result: monitor web script parses.
 
