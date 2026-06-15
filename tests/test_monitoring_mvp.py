@@ -7139,6 +7139,9 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "email_subject_summary" in page
     assert "配置和测试都通过弹窗完成；密码保存后不会在页面回显。" in page
     assert "测试失败不会阻断报告生成；系统仍会保留报告供下载和预览。" in page
+    assert "smtp_password_status" in page
+    assert "已保存密码" in page
+    assert "如需更换请重新输入" in page
     assert "email-templates/preview" in page
     assert "email_template_preview" in page
     assert "scheduleEmailPreview" in page
@@ -7150,6 +7153,9 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "renderReportsTable" in page
     assert "currentReports" in page
     assert "action-menu-host" in page
+    assert "report-action-menu" in page
+    assert "data-report-menu-button" in page
+    assert "positionReportActionMenu" in page
     assert "下载 Markdown" in page
     assert "api('/leads?" in page
     assert "report_id:String(id)" in page
@@ -7196,6 +7202,7 @@ def test_monitor_page_uses_consistent_buttons_tables_and_modal_actions():
     assert ".schema-item { grid-template-columns:1fr; }" in page
     assert ".action-menu-host" in page
     assert ".action-menu.active" in page
+    assert ".report-action-menu { position:fixed;" in page
     assert "openReportMenuId" in page
     assert "resourceStat(label, value)" in page
     assert "renderProxyProfilesTable" in page
@@ -8318,15 +8325,23 @@ def get_user_for_test_session(token: str) -> dict:
 
 def _restore_table(table: str, snapshot: list[dict]) -> None:
     with get_conn() as conn:
-        conn.execute(f"DELETE FROM {table}")
-        if not snapshot:
-            return
-        columns = list(snapshot[0].keys())
-        placeholders = ",".join("?" for _ in columns)
-        conn.executemany(
-            f"INSERT INTO {table} ({','.join(columns)}) VALUES ({placeholders})",
-            [[row[col] for col in columns] for row in snapshot],
-        )
+        conn.execute("PRAGMA foreign_keys=OFF")
+        try:
+            if table == "monitor_jobs":
+                _delete_rows_for_new_jobs(conn, {int(row["id"]) for row in snapshot if row.get("id") is not None})
+            elif table == "crawl_runs":
+                _delete_rows_for_new_runs(conn, {int(row["id"]) for row in snapshot if row.get("id") is not None})
+            conn.execute(f"DELETE FROM {table}")
+            if snapshot:
+                columns = list(snapshot[0].keys())
+                placeholders = ",".join("?" for _ in columns)
+                conn.executemany(
+                    f"INSERT INTO {table} ({','.join(columns)}) VALUES ({placeholders})",
+                    [[row[col] for col in columns] for row in snapshot],
+                )
+            conn.commit()
+        finally:
+            conn.execute("PRAGMA foreign_keys=ON")
 
 
 def _cmd_value(cmd: list[str], flag: str) -> str | None:
@@ -8359,25 +8374,69 @@ def _snapshot_monitor_jobs() -> dict[str, list[dict]]:
 
 def _restore_monitor_jobs(snapshot: dict[str, list[dict]]) -> None:
     tables = ["job_recipients", "job_platforms", "job_keywords", "monitor_jobs"]
+    snapshot_job_ids = {int(row["id"]) for row in snapshot.get("monitor_jobs", []) if row.get("id") is not None}
     with get_conn() as conn:
-        for table in tables:
-            conn.execute(f"DELETE FROM {table}")
-        for table in ["monitor_jobs", "job_keywords", "job_platforms", "job_recipients"]:
-            rows = snapshot.get(table, [])
-            if not rows:
-                continue
-            columns = list(rows[0].keys())
-            placeholders = ",".join("?" for _ in columns)
-            conn.executemany(
-                f"INSERT INTO {table} ({','.join(columns)}) VALUES ({placeholders})",
-                [[row[col] for col in columns] for row in rows],
-            )
+        conn.execute("PRAGMA foreign_keys=OFF")
+        try:
+            _delete_rows_for_new_jobs(conn, snapshot_job_ids)
+            for table in tables:
+                conn.execute(f"DELETE FROM {table}")
+            for table in ["monitor_jobs", "job_keywords", "job_platforms", "job_recipients"]:
+                rows = snapshot.get(table, [])
+                if not rows:
+                    continue
+                columns = list(rows[0].keys())
+                placeholders = ",".join("?" for _ in columns)
+                conn.executemany(
+                    f"INSERT INTO {table} ({','.join(columns)}) VALUES ({placeholders})",
+                    [[row[col] for col in columns] for row in rows],
+                )
+            conn.commit()
+        finally:
+            conn.execute("PRAGMA foreign_keys=ON")
 
 
 def _clear_monitor_jobs() -> None:
     with get_conn() as conn:
-        for table in ["job_recipients", "job_platforms", "job_keywords", "monitor_jobs"]:
-            conn.execute(f"DELETE FROM {table}")
+        conn.execute("PRAGMA foreign_keys=OFF")
+        try:
+            for table in ["job_recipients", "job_platforms", "job_keywords", "monitor_jobs"]:
+                conn.execute(f"DELETE FROM {table}")
+            conn.commit()
+        finally:
+            conn.execute("PRAGMA foreign_keys=ON")
+
+
+def _delete_rows_for_new_jobs(conn, snapshot_job_ids: set[int]) -> None:
+    current_job_ids = {
+        int(row["id"])
+        for row in conn.execute("SELECT id FROM monitor_jobs").fetchall()
+        if row["id"] is not None
+    }
+    test_job_ids = current_job_ids - snapshot_job_ids
+    if not test_job_ids:
+        return
+    placeholders = ",".join("?" for _ in test_job_ids)
+    ids = sorted(test_job_ids)
+    conn.execute(f"DELETE FROM reports WHERE job_id IN ({placeholders})", ids)
+    conn.execute(f"DELETE FROM crawl_runs WHERE job_id IN ({placeholders})", ids)
+    conn.execute(f"DELETE FROM job_recipients WHERE job_id IN ({placeholders})", ids)
+    conn.execute(f"DELETE FROM job_platforms WHERE job_id IN ({placeholders})", ids)
+    conn.execute(f"DELETE FROM job_keywords WHERE job_id IN ({placeholders})", ids)
+
+
+def _delete_rows_for_new_runs(conn, snapshot_run_ids: set[int]) -> None:
+    current_run_ids = {
+        int(row["id"])
+        for row in conn.execute("SELECT id FROM crawl_runs").fetchall()
+        if row["id"] is not None
+    }
+    test_run_ids = current_run_ids - snapshot_run_ids
+    if not test_run_ids:
+        return
+    placeholders = ",".join("?" for _ in test_run_ids)
+    ids = sorted(test_run_ids)
+    conn.execute(f"DELETE FROM reports WHERE run_id IN ({placeholders})", ids)
 
 
 class _FakeClient:

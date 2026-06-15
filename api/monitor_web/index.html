@@ -261,6 +261,10 @@
     .action-menu.active { display:grid; gap:4px; }
     .action-menu a, .action-menu button { width:100%; min-height:32px; display:flex; align-items:center; justify-content:flex-start; border:0; border-radius:6px; background:#fff; color:var(--text); padding:7px 9px; text-align:left; text-decoration:none; font-weight:650; cursor:pointer; }
     .action-menu a:hover, .action-menu button:hover { background:var(--primary-weak); color:#1d4ed8; }
+    .report-action-menu { position:fixed; display:none; min-width:168px; padding:6px; background:#fff; border:1px solid var(--line); border-radius:8px; box-shadow:0 18px 38px rgba(15,23,42,.18); z-index:90; }
+    .report-action-menu.active { display:grid; gap:4px; }
+    .report-action-menu a, .report-action-menu button { width:100%; min-height:32px; display:flex; align-items:center; justify-content:flex-start; border:0; border-radius:6px; background:#fff; color:var(--text); padding:7px 9px; text-align:left; text-decoration:none; font-weight:650; cursor:pointer; white-space:nowrap; }
+    .report-action-menu a:hover, .report-action-menu button:hover { background:var(--primary-weak); color:#1d4ed8; }
     .account-table tr.active td { background:#eff6ff; }
     .account-name-cell strong { display:block; font-size:13px; }
     .account-name-cell span { display:block; margin-top:3px; color:var(--muted); font-size:12px; }
@@ -1130,7 +1134,7 @@
                 <div><label>加密方式</label><select id="encryption"><option value="ssl">SSL</option><option value="starttls">STARTTLS</option><option value="none">None</option></select></div>
                 <div><label>发件人</label><input id="sender"></div>
                 <div><label>用户名</label><input id="smtp_username"></div>
-                <div><label>密码</label><input id="smtp_password" type="password" placeholder="留空表示不修改"></div>
+                <div><label>密码</label><input id="smtp_password" type="password" placeholder="留空表示不修改"><div id="smtp_password_status" class="field-hint">未保存密码</div></div>
               </div>
             </div>
             <div class="settings-card">
@@ -1291,6 +1295,7 @@
     </div>
   </div>
   <div id="toast" class="toast"></div>
+  <div id="report_action_menu" class="report-action-menu"></div>
   <div id="email_template_drawer_backdrop" class="drawer-backdrop" onclick="closeEmailTemplateDrawer()"></div>
   <div id="email_template_drawer" class="drawer template-modal email-template-modal" role="dialog" aria-modal="true" aria-label="邮件模板">
     <div class="drawer-head">
@@ -1390,6 +1395,7 @@
     let activeLoginSessionId = null;
     let emailPreviewTimer = null;
     let openReportMenuId = null;
+    let reportMenuAnchor = null;
     let openJobMenuId = null;
     let openAIRuleMenuId = null;
     let currentReports = [];
@@ -1570,11 +1576,15 @@
         }
       }
       if(!event.target.closest('.action-menu-host')){
-        if(openReportMenuId !== null){ openReportMenuId = null; renderReportsTable(); }
         if(openJobMenuId !== null){ openJobMenuId = null; renderJobsTable(); }
         if(openAIRuleMenuId !== null){ openAIRuleMenuId = null; renderAIRuleProfiles([...aiRuleProfileCache.values()]); }
       }
+      if(!event.target.closest('.report-action-menu') && !event.target.closest('[data-report-menu-button]')){
+        closeReportActionMenu();
+      }
     });
+    window.addEventListener('resize', positionReportActionMenu);
+    window.addEventListener('scroll', positionReportActionMenu, true);
 
     function toggleNavMenu(menu){
       const target=document.getElementById('nav_menu_'+menu);
@@ -3654,6 +3664,8 @@
       document.getElementById('email_status').textContent = statusText;
       const statusLabel=document.getElementById('email_status_label');
       if(statusLabel) statusLabel.textContent = c.last_test_status==='success' ? '最近测试通过' : (c.last_test_status==='failed' ? '最近测试失败' : '尚未测试');
+      const passwordStatus=document.getElementById('smtp_password_status');
+      if(passwordStatus) passwordStatus.textContent = c.password ? `已保存密码：${c.password}；如需更换请重新输入。` : '未保存密码；发送测试邮件前请填写。';
       const senderSummary=document.getElementById('email_sender_summary');
       if(senderSummary) senderSummary.textContent = c.sender || c.username || '-';
       const recipientSummary=document.getElementById('email_recipient_summary');
@@ -4036,6 +4048,7 @@
       const target=document.getElementById('reports_table');
       if(!target) return;
       target.innerHTML=table(['报告 ID','律所','新增','疑似负面','高风险','待复核','邮件','创建时间','操作'], (currentReports||[]).map(reportRow));
+      positionReportActionMenu();
     }
     function reportRow(r){
       return [
@@ -4052,23 +4065,53 @@
     }
     function reportActions(id){
       const reportId=Number(id);
-      const open=openReportMenuId===reportId;
       return `<div class="wide-actions">
         <button class="secondary" onclick="previewReport(${reportId})">预览</button>
-        <span class="action-menu-host">
-          <button class="secondary" onclick="toggleReportActionMenu(${reportId})">更多</button>
-          <span id="report_menu_${reportId}" class="action-menu${open?' active':''}">
-            <button type="button" onclick="resendReportEmail(${reportId})">重发邮件</button>
-            <a href="/api/monitor/reports/${reportId}/download?type=html" target="_blank">下载 HTML</a>
-            <a href="/api/monitor/reports/${reportId}/download?type=excel" target="_blank">下载 Excel</a>
-            <a href="/api/monitor/reports/${reportId}/download?type=markdown" target="_blank">下载 Markdown</a>
-          </span>
-        </span>
+        <button class="secondary" data-report-menu-button="${reportId}" onclick="toggleReportActionMenu(${reportId}, this)">更多</button>
       </div>`;
     }
-    function toggleReportActionMenu(id){
+    function reportFloatingMenu(id){
+      return `
+        <button type="button" onclick="resendReportEmail(${Number(id)}); closeReportActionMenu();">重发邮件</button>
+        <a href="/api/monitor/reports/${Number(id)}/download?type=html" target="_blank" onclick="closeReportActionMenu()">下载 HTML</a>
+        <a href="/api/monitor/reports/${Number(id)}/download?type=excel" target="_blank" onclick="closeReportActionMenu()">下载 Excel</a>
+        <a href="/api/monitor/reports/${Number(id)}/download?type=markdown" target="_blank" onclick="closeReportActionMenu()">下载 Markdown</a>`;
+    }
+    function toggleReportActionMenu(id, anchor){
       openReportMenuId = openReportMenuId===Number(id) ? null : Number(id);
-      renderReportsTable();
+      reportMenuAnchor = openReportMenuId ? anchor : null;
+      renderReportActionMenu();
+    }
+    function closeReportActionMenu(){
+      if(openReportMenuId===null) return;
+      openReportMenuId=null;
+      reportMenuAnchor=null;
+      renderReportActionMenu();
+    }
+    function renderReportActionMenu(){
+      const menu=document.getElementById('report_action_menu');
+      if(!menu) return;
+      if(openReportMenuId===null){
+        menu.classList.remove('active');
+        menu.innerHTML='';
+        return;
+      }
+      menu.innerHTML=reportFloatingMenu(openReportMenuId);
+      menu.classList.add('active');
+      positionReportActionMenu();
+    }
+    function positionReportActionMenu(){
+      if(openReportMenuId===null) return;
+      const menu=document.getElementById('report_action_menu');
+      const anchor=(reportMenuAnchor && document.contains(reportMenuAnchor)) ? reportMenuAnchor : document.querySelector(`[data-report-menu-button="${openReportMenuId}"]`);
+      if(!menu || !anchor) return;
+      const rect=anchor.getBoundingClientRect();
+      const menuWidth=menu.offsetWidth || 168;
+      const menuHeight=menu.offsetHeight || 160;
+      const left=Math.max(12, Math.min(window.innerWidth - menuWidth - 12, rect.right - menuWidth));
+      const top=Math.max(12, Math.min(window.innerHeight - menuHeight - 12, rect.bottom + 6));
+      menu.style.left=left+'px';
+      menu.style.top=top+'px';
     }
     async function createSystemCheckReport(){ const res=await api('/reports/system-check',{method:'POST'}); if(!res.ok){toast(await err(res));return;} toast('系统诊断报告已生成'); await Promise.all([loadReports(), loadRuns(), loadReadiness(), loadDoctor(), loadDashboard()]); }
     async function previewReport(id){
