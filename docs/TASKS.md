@@ -219,24 +219,24 @@ scope, and rollback path.
 
 ### Phase 11A - Frontend Module Boundary And CSS Token Layer
 
-- [ ] Create `api/webui/monitor/monitor.css`.
-- [ ] Create `api/webui/monitor/monitor.js`.
-- [ ] Reference the new local CSS/JS assets from `api/monitor_web/index.html`
+- [x] Create `api/webui/monitor/monitor.css`.
+- [x] Create `api/webui/monitor/monitor.js`.
+- [x] Reference the new local CSS/JS assets from `api/monitor_web/index.html`
       without removing existing inline CSS/JS.
-- [ ] Load `monitor.css` before the existing inline `<style>` block and load
+- [x] Load `monitor.css` before the existing inline `<style>` block and load
       `monitor.js` after the existing inline `<script>` block.
-- [ ] Define CSS custom-property tokens for colors, typography, spacing,
+- [x] Define CSS custom-property tokens for colors, typography, spacing,
       radius, shadows, z-index, status colors, and breakpoint values.
-- [ ] Use namespaced token variables such as `--color-*`, `--space-*`, and
+- [x] Use namespaced token variables such as `--color-*`, `--space-*`, and
       `--font-*`; do not define legacy aliases such as `--bg` or `--primary`
       in Phase 11A.
-- [ ] Keep `monitor.js` as a quiet module boundary with no console logging and
+- [x] Keep `monitor.js` as a quiet module boundary with no console logging and
       no global variable/function definitions or UI behavior in Phase 11A.
-- [ ] Keep the visible UI unchanged in this batch.
-- [ ] Verify `/monitor` loads and the new CSS/JS assets return HTTP 200.
-- [ ] Verify login, navigation, task list, run center, and report preview still
+- [x] Keep the visible UI unchanged in this batch.
+- [x] Verify `/monitor` loads and the new CSS/JS assets return HTTP 200.
+- [x] Verify login, navigation, task list, run center, and report preview still
       work through a browser smoke check.
-- [ ] Verify 1440px desktop, 1024px tablet, and 390px mobile layouts are
+- [x] Verify 1440px desktop, 1024px tablet, and 390px mobile layouts are
       unchanged.
 
 ### Phase 11B - Base Layout And Navigation Visual Foundation

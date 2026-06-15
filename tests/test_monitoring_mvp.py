@@ -7245,6 +7245,58 @@ def test_monitor_page_uses_consistent_buttons_tables_and_modal_actions():
     assert not [word for word in forbidden if word in page]
 
 
+def test_phase_11a_monitor_static_boundary_and_tokens_are_quiet():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    js = Path("api/webui/monitor/monitor.js").read_text(encoding="utf-8")
+
+    stylesheet = '<link rel="stylesheet" href="/static/monitor/monitor.css">'
+    module_script = '<script type="module" src="/static/monitor/monitor.js"></script>'
+
+    assert stylesheet in page
+    assert module_script in page
+    assert page.index(stylesheet) < page.index("<style>")
+    assert page.index("</script>") < page.index(module_script)
+
+    for token in [
+        "--color-neutral-0",
+        "--color-primary-600",
+        "--color-status-success-text",
+        "--color-status-warning-text",
+        "--color-status-danger-text",
+        "--color-status-info-text",
+        "--color-navigation-bg",
+        "--font-family-sans",
+        "--font-size-md",
+        "--font-weight-semibold",
+        "--line-height-base",
+        "--space-4",
+        "--space-page-x",
+        "--radius-control-medium",
+        "--shadow-elevation-1",
+        "--z-floating-menu",
+        "--transition-duration-base",
+        "--breakpoint-mobile-max",
+        "--breakpoint-tablet-min",
+        "--breakpoint-desktop-min",
+    ]:
+        assert token in css
+
+    for legacy_alias in [
+        "--bg:",
+        "--surface:",
+        "--line:",
+        "--text:",
+        "--muted:",
+        "--primary:",
+        "--radius:",
+    ]:
+        assert legacy_alias not in css
+
+    for forbidden_js in ["console.", "window.", "globalThis", "document.", "addEventListener"]:
+        assert forbidden_js not in js
+
+
 def test_cli_run_due_runs_only_due_enabled_jobs(monkeypatch):
     init_db()
     jobs_snapshot = _snapshot_monitor_jobs()

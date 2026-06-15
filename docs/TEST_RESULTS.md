@@ -11,6 +11,48 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
   `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-15 - Phase 11A Frontend Module Boundary Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`, isolated local FastAPI service with
+temporary monitor data.
+
+Result:
+
+- Created `api/webui/monitor/monitor.css` with namespaced design-token custom
+  properties for color, typography, spacing, radius, shadows, z-index, status
+  colors, motion, and breakpoints.
+- Created `api/webui/monitor/monitor.js` as a quiet Phase 11A module boundary
+  with no console logging, global variables/functions, event listeners, or UI
+  behavior.
+- Referenced `/static/monitor/monitor.css` before the existing inline
+  `<style>` block and `/static/monitor/monitor.js` after the existing inline
+  `<script>` block.
+- Kept the existing inline CSS/JS in place and did not introduce an intentional
+  visual redesign in this batch.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_11a or monitor_page_uses"`
+- Result: 3 passed, 214 deselected, 4 warnings.
+- Runtime HTTP check on isolated service:
+  - `/monitor`: HTTP 200;
+  - `/static/monitor/monitor.css`: HTTP 200;
+  - `/static/monitor/monitor.js`: HTTP 200.
+- Playwright authenticated smoke check at 1440px, 1024px, and 390px:
+  dashboard, monitoring task list, run center, report center, and task-create
+  entry remained reachable; no console errors or page errors were reported.
+
+Limitations:
+
+- Phase 11A only creates the static module boundary and token layer. Base
+  layout migration, visible Apple-style visual foundation, shared interaction
+  helpers, floating-menu fixes, and responsive navigation remain for Phase
+  11B-11D.
+
 ## 2026-06-15 - Phase 10-18 Systematic Global Review Reconfirmed
 
 Environment: local repository documentation update in `E:\myproject\MediaCrawler`.

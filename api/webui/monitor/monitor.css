@@ -1,0 +1,102 @@
+:root {
+  color-scheme: light;
+
+  --color-neutral-0: #ffffff;
+  --color-neutral-25: #fbfcfe;
+  --color-neutral-50: #f6f8fb;
+  --color-neutral-100: #eef2f7;
+  --color-neutral-200: #dde5ef;
+  --color-neutral-300: #c7d2e1;
+  --color-neutral-400: #94a3b8;
+  --color-neutral-500: #64748b;
+  --color-neutral-600: #475569;
+  --color-neutral-700: #334155;
+  --color-neutral-800: #1f2937;
+  --color-neutral-900: #111827;
+  --color-neutral-950: #0f172a;
+
+  --color-primary-50: #eff6ff;
+  --color-primary-100: #dbeafe;
+  --color-primary-500: #3b82f6;
+  --color-primary-600: #2563eb;
+  --color-primary-700: #1d4ed8;
+
+  --color-status-success-text: #047857;
+  --color-status-success-bg: #ecfdf5;
+  --color-status-success-border: #a7f3d0;
+  --color-status-warning-text: #b45309;
+  --color-status-warning-bg: #fffbeb;
+  --color-status-warning-border: #fde68a;
+  --color-status-danger-text: #b42318;
+  --color-status-danger-bg: #fff1f2;
+  --color-status-danger-border: #fecdd3;
+  --color-status-info-text: #1d4ed8;
+  --color-status-info-bg: #eff6ff;
+  --color-status-info-border: #bfdbfe;
+
+  --color-navigation-bg: #111827;
+  --color-navigation-text: #cbd5e1;
+  --color-navigation-text-muted: #94a3b8;
+  --color-navigation-active-bg: #1f2937;
+  --color-navigation-active-text: #ffffff;
+
+  --font-family-sans: "Inter", "Microsoft YaHei", Arial, sans-serif;
+  --font-size-xs: 12px;
+  --font-size-sm: 13px;
+  --font-size-md: 14px;
+  --font-size-lg: 16px;
+  --font-size-xl: 18px;
+  --font-size-2xl: 22px;
+  --font-size-3xl: 28px;
+  --font-weight-regular: 400;
+  --font-weight-medium: 500;
+  --font-weight-semibold: 650;
+  --font-weight-bold: 700;
+  --line-height-tight: 1.2;
+  --line-height-base: 1.5;
+  --line-height-relaxed: 1.6;
+
+  --space-0: 0;
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-page-x: 24px;
+  --space-page-y: 22px;
+  --space-toolbar-gap: 10px;
+  --space-card-gap: 14px;
+
+  --radius-control-small: 6px;
+  --radius-control-medium: 8px;
+  --radius-card-medium: 8px;
+  --radius-modal-medium: 10px;
+  --radius-menu-medium: 8px;
+
+  --shadow-elevation-1: 0 1px 2px rgba(15, 23, 42, 0.04);
+  --shadow-elevation-2: 0 12px 28px rgba(15, 23, 42, 0.12);
+  --shadow-elevation-3: 0 18px 45px rgba(15, 23, 42, 0.22);
+  --shadow-focus-ring: 0 0 0 3px rgba(37, 99, 235, 0.16);
+
+  --z-base: 1;
+  --z-sticky-header: 4;
+  --z-side-navigation: 20;
+  --z-floating-menu: 55;
+  --z-modal-backdrop: 90;
+  --z-modal: 100;
+  --z-toast: 120;
+
+  --transition-duration-fast: 120ms;
+  --transition-duration-base: 160ms;
+  --transition-duration-slow: 220ms;
+  --transition-easing-standard: cubic-bezier(0.2, 0, 0, 1);
+  --transition-easing-exit: cubic-bezier(0.4, 0, 1, 1);
+
+  --breakpoint-mobile-max: 767px;
+  --breakpoint-tablet-min: 768px;
+  --breakpoint-tablet-max: 1279px;
+  --breakpoint-desktop-min: 1280px;
+}

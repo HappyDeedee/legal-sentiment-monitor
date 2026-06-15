@@ -17,8 +17,8 @@ Phase 10-18 console optimization planning has been accepted as the next
 roadmap. Phase 10 - Frontend Architecture And Technology Decision is complete
 as a documentation and architecture decision phase. Phase 10.5 - Phase 10-18
 Global Plan Review Gate is complete and found no P0/P1 blockers after the
-granularity refinements. Phase 11A is the next allowed execution goal, but
-Phase 11-18 implementation work has not started yet.
+granularity refinements. Phase 11A - Frontend Module Boundary And CSS Token
+Layer is complete and verified. Phase 11B is the next allowed execution goal.
 The active SQLite schema now provides the foundation tables and columns
 required before later implementation work, and the web/API layer now has
 session login, administrator/normal-user roles, menu visibility,
@@ -55,8 +55,8 @@ diagnostics, and retention-setting diagnostics.
   documentation and architecture decision phase.
 - Phase 10.5 - Phase 10-18 Global Plan Review Gate: complete as a
   documentation-only review gate.
-- Phase 11 - Frontend Design System: planned as Phase 11A-11D, not
-  implemented; Phase 11A is allowed as the next execution goal.
+- Phase 11 - Frontend Design System: Phase 11A complete and verified; Phase
+  11B is the next allowed execution goal.
 - Phase 12 - Navigation And Page Entry Redesign: planned, not implemented.
 - Phase 13 - Overview Operations Home Redesign: planned as Phase 13A-13C, not
   implemented.
@@ -201,7 +201,7 @@ validation with real deployment credentials.
 
 ## In Progress
 
-- Phase 11A execution preparation. No Phase 11-18 code implementation is in
+- Phase 11B execution preparation. No Phase 11B-18 implementation work is in
   progress.
 
 ## Known Risks
@@ -227,9 +227,9 @@ validation with real deployment credentials.
 - Phase 7 and Phase 8 automated checks do not prove real AI provider, SMTP,
   real platform QR scanning, or real platform crawling behavior; those remain
   deployment and pilot risks.
-- Phase 11-18 plans depend on future implementation and verification. The
-  current frontend is still the pre-redesign console until those phases are
-  implemented.
+- Phase 11B-18 plans depend on future implementation and verification. The
+  current frontend has only the Phase 11A local static module boundary and
+  design-token layer; visible redesign work has not started yet.
 - Phase 11 must not be run as one large implementation goal. It is split into
   Phase 11A module boundary and tokens, Phase 11B base layout/navigation
   visual foundation, Phase 11C interaction components and floating menus, and
@@ -241,20 +241,40 @@ validation with real deployment credentials.
   and frontend/responsive batches.
 - Phase 10.5 follow-up global review found no remaining P0/P1 blockers.
   Remaining review notes are P2 implementation refinements and do not block
-  Phase 11A.
+  Phase 11B.
 
 ## Next Step
 
 Next allowed implementation step:
 
-1. start Phase 11A only;
-2. create the local monitor CSS/JS module boundary;
-3. define namespaced design-token custom properties;
-4. keep visible UI and existing inline CSS/JS behavior unchanged;
-5. verify `/monitor`, static asset loading, core smoke flows, and unchanged
-   1440px/1024px/390px layouts before moving to Phase 11B.
+1. start Phase 11B only;
+2. move the base layout, shell, header, navigation, button, card, and toolbar
+   styling into `api/webui/monitor/monitor.css`;
+3. keep page structure, business data flow, and role visibility unchanged;
+4. verify desktop 1440px navigation, page switching, login/logout, and core
+   pages before moving to Phase 11C.
 
 ## Latest Verification
+
+Phase 11A frontend module boundary verification on 2026-06-15:
+
+- Added `api/webui/monitor/monitor.css` and
+  `api/webui/monitor/monitor.js`.
+- Referenced `/static/monitor/monitor.css` before the existing inline
+  `<style>` block and `/static/monitor/monitor.js` after the existing inline
+  `<script>` block.
+- Kept existing inline CSS/JS behavior in place; no visible UI redesign was
+  introduced.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_11a or monitor_page_uses"`
+- Result: 3 passed, 214 deselected, 4 warnings.
+- Runtime HTTP check on isolated local service:
+  `/monitor`, `/static/monitor/monitor.css`, and
+  `/static/monitor/monitor.js` returned HTTP 200.
+- Playwright authenticated smoke check at 1440px, 1024px, and 390px:
+  dashboard, monitoring task list, run center, report center, and task-create
+  entry remained reachable with no console or page errors.
 
 Phase 10-18 documentation planning verification on 2026-06-15:
 
