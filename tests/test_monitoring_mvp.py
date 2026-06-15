@@ -7510,6 +7510,84 @@ def test_phase_12a_navigation_groups_and_login_landing():
     assert ".nav-popover" not in inline_style
 
 
+def test_phase_12b_page_entry_and_role_flow_shortcuts():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+
+    for entry in [
+        'data-page-entry="dashboard"',
+        'data-page-entry="jobs"',
+        'data-page-entry="runs"',
+        'data-page-entry="reports"',
+        'data-page-entry="accounts"',
+        'data-page-entry="proxies"',
+        'data-page-entry="ai"',
+        'data-page-entry="ai_rules"',
+        'data-page-entry="email"',
+        'data-page-entry="email_templates"',
+        'data-page-entry="runtime"',
+        'data-page-entry="doctor"',
+    ]:
+        assert entry in page
+
+    for marker in [
+        "运营首页",
+        "任务监控",
+        "运行中心",
+        "报告中心",
+        "邮件交付",
+        "资源支撑",
+        "系统配置",
+        'id="task_loop_shortcuts"',
+        'class="task-loop-shortcuts"',
+        'data-shortcut-action="new-job"',
+        'data-shortcut-target="email_delivery_status_entry"',
+        'id="email_delivery_status_entry"',
+        "报告邮件状态与手动重发入口",
+        "报告列表展示最新邮件状态",
+        "function refreshActiveSection()",
+        "function navigateShortcut(tab, options={})",
+        "document.querySelectorAll('[data-shortcut-tab]').forEach",
+        "document.querySelectorAll('[data-shortcut-tab][data-menu-key]')",
+        "btn.classList.toggle('is-hidden', !canMenu(btn.dataset.menuKey))",
+        "if(options.action==='new-job')",
+        "openNewJobDrawer()",
+        "loadReadiness();",
+        "loadSchedulerStatus();",
+        "loadPlatformStatus();",
+        "if(canMenu('system_diagnostics')) loadSystemChecklist();",
+    ]:
+        assert marker in page
+
+    for selector in [
+        ".page-entry",
+        ".page-title-block",
+        ".page-kicker",
+        ".page-filter-region",
+        ".task-loop-shortcuts",
+        ".shortcut-card",
+        ".shortcut-primary",
+        ".email-delivery-entry",
+    ]:
+        assert selector in css
+
+    assert "刷新全局状态" not in page
+    assert "刷新当前页面" in page
+
+    # Normal-user shortcuts and page actions must not expose administrator
+    # resource entries when menu permissions hide them.
+    assert 'class="shortcut-card admin-entry" type="button" data-shortcut-tab="accounts" data-menu-key="platform_accounts"' in page
+    assert 'data-shortcut-tab="accounts" data-menu-key="platform_accounts">处理账号资源' in page
+    assert 'data-shortcut-tab="doctor" data-menu-key="system_diagnostics"' in page
+    assert 'data-shortcut-tab="email" data-menu-key="mail_config"' in page
+    assert 'data-shortcut-tab="ai_rules" data-menu-key="ai_rules"' in page
+
+    assert "/api/monitor/dashboard" not in page
+    assert "email_delivery_logs" not in page
+    assert "job_snapshot_json" not in page
+    assert "crawl_runs.visibility" not in page
+
+
 def test_cli_run_due_runs_only_due_enabled_jobs(monkeypatch):
     init_db()
     jobs_snapshot = _snapshot_monitor_jobs()

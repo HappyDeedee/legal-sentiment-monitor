@@ -19,8 +19,9 @@ as a documentation and architecture decision phase. Phase 10.5 - Phase 10-18
 Global Plan Review Gate is complete and found no P0/P1 blockers after the
 granularity refinements. Phase 11 - Frontend Design System is complete and
 verified through Phase 11A, Phase 11B, Phase 11C, and Phase 11D. Phase 12A -
-Navigation Structure And Login Landing is complete and verified. Phase 12B is
-the next allowed execution goal.
+Navigation Structure And Login Landing is complete and verified. Phase 12B -
+Page Entry And Role Flow is complete and verified. Phase 13A - Operations Home
+Data Layer is the next allowed execution goal.
 The active SQLite schema now provides the foundation tables and columns
 required before later implementation work, and the web/API layer now has
 session login, administrator/normal-user roles, menu visibility,
@@ -41,7 +42,8 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   assets, base shell/navigation visual styles, fixed floating-menu behavior,
   responsive desktop/tablet/mobile navigation and layout foundations, Phase
   12A expandable primary navigation groups, operations-home login/session
-  landing, and grouped account/logout controls.
+  landing, grouped account/logout controls, and Phase 12B standardized page
+  entries with task-loop shortcuts for administrator and normal-user paths.
 
 ## Implementation Status
 
@@ -63,10 +65,10 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   documentation-only review gate.
 - Phase 11 - Frontend Design System: complete and verified through Phase
   11A-11D.
-- Phase 12 - Navigation And Page Entry Redesign: in progress; Phase 12A is
-  complete and verified, and Phase 12B is the next allowed execution goal.
-- Phase 13 - Overview Operations Home Redesign: planned as Phase 13A-13C, not
-  implemented.
+- Phase 12 - Navigation And Page Entry Redesign: complete and verified through
+  Phase 12A-12B.
+- Phase 13 - Overview Operations Home Redesign: planned as Phase 13A-13C;
+  Phase 13A is the next allowed execution goal and is not implemented.
 - Phase 14 - Run Center Data Model Preparation: planned, not implemented.
 - Phase 15 - Run Center Governance And Frontend: planned, not implemented.
 - Phase 16 - Email Delivery Data Model Preparation: planned, not implemented.
@@ -78,7 +80,8 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   lock-storage decisions are accepted; Phase 5 account environment runtime and
   Phase 6 login-flow runtime are complete.
 
-The documented V1 roadmap is implemented through Phase 9 in this worktree.
+The documented V1 product roadmap is implemented through Phase 9 in this
+worktree, and the console optimization roadmap is verified through Phase 12B.
 Production pilot handoff still requires live platform, SMTP, and AI-provider
 validation with real deployment credentials.
 
@@ -208,7 +211,7 @@ validation with real deployment credentials.
 
 ## In Progress
 
-- Phase 12B execution preparation. No Phase 12B-18 implementation work is in
+- Phase 13A execution preparation. No Phase 13A-18 implementation work is in
   progress.
 
 ## Known Risks
@@ -234,11 +237,13 @@ validation with real deployment credentials.
 - Phase 7 and Phase 8 automated checks do not prove real AI provider, SMTP,
   real platform QR scanning, or real platform crawling behavior; those remain
   deployment and pilot risks.
-- Phase 12B-18 plans depend on future implementation and verification. The
-  current frontend has the complete Phase 11 foundation: local static module
+- Phase 13A-18 plans depend on future implementation and verification. The
+  current frontend has the complete Phase 11-12 foundation: local static module
   boundary, base desktop shell/navigation/button/card/toolbar styling, shared
-  interaction helper/fixed floating-menu behavior, and responsive
-  desktop/tablet/mobile navigation/layout rules.
+  interaction helper/fixed floating-menu behavior, responsive
+  desktop/tablet/mobile navigation/layout rules, expandable navigation groups,
+  operations-home landing, and standardized page entries with role-safe
+  task-loop shortcuts.
 - Phase 11 was completed as four verified batches: Phase 11A module boundary
   and tokens, Phase 11B base layout/navigation visual foundation, Phase 11C
   interaction components and floating menus, and Phase 11D responsive
@@ -247,6 +252,10 @@ validation with real deployment credentials.
   popover navigation with expandable groups, routed login/session restore to
   Operations Home, and grouped user identity/logout controls for desktop and
   mobile.
+- Phase 12B standardized page entry headers and task-loop shortcuts across
+  Operations Home, Monitoring, Run Center, Report Center, resource pages, mail
+  configuration, runtime settings, and system diagnostics while preserving
+  normal-user role boundaries.
 - Email idempotency, run archive/noise filtering, and report task grouping are
   accepted data-model directions but are not active schema features yet.
 - The first global Phase 10-18 review found that Phase 13, Phase 17, and Phase
@@ -254,19 +263,47 @@ validation with real deployment credentials.
   and frontend/responsive batches.
 - Phase 10.5 follow-up global review found no remaining P0/P1 blockers.
   Remaining review notes are P2 implementation refinements and do not block
-  Phase 12B.
+  Phase 13A.
 
 ## Next Step
 
 Next allowed implementation step:
 
-1. start Phase 12B only;
-2. standardize page entries around the monitoring task loop;
-3. preserve the Phase 12A expandable navigation, login/session landing,
-   account/logout grouping, and role visibility behavior;
-4. verify administrator and normal-user entry paths before moving to Phase 13A.
+1. start Phase 13A only;
+2. define the operations-home data contract under the existing monitor API
+   surface;
+3. aggregate task health, run activity, report activity, email delivery status,
+   suspected lead metrics, and concise resource health from real persisted data
+   or documented empty states;
+4. preserve administrator and normal-user owner/workspace scope before moving
+   to Phase 13B.
 
 ## Latest Verification
+
+Phase 12B page entry and role flow verification on
+2026-06-15:
+
+- Standardized page entry headers across Operations Home, Monitoring, Run
+  Center, Report Center, account resources, proxy resources, AI access, AI
+  rules, mail configuration, mail templates, runtime settings, and system
+  diagnostics.
+- Added task-loop shortcuts for creating a monitoring task, viewing runs,
+  viewing reports, checking report email delivery status, and resolving
+  administrator resource issues where permitted.
+- Replaced the header refresh affordance with current-page refresh behavior
+  and kept Operations Home using the existing `dashboard` route ID.
+- Preserved Phase 12A expandable navigation, login/session landing,
+  account/logout grouping, and role visibility behavior.
+- Runtime browser validation on an isolated local service verified `/monitor`,
+  `/static/monitor/monitor.css`, and `/static/monitor/monitor.js` returned HTTP
+  200; administrator path exposed 12 page entries and 5 Operations Home
+  shortcuts; task-loop shortcuts opened the task drawer and navigated jobs ->
+  runs -> reports; the report email delivery entry was visible; normal-user
+  navigation only exposed `总览`, `舆情监控`, `运行中心`, and `报告中心`; normal-user
+  Operations Home exposed 4 task-loop shortcuts and no administrator resource
+  shortcuts; 1440px, 1024px, and 390px checks found no business-area horizontal
+  overflow; mobile navigation opened, switched to Monitoring, and closed; page
+  console errors were empty.
 
 Phase 12A navigation structure and login landing verification on
 2026-06-15:

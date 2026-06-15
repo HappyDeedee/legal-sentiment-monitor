@@ -11,6 +11,68 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
   `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-15 - Phase 12B Page Entry And Role Flow Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`, isolated local FastAPI service with
+temporary monitor data.
+
+Result:
+
+- Added consistent page entry headers for Operations Home, Monitoring, Run
+  Center, Report Center, account resources, proxy resources, AI access, AI
+  rules, mail configuration, mail templates, runtime settings, and system
+  diagnostics.
+- Added role-aware task-loop shortcuts for creating a monitoring task, viewing
+  runs, viewing reports, checking report email delivery status, and resolving
+  administrator resource issues.
+- Added a report-center email delivery entry that keeps latest report email
+  status and manual resend discovery in the task loop without implementing the
+  later delivery-log data model.
+- Changed the shell refresh action to refresh the current page instead of a
+  global-status-only action.
+- Added
+  `tests/test_monitoring_mvp.py::test_phase_12b_page_entry_and_role_flow_shortcuts`.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before implementation and after documentation
+  close-out.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_12b or phase_12a or phase_11a or phase_11b or phase_11c or phase_11d or monitor_page_uses"`
+- Result after documentation close-out: 8 passed, 214 deselected, 1 warning.
+- Runtime HTTP check on isolated service:
+  - `/monitor`: HTTP 200;
+  - `/static/monitor/monitor.css`: HTTP 200;
+  - `/static/monitor/monitor.js`: HTTP 200.
+- Browser validation:
+  - administrator login landed on `dashboard`;
+  - 12 page entries existed in the DOM;
+  - administrator Operations Home showed 5 shortcuts including the resource
+    support shortcut;
+  - create-task shortcut opened the task drawer;
+  - task -> runs -> reports shortcuts navigated successfully;
+  - report-center email delivery entry was visible;
+  - normal-user navigation contained only `总览`, `舆情监控`, `运行中心`, and
+    `报告中心`;
+  - normal-user Operations Home showed 4 task-loop shortcuts and no visible
+    administrator resource shortcuts;
+  - normal-user email delivery shortcut navigated to Report Center and the
+    email delivery entry;
+  - 1440px, 1024px, and 390px checks found no business-area horizontal
+    overflow for page entries, shortcut blocks, or the email delivery entry;
+  - 390px mobile navigation opened, selected Monitoring, and closed;
+  - page console errors were empty.
+
+Limitations:
+
+- Phase 12B only standardizes page entry structure and role-safe task-loop
+  navigation. Phase 13A must still define the real operations-home data
+  contract and aggregates.
+- No backend API contract, database schema, permission model, email-delivery
+  log, run archive, or report grouping changes were made in this batch.
+
 ## 2026-06-15 - Phase 12A Navigation Structure And Login Landing Verified
 
 Environment: worktree

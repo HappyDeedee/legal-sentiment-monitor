@@ -379,7 +379,7 @@
         </div>
         <div class="row header-actions">
           <div id="top_status" class="small"></div>
-          <button class="secondary" onclick="loadAll()">刷新全局状态</button>
+          <button class="secondary" onclick="refreshActiveSection()">刷新当前页面</button>
           <div class="account-area">
             <div id="current_user_badge" class="small"></div>
             <button class="secondary" onclick="logout()">退出</button>
@@ -387,9 +387,19 @@
         </div>
       </header>
       <section id="dashboard" class="active">
-        <div class="page-head">
-          <div><h2>总览</h2><p>汇总任务、采集、线索、报告和资源运行状态。</p></div>
-          <button class="secondary" onclick="loadDashboard()">刷新总览</button>
+        <div class="page-head page-entry" data-page-entry="dashboard">
+          <div class="page-title-block"><span class="page-kicker">运营首页</span><h2>运营首页</h2><p>围绕监控任务、运行记录、报告和邮件交付查看当前运营状态。</p></div>
+          <div class="page-actions">
+            <button class="primary" data-shortcut-tab="jobs" data-shortcut-action="new-job" data-menu-key="monitoring">新建监控任务</button>
+            <button class="secondary" onclick="refreshActiveSection()">刷新首页</button>
+          </div>
+        </div>
+        <div id="task_loop_shortcuts" class="task-loop-shortcuts" aria-label="监控任务流快捷入口">
+          <button class="shortcut-card shortcut-primary" type="button" data-shortcut-tab="jobs" data-shortcut-action="new-job" data-menu-key="monitoring"><span>01</span><strong>创建监控任务</strong><em>填写律所、平台搜索词、调度和收件人。</em></button>
+          <button class="shortcut-card" type="button" data-shortcut-tab="runs" data-menu-key="run_center"><span>02</span><strong>查看运行中心</strong><em>跟进采集状态、失败原因和运行日志。</em></button>
+          <button class="shortcut-card" type="button" data-shortcut-tab="reports" data-menu-key="report_center"><span>03</span><strong>查看报告中心</strong><em>预览报告正文、线索明细和下载归档。</em></button>
+          <button class="shortcut-card" type="button" data-shortcut-tab="reports" data-shortcut-target="email_delivery_status_entry" data-menu-key="report_center"><span>04</span><strong>检查邮件交付</strong><em>查看报告邮件状态，并按需手动重发。</em></button>
+          <button class="shortcut-card admin-entry" type="button" data-shortcut-tab="accounts" data-menu-key="platform_accounts"><span>05</span><strong>处理资源问题</strong><em>维护账号登录态、代理、AI 接入和邮件配置。</em></button>
         </div>
         <div id="dashboard_metrics" class="grid-4"></div>
         <div class="grid">
@@ -412,15 +422,16 @@
       </section>
 
       <section id="jobs">
-        <div class="page-head">
-          <div><h2>舆情监控</h2><p>配置律所舆情任务，把平台采集、过滤去重、AI 评估和报告发送串联起来。</p></div>
+        <div class="page-head page-entry" data-page-entry="jobs">
+          <div class="page-title-block"><span class="page-kicker">任务监控</span><h2>舆情监控</h2><p>配置律所舆情任务，把平台采集、过滤去重、AI 评估和报告发送串联起来。</p></div>
           <div class="page-actions">
             <button class="primary" onclick="openNewJobDrawer()">新建任务</button>
             <button class="secondary" onclick="refreshJobSchedule()">刷新调度时间</button>
+            <button class="secondary" data-shortcut-tab="runs" data-menu-key="run_center">查看运行中心</button>
           </div>
         </div>
         <div class="panel">
-          <div class="toolbar">
+          <div class="toolbar page-filter-region" data-filter-region="jobs">
             <div><label>任务搜索</label><input id="job_search" placeholder="律所名称 / 平台搜索词"></div>
             <div><label>平台</label><select id="job_platform_filter"><option value="">全部平台</option><option value="dy">抖音</option><option value="ks">快手</option><option value="xhs">小红书</option></select></div>
             <div><label>状态</label><select id="job_status_filter"><option value="">全部状态</option><option value="enabled">启用</option><option value="paused">暂停</option><option value="running">运行中</option></select></div>
@@ -565,11 +576,12 @@
       </div>
 
       <section id="accounts">
-        <div class="page-head">
-          <div><h2>平台账号</h2><p>维护抖音、快手、小红书账号资源、登录状态和代理绑定。任务只选择账号，不在任务里修改账号资料。</p></div>
-          <div class="row" style="flex:0 0 auto">
+        <div class="page-head page-entry" data-page-entry="accounts">
+          <div class="page-title-block"><span class="page-kicker">资源支撑</span><h2>平台账号</h2><p>维护抖音、快手、小红书账号资源、登录状态和代理绑定。任务只选择账号，不在任务里修改账号资料。</p></div>
+          <div class="page-actions">
             <button class="primary" onclick="openNewSocialAccountModal()">新增账号</button>
             <button class="secondary" onclick="loadAccountsPool()">刷新账号</button>
+            <button class="secondary" data-shortcut-tab="jobs" data-menu-key="monitoring">返回任务</button>
           </div>
         </div>
         <div id="account_metrics" class="grid-4"></div>
@@ -589,7 +601,7 @@
                 <button id="account_bulk_delete_btn" class="danger" onclick="deleteSelectedSocialAccounts()">批量删除</button>
               </div>
             </div>
-            <div class="account-filter">
+            <div class="account-filter page-filter-region" data-filter-region="accounts">
               <div><label>搜索</label><input id="account_search" placeholder="账号名称 / 备注"></div>
               <div><label>平台</label><select id="account_platform_filter"><option value="">全部平台</option><option value="dy">抖音</option><option value="ks">快手</option><option value="xhs">小红书</option></select></div>
               <div><label>可用性</label><select id="account_status_filter"><option value="">全部状态</option><option value="collectable">可采集</option><option value="unchecked">待检测</option><option value="relogin">需重新登录</option><option value="verification">需要人工验证</option><option value="disabled">停用</option></select></div>
@@ -696,11 +708,12 @@
       </section>
 
       <section id="proxies">
-        <div class="page-head">
-          <div><h2>代理资源</h2><p>维护代理来源、并发上限和可用状态。代理可绑定到账号或任务，采集时按绑定关系使用。</p></div>
+        <div class="page-head page-entry" data-page-entry="proxies">
+          <div class="page-title-block"><span class="page-kicker">资源支撑</span><h2>代理资源</h2><p>维护代理来源、并发上限和可用状态。代理可绑定到账号或任务，采集时按绑定关系使用。</p></div>
           <div class="page-actions">
             <button class="primary" onclick="openProxyDrawer()">新增代理</button>
             <button class="secondary" onclick="loadProxyPool()">刷新代理</button>
+            <button class="secondary" data-shortcut-tab="accounts" data-menu-key="platform_accounts">查看账号</button>
           </div>
         </div>
         <div id="proxy_resource_summary" class="resource-summary-grid"></div>
@@ -712,7 +725,7 @@
             </div>
             <div class="inline-status"><span id="proxy_resource_count">-</span></div>
           </div>
-          <div class="resource-toolbar">
+          <div class="resource-toolbar page-filter-region" data-filter-region="proxies">
             <div><label>搜索</label><input id="proxy_search" placeholder="代理名称 / 供应商 / 备注"></div>
             <div><label>状态</label><select id="proxy_status_filter"><option value="">全部状态</option><option value="active">可用</option><option value="standby">待机</option><option value="limited">受限</option><option value="disabled">停用</option></select></div>
             <div class="toolbar-actions">
@@ -756,11 +769,12 @@
       </div>
 
       <section id="ai">
-        <div class="page-head">
-          <div><h2>AI 接入</h2><p>维护 OpenAI-compatible / Anthropic-compatible 协议的模型连接资源，可被监控任务绑定。</p></div>
+        <div class="page-head page-entry" data-page-entry="ai">
+          <div class="page-title-block"><span class="page-kicker">资源支撑</span><h2>AI 接入</h2><p>维护 OpenAI-compatible / Anthropic-compatible 协议的模型连接资源，可被监控任务绑定。</p></div>
           <div class="page-actions">
             <button class="primary" onclick="openAIProfileDrawer()">新增 AI 接入</button>
             <button class="secondary" onclick="loadAIProfiles()">刷新 AI 接入</button>
+            <button class="secondary" data-shortcut-tab="ai_rules" data-menu-key="ai_rules">查看评估规则</button>
           </div>
         </div>
         <div id="ai_resource_summary" class="resource-summary-grid"></div>
@@ -772,7 +786,7 @@
             </div>
             <div class="inline-status"><span id="ai_resource_count">-</span></div>
           </div>
-          <div class="resource-toolbar">
+          <div class="resource-toolbar page-filter-region" data-filter-region="ai">
             <div><label>搜索</label><input id="ai_profile_search" placeholder="接入名称 / 模型 / Base URL"></div>
             <div><label>接口协议</label><select id="ai_profile_provider_filter"><option value="">全部协议</option><option value="openai">OpenAI-compatible</option><option value="anthropic">Anthropic-compatible</option></select></div>
             <div><label>测试状态</label><select id="ai_profile_test_filter"><option value="">全部状态</option><option value="success">最近通过</option><option value="failed">最近失败</option><option value="untested">尚未测试</option></select></div>
@@ -868,11 +882,12 @@
       </div>
 
       <section id="ai_rules">
-        <div class="page-head">
-          <div><h2>AI 评估规则</h2><p>维护可复用的舆情判断规则。当前默认规则会用于任务采集后的 AI 初筛。</p></div>
+        <div class="page-head page-entry" data-page-entry="ai_rules">
+          <div class="page-title-block"><span class="page-kicker">系统配置</span><h2>AI 评估规则</h2><p>维护可复用的舆情判断规则。当前默认规则会用于任务采集后的 AI 初筛。</p></div>
           <div class="page-actions">
             <button class="primary" onclick="openNewAIRuleModal()">新增评估规则</button>
             <button class="secondary" onclick="loadAIRuleProfiles()">刷新规则</button>
+            <button class="secondary" data-shortcut-tab="ai" data-menu-key="ai_access">查看 AI 接入</button>
           </div>
         </div>
         <div class="panel">
@@ -979,12 +994,13 @@
       </div>
 
       <section id="email">
-        <div class="page-head">
-          <div><h2>邮件配置</h2><p>配置 SMTP、发件人和默认收件人。HTML 邮件样式在“邮件模板”中维护。</p></div>
+        <div class="page-head page-entry" data-page-entry="email">
+          <div class="page-title-block"><span class="page-kicker">邮件交付</span><h2>邮件配置</h2><p>配置 SMTP、发件人和默认收件人。HTML 邮件样式在“邮件模板”中维护。</p></div>
           <div class="page-actions">
             <button class="primary" onclick="openMailConfigModal()">编辑邮件配置</button>
             <button class="secondary" onclick="openMailTestModal()">发送测试邮件</button>
             <button class="secondary" onclick="loadEmail()">刷新配置</button>
+            <button class="secondary" data-shortcut-tab="reports" data-shortcut-target="email_delivery_status_entry" data-menu-key="report_center">查看交付状态</button>
           </div>
         </div>
         <div class="resource-summary-grid">
@@ -1066,11 +1082,12 @@
       </div>
 
       <section id="email_templates">
-        <div class="page-head">
-          <div><h2>邮件模板</h2><p>管理报告邮件的标题模板和 HTML 正文，支持变量和实时预览。</p></div>
+        <div class="page-head page-entry" data-page-entry="email_templates">
+          <div class="page-title-block"><span class="page-kicker">邮件交付</span><h2>邮件模板</h2><p>管理报告邮件的标题模板和 HTML 正文，支持变量和实时预览。</p></div>
           <div class="page-actions">
             <button class="primary" onclick="openEmailTemplateDrawer()">新增邮件模板</button>
             <button class="secondary" onclick="loadEmailTemplates()">刷新模板</button>
+            <button class="secondary" data-shortcut-tab="email" data-menu-key="mail_config">查看邮件配置</button>
           </div>
         </div>
         <div id="email_template_resource_summary" class="resource-summary-grid"></div>
@@ -1082,7 +1099,7 @@
             </div>
             <div class="inline-status"><span id="email_template_summary">-</span></div>
           </div>
-          <div class="resource-toolbar">
+          <div class="resource-toolbar page-filter-region" data-filter-region="email_templates">
             <div><label>搜索</label><input id="email_template_search" placeholder="模板名称 / 标题模板"></div>
             <div><label>状态</label><select id="email_template_status_filter"><option value="">全部模板</option><option value="active">当前使用</option><option value="standby">备用</option></select></div>
             <div class="toolbar-actions">
@@ -1095,11 +1112,12 @@
       </section>
 
       <section id="runtime">
-        <div class="page-head">
-          <div><h2>运行策略</h2><p>配置采集并发、运行超时、登录会话、调度间隔和保留周期。</p></div>
+        <div class="page-head page-entry" data-page-entry="runtime">
+          <div class="page-title-block"><span class="page-kicker">系统配置</span><h2>运行策略</h2><p>配置采集并发、运行超时、登录会话、调度间隔和保留周期。</p></div>
           <div class="page-actions">
             <button class="secondary" onclick="loadRuntimeSettings()">刷新策略</button>
             <button class="primary" onclick="saveRuntimeSettings()">保存策略</button>
+            <button class="secondary" data-shortcut-tab="doctor" data-menu-key="system_diagnostics">查看系统诊断</button>
           </div>
         </div>
         <div class="panel">
@@ -1108,15 +1126,17 @@
       </section>
 
       <section id="runs">
-        <div class="page-head">
-          <div><h2>运行中心</h2><p>查看每次采集运行状态、失败原因和日志。运行记录会保留，即使原任务已删除。</p></div>
+        <div class="page-head page-entry" data-page-entry="runs">
+          <div class="page-title-block"><span class="page-kicker">运行中心</span><h2>运行中心</h2><p>查看每次采集运行状态、失败原因和日志。运行记录会保留，即使原任务已删除。</p></div>
           <div class="page-actions">
+            <button class="primary" data-shortcut-tab="jobs" data-shortcut-action="new-job" data-menu-key="monitoring">新建任务</button>
             <button class="secondary" onclick="loadRuns()">刷新运行记录</button>
+            <button class="secondary" data-shortcut-tab="reports" data-menu-key="report_center">查看报告</button>
           </div>
         </div>
         <div id="running_summary"></div>
         <div class="panel">
-          <div class="page-toolbar">
+          <div class="page-toolbar page-filter-region" data-filter-region="runs">
             <div>
               <label>显示范围</label>
               <select id="run_limit" onchange="loadRuns()">
@@ -1132,14 +1152,24 @@
         </div>
       </section>
       <section id="reports">
-        <div class="page-head">
-          <div><h2>报告中心</h2><p>筛选报告、预览邮件正文、查看线索明细，并按需下载归档文件。</p></div>
+        <div class="page-head page-entry" data-page-entry="reports">
+          <div class="page-title-block"><span class="page-kicker">报告中心</span><h2>报告中心</h2><p>筛选报告、预览邮件正文、查看线索明细，并按需下载归档文件。</p></div>
           <div class="page-actions">
+            <button class="primary" data-shortcut-tab="jobs" data-shortcut-action="new-job" data-menu-key="monitoring">新建任务</button>
             <button class="secondary" onclick="loadReports()">刷新报告</button>
+            <button class="secondary" data-shortcut-tab="runs" data-menu-key="run_center">查看运行</button>
           </div>
         </div>
+        <div id="email_delivery_status_entry" class="email-delivery-entry">
+          <div>
+            <span class="status">邮件交付</span>
+            <strong>报告邮件状态与手动重发入口</strong>
+            <p>报告列表展示最新邮件状态；需要再次发送时，可在报告操作中发起手动重发。</p>
+          </div>
+          <button class="secondary" type="button" onclick="loadReports()">刷新报告邮件状态</button>
+        </div>
         <div class="panel">
-          <div class="page-toolbar">
+          <div class="page-toolbar page-filter-region" data-filter-region="reports">
             <div><label>律所</label><input id="report_law_firm" placeholder="输入律所名称"></div>
             <div><label>平台</label><select id="report_platform"><option value="">全部</option><option value="dy">抖音</option><option value="ks">快手</option><option value="xhs">小红书</option></select></div>
             <div><label>风险</label><select id="report_risk"><option value="">全部</option><option value="high">高风险</option><option value="negative">疑似负面</option><option value="pending">待人工复核</option><option value="none">无风险</option></select></div>
@@ -1166,11 +1196,12 @@
         </div>
       </section>
       <section id="doctor">
-        <div class="page-head">
-          <div><h2>系统诊断</h2><p>检查基础配置、运行状态和报告链路，便于管理员快速定位待处理项。</p></div>
+        <div class="page-head page-entry" data-page-entry="doctor">
+          <div class="page-title-block"><span class="page-kicker">系统诊断</span><h2>系统诊断</h2><p>检查基础配置、运行状态和报告链路，便于管理员快速定位待处理项。</p></div>
           <div class="page-actions">
             <button class="secondary" onclick="loadDoctor()">重新诊断</button>
             <button class="primary" onclick="runSmokeCheck()">运行系统诊断</button>
+            <button class="secondary" data-shortcut-tab="accounts" data-menu-key="platform_accounts">处理账号资源</button>
           </div>
         </div>
         <div class="diagnostic-layout">
@@ -1586,6 +1617,15 @@
       toggleMobileNav();
     });
     document.getElementById('mobile_nav_backdrop')?.addEventListener('click', closeMobileNav);
+    document.querySelectorAll('[data-shortcut-tab]').forEach(btn=>{
+      btn.addEventListener('click', event=>{
+        event.preventDefault();
+        navigateShortcut(btn.dataset.shortcutTab, {
+          target: btn.dataset.shortcutTarget || '',
+          action: btn.dataset.shortcutAction || ''
+        });
+      });
+    });
 
     function toggleNavGroup(group){
       const wrapper=document.querySelector(`[data-nav-group="${group}"]`);
@@ -1609,6 +1649,30 @@
       const dashboardButton=document.querySelector('nav button[data-tab="dashboard"]:not(.is-hidden)');
       if(dashboardButton) activateNavTab(dashboardButton, {skipLoad:true});
     }
+    function activeTabId(){
+      return document.querySelector('section.active')?.id || 'dashboard';
+    }
+    function refreshActiveSection(){
+      const tab=activeTabId();
+      loadSectionData(tab);
+      toast(tab==='dashboard' ? '运营首页已刷新' : '当前页面已刷新');
+    }
+    function navigateShortcut(tab, options={}){
+      if(!canOpenTab(tab)){
+        toast('当前账号没有访问该页面的权限');
+        return;
+      }
+      switchTab(tab);
+      if(options.target){
+        setTimeout(()=>{
+          const target=document.getElementById(options.target);
+          if(target) target.scrollIntoView({behavior:'smooth', block:'start'});
+        }, 0);
+      }
+      if(options.action==='new-job'){
+        setTimeout(()=>openNewJobDrawer(), 0);
+      }
+    }
     function activateNavTab(btn, options={}){
       if(!canOpenTab(btn.dataset.tab)){
         toast('当前账号没有访问该页面的权限');
@@ -1629,7 +1693,13 @@
     }
     function loadSectionData(tab){
       if(!canOpenTab(tab)) return;
-      if(tab==='dashboard') loadDashboard();
+      if(tab==='dashboard') {
+        loadDashboard();
+        loadReadiness();
+        loadSchedulerStatus();
+        loadPlatformStatus();
+        if(canMenu('system_diagnostics')) loadSystemChecklist();
+      }
       if(tab==='accounts') { loadProxyPool(); loadAccountsPool(); }
       if(tab==='proxies') loadProxyPool();
       if(tab==='ai') loadAIProfiles();
@@ -1651,6 +1721,9 @@
     }
     function applyMenuPermissions(){
       document.querySelectorAll('nav button[data-menu-key]').forEach(btn=>{
+        btn.classList.toggle('is-hidden', !canMenu(btn.dataset.menuKey));
+      });
+      document.querySelectorAll('[data-shortcut-tab][data-menu-key]').forEach(btn=>{
         btn.classList.toggle('is-hidden', !canMenu(btn.dataset.menuKey));
       });
       document.querySelectorAll('section[id]').forEach(section=>{

@@ -304,14 +304,14 @@ Phase 12 is planned and depends on Phase 11. Execute it as Phase 12A-12B.
 
 ### Phase 12B - Page Entry And Role Flow
 
-- [ ] Rebuild page entries around the monitoring task loop: Operations Home,
+- [x] Rebuild page entries around the monitoring task loop: Operations Home,
       Monitoring, Run Center, Report Center, Email Delivery status, and
       administrator resource support.
-- [ ] Standardize page title, description, primary action, and toolbar areas.
-- [ ] Add task-loop shortcuts where useful: create task, view runs, view
+- [x] Standardize page title, description, primary action, and toolbar areas.
+- [x] Add task-loop shortcuts where useful: create task, view runs, view
       reports, inspect email delivery, and resolve resource issues.
-- [ ] Verify administrator and normal-user paths separately.
-- [ ] Confirm no hidden administrator resource details leak into normal-user
+- [x] Verify administrator and normal-user paths separately.
+- [x] Confirm no hidden administrator resource details leak into normal-user
       entry points.
 
 ## Phase 13 - Overview Operations Home Redesign

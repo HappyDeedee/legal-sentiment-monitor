@@ -453,6 +453,107 @@ button:disabled {
   flex-wrap: wrap;
 }
 
+.page-entry {
+  padding: var(--space-4);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-card-medium);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.86), rgba(255, 255, 255, 0.96)),
+    var(--color-neutral-0);
+  box-shadow: var(--shadow-elevation-1);
+}
+
+.page-title-block {
+  min-width: 0;
+}
+
+.page-kicker {
+  display: block;
+  margin-bottom: var(--space-1);
+  color: var(--color-primary-700);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+  text-transform: uppercase;
+}
+
+.page-filter-region {
+  padding: var(--space-3);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-card-medium);
+  background: var(--color-neutral-25);
+}
+
+.task-loop-shortcuts {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-3);
+  margin: 0 0 var(--space-4);
+}
+
+.shortcut-card {
+  min-height: 112px;
+  display: grid;
+  align-content: start;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-card-medium);
+  background: var(--color-neutral-0);
+  color: var(--color-neutral-800);
+  text-align: left;
+  box-shadow: var(--shadow-elevation-1);
+}
+
+.shortcut-card:hover {
+  border-color: var(--color-primary-500);
+  background: var(--color-primary-50);
+}
+
+.shortcut-card span {
+  color: var(--color-neutral-500);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.shortcut-card strong {
+  font-size: var(--font-size-md);
+}
+
+.shortcut-card em {
+  color: var(--color-neutral-600);
+  font-size: var(--font-size-xs);
+  font-style: normal;
+  line-height: var(--line-height-relaxed);
+}
+
+.shortcut-primary {
+  border-color: var(--color-primary-500);
+  background: var(--color-primary-50);
+}
+
+.email-delivery-entry {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  margin: 0 0 var(--space-4);
+  border: 1px solid var(--color-status-info-border);
+  border-radius: var(--radius-card-medium);
+  background: var(--color-status-info-bg);
+}
+
+.email-delivery-entry strong {
+  display: block;
+  margin-top: var(--space-1);
+}
+
+.email-delivery-entry p {
+  margin: var(--space-1) 0 0;
+  color: var(--color-neutral-600);
+  line-height: var(--line-height-relaxed);
+}
+
 .page-actions {
   display: flex;
   gap: var(--space-2);
@@ -793,6 +894,10 @@ button:disabled {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
+  .task-loop-shortcuts {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+
   .grid-3,
   .settings-grid,
   .artifact-grid,
@@ -833,6 +938,11 @@ button:disabled {
   .toolbar,
   .resource-toolbar {
     align-items: flex-end;
+  }
+
+  .email-delivery-entry {
+    align-items: flex-start;
+    flex-wrap: wrap;
   }
 
   .page-toolbar .toolbar-actions,
@@ -949,6 +1059,7 @@ button:disabled {
   .settings-grid,
   .artifact-grid,
   .resource-summary-grid,
+  .task-loop-shortcuts,
   .wizard-steps,
   .rule-flow,
   .rule-sections,
@@ -959,6 +1070,18 @@ button:disabled {
 
   .metric-value {
     font-size: 24px;
+  }
+
+  .page-entry {
+    padding: var(--space-3);
+  }
+
+  .shortcut-card {
+    min-height: 96px;
+  }
+
+  .email-delivery-entry {
+    display: grid;
   }
 
   .table-wrap table {
