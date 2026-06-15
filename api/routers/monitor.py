@@ -298,8 +298,10 @@ async def smoke(admin: dict[str, Any] = AdminUser):
 @router.get("/dashboard")
 async def dashboard(user: dict[str, Any] = CurrentUser):
     init_db()
+    summary = get_dashboard_summary(actor=_route_actor(user))
     return {
-        "summary": get_dashboard_summary(actor=_route_actor(user)),
+        "summary": summary,
+        "operations_home": summary.get("operations_home", {}),
         "readiness": _customer_view_readiness_status(get_readiness_status()),
         "scheduler": scheduler_status(),
     }

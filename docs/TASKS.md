@@ -324,19 +324,19 @@ views in one goal.
 
 ### Phase 13A - Operations Home Data Layer
 
-- [ ] Define the operations-home API contract under the existing monitor API
+- [x] Define the operations-home API contract under the existing monitor API
       surface, reusing `api/routers/monitor.py` unless a small helper module is
       justified.
-- [ ] Define data sources for task health, run activity, report activity,
+- [x] Define data sources for task health, run activity, report activity,
       email delivery status, suspected lead metrics, and resource health.
-- [ ] Reuse existing tables where possible and document any missing metric as
+- [x] Reuse existing tables where possible and document any missing metric as
       a later enhancement instead of fabricating data.
-- [ ] Preserve administrator and normal-user owner/workspace scope in every
+- [x] Preserve administrator and normal-user owner/workspace scope in every
       aggregate.
-- [ ] Keep the existing `/api/monitor/dashboard` response compatible until the
+- [x] Keep the existing `/api/monitor/dashboard` response compatible until the
       frontend migration is complete, or document the response versioning
       strategy before changing it.
-- [ ] Verify API results for administrator and normal-user data scopes.
+- [x] Verify API results for administrator and normal-user data scopes.
 
 ### Phase 13B - Operations Home Desktop Visual Metrics
 

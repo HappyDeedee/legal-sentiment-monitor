@@ -453,6 +453,235 @@ def test_phase_1_http_routes_enforce_sessions_roles_and_owner_scope():
         _restore_table("audit_logs", snapshots["audit_logs"])
 
 
+def test_phase_13a_operations_home_data_layer_scopes_real_aggregates():
+    from api import main as api_main
+
+    init_db()
+    snapshots = {
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "raw_contents": _snapshot_table("raw_contents"),
+        "ai_evaluations": _snapshot_table("ai_evaluations"),
+        "audit_logs": _snapshot_table("audit_logs"),
+        "user_sessions": _snapshot_table("user_sessions"),
+        "users": _snapshot_table("users"),
+        "social_accounts": _snapshot_table("social_accounts"),
+        "proxy_profiles": _snapshot_table("proxy_profiles"),
+        "ai_key_profiles": _snapshot_table("ai_key_profiles"),
+        "login_sessions": _snapshot_table("login_sessions"),
+    }
+    jobs_snapshot = _snapshot_monitor_jobs()
+    try:
+        with get_conn() as conn:
+            for table in [
+                "ai_evaluations",
+                "raw_contents",
+                "reports",
+                "crawl_runs",
+                "user_sessions",
+                "audit_logs",
+                "users",
+                "social_accounts",
+                "proxy_profiles",
+                "ai_key_profiles",
+                "login_sessions",
+            ]:
+                conn.execute(f"DELETE FROM {table}")
+        _clear_monitor_jobs()
+
+        admin = bootstrap_admin_from_env("phase13a-admin@example.com", "AdminPass123!", "Phase 13A Admin")
+        user1 = save_user(
+            {
+                "email": "phase13a-user1@example.com",
+                "display_name": "Phase 13A User One",
+                "password": "UserPass123!",
+                "role": "normal",
+            },
+            actor_id=int(admin["id"]),
+        )
+        user2 = save_user(
+            {
+                "email": "phase13a-user2@example.com",
+                "display_name": "Phase 13A User Two",
+                "password": "UserPass456!",
+                "role": "normal",
+            },
+            actor_id=int(admin["id"]),
+        )
+        job1 = save_job(
+            {
+                "law_firm_name": "海安律所",
+                "keywords": ["海安律所避雷"],
+                "platforms": ["dy"],
+                "recipients": ["ops@example.com"],
+                "enabled": True,
+            },
+            actor=user1,
+        )
+        job2 = save_job(
+            {
+                "law_firm_name": "恒泰律所",
+                "keywords": ["恒泰律所投诉"],
+                "platforms": ["ks"],
+                "recipients": ["ops@example.com"],
+                "enabled": False,
+            },
+            actor=user2,
+        )
+        run1 = create_run(job1["id"], {"job_id": job1["id"], "law_firm_name": job1["law_firm_name"], "platforms": ["dy"]})
+        run2 = create_run(job2["id"], {"job_id": job2["id"], "law_firm_name": job2["law_firm_name"], "platforms": ["ks"]})
+        finish_run(run1, "success", {"job_id": job1["id"], "law_firm_name": job1["law_firm_name"], "platforms": ["dy"]})
+        finish_run(run2, "failed", {"job_id": job2["id"], "law_firm_name": job2["law_firm_name"], "platforms": ["ks"]}, "平台登录态失效")
+        report1 = create_report(
+            run1,
+            job1,
+            {
+                "job_id": job1["id"],
+                "law_firm_name": job1["law_firm_name"],
+                "platforms": ["dy"],
+                "negative_count": 1,
+                "high_count": 1,
+                "pending_review_count": 0,
+            },
+        )
+        report2 = create_report(
+            run2,
+            job2,
+            {
+                "job_id": job2["id"],
+                "law_firm_name": job2["law_firm_name"],
+                "platforms": ["ks"],
+                "negative_count": 0,
+                "high_count": 0,
+                "pending_review_count": 1,
+            },
+        )
+        with get_conn() as conn:
+            now = datetime.now(timezone.utc).isoformat()
+            rows = [
+                (job1, run1, user1, "dy", "phase13a-user1-negative", "海安律所避雷", "海安律所退费争议"),
+                (job2, run2, user2, "ks", "phase13a-user2-pending", "恒泰律所投诉", "恒泰律所沟通争议"),
+            ]
+            raw_ids = []
+            for job, run_id, owner, platform, content_id, keyword, title in rows:
+                conn.execute(
+                    """
+                    INSERT INTO raw_contents (
+                        workspace_id, platform, content_id, job_id, run_id,
+                        law_firm_name, source_keyword, title, description,
+                        author_name, content_url, cover_url, publish_time,
+                        comment_count, raw_json, first_seen_at, last_seen_at,
+                        created_by, updated_by
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        1,
+                        platform,
+                        content_id,
+                        job["id"],
+                        run_id,
+                        job["law_firm_name"],
+                        keyword,
+                        title,
+                        "服务争议",
+                        "用户",
+                        "https://example.com/" + content_id,
+                        "",
+                        int(datetime.now(timezone.utc).timestamp()),
+                        0,
+                        "{}",
+                        now,
+                        now,
+                        owner["id"],
+                        owner["id"],
+                    ),
+                )
+                raw_ids.append(int(conn.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]))
+            conn.execute(
+                """
+                INSERT INTO ai_evaluations (
+                    workspace_id, raw_content_id, run_id, status, is_related,
+                    is_negative, risk_level, reason, evidence_quotes,
+                    recommended_action, raw_response, created_at, created_by,
+                    updated_by
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (1, raw_ids[0], run1, "ok", 1, 1, "high", "疑似负面", '["退费争议"]', "人工复核", "{}", now, user1["id"], user1["id"]),
+            )
+            conn.execute(
+                """
+                INSERT INTO ai_evaluations (
+                    workspace_id, raw_content_id, run_id, status, is_related,
+                    is_negative, risk_level, reason, evidence_quotes,
+                    recommended_action, raw_response, created_at, created_by,
+                    updated_by
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (1, raw_ids[1], run2, "pending_review", 0, 0, "low", "待人工复核", "[]", "人工复核", "{}", now, user2["id"], user2["id"]),
+            )
+            conn.execute("UPDATE reports SET email_status='sent', email_error='' WHERE id=?", (report1["id"],))
+            conn.execute("UPDATE reports SET email_status='failed', email_error='SMTP 配置未完成' WHERE id=?", (report2["id"],))
+
+        save_proxy_profile({"name": "Phase 13A Proxy", "provider": "manual", "proxy_url": "http://user:pass@example.com:8080", "status": "active"})
+        save_social_account({"name": "Phase 13A Account", "platform": "dy", "login_type": "qrcode", "status": "active"})
+        save_ai_key_profile({"name": "Phase 13A AI", "provider": "openai", "base_url": "https://api.example.com", "api_key": "sk-test", "model": "test", "is_active": True})
+        create_login_session({"platform": "dy", "account_id": None, "login_url": "https://www.douyin.com/"})
+
+        admin_summary = get_dashboard_summary(actor=admin)
+        user1_summary = get_dashboard_summary(actor=user1)
+        user2_summary = get_dashboard_summary(actor=user2)
+
+        assert admin_summary["jobs_total"] == 2
+        assert admin_summary["operations_home"]["task_health"]["total"] == 2
+        assert admin_summary["operations_home"]["run_activity"]["failed_recent"] == 1
+        assert admin_summary["operations_home"]["report_activity"]["total"] == 2
+        assert admin_summary["operations_home"]["email_delivery"]["failed"] == 1
+        assert admin_summary["operations_home"]["lead_metrics"]["suspected_negative"] == 1
+        assert admin_summary["operations_home"]["lead_metrics"]["pending_review"] == 1
+        assert admin_summary["operations_home"]["resource_health"]["scope"] == "workspace"
+        assert admin_summary["operations_home"]["resource_health"]["social_accounts_total"] == 1
+
+        assert user1_summary["operations_home"]["task_health"]["total"] == 1
+        assert user1_summary["operations_home"]["run_activity"]["failed_recent"] == 0
+        assert user1_summary["operations_home"]["report_activity"]["total"] == 1
+        assert user1_summary["operations_home"]["email_delivery"]["sent"] == 1
+        assert user1_summary["operations_home"]["email_delivery"]["failed"] == 0
+        assert user1_summary["operations_home"]["lead_metrics"]["suspected_negative"] == 1
+        assert user1_summary["operations_home"]["lead_metrics"]["pending_review"] == 0
+        assert user1_summary["operations_home"]["resource_health"]["scope"] == "business_safe"
+        assert "social_accounts_total" not in user1_summary["operations_home"]["resource_health"]
+
+        assert user2_summary["operations_home"]["task_health"]["active"] == 0
+        assert user2_summary["operations_home"]["task_health"]["paused"] == 1
+        assert user2_summary["operations_home"]["run_activity"]["failed_recent"] == 1
+        assert user2_summary["operations_home"]["email_delivery"]["failed"] == 1
+        assert user2_summary["operations_home"]["lead_metrics"]["pending_review"] == 1
+
+        transport = httpx.ASGITransport(app=api_main.app)
+
+        async def exercise_dashboard_contract() -> None:
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as normal_client:
+                login = await normal_client.post(
+                    "/api/auth/login",
+                    json={"email": "phase13a-user1@example.com", "password": "UserPass123!"},
+                )
+                assert login.status_code == 200
+                response = await normal_client.get("/api/monitor/dashboard")
+                assert response.status_code == 200
+                payload = response.json()
+                assert payload["summary"]["jobs_total"] == 1
+                assert payload["operations_home"] == payload["summary"]["operations_home"]
+                assert payload["operations_home"]["task_health"]["total"] == 1
+                assert payload["operations_home"]["resource_health"]["scope"] == "business_safe"
+                assert "social_accounts_total" not in payload["operations_home"]["resource_health"]
+
+        asyncio.run(exercise_dashboard_contract())
+    finally:
+        _restore_monitor_jobs(jobs_snapshot)
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+
 def test_phase_4_normal_user_task_api_ignores_advanced_resource_fields():
     from api import main as api_main
 

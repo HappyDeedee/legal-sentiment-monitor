@@ -2676,6 +2676,32 @@ def get_dashboard_summary(actor: dict[str, Any] | None = None) -> dict[str, Any]
             proxy_total = conn.execute("SELECT COUNT(*) AS n FROM proxy_profiles").fetchone()["n"]
             ai_profiles_total = conn.execute("SELECT COUNT(*) AS n FROM ai_key_profiles").fetchone()["n"]
             login_sessions_total = conn.execute("SELECT COUNT(*) AS n FROM login_sessions").fetchone()["n"]
+        running_runs = conn.execute(
+            f"""
+            SELECT COUNT(*) AS n FROM crawl_runs r
+            LEFT JOIN monitor_jobs j ON j.id = r.job_id
+            WHERE {run_scope} AND r.status='running'
+            """,
+            scoped_params,
+        ).fetchone()["n"]
+        today_prefix = datetime.now(timezone.utc).date().isoformat()
+        runs_today = conn.execute(
+            f"""
+            SELECT COUNT(*) AS n FROM crawl_runs r
+            LEFT JOIN monitor_jobs j ON j.id = r.job_id
+            WHERE {run_scope} AND substr(COALESCE(r.started_at, ''), 1, 10)=?
+            """,
+            [*scoped_params, today_prefix],
+        ).fetchone()["n"]
+        email_rows = conn.execute(
+            f"""
+            SELECT reports.email_status, COUNT(*) AS n FROM reports
+            LEFT JOIN monitor_jobs ON monitor_jobs.id = reports.job_id
+            WHERE {report_scope}
+            GROUP BY reports.email_status
+            """,
+            scoped_params,
+        ).fetchall()
         latest_runs = conn.execute(
             f"""
             SELECT r.status, r.summary, r.started_at, r.finished_at FROM crawl_runs r
@@ -2696,22 +2722,133 @@ def get_dashboard_summary(actor: dict[str, Any] | None = None) -> dict[str, Any]
         summary = _json_loads(row["summary"], {})
         for platform in summary.get("platforms") or []:
             platform_counts[platform] = platform_counts.get(platform, 0) + 1
+    email_status_counts = {str(row["email_status"] or "pending"): int(row["n"] or 0) for row in email_rows}
+    sent_statuses = {"sent", "success", "delivered"}
+    failed_statuses = {"failed", "error"}
+    email_sent = sum(count for status, count in email_status_counts.items() if status in sent_statuses)
+    email_failed = sum(count for status, count in email_status_counts.items() if status in failed_statuses)
+    email_unsent = max(0, int(reports_total or 0) - email_sent - email_failed)
+    jobs_total_int = int(jobs_total or 0)
+    jobs_enabled_int = int(jobs_enabled or 0)
+    runs_total_int = int(runs_total or 0)
+    reports_total_int = int(reports_total or 0)
+    contents_total_int = int(contents_total or 0)
+    pending_review_int = int(pending_review or 0)
+    negative_total_int = int(negative_total or 0)
+    high_total_int = int(high_total or 0)
+    social_total_int = int(social_total or 0)
+    proxy_total_int = int(proxy_total or 0)
+    ai_profiles_total_int = int(ai_profiles_total or 0)
+    login_sessions_total_int = int(login_sessions_total or 0)
+    is_admin_view = not actor or actor.get("role") == "administrator"
+    if is_admin_view:
+        resource_health = {
+            "scope": "workspace",
+            "status": "ready" if social_total_int and proxy_total_int and ai_profiles_total_int else "needs_attention",
+            "social_accounts_total": social_total_int,
+            "proxy_profiles_total": proxy_total_int,
+            "ai_profiles_total": ai_profiles_total_int,
+            "login_sessions_total": login_sessions_total_int,
+            "signals": [
+                {
+                    "key": "account_pool",
+                    "label": "平台账号",
+                    "status": "ready" if social_total_int else "empty",
+                    "count": social_total_int,
+                },
+                {
+                    "key": "proxy_pool",
+                    "label": "代理资源",
+                    "status": "ready" if proxy_total_int else "empty",
+                    "count": proxy_total_int,
+                },
+                {
+                    "key": "ai_access",
+                    "label": "AI 接入",
+                    "status": "ready" if ai_profiles_total_int else "empty",
+                    "count": ai_profiles_total_int,
+                },
+                {
+                    "key": "login_sessions",
+                    "label": "登录会话",
+                    "status": "ready" if login_sessions_total_int else "empty",
+                    "count": login_sessions_total_int,
+                },
+            ],
+        }
+    else:
+        resource_health = {
+            "scope": "business_safe",
+            "status": "available",
+            "signals": [
+                {
+                    "key": "resource_supply",
+                    "label": "采集资源",
+                    "status": "available",
+                    "note": "资源由管理员维护",
+                }
+            ],
+        }
+    operations_home = {
+        "last_updated_at": utc_now(),
+        "scope": "workspace" if is_admin_view else "own",
+        "task_health": {
+            "total": jobs_total_int,
+            "active": jobs_enabled_int,
+            "paused": max(0, jobs_total_int - jobs_enabled_int),
+            "needs_attention": int(failed_runs + skipped_runs + email_failed + pending_review_int),
+        },
+        "run_activity": {
+            "total": runs_total_int,
+            "today": int(runs_today or 0),
+            "running": int(running_runs or 0),
+            "failed_recent": failed_runs,
+            "skipped_recent": skipped_runs,
+            "platform_counts_recent": platform_counts,
+        },
+        "report_activity": {
+            "total": reports_total_int,
+            "generated": reports_total_int,
+            "manual_review": pending_review_int,
+            "email_failed": email_failed,
+            "email_unsent": email_unsent,
+        },
+        "email_delivery": {
+            "source": "reports.email_status",
+            "total": reports_total_int,
+            "sent": email_sent,
+            "failed": email_failed,
+            "unsent": email_unsent,
+            "history_available": False,
+            "history_note": "邮件交付历史将在后续阶段记录",
+            "status_counts": email_status_counts,
+        },
+        "lead_metrics": {
+            "contents_total": contents_total_int,
+            "suspected_negative": negative_total_int,
+            "high_risk": high_total_int,
+            "pending_review": pending_review_int,
+            "trend_available": False,
+        },
+        "resource_health": resource_health,
+    }
     return {
-        "jobs_total": int(jobs_total or 0),
-        "jobs_enabled": int(jobs_enabled or 0),
-        "runs_total": int(runs_total or 0),
-        "reports_total": int(reports_total or 0),
-        "contents_total": int(contents_total or 0),
-        "pending_review": int(pending_review or 0),
-        "negative_total": int(negative_total or 0),
-        "high_total": int(high_total or 0),
+        "jobs_total": jobs_total_int,
+        "jobs_enabled": jobs_enabled_int,
+        "runs_total": runs_total_int,
+        "reports_total": reports_total_int,
+        "contents_total": contents_total_int,
+        "pending_review": pending_review_int,
+        "negative_total": negative_total_int,
+        "high_total": high_total_int,
         "failed_runs_recent": failed_runs,
         "skipped_runs_recent": skipped_runs,
         "platform_counts_recent": platform_counts,
-        "social_accounts_total": int(social_total or 0),
-        "proxy_profiles_total": int(proxy_total or 0),
-        "ai_profiles_total": int(ai_profiles_total or 0),
-        "login_sessions_total": int(login_sessions_total or 0),
+        "social_accounts_total": social_total_int,
+        "proxy_profiles_total": proxy_total_int,
+        "ai_profiles_total": ai_profiles_total_int,
+        "login_sessions_total": login_sessions_total_int,
+        "operations_home": operations_home,
     }
 
 

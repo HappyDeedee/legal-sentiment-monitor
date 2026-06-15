@@ -9,7 +9,48 @@ How to read this file:
 - older entries are historical snapshots and may mention states that were later
   superseded by newer entries above them;
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
-  `docs/TRACEABILITY.md` for final current-state decisions.
+`docs/TRACEABILITY.md` for final current-state decisions.
+
+## 2026-06-15 - Phase 13A Operations Home Data Layer Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`.
+
+Result:
+
+- Added an operations-home data contract under the existing
+  `/api/monitor/dashboard` API surface.
+- Extended the existing dashboard summary with `summary.operations_home` while
+  preserving all existing flat dashboard fields for compatibility.
+- Returned the same object as top-level `operations_home` so Phase 13B can
+  migrate the frontend without breaking old summary consumers.
+- Aggregated task health, run activity, report activity, email delivery latest
+  state, suspected lead metrics, and concise resource health from existing
+  persisted tables.
+- Represented missing delivery history as unavailable instead of fabricating
+  Phase 16/17 delivery-log metrics.
+- Preserved administrator workspace-wide visibility and normal-user
+  owner/workspace scope. Normal users receive business-safe resource health and
+  no platform account, proxy, AI profile, or login-session counts.
+- Added
+  `tests/test_monitoring_mvp.py::test_phase_13a_operations_home_data_layer_scopes_real_aggregates`.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before implementation.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k phase_13a`
+- Result: 1 passed, 222 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_13a or phase_12b or phase_12a or phase_11a or phase_11b or phase_11c or phase_11d or monitor_page_uses or readiness_dashboard"`
+- Result: 10 passed, 213 deselected, 3 warnings.
+
+Limitations:
+
+- Phase 13A only adds the API/data layer. It does not implement the Phase 13B
+  desktop visual metrics or Phase 13C responsive/role-specific frontend view.
+- No schema migration, email delivery log, run archive, or report grouping
+  behavior was added in this batch.
 
 ## 2026-06-15 - Phase 12B Page Entry And Role Flow Verified
 

@@ -11,7 +11,8 @@ Phase 11A module boundary, Phase 11B base layout, Phase 11C interaction
 helper/floating-menu, and Phase 11D responsive foundation batches are complete
 and verified. Phase 12A navigation structure and login landing is complete and
 verified. Phase 12B page entry and role flow is complete and verified. Phase
-13A operations-home data layer is the next frontend/data batch.
+13A operations-home data layer is complete and verified. Phase 13B operations
+home desktop visual metrics is the next frontend batch.
 
 Agents must use this document together with:
 

@@ -21,7 +21,8 @@ granularity refinements. Phase 11 - Frontend Design System is complete and
 verified through Phase 11A, Phase 11B, Phase 11C, and Phase 11D. Phase 12A -
 Navigation Structure And Login Landing is complete and verified. Phase 12B -
 Page Entry And Role Flow is complete and verified. Phase 13A - Operations Home
-Data Layer is the next allowed execution goal.
+Data Layer is complete and verified. Phase 13B - Operations Home Desktop
+Visual Metrics is the next allowed execution goal.
 The active SQLite schema now provides the foundation tables and columns
 required before later implementation work, and the web/API layer now has
 session login, administrator/normal-user roles, menu visibility,
@@ -42,8 +43,11 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   assets, base shell/navigation visual styles, fixed floating-menu behavior,
   responsive desktop/tablet/mobile navigation and layout foundations, Phase
   12A expandable primary navigation groups, operations-home login/session
-  landing, grouped account/logout controls, and Phase 12B standardized page
-  entries with task-loop shortcuts for administrator and normal-user paths.
+  landing, grouped account/logout controls, Phase 12B standardized page
+  entries with task-loop shortcuts for administrator and normal-user paths,
+  and Phase 13A dashboard API operations-home aggregates for task health, run
+  activity, report activity, email delivery latest state, suspected lead
+  metrics, and role-safe resource health.
 
 ## Implementation Status
 
@@ -68,7 +72,8 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
 - Phase 12 - Navigation And Page Entry Redesign: complete and verified through
   Phase 12A-12B.
 - Phase 13 - Overview Operations Home Redesign: planned as Phase 13A-13C;
-  Phase 13A is the next allowed execution goal and is not implemented.
+  Phase 13A is complete and verified; Phase 13B is the next allowed execution
+  goal.
 - Phase 14 - Run Center Data Model Preparation: planned, not implemented.
 - Phase 15 - Run Center Governance And Frontend: planned, not implemented.
 - Phase 16 - Email Delivery Data Model Preparation: planned, not implemented.
@@ -81,7 +86,7 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   Phase 6 login-flow runtime are complete.
 
 The documented V1 product roadmap is implemented through Phase 9 in this
-worktree, and the console optimization roadmap is verified through Phase 12B.
+worktree, and the console optimization roadmap is verified through Phase 13A.
 Production pilot handoff still requires live platform, SMTP, and AI-provider
 validation with real deployment credentials.
 
@@ -211,7 +216,7 @@ validation with real deployment credentials.
 
 ## In Progress
 
-- Phase 13A execution preparation. No Phase 13A-18 implementation work is in
+- Phase 13B execution preparation. No Phase 13B-18 implementation work is in
   progress.
 
 ## Known Risks
@@ -237,13 +242,15 @@ validation with real deployment credentials.
 - Phase 7 and Phase 8 automated checks do not prove real AI provider, SMTP,
   real platform QR scanning, or real platform crawling behavior; those remain
   deployment and pilot risks.
-- Phase 13A-18 plans depend on future implementation and verification. The
-  current frontend has the complete Phase 11-12 foundation: local static module
+- Phase 13B-18 plans depend on future implementation and verification. The
+  current frontend has the complete Phase 11-12 foundation and Phase 13A data
+  contract: local static module
   boundary, base desktop shell/navigation/button/card/toolbar styling, shared
   interaction helper/fixed floating-menu behavior, responsive
   desktop/tablet/mobile navigation/layout rules, expandable navigation groups,
   operations-home landing, and standardized page entries with role-safe
-  task-loop shortcuts.
+  task-loop shortcuts, plus role-scoped operations-home aggregates on
+  `/api/monitor/dashboard`.
 - Phase 11 was completed as four verified batches: Phase 11A module boundary
   and tokens, Phase 11B base layout/navigation visual foundation, Phase 11C
   interaction components and floating menus, and Phase 11D responsive
@@ -256,6 +263,10 @@ validation with real deployment credentials.
   Operations Home, Monitoring, Run Center, Report Center, resource pages, mail
   configuration, runtime settings, and system diagnostics while preserving
   normal-user role boundaries.
+- Phase 13A added an operations-home API data contract under the existing
+  dashboard endpoint, preserving old summary fields while exposing task
+  health, run activity, report activity, email delivery latest state,
+  suspected lead metrics, and concise resource health for Phase 13B/13C.
 - Email idempotency, run archive/noise filtering, and report task grouping are
   accepted data-model directions but are not active schema features yet.
 - The first global Phase 10-18 review found that Phase 13, Phase 17, and Phase
@@ -263,22 +274,44 @@ validation with real deployment credentials.
   and frontend/responsive batches.
 - Phase 10.5 follow-up global review found no remaining P0/P1 blockers.
   Remaining review notes are P2 implementation refinements and do not block
-  Phase 13A.
+  Phase 13B.
 
 ## Next Step
 
 Next allowed implementation step:
 
-1. start Phase 13A only;
-2. define the operations-home data contract under the existing monitor API
-   surface;
-3. aggregate task health, run activity, report activity, email delivery status,
-   suspected lead metrics, and concise resource health from real persisted data
-   or documented empty states;
-4. preserve administrator and normal-user owner/workspace scope before moving
-   to Phase 13B.
+1. start Phase 13B only;
+2. replace the text-heavy overview content with desktop visual metrics using
+   the Phase 13A operations-home API contract;
+3. add drilldowns into Monitoring, Run Center, Report Center, Email Delivery
+   status, and permitted administrator resource pages;
+4. keep long diagnostic blocks out of the default home page and preserve
+   role-safe wording before moving to Phase 13C.
 
 ## Latest Verification
+
+Phase 13A operations home data layer verification on
+2026-06-15:
+
+- Added `summary.operations_home` to the existing dashboard summary contract
+  and returned the same object as top-level `operations_home` from
+  `/api/monitor/dashboard` for the Phase 13B frontend migration.
+- Preserved existing flat dashboard fields such as `jobs_total`,
+  `runs_total`, `reports_total`, `contents_total`,
+  `failed_runs_recent`, `skipped_runs_recent`, and administrator resource
+  totals.
+- Aggregated task health, run activity, report activity, email delivery latest
+  state from `reports.email_status`, suspected lead metrics from
+  `ai_evaluations`, and concise resource health from existing persisted data.
+- Preserved administrator workspace-wide visibility and normal-user
+  owner/workspace scoping; normal users receive business-safe resource health
+  without platform account, proxy, AI profile, or login-session counts.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before implementation.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k phase_13a`
+- Result: 1 passed, 222 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_13a or phase_12b or phase_12a or phase_11a or phase_11b or phase_11c or phase_11d or monitor_page_uses or readiness_dashboard"`
+- Result: 10 passed, 213 deselected, 3 warnings.
 
 Phase 12B page entry and role flow verification on
 2026-06-15:
