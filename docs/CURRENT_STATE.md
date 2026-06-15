@@ -17,10 +17,9 @@ Phase 10-18 console optimization planning has been accepted as the next
 roadmap. Phase 10 - Frontend Architecture And Technology Decision is complete
 as a documentation and architecture decision phase. Phase 10.5 - Phase 10-18
 Global Plan Review Gate is complete and found no P0/P1 blockers after the
-granularity refinements. Phase 11A - Frontend Module Boundary And CSS Token
-Layer, Phase 11B - Base Layout And Navigation Visual Foundation, and Phase
-11C - Interaction Components And Floating Menu Fix are complete and verified.
-Phase 11D is the next allowed execution goal.
+granularity refinements. Phase 11 - Frontend Design System is complete and
+verified through Phase 11A, Phase 11B, Phase 11C, and Phase 11D. Phase 12A is
+the next allowed execution goal.
 The active SQLite schema now provides the foundation tables and columns
 required before later implementation work, and the web/API layer now has
 session login, administrator/normal-user roles, menu visibility,
@@ -37,7 +36,9 @@ server-like validation script that starts the real FastAPI service with
 production login flags, persistent profile roots, service restart checks, and
 headless browser verification, administrator-operation audit logs, sensitive
 value redaction, resource-alert diagnostics, backup guidance, disk-space
-diagnostics, and retention-setting diagnostics.
+  diagnostics, retention-setting diagnostics, Phase 11 local static frontend
+  assets, base shell/navigation visual styles, fixed floating-menu behavior,
+  and responsive desktop/tablet/mobile navigation and layout foundations.
 
 ## Implementation Status
 
@@ -57,9 +58,10 @@ diagnostics, and retention-setting diagnostics.
   documentation and architecture decision phase.
 - Phase 10.5 - Phase 10-18 Global Plan Review Gate: complete as a
   documentation-only review gate.
-- Phase 11 - Frontend Design System: Phase 11A, Phase 11B, and Phase 11C
-  complete and verified; Phase 11D is the next allowed execution goal.
-- Phase 12 - Navigation And Page Entry Redesign: planned, not implemented.
+- Phase 11 - Frontend Design System: complete and verified through Phase
+  11A-11D.
+- Phase 12 - Navigation And Page Entry Redesign: planned; Phase 12A is the
+  next allowed execution goal.
 - Phase 13 - Overview Operations Home Redesign: planned as Phase 13A-13C, not
   implemented.
 - Phase 14 - Run Center Data Model Preparation: planned, not implemented.
@@ -203,7 +205,7 @@ validation with real deployment credentials.
 
 ## In Progress
 
-- Phase 11D execution preparation. No Phase 11D-18 implementation work is in
+- Phase 12A execution preparation. No Phase 12A-18 implementation work is in
   progress.
 
 ## Known Risks
@@ -229,14 +231,15 @@ validation with real deployment credentials.
 - Phase 7 and Phase 8 automated checks do not prove real AI provider, SMTP,
   real platform QR scanning, or real platform crawling behavior; those remain
   deployment and pilot risks.
-- Phase 11D-18 plans depend on future implementation and verification. The
-  current frontend has the Phase 11A local static module boundary and the Phase
-  11B base desktop shell/navigation/button/card/toolbar styling foundation, and
-  the Phase 11C shared interaction helper/fixed floating-menu foundation.
-- Phase 11 must not be run as one large implementation goal. It is split into
-  Phase 11A module boundary and tokens, Phase 11B base layout/navigation
-  visual foundation, Phase 11C interaction components and floating menus, and
-  Phase 11D responsive foundation.
+- Phase 12A-18 plans depend on future implementation and verification. The
+  current frontend has the complete Phase 11 foundation: local static module
+  boundary, base desktop shell/navigation/button/card/toolbar styling, shared
+  interaction helper/fixed floating-menu behavior, and responsive
+  desktop/tablet/mobile navigation/layout rules.
+- Phase 11 was completed as four verified batches: Phase 11A module boundary
+  and tokens, Phase 11B base layout/navigation visual foundation, Phase 11C
+  interaction components and floating menus, and Phase 11D responsive
+  foundation.
 - Email idempotency, run archive/noise filtering, and report task grouping are
   accepted data-model directions but are not active schema features yet.
 - The first global Phase 10-18 review found that Phase 13, Phase 17, and Phase
@@ -244,20 +247,40 @@ validation with real deployment credentials.
   and frontend/responsive batches.
 - Phase 10.5 follow-up global review found no remaining P0/P1 blockers.
   Remaining review notes are P2 implementation refinements and do not block
-  Phase 11D.
+  Phase 12A.
 
 ## Next Step
 
 Next allowed implementation step:
 
-1. start Phase 11D only;
-2. implement the accepted desktop/tablet/mobile breakpoints;
-3. add touch-safe mobile navigation using the documented hamburger/drawer
-   direction or document an equivalent before implementation;
-4. make toolbars, form grids, metric grids, modals, and dense tables usable at
-   1440px, 1024px, and 390px before moving to Phase 12A.
+1. start Phase 12A only;
+2. replace Resource Management and System Configuration popover navigation with
+   expandable navigation groups;
+3. keep login success and session restore on an allowed operations-home path;
+4. preserve administrator and normal-user menu visibility, mobile navigation,
+   and Phase 11 responsive behavior before moving to Phase 12B.
 
 ## Latest Verification
+
+Phase 11D responsive foundation verification on
+2026-06-15:
+
+- Implemented the accepted desktop `>= 1280px`, tablet `768px - 1279px`, and
+  mobile `< 768px` breakpoint foundation in `api/webui/monitor/monitor.css`.
+- Added touch-safe mobile navigation hooks in `api/monitor_web/index.html`:
+  hamburger toggle, primary sidebar/navigation IDs, and a navigation backdrop.
+- Added mobile navigation behavior for open, backdrop close, Escape close,
+  page-switch close, and desktop-resize reset.
+- Kept dense tables scroll-safe on mobile while leaving page-specific card
+  conversions to later page phases.
+- Added a normal-user frontend permission guard so mail-template preview
+  polling does not call administrator-only endpoints.
+- Runtime browser validation on an isolated local service verified `/monitor`,
+  `/static/monitor/monitor.css`, and `/static/monitor/monitor.js` returned HTTP
+  200; administrator and normal-user authenticated paths loaded with no
+  console/page errors; 1440px, 1024px, and 390px checks covered navigation,
+  task-create entry, run log drawer, report preview drawer, and report action
+  menu.
 
 Phase 11C interaction components and floating menu verification on
 2026-06-15:

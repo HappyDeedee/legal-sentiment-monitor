@@ -274,16 +274,16 @@ scope, and rollback path.
 
 ### Phase 11D - Responsive Foundation
 
-- [ ] Implement the accepted breakpoints: mobile `< 768px`, tablet
+- [x] Implement the accepted breakpoints: mobile `< 768px`, tablet
       `768px - 1279px`, desktop `>= 1280px`.
-- [ ] Add mobile navigation using a top-left hamburger button and left-side
+- [x] Add mobile navigation using a top-left hamburger button and left-side
       drawer, or document an equivalent touch-safe alternative before
       implementation.
-- [ ] Make toolbars, form grids, metric grids, modals, and dense tables usable
+- [x] Make toolbars, form grids, metric grids, modals, and dense tables usable
       on tablet and mobile.
-- [ ] Keep dense operational tables at least scroll-safe on mobile; page-level
+- [x] Keep dense operational tables at least scroll-safe on mobile; page-level
       card conversions can be completed in the later page-specific phases.
-- [ ] Verify 1440px desktop, 1024px tablet, and 390px mobile layouts have no
+- [x] Verify 1440px desktop, 1024px tablet, and 390px mobile layouts have no
       severe overlap, hidden primary actions, or hover-only required paths.
 
 ## Phase 12 - Navigation And Page Entry Redesign

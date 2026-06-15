@@ -11,6 +11,57 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
   `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-15 - Phase 11D Responsive Foundation Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`, isolated local FastAPI service with
+temporary monitor data.
+
+Result:
+
+- Implemented accepted responsive breakpoints in
+  `api/webui/monitor/monitor.css`: desktop `>= 1280px`, tablet
+  `768px - 1279px`, and mobile `< 768px`.
+- Added touch-safe mobile navigation in `api/monitor_web/index.html` using a
+  top-left hamburger button, left-side drawer, and backdrop.
+- Added mobile navigation behavior for toggle open, backdrop close, Escape
+  close, page-switch close, and desktop-resize reset.
+- Made shell, header actions, page heads, toolbars, grids, modals/drawers,
+  action rows, toasts, and dense tables usable or scroll-safe on tablet and
+  mobile.
+- Added a normal-user frontend permission guard so mail-template preview
+  polling does not call administrator-only endpoints.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before implementation.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_11a or phase_11b or phase_11c or phase_11d or monitor_page_uses"`
+- Result before documentation close-out: 6 passed, 214 deselected, 1 warning.
+- Runtime HTTP check on isolated service:
+  - `/monitor`: HTTP 200;
+  - `/static/monitor/monitor.css`: HTTP 200;
+  - `/static/monitor/monitor.js`: HTTP 200.
+- Playwright authenticated browser validation:
+  - administrator dashboard loaded at 1440px with 12 navigation entries;
+  - normal user loaded with only `总览`, `舆情监控`, `运行中心`, and `报告中心`;
+  - tablet 1024px mobile navigation opened, closed by backdrop, and closed by
+    Escape;
+  - mobile 390px navigation opened, page switch closed the drawer, and the
+    task-create drawer remained reachable;
+  - desktop task drawer, run log drawer, report preview drawer, and report
+    action menu opened successfully;
+  - authenticated administrator and normal-user paths reported no console or
+    page errors.
+
+Limitations:
+
+- Phase 11D keeps dense tables scroll-safe on mobile. Full page-specific card
+  conversions remain for later page phases.
+- Phase 11D does not restructure Resource Management or System Configuration
+  popover navigation; that is the next allowed Phase 12A work.
+
 ## 2026-06-15 - Phase 11C Interaction Components And Floating Menu Fix Verified
 
 Environment: worktree

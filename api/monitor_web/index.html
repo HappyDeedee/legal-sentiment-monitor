@@ -314,34 +314,6 @@
     .form-actions { position:sticky; bottom:-18px; z-index:5; margin:16px -18px -18px; display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap; border-top:1px solid var(--line); padding:14px 18px; background:#fff; }
     .rule-modal-actions .row, .ai-test-actions .row, .account-flow-actions .row, .resource-modal-actions .row { width:auto; flex:0 0 auto; justify-content:flex-end; }
     .rule-modal-actions > .small, .ai-test-actions > .small, .account-flow-actions .small, .resource-modal-actions .small { max-width:620px; }
-    @media (max-width: 1100px) { .shell { grid-template-columns:minmax(0,1fr); width:100%; overflow:hidden; } .shell > aside { position:static; height:auto; width:100%; max-width:100%; min-width:0; overflow:visible; } nav { display:flex; width:100%; max-width:100%; min-width:0; overflow-x:auto; overflow-y:hidden; } .nav-group { flex:0 0 auto; } nav button { min-width:max-content; } .nav-popover { position:fixed; top:78px; left:12px; right:12px; width:auto; max-width:360px; } .grid, .grid-3, .grid-4, .split, .settings-panel-grid, .template-editor-layout, .diagnostic-layout, .settings-grid, .artifact-grid, .resource-summary-grid, .wizard-steps { grid-template-columns:1fr; } section { padding:16px; } }
-    @media (max-width: 1100px) { .account-filter, .account-modal-grid, .login-card-grid, .rule-builder-grid, .rule-flow, .rule-sections, .rule-modal-flow, .rule-accordion, .diagnostic-grid { grid-template-columns:1fr; } .template-preview-panel { position:static; } }
-    @media (max-width: 720px) {
-      body { font-size:13px; }
-      header { height:auto; min-height:60px; padding:12px 14px; align-items:flex-start; gap:10px; flex-direction:column; }
-      .page-head, .account-ledger-head { flex-direction:column; align-items:stretch; }
-      .page-actions, .row { width:100%; }
-      .row > div { flex:1 1 100%; min-width:100%; }
-      .row > button, .row > a { flex:0 0 auto; }
-      .drawer {
-        width:calc(100% - 18px);
-        max-height:calc(100vh - 18px);
-        padding:14px;
-      }
-      .template-modal, .form-drawer { width:calc(100% - 18px); }
-      .drawer .logbox { min-height:320px; }
-      iframe { min-height:420px; }
-      .metric-value { font-size:24px; }
-      .toolbar > div { min-width:100%; }
-      .wide-actions { min-width:220px; }
-      .account-bulk-toolbar { justify-content:flex-start; }
-      .account-bulk-toolbar button { flex:0 0 auto; }
-      .rule-modal-actions, .ai-test-actions, .account-flow-actions, .resource-modal-actions { align-items:stretch; }
-      .rule-modal-actions > .small, .ai-test-actions > .small, .account-flow-actions .small, .resource-modal-actions .small { display:none; }
-      .rule-modal-actions .row, .ai-test-actions .row, .account-flow-actions .row, .resource-modal-actions .row { width:100%; }
-      .rule-modal-actions button, .ai-test-actions button, .account-flow-actions button, .resource-modal-actions button { flex:1 1 auto; }
-      .schema-item { grid-template-columns:1fr; }
-    }
   </style>
 </head>
 <body>
@@ -368,13 +340,14 @@
     <symbol id="icon-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.6 6"></path><path d="M3 12a9 9 0 0 1 15.6-6"></path><path d="M3 4v6h6"></path><path d="M21 20v-6h-6"></path></symbol>
     <symbol id="icon-more" viewBox="0 0 24 24"><path d="M12 12h.01"></path><path d="M19 12h.01"></path><path d="M5 12h.01"></path></symbol>
   </svg>
+  <div id="mobile_nav_backdrop" class="mobile-nav-backdrop" aria-hidden="true"></div>
   <div class="shell">
-    <aside>
+    <aside id="primary_sidebar" aria-label="主导航">
       <div class="brand">
         <strong>Legal Sentiment</strong>
         <span>企业级律所舆情监控</span>
       </div>
-      <nav>
+      <nav id="primary_navigation">
         <div class="nav-group">
           <button class="active" data-tab="dashboard" data-menu-key="overview"><span class="ui-icon"><svg><use href="#icon-dashboard"></use></svg></span>总览</button>
         </div>
@@ -409,11 +382,15 @@
     </aside>
     <div class="content">
       <header>
+        <button id="mobile_nav_toggle" class="mobile-nav-toggle" type="button" aria-controls="primary_navigation" aria-expanded="false" aria-label="打开导航">
+          <span class="mobile-nav-icon" aria-hidden="true"></span>
+          <span>导航</span>
+        </button>
         <div class="header-title">
           <strong>舆情监控运营后台</strong>
           <span>抖音 / 快手 / 小红书 · 平台采集服务</span>
         </div>
-        <div class="row" style="flex:0 0 auto">
+        <div class="row header-actions">
           <div id="current_user_badge" class="small"></div>
           <div id="top_status" class="small"></div>
           <button class="secondary" onclick="loadAll()">刷新全局状态</button>
@@ -1434,6 +1411,22 @@
       positionAIRuleActionMenu();
       positionReportActionMenu();
     }
+    function setMobileNavOpen(open){
+      document.body.classList.toggle('mobile-nav-open', !!open);
+      const toggle=document.getElementById('mobile_nav_toggle');
+      const backdrop=document.getElementById('mobile_nav_backdrop');
+      if(toggle){
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        toggle.setAttribute('aria-label', open ? '关闭导航' : '打开导航');
+      }
+      if(backdrop) backdrop.setAttribute('aria-hidden', open ? 'false' : 'true');
+    }
+    function closeMobileNav(){
+      setMobileNavOpen(false);
+    }
+    function toggleMobileNav(){
+      setMobileNavOpen(!document.body.classList.contains('mobile-nav-open'));
+    }
     function showLogin(message=''){
       authReady=false;
       currentSession=null;
@@ -1581,11 +1574,22 @@
       }
     });
     document.addEventListener('keydown', event => {
-      if(event.key === 'Escape') closeFloatingMenus();
+      if(event.key === 'Escape'){
+        closeFloatingMenus();
+        closeMobileNav();
+      }
     });
     document.addEventListener('monitor:close-floating-menus', closeFloatingMenus);
     window.addEventListener('resize', positionActiveFloatingMenus);
+    window.addEventListener('resize', () => {
+      if(window.innerWidth >= 1280) closeMobileNav();
+    });
     window.addEventListener('scroll', positionActiveFloatingMenus, true);
+    document.getElementById('mobile_nav_toggle')?.addEventListener('click', event => {
+      event.stopPropagation();
+      toggleMobileNav();
+    });
+    document.getElementById('mobile_nav_backdrop')?.addEventListener('click', closeMobileNav);
 
     function toggleNavMenu(menu){
       const target=document.getElementById('nav_menu_'+menu);
@@ -1611,6 +1615,7 @@
       if(btn.dataset.subview) switchSubview(btn.dataset.tab, btn.dataset.subview);
       else ensureDefaultSubview(btn.dataset.tab);
       loadSectionData(btn.dataset.tab);
+      closeMobileNav();
     }
     function loadSectionData(tab){
       if(!canOpenTab(tab)) return;
@@ -3947,10 +3952,12 @@
       document.body.style.overflow='';
     }
     function scheduleEmailPreview(){
+      if(!canMenu('mail_templates')) return;
       if(emailPreviewTimer) clearTimeout(emailPreviewTimer);
       emailPreviewTimer=setTimeout(()=>previewEmailTemplate(false), 350);
     }
     async function previewEmailTemplate(showToast=true){
+      if(!canMenu('mail_templates')) return;
       const payload={subject_template:val('email_template_subject'),html_template:val('email_html_template'),law_firm_name:'海安律所'};
       const res=await api('/email-templates/preview',{method:'POST',body:JSON.stringify(payload)});
       if(!res.ok){ if(showToast) toast(await err(res)); return; }

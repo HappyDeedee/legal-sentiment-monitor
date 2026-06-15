@@ -7,9 +7,10 @@ responsive behavior, and component boundaries before UI implementation begins.
 ## Status
 
 Planning accepted on 2026-06-15. Phase 10 architecture review is complete.
-Phase 11A module boundary, Phase 11B base layout, and Phase 11C interaction
-helper/floating-menu batches are complete and verified. Phase 11D responsive
-foundation remains the next frontend design-system batch.
+Phase 11A module boundary, Phase 11B base layout, Phase 11C interaction
+helper/floating-menu, and Phase 11D responsive foundation batches are complete
+and verified. Phase 12A navigation structure and login landing is the next
+frontend batch.
 
 Agents must use this document together with:
 

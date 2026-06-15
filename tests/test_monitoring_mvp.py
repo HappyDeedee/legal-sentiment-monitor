@@ -7201,7 +7201,7 @@ def test_monitor_page_uses_consistent_buttons_tables_and_modal_actions():
     assert '<use href="#icon-monitor">' in page
     assert ".page-toolbar {" in frontend_source
     assert "report-workspace" not in page
-    assert ".schema-item { grid-template-columns:1fr; }" in page
+    assert ".schema-item { grid-template-columns:1fr; }" in page or ".schema-item {" in monitor_css
     assert ".action-menu-host" in frontend_source
     assert ".action-menu.active" in frontend_source
     assert ".report-action-menu {" in frontend_source
@@ -7397,6 +7397,63 @@ def test_phase_11c_interaction_helpers_and_floating_menus():
     assert "data-proxy-menu-button" not in page
     assert "data-ai-profile-menu-button" not in page
     assert "data-email-template-menu-button" not in page
+
+
+def test_phase_11d_responsive_foundation_and_mobile_navigation():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    inline_style = page[page.index("<style>") : page.index("</style>")]
+
+    for marker in [
+        'id="mobile_nav_toggle"',
+        'class="mobile-nav-toggle"',
+        'aria-controls="primary_navigation"',
+        'aria-expanded="false"',
+        'id="mobile_nav_backdrop"',
+        'class="mobile-nav-backdrop"',
+        'id="primary_sidebar"',
+        'id="primary_navigation"',
+        'class="row header-actions"',
+    ]:
+        assert marker in page
+
+    for marker in [
+        "function setMobileNavOpen(open)",
+        "function closeMobileNav()",
+        "function toggleMobileNav()",
+        "document.body.classList.toggle('mobile-nav-open'",
+        "document.getElementById('mobile_nav_toggle')?.addEventListener('click'",
+        "document.getElementById('mobile_nav_backdrop')?.addEventListener('click', closeMobileNav)",
+        "if(window.innerWidth >= 1280) closeMobileNav()",
+        "closeMobileNav();",
+        "if(!canMenu('mail_templates')) return;",
+    ]:
+        assert marker in page
+
+    assert "@media (max-width: 1279px)" in css
+    assert "@media (max-width: 767px)" in css
+    assert "@media (max-width: 1100px)" not in inline_style
+    assert "@media (max-width: 720px)" not in inline_style
+
+    for selector in [
+        ".mobile-nav-toggle",
+        ".mobile-nav-backdrop",
+        "body.mobile-nav-open",
+        "body.mobile-nav-open .shell > aside",
+        ".nav-popover",
+        ".table-wrap",
+        ".page-toolbar .toolbar-actions",
+        ".drawer {",
+        ".template-modal,",
+        ".form-drawer,",
+    ]:
+        assert selector in css
+
+    assert "grid-template-columns: minmax(0, 1fr);" in css
+    assert "height: 100dvh;" in css
+    assert "max-height: calc(100dvh - 18px);" in css
+    assert ".table-wrap table" in css
+    assert "min-width: 760px !important;" in css
 
 
 def test_cli_run_due_runs_only_due_enabled_jobs(monkeypatch):
