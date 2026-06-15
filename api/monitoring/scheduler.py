@@ -5,7 +5,7 @@ import os
 from datetime import datetime, time, timedelta
 from typing import Any
 
-from .database import get_job, has_job_template_placeholders, list_jobs, record_skipped_run, set_job_schedule_state
+from .database import get_job, get_runtime_setting_value, has_job_template_placeholders, list_jobs, record_skipped_run, recover_stale_runs_and_locks, set_job_schedule_state
 from .preflight import build_job_preflight
 from .runner import clear_stop_request, request_stop_job, run_job
 
@@ -18,15 +18,17 @@ _job_tasks: dict[int, asyncio.Task] = {}
 
 async def start_scheduler() -> None:
     global _scheduler_task, _apscheduler
+    recover_stale_runs_and_locks("startup_recovery")
     if scheduler_disabled_reason():
         return
+    tick_seconds = _scheduler_tick_seconds()
     if _apscheduler is not None:
         return
     try:
         from apscheduler.schedulers.asyncio import AsyncIOScheduler
 
         _apscheduler = AsyncIOScheduler()
-        _apscheduler.add_job(tick, "interval", seconds=60, id="monitor_tick", max_instances=1, coalesce=True)
+        _apscheduler.add_job(tick, "interval", seconds=tick_seconds, id="monitor_tick", max_instances=1, coalesce=True)
         _apscheduler.start()
         await tick()
         return
@@ -44,10 +46,11 @@ async def _loop() -> None:
             await tick()
         except Exception:
             pass
-        await asyncio.sleep(60)
+        await asyncio.sleep(_scheduler_tick_seconds())
 
 
 async def tick() -> None:
+    recover_stale_runs_and_locks("scheduler_recovery")
     now = datetime.now()
     for job in list_jobs():
         if not job.get("enabled"):
@@ -123,18 +126,20 @@ def stop_job(job_id: int) -> dict[str, Any]:
 
 def scheduler_status() -> dict[str, Any]:
     disabled_reason = scheduler_disabled_reason()
+    tick_seconds = _scheduler_tick_seconds()
     return {
         "enabled": not bool(disabled_reason),
         "mode": "disabled" if disabled_reason else "internal",
-        "message": disabled_reason or "内置调度器已启用，会每 60 秒检查到期任务",
+        "message": disabled_reason or f"内置调度器已启用，会每 {tick_seconds} 秒检查到期任务",
+        "tick_seconds": tick_seconds,
         "running_job_ids": running_job_ids(),
         "running_jobs": running_jobs_detail(),
     }
 
 
 def scheduler_disabled_reason() -> str:
-    if os.environ.get("MONITOR_DISABLE_SCHEDULER", "").lower() in {"1", "true", "yes"}:
-        return "已设置 MONITOR_DISABLE_SCHEDULER=true，内置调度器不会启动"
+    if _scheduler_disabled_setting():
+        return "运行策略已暂停自动调度，内置调度器不会启动"
     workers = os.environ.get("WEB_CONCURRENCY") or os.environ.get("UVICORN_WORKERS")
     try:
         worker_count = int(workers) if workers else 1
@@ -143,6 +148,29 @@ def scheduler_disabled_reason() -> str:
     if worker_count > 1:
         return "检测到多 worker 配置，MVP 内置调度器要求单进程"
     return ""
+
+
+def _scheduler_tick_seconds() -> int:
+    return max(10, _runtime_setting_int("scheduler_tick_seconds", 60))
+
+
+def _scheduler_disabled_setting() -> bool:
+    try:
+        return bool(get_runtime_setting_value("scheduler_disabled"))
+    except Exception:
+        return os.environ.get("MONITOR_DISABLE_SCHEDULER", "").lower() in {"1", "true", "yes"}
+
+
+def _runtime_setting_int(key: str, default: int) -> int:
+    try:
+        return int(get_runtime_setting_value(key))
+    except Exception:
+        env_map = {"scheduler_tick_seconds": "MONITOR_SCHEDULER_TICK_SECONDS"}
+        env_value = os.environ.get(env_map.get(key, ""))
+        try:
+            return int(env_value) if env_value not in (None, "") else default
+        except ValueError:
+            return default
 
 
 async def _run_and_release(job_id: int) -> None:

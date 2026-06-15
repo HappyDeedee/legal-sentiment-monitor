@@ -58,10 +58,22 @@ MONITOR_ADMIN_EMAIL
 MONITOR_ADMIN_PASSWORD
 MONITOR_PORT
 MONITOR_CORS_ORIGINS
+MONITOR_LOGIN_QR_HEADLESS
+MONITOR_ALLOW_LOCAL_LOGIN_WINDOW
 ```
 
 Deployment variables that lock settings should be visible as read-only in the
 administrator settings UI.
+
+Production deployments should set:
+
+```text
+MONITOR_LOGIN_QR_HEADLESS=true
+MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=false
+```
+
+`MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=true` is only a development fallback for
+operators working on a desktop machine. It is not an acceptance path for V1.
 
 ## Browser Requirements
 
@@ -79,6 +91,9 @@ Acceptance requirements:
 
 If the platform requires manual verification, the server should return a
 structured `needs_verification` state instead of attempting bypass behavior.
+If QR generation fails, the server should return `qrcode_failed` and a
+customer-safe message. In production mode, local-window login endpoints should
+return a permission error and direct administrators back to the web QR flow.
 
 ## Container Checklist
 
@@ -108,7 +123,9 @@ The first container/server-like environment should verify:
 6. QR login can be completed through the web UI;
 7. profile survives service/container restart;
 8. scheduled task can run using the server-side profile;
-9. logs do not expose secrets, cookies, proxy credentials, or raw profile paths.
+9. local-window login fallback is disabled;
+10. logs do not expose secrets, cookies, proxy credentials, or raw profile
+    paths.
 
 ## systemd Checklist
 
@@ -148,7 +165,9 @@ Restore validation must include:
 - service starts after restore;
 - administrator login works;
 - account profiles can be reused;
-- a report can be opened from restored data.
+- a report can be opened from restored data;
+- System Diagnostics shows acceptable database, disk-space, backup-set,
+  retention-setting, account-alert, and proxy-alert checks before pilot use.
 
 ## Encryption Key Management
 
@@ -175,6 +194,20 @@ Automated key rotation is deferred until after V1.
 
 Before production handoff, run the server-like tests in `TEST_PLAN.md` and
 record results in `TEST_RESULTS.md`.
+
+Automated server-like validation can be run from the deployment worktree with:
+
+```bash
+uv run python scripts/server_like_validation.py
+```
+
+The script starts a real FastAPI HTTP service with isolated persistent data
+directories, `MONITOR_LOGIN_QR_HEADLESS=true`,
+`MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=false`, scheduler disabled, AI skipped, and
+server-side profile roots. It validates web reachability, administrator login,
+web QR/status login capability, local-window login blocking, separate
+same-platform profiles, profile metadata across service restart, runtime
+account/profile/proxy locks, and headless Chromium availability.
 
 Acceptance cannot be marked complete until:
 

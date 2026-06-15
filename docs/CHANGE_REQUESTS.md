@@ -114,7 +114,7 @@ Reason:
 Requirements should not exist only in chat. The project needs a closed-loop
 documentation mechanism.
 
-Status: Implemented
+Status: Verified
 
 Related tasks:
 
@@ -213,7 +213,7 @@ Reason:
 
 Without this, Phase 1 requires guessing user, role, and workspace behavior.
 
-Status: Accepted
+Status: Verified
 
 Related tasks:
 
@@ -247,7 +247,7 @@ Reason:
 The current code still has legacy `profile_path` concepts, while product
 decisions require stable `profile_key` and hidden real paths.
 
-Status: Accepted
+Status: Verified
 
 Related tasks:
 
@@ -259,7 +259,9 @@ Acceptance:
 - user has confirmed legacy profile migration can be direct-new-profile rather
   than compatibility-preserving;
 - new account environments use `profile_key`;
-- customer-facing UI and API should stop accepting arbitrary profile paths.
+- customer-facing UI and API should stop accepting arbitrary profile paths;
+- Phase 6 and Phase 8 still need full server-login and server-like acceptance
+  validation, but the Phase 5 account environment runtime is verified.
 
 ## CR-008 - Runtime Settings Specification
 
@@ -279,7 +281,7 @@ Reason:
 Runtime settings are currently spread across code defaults and environment
 variables.
 
-Status: Accepted
+Status: Verified
 
 Related tasks:
 
@@ -403,7 +405,7 @@ Reason:
 The product direction is accepted, but the exact key format affects filesystem
 layout, database values, diagnostics, and migration scripts.
 
-Status: Accepted
+Status: Verified
 
 Related tasks:
 
@@ -415,7 +417,8 @@ Acceptance:
 - user confirmed final format:
   `{workspace_id}/{platform}/acc_{account_id}`;
 - examples are updated in `ACCOUNT_ENVIRONMENT.md`;
-- path resolver tests use the confirmed format.
+- path resolver tests use the confirmed format;
+- Phase 5 resolver and runtime binding tests verify the confirmed format.
 
 ## CR-012B - Account And Profile Lock Timeout
 
@@ -435,7 +438,7 @@ Reason:
 Lock timeout affects failed-run recovery and whether a stuck browser session can
 block future scheduled runs.
 
-Status: Accepted
+Status: Verified
 
 Related tasks:
 
@@ -449,7 +452,9 @@ Acceptance:
 - V1 does not auto-compute timeout from crawl range;
 - lock expiry follows the run deadline plus `lock_cleanup_buffer_seconds`;
 - stale lock cleanup verifies the owning run state before releasing locks;
-- timeout setting source is documented in `SYSTEM_SETTINGS.md`.
+- timeout setting source is documented in `SYSTEM_SETTINGS.md`;
+- Phase 5 recovery tests verify timed-out running runs are recovered before
+  account/profile/proxy locks are released.
 
 ## CR-012C - Account/Profile/Proxy Lock Storage
 
@@ -469,7 +474,7 @@ Reason:
 Inline lock fields and a dedicated lock table have different migration,
 querying, and proxy concurrency tradeoffs.
 
-Status: Accepted
+Status: Verified
 
 Related tasks:
 
@@ -482,7 +487,9 @@ Acceptance:
   inline fields for single account/profile locks and `resource_locks` table for
   proxy concurrency;
 - schema migration plan is updated with the confirmed fields/tables;
-- lock tests cover account, profile, and proxy concurrency.
+- lock tests cover account, profile, and proxy concurrency;
+- Phase 5 runtime tests verify inline account/profile locking and proxy
+  `resource_locks` concurrency control.
 
 ## CR-013 - API Authentication Implementation Guide
 
@@ -548,6 +555,9 @@ Acceptance:
 - `SERVER_DEPLOYMENT.md` exists;
 - it documents server-like acceptance requirements and persistent data;
 - `AGENTS.md` and `AGENT_WORKFLOW.md` route deployment work to the document.
+- `scripts/server_like_validation.py` verifies the automated server-like HTTP
+  service path, production login flags, profile restart persistence, runtime
+  locks, and no-local-Chrome validation boundary.
 
 ## CR-015 - Documentation Consistency Check Specification
 

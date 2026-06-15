@@ -13,7 +13,9 @@ from fastapi import HTTPException
 
 from api.monitoring.ai import _build_endpoint, _parse_json, _validate_ai_output, build_evaluation_payload, test_ai as run_ai_config_test
 from api.monitoring.ai import DEFAULT_PROMPT
-from api.monitoring.database import create_login_session, create_run, expire_login_sessions_for_account, finish_run, get_active_ai_key_profile, get_ai_config, get_conn, get_dashboard_summary, get_email_config, get_job, get_login_session, get_platform_login_config, get_report, get_run, get_social_account, init_db, list_ai_key_profiles, list_ai_rule_profiles, list_email_templates, list_jobs, list_leads, list_login_sessions, list_platform_login_configs, list_proxy_profiles, list_reports, list_runs, list_social_accounts, mark_selftest_jobs_internal, record_skipped_run, render_email_template_preview, save_ai_config, save_ai_key_profile, save_ai_rule_profile, save_email_config, save_email_template, save_job, save_platform_login_config, save_proxy_profile, save_social_account, set_active_ai_key_profile, set_active_ai_rule_profile, update_social_account_check_state
+from api.monitoring.auth import SESSION_COOKIE_NAME
+from api.monitoring.account_environment import resolve_account_profile_path
+from api.monitoring.database import acquire_account_lock, acquire_proxy_lock, authenticate_user, bootstrap_admin_from_env, create_login_session, create_run, expire_login_sessions_for_account, finish_run, get_active_ai_key_profile, get_ai_config, get_conn, get_dashboard_summary, get_email_config, get_job, get_login_session, get_platform_login_config, get_report, get_run, get_runtime_setting_value, get_social_account, get_user_by_email, init_db, list_ai_key_profiles, list_ai_rule_profiles, list_email_templates, list_jobs, list_leads, list_login_sessions, list_platform_login_configs, list_proxy_profiles, list_reports, list_runtime_settings, list_runs, list_social_accounts, list_users, mark_selftest_jobs_internal, record_skipped_run, recover_stale_runs_and_locks, release_account_lock, release_proxy_locks, release_run_resource_locks, render_email_template_preview, save_ai_config, save_ai_key_profile, save_ai_rule_profile, save_email_config, save_email_template, save_job, save_platform_login_config, save_proxy_profile, save_runtime_settings, save_social_account, save_user, set_active_ai_key_profile, set_active_ai_rule_profile, update_social_account_check_state
 from api.monitoring.mediacrawler_login import get_mediacrawler_login_capability
 from api.monitoring.login_browser import build_login_browser_command, open_login_browser, open_login_browser_with_command
 import api.monitoring.account_check as account_check_module
@@ -121,6 +123,718 @@ def test_scheduler_next_run_at_is_visible_for_jobs():
     ).startswith("2026-06-12T12:00:00")
 
 
+def test_phase_05_schema_foundation_tables_and_columns_exist():
+    init_db()
+    expected_tables = {
+        "workspaces",
+        "users",
+        "user_sessions",
+        "system_settings",
+        "audit_logs",
+        "resource_locks",
+    }
+    ownership_tables = {
+        "monitor_jobs",
+        "social_accounts",
+        "proxy_profiles",
+        "login_sessions",
+        "crawl_runs",
+        "raw_contents",
+        "raw_comments",
+        "ai_evaluations",
+        "reports",
+        "email_templates",
+        "ai_key_profiles",
+    }
+    with get_conn() as conn:
+        tables = {
+            row["name"]
+            for row in conn.execute("SELECT name FROM sqlite_master WHERE type='table'").fetchall()
+        }
+        assert expected_tables <= tables
+        workspace = conn.execute("SELECT id, status FROM workspaces WHERE id=1").fetchone()
+        assert dict(workspace) == {"id": 1, "status": "active"}
+        for table in ownership_tables:
+            columns = _table_columns(conn, table)
+            assert {"workspace_id", "created_by", "updated_by"} <= columns
+        assert {"profile_key", "locked_by_run_id", "locked_at", "lock_expires_at"} <= _table_columns(conn, "social_accounts")
+        assert "profile_key" in _table_columns(conn, "login_sessions")
+        assert {"timeout_seconds", "deadline_at", "timeout_reason", "account_id", "proxy_id"} <= _table_columns(conn, "crawl_runs")
+        assert {"workspace_id", "resource_type", "resource_id", "run_id", "locked_at", "expires_at"} <= _table_columns(conn, "resource_locks")
+
+
+def test_phase_05_schema_defaults_keep_existing_mvp_records_compatible(tmp_path):
+    init_db()
+    jobs_snapshot = _snapshot_monitor_jobs()
+    snapshots = {
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "login_sessions": _snapshot_table("login_sessions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+        "proxy_profiles": _snapshot_table("proxy_profiles"),
+    }
+    _clear_monitor_jobs()
+    try:
+        proxy = save_proxy_profile(
+            {
+                "name": "华东代理池",
+                "provider": "manual",
+                "proxy_url": "http://user:password@example.com:8080",
+                "status": "standby",
+            }
+        )
+        account = save_social_account(
+            {
+                "name": "海安律所抖音采集号",
+                "platform": "dy",
+                "login_type": "qrcode",
+                "status": "standby",
+                "profile_path": str(tmp_path / "dy_profile"),
+                "proxy_id": proxy["id"],
+            }
+        )
+        job = save_job(
+            {
+                "law_firm_name": "海安律所",
+                "aliases": [],
+                "exclude_words": [],
+                "keywords": ["海安律所投诉"],
+                "platforms": ["dy"],
+                "recipients": [],
+                "account_id": account["id"],
+                "proxy_id": proxy["id"],
+            }
+        )
+        session = create_login_session(
+            {
+                "platform": "dy",
+                "account_id": account["id"],
+                "login_url": "https://www.douyin.com/",
+                "profile_path": account["profile_path"],
+            }
+        )
+        run_id = create_run(job["id"], {"law_firm_name": job["law_firm_name"]})
+        finish_run(run_id, "success", {"law_firm_name": job["law_firm_name"]})
+        report = create_report(run_id, job, {"law_firm_name": job["law_firm_name"], "platforms": ["dy"]})
+
+        assert get_job(job["id"])["workspace_id"] == 1
+        stored_account = get_social_account(account["id"])
+        stored_session = get_login_session(session["id"])
+        assert stored_account["workspace_id"] == 1
+        assert stored_account["profile_key"] == f"1/dy/acc_{account['id']}"
+        assert stored_session["workspace_id"] == 1
+        assert stored_session["profile_key"] == stored_account["profile_key"]
+        assert get_run(run_id)["workspace_id"] == 1
+        assert get_report(report["id"])["workspace_id"] == 1
+        assert list_jobs()[0]["id"] == job["id"]
+        assert list_social_accounts()[0]["id"] == account["id"]
+        assert list_login_sessions(limit=1)[0]["id"] == session["id"]
+        assert list_runs(limit=1)[0]["id"] == run_id
+        assert list_reports(limit=1)[0]["id"] == report["id"]
+    finally:
+        _restore_table("reports", snapshots["reports"])
+        _restore_table("crawl_runs", snapshots["crawl_runs"])
+        _restore_table("login_sessions", snapshots["login_sessions"])
+        _restore_table("social_accounts", snapshots["social_accounts"])
+        _restore_table("proxy_profiles", snapshots["proxy_profiles"])
+        _restore_monitor_jobs(jobs_snapshot)
+
+
+def test_phase_1_bootstrap_admin_login_session_and_user_management():
+    from api.routers import auth as auth_router
+
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "user_sessions": _snapshot_table("user_sessions"),
+        "users": _snapshot_table("users"),
+    }
+    try:
+        with get_conn() as conn:
+            conn.execute("DELETE FROM user_sessions")
+            conn.execute("DELETE FROM audit_logs")
+            conn.execute("DELETE FROM users")
+
+        admin = bootstrap_admin_from_env("admin@example.com", "StrongPass123!", "Admin")
+        assert admin
+        assert admin["email"] == "admin@example.com"
+        assert admin["role"] == "administrator"
+        assert "password_hash" not in admin
+        assert authenticate_user("admin@example.com", "StrongPass123!")["id"] == admin["id"]
+        assert authenticate_user("admin@example.com", "wrong-password") is None
+
+        login_response = _FakeResponse()
+        login_result = asyncio.run(
+            auth_router.login(
+                {"email": "admin@example.com", "password": "StrongPass123!"},
+                _FakeRequest(),
+                login_response,
+            )
+        )
+        session_cookie = login_response.cookies[SESSION_COOKIE_NAME]["value"]
+        assert login_result["user"]["role"] == "administrator"
+        assert login_result["user"]["menu_permissions"]["users_permissions"] is True
+        assert session_cookie
+        session_user = asyncio.run(auth_router.session(get_user_for_test_session(session_cookie)))["user"]
+        assert session_user["email"] == "admin@example.com"
+
+        normal = asyncio.run(
+            auth_router.create_user(
+                {
+                    "email": "user1@example.com",
+                    "display_name": "User One",
+                    "password": "UserPass123!",
+                    "role": "normal",
+                },
+                admin,
+            )
+        )["user"]
+        assert normal["role"] == "normal"
+        assert normal["status"] == "active"
+        assert authenticate_user("user1@example.com", "UserPass123!")["role"] == "normal"
+
+        disabled = asyncio.run(auth_router.update_user(int(normal["id"]), {"status": "disabled"}, admin))["user"]
+        assert disabled["status"] == "disabled"
+        assert authenticate_user("user1@example.com", "UserPass123!") is None
+        assert any(user["email"] == "user1@example.com" for user in list_users())
+        assert get_user_by_email("user1@example.com")["status"] == "disabled"
+
+        logout_response = _FakeResponse()
+        logout_result = asyncio.run(auth_router.logout(logout_response, admin, session_cookie))
+        assert logout_result["ok"] is True
+        assert SESSION_COOKIE_NAME in logout_response.deleted_cookies
+    finally:
+        _restore_table("user_sessions", snapshots["user_sessions"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
+        _restore_table("users", snapshots["users"])
+
+
+def test_phase_1_http_routes_enforce_sessions_roles_and_owner_scope():
+    from api import main as api_main
+
+    init_db()
+    snapshots = {
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "raw_contents": _snapshot_table("raw_contents"),
+        "ai_evaluations": _snapshot_table("ai_evaluations"),
+        "audit_logs": _snapshot_table("audit_logs"),
+        "user_sessions": _snapshot_table("user_sessions"),
+        "users": _snapshot_table("users"),
+    }
+    jobs_snapshot = _snapshot_monitor_jobs()
+    try:
+        with get_conn() as conn:
+            for table in ["ai_evaluations", "raw_contents", "reports", "crawl_runs", "user_sessions", "audit_logs", "users"]:
+                conn.execute(f"DELETE FROM {table}")
+        _clear_monitor_jobs()
+
+        admin = bootstrap_admin_from_env("admin@example.com", "AdminPass123!", "Admin")
+        user1 = save_user(
+            {
+                "email": "user1@example.com",
+                "display_name": "User One",
+                "password": "UserPass123!",
+                "role": "normal",
+            },
+            actor_id=int(admin["id"]),
+        )
+        user2 = save_user(
+            {
+                "email": "user2@example.com",
+                "display_name": "User Two",
+                "password": "UserPass456!",
+                "role": "normal",
+            },
+            actor_id=int(admin["id"]),
+        )
+        job1 = save_job(
+            {
+                "law_firm_name": "海安律所",
+                "keywords": ["海安律所避雷"],
+                "platforms": ["dy"],
+                "recipients": [],
+            },
+            actor=user1,
+        )
+        job2 = save_job(
+            {
+                "law_firm_name": "恒泰律所",
+                "keywords": ["恒泰律所投诉"],
+                "platforms": ["dy"],
+                "recipients": [],
+            },
+            actor=user2,
+        )
+        run1 = create_run(job1["id"], {"job_id": job1["id"], "law_firm_name": job1["law_firm_name"], "platforms": ["dy"]})
+        run2 = create_run(job2["id"], {"job_id": job2["id"], "law_firm_name": job2["law_firm_name"], "platforms": ["dy"]})
+        finish_run(run1, "success", {"job_id": job1["id"], "law_firm_name": job1["law_firm_name"], "platforms": ["dy"]})
+        finish_run(run2, "success", {"job_id": job2["id"], "law_firm_name": job2["law_firm_name"], "platforms": ["dy"]})
+        report1 = create_report(run1, job1, {"job_id": job1["id"], "law_firm_name": job1["law_firm_name"], "platforms": ["dy"]})
+        report2 = create_report(run2, job2, {"job_id": job2["id"], "law_firm_name": job2["law_firm_name"], "platforms": ["dy"]})
+
+        transport = httpx.ASGITransport(app=api_main.app)
+
+        async def exercise() -> None:
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as anonymous:
+                assert (await anonymous.get("/api/monitor/jobs")).status_code == 401
+
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as normal_client:
+                login = await normal_client.post(
+                    "/api/auth/login",
+                    json={"email": "user1@example.com", "password": "UserPass123!"},
+                )
+                assert login.status_code == 200
+                session = await normal_client.get("/api/auth/session")
+                assert session.status_code == 200
+                permissions = session.json()["user"]["menu_permissions"]
+                assert permissions["overview"] is True
+                assert permissions["platform_accounts"] is False
+                assert (await normal_client.get("/api/monitor/social-accounts")).status_code == 403
+
+                jobs_response = await normal_client.get("/api/monitor/jobs")
+                assert jobs_response.status_code == 200
+                job_ids = {item["id"] for item in jobs_response.json()["jobs"]}
+                assert job_ids == {job1["id"]}
+                assert (await normal_client.get(f"/api/monitor/jobs/{job2['id']}/preflight")).status_code == 404
+
+                runs_response = await normal_client.get("/api/monitor/runs")
+                assert {item["id"] for item in runs_response.json()["runs"]} == {run1}
+                reports_response = await normal_client.get("/api/monitor/reports")
+                assert {item["id"] for item in reports_response.json()["reports"]} == {report1["id"]}
+                assert (await normal_client.get(f"/api/monitor/reports/{report2['id']}")).status_code == 404
+
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as admin_client:
+                login = await admin_client.post(
+                    "/api/auth/login",
+                    json={"email": "admin@example.com", "password": "AdminPass123!"},
+                )
+                assert login.status_code == 200
+                assert (await admin_client.get("/api/monitor/social-accounts")).status_code == 200
+                jobs_response = await admin_client.get("/api/monitor/jobs")
+                assert {item["id"] for item in jobs_response.json()["jobs"]} == {job1["id"], job2["id"]}
+                reports_response = await admin_client.get("/api/monitor/reports")
+                assert {item["id"] for item in reports_response.json()["reports"]} == {report1["id"], report2["id"]}
+
+        asyncio.run(exercise())
+    finally:
+        with get_conn() as conn:
+            user_ids = [
+                row["id"]
+                for row in conn.execute(
+                    "SELECT id FROM users WHERE email IN ('admin@example.com','user1@example.com','user2@example.com')"
+                ).fetchall()
+            ]
+            if user_ids:
+                placeholders = ",".join("?" for _ in user_ids)
+                run_ids = [
+                    row["id"]
+                    for row in conn.execute(
+                        f"SELECT id FROM crawl_runs WHERE created_by IN ({placeholders})",
+                        user_ids,
+                    ).fetchall()
+                ]
+                if run_ids:
+                    run_placeholders = ",".join("?" for _ in run_ids)
+                    conn.execute(f"DELETE FROM ai_evaluations WHERE run_id IN ({run_placeholders})", run_ids)
+                    conn.execute(f"DELETE FROM raw_contents WHERE run_id IN ({run_placeholders})", run_ids)
+                    conn.execute(f"DELETE FROM reports WHERE run_id IN ({run_placeholders})", run_ids)
+                    conn.execute(f"DELETE FROM crawl_runs WHERE id IN ({run_placeholders})", run_ids)
+                conn.execute(f"DELETE FROM user_sessions WHERE user_id IN ({placeholders})", user_ids)
+                conn.execute(f"DELETE FROM audit_logs WHERE user_id IN ({placeholders})", user_ids)
+                conn.execute(f"DELETE FROM users WHERE id IN ({placeholders})", user_ids)
+        _restore_table("users", snapshots["users"])
+        _restore_monitor_jobs(jobs_snapshot)
+        _restore_table("crawl_runs", snapshots["crawl_runs"])
+        _restore_table("reports", snapshots["reports"])
+        _restore_table("raw_contents", snapshots["raw_contents"])
+        _restore_table("ai_evaluations", snapshots["ai_evaluations"])
+        _restore_table("user_sessions", snapshots["user_sessions"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
+
+
+def test_phase_4_normal_user_task_api_ignores_advanced_resource_fields():
+    from api import main as api_main
+
+    init_db()
+    snapshots = {
+        "users": _snapshot_table("users"),
+        "user_sessions": _snapshot_table("user_sessions"),
+        "monitor_jobs": _snapshot_table("monitor_jobs"),
+        "job_keywords": _snapshot_table("job_keywords"),
+        "job_platforms": _snapshot_table("job_platforms"),
+        "job_recipients": _snapshot_table("job_recipients"),
+        "ai_key_profiles": _snapshot_table("ai_key_profiles"),
+        "email_templates": _snapshot_table("email_templates"),
+        "proxy_profiles": _snapshot_table("proxy_profiles"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        with get_conn() as conn:
+            for table in ["job_recipients", "job_platforms", "job_keywords", "monitor_jobs", "user_sessions", "users"]:
+                conn.execute(f"DELETE FROM {table}")
+
+        admin = save_user(
+            {
+                "email": "phase4-admin@example.com",
+                "display_name": "Phase4 Admin",
+                "password": "AdminPass123!",
+                "role": "administrator",
+            }
+        )
+        save_user(
+            {
+                "email": "phase4-user@example.com",
+                "display_name": "Phase4 User",
+                "password": "UserPass123!",
+                "role": "normal",
+            },
+            actor_id=int(admin["id"]),
+        )
+        profile = save_ai_key_profile(
+            {
+                "name": "Phase4 AI",
+                "provider": "openai",
+                "base_url": "https://example.com",
+                "api_key": "sk-phase4",
+                "model": "phase4-model",
+            }
+        )
+        template = save_email_template({"name": "Phase4 Template", "subject_template": "日报 {law_firm_name}", "html_template": "{report_body}"})
+        proxy = save_proxy_profile({"name": "Phase4 Proxy", "provider": "manual", "proxy_url": "http://user:pass@127.0.0.1:8081"})
+        account = save_social_account({"name": "Phase4 Account", "platform": "dy", "status": "active", "proxy_id": proxy["id"]})
+        payload = {
+            "law_firm_name": "海安律所",
+            "aliases": ["海安律师事务所"],
+            "keywords": ["海安律所避雷", "海安律所退费"],
+            "platforms": ["dy"],
+            "recipients": ["target@example.com"],
+            "enable_comments": True,
+            "enable_sub_comments": True,
+            "time_window_type": "recent_7d",
+            "frequency": "daily",
+            "email_time": "09:00",
+            "max_items": 80,
+            "start_page": 2,
+            "max_pages": 3,
+            "target_type": "detail",
+            "output_mode": "excel",
+            "browser_mode": "local_window",
+            "ai_profile_id": profile["id"],
+            "email_template_id": template["id"],
+            "account_id": account["id"],
+            "proxy_id": proxy["id"],
+        }
+        transport = httpx.ASGITransport(app=api_main.app)
+
+        async def exercise() -> None:
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as normal_client:
+                login = await normal_client.post(
+                    "/api/auth/login",
+                    json={"email": "phase4-user@example.com", "password": "UserPass123!"},
+                )
+                assert login.status_code == 200
+                created = await normal_client.post("/api/monitor/jobs", json=payload)
+                assert created.status_code == 200
+                normal_job = created.json()["job"]
+                assert normal_job["target_type"] == "search"
+                assert normal_job["output_mode"] == "internal"
+                assert normal_job["browser_mode"] == "server_qrcode"
+                assert normal_job["ai_profile_id"] is None
+                assert normal_job["email_template_id"] is None
+                assert normal_job["account_id"] is None
+                assert normal_job["proxy_id"] is None
+                assert normal_job["max_items"] == 80
+                assert normal_job["start_page"] == 2
+                assert normal_job["max_pages"] == 3
+
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as admin_client:
+                login = await admin_client.post(
+                    "/api/auth/login",
+                    json={"email": "phase4-admin@example.com", "password": "AdminPass123!"},
+                )
+                assert login.status_code == 200
+                created = await admin_client.post("/api/monitor/jobs", json=payload)
+                assert created.status_code == 200
+                admin_job = created.json()["job"]
+                assert admin_job["target_type"] == "detail"
+                assert admin_job["output_mode"] == "excel"
+                assert admin_job["browser_mode"] == "local_window"
+                assert admin_job["ai_profile_id"] == profile["id"]
+                assert admin_job["email_template_id"] == template["id"]
+                assert admin_job["account_id"] == account["id"]
+                assert admin_job["proxy_id"] == proxy["id"]
+
+        asyncio.run(exercise())
+    finally:
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+
+def test_phase_2_runtime_settings_storage_validation_and_environment_locks(monkeypatch):
+    init_db()
+    snapshot = _snapshot_table("system_settings")
+    audit_snapshot = _snapshot_table("audit_logs")
+    try:
+        with get_conn() as conn:
+            conn.execute("DELETE FROM system_settings")
+            conn.execute("DELETE FROM audit_logs")
+
+        settings = list_runtime_settings()
+        assert settings["global_crawl_concurrency"]["value"] == 2
+        assert settings["crawler_timeout_seconds"]["value"] == 900
+        assert settings["scheduler_disabled"]["value"] is False
+
+        updated = save_runtime_settings(
+            {
+                "global_crawl_concurrency": 3,
+                "crawler_timeout_seconds": 1200,
+                "scheduler_disabled": True,
+            },
+            actor_id=123,
+        )
+        assert updated["global_crawl_concurrency"]["value"] == 3
+        assert get_runtime_setting_value("crawler_timeout_seconds") == 1200
+        assert updated["scheduler_disabled"]["source"] == "database"
+        with get_conn() as conn:
+            audit = conn.execute("SELECT action_type, resource_type FROM audit_logs ORDER BY id DESC LIMIT 1").fetchone()
+        assert dict(audit) == {"action_type": "update_runtime_settings", "resource_type": "system_settings"}
+
+        with pytest.raises(ValueError, match="at most"):
+            save_runtime_settings({"global_crawl_concurrency": 99})
+
+        monkeypatch.setenv("MONITOR_CRAWLER_TIMEOUT_SECONDS", "1800")
+        locked = list_runtime_settings()["crawler_timeout_seconds"]
+        assert locked["value"] == 1800
+        assert locked["is_locked"] is True
+        assert locked["source"] == "environment"
+        with pytest.raises(ValueError, match="locked"):
+            save_runtime_settings({"crawler_timeout_seconds": 900})
+    finally:
+        _restore_table("system_settings", snapshot)
+        _restore_table("audit_logs", audit_snapshot)
+
+
+def test_phase_2_runtime_settings_api_is_admin_only():
+    from api import main as api_main
+
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "system_settings": _snapshot_table("system_settings"),
+        "user_sessions": _snapshot_table("user_sessions"),
+        "users": _snapshot_table("users"),
+    }
+    try:
+        with get_conn() as conn:
+            for table in ["audit_logs", "system_settings", "user_sessions", "users"]:
+                conn.execute(f"DELETE FROM {table}")
+        admin = bootstrap_admin_from_env("admin@example.com", "AdminPass123!", "Admin")
+        save_user(
+            {
+                "email": "user1@example.com",
+                "display_name": "User One",
+                "password": "UserPass123!",
+                "role": "normal",
+            },
+            actor_id=int(admin["id"]),
+        )
+        transport = httpx.ASGITransport(app=api_main.app)
+
+        async def exercise() -> None:
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as normal_client:
+                login = await normal_client.post("/api/auth/login", json={"email": "user1@example.com", "password": "UserPass123!"})
+                assert login.status_code == 200
+                assert (await normal_client.get("/api/monitor/runtime-settings")).status_code == 403
+
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as admin_client:
+                login = await admin_client.post("/api/auth/login", json={"email": "admin@example.com", "password": "AdminPass123!"})
+                assert login.status_code == 200
+                get_response = await admin_client.get("/api/monitor/runtime-settings")
+                assert get_response.status_code == 200
+                assert get_response.json()["settings"]["scheduler_tick_seconds"]["value"] == 60
+                put_response = await admin_client.put(
+                    "/api/monitor/runtime-settings",
+                    json={"scheduler_tick_seconds": 30, "crawler_retry_count": 2},
+                )
+                assert put_response.status_code == 200
+                data = put_response.json()["settings"]
+                assert data["scheduler_tick_seconds"]["value"] == 30
+                assert data["crawler_retry_count"]["value"] == 2
+
+        asyncio.run(exercise())
+    finally:
+        _restore_table("users", snapshots["users"])
+        _restore_table("user_sessions", snapshots["user_sessions"])
+        _restore_table("system_settings", snapshots["system_settings"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
+
+
+def test_phase_2_scheduler_uses_runtime_settings(monkeypatch):
+    init_db()
+    snapshot = _snapshot_table("system_settings")
+    try:
+        with get_conn() as conn:
+            conn.execute("DELETE FROM system_settings")
+        save_runtime_settings({"scheduler_tick_seconds": 30})
+        monkeypatch.delenv("MONITOR_DISABLE_SCHEDULER", raising=False)
+        monkeypatch.delenv("WEB_CONCURRENCY", raising=False)
+        monkeypatch.delenv("UVICORN_WORKERS", raising=False)
+
+        status = scheduler_status()
+
+        assert status["enabled"] is True
+        assert status["tick_seconds"] == 30
+        assert "30 秒" in status["message"]
+
+        save_runtime_settings({"scheduler_disabled": True})
+
+        assert "暂停自动调度" in scheduler_disabled_reason()
+        assert scheduler_status()["enabled"] is False
+    finally:
+        _restore_table("system_settings", snapshot)
+
+
+def test_phase_2_qrcode_timeout_and_ttl_use_runtime_settings():
+    init_db()
+    snapshot = _snapshot_table("system_settings")
+    try:
+        with get_conn() as conn:
+            conn.execute("DELETE FROM system_settings")
+        save_runtime_settings({"login_qr_timeout_seconds": 12, "login_session_ttl_seconds": 60})
+        handle = login_qrcode_module.LoginSessionHandle(
+            platform="dy",
+            playwright=object(),
+            context=object(),
+            page=object(),
+            profile_path="browser_data/test",
+            created_at=datetime.now(timezone.utc) - timedelta(seconds=61),
+        )
+
+        assert login_qrcode_module._login_qr_timeout_ms() == 12000
+        assert login_qrcode_module._session_expired(handle) is True
+    finally:
+        _restore_table("system_settings", snapshot)
+
+
+def test_phase_2_run_platform_uses_settings_for_retry_and_deadline(tmp_path, monkeypatch):
+    init_db()
+    snapshot = _snapshot_table("system_settings")
+    job = save_job(
+        {
+            "law_firm_name": "运行策略测试律所",
+            "keywords": ["运行策略测试律所避雷"],
+            "platforms": ["dy"],
+            "recipients": [],
+            "enable_comments": False,
+            "time_window_type": "recent_1d",
+        }
+    )
+    run_id = create_run(job["id"], {"job_id": job["id"]}, timeout_seconds=120)
+    calls: list[dict[str, Any]] = []
+
+    def fake_run_attempt(job_arg, platform_arg, out_dir, proxy_binding=None):
+        calls.append({"timeout": job_arg.get("_crawler_timeout_seconds"), "out_dir": out_dir})
+        if len(calls) == 1:
+            raise RuntimeError("temporary network error")
+        json_dir = out_dir / "douyin" / "json"
+        json_dir.mkdir(parents=True)
+        (json_dir / "search_contents_runtime_settings.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "aweme_id": "pytest_runtime_settings_retry_001",
+                        "title": "运行策略测试律所避雷",
+                        "desc": "第二次成功",
+                        "create_time": int(datetime.now(timezone.utc).timestamp()),
+                    }
+                ],
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+
+    try:
+        with get_conn() as conn:
+            conn.execute("DELETE FROM system_settings")
+        save_runtime_settings({"crawler_retry_count": 1, "crawler_retry_delay_seconds": 0})
+        monkeypatch.setattr(runner_module, "list_platform_status", lambda: [{"platform": "dy", "login_window_open": False}])
+        monkeypatch.setattr(runner_module, "_run_crawler_attempt", fake_run_attempt)
+
+        result = asyncio.run(runner_module.run_platform(job, run_id, "dy", tmp_path))
+
+        assert len(calls) == 2
+        assert all(1 <= int(call["timeout"]) <= 120 for call in calls)
+        assert result["attempts"] == 2
+        assert result["max_retries"] == 1
+        assert result["timeout_seconds"] == 120
+        assert result["new_contents"] == 1
+    finally:
+        _cleanup_test_records(job["id"], "pytest_runtime_settings_retry_001")
+        _restore_table("system_settings", snapshot)
+
+
+def test_phase_2_run_job_marks_run_timeout_with_partial_results(monkeypatch):
+    init_db()
+    snapshots = {
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "raw_contents": _snapshot_table("raw_contents"),
+        "raw_comments": _snapshot_table("raw_comments"),
+        "ai_evaluations": _snapshot_table("ai_evaluations"),
+        "system_settings": _snapshot_table("system_settings"),
+    }
+    jobs_snapshot = _snapshot_monitor_jobs()
+    try:
+        with get_conn() as conn:
+            for table in ["reports", "crawl_runs", "raw_contents", "raw_comments", "ai_evaluations", "system_settings"]:
+                conn.execute(f"DELETE FROM {table}")
+        save_runtime_settings({"crawler_timeout_seconds": 60})
+        job = save_job(
+            {
+                "law_firm_name": "超时测试律所",
+                "keywords": ["超时测试律所避雷"],
+                "platforms": ["dy", "ks"],
+                "recipients": [],
+                "enable_comments": False,
+                "time_window_type": "recent_1d",
+            }
+        )
+
+        async def fake_run_platform(job_arg, run_id, platform, run_dir):
+            if platform == "dy":
+                return {
+                    "status": "success",
+                    "raw_contents": 1,
+                    "filtered_contents": 1,
+                    "excluded_contents": 0,
+                    "new_contents": 1,
+                    "content_db_ids": [],
+                }
+            raise runner_module.CrawlerTimedOut("任务达到系统运行时间上限（60 秒），已停止未完成的采集进程")
+
+        monkeypatch.setattr(runner_module, "run_platform", fake_run_platform)
+        monkeypatch.setattr(runner_module, "create_report", lambda run_id, job, summary: {"id": 9876, "run_id": run_id, "job_id": job["id"], "summary": summary})
+        monkeypatch.setattr(runner_module, "send_report", lambda job, report: (False, "未配置收件人"))
+        monkeypatch.setattr(runner_module, "update_report_email_status", lambda *args, **kwargs: None)
+
+        result = asyncio.run(runner_module.run_job(job["id"]))
+        run = get_run(result["run_id"])
+
+        assert result["status"] == "timeout"
+        assert run["status"] == "timeout"
+        assert run["timeout_seconds"] == 60
+        assert run["deadline_at"]
+        assert "系统运行时间上限" in (run["timeout_reason"] or "")
+        assert result["summary"]["new_contents"] == 1
+        assert result["summary"]["platform_results"]["dy"]["status"] == "success"
+        assert result["summary"]["platform_results"]["ks"]["status"] == "timeout"
+    finally:
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+        _restore_monitor_jobs(jobs_snapshot)
+
+
 def test_custom_window_and_millisecond_timestamps():
     start, end = resolve_window({"time_window_type": "custom", "custom_start": "2026-06-10", "custom_end": "2026-06-11"})
     assert start.isoformat().startswith("2026-06-10T00:00:00")
@@ -194,7 +908,10 @@ def test_platform_status_reports_profile_and_login_error(tmp_path):
 
 def test_platform_status_ignores_login_error_older_than_successful_login_session(tmp_path):
     init_db()
-    snapshot = _snapshot_table("login_sessions")
+    snapshots = {
+        "login_sessions": _snapshot_table("login_sessions"),
+        "platform_login_configs": _snapshot_table("platform_login_configs"),
+    }
     profile = tmp_path / "browser_data" / "cdp_dy_user_data_dir"
     profile.mkdir(parents=True)
     state = profile / "state"
@@ -233,7 +950,8 @@ def test_platform_status_ignores_login_error_older_than_successful_login_session
             ],
         )
     finally:
-        _restore_table("login_sessions", snapshot)
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
     dy = next(item for item in statuses if item["platform"] == "dy")
 
     assert dy["profile_exists"] is True
@@ -242,6 +960,8 @@ def test_platform_status_ignores_login_error_older_than_successful_login_session
 
 
 def test_platform_status_keeps_fresh_login_error_when_browser_profile_was_touched(tmp_path):
+    init_db()
+    snapshot = _snapshot_table("platform_login_configs")
     profile = tmp_path / "browser_data" / "cdp_ks_user_data_dir"
     profile.mkdir(parents=True)
     state = profile / "state"
@@ -249,22 +969,29 @@ def test_platform_status_keeps_fresh_login_error_when_browser_profile_was_touche
     error_time = datetime.now(timezone.utc) - timedelta(minutes=5)
     touched_time = error_time + timedelta(seconds=5)
     os.utime(state, (touched_time.timestamp(), touched_time.timestamp()))
-
-    statuses = list_platform_status(
-        tmp_path,
-        [
-            {
-                "finished_at": error_time.isoformat(),
-                "summary": {
-                    "platform_results": {
-                        "ks": {
-                            "error": "MediaCrawler exited with 1；检测到登录态失效，请先重新登录该平台账号"
+    try:
+        with get_conn() as conn:
+            conn.execute(
+                "UPDATE platform_login_configs SET updated_at=? WHERE platform='ks'",
+                ((error_time - timedelta(minutes=1)).isoformat(),),
+            )
+        statuses = list_platform_status(
+            tmp_path,
+            [
+                {
+                    "finished_at": error_time.isoformat(),
+                    "summary": {
+                        "platform_results": {
+                            "ks": {
+                                "error": "MediaCrawler exited with 1；检测到登录态失效，请先重新登录该平台账号"
+                            }
                         }
-                    }
-                },
-            }
-        ],
-    )
+                    },
+                }
+            ],
+        )
+    finally:
+        _restore_table("platform_login_configs", snapshot)
     ks = next(item for item in statuses if item["platform"] == "ks")
 
     assert ks["profile_exists"] is True
@@ -453,9 +1180,6 @@ def test_platform_status_supports_custom_browser_data_dir(tmp_path, monkeypatch)
 def test_platform_status_uses_active_account_profile_when_present(tmp_path):
     init_db()
     snapshot = _snapshot_table("social_accounts")
-    account_profile = tmp_path / "account_profile"
-    account_profile.mkdir(parents=True)
-    (account_profile / "state").write_text("ok", encoding="utf-8")
     try:
         account = save_social_account(
             {
@@ -463,16 +1187,19 @@ def test_platform_status_uses_active_account_profile_when_present(tmp_path):
                 "platform": "dy",
                 "login_type": "qrcode",
                 "status": "active",
-                "profile_path": str(account_profile),
             }
         )
+        expected_path = resolve_account_profile_path(f"1/dy/acc_{account['id']}")
+        expected_path.mkdir(parents=True, exist_ok=True)
+        (expected_path / "state").write_text("ok", encoding="utf-8")
 
-        statuses = list_platform_status(tmp_path, [])
+        statuses = list_platform_status(recent_runs=[])
     finally:
         _restore_table("social_accounts", snapshot)
     dy = next(item for item in statuses if item["platform"] == "dy")
 
-    assert dy["profile_path"] == str(account_profile)
+    assert dy["profile_key"] == f"1/dy/acc_{account['id']}"
+    assert dy["profile_path"] == str(expected_path)
     assert dy["profile_exists"] is True
     assert dy["using_account_profile"] is True
     assert dy["active_account_id"] == account["id"]
@@ -562,7 +1289,8 @@ def test_login_browser_route_can_use_social_account_profile(tmp_path, monkeypatc
         result = asyncio.run(monitor_router.platform_login_browser("dy", {"account_id": account["id"]}))
 
         assert result["pid"] == 12345
-        assert seen["profile_path"] == str(tmp_path / "account_profile")
+        assert seen["profile_path"] == str(resolve_account_profile_path(f"1/dy/acc_{account['id']}"))
+        assert result["profile_path"] == "网页登录态已配置"
     finally:
         for table, snapshot in snapshots.items():
             _restore_table(table, snapshot)
@@ -924,11 +1652,15 @@ def test_runner_injects_active_account_profile_for_cdp(tmp_path):
         _restore_table("social_accounts", snapshot)
 
     assert binding["account_id"] == account["id"]
-    assert binding["profile_path"] == str(tmp_path / "dy_account_profile")
-    assert env["MONITOR_CDP_USER_DATA_DIR"] == str(tmp_path / "dy_account_profile")
-    assert env["MONITOR_CDP_USER_DATA_DIR_DY"] == str(tmp_path / "dy_account_profile")
+    expected_profile_path = str(resolve_account_profile_path(f"1/dy/acc_{account['id']}"))
+    assert binding["profile_key"] == f"1/dy/acc_{account['id']}"
+    assert binding["profile_path"] == expected_profile_path
+    assert env["MONITOR_CDP_USER_DATA_DIR"] == expected_profile_path
+    assert env["MONITOR_CDP_USER_DATA_DIR_DY"] == expected_profile_path
     assert env["MONITOR_ACTIVE_ACCOUNT_ID"] == str(account["id"])
     assert summary["account_name"] == "抖音采集号"
+    assert summary["profile_key"] == f"1/dy/acc_{account['id']}"
+    assert "profile_path" not in summary
 
 
 def test_crawler_command_uses_platform_search_terms_only(tmp_path):
@@ -1016,9 +1748,159 @@ def test_runner_prefers_job_bound_account_and_proxy(tmp_path):
 
     assert fallback_account["id"] != bound_account["id"]
     assert binding["account_id"] == bound_account["id"]
-    assert binding["profile_path"] == str(tmp_path / "bound_profile")
+    assert binding["profile_key"] == f"1/dy/acc_{bound_account['id']}"
+    assert binding["profile_path"] == str(resolve_account_profile_path(binding["profile_key"]))
     assert binding["proxy_id"] == job_proxy["id"]
     assert env["HTTP_PROXY"] == "http://job:pass@127.0.0.1:8082"
+
+
+def test_phase_5_account_lock_blocks_concurrent_profile_use():
+    init_db()
+    snapshots = {
+        "social_accounts": _snapshot_table("social_accounts"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+    }
+    jobs_snapshot = _snapshot_monitor_jobs()
+    run1 = None
+    run2 = None
+    try:
+        _clear_monitor_jobs()
+        account = save_social_account({"name": "抖音锁定号", "platform": "dy", "login_type": "qrcode", "status": "active"})
+        job = save_job(
+            {
+                "law_firm_name": "锁定测试律所",
+                "keywords": ["锁定测试律所避雷"],
+                "platforms": ["dy"],
+                "recipients": [],
+            }
+        )
+        run1 = create_run(job["id"], timeout_seconds=120)
+        run2 = create_run(job["id"], timeout_seconds=120)
+        deadline = get_run(run1)["deadline_at"]
+
+        assert acquire_account_lock(account["id"], run1, deadline) is True
+        assert acquire_account_lock(account["id"], run2, deadline) is False
+
+        release_account_lock(account["id"], run1)
+
+        assert acquire_account_lock(account["id"], run2, deadline) is True
+    finally:
+        for run_id in [run1, run2]:
+            if run_id:
+                release_run_resource_locks(run_id)
+        _restore_monitor_jobs(jobs_snapshot)
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+
+def test_phase_5_proxy_resource_locks_respect_max_concurrency():
+    init_db()
+    snapshots = {
+        "proxy_profiles": _snapshot_table("proxy_profiles"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "resource_locks": _snapshot_table("resource_locks"),
+    }
+    jobs_snapshot = _snapshot_monitor_jobs()
+    run1 = None
+    run2 = None
+    try:
+        _clear_monitor_jobs()
+        proxy = save_proxy_profile(
+            {
+                "name": "单并发代理",
+                "provider": "manual",
+                "proxy_url": "http://user:pass@127.0.0.1:8081",
+                "status": "active",
+                "max_concurrency": 1,
+            }
+        )
+        job = save_job(
+            {
+                "law_firm_name": "代理并发测试律所",
+                "keywords": ["代理并发测试律所避雷"],
+                "platforms": ["dy"],
+                "recipients": [],
+            }
+        )
+        run1 = create_run(job["id"], timeout_seconds=120)
+        run2 = create_run(job["id"], timeout_seconds=120)
+        deadline = get_run(run1)["deadline_at"]
+
+        assert acquire_proxy_lock(proxy["id"], run1, deadline) is True
+        assert acquire_proxy_lock(proxy["id"], run2, deadline) is False
+
+        release_proxy_locks(run1)
+
+        assert acquire_proxy_lock(proxy["id"], run2, deadline) is True
+    finally:
+        for run_id in [run1, run2]:
+            if run_id:
+                release_run_resource_locks(run_id)
+        _restore_monitor_jobs(jobs_snapshot)
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+
+def test_phase_5_recovery_marks_expired_running_run_before_releasing_locks():
+    init_db()
+    snapshots = {
+        "proxy_profiles": _snapshot_table("proxy_profiles"),
+        "social_accounts": _snapshot_table("social_accounts"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "resource_locks": _snapshot_table("resource_locks"),
+    }
+    jobs_snapshot = _snapshot_monitor_jobs()
+    try:
+        _clear_monitor_jobs()
+        proxy = save_proxy_profile(
+            {
+                "name": "恢复代理",
+                "provider": "manual",
+                "proxy_url": "http://user:pass@127.0.0.1:8081",
+                "status": "active",
+                "max_concurrency": 1,
+            }
+        )
+        account = save_social_account(
+            {
+                "name": "恢复账号",
+                "platform": "dy",
+                "login_type": "qrcode",
+                "status": "active",
+                "proxy_id": proxy["id"],
+            }
+        )
+        job = save_job(
+            {
+                "law_firm_name": "恢复测试律所",
+                "keywords": ["恢复测试律所避雷"],
+                "platforms": ["dy"],
+                "recipients": [],
+                "account_id": account["id"],
+                "proxy_id": proxy["id"],
+            }
+        )
+        run_id = create_run(job["id"], timeout_seconds=120)
+        expired_at = (datetime.now(timezone.utc) - timedelta(seconds=30)).isoformat()
+        with get_conn() as conn:
+            conn.execute("UPDATE crawl_runs SET deadline_at=? WHERE id=?", (expired_at, run_id))
+        assert acquire_account_lock(account["id"], run_id, expired_at) is True
+        assert acquire_proxy_lock(proxy["id"], run_id, expired_at) is True
+
+        recovered = recover_stale_runs_and_locks("pytest_recovery")
+        run = get_run(run_id)
+        account_after = get_social_account(account["id"], masked=False)
+        with get_conn() as conn:
+            proxy_locks = conn.execute("SELECT COUNT(*) AS n FROM resource_locks WHERE run_id=?", (run_id,)).fetchone()["n"]
+
+        assert recovered["recovered_runs"] == 1
+        assert run["status"] == "timeout"
+        assert account_after["locked_by_run_id"] is None
+        assert proxy_locks == 0
+    finally:
+        _restore_monitor_jobs(jobs_snapshot)
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
 
 
 def test_ai_and_email_test_paths_reuse_config_validation():
@@ -1351,7 +2233,7 @@ def test_report_path_guard_rejects_files_outside_report_dir(tmp_path, monkeypatc
 
 
 def test_sensitive_text_is_redacted():
-    text = "Authorization: Bearer sk-secret123456789 api_key=abc123 password=hunter2 cookie=session=abc token=mytoken"
+    text = "Authorization: Bearer sk-secret123456789 api_key=abc123 password=hunter2 cookie=session=abc token=mytoken 密码：明文密码 代理地址=http://user:pass@example.com"
     proxy_text = "proxy=http://user:pass@127.0.0.1:8081"
     redacted = redact_sensitive(text)
     redacted_proxy = redact_sensitive(proxy_text)
@@ -1361,9 +2243,112 @@ def test_sensitive_text_is_redacted():
     assert "hunter2" not in redacted
     assert "session=abc" not in redacted
     assert "mytoken" not in redacted
+    assert "明文密码" not in redacted
+    assert "user:pass@example.com" not in redacted
     assert "user:pass" not in redacted_proxy
     assert "http://[REDACTED]@127.0.0.1:8081" in redacted_proxy
     assert "[REDACTED]" in redacted
+
+
+def test_phase_9_admin_resource_operations_are_audited_without_secrets():
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "social_accounts": _snapshot_table("social_accounts"),
+        "proxy_profiles": _snapshot_table("proxy_profiles"),
+        "ai_key_profiles": _snapshot_table("ai_key_profiles"),
+        "email_configs": _snapshot_singleton_table("email_configs"),
+        "email_templates": _snapshot_table("email_templates"),
+    }
+    admin = {"id": 901, "workspace_id": 1, "role": "administrator"}
+    try:
+        with get_conn() as conn:
+            conn.execute("DELETE FROM audit_logs")
+
+        proxy = asyncio.run(
+            monitor_router.create_proxy(
+                {
+                    "name": "Phase9 Proxy",
+                    "provider": "manual",
+                    "proxy_url": "http://secret-user:secret-pass@127.0.0.1:8081",
+                    "status": "active",
+                    "max_concurrency": 1,
+                    "last_error": "代理地址=http://secret-user:secret-pass@127.0.0.1:8081",
+                },
+                admin=admin,
+            )
+        )["proxy"]
+        account = asyncio.run(
+            monitor_router.create_social_account(
+                {
+                    "name": "Phase9 Account",
+                    "platform": "dy",
+                    "login_type": "cookie",
+                    "cookies": "sessionid=secret-cookie",
+                    "status": "active",
+                    "proxy_id": proxy["id"],
+                },
+                admin=admin,
+            )
+        )["account"]
+        profile = asyncio.run(
+            monitor_router.create_ai_profile(
+                {
+                    "name": "Phase9 AI",
+                    "provider": "openai",
+                    "base_url": "https://example.com",
+                    "api_key": "sk-phase9-secret-key",
+                    "model": "phase9-model",
+                },
+                admin=admin,
+            )
+        )["profile"]
+        asyncio.run(
+            monitor_router.update_email_config(
+                {
+                    "smtp_host": "smtp.example.com",
+                    "smtp_port": 465,
+                    "encryption": "ssl",
+                    "sender": "sender@example.com",
+                    "username": "sender@example.com",
+                    "password": "smtp-secret",
+                    "default_recipients": ["target@example.com"],
+                },
+                admin=admin,
+            )
+        )
+        template = asyncio.run(
+            monitor_router.create_email_template(
+                {"name": "Phase9 Template", "subject_template": "日报 {law_firm_name}", "html_template": "{report_body}"},
+                admin=admin,
+            )
+        )["template"]
+
+        with get_conn() as conn:
+            rows = [dict(row) for row in conn.execute("SELECT * FROM audit_logs ORDER BY id").fetchall()]
+        actions = {row["action_type"] for row in rows}
+        assert {
+            "create_proxy",
+            "create_social_account",
+            "create_ai_profile",
+            "update_email_config",
+            "create_email_template",
+        } <= actions
+        serialized = json.dumps(rows, ensure_ascii=False)
+        for forbidden in ["secret-pass", "secret-cookie", "sk-phase9-secret-key", "smtp-secret"]:
+            assert forbidden not in serialized
+        assert all(row["user_id"] == admin["id"] for row in rows)
+        assert str(proxy["id"]) in {row["resource_id"] for row in rows}
+        assert str(account["id"]) in {row["resource_id"] for row in rows}
+        assert str(profile["id"]) in {row["resource_id"] for row in rows}
+        assert str(template["id"]) in {row["resource_id"] for row in rows}
+    finally:
+        _restore_table("audit_logs", snapshots["audit_logs"])
+        _restore_table("social_accounts", snapshots["social_accounts"])
+        _restore_table("proxy_profiles", snapshots["proxy_profiles"])
+        _restore_table("ai_key_profiles", snapshots["ai_key_profiles"])
+        _restore_singleton_table("email_configs", snapshots["email_configs"])
+        _restore_table("email_templates", snapshots["email_templates"])
 
 
 def test_run_summary_and_log_api_redact_sensitive_values(tmp_path, monkeypatch):
@@ -2394,7 +3379,7 @@ def test_login_sessions_are_persisted_for_server_side_login_flow():
         listed = list_login_sessions()
         summary = get_dashboard_summary()
 
-        assert session["status"] == "waiting_manual_browser"
+        assert session["status"] == "preparing"
         assert get_login_session(session["id"])["platform"] == "dy"
         assert listed[0]["id"] == session["id"]
         assert summary["login_sessions_total"] >= 1
@@ -2428,8 +3413,8 @@ def test_login_sessions_can_be_expired_for_same_account():
         expired = expire_login_sessions_for_account(10001, "dy", "browser_data/account_10001")
 
         assert expired == [first["id"]]
-        assert get_login_session(first["id"])["status"] == "expired"
-        assert get_login_session(other["id"])["status"] == "waiting_manual_browser"
+        assert get_login_session(first["id"])["status"] == "timeout"
+        assert get_login_session(other["id"])["status"] == "preparing"
     finally:
         _restore_table("login_sessions", snapshot)
 
@@ -2489,7 +3474,7 @@ def test_login_session_routes_create_pollable_session(monkeypatch):
         assert created["capabilities"]["qr_image_supported"] is True
         assert created["session"]["status"] == "waiting_qrcode"
         assert created["session"]["qr_image"].startswith("data:image")
-        assert polled["session"]["status"] == "waiting_qrcode"
+        assert polled["session"]["status"] == "waiting_scan"
         assert polled["platform_status"]["platform"] == "dy"
         assert polled["capabilities"]["login_capability_source"] == "平台采集服务"
         assert polled["capabilities"]["login_boundary"] == "复用平台采集服务登录能力"
@@ -2532,11 +3517,25 @@ def test_login_session_route_falls_back_when_qrcode_unavailable(monkeypatch):
         assert created["capabilities"]["qr_image_supported"] is False
         assert created["capabilities"]["diagnostic_image_supported"] is False
         assert created["capabilities"]["diagnostic_image"] == ""
-        assert created["session"]["status"] == "waiting_manual_browser"
+        assert created["session"]["status"] == "qrcode_failed"
         assert "网页登录窗口处理" in created["session"]["message"]
     finally:
         for table, snapshot in snapshots.items():
             _restore_table(table, snapshot)
+
+
+def test_phase_6_production_mode_hides_local_login_window(monkeypatch):
+    monkeypatch.setenv("MONITOR_ALLOW_LOCAL_LOGIN_WINDOW", "false")
+
+    caps = monitor_router._login_capability_response("dy")
+
+    assert caps["primary_login_flow"] == "server_qrcode"
+    assert caps["manual_browser_fallback"] is False
+    assert caps["local_login_window_allowed"] is False
+    with pytest.raises(HTTPException) as exc:
+        asyncio.run(monitor_router.platform_login_browser("dy", {}))
+    assert exc.value.status_code == 403
+    assert "网页登录二维码" in exc.value.detail
 
 
 def test_account_login_session_does_not_inherit_default_platform_success(monkeypatch, tmp_path):
@@ -2594,7 +3593,7 @@ def test_account_login_session_does_not_inherit_default_platform_success(monkeyp
         for table, snapshot in snapshots.items():
             _restore_table(table, snapshot)
 
-    assert polled["session"]["status"] == "waiting_manual_browser"
+    assert polled["session"]["status"] == "qrcode_failed"
     assert "TargetClosedError" in polled["session"]["message"]
     assert polled["platform_status"]["login_ready"] is True
 
@@ -2639,7 +3638,7 @@ def test_terminal_login_session_lookup_does_not_downgrade_checked_account(monkey
         for table, snapshot in snapshots.items():
             _restore_table(table, snapshot)
 
-    assert polled["session"]["status"] == "expired"
+    assert polled["session"]["status"] == "timeout"
     assert refreshed["status"] == "active"
     assert refreshed["last_error"] == ""
     assert refreshed["last_checked_at"]
@@ -2687,7 +3686,7 @@ def test_default_login_session_does_not_turn_manual_failure_into_success(monkeyp
     finally:
         _restore_table("login_sessions", snapshot)
 
-    assert polled["session"]["status"] == "waiting_manual_browser"
+    assert polled["session"]["status"] == "qrcode_failed"
     assert "TargetClosedError" in polled["session"]["message"]
     assert polled["platform_status"]["login_ready"] is True
 
@@ -2731,7 +3730,7 @@ def test_waiting_qrcode_session_does_not_inherit_platform_success(monkeypatch, t
     finally:
         _restore_table("login_sessions", snapshot)
 
-    assert polled["session"]["status"] == "waiting_qrcode"
+    assert polled["session"]["status"] == "waiting_scan"
     assert polled["session"]["qr_image"].startswith("data:image")
     assert polled["platform_status"]["login_ready"] is True
 
@@ -2813,7 +3812,7 @@ def test_login_session_route_maps_manual_verification_then_qrcode(monkeypatch):
         created = asyncio.run(monitor_router.create_platform_login_session({"platform": "ks", "account_id": account["id"]}))
         polled = asyncio.run(monitor_router.login_session(int(created["session"]["id"])))
 
-        assert created["session"]["status"] == "waiting_verification"
+        assert created["session"]["status"] == "needs_verification"
         assert created["capabilities"]["qr_image_supported"] is False
         assert created["capabilities"]["verification_image_supported"] is False
         assert created["capabilities"]["verification_image"] == ""
@@ -2821,7 +3820,7 @@ def test_login_session_route_maps_manual_verification_then_qrcode(monkeypatch):
         assert created["capabilities"]["verification_label"] == "滑块验证"
         assert "拖动滑块" in created["capabilities"]["verification_detail"]
         assert "滑块" in created["session"]["message"]
-        assert polled["session"]["status"] == "waiting_qrcode"
+        assert polled["session"]["status"] == "waiting_scan"
         assert polled["session"]["qr_image"].startswith("data:image")
         assert polled["capabilities"]["qr_image_supported"] is True
     finally:
@@ -2968,7 +3967,7 @@ def test_login_session_route_keeps_manual_verification_status_when_window_is_ope
 
         polled = asyncio.run(monitor_router.login_session(int(session["id"])))
 
-        assert polled["session"]["status"] == "waiting_verification"
+        assert polled["session"]["status"] == "needs_verification"
         assert "短信验证码" in polled["session"]["message"]
         assert polled["capabilities"]["verification_type"] == "sms"
         assert polled["capabilities"]["verification_label"] == "短信验证码"
@@ -3425,7 +4424,7 @@ def test_login_session_success_requires_account_check(monkeypatch):
 
         created = asyncio.run(monitor_router.create_platform_login_session({"platform": "xhs", "account_id": account["id"]}))
 
-        assert created["session"]["status"] == "failed"
+        assert created["session"]["status"] == "platform_error"
         assert "重新扫码登录" in created["session"]["message"]
         assert created["account_status"]["status"] == "limited"
     finally:
@@ -3477,9 +4476,10 @@ def test_login_session_uses_social_account_profile(monkeypatch, tmp_path):
 
         created = asyncio.run(monitor_router.create_platform_login_session({"platform": "dy", "account_id": account["id"]}))
 
-        assert seen["profile_path"] == str(account_profile)
+        assert seen["profile_path"] == str(resolve_account_profile_path(f"1/dy/acc_{account['id']}"))
         assert created["session"]["account_id"] == account["id"]
-        assert created["session"]["profile_path"] == str(account_profile)
+        assert created["session"]["profile_key"] == f"1/dy/acc_{account['id']}"
+        assert created["session"]["profile_path"] == "网页登录态已配置"
         assert created["session"]["qr_image"].startswith("data:image")
     finally:
         for table, snapshot in snapshots.items():
@@ -3539,13 +4539,14 @@ def test_login_session_list_account_id_can_reopen_account_profile(monkeypatch, t
         assert listed["id"] == session["id"]
         assert listed["account_id"] == account["id"]
         assert result["pid"] == 23456
-        assert seen["profile_path"] == str(account_profile)
+        assert seen["profile_path"] == str(resolve_account_profile_path(f"1/dy/acc_{account['id']}"))
+        assert result["profile_path"] == "网页登录态已配置"
     finally:
         for table, snapshot in snapshots.items():
             _restore_table(table, snapshot)
 
 
-def test_social_account_profile_path_auto_generated_when_empty():
+def test_phase_5_social_account_profile_key_drives_runtime_path():
     init_db()
     snapshot = _snapshot_table("social_accounts")
     try:
@@ -3557,19 +4558,30 @@ def test_social_account_profile_path_auto_generated_when_empty():
                 "status": "standby",
             }
         )
-        assert "account_profiles" in account["profile_path"]
-        assert "海安律所小红书采集号" in account["profile_path"]
+        expected_key = f"1/xhs/acc_{account['id']}"
+        expected_path = str(resolve_account_profile_path(expected_key))
+        assert account["profile_key"] == expected_key
+        assert account["profile_path"] == ""
+        assert account["profile_configured"] is True
+        assert get_social_account(account["id"], masked=False)["profile_path"] == expected_path
         assert account["login_capability_source"] == "平台采集服务"
         assert account["login_boundary"] == "media_crawler_only"
         assert account["captcha_policy"] == "report_only"
         assert "qrcode" in account["supported_login_types"]
 
-        updated = save_social_account({**account, "profile_path": ""}, int(account["id"]))
+        updated = save_social_account({**account, "name": "新展示名", "profile_path": str(Path("ignored"))}, int(account["id"]))
 
-        assert updated["profile_path"]
-        assert str(account["id"]) in updated["profile_path"]
+        assert updated["profile_key"] == expected_key
+        assert get_social_account(account["id"], masked=False)["profile_path"] == expected_path
     finally:
         _restore_table("social_accounts", snapshot)
+
+
+def test_phase_5_profile_key_resolver_rejects_path_traversal(tmp_path):
+    assert resolve_account_profile_path("1/dy/acc_123", root=tmp_path) == tmp_path / "1" / "dy" / "acc_123"
+    for bad_key in ["../dy/acc_1", "1/dy/../../x", "1/dy/acc_bad", "1/DY/acc_1"]:
+        with pytest.raises(ValueError, match="invalid account profile key"):
+            resolve_account_profile_path(bad_key, root=tmp_path)
 
 
 def test_social_account_login_type_must_follow_mediacrawler_capability():
@@ -4273,6 +5285,70 @@ def test_leads_api_lists_pending_review_items():
     assert all(item["id"] != result["report"]["id"] for item in no_risk_reports)
 
 
+def test_phase_7_run_job_generates_report_without_ai_or_email(monkeypatch):
+    init_db()
+    monkeypatch.setenv("MONITOR_SKIP_AI_API", "true")
+    job = save_job(
+        {
+            "law_firm_name": "海安律所",
+            "aliases": ["海安律师事务所"],
+            "exclude_words": [],
+            "keywords": ["海安律所避雷"],
+            "platforms": ["dy"],
+            "recipients": [],
+            "enable_comments": False,
+            "time_window_type": "recent_1d",
+            "frequency": "daily",
+            "email_time": "09:00",
+            "enabled": True,
+        }
+    )
+    content_id = "pytest_phase7_no_ai_email_001"
+    now_ts = int(datetime.now(timezone.utc).timestamp())
+
+    async def fake_run_platform(job_arg, run_id, platform, run_dir):
+        return ingest_outputs(
+            job_arg,
+            run_id,
+            platform,
+            [
+                {
+                    "aweme_id": content_id,
+                    "title": "海安律所退费投诉",
+                    "desc": "收费争议需要人工复核",
+                    "create_time": now_ts,
+                    "share_url": "https://www.douyin.com/video/phase7",
+                }
+            ],
+            [],
+        )
+
+    def fake_send_report(job_arg, report):
+        return False, "SMTP 配置未完成"
+
+    try:
+        monkeypatch.setattr(runner_module, "run_platform", fake_run_platform)
+        monkeypatch.setattr(runner_module, "send_report", fake_send_report)
+
+        result = asyncio.run(run_monitor_job(job["id"]))
+        run = get_run(int(result["run_id"]))
+        report = get_report(int(result["report"]["id"]))
+        html = Path(result["report"]["html_path"]).read_text(encoding="utf-8")
+    finally:
+        _cleanup_test_records(job["id"], content_id)
+
+    assert result["status"] == "success"
+    assert run and run["status"] == "success"
+    assert result["report"]
+    assert report and report["email_status"] == "failed"
+    assert result["summary"]["new_contents"] == 1
+    assert result["summary"]["pending_review_count"] == 1
+    assert result["summary"]["email_status"] == "failed"
+    assert "SMTP 配置未完成" in result["summary"]["email_error"]
+    assert "待人工复核" in html
+    assert "AI 结果仅用于舆情线索筛查" in html
+
+
 def test_selftest_report_generates_downloadable_artifacts():
     asyncio.run(_selftest_report_check())
 
@@ -4338,7 +5414,7 @@ def test_readiness_status_reports_checks():
     status = get_readiness_status()
     keys = {check["key"] for check in status["checks"]}
 
-    assert {"platform_profiles", "ai_config", "email_config", "selftest_report", "real_report"} <= keys
+    assert {"platform_profiles", "account_alerts", "proxy_alerts", "ai_config", "email_config", "selftest_report", "real_report"} <= keys
     assert isinstance(status["ready"], bool)
     assert isinstance(status["next_actions"], list)
     assert len(status["platforms"]) == 3
@@ -4505,6 +5581,35 @@ def test_job_preflight_blocks_active_account_with_disabled_proxy(monkeypatch):
             _restore_table(table, snapshot)
 
 
+def test_phase_9_readiness_reports_account_and_proxy_alerts(monkeypatch):
+    statuses = [
+        {
+            "platform": "dy",
+            "platform_label": "抖音",
+            "login_type": "qrcode",
+            "profile_exists": True,
+            "needs_login": True,
+            "login_window_open": False,
+            "last_error": "登录态失效 password=hunter2",
+            "active_proxy_error": "代理超时 密码：secret",
+        }
+    ]
+    monkeypatch.setattr(readiness_module, "list_platform_status", lambda: statuses)
+
+    readiness = get_readiness_status()
+    account_check = next(check for check in readiness["checks"] if check["key"] == "account_alerts")
+    proxy_check = next(check for check in readiness["checks"] if check["key"] == "proxy_alerts")
+
+    assert account_check["ok"] is False
+    assert proxy_check["ok"] is False
+    visible = json.dumps({"checks": readiness["checks"], "actions": readiness["next_actions"]}, ensure_ascii=False)
+    assert "登录态失效" in visible
+    assert "hunter2" not in visible
+    assert "secret" not in visible
+    assert any("平台账号页" in action for action in readiness["next_actions"])
+    assert any("代理资源页" in action for action in readiness["next_actions"])
+
+
 def test_job_preflight_warns_active_account_with_limited_proxy_error(monkeypatch):
     init_db()
     snapshots = {
@@ -4554,7 +5659,22 @@ def test_doctor_reports_deployment_diagnostics():
     status = run_doctor()
     keys = {check["key"] for check in status["checks"]}
 
-    assert {"project_files", "uv", "data_dir", "database", "gitignore_runtime_data", "platform_login", "browser_profiles", "ai_config", "email_config", "reports"} <= keys
+    assert {
+        "project_files",
+        "uv",
+        "data_dir",
+        "database",
+        "disk_space",
+        "retention_settings",
+        "backup_set",
+        "gitignore_runtime_data",
+        "platform_login",
+        "browser_profiles",
+        "resource_alerts",
+        "ai_config",
+        "email_config",
+        "reports",
+    } <= keys
     assert "readiness" in status
     assert "paths" in status
     assert status["paths"]["monitor_data_dir"]
@@ -4567,6 +5687,37 @@ def test_doctor_reports_deployment_diagnostics():
     assert all(str(item["login_class"]).startswith("media_platform.") for item in capabilities)
     assert all(str(item["qrcode_prepare_method"]).endswith(".prepare_qrcode_login") for item in capabilities)
     assert all(item["qrcode_capture_method"] == "tools.utils.find_login_qrcode" for item in capabilities)
+    retention_check = next(check for check in status["checks"] if check["key"] == "retention_settings")
+    assert "运行日志保留" in retention_check["message"]
+    disk_check = next(check for check in status["checks"] if check["key"] == "disk_space")
+    assert "GB" in disk_check["message"]
+    backup_check = next(check for check in status["checks"] if check["key"] == "backup_set")
+    assert "数据库" in backup_check["message"]
+
+
+def test_phase_9_doctor_resource_alerts_are_customer_safe(monkeypatch):
+    statuses = [
+        {
+            "platform": "dy",
+            "platform_label": "抖音",
+            "login_type": "qrcode",
+            "profile_exists": True,
+            "needs_login": True,
+            "login_window_open": False,
+            "last_error": "cookie=session-secret",
+            "active_proxy_error": "proxy=http://user:pass@127.0.0.1:8081",
+        }
+    ]
+    monkeypatch.setattr("api.monitoring.doctor.list_platform_status", lambda: statuses)
+
+    status = run_doctor()
+    check = next(item for item in status["checks"] if item["key"] == "resource_alerts")
+
+    assert check["ok"] is False
+    visible = json.dumps({"check": check, "tips": status["recommendations"]}, ensure_ascii=False)
+    assert "session-secret" not in visible
+    assert "user:pass" not in visible
+    assert "平台账号和代理资源页" in visible
 
 
 def test_doctor_checks_gitignore_runtime_data(monkeypatch, tmp_path):
@@ -5685,7 +6836,8 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "startLoginSessionForAccount" in page
     assert "openCurrentAccountLoginBrowser" in page
     assert "openLoginSessionBrowser" in page
-    assert "session.account_id ? Number(session.account_id) : 'null'" in page
+    assert "localLoginWindowAllowed" in page
+    assert "account_local_login_button" in page
     assert "打开登录窗口" in page
     assert "打开登录窗口兜底" not in page
     assert "先按平台和状态定位账号资源" not in page
@@ -5741,7 +6893,9 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "生成二维码" in page
     assert "手机扫码确认" in page
     assert "保存登录态" in page
-    assert "waiting_verification" in page
+    assert "needs_verification" in page
+    assert "waiting_scan" in page
+    assert "waiting_confirm" in page
     assert "等待验证" in page
     assert "平台要求先完成验证，请按文字提示处理" in page
     assert "平台验证页面截图" not in page
@@ -5755,6 +6909,15 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "pollLoginSession" in page
     assert "代理资源" in page
     assert "代理可绑定到账号或任务，采集时按绑定关系使用" in page
+    assert "proxy_resource_summary" in page
+    assert "proxy_resource_count" in page
+    assert "proxy_search" in page
+    assert "proxy_status_filter" in page
+    assert "clearProxyFilters" in page
+    assert "renderProxyResourceSummary" in page
+    assert "renderProxyProfilesTable" in page
+    assert "新增、编辑和删除都在弹窗内确认；代理 URL 保存后只显示掩码。" in page
+    assert "保存后任务和账号绑定会继续引用这个代理资源；删除前请确认没有正在使用的任务。" in page
     assert "proxies" in page
     assert "loadProxyPool" in page
     assert "platformStatusTable" in page
@@ -5785,7 +6948,7 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "打开登录窗口" in page
     assert "用于默认登录态维护；账号资源请在账号详情里发起登录。" not in page
     assert "平台默认登录态" not in page
-    assert "登录过程中如平台需要额外确认，请按页面提示完成后继续确认。" in page
+    assert "网页登录二维码是主流程" in page
     assert "如平台需要额外确认，系统会提示下一步操作。" in page
     assert "login-browser" in page
     assert "openPlatformLoginBrowser" in page
@@ -5819,8 +6982,26 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "preflight" in page
     assert "运行前提示" in page
     assert "填入海安律所样例" in page
-    assert "基本信息" in page
-    assert "采集设置" in page
+    assert "1. 目标" in page
+    assert "2. 采集内容" in page
+    assert "3. 调度" in page
+    assert "4. 报告" in page
+    assert "normal_task_wizard_steps" in page
+    assert "normal_task_wizard_hint" in page
+    assert "wizard-step" in page
+    assert "wizard-section" in page
+    assert "normal-only" in page
+    assert "普通用户只需填写目标律所、平台搜索词、采集范围、调度和收件邮箱。" in page
+    assert "账号、代理、AI 接入、邮件模板和浏览器方式由管理员维护。" in page
+    assert "管理员高级采集设置" in page
+    assert "admin-only-job-field" in page
+    assert "applyJobFormRoleMode" in page
+    assert "isAdminUser" in page
+    assert "document.querySelectorAll('.admin-only-job-field')" in page
+    assert "document.querySelectorAll('.normal-only')" in page
+    assert "采集条数是内容数量上限" in page
+    assert "部分平台可能返回少于所选范围的结果" in page
+    assert "任务运行超时由管理员在运行策略中统一控制" in page
     assert "过滤与去重" in page
     assert "平台搜索词（多行）" in page
     assert "律所名称和别名用于 AI 判断、报告标题和线索归属，不会自动追加为平台搜索词。" in page
@@ -5901,6 +7082,15 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "接口协议" in page
     assert "OpenAI-compatible / Anthropic-compatible 协议的模型连接资源" in page
     assert "Provider" not in page
+    assert "ai_resource_summary" in page
+    assert "ai_resource_count" in page
+    assert "ai_profile_search" in page
+    assert "ai_profile_provider_filter" in page
+    assert "ai_profile_test_filter" in page
+    assert "clearAIProfileFilters" in page
+    assert "renderAIResourceSummary" in page
+    assert "renderAIProfilesTable" in page
+    assert "API Key 保存后不回显；连接测试在独立弹窗中执行并记录最近状态。" in page
     assert "获取模型列表" in page
     assert "ai_profile_model_options" in page
     assert "toggleAIProfileModelOptions" in page
@@ -5932,6 +7122,23 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "testAI" in page
     assert "HTML 邮件模板" in page
     assert "email_template_summary" in page
+    assert "email_template_resource_summary" in page
+    assert "email_template_search" in page
+    assert "email_template_status_filter" in page
+    assert "clearEmailTemplateFilters" in page
+    assert "renderEmailTemplateResourceSummary" in page
+    assert "renderEmailTemplatesTable" in page
+    assert "mail_config_modal" in page
+    assert "openMailConfigModal" in page
+    assert "closeMailConfigModal" in page
+    assert "mail_test_modal" in page
+    assert "openMailTestModal" in page
+    assert "closeMailTestModal" in page
+    assert "mail_test_console" in page
+    assert "mail_test_start_btn" in page
+    assert "email_subject_summary" in page
+    assert "配置和测试都通过弹窗完成；密码保存后不会在页面回显。" in page
+    assert "测试失败不会阻断报告生成；系统仍会保留报告供下载和预览。" in page
     assert "email-templates/preview" in page
     assert "email_template_preview" in page
     assert "scheduleEmailPreview" in page
@@ -5945,6 +7152,8 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "action-menu-host" in page
     assert "下载 Markdown" in page
     assert "api('/leads?" in page
+    assert "report_id:String(id)" in page
+    assert "报告 ID ${id} 的线索明细" in page
     assert "待人工复核" in page
     assert "待复核" in page
     assert "运行系统诊断" in page
@@ -5973,6 +7182,11 @@ def test_monitor_page_uses_consistent_buttons_tables_and_modal_actions():
     assert ".account-flow-actions { position:sticky;" in page
     assert ".ai-test-actions { position:sticky;" in page
     assert ".rule-modal-actions { position:sticky;" in page
+    assert ".resource-modal-actions { position:sticky;" in page
+    assert ".resource-summary-grid { display:grid;" in page
+    assert ".resource-toolbar { display:flex;" in page
+    assert ".mail-test-modal" in page
+    assert ".test-console" in page
     assert ".config-section .section-note, .config-section .field-hint { display:none; }" in page
     assert ".ui-icon svg" in page
     assert '<symbol id="icon-dashboard"' in page
@@ -5983,6 +7197,13 @@ def test_monitor_page_uses_consistent_buttons_tables_and_modal_actions():
     assert ".action-menu-host" in page
     assert ".action-menu.active" in page
     assert "openReportMenuId" in page
+    assert "resourceStat(label, value)" in page
+    assert "renderProxyProfilesTable" in page
+    assert "renderAIProfilesTable" in page
+    assert "renderEmailTemplatesTable" in page
+    assert "addEventListener('input', renderProxyProfilesTable)" in page
+    assert "addEventListener('input', renderAIProfilesTable)" in page
+    assert "addEventListener('input', renderEmailTemplatesTable)" in page
     assert "oldHtml = btn ? btn.innerHTML : ''" in page
     assert "btn.innerHTML = oldHtml" in page
     assert "<div class=\"wide-actions\"><button class=\"secondary\" onclick=\"switchTab('accounts')\">管理账号</button></div>" in page
@@ -6696,7 +7917,7 @@ def test_run_platform_attaches_bound_proxy_summary(tmp_path, monkeypatch):
                 "max_concurrency": 1,
             }
         )
-        save_social_account(
+        account = save_social_account(
             {
                 "name": "抖音采集号",
                 "platform": "dy",
@@ -6717,9 +7938,12 @@ def test_run_platform_attaches_bound_proxy_summary(tmp_path, monkeypatch):
             _restore_table(table, snapshot)
 
     assert seen["proxy_binding"]["proxy_url"] == "http://user:pass@127.0.0.1:8081"
-    assert seen["proxy_binding"]["profile_path"] == str(tmp_path / "dy_account_profile")
+    assert seen["proxy_binding"]["profile_key"] == f"1/dy/acc_{account['id']}"
+    assert seen["proxy_binding"]["profile_path"] == str(resolve_account_profile_path(seen["proxy_binding"]["profile_key"]))
     assert result["account"]["account_name"] == "抖音采集号"
-    assert result["account"]["profile_path"] == str(tmp_path / "dy_account_profile")
+    assert result["account"]["profile_key"] == f"1/dy/acc_{account['id']}"
+    assert result["account"]["profile_configured"] is True
+    assert "profile_path" not in result["account"]
     assert result["proxy"]["proxy_id"] == proxy["id"]
     assert "user:pass" not in result["proxy"]["proxy_url"]
     assert result["new_contents"] == 1
@@ -7080,6 +8304,18 @@ def _snapshot_table(table: str) -> list[dict]:
         return [dict(row) for row in conn.execute(f"SELECT * FROM {table}").fetchall()]
 
 
+def _table_columns(conn, table: str) -> set[str]:
+    return {row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()}
+
+
+def get_user_for_test_session(token: str) -> dict:
+    from api.monitoring.database import get_user_for_session_token
+
+    user = get_user_for_session_token(token)
+    assert user
+    return user
+
+
 def _restore_table(table: str, snapshot: list[dict]) -> None:
     with get_conn() as conn:
         conn.execute(f"DELETE FROM {table}")
@@ -7142,3 +8378,24 @@ def _clear_monitor_jobs() -> None:
     with get_conn() as conn:
         for table in ["job_recipients", "job_platforms", "job_keywords", "monitor_jobs"]:
             conn.execute(f"DELETE FROM {table}")
+
+
+class _FakeClient:
+    host = "127.0.0.1"
+
+
+class _FakeRequest:
+    headers = {"user-agent": "pytest"}
+    client = _FakeClient()
+
+
+class _FakeResponse:
+    def __init__(self) -> None:
+        self.cookies: dict[str, dict[str, object]] = {}
+        self.deleted_cookies: set[str] = set()
+
+    def set_cookie(self, key: str, value: str, **kwargs) -> None:
+        self.cookies[key] = {"value": value, **kwargs}
+
+    def delete_cookie(self, key: str, **kwargs) -> None:
+        self.deleted_cookies.add(key)

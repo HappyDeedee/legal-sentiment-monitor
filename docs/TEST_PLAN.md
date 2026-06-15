@@ -5,6 +5,15 @@
 Production acceptance must run in a server-like environment. Local Chrome on
 the operator's computer is not a valid acceptance path.
 
+## Phase 0 Documentation Review Tests
+
+- Governance documents exist and can be followed from `AGENTS.md`.
+- Accepted change requests are connected to `TASKS.md`, `TRACEABILITY.md`, and
+  verification notes.
+- Specialist documents referenced by `AGENTS.md` exist.
+- Documentation consistency checks can be run with `python scripts/check_docs.py`
+  once the Phase 1 close-out script is implemented.
+
 ## Phase 0.5 Schema Foundation Tests
 
 - Foundation tables exist: `workspaces`, `users`, `user_sessions`,
@@ -82,6 +91,9 @@ Use the standard permission test data:
 
 - QR login is initiated from the web UI.
 - QR code or structured status is returned to the web UI.
+- Structured login-session statuses include `preparing`, `waiting_qrcode`,
+  `waiting_scan`, `waiting_confirm`, `success`, `needs_verification`,
+  `qrcode_failed`, `timeout`, and `platform_error`.
 - Scanning succeeds without using the operator's local Chrome.
 - Verification states are returned when the platform requires captcha, slider,
   SMS, or manual confirmation.
@@ -92,6 +104,8 @@ Use the standard permission test data:
   server/container deployment.
 - Server deployment sets `MONITOR_LOGIN_QR_HEADLESS=true` or equivalent
   production behavior.
+- Server deployment sets `MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=false`, and the
+  local-window login endpoint is unavailable in production mode.
 - QR login works in a container/server-like environment without X11 or desktop
   GUI dependency.
 
@@ -162,6 +176,12 @@ Use the standard permission test data:
 - Cookies are not displayed after save.
 - Logs do not contain raw API keys, cookies, SMTP passwords, or proxy passwords.
 - Normal users cannot call administrator-only APIs.
+- Administrator resource operations write audit logs without storing plaintext
+  secrets.
+- Readiness surfaces account invalidation and proxy-error alert paths with
+  customer-safe wording.
+- System diagnostics include disk-space, backup-set, and retention-setting
+  checks.
 
 ## Server-Like Acceptance Tests
 

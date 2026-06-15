@@ -6,7 +6,16 @@ from pathlib import Path
 from typing import Any
 
 from .ai import ai_api_disabled
-from .database import DB_PATH, get_active_ai_key_profile, get_ai_config, get_conn, get_email_config, list_jobs, list_reports
+from .database import (
+    DB_PATH,
+    get_active_ai_key_profile,
+    get_ai_config,
+    get_conn,
+    get_email_config,
+    get_runtime_setting_value,
+    list_jobs,
+    list_reports,
+)
 from .mediacrawler_login import SUPPORTED_MONITOR_PLATFORMS, list_mediacrawler_login_capabilities
 from .platform_status import list_platform_status
 from .readiness import (
@@ -18,7 +27,7 @@ from .readiness import (
     get_readiness_status,
 )
 from .scheduler import scheduler_disabled_reason
-from .security import KEY_PATH, MONITOR_DATA_DIR
+from .security import KEY_PATH, MONITOR_DATA_DIR, customer_safe_text
 
 
 PROJECT_ROOT = Path(__file__).resolve().parents[2]
@@ -50,9 +59,13 @@ def run_doctor() -> dict[str, Any]:
         _check_data_dir(),
         _check_secret_key(),
         _check_database(),
+        _check_disk_space(),
+        _check_retention_settings(),
+        _check_backup_set(),
         _check_gitignore_runtime_data(),
         _check_platform_login_capabilities(),
         _check_browser_profiles(),
+        _check_resource_alerts(),
         _check_ai_config(),
         _check_email_config(),
         _check_jobs(),
@@ -119,6 +132,44 @@ def _check_database() -> dict[str, Any]:
         return _check("database", "本地数据库", True, "数据表结构完整")
     except Exception as exc:
         return _check("database", "本地数据库", False, f"数据库检查失败：{type(exc).__name__}")
+
+
+def _check_disk_space() -> dict[str, Any]:
+    try:
+        usage = shutil.disk_usage(MONITOR_DATA_DIR)
+    except Exception as exc:
+        return _check("disk_space", "磁盘空间", False, f"磁盘空间检查失败：{type(exc).__name__}")
+    free_gb = usage.free / (1024**3)
+    total_gb = usage.total / (1024**3)
+    ok = free_gb >= 1
+    message = f"运行数据所在磁盘剩余 {free_gb:.1f} GB / 总计 {total_gb:.1f} GB"
+    if not ok:
+        message += "，请清理旧报告或扩容后再持续运行"
+    return _check("disk_space", "磁盘空间", ok, message)
+
+
+def _check_retention_settings() -> dict[str, Any]:
+    try:
+        run_log_days = int(get_runtime_setting_value("run_log_retention_days") or 0)
+        report_days = int(get_runtime_setting_value("report_retention_days") or 0)
+    except Exception as exc:
+        return _check("retention_settings", "保留策略", False, f"保留策略读取失败：{type(exc).__name__}")
+    ok = run_log_days > 0 and report_days > 0
+    message = f"运行日志保留 {run_log_days} 天，报告保留 {report_days} 天"
+    return _check("retention_settings", "保留策略", ok, message)
+
+
+def _check_backup_set() -> dict[str, Any]:
+    items = [
+        "数据库",
+        "账号 Profile 目录",
+        "报告目录",
+        "加密密钥",
+        "部署配置",
+    ]
+    if KEY_PATH.exists():
+        return _check("backup_set", "备份清单", True, "需纳入备份：" + "、".join(items))
+    return _check("backup_set", "备份清单", False, "密钥文件尚未生成；生成后需备份：" + "、".join(items))
 
 
 def _check_gitignore_runtime_data() -> dict[str, Any]:
@@ -214,6 +265,26 @@ def _check_browser_profiles() -> dict[str, Any]:
     return _check("browser_profiles", "浏览器登录态", ok, message, {"platforms": platforms})
 
 
+def _check_resource_alerts() -> dict[str, Any]:
+    platforms = list_platform_status()
+    account_alerts = []
+    proxy_alerts = []
+    for platform in platforms:
+        label = platform.get("platform_label") or _platform_label(str(platform.get("platform") or ""))
+        if platform.get("needs_login"):
+            account_alerts.append(f"{label}可能需要重新登录")
+        error = customer_safe_text(platform.get("last_error") or platform.get("login_material_error") or "").strip()
+        if error:
+            account_alerts.append(f"{label}{error[:80]}")
+        proxy_error = customer_safe_text(platform.get("active_proxy_error") or "").strip()
+        if proxy_error:
+            proxy_alerts.append(f"{label}{proxy_error[:80]}")
+    alerts = account_alerts + proxy_alerts
+    if not alerts:
+        return _check("resource_alerts", "资源告警", True, "账号和代理暂无异常告警")
+    return _check("resource_alerts", "资源告警", False, "；".join(alerts))
+
+
 def _check_ai_config() -> dict[str, Any]:
     if ai_api_disabled():
         return _check(
@@ -297,6 +368,12 @@ def _recommendations(checks: list[dict[str, Any]], readiness: dict[str, Any]) ->
         tips.append("修正运行数据目录权限，确保服务账号可读写。")
     if "secret_key" in failed:
         tips.append("保存一次 AI 或邮件配置生成 secret.key，并把它加入服务器备份。")
+    if "disk_space" in failed:
+        tips.append("清理旧运行数据或扩容磁盘，避免报告和网页登录态写入失败。")
+    if "backup_set" in failed:
+        tips.append("保存一次含密钥的配置后，按部署手册备份数据库、账号 Profile、报告、密钥和部署配置。")
+    if "retention_settings" in failed:
+        tips.append("检查运行日志和报告保留天数，避免长期运行后数据无限增长。")
     if "browser_profiles" in failed:
         browser_message = check_by_key["browser_profiles"].get("message") or ""
         if "登录窗口未关闭" in browser_message:
@@ -326,6 +403,8 @@ def _recommendations(checks: list[dict[str, Any]], readiness: dict[str, Any]) ->
             tips.append("先运行系统自检，再运行抖音任务生成报告。")
     if "scheduler_mode" in failed:
         tips.append("当前版本建议只运行一个后台服务实例；如需多实例部署，请改用外部定时调度。")
+    if "resource_alerts" in failed:
+        tips.append("进入平台账号和代理资源页，处理最近的账号失效或代理错误。")
     for action in readiness.get("next_actions") or []:
         if action not in tips:
             tips.append(action)

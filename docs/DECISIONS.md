@@ -83,3 +83,20 @@ short `Superseded by` note rather than deleting history.
   concurrent runs up to its configured limit.
 - Runtime Strategy is administrator-only and uses grouped table sections for
   Crawling, Login, Scheduler, and Retention settings.
+- Phase 6 makes server-side QR login the primary administrator login flow.
+  Local-window login is a development-only fallback controlled by
+  `MONITOR_ALLOW_LOCAL_LOGIN_WINDOW`; production deployments should set it to
+  false and use the web QR/status flow for acceptance.
+- Phase 8 server-like validation may use an isolated real FastAPI service
+  process with persistent data/profile directories when Docker or a remote
+  Linux server is unavailable on the validation machine. This validates the
+  server-controlled HTTP UI/API path, production login flags, profile
+  persistence across service restart, runtime locks, and headless browser
+  availability, but it does not replace live pilot validation for real platform
+  QR scanning, real platform crawling, real AI provider, or real SMTP delivery.
+- Phase 9 completes V1 security and operations with minimal administrator
+  audit logs, secret redaction, resource-alert diagnostics, backup guidance,
+  disk-space diagnostics, and retention-setting diagnostics. Automated
+  retention cleanup jobs are not added in V1; operators should use the
+  diagnostics and backup guidance during pilot operations until a later cleanup
+  job is explicitly planned.

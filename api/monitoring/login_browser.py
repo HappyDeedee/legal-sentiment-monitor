@@ -56,6 +56,8 @@ def open_login_browser_with_command(command: dict[str, Any]) -> dict[str, Any]:
         f"--user-data-dir={command['profile_path']}",
         command["login_url"],
     ]
+    if command.get("proxy_url"):
+        args.insert(-1, f"--proxy-server={command['proxy_url']}")
     creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
     process = subprocess.Popen(
         args,

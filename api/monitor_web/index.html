@@ -92,6 +92,14 @@
     .status.warn { background:#fff7ed; color:#b45309; }
     .status.bad { background:#fef2f2; color:#b42318; }
     .toast { position:fixed; right:18px; top:76px; background:#111827; color:#fff; padding:10px 14px; border-radius:6px; display:none; max-width:460px; z-index:60; }
+    .auth-screen { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:#f8fafc; z-index:70; padding:20px; }
+    .auth-screen.active { display:flex; }
+    .auth-panel { width:min(420px, 100%); border:1px solid var(--line); border-radius:8px; background:#fff; box-shadow:0 24px 60px rgba(15,23,42,.18); padding:24px; }
+    .auth-panel h1 { margin:0 0 8px; font-size:22px; }
+    .auth-panel p { margin:0 0 18px; color:var(--muted); line-height:1.6; }
+    .auth-panel form { display:grid; gap:14px; }
+    .auth-error { min-height:20px; color:var(--danger); font-size:13px; }
+    .is-hidden { display:none !important; }
     iframe { width:100%; min-height:520px; border:1px solid var(--line); border-radius:8px; background:#fff; }
     pre.logbox, pre.resultbox { max-height:360px; overflow:auto; background:#0f172a; color:#e5e7eb; padding:12px; border-radius:6px; white-space:pre-wrap; }
     .test-console { min-height:180px; max-height:360px; overflow:auto; background:#0f172a; color:#dbeafe; padding:14px 16px; border-radius:8px; white-space:pre-wrap; font-family:Consolas,Menlo,monospace; line-height:1.7; }
@@ -183,6 +191,18 @@
     .settings-card { border:1px solid var(--line); border-radius:8px; background:#fff; padding:12px; }
     .settings-card h3 { margin-bottom:8px; }
     .settings-actions { display:flex; gap:8px; align-items:center; justify-content:flex-end; flex-wrap:wrap; margin-top:12px; }
+    .resource-toolbar { display:flex; gap:10px; align-items:end; flex-wrap:wrap; margin-bottom:12px; }
+    .resource-toolbar > div { min-width:150px; flex:1 1 170px; }
+    .resource-toolbar .toolbar-actions { flex:0 0 auto; }
+    .resource-summary-grid { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin:0 0 12px; }
+    .resource-stat { border:1px solid var(--line); border-radius:8px; background:#fbfdff; padding:10px; min-height:62px; }
+    .resource-stat strong { display:block; color:var(--muted); font-size:12px; margin-bottom:5px; }
+    .resource-stat span { display:block; color:var(--text); font-weight:750; word-break:break-word; }
+    .resource-modal-actions { position:sticky; bottom:-18px; margin:16px -18px -18px; padding:14px 18px; border-top:1px solid var(--line); background:#fff; display:flex; align-items:center; justify-content:space-between; gap:12px; z-index:5; flex-wrap:wrap; }
+    .resource-modal-actions .row { flex:0 0 auto; justify-content:flex-end; }
+    .mail-test-modal { width:min(760px, calc(100% - 36px)); }
+    .test-console { min-height:168px; max-height:360px; overflow:auto; background:#0f172a; color:#dbeafe; border-radius:8px; padding:12px; white-space:pre-wrap; font-family:Consolas,Menlo,monospace; line-height:1.6; }
+    .muted-line { color:#93a4bd; }
     .template-editor-layout { display:grid; grid-template-columns:1fr; gap:14px; align-items:start; }
     .template-editor-layout textarea { min-height:300px; }
     .template-preview-panel { position:static; }
@@ -353,10 +373,17 @@
     .section-note strong { color:var(--text); }
     .field-hint { color:var(--muted); font-size:12px; line-height:1.6; margin:6px 0 12px; }
     .config-section .section-note, .config-section .field-hint { display:none; }
+    .wizard-steps { display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:8px; margin:0 0 14px; }
+    .wizard-step { border:1px solid var(--line); border-radius:8px; background:#f8fafc; padding:10px; color:var(--muted); min-height:64px; }
+    .wizard-step strong { display:block; color:var(--text); margin-bottom:4px; }
+    .wizard-step span { display:block; font-size:12px; line-height:1.45; }
+    .normal-wizard-hint { display:none; margin:0 0 14px; }
+    .admin-advanced-section { border-color:#bfdbfe; background:#fbfdff; }
+    .admin-advanced-section h3 { color:#1d4ed8; }
     .form-actions { position:sticky; bottom:-18px; z-index:5; margin:16px -18px -18px; display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap; border-top:1px solid var(--line); padding:14px 18px; background:#fff; }
-    .rule-modal-actions .row, .ai-test-actions .row, .account-flow-actions .row { width:auto; flex:0 0 auto; justify-content:flex-end; }
-    .rule-modal-actions > .small, .ai-test-actions > .small, .account-flow-actions .small { max-width:620px; }
-    @media (max-width: 1100px) { .shell { grid-template-columns:minmax(0,1fr); width:100%; overflow:hidden; } .shell > aside { position:static; height:auto; width:100%; max-width:100%; min-width:0; overflow:visible; } nav { display:flex; width:100%; max-width:100%; min-width:0; overflow-x:auto; overflow-y:hidden; } .nav-group { flex:0 0 auto; } nav button { min-width:max-content; } .nav-popover { position:fixed; top:78px; left:12px; right:12px; width:auto; max-width:360px; } .grid, .grid-3, .grid-4, .split, .settings-panel-grid, .template-editor-layout, .diagnostic-layout, .settings-grid, .artifact-grid { grid-template-columns:1fr; } section { padding:16px; } }
+    .rule-modal-actions .row, .ai-test-actions .row, .account-flow-actions .row, .resource-modal-actions .row { width:auto; flex:0 0 auto; justify-content:flex-end; }
+    .rule-modal-actions > .small, .ai-test-actions > .small, .account-flow-actions .small, .resource-modal-actions .small { max-width:620px; }
+    @media (max-width: 1100px) { .shell { grid-template-columns:minmax(0,1fr); width:100%; overflow:hidden; } .shell > aside { position:static; height:auto; width:100%; max-width:100%; min-width:0; overflow:visible; } nav { display:flex; width:100%; max-width:100%; min-width:0; overflow-x:auto; overflow-y:hidden; } .nav-group { flex:0 0 auto; } nav button { min-width:max-content; } .nav-popover { position:fixed; top:78px; left:12px; right:12px; width:auto; max-width:360px; } .grid, .grid-3, .grid-4, .split, .settings-panel-grid, .template-editor-layout, .diagnostic-layout, .settings-grid, .artifact-grid, .resource-summary-grid, .wizard-steps { grid-template-columns:1fr; } section { padding:16px; } }
     @media (max-width: 1100px) { .account-filter, .account-modal-grid, .login-card-grid, .rule-builder-grid, .rule-flow, .rule-sections, .rule-modal-flow, .rule-accordion, .diagnostic-grid { grid-template-columns:1fr; } .template-preview-panel { position:static; } }
     @media (max-width: 720px) {
       body { font-size:13px; }
@@ -378,15 +405,27 @@
       .wide-actions { min-width:220px; }
       .account-bulk-toolbar { justify-content:flex-start; }
       .account-bulk-toolbar button { flex:0 0 auto; }
-      .rule-modal-actions, .ai-test-actions, .account-flow-actions { align-items:stretch; }
-      .rule-modal-actions > .small, .ai-test-actions > .small, .account-flow-actions .small { display:none; }
-      .rule-modal-actions .row, .ai-test-actions .row, .account-flow-actions .row { width:100%; }
-      .rule-modal-actions button, .ai-test-actions button, .account-flow-actions button { flex:1 1 auto; }
+      .rule-modal-actions, .ai-test-actions, .account-flow-actions, .resource-modal-actions { align-items:stretch; }
+      .rule-modal-actions > .small, .ai-test-actions > .small, .account-flow-actions .small, .resource-modal-actions .small { display:none; }
+      .rule-modal-actions .row, .ai-test-actions .row, .account-flow-actions .row, .resource-modal-actions .row { width:100%; }
+      .rule-modal-actions button, .ai-test-actions button, .account-flow-actions button, .resource-modal-actions button { flex:1 1 auto; }
       .schema-item { grid-template-columns:1fr; }
     }
   </style>
 </head>
 <body>
+  <div id="auth_screen" class="auth-screen">
+    <div class="auth-panel">
+      <h1>登录舆情监控后台</h1>
+      <p>使用管理员创建的账号进入系统。普通用户只会看到任务、运行和报告相关页面。</p>
+      <form id="login_form">
+        <div><label>邮箱</label><input id="login_email" type="email" autocomplete="username" required></div>
+        <div><label>密码</label><input id="login_password" type="password" autocomplete="current-password" required></div>
+        <div id="login_error" class="auth-error"></div>
+        <button class="primary" type="submit">登录</button>
+      </form>
+    </div>
+  </div>
   <svg aria-hidden="true" width="0" height="0" style="position:absolute;overflow:hidden">
     <symbol id="icon-dashboard" viewBox="0 0 24 24"><path d="M3 13h8V3H3z"></path><path d="M13 21h8V11h-8z"></path><path d="M13 3h8v6h-8z"></path><path d="M3 21h8v-6H3z"></path></symbol>
     <symbol id="icon-monitor" viewBox="0 0 24 24"><path d="M4 19V5"></path><path d="M4 19h16"></path><path d="m7 15 4-4 3 3 5-7"></path></symbol>
@@ -406,32 +445,33 @@
       </div>
       <nav>
         <div class="nav-group">
-          <button class="active" data-tab="dashboard"><span class="ui-icon"><svg><use href="#icon-dashboard"></use></svg></span>总览</button>
+          <button class="active" data-tab="dashboard" data-menu-key="overview"><span class="ui-icon"><svg><use href="#icon-dashboard"></use></svg></span>总览</button>
         </div>
         <div class="nav-group">
-          <button data-tab="jobs"><span class="ui-icon"><svg><use href="#icon-monitor"></use></svg></span>舆情监控</button>
+          <button data-tab="jobs" data-menu-key="monitoring"><span class="ui-icon"><svg><use href="#icon-monitor"></use></svg></span>舆情监控</button>
         </div>
         <div class="nav-group">
-          <button data-tab="runs"><span class="ui-icon"><svg><use href="#icon-run"></use></svg></span>运行中心</button>
+          <button data-tab="runs" data-menu-key="run_center"><span class="ui-icon"><svg><use href="#icon-run"></use></svg></span>运行中心</button>
         </div>
         <div class="nav-group">
-          <button data-tab="reports"><span class="ui-icon"><svg><use href="#icon-report"></use></svg></span>报告中心</button>
+          <button data-tab="reports" data-menu-key="report_center"><span class="ui-icon"><svg><use href="#icon-report"></use></svg></span>报告中心</button>
         </div>
         <div class="nav-group">
-          <button data-menu="resources" data-default-tab="accounts"><span class="ui-icon"><svg><use href="#icon-resource"></use></svg></span>资源管理</button>
+          <button data-menu="resources" data-default-tab="accounts" data-menu-key="platform_accounts"><span class="ui-icon"><svg><use href="#icon-resource"></use></svg></span>资源管理</button>
           <div class="nav-popover" id="nav_menu_resources">
-            <button class="sub" data-tab="accounts">平台账号</button>
-            <button class="sub" data-tab="proxies">代理资源</button>
-            <button class="sub" data-tab="ai">AI 接入</button>
+            <button class="sub" data-tab="accounts" data-menu-key="platform_accounts">平台账号</button>
+            <button class="sub" data-tab="proxies" data-menu-key="proxy_resources">代理资源</button>
+            <button class="sub" data-tab="ai" data-menu-key="ai_access">AI 接入</button>
           </div>
         </div>
         <div class="nav-group">
-          <button data-menu="settings" data-default-tab="ai_rules"><span class="ui-icon"><svg><use href="#icon-settings"></use></svg></span>系统配置</button>
+          <button data-menu="settings" data-default-tab="ai_rules" data-menu-key="ai_rules"><span class="ui-icon"><svg><use href="#icon-settings"></use></svg></span>系统配置</button>
           <div class="nav-popover" id="nav_menu_settings">
-            <button class="sub" data-tab="ai_rules">AI 评估规则</button>
-            <button class="sub" data-tab="email">邮件配置</button>
-            <button class="sub" data-tab="email_templates">邮件模板</button>
-            <button class="sub" data-tab="doctor">系统诊断</button>
+            <button class="sub" data-tab="ai_rules" data-menu-key="ai_rules">AI 评估规则</button>
+            <button class="sub" data-tab="email" data-menu-key="mail_config">邮件配置</button>
+            <button class="sub" data-tab="email_templates" data-menu-key="mail_templates">邮件模板</button>
+            <button class="sub" data-tab="runtime" data-menu-key="runtime_strategy">运行策略</button>
+            <button class="sub" data-tab="doctor" data-menu-key="system_diagnostics">系统诊断</button>
           </div>
         </div>
       </nav>
@@ -443,8 +483,10 @@
           <span>抖音 / 快手 / 小红书 · 平台采集服务</span>
         </div>
         <div class="row" style="flex:0 0 auto">
+          <div id="current_user_badge" class="small"></div>
           <div id="top_status" class="small"></div>
           <button class="secondary" onclick="loadAll()">刷新全局状态</button>
+          <button class="secondary" onclick="logout()">退出</button>
         </div>
       </header>
       <section id="dashboard" class="active">
@@ -507,8 +549,15 @@
         </div>
         <div id="job_form" class="panel">
           <input type="hidden" id="job_id">
-          <div class="config-section">
-            <h3>基本信息</h3>
+          <div id="normal_task_wizard_hint" class="notice normal-wizard-hint">普通用户只需填写目标律所、平台搜索词、采集范围、调度和收件邮箱。账号、代理、AI 接入、邮件模板和浏览器方式由管理员维护。</div>
+          <div id="normal_task_wizard_steps" class="wizard-steps normal-only">
+            <div class="wizard-step"><strong>1. 目标</strong><span>填写律所名称和别名，用于报告归属和线索判断。</span></div>
+            <div class="wizard-step"><strong>2. 采集内容</strong><span>选择平台、输入平台搜索词，并设置采集范围。</span></div>
+            <div class="wizard-step"><strong>3. 调度</strong><span>选择运行频率、发送时间和是否启用任务。</span></div>
+            <div class="wizard-step"><strong>4. 报告</strong><span>填写日报收件邮箱；未填写时仍可生成报告。</span></div>
+          </div>
+          <div class="config-section wizard-section" data-wizard-step="target">
+            <h3>1. 目标</h3>
             <p class="section-note">律所名称和别名用于 AI 判断、报告标题和线索归属，不会自动追加为平台搜索词。</p>
             <div class="grid">
               <div><label>律所名称</label><input id="law_firm_name" placeholder="例如：海安律所"></div>
@@ -516,9 +565,9 @@
             </div>
           </div>
 
-          <div class="config-section">
-            <h3>采集设置</h3>
-            <p class="section-note">平台搜索词会逐行传入平台搜索。账号和代理只在这里绑定，资源资料仍在资源管理中维护。</p>
+          <div class="config-section wizard-section" data-wizard-step="content">
+            <h3>2. 采集内容</h3>
+            <p class="section-note">平台搜索词会逐行传入平台搜索。律所名称和别名只用于评估、报告和线索归属。</p>
             <label>平台搜索词（多行）</label>
             <textarea id="keywords" placeholder="海安律所避雷&#10;海安律所退费&#10;海安律所投诉"></textarea>
             <div class="field-hint">这里的每一行才会用于平台搜索；律所别名不会自动参与搜索。</div>
@@ -531,25 +580,17 @@
                   <label><input type="checkbox" name="platform" value="xhs">小红书</label>
                 </div>
               </div>
-              <div><label>绑定平台账号</label><select id="job_account_id"><option value="">自动选择可用账号</option></select></div>
-              <div><label>绑定代理资源</label><select id="job_proxy_id"><option value="">跟随账号设置</option></select></div>
             </div>
+            <div class="grid-3">
+              <div><label>最大采集条数</label><input id="job_max_items" value="50"></div>
+              <div><label>起始页</label><input id="job_start_page" value="1"></div>
+              <div><label>最大采集页数</label><input id="job_max_pages" value="1"></div>
+            </div>
+            <div class="notice" id="crawl_range_hint">采集条数是内容数量上限；起始页和页数会按平台能力执行，部分平台可能返回少于所选范围的结果。任务运行超时由管理员在运行策略中统一控制。</div>
             <div class="row">
               <label><input type="checkbox" id="enable_comments" checked style="width:auto"> 抓取一级评论</label>
               <label><input type="checkbox" id="enable_sub_comments" style="width:auto"> 抓取二级评论</label>
             </div>
-            <details class="advanced">
-              <summary>采集参数</summary>
-              <div class="grid-3">
-                <div><label>采集目标类型</label><select id="job_target_type"><option value="search">关键词搜索</option></select></div>
-                <div><label>最大采集页数</label><input id="job_max_pages" value="1"></div>
-              <div><label>最大采集条数</label><input id="job_max_items" value="50"></div>
-              <div><label>起始页</label><input id="job_start_page" value="1"></div>
-              <div><label>输出方式</label><select id="job_output_mode"><option value="internal">系统内部存储</option><option value="json">JSON 归档</option><option value="excel">Excel 归档</option></select></div>
-                <div><label>登录方式</label><select id="job_browser_mode"><option value="server_qrcode">网页登录态 / 扫码</option><option value="profile">已有网页登录态</option><option value="local_window">本地登录窗口</option></select></div>
-              </div>
-              <div id="job_target_hint" class="notice">当前任务按平台搜索词运行。平台搜索词、平台和采集范围会共同决定本次采集内容。</div>
-            </details>
           </div>
 
           <div class="config-section">
@@ -559,8 +600,26 @@
             <textarea id="exclude_words" placeholder="招聘&#10;无关同名&#10;广告合作"></textarea>
           </div>
 
-          <div class="config-section">
-            <h3>任务调度</h3>
+          <div class="config-section admin-advanced-section admin-only-job-field">
+            <h3>管理员高级采集设置</h3>
+            <p class="section-note">仅管理员可绑定账号、代理和采集技术参数；普通用户任务会使用系统自动选择的资源。</p>
+            <div class="row">
+              <div><label>绑定平台账号</label><select id="job_account_id"><option value="">自动选择可用账号</option></select></div>
+              <div><label>绑定代理资源</label><select id="job_proxy_id"><option value="">跟随账号设置</option></select></div>
+            </div>
+            <details class="advanced">
+              <summary>采集参数</summary>
+              <div class="grid-3">
+                <div><label>采集目标类型</label><select id="job_target_type"><option value="search">关键词搜索</option></select></div>
+                <div><label>输出方式</label><select id="job_output_mode"><option value="internal">系统内部存储</option><option value="json">JSON 归档</option><option value="excel">Excel 归档</option></select></div>
+                <div><label>登录方式</label><select id="job_browser_mode"><option value="server_qrcode">网页登录态 / 扫码</option><option value="profile">已有网页登录态</option><option value="local_window">本地登录窗口</option></select></div>
+              </div>
+              <div id="job_target_hint" class="notice">当前任务按平台搜索词运行。平台搜索词、平台和采集范围会共同决定本次采集内容。</div>
+            </details>
+          </div>
+
+          <div class="config-section wizard-section" data-wizard-step="schedule">
+            <h3>3. 调度</h3>
             <p class="section-note">设置任务是否启用、多久运行一次，以及每次只处理哪个时间范围内的新内容。</p>
             <div class="row">
               <div>
@@ -583,7 +642,7 @@
             <label><input type="checkbox" id="enabled" checked style="width:auto"> 启用任务</label>
           </div>
 
-          <div class="config-section">
+          <div class="config-section admin-advanced-section admin-only-job-field">
             <h3>AI 评估</h3>
             <p class="section-note">选择用于本任务的 AI 接入资源。未选择或接入异常时，采集仍会运行，内容进入待人工复核。</p>
             <div class="grid">
@@ -592,11 +651,11 @@
             </div>
           </div>
 
-          <div class="config-section">
-            <h3>邮件报告</h3>
+          <div class="config-section wizard-section" data-wizard-step="report">
+            <h3>4. 报告</h3>
             <p class="section-note">设置报告收件人和本任务使用的邮件模板。未配置邮件也可以采集和生成报告，只是不发送邮件。</p>
             <label>收件邮箱（多行）</label><textarea id="recipients" placeholder="a@example.com&#10;b@example.com"></textarea>
-            <div class="grid">
+            <div class="grid admin-only-job-field">
               <div><label>邮件模板</label><select id="job_email_template_id"><option value="">使用当前启用模板</option></select></div>
             </div>
           </div>
@@ -678,7 +737,7 @@
                 <div id="social_account_error_summary" class="account-error-summary">最近暂无异常。</div>
                 <details class="advanced">
                   <summary>高级设置</summary>
-                  <label>网页登录态</label><input id="social_account_profile_path" placeholder="留空由系统生成">
+                  <div class="small">网页登录态由系统按账号自动创建和复用，不需要手动填写路径。</div>
                   <label>异常记录</label><textarea id="social_account_last_error" placeholder="最近一次登录或采集异常，可留空"></textarea>
                 </details>
                 </details>
@@ -697,7 +756,7 @@
                     <div id="login_panel_qrcode" class="login-mode-panel platform-login-panel active">
                       <div class="login-actions">
                         <button id="account_qrcode_button" class="primary" onclick="startLoginSessionFromForm()">生成二维码并登录</button>
-                        <button class="secondary" onclick="openCurrentAccountLoginBrowser()">打开登录窗口</button>
+                        <button id="account_local_login_button" class="secondary" onclick="openCurrentAccountLoginBrowser()">打开登录窗口</button>
                       </div>
                       <div id="account_login_prereq_hint" class="small" style="margin-top:8px"></div>
                       <div id="login_session_result" class="login-result"><div class="small">点击“生成登录二维码”后在这里扫码。</div></div>
@@ -747,8 +806,23 @@
             <button class="secondary" onclick="loadProxyPool()">刷新代理</button>
           </div>
         </div>
+        <div id="proxy_resource_summary" class="resource-summary-grid"></div>
         <div class="panel">
-          <h3>代理列表</h3>
+          <div class="account-ledger-head">
+            <div>
+              <h3>代理列表</h3>
+              <p class="small">新增、编辑和删除都在弹窗内确认；代理 URL 保存后只显示掩码。</p>
+            </div>
+            <div class="inline-status"><span id="proxy_resource_count">-</span></div>
+          </div>
+          <div class="resource-toolbar">
+            <div><label>搜索</label><input id="proxy_search" placeholder="代理名称 / 供应商 / 备注"></div>
+            <div><label>状态</label><select id="proxy_status_filter"><option value="">全部状态</option><option value="active">可用</option><option value="standby">待机</option><option value="limited">受限</option><option value="disabled">停用</option></select></div>
+            <div class="toolbar-actions">
+              <button class="secondary" onclick="clearProxyFilters()">清空筛选</button>
+              <button class="secondary" onclick="loadProxyPool()">刷新</button>
+            </div>
+          </div>
           <div id="proxy_profiles_table"></div>
         </div>
       </section>
@@ -774,9 +848,12 @@
           </div>
           <label>备注</label><textarea id="proxy_notes" placeholder="记录供应商、地区、套餐、过期时间"></textarea>
           <label>错误信息</label><textarea id="proxy_last_error" placeholder="记录最近一次代理检测异常，可留空"></textarea>
-          <div class="form-actions">
-            <button class="primary" onclick="saveProxyProfile()">保存代理</button>
-            <button class="secondary" onclick="resetProxyForm()">清空</button>
+          <div class="resource-modal-actions">
+            <div class="small">保存后任务和账号绑定会继续引用这个代理资源；删除前请确认没有正在使用的任务。</div>
+            <div class="row">
+              <button class="secondary" onclick="resetProxyForm()">清空</button>
+              <button class="primary" onclick="saveProxyProfile()">保存代理</button>
+            </div>
           </div>
         </div>
       </div>
@@ -789,8 +866,24 @@
             <button class="secondary" onclick="loadAIProfiles()">刷新 AI 接入</button>
           </div>
         </div>
+        <div id="ai_resource_summary" class="resource-summary-grid"></div>
         <div class="panel">
-          <h3>AI 接入资源</h3>
+          <div class="account-ledger-head">
+            <div>
+              <h3>AI 接入资源</h3>
+              <p class="small">API Key 保存后不回显；连接测试在独立弹窗中执行并记录最近状态。</p>
+            </div>
+            <div class="inline-status"><span id="ai_resource_count">-</span></div>
+          </div>
+          <div class="resource-toolbar">
+            <div><label>搜索</label><input id="ai_profile_search" placeholder="接入名称 / 模型 / Base URL"></div>
+            <div><label>接口协议</label><select id="ai_profile_provider_filter"><option value="">全部协议</option><option value="openai">OpenAI-compatible</option><option value="anthropic">Anthropic-compatible</option></select></div>
+            <div><label>测试状态</label><select id="ai_profile_test_filter"><option value="">全部状态</option><option value="success">最近通过</option><option value="failed">最近失败</option><option value="untested">尚未测试</option></select></div>
+            <div class="toolbar-actions">
+              <button class="secondary" onclick="clearAIProfileFilters()">清空筛选</button>
+              <button class="secondary" onclick="loadAIProfiles()">刷新</button>
+            </div>
+          </div>
           <div id="ai_profiles_table" style="margin-top:12px"></div>
         </div>
       </section>
@@ -867,9 +960,12 @@
           </details>
           <input type="hidden" id="ai_profile_prompt">
           <label><input type="checkbox" id="ai_profile_active"> 设为默认 AI 接入</label>
-          <div class="form-actions">
-            <button class="primary" onclick="saveAIProfile()">保存 AI 接入</button>
-            <button class="secondary" onclick="resetAIProfileForm()">清空</button>
+          <div class="resource-modal-actions">
+            <div class="small">保存后可在列表中进行连接测试；API Key 留空时不会覆盖已保存密钥。</div>
+            <div class="row">
+              <button class="secondary" onclick="resetAIProfileForm()">清空</button>
+              <button class="primary" onclick="saveAIProfile()">保存 AI 接入</button>
+            </div>
           </div>
         </div>
       </div>
@@ -988,14 +1084,43 @@
       <section id="email">
         <div class="page-head">
           <div><h2>邮件配置</h2><p>配置 SMTP、发件人和默认收件人。HTML 邮件样式在“邮件模板”中维护。</p></div>
-          <button class="secondary" onclick="loadEmail()">刷新配置</button>
+          <div class="page-actions">
+            <button class="primary" onclick="openMailConfigModal()">编辑邮件配置</button>
+            <button class="secondary" onclick="openMailTestModal()">发送测试邮件</button>
+            <button class="secondary" onclick="loadEmail()">刷新配置</button>
+          </div>
         </div>
-        <div class="panel">
-          <div class="settings-grid">
+        <div class="resource-summary-grid">
             <div class="settings-stat"><strong>测试状态</strong><span id="email_status_label">未测试</span></div>
             <div class="settings-stat"><strong>发件身份</strong><span id="email_sender_summary">-</span></div>
             <div class="settings-stat"><strong>默认收件人</strong><span id="email_recipient_summary">0 个</span></div>
+            <div class="settings-stat"><strong>标题模板</strong><span id="email_subject_summary">-</span></div>
+        </div>
+        <div class="panel">
+          <div class="account-ledger-head">
+            <div>
+              <h3>SMTP 与发送默认值</h3>
+              <p class="small">配置和测试都通过弹窗完成；密码保存后不会在页面回显。</p>
+            </div>
+            <div class="wide-actions">
+              <button class="secondary" onclick="openMailConfigModal()">编辑配置</button>
+              <button class="secondary" onclick="openMailTestModal()">测试邮件</button>
+            </div>
           </div>
+          <div id="email_status" class="notice">邮件配置尚未读取。</div>
+        </div>
+      </section>
+
+      <div id="mail_config_backdrop" class="drawer-backdrop" onclick="closeMailConfigModal()"></div>
+      <div id="mail_config_modal" class="drawer form-drawer" role="dialog" aria-modal="true" aria-label="邮件配置">
+        <div class="drawer-head">
+          <div>
+            <h3>编辑邮件配置</h3>
+            <div class="small">SMTP 密码会加密保存；留空表示不修改已保存密码。</div>
+          </div>
+          <button class="modal-close" onclick="closeMailConfigModal()" title="关闭">×</button>
+        </div>
+        <div class="panel">
           <div class="settings-panel-grid">
             <div class="settings-card">
               <h3>SMTP 连接</h3>
@@ -1012,15 +1137,36 @@
               <h3>发送默认值</h3>
               <label>默认收件人</label><textarea id="default_recipients" style="min-height:136px"></textarea>
               <label>标题模板</label><input id="subject_template" value="【律所舆情日报】{law_firm_name} - {date}">
-              <div id="email_status" class="small" style="margin-top:8px"></div>
-              <div class="settings-actions">
-                <button class="primary" onclick="saveEmail()">保存配置</button>
-                <button class="secondary" onclick="testEmail()">发送测试邮件</button>
-              </div>
+            </div>
+          </div>
+          <div class="resource-modal-actions">
+            <div class="small">保存配置不会自动发送邮件；如需验证 SMTP，请使用“测试邮件”。</div>
+            <div class="row">
+              <button class="secondary" onclick="closeMailConfigModal()">取消</button>
+              <button class="primary" onclick="saveEmail()">保存配置</button>
             </div>
           </div>
         </div>
-      </section>
+      </div>
+
+      <div id="mail_test_backdrop" class="drawer-backdrop" onclick="closeMailTestModal()"></div>
+      <div id="mail_test_modal" class="drawer mail-test-modal" role="dialog" aria-modal="true" aria-label="邮件测试">
+        <div class="drawer-head">
+          <div>
+            <h3>发送测试邮件</h3>
+            <div class="small">测试会使用当前表单中的配置；如果刚修改过密码，请先保存或在配置弹窗中保持当前输入。</div>
+          </div>
+          <button class="modal-close" onclick="closeMailTestModal()" title="关闭">×</button>
+        </div>
+        <pre id="mail_test_console" class="test-console"><span class="muted-line">点击“开始测试”后，系统会尝试发送一封测试邮件并记录结果。</span></pre>
+        <div class="resource-modal-actions">
+          <div class="small">测试失败不会阻断报告生成；系统仍会保留报告供下载和预览。</div>
+          <div class="row">
+            <button class="secondary" onclick="closeMailTestModal()">关闭</button>
+            <button id="mail_test_start_btn" class="primary" onclick="testEmail()">开始测试</button>
+          </div>
+        </div>
+      </div>
 
       <section id="email_templates">
         <div class="page-head">
@@ -1030,6 +1176,7 @@
             <button class="secondary" onclick="loadEmailTemplates()">刷新模板</button>
           </div>
         </div>
+        <div id="email_template_resource_summary" class="resource-summary-grid"></div>
         <div class="panel">
           <div class="account-ledger-head">
             <div>
@@ -1038,7 +1185,28 @@
             </div>
             <div class="inline-status"><span id="email_template_summary">-</span></div>
           </div>
+          <div class="resource-toolbar">
+            <div><label>搜索</label><input id="email_template_search" placeholder="模板名称 / 标题模板"></div>
+            <div><label>状态</label><select id="email_template_status_filter"><option value="">全部模板</option><option value="active">当前使用</option><option value="standby">备用</option></select></div>
+            <div class="toolbar-actions">
+              <button class="secondary" onclick="clearEmailTemplateFilters()">清空筛选</button>
+              <button class="secondary" onclick="loadEmailTemplates()">刷新</button>
+            </div>
+          </div>
           <div id="email_templates_table"></div>
+        </div>
+      </section>
+
+      <section id="runtime">
+        <div class="page-head">
+          <div><h2>运行策略</h2><p>配置采集并发、运行超时、登录会话、调度间隔和保留周期。</p></div>
+          <div class="page-actions">
+            <button class="secondary" onclick="loadRuntimeSettings()">刷新策略</button>
+            <button class="primary" onclick="saveRuntimeSettings()">保存策略</button>
+          </div>
+        </div>
+        <div class="panel">
+          <div id="runtime_settings_table"></div>
         </div>
       </section>
 
@@ -1188,7 +1356,22 @@
     <iframe id="report_preview"></iframe>
   </div>
   <script>
-    const api = (path, options={}) => fetch('/api/monitor' + path, {headers:{'Content-Type':'application/json'}, ...options});
+    let currentSession = null;
+    let authReady = false;
+    async function api(path, options={}){
+      const res = await fetch('/api/monitor' + path, {headers:{'Content-Type':'application/json'}, ...options});
+      if(res.status===401){
+        showLogin();
+        throw new Error('需要重新登录');
+      }
+      if(res.status===403){
+        toast('当前账号没有访问该功能的权限');
+      }
+      return res;
+    }
+    async function authApi(path, options={}){
+      return fetch('/api/auth' + path, {headers:{'Content-Type':'application/json'}, ...options});
+    }
     const jobCache = new Map();
     const runningJobIds = new Set();
     const socialAccountCache = new Map();
@@ -1201,6 +1384,7 @@
     let aiProfileModelOptions = [];
     const emailTemplateCache = new Map();
     let platformLoginConfigCache = [];
+    let platformLoginCapabilityCache = [];
     let runPollTimer = null;
     let loginSessionPollTimer = null;
     let activeLoginSessionId = null;
@@ -1214,6 +1398,21 @@
     let currentRunLogText = '';
     let accountAttentionOnly = false;
     let openAccountMenuId = null;
+    const TAB_PERMISSION_KEYS = {
+      dashboard: 'overview',
+      jobs: 'monitoring',
+      runs: 'run_center',
+      reports: 'report_center',
+      accounts: 'platform_accounts',
+      proxies: 'proxy_resources',
+      ai: 'ai_access',
+      ai_rules: 'ai_rules',
+      email: 'mail_config',
+      email_templates: 'mail_templates',
+      runtime: 'runtime_strategy',
+      doctor: 'system_diagnostics'
+    };
+    let runtimeSettingsCache = {};
     let defaultPromptSections = {
       role:'你是律所舆情线索初筛助手，只负责发现疑似风险线索，不做事实认定。',
       relevance:'优先判断内容是否明确指向目标律所、律所别名、平台搜索词或评论中的相关称呼。同名无关、泛泛法律咨询、普通法律科普和无明显指向的内容应判为不相关。',
@@ -1232,6 +1431,92 @@
     ];
     const lines = id => document.getElementById(id).value.split(/\n|,/).map(s=>s.trim()).filter(Boolean);
     const toast = msg => { const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; setTimeout(()=>el.style.display='none', 3500); };
+    function showLogin(message=''){
+      authReady=false;
+      currentSession=null;
+      document.getElementById('auth_screen').classList.add('active');
+      document.getElementById('login_error').textContent=message;
+      document.getElementById('login_password').value='';
+    }
+    function hideLogin(){
+      document.getElementById('auth_screen').classList.remove('active');
+      document.getElementById('login_error').textContent='';
+    }
+    async function loadSession(){
+      const res=await authApi('/session');
+      if(!res.ok) return null;
+      return (await res.json()).user || null;
+    }
+    async function bootApp(){
+      const user=await loadSession();
+      if(!user){
+        showLogin();
+        return;
+      }
+      currentSession=user;
+      authReady=true;
+      hideLogin();
+      renderCurrentUser();
+      applyMenuPermissions();
+      applyJobFormRoleMode();
+      renderJobAccountOptions([...socialAccountCache.values()].filter(a=>!a.is_draft));
+      renderProxySelectOptions();
+      renderJobAIProfileOptions();
+      renderJobEmailTemplateOptions();
+      await loadAll();
+    }
+    function renderCurrentUser(){
+      const el=document.getElementById('current_user_badge');
+      if(!el || !currentSession) return;
+      const role=currentSession.role==='administrator' ? '管理员' : '普通用户';
+      el.innerHTML=`<span class="status ok">${esc(role)}</span> ${esc(currentSession.display_name || currentSession.email || '')}`;
+    }
+    function isAdminUser(){ return currentSession && currentSession.role === 'administrator'; }
+    function applyJobFormRoleMode(){
+      const admin=isAdminUser();
+      document.querySelectorAll('.admin-only-job-field').forEach(el=>{ el.style.display=admin ? '' : 'none'; });
+      document.querySelectorAll('.normal-only').forEach(el=>{ el.style.display=admin ? 'none' : ''; });
+      const hint=document.getElementById('normal_task_wizard_hint');
+      if(hint) hint.style.display=admin ? 'none' : 'block';
+      const title=document.getElementById('job_drawer_title');
+      if(title && !val('job_id')) title.textContent = admin ? '新建任务' : '新建监控任务';
+      if(!admin){
+        set('job_account_id','');
+        set('job_proxy_id','');
+        set('job_ai_profile_id','');
+        set('job_email_template_id','');
+        set('job_output_mode','internal');
+        set('job_browser_mode','server_qrcode');
+        setJobTargetType('search');
+      }
+    }
+    async function loginWithForm(event){
+      event.preventDefault();
+      const button=event.submitter;
+      const oldText=button ? button.textContent : '';
+      if(button){ button.disabled=true; button.textContent='登录中...'; }
+      try {
+        const res=await authApi('/login',{method:'POST',body:JSON.stringify({email:val('login_email'),password:val('login_password')})});
+        if(!res.ok){
+          document.getElementById('login_error').textContent=await err(res);
+          return;
+        }
+        const data=await res.json();
+        currentSession=data.user;
+        authReady=true;
+        hideLogin();
+        renderCurrentUser();
+        applyMenuPermissions();
+        applyJobFormRoleMode();
+        await loadAll();
+      } finally {
+        if(button){ button.disabled=false; button.textContent=oldText; }
+      }
+    }
+    async function logout(){
+      await authApi('/logout',{method:'POST'});
+      showLogin();
+    }
     async function withButtonFeedback(button, label, work){
       const btn = typeof button === 'string' ? document.querySelector(button) : button;
       const oldHtml = btn ? btn.innerHTML : '';
@@ -1301,6 +1586,10 @@
       document.querySelectorAll('.nav-popover').forEach(menu=>menu.classList.remove('active'));
     }
     function activateNavTab(btn){
+      if(!canOpenTab(btn.dataset.tab)){
+        toast('当前账号没有访问该页面的权限');
+        return;
+      }
       document.querySelectorAll('nav button, section').forEach(x=>x.classList.remove('active'));
       const parent = btn.classList.contains('sub') ? btn.closest('.nav-group')?.querySelector('button[data-menu]') : btn;
       if(parent) parent.classList.add('active');
@@ -1312,6 +1601,7 @@
       loadSectionData(btn.dataset.tab);
     }
     function loadSectionData(tab){
+      if(!canOpenTab(tab)) return;
       if(tab==='dashboard') loadDashboard();
       if(tab==='accounts') { loadProxyPool(); loadAccountsPool(); }
       if(tab==='proxies') loadProxyPool();
@@ -1319,9 +1609,36 @@
       if(tab==='ai_rules') loadAIRuleProfiles();
       if(tab==='email') loadEmail();
       if(tab==='email_templates') loadEmailTemplates();
+      if(tab==='runtime') loadRuntimeSettings();
       if(tab==='runs') loadRuns();
       if(tab==='reports') loadReports();
       if(tab==='doctor') loadDoctor();
+    }
+
+    function canMenu(key){
+      if(!key) return true;
+      return !!((currentSession && currentSession.menu_permissions || {})[key]);
+    }
+    function canOpenTab(tab){
+      return canMenu(TAB_PERMISSION_KEYS[tab]);
+    }
+    function applyMenuPermissions(){
+      document.querySelectorAll('nav button[data-menu-key]').forEach(btn=>{
+        btn.classList.toggle('is-hidden', !canMenu(btn.dataset.menuKey));
+      });
+      document.querySelectorAll('section[id]').forEach(section=>{
+        if(!canOpenTab(section.id)) section.classList.remove('active');
+      });
+      document.querySelectorAll('.nav-popover').forEach(menu=>{
+        const visible=[...menu.querySelectorAll('button.sub')].some(btn=>!btn.classList.contains('is-hidden'));
+        const trigger=menu.closest('.nav-group')?.querySelector('button[data-menu]');
+        if(trigger) trigger.classList.toggle('is-hidden', !visible);
+      });
+      const active=document.querySelector('nav button.active:not(.is-hidden)');
+      if(!active){
+        const first=document.querySelector('nav button[data-tab]:not(.is-hidden)');
+        if(first) activateNavTab(first);
+      }
     }
 
     function switchSubview(sectionId, viewId){
@@ -1346,25 +1663,31 @@
         return null;
       }
     }
+    function addPermittedLoad(loads, label, key, work){
+      if(canMenu(key)) loads.push(safeLoad(label, work));
+    }
     async function loadAll(){
-      await Promise.all([
+      if(!authReady) return;
+      const loads = [
         safeLoad('总览', loadDashboard),
         safeLoad('运行状态', loadReadiness),
-        safeLoad('系统状态', loadSystemChecklist),
         safeLoad('调度状态', loadSchedulerStatus),
         safeLoad('平台状态', loadPlatformStatus),
-        safeLoad('登录能力', loadPlatformLoginConfigs),
-        safeLoad('账号资源', loadAccountsPool),
-        safeLoad('登录会话', loadLoginSessions),
-        safeLoad('代理资源', loadProxyPool),
-        safeLoad('AI 评估规则', loadAI),
-        safeLoad('AI 接入', loadAIProfiles),
-        safeLoad('邮件配置', loadEmail),
-        safeLoad('邮件模板', loadEmailTemplates),
         safeLoad('运行记录', loadRuns),
-        safeLoad('报告中心', loadReports),
-        safeLoad('系统诊断', loadDoctor)
-      ]);
+        safeLoad('报告中心', loadReports)
+      ];
+      addPermittedLoad(loads, '系统状态', 'system_diagnostics', loadSystemChecklist);
+      addPermittedLoad(loads, '登录能力', 'platform_accounts', loadPlatformLoginConfigs);
+      addPermittedLoad(loads, '账号资源', 'platform_accounts', loadAccountsPool);
+      addPermittedLoad(loads, '登录会话', 'platform_accounts', loadLoginSessions);
+      addPermittedLoad(loads, '代理资源', 'proxy_resources', loadProxyPool);
+      addPermittedLoad(loads, 'AI 评估规则', 'ai_rules', loadAI);
+      addPermittedLoad(loads, 'AI 接入', 'ai_access', loadAIProfiles);
+      addPermittedLoad(loads, '邮件配置', 'mail_config', loadEmail);
+      addPermittedLoad(loads, '邮件模板', 'mail_templates', loadEmailTemplates);
+      addPermittedLoad(loads, '运行策略', 'runtime_strategy', loadRuntimeSettings);
+      addPermittedLoad(loads, '系统诊断', 'system_diagnostics', loadDoctor);
+      await Promise.all(loads);
       await safeLoad('监控任务', loadJobs);
     }
     async function loadDashboard(){
@@ -1388,6 +1711,7 @@
     }
     function metricCard(label, value, note){ return `<div class="metric-card"><div class="metric-label">${esc(label)}</div><div class="metric-value">${esc(value)}</div><div class="metric-note">${note}</div></div>`; }
     async function loadSystemChecklist(){
+      if(!canMenu('system_diagnostics')) return;
       const data=await (await api('/system-checklist')).json();
       const items=data.items||[];
       const mount=document.getElementById('ops_checklist');
@@ -1465,7 +1789,18 @@
       if(btn) btn.click();
     }
     async function loadPlatformStatus(){ const data=await (await api('/platform-status')).json(); const html=platformStatusTable(data.platforms); document.getElementById('platform_status_table').innerHTML=html; }
-    async function loadPlatformLoginConfigs(){ const data=await (await api('/platform-login-configs')).json(); platformLoginConfigCache=data.configs||[]; renderLoginModePanel(); }
+    async function loadPlatformLoginConfigs(){
+      if(!canMenu('platform_accounts')) return;
+      const [configData, capabilityData]=await Promise.all([
+        (await api('/platform-login-configs')).json(),
+        (await api('/platform-login-capabilities')).json()
+      ]);
+      const data=configData||{};
+      platformLoginConfigCache=data.configs||[];
+      platformLoginCapabilityCache=(capabilityData&&capabilityData.capabilities)||[];
+      updateJobBrowserModeOptions();
+      renderLoginModePanel();
+    }
     async function loadSchedulerStatus(){
       const data=await (await api('/scheduler-status')).json();
       runningJobIds.clear();
@@ -1497,6 +1832,10 @@
       renderLoginModePanel();
     }
     async function openPlatformLoginBrowser(platform, accountId=null){
+      if(!localLoginWindowAllowed(platform)){
+        toast('生产模式已关闭本地登录窗口，请使用网页二维码完成登录');
+        return;
+      }
       const body=accountId ? JSON.stringify({account_id:accountId}) : JSON.stringify({});
       const res=await api('/platform-status/'+platform+'/login-browser',{method:'POST',body});
       if(!res.ok){ toast(await err(res)); return; }
@@ -1520,7 +1859,6 @@
         platform,
         name:val('social_account_name'),
         proxy_id:val('social_account_proxy_id'),
-        profile_path:val('social_account_profile_path'),
         notes:val('social_account_notes')
       };
       const res=await api('/login-sessions',{method:'POST',body:JSON.stringify(payload)});
@@ -1528,7 +1866,6 @@
       const data=await res.json();
       if(data.account_status && data.account_status.id){
         set('social_account_id', data.account_status.id);
-        set('social_account_profile_path', data.account_status.profile_path || '');
         socialAccountCache.set(Number(data.account_status.id), data.account_status);
       }
       renderLoginSessionResult(data.session, data.capabilities);
@@ -1546,9 +1883,10 @@
       renderLoginSessionResult(data.session, data.capabilities);
       await loadLoginSessions(Number(account.id));
       pollLoginSession(Number(data.session.id));
-      toast(data.session.status === 'waiting_verification' ? '平台要求先完成验证，请按文字提示处理' : (data.session.qr_image ? '二维码已生成，系统正在自动确认登录结果' : '二维码未生成，请查看文字提示或使用网页登录窗口处理'));
+      toast(normalizeLoginSessionStatus(data.session.status) === 'needs_verification' ? '平台要求先完成验证，请按文字提示处理' : (data.session.qr_image ? '二维码已生成，系统正在自动确认登录结果' : '二维码未生成，请查看文字提示或使用网页登录窗口处理'));
     }
     async function loadLoginSessions(accountId=null){
+      if(!canMenu('platform_accounts')) return;
       const target=document.getElementById('current_account_login_sessions');
       if(!target) return;
       const currentId=Number(accountId || val('social_account_id') || 0);
@@ -1567,6 +1905,10 @@
       ) : '<div class="empty">当前账号还没有登录记录。</div>';
     }
     async function openLoginSessionBrowser(sessionId, platform, accountId=null){
+      if(!localLoginWindowAllowed(platform)){
+        toast('生产模式已关闭本地登录窗口，请使用网页二维码完成登录');
+        return;
+      }
       await openPlatformLoginBrowser(platform, accountId || null);
       if(sessionId) await pollLoginSession(Number(sessionId));
     }
@@ -1584,7 +1926,7 @@
         syncAccountFromResponse(data.account_status);
         renderLoginSessionResult(data.session, data.capabilities, data.platform_status);
         await loadPlatformStatus();
-        return data.session.status === 'success' || data.session.status === 'failed' || data.session.status === 'expired';
+        return isLoginSessionTerminal(data.session.status);
       };
       if(await update()){
         activeLoginSessionId=null;
@@ -1614,51 +1956,58 @@
         if(badge) badge.textContent='未开始';
         return;
       }
+      const status=normalizeLoginSessionStatus(session.status);
       if(badge){
-        badge.textContent=loginSessionText(session.status);
-        badge.className='status ' + (session.status==='success'?'ok':(session.status==='failed'||session.status==='expired'?'bad':'warn'));
+        badge.textContent=loginSessionText(status);
+        badge.className='status ' + loginSessionStatusClass(status);
       }
       const verificationLabel=capabilities.verification_label || '平台验证';
       const verificationDetail=capabilities.verification_detail ? `<div class="small">页面提示：${esc(capabilities.verification_detail)}</div>` : '';
-      const status=String(session.status||'');
       const pending=isLoginSessionPending(status);
+      const localLoginAction=localLoginButton('打开登录窗口处理', session.id, session.platform, session.account_id || null);
       let actionBlock='';
       if(status==='success'){
         actionBlock=`<div class="notice ok">
           <strong>登录成功，账号已保存</strong>
           <div class="small">当前账号已经可以被任务绑定使用。你可以关闭窗口，或继续在基础资料中维护备注、代理等信息。</div>
         </div>`;
-      } else if(status==='expired'){
+      } else if(status==='timeout'){
         actionBlock=`<div class="notice warn">
           <strong>二维码已过期</strong>
           <div class="small">请点击“重新生成二维码”后再次扫码。</div>
         </div>`;
-      } else if(status==='failed'){
+      } else if(status==='platform_error'){
         actionBlock=`<div class="notice warn">
-          <strong>登录失败</strong>
-          <div class="small">请根据提示重新生成二维码；如平台要求人工验证，可打开登录窗口处理。</div>
+          <strong>平台登录状态异常</strong>
+          <div class="small">请根据提示重新生成二维码；如平台要求人工验证，可按页面提示处理。</div>
         </div>`;
-      } else if(status==='waiting_verification'){
+      } else if(status==='needs_verification'){
         actionBlock=`<div class="notice warn">
           <strong>平台要求先完成${esc(verificationLabel)}</strong>
           <div class="small">请按照平台页面完成确认，完成后点击下方按钮继续确认。</div>
           ${verificationDetail}
           <div class="login-actions" style="margin-top:10px">
             <button class="secondary" onclick="pollLoginSession(${Number(session.id)})">我已处理，继续确认</button>
-            <button class="secondary" onclick="openLoginSessionBrowser(${Number(session.id)}, '${esc(session.platform)}', ${session.account_id ? Number(session.account_id) : 'null'})">打开登录窗口处理</button>
+            ${localLoginAction}
           </div>
         </div>`;
-      } else if(status==='waiting_qrcode' && capabilities.qr_image_supported && session.qr_image){
+      } else if(['waiting_qrcode','waiting_scan'].includes(status) && capabilities.qr_image_supported && session.qr_image){
         actionBlock=`<div style="text-align:center">
           <img alt="登录二维码" src="${esc(session.qr_image)}">
           <div class="small" style="margin-top:8px">请用 ${esc(formatPlatforms([session.platform]))} 手机端扫码。扫码后保持本窗口打开，系统会自动确认是否登录成功。</div>
         </div>`;
+      } else if(status==='waiting_confirm'){
+        actionBlock=`<div class="notice warn">
+          <strong>等待手机端确认</strong>
+          <div class="small">请在手机端完成登录确认。确认后系统会自动保存登录态。</div>
+        </div>`;
       } else {
+        const localFallback=localLoginButton('打开登录窗口', session.id, session.platform, session.account_id || null);
         actionBlock=`<div class="notice warn">
           <strong>当前没有拿到二维码</strong>
-          <div class="small">请根据文字提示处理；如果平台要求人工验证，可打开登录窗口完成。</div>
+          <div class="small">请根据文字提示重新生成二维码；如果平台要求人工验证，请按页面提示完成后继续确认。</div>
           <div class="login-actions" style="margin-top:10px">
-            <button class="secondary" onclick="openLoginSessionBrowser(${Number(session.id)}, '${esc(session.platform)}', ${session.account_id ? Number(session.account_id) : 'null'})">打开登录窗口</button>
+            ${localFallback}
             <button class="secondary" onclick="pollLoginSession(${Number(session.id)})">继续确认</button>
           </div>
         </div>`;
@@ -1672,7 +2021,7 @@
             <strong>${esc(formatPlatforms([session.platform]))} · ${esc(loginSessionText(status))}</strong>
             <div class="small">${esc(cleanCustomerText(session.message||''))}</div>
           </div>
-          <span class="status ${status==='success'?'ok':(status==='failed'||status==='expired'?'bad':'warn')}">${esc(loginSessionText(status))}</span>
+          <span class="status ${loginSessionStatusClass(status)}">${esc(loginSessionText(status))}</span>
         </div>
         ${loginFlowSteps(status)}
         ${pollingLine}
@@ -1701,7 +2050,6 @@
         name:val('social_account_name'),
         login_type:val('social_account_login_type') || 'qrcode',
         proxy_id:val('social_account_proxy_id'),
-        profile_path:val('social_account_profile_path') || (socialAccountCache.get(Number(accountId))||{}).profile_path || '',
         notes:val('social_account_notes'),
         status:'active'
       };
@@ -1718,6 +2066,7 @@
       await loadLoginSessions(Number(val('social_account_id')||0));
     }
     async function loadAccountsPool(){
+      if(!canMenu('platform_accounts')) return;
       const data=await (await api('/social-accounts')).json();
       const currentId=Number(val('social_account_id')||0);
       const currentDraft=currentId ? socialAccountCache.get(currentId) : null;
@@ -1732,6 +2081,11 @@
     function renderJobAccountOptions(accounts){
       const select=document.getElementById('job_account_id');
       if(!select) return;
+      if(!canMenu('platform_accounts')){
+        select.innerHTML='<option value="">自动选择可用账号</option>';
+        select.value='';
+        return;
+      }
       const current=select.value || '';
       const formal=(accounts||[]).filter(a=>!a.is_draft);
       select.innerHTML=['<option value="">自动选择可用账号</option>'].concat(formal.map(a=>`<option value="${esc(a.id)}">${esc(a.name)}（${esc(formatPlatforms([a.platform]))} / ${esc(poolStatusText(a.status))}）</option>`)).join('');
@@ -1866,7 +2220,7 @@
       if((account.login_type||'qrcode')==='cookie'){
         return account.has_cookies ? '<span class="status ok">Cookie 已配置</span>' : '<span class="status warn">Cookie 待填写</span>';
       }
-      return account.profile_path ? '<span class="status ok">网页登录态</span>' : '<span class="status warn">未登录</span>';
+      return accountProfileConfigured(account) ? '<span class="status ok">网页登录态</span>' : '<span class="status warn">未登录</span>';
     }
     function accountIdentityCell(account){
       const name=account.platform_account_name || '';
@@ -1906,7 +2260,7 @@
     function accountAvailability(account){
       const error=String(account.last_error||'');
       const lower=error.toLowerCase();
-      const hasLoginSource=(account.login_type||'qrcode')==='cookie' ? !!account.has_cookies : !!account.profile_path;
+      const hasLoginSource=(account.login_type||'qrcode')==='cookie' ? !!account.has_cookies : accountProfileConfigured(account);
       if(account.status==='disabled') return {key:'disabled', label:'停用', cls:'bad', hint:'不会被采集任务使用'};
       if(error.includes('滑块') || error.includes('验证码') || error.includes('短信') || lower.includes('captcha') || lower.includes('verify')) return {key:'verification', label:'需要人工验证', cls:'warn', hint:'进入重新登录处理平台验证'};
       if(!hasLoginSource) return {key:'relogin', label:'需重新登录', cls:'warn', hint:'缺少可复用登录态'};
@@ -1964,7 +2318,6 @@
         login_type:loginType,
         status:val('social_account_status'),
         proxy_id:val('social_account_proxy_id'),
-        profile_path:val('social_account_profile_path'),
         notes:val('social_account_notes'),
         last_error:val('social_account_last_error'),
         ...overrides
@@ -1986,7 +2339,7 @@
       const loginType=a.login_type||'qrcode';
       if([...loginSelect.options].some(option=>option.value===loginType)) set('social_account_login_type', loginType);
       set('social_account_status', a.status||'standby');
-      set('social_account_proxy_id', a.proxy_id||''); set('social_account_profile_path', a.profile_path||''); set('social_account_notes', a.notes||''); set('social_account_last_error', a.last_error||'');
+      set('social_account_proxy_id', a.proxy_id||''); set('social_account_notes', a.notes||''); set('social_account_last_error', a.last_error||'');
       renderLoginModePanel();
       updateAccountDetailHeader(a);
       updateAccountModalActions(a);
@@ -2118,10 +2471,12 @@
         login_type:account.login_type || 'qrcode',
         status,
         proxy_id:account.proxy_id || null,
-        profile_path:account.profile_path || '',
         notes:account.notes || '',
         last_error:account.last_error || ''
       };
+    }
+    function accountProfileConfigured(account){
+      return !!(account && (account.profile_path_configured || account.profile_configured || account.profile_path));
     }
     async function openCurrentAccountLoginBrowser(){
       let account=socialAccountCache.get(Number(val('social_account_id')||0));
@@ -2129,11 +2484,19 @@
         toast('请先打开已有账号详情，或使用二维码登录完成后自动保存');
         return;
       }
+      if(!localLoginWindowAllowed(account.platform)){
+        toast('生产模式已关闭本地登录窗口，请使用网页二维码完成登录');
+        return;
+      }
       await openPlatformLoginBrowser(account.platform, Number(account.id));
     }
     async function openAccountLoginBrowser(id){
       const account=socialAccountCache.get(Number(id));
       if(!account){ toast('账号池已刷新，请重新选择'); loadAccountsPool(); return; }
+      if(!localLoginWindowAllowed(account.platform)){
+        toast('生产模式已关闭本地登录窗口，请使用网页二维码完成登录');
+        return;
+      }
       editSocialAccount(id, true);
       await openPlatformLoginBrowser(account.platform, Number(account.id));
     }
@@ -2229,6 +2592,35 @@
     function platformLoginConfig(platform){
       return (platformLoginConfigCache||[]).find(item=>item.platform===platform) || {};
     }
+    function platformLoginCapability(platform){
+      return (platformLoginCapabilityCache||[]).find(item=>item.platform===platform) || {};
+    }
+    function localLoginWindowAllowed(platform=''){
+      const caps=platform ? platformLoginCapability(platform) : {};
+      if(caps && Object.prototype.hasOwnProperty.call(caps,'local_login_window_allowed')){
+        return !!caps.local_login_window_allowed;
+      }
+      if((platformLoginCapabilityCache||[]).length){
+        return platformLoginCapabilityCache.some(item=>item.local_login_window_allowed !== false);
+      }
+      return true;
+    }
+    function localLoginButton(label, sessionId, platform, accountId=null){
+      if(!localLoginWindowAllowed(platform)) return '';
+      return `<button class="secondary" onclick="openLoginSessionBrowser(${Number(sessionId)}, '${esc(platform)}', ${accountId ? Number(accountId) : 'null'})">${esc(label)}</button>`;
+    }
+    function updateJobBrowserModeOptions(){
+      const select=document.getElementById('job_browser_mode');
+      if(!select) return;
+      const current=select.value || 'server_qrcode';
+      const allowLocal=localLoginWindowAllowed();
+      select.innerHTML=[
+        '<option value="server_qrcode">网页登录态 / 扫码</option>',
+        '<option value="profile">已有网页登录态</option>',
+        allowLocal ? '<option value="local_window">本地登录窗口</option>' : ''
+      ].join('');
+      select.value=(current==='local_window' && !allowLocal) ? 'server_qrcode' : current;
+    }
     function supportedSocialLoginTypes(platform){
       const cfg=platformLoginConfig(platform);
       const types=(cfg.supported_login_types || ['qrcode','cookie']).filter(t=>['qrcode','cookie'].includes(t));
@@ -2282,7 +2674,8 @@
       const capabilityHint=document.getElementById('login_capability_hint');
       if(capabilityHint){
         const supported=(cfg.supported_login_types||['qrcode','cookie']).filter(t=>['qrcode','cookie'].includes(t)).map(loginTypeLabel).join(' / ') || '扫码登录 / Cookie';
-        capabilityHint.textContent=`当前账号可使用：${supported}。登录过程中如平台需要额外确认，请按页面提示完成后继续确认。`;
+        const localWindowText=localLoginWindowAllowed(platform) ? '开发环境可打开本地登录窗口辅助处理。' : '生产模式不显示本地登录窗口入口。';
+        capabilityHint.textContent=`当前账号可使用：${supported}。网页登录二维码是主流程；如平台需要额外确认，请按页面提示完成后继续确认。${localWindowText}`;
       }
       renderSocialLoginMethodOptions(loginType, platform);
       ['qrcode','cookie'].forEach(type=>{
@@ -2296,7 +2689,9 @@
       const badge=document.getElementById('login_status_badge');
       const account=socialAccountCache.get(Number(val('social_account_id')||0));
       const qrButton=document.getElementById('account_qrcode_button');
+      const localButton=document.getElementById('account_local_login_button');
       if(qrButton) qrButton.textContent = account ? '重新生成二维码' : '生成二维码并登录';
+      if(localButton) localButton.style.display = localLoginWindowAllowed(platform) ? 'inline-flex' : 'none';
       if(badge){
         if(loginType==='qrcode'){
           badge.textContent = account ? poolStatusText(account.status) : '未保存';
@@ -2339,7 +2734,7 @@
     }
     function resetSocialAccountForm(){
       stopLoginSessionPolling({closeRemote:true});
-      ['social_account_id','social_account_name','social_account_proxy_id','social_account_profile_path','social_account_notes','social_account_last_error'].forEach(id=>set(id,''));
+      ['social_account_id','social_account_name','social_account_proxy_id','social_account_notes','social_account_last_error'].forEach(id=>set(id,''));
       set('social_account_cookie_input','');
       const clearCookie=document.getElementById('social_account_clear_cookie');
       if(clearCookie) clearCookie.checked=false;
@@ -2363,13 +2758,46 @@
       renderLoginModePanel();
     }
     async function loadProxyPool(){
+      if(!canMenu('proxy_resources')) return;
       const data=await (await api('/proxies')).json();
       proxyProfileCache.clear();
       (data.proxies||[]).forEach(p=>proxyProfileCache.set(Number(p.id), p));
       renderProxySelectOptions();
-      document.getElementById('proxy_profiles_table').innerHTML = (data.proxies||[]).length ? table(
+      renderProxyResourceSummary(data.proxies||[]);
+      renderProxyProfilesTable();
+    }
+    function renderProxyResourceSummary(proxies){
+      const total=(proxies||[]).length;
+      const active=(proxies||[]).filter(p=>p.status==='active').length;
+      const limited=(proxies||[]).filter(p=>p.status==='limited').length;
+      const concurrency=(proxies||[]).reduce((sum,p)=>sum+Number(p.max_concurrency||0),0);
+      const target=document.getElementById('proxy_resource_summary');
+      if(target){
+        target.innerHTML=[
+          resourceStat('代理总数', total || '0'),
+          resourceStat('可用代理', active || '0'),
+          resourceStat('受限代理', limited || '0'),
+          resourceStat('并发容量', concurrency || '0')
+        ].join('');
+      }
+      const count=document.getElementById('proxy_resource_count');
+      if(count) count.textContent=`共 ${total} 个代理资源`;
+    }
+    function filteredProxyProfiles(){
+      const query=(val('proxy_search')||'').trim().toLowerCase();
+      const status=val('proxy_status_filter');
+      return [...proxyProfileCache.values()].filter(p=>{
+        if(status && p.status!==status) return false;
+        const haystack=[p.name,p.provider,p.proxy_url,p.notes,p.last_error].join(' ').toLowerCase();
+        if(query && !haystack.includes(query)) return false;
+        return true;
+      });
+    }
+    function renderProxyProfilesTable(){
+      const proxies=filteredProxyProfiles();
+      document.getElementById('proxy_profiles_table').innerHTML = proxies.length ? table(
         ['ID','名称','供应商','代理','状态','并发','备注/错误','更新时间','操作'],
-        data.proxies.map(p=>[
+        proxies.map(p=>[
           p.id,
           esc(p.name),
           esc(p.provider||'manual'),
@@ -2385,6 +2813,7 @@
         ])
       ) : '<div class="empty">还没有代理。首版可先不使用代理；需要指定线路时，先新增代理再绑定到账号。</div>';
     }
+    function clearProxyFilters(){ ['proxy_search','proxy_status_filter'].forEach(id=>set(id,'')); renderProxyProfilesTable(); }
     function renderProxySelectOptions(){
       const proxies=[...proxyProfileCache.values()];
       const options=['<option value="">不绑定代理</option>'].concat(proxies.map(p=>{
@@ -2395,6 +2824,11 @@
       ['social_account_proxy_id','job_proxy_id'].forEach(id=>{
         const select=document.getElementById(id);
         if(!select) return;
+        if(id==='job_proxy_id' && !canMenu('proxy_resources')){
+          select.innerHTML='<option value="">跟随账号设置</option>';
+          select.value='';
+          return;
+        }
         const current=select.value || '';
         select.innerHTML=options.join('');
         if(current && proxies.some(p=>String(p.id)===String(current))) select.value=current;
@@ -2554,6 +2988,7 @@
       set('job_start_page', j.start_page || '1');
       set('job_output_mode', j.output_mode || 'internal');
       set('job_browser_mode', j.browser_mode || 'server_qrcode');
+      applyJobFormRoleMode();
       openJobDrawer('编辑任务');
     }
     async function runJob(id){
@@ -2592,6 +3027,7 @@
     }
     function openJobDrawer(title='新建任务'){
       document.getElementById('job_drawer_title').textContent=title;
+      applyJobFormRoleMode();
       document.getElementById('job_drawer_backdrop').classList.add('active');
       document.getElementById('job_drawer').classList.add('active');
       document.body.style.overflow='hidden';
@@ -2620,7 +3056,7 @@
           : `当前任务使用“${labels[targetType]||targetType}”。请确认平台搜索词区域填写的是平台可识别的内容 ID 或主页 ID。`;
       }
     }
-    function resetJobForm(){ ['job_id','law_firm_name','aliases','exclude_words','keywords','recipients','custom_start','custom_end','cron_expr'].forEach(id=>set(id,'')); set('time_window_type','recent_1d'); set('frequency','daily'); set('email_time','09:00'); document.querySelectorAll('input[name=platform]').forEach(x=>x.checked=x.value==='dy'); document.getElementById('enabled').checked=true; document.getElementById('enable_comments').checked=true; set('job_ai_profile_id',''); set('job_email_template_id',''); set('job_account_id',''); set('job_proxy_id',''); setJobTargetType('search'); set('job_max_pages','1'); set('job_max_items','50'); set('job_start_page','1'); set('job_output_mode','internal'); set('job_browser_mode','server_qrcode'); document.getElementById('enable_sub_comments').checked=false; document.getElementById('job_drawer_title').textContent='新建任务'; }
+    function resetJobForm(){ ['job_id','law_firm_name','aliases','exclude_words','keywords','recipients','custom_start','custom_end','cron_expr'].forEach(id=>set(id,'')); set('time_window_type','recent_1d'); set('frequency','daily'); set('email_time','09:00'); document.querySelectorAll('input[name=platform]').forEach(x=>x.checked=x.value==='dy'); document.getElementById('enabled').checked=true; document.getElementById('enable_comments').checked=true; set('job_ai_profile_id',''); set('job_email_template_id',''); set('job_account_id',''); set('job_proxy_id',''); setJobTargetType('search'); set('job_max_pages','1'); set('job_max_items','50'); set('job_start_page','1'); set('job_output_mode','internal'); set('job_browser_mode','server_qrcode'); document.getElementById('enable_sub_comments').checked=false; document.getElementById('job_drawer_title').textContent='新建任务'; applyJobFormRoleMode(); }
     function fillSampleJobTemplate(){
       set('job_id',''); set('law_firm_name','海安律所'); set('aliases','海安律师事务所\n海安律师'); set('exclude_words','招聘\n无关同名\n广告合作');
       set('keywords','海安律所避雷\n海安律所退费\n海安律所投诉');
@@ -2643,6 +3079,7 @@
     ];
     function aiPayload(){ syncAIPromptFromRules(); return {provider:val('ai_provider')||'openai',base_url:val('ai_base_url'),api_key:'',model:val('ai_model'),temperature:Number(val('ai_temperature')||0),prompt:val('ai_prompt')}; }
     async function loadAI(){
+      if(!canMenu('ai_rules')) return;
       const res=await api('/ai-evaluation-config');
       if(!res.ok) throw new Error(await err(res));
       const data=await res.json();
@@ -2904,13 +3341,49 @@
       await Promise.all([loadAIRuleProfiles(), loadReadiness()]);
     }
     async function loadAIProfiles(){
+      if(!canMenu('ai_access')) return;
       const data=await (await api('/ai-profiles')).json();
       aiProfileCache.clear();
       (data.profiles||[]).forEach(p=>aiProfileCache.set(Number(p.id), p));
       renderJobAIProfileOptions();
+      renderAIResourceSummary(data.profiles||[]);
+      renderAIProfilesTable();
+    }
+    function renderAIResourceSummary(profiles){
+      const total=(profiles||[]).length;
+      const active=(profiles||[]).filter(p=>p.is_active).length;
+      const passed=(profiles||[]).filter(p=>p.last_test_status==='success').length;
+      const failed=(profiles||[]).filter(p=>p.last_test_status==='failed').length;
+      const target=document.getElementById('ai_resource_summary');
+      if(target){
+        target.innerHTML=[
+          resourceStat('接入总数', total || '0'),
+          resourceStat('默认接入', active ? '已设置' : '未设置'),
+          resourceStat('最近通过', passed || '0'),
+          resourceStat('最近失败', failed || '0')
+        ].join('');
+      }
+      const count=document.getElementById('ai_resource_count');
+      if(count) count.textContent=`共 ${total} 个 AI 接入资源`;
+    }
+    function filteredAIProfiles(){
+      const query=(val('ai_profile_search')||'').trim().toLowerCase();
+      const provider=val('ai_profile_provider_filter');
+      const test=val('ai_profile_test_filter');
+      return [...aiProfileCache.values()].filter(p=>{
+        if(provider && p.provider!==provider) return false;
+        const status=p.last_test_status||'untested';
+        if(test && status!==test) return false;
+        const haystack=[p.name,p.model,p.base_url,p.provider].join(' ').toLowerCase();
+        if(query && !haystack.includes(query)) return false;
+        return true;
+      });
+    }
+    function renderAIProfilesTable(){
+      const profiles=filteredAIProfiles();
       document.getElementById('ai_profiles_table').innerHTML = table(
         ['ID','名称','接口协议','模型','Base URL','Key','状态','测试','操作'],
-        (data.profiles||[]).map(p=>[
+        profiles.map(p=>[
           p.id,
           esc(p.name),
           esc(providerLabel(p.provider)),
@@ -2927,13 +3400,19 @@
           ].join(' ')}</div>`
         ])
       );
-      if(!(data.profiles||[]).length){
+      if(!profiles.length){
         document.getElementById('ai_profiles_table').innerHTML = '<div class="empty">还没有 AI 接入资源。采集仍可运行，线索会进入待人工复核；需要自动初筛时再新增模型连接。</div>';
       }
     }
+    function clearAIProfileFilters(){ ['ai_profile_search','ai_profile_provider_filter','ai_profile_test_filter'].forEach(id=>set(id,'')); renderAIProfilesTable(); }
     function renderJobAIProfileOptions(){
       const select=document.getElementById('job_ai_profile_id');
       if(!select) return;
+      if(!canMenu('ai_access')){
+        select.innerHTML='<option value="">使用默认 AI 接入</option>';
+        select.value='';
+        return;
+      }
       const current=select.value || '';
       const profiles=[...aiProfileCache.values()];
       select.innerHTML=['<option value="">使用默认 AI 接入</option>'].concat(profiles.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}${p.is_active?'（默认）':''}</option>`)).join('');
@@ -3165,6 +3644,7 @@
     }
 
     async function loadEmail(){
+      if(!canMenu('mail_config')) return;
       const c=(await (await api('/email-config')).json()).config;
       ['smtp_host','smtp_port','encryption','sender'].forEach(id=>set(id,c[id]||''));
       set('smtp_username',c.username||'');
@@ -3178,22 +3658,134 @@
       if(senderSummary) senderSummary.textContent = c.sender || c.username || '-';
       const recipientSummary=document.getElementById('email_recipient_summary');
       if(recipientSummary) recipientSummary.textContent = `${(c.default_recipients||[]).length} 个`;
+      const subjectSummary=document.getElementById('email_subject_summary');
+      if(subjectSummary) subjectSummary.textContent = c.subject_template || '-';
     }
-    async function saveEmail(){ const payload={smtp_host:val('smtp_host'),smtp_port:Number(val('smtp_port')||465),encryption:val('encryption'),sender:val('sender'),username:val('smtp_username'),password:val('smtp_password'),subject_template:val('subject_template'),default_recipients:lines('default_recipients')}; const res=await api('/email-config',{method:'PUT',body:JSON.stringify(payload)}); if(res.ok){ const data=await res.json(); toast(data.config.last_test_status==='success'?'邮件配置已保存，测试状态仍有效':'邮件配置已保存，需重新测试'); } else toast(await err(res)); set('smtp_password',''); await loadEmail(); await loadReadiness(); }
-    async function testEmail(){ const payload={smtp_host:val('smtp_host'),smtp_port:Number(val('smtp_port')||465),encryption:val('encryption'),sender:val('sender'),username:val('smtp_username'),password:val('smtp_password'),subject_template:val('subject_template'),default_recipients:lines('default_recipients')}; const res=await api('/email-config/test',{method:'POST',body:JSON.stringify(payload)}); toast(res.ok?'测试邮件已发送并记录通过':await err(res)); set('smtp_password',''); await loadEmail(); await loadReadiness(); }
+    async function saveEmail(){
+      const payload=emailConfigPayload();
+      const res=await api('/email-config',{method:'PUT',body:JSON.stringify(payload)});
+      if(res.ok){
+        const data=await res.json();
+        toast(data.config.last_test_status==='success'?'邮件配置已保存，测试状态仍有效':'邮件配置已保存，需重新测试');
+        closeMailConfigModal();
+      } else toast(await err(res));
+      set('smtp_password','');
+      await loadEmail();
+      await loadReadiness();
+    }
+    async function testEmail(){
+      const payload=emailConfigPayload();
+      const btn=document.getElementById('mail_test_start_btn');
+      const consoleBox=document.getElementById('mail_test_console');
+      if(btn){ btn.disabled=true; btn.textContent='测试中...'; }
+      if(consoleBox){
+        consoleBox.textContent=[
+          '开始测试邮件配置',
+          'SMTP：' + (payload.smtp_host || '-'),
+          '发件人：' + (payload.sender || payload.username || '-'),
+          '默认收件人：' + (payload.default_recipients||[]).length + ' 个',
+          '',
+          '正在发送测试邮件...'
+        ].join('\n');
+      }
+      const res=await api('/email-config/test',{method:'POST',body:JSON.stringify(payload)});
+      if(res.ok){
+        if(consoleBox) consoleBox.textContent='测试邮件已发送并记录通过。\n\n后续报告发送会继续使用当前邮件配置。';
+        toast('测试邮件已发送并记录通过');
+      } else {
+        const message=cleanCustomerText(await err(res));
+        if(consoleBox) consoleBox.textContent='测试邮件发送失败。\n\n' + message;
+        toast(message);
+      }
+      if(btn){ btn.disabled=false; btn.textContent='重新测试'; }
+      set('smtp_password','');
+      await loadEmail();
+      await loadReadiness();
+    }
+    function emailConfigPayload(){
+      return {
+        smtp_host:val('smtp_host'),
+        smtp_port:Number(val('smtp_port')||465),
+        encryption:val('encryption'),
+        sender:val('sender'),
+        username:val('smtp_username'),
+        password:val('smtp_password'),
+        subject_template:val('subject_template'),
+        default_recipients:lines('default_recipients')
+      };
+    }
+    function openMailConfigModal(){
+      document.getElementById('mail_config_backdrop').classList.add('active');
+      document.getElementById('mail_config_modal').classList.add('active');
+      document.body.style.overflow='hidden';
+    }
+    function closeMailConfigModal(){
+      document.getElementById('mail_config_backdrop').classList.remove('active');
+      document.getElementById('mail_config_modal').classList.remove('active');
+      document.body.style.overflow='';
+    }
+    function openMailTestModal(){
+      const consoleBox=document.getElementById('mail_test_console');
+      if(consoleBox) consoleBox.textContent='点击“开始测试”后，系统会尝试发送一封测试邮件并记录结果。';
+      const btn=document.getElementById('mail_test_start_btn');
+      if(btn){ btn.disabled=false; btn.textContent='开始测试'; }
+      document.getElementById('mail_test_backdrop').classList.add('active');
+      document.getElementById('mail_test_modal').classList.add('active');
+      document.body.style.overflow='hidden';
+    }
+    function closeMailTestModal(){
+      document.getElementById('mail_test_backdrop').classList.remove('active');
+      document.getElementById('mail_test_modal').classList.remove('active');
+      document.body.style.overflow='';
+    }
     async function loadEmailTemplates(){
+      if(!canMenu('mail_templates')) return;
       const data=await (await api('/email-templates')).json();
       emailTemplateCache.clear();
       (data.templates||[]).forEach(t=>emailTemplateCache.set(Number(t.id), t));
       renderJobEmailTemplateOptions();
+      renderEmailTemplateResourceSummary(data.templates||[]);
       const summary=document.getElementById('email_template_summary');
       if(summary){
         const active=(data.templates||[]).find(t=>t.is_active);
         summary.textContent=`共 ${(data.templates||[]).length} 个模板${active ? '，当前使用：' + active.name : ''}`;
       }
-      document.getElementById('email_templates_table').innerHTML = (data.templates||[]).length ? table(
+      renderEmailTemplatesTable();
+      if(!val('email_template_id') && data.active){
+        loadEmailTemplateIntoForm(Number(data.active.id));
+      }
+      await previewEmailTemplate(false);
+    }
+    function renderEmailTemplateResourceSummary(templates){
+      const total=(templates||[]).length;
+      const active=(templates||[]).find(t=>t.is_active);
+      const withHtml=(templates||[]).filter(t=>String(t.html_template||'').trim()).length;
+      const target=document.getElementById('email_template_resource_summary');
+      if(target){
+        target.innerHTML=[
+          resourceStat('模板总数', total || '0'),
+          resourceStat('当前模板', active ? active.name : '未设置'),
+          resourceStat('已填 HTML', withHtml || '0'),
+          resourceStat('变量预览', '可用')
+        ].join('');
+      }
+    }
+    function filteredEmailTemplates(){
+      const query=(val('email_template_search')||'').trim().toLowerCase();
+      const status=val('email_template_status_filter');
+      return [...emailTemplateCache.values()].filter(t=>{
+        if(status==='active' && !t.is_active) return false;
+        if(status==='standby' && t.is_active) return false;
+        const haystack=[t.name,t.subject_template,t.html_template].join(' ').toLowerCase();
+        if(query && !haystack.includes(query)) return false;
+        return true;
+      });
+    }
+    function renderEmailTemplatesTable(){
+      const templates=filteredEmailTemplates();
+      document.getElementById('email_templates_table').innerHTML = templates.length ? table(
         ['ID','模板名称','标题模板','状态','更新时间','操作'],
-        data.templates.map(t=>[
+        templates.map(t=>[
           t.id,
           esc(t.name),
           `<span class="code">${esc(t.subject_template||'')}</span>`,
@@ -3205,18 +3797,80 @@
           ].join(' ')}</div>`
         ])
       ) : '<div class="empty">还没有 HTML 邮件模板。系统会先使用默认报告 HTML。</div>';
-      if(!val('email_template_id') && data.active){
-        loadEmailTemplateIntoForm(Number(data.active.id));
-      }
-      await previewEmailTemplate(false);
     }
+    function clearEmailTemplateFilters(){ ['email_template_search','email_template_status_filter'].forEach(id=>set(id,'')); renderEmailTemplatesTable(); }
     function renderJobEmailTemplateOptions(){
       const select=document.getElementById('job_email_template_id');
       if(!select) return;
+      if(!canMenu('mail_templates')){
+        select.innerHTML='<option value="">使用当前默认</option>';
+        select.value='';
+        return;
+      }
       const current=select.value || '';
       const templates=[...emailTemplateCache.values()];
       select.innerHTML=['<option value="">使用当前默认</option>'].concat(templates.map(t=>`<option value="${esc(t.id)}">${esc(t.name)}${t.is_active?'（当前）':''}</option>`)).join('');
       if(current && templates.some(t=>String(t.id)===String(current))) select.value=current;
+    }
+    async function loadRuntimeSettings(){
+      if(!canMenu('runtime_strategy')) return;
+      const data=await (await api('/runtime-settings')).json();
+      runtimeSettingsCache=data.settings||{};
+      renderRuntimeSettings(runtimeSettingsCache);
+    }
+    function renderRuntimeSettings(settings){
+      const mount=document.getElementById('runtime_settings_table');
+      if(!mount) return;
+      const groups=['Crawling','Login','Scheduler','Retention'];
+      const groupLabels={Crawling:'采集',Login:'登录',Scheduler:'调度',Retention:'保留周期'};
+      mount.innerHTML=groups.map(group=>{
+        const items=Object.values(settings||{}).filter(item=>item.group===group);
+        if(!items.length) return '';
+        const rows=items.map(item=>runtimeSettingRow(item));
+        return `<div class="settings-card" style="margin-bottom:14px">
+          <h3>${esc(groupLabels[group]||group)}</h3>
+          ${table(['设置','当前值','调整','范围','生效','锁定'], rows)}
+        </div>`;
+      }).join('');
+    }
+    function runtimeSettingRow(item){
+      const disabled=item.is_locked ? ' disabled' : '';
+      const value=item.value_type==='boolean' ? String(!!item.value) : String(item.value ?? '');
+      const input=item.value_type==='boolean'
+        ? `<select data-runtime-key="${esc(item.key)}"${disabled}><option value="false"${value==='false'?' selected':''}>否</option><option value="true"${value==='true'?' selected':''}>是</option></select>`
+        : `<input data-runtime-key="${esc(item.key)}" type="number" min="${esc(item.minimum)}" max="${esc(item.maximum)}" value="${esc(value)}"${disabled}>`;
+      const lock=item.is_locked ? '<span class="status warn">部署锁定</span>' : '<span class="status ok">可编辑</span>';
+      return [
+        `<strong>${esc(item.label)}</strong><div class="small">${esc(item.key)}</div>`,
+        `<span class="code">${esc(value)}</span><div class="small">${esc(item.source||'default')}</div>`,
+        input,
+        esc(item.range||'-'),
+        esc(runtimeApplyScopeLabel(item.apply_scope)),
+        `${lock}${item.lock_reason?'<div class="small">'+esc(item.lock_reason)+'</div>':''}`
+      ];
+    }
+    function runtimeApplyScopeLabel(scope){
+      return {
+        'immediate':'立即生效',
+        'next run':'下次运行',
+        'next session':'下次登录会话',
+        'scheduler reload or restart':'调度重载或重启',
+        'cleanup job':'清理任务'
+      }[scope] || scope || '-';
+    }
+    async function saveRuntimeSettings(){
+      const payload={};
+      document.querySelectorAll('[data-runtime-key]').forEach(input=>{
+        if(input.disabled) return;
+        payload[input.dataset.runtimeKey]=input.value;
+      });
+      const res=await api('/runtime-settings',{method:'PUT',body:JSON.stringify(payload)});
+      if(!res.ok){ toast(await err(res)); return; }
+      const data=await res.json();
+      runtimeSettingsCache=data.settings||{};
+      renderRuntimeSettings(runtimeSettingsCache);
+      toast('运行策略已保存');
+      await Promise.all([loadDashboard(), loadSchedulerStatus()]);
     }
     async function saveEmailTemplate(){
       const id=val('email_template_id');
@@ -3452,6 +4106,7 @@
     }
     async function resendReportEmail(id){ const res=await api('/reports/'+id+'/resend-email',{method:'POST'}); if(!res.ok){toast(await err(res));return;} const data=await res.json(); toast(data.ok?'报告邮件已重新发送':'重发失败：'+(data.error||'请检查邮件配置')); loadReports(); }
     async function loadDoctor(){
+      if(!canMenu('system_diagnostics')) return;
       const data=await (await api('/doctor')).json();
       document.getElementById('doctor_summary').innerHTML = data.ok
         ? '<div class="notice ok">基础配置检查已通过。</div>'
@@ -3517,6 +4172,7 @@
       const minWidth=Math.max(920, (headers||[]).length * 112);
       return `<div class="table-wrap"><table style="min-width:${minWidth}px"><thead><tr>${headers.map(h=>`<th class="${h==='操作'?'col-actions':''}">${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map((c,i)=>`<td class="${headers[i]==='操作'?'col-actions':''}">${c??''}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
     }
+    function resourceStat(label, value){ return `<div class="resource-stat"><strong>${esc(label)}</strong><span>${esc(value)}</span></div>`; }
     function formatPlatforms(platforms){ const labels={dy:'抖音',ks:'快手',xhs:'小红书'}; return (platforms||[]).map(p=>labels[p]||p).join(' / '); }
     function formatPlatformCounts(counts){ const items=Object.entries(counts||{}).map(([p,n])=>`${formatPlatforms([p])} ${n}`); return items.length?items.join(' / '):'暂无'; }
     function formatFrequency(job){ const anchor=job.email_time||'09:00'; const labels={daily:`每天 ${anchor}`,'12h':`每 12 小时，起点 ${anchor}`,'6h':`每 6 小时，起点 ${anchor}`,cron:`cron ${job.cron_expr||''}`}; return labels[job.frequency] || job.frequency || ''; }
@@ -3542,18 +4198,26 @@
     function loginTypeLabel(loginType){ return {qrcode:'扫码登录',cookie:'Cookie'}[loginType]||loginType||'-'; }
     function poolStatusText(status){ return {active:'可用',standby:'待机',limited:'受限',disabled:'停用'}[status]||status||'-'; }
     function poolStatusBadge(status){ const labels={active:'可用',standby:'待机',limited:'受限',disabled:'停用'}; const cls=status==='active'?'ok':(status==='limited'?'warn':(status==='disabled'?'bad':'')); return `<span class="status ${cls}">${esc(labels[status]||status||'-')}</span>`; }
-    function isLoginSessionPending(status){ return ['waiting_qrcode','waiting_verification','waiting_manual_browser','scanned'].includes(status); }
+    function normalizeLoginSessionStatus(status){
+      const aliases={waiting_verification:'needs_verification',waiting_manual_browser:'qrcode_failed',scanned:'waiting_confirm',expired:'timeout',failed:'platform_error'};
+      const value=String(status||'');
+      return aliases[value] || value || 'preparing';
+    }
+    function isLoginSessionPending(status){ return ['preparing','waiting_qrcode','waiting_scan','waiting_confirm','needs_verification'].includes(normalizeLoginSessionStatus(status)); }
+    function isLoginSessionTerminal(status){ return ['success','qrcode_failed','timeout','platform_error'].includes(normalizeLoginSessionStatus(status)); }
+    function loginSessionStatusClass(status){ const value=normalizeLoginSessionStatus(status); return value==='success'?'ok':(isLoginSessionTerminal(value)?'bad':'warn'); }
     function loginFlowSteps(status){
+      status=normalizeLoginSessionStatus(status);
       const steps=[
-        {label:'生成二维码', note:'创建账号登录会话', done:['waiting_qrcode','scanned','waiting_verification','success'].includes(status), active:status==='waiting_manual_browser'},
-        {label:'手机扫码确认', note:'等待平台返回结果', done:status==='success', active:['waiting_qrcode','scanned','waiting_verification'].includes(status)},
+        {label:'生成二维码', note:'创建账号登录会话', done:['waiting_qrcode','waiting_scan','waiting_confirm','needs_verification','success'].includes(status), active:status==='preparing'},
+        {label:'手机扫码确认', note:'等待平台返回结果', done:['waiting_confirm','success'].includes(status), active:['waiting_qrcode','waiting_scan','needs_verification'].includes(status)},
         {label:'保存登录态', note:'账号可被任务复用', done:status==='success', active:status==='success'}
       ];
-      if(status==='failed' || status==='expired') steps.forEach(step=>{ step.active=false; step.done=false; });
+      if(['qrcode_failed','timeout','platform_error'].includes(status)) steps.forEach(step=>{ step.active=false; step.done=false; });
       return `<div class="login-stepper">${steps.map((step,index)=>`<div class="login-step ${step.done?'done':(step.active?'active':'')}"><strong>${index+1}. ${esc(step.label)}</strong><span>${esc(step.note)}</span></div>`).join('')}</div>`;
     }
-    function loginSessionText(status){ return {waiting_qrcode:'等待扫码',waiting_verification:'等待验证',waiting_manual_browser:'等待登录窗口',scanned:'已扫码',success:'登录成功',expired:'已过期',failed:'失败'}[status]||status||'-'; }
-    function loginSessionBadge(status){ const cls=status==='success'?'ok':(status==='failed'||status==='expired'?'bad':'warn'); return `<span class="status ${cls}">${esc(loginSessionText(status))}</span>`; }
+    function loginSessionText(status){ const value=normalizeLoginSessionStatus(status); return {preparing:'准备中',waiting_qrcode:'等待二维码',waiting_scan:'等待扫码',waiting_confirm:'等待确认',needs_verification:'等待验证',qrcode_failed:'二维码失败',success:'登录成功',timeout:'已超时',platform_error:'平台异常'}[value]||value||'-'; }
+    function loginSessionBadge(status){ return `<span class="status ${loginSessionStatusClass(status)}">${esc(loginSessionText(status))}</span>`; }
     function defaultEmailTemplateHtml(){ return `<div style="font-family:Arial,'Microsoft YaHei',sans-serif;background:#f4f6fa;padding:24px;color:#172033">
   <div style="max-width:760px;margin:0 auto;background:#fff;border:1px solid #dde3ec;border-radius:8px;overflow:hidden">
     <div style="padding:20px 24px;border-bottom:1px solid #dde3ec;background:#111827;color:#fff">
@@ -3579,6 +4243,7 @@
     function esc(s){ return String(s??'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
     async function err(res){ try { return (await res.json()).detail || res.statusText; } catch { return res.statusText; } }
     document.getElementById('save_job_btn').addEventListener('click', saveJob);
+    document.getElementById('login_form').addEventListener('submit', loginWithForm);
     document.getElementById('fill_sample_job_btn').addEventListener('click', fillSampleJobTemplate);
     document.getElementById('reset_job_btn').addEventListener('click', resetJobForm);
     document.getElementById('social_account_platform').addEventListener('change', updateSocialLoginTypeOptions);
@@ -3588,6 +4253,21 @@
       const el=document.getElementById(id);
       if(el) el.addEventListener('input', renderAccountList);
       if(el) el.addEventListener('change', renderAccountList);
+    });
+    ['proxy_search','proxy_status_filter'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el) el.addEventListener('input', renderProxyProfilesTable);
+      if(el) el.addEventListener('change', renderProxyProfilesTable);
+    });
+    ['ai_profile_search','ai_profile_provider_filter','ai_profile_test_filter'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el) el.addEventListener('input', renderAIProfilesTable);
+      if(el) el.addEventListener('change', renderAIProfilesTable);
+    });
+    ['email_template_search','email_template_status_filter'].forEach(id=>{
+      const el=document.getElementById(id);
+      if(el) el.addEventListener('input', renderEmailTemplatesTable);
+      if(el) el.addEventListener('change', renderEmailTemplatesTable);
     });
     ['email_template_subject','email_html_template','email_template_name'].forEach(id=>{
       const el=document.getElementById(id);
@@ -3622,7 +4302,7 @@
     resetAIProfileForm();
     resetSocialAccountForm();
     resetProxyForm();
-    loadAll();
+    bootApp();
 </script>
 </body>
 </html>

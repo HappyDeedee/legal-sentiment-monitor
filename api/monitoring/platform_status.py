@@ -70,6 +70,7 @@ def list_platform_status(project_root: Path | None = None, recent_runs: list[dic
                 "unsupported_reason": customer_safe_text(login_config.get("unsupported_reason") or ""),
                 "has_cookies": bool(login_config.get("has_cookies")),
                 "profile_path": str(effective_profile_path),
+                "profile_key": active_account.get("profile_key") or "",
                 "profile_exists": profile_exists,
                 "default_profile_path": str(default_profile_path),
                 "default_profile_exists": default_profile_exists,
@@ -95,7 +96,7 @@ def list_platform_status(project_root: Path | None = None, recent_runs: list[dic
 
 def _active_accounts_by_platform(scope_root: Path | None = None) -> dict[str, dict[str, Any]]:
     result: dict[str, dict[str, Any]] = {}
-    for account in list_social_accounts():
+    for account in list_social_accounts(masked=False):
         platform = account.get("platform")
         if platform in result:
             continue

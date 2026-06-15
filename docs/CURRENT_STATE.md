@@ -4,26 +4,54 @@ Last updated: 2026-06-14
 
 ## Current Phase
 
-Phase 0 documentation is complete. Phase 0.5 - Schema Foundation must be
-implemented before Phase 1-9 work can begin. Current code does not yet provide
-the `users`, `workspaces`, `user_sessions`, `system_settings`, or `audit_logs`
-tables required by the target V1 model.
+Phase 0 documentation is complete. Phase 0.5 - Schema Foundation is complete
+and verified. Phase 1 - Users And Permissions is complete and verified. Phase
+2 - System Settings Center is complete and verified. Phase 3 - Administrator
+Resource Center is complete and verified. Phase 4 - Normal User Task Wizard is
+complete and verified. Phase 5 - Account Environment is complete and verified.
+Phase 6 - Server Login Flow is complete and verified locally. Phase 7 - Runs,
+Reports, And AI is complete and verified locally. Phase 8 - Server-Like
+Validation is complete and verified through an isolated server-like service
+process. Phase 9 - Security And Operations is complete and verified locally.
+The active SQLite schema now provides the foundation tables and columns
+required before later implementation work, and the web/API layer now has
+session login, administrator/normal-user roles, menu visibility,
+owner-scoped business data access, administrator-managed runtime strategy
+settings, administrator resource pages with consistent summary, toolbar, modal,
+and test interactions, a normal-user task wizard with administrator-only
+advanced options, and profile-key based account environments with persisted
+account/profile/proxy locks, stale-run recovery, server-side QR login as the
+primary administrator flow, structured login states, profile persistence/reuse
+checks, deployment gating for local-window login fallback, AI/manual-review
+fallback, email-failure-tolerant report generation, report-specific lead
+preview switching, run log refresh/copy/download controls, and an automated
+server-like validation script that starts the real FastAPI service with
+production login flags, persistent profile roots, service restart checks, and
+headless browser verification, administrator-operation audit logs, sensitive
+value redaction, resource-alert diagnostics, backup guidance, disk-space
+diagnostics, and retention-setting diagnostics.
 
 ## Implementation Status
 
 - Phase 0 - Documentation: complete.
-- Phase 0.5 - Schema Foundation: not started; required before Phase 1.
-- Phase 1 - Users And Permissions: blocked by Phase 0.5 implementation, not
-  by permission decisions.
-- Phase 2 - System Settings: blocked by Phase 0.5 implementation until the
-  `system_settings` foundation exists.
+- Phase 0.5 - Schema Foundation: complete and verified.
+- Phase 1 - Users And Permissions: complete and verified.
+- Phase 2 - System Settings: complete and verified.
+- Phase 3 - Administrator Resource Center: complete and verified.
+- Phase 4 - Normal User Task Wizard: complete and verified.
+- Phase 5 - Account Environment: complete and verified.
+- Phase 6 - Server Login Flow: complete and verified locally.
+- Phase 7 - Runs, Reports, And AI: complete and verified locally.
+- Phase 8 - Server-Like Validation: complete and verified through automated
+  server-like validation.
+- Phase 9 - Security And Operations: complete and verified locally.
 - Phase 5/6 - Account Environment and Server Login: profile key, timeout, and
-  lock-storage decisions are accepted; implementation is still blocked by
-  Phase 0.5 schema foundation and the preceding account/session groundwork.
+  lock-storage decisions are accepted; Phase 5 account environment runtime and
+  Phase 6 login-flow runtime are complete.
 
-All Phase 1-9 implementation work depends on Phase 0.5. Phase-specific planning
-may continue, but code changes for those phases should not bypass the schema
-foundation.
+The documented V1 roadmap is implemented through Phase 9 in this worktree.
+Production pilot handoff still requires live platform, SMTP, and AI-provider
+validation with real deployment credentials.
 
 ## Completed
 
@@ -57,69 +85,141 @@ foundation.
 - Permission, workspace, authentication, initial administrator, disabled-user
   behavior, audit-log timing, and runtime settings storage decisions have been
   accepted using the V1 recommended options.
+- Phase 0.5 schema foundation has been implemented in
+  `api/monitoring/database.py`: default workspace, user/session/settings/audit
+  tables, ownership columns, profile keys, run timeout fields, account lock
+  fields, and proxy `resource_locks`.
+- Existing monitoring MVP task/account/login/run/report records still load
+  after the schema foundation migration.
+- Phase 1 user and permission foundation has been implemented:
+  environment-bootstrap administrator creation, bcrypt password hashes,
+  session-token cookies backed by `user_sessions`, user management APIs,
+  shared FastAPI auth/role dependencies, administrator-only resource APIs,
+  normal-user owner scope for jobs/runs/reports/leads, and frontend login/menu
+  visibility.
+- `scripts/check_docs.py` has been implemented and currently passes.
+- Phase 2 runtime strategy has been implemented:
+  `api/monitoring/settings.py` defines runtime defaults, YAML mapping,
+  validation ranges, apply scopes, and environment locks; `system_settings`
+  stores database overrides with audit logging; administrators can edit grouped
+  Runtime Strategy tables; normal users cannot access runtime settings APIs;
+  scheduler tick/disable, crawl concurrency, crawler retry, run-level timeout,
+  QR timeout, login session TTL, lock cleanup buffer, and retention settings
+  now read through the runtime settings layer.
+- Newly started crawl runs copy `crawler_timeout_seconds` into
+  `crawl_runs.timeout_seconds`, compute `deadline_at`, allocate remaining run
+  time to platform crawler attempts, and mark deadline-exceeded runs as
+  `timeout` while preserving partial platform results.
+- Phase 3 administrator resource center has been refined:
+  platform accounts keep the single account-detail dialog, proxy resources have
+  summary cards plus search/status filters, AI access has summary cards plus
+  protocol/test-status filters and a connection-test dialog, mail configuration
+  uses edit/test dialogs with masked password behavior, and mail templates have
+  summary cards plus search/status filters and live preview.
+- Phase 4 normal-user task creation has been simplified:
+  normal users see a four-step task wizard for target, collection content,
+  schedule, and report recipients; crawl range copy explains the actual V1
+  boundaries; account/proxy/AI/template/browser fields are hidden from normal
+  users; the API also clears those advanced fields for normal-user create/edit
+  requests; administrators still keep advanced task binding controls.
+- Phase 5 account environment runtime has been implemented:
+  account profile runtime paths are derived from stable `profile_key` values,
+  new account environments ignore arbitrary customer-provided profile paths,
+  account names are display labels only, account/profile summaries no longer
+  expose real server paths, account/profile locks use inline
+  `social_accounts` fields, proxy concurrency uses `resource_locks`, run
+  cleanup releases locks, and startup/scheduler recovery reconciles timed-out
+  running runs before releasing persisted locks.
+- Phase 6 server login flow has been implemented:
+  administrator account login now starts from server-side QR sessions by
+  default, login APIs and the frontend use structured states (`preparing`,
+  `waiting_qrcode`, `waiting_scan`, `waiting_confirm`, `success`,
+  `needs_verification`, `qrcode_failed`, `timeout`, and `platform_error`),
+  legacy login states are normalized for compatibility, successful login is
+  re-checked before the account is marked active, profile-key paths are reused
+  after the browser session closes, and `MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=false`
+  hides and blocks local-window login fallback for production mode.
+- Phase 7 runs, reports, and AI behavior has been verified:
+  jobs can complete with AI disabled and email unavailable, new contents enter
+  `pending_review` instead of blocking report generation, report wording keeps
+  "suspected negative leads" semantics and avoids factual conclusions, report
+  preview requests load leads scoped to the selected report ID, and run logs
+  expose refresh, copy, and download controls with customer-safe text.
+- Phase 8 server-like validation has been implemented and verified:
+  `scripts/server_like_validation.py` starts the real FastAPI app as an HTTP
+  service with isolated persistent data directories, production login flags
+  (`MONITOR_LOGIN_QR_HEADLESS=true` and
+  `MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=false`), bootstrap administrator login,
+  web QR/status capability checks, local-window login blocking,
+  same-platform account profile separation, profile metadata persistence across
+  service restart, account/profile/proxy runtime lock enforcement, and
+  headless Playwright Chromium availability.
+- Phase 9 security and operations has been implemented and verified:
+  administrator resource changes write minimal `audit_logs` records without
+  plaintext secrets, sensitive text redaction covers API keys, passwords,
+  cookies, proxy credentials, encrypted-field labels, and Chinese secret
+  labels, readiness now surfaces account invalidation and proxy-error alert
+  paths, doctor diagnostics include disk-space, retention-setting, backup-set,
+  and resource-alert checks, and deployment docs describe database, profile,
+  report, encryption-key, and configuration backups.
 
 ## In Progress
 
-- Preparing for implementation phases that use the documentation loop as the
-  source of truth.
+- None for the documented V1 roadmap.
 
 ## Known Risks
 
-- Current code still exposes or handles real profile paths in places.
-- Current code still uses `profile_path` as a primary account/profile identity
-  in places; Phase 5 will migrate new account environments to `profile_key`.
-- Current database schema does not have `profile_key` yet; Phase 0.5 adds the
-  column, and Phase 5 changes runtime behavior to use it.
-- Current frontend does not have role-based menu rendering, login page,
-  session checks, or `/api/auth/*` flows yet.
-- Scheduler tick interval and global/platform concurrency are still hard-coded
-  in places; Phase 2 moves these values into runtime settings.
-- Current crawler timeout is applied to individual MediaCrawler subprocess
-  attempts; Phase 2 changes the target behavior to one run-level wall-clock
-  deadline with remaining-time allocation.
+- Phase 5 still stores `profile_path` as a transition-only internal runtime
+  field for existing login/crawler code paths, but new identity and path
+  resolution are `profile_key` based and customer-facing responses mask real
+  paths.
 - Current system is closer to a single-team MVP than a production multi-user
   system.
-- Server-side QR login and profile persistence need container/server validation.
-- Runtime settings are still partly hard-coded or environment-driven.
-- Existing UI may still mix administrator resource management and normal-user
-  task creation.
+- Server-side QR/login capability and profile persistence now have automated
+  server-like validation, but real platform QR scanning and real platform
+  crawling still require a live server/account pilot.
 - The newly added product documents are initial versions and should be refined
   during implementation.
 - Profile migration strategy has been clarified: existing low-volume
   `profile_path` accounts do not need long-term compatibility and can be reset
   or re-logged in under the new `profile_key` model.
-- Phase 5/6 account/profile/proxy behavior has accepted decisions, but code
-  still needs run-level timeout tracking, persisted lock fields, proxy lock
-  records, and startup/scheduler recovery.
-- Phase 2 Runtime Strategy layout is accepted as administrator-only grouped
-  tables, but the settings UI and database-backed settings layer are not yet
-  implemented.
+- Phase 2/9 retention settings are configurable and visible in diagnostics,
+  but automated retention cleanup jobs remain for later operations work.
+- Docker/container validation could not be run on this machine. Phase 8 used
+  an isolated real FastAPI service process with persistent temp data instead.
+- Phase 7 and Phase 8 automated checks do not prove real AI provider, SMTP,
+  real platform QR scanning, or real platform crawling behavior; those remain
+  deployment and pilot risks.
 
 ## Next Step
 
-Implement Phase 0.5 first, then Phase 1 and Phase 2 in small increments:
+Prepare for pilot deployment:
 
-1. add schema foundation tables and fields;
-2. add user and role foundation;
-3. add menu/route permission controls;
-4. add runtime settings storage and administrator UI;
-5. keep normal-user task creation simple.
-6. for every new requirement, add or update `CHANGE_REQUESTS.md`,
-   `TASKS.md`, `TRACEABILITY.md`, and `TEST_RESULTS.md`.
-7. ask for user confirmation before accepting ambiguous assumptions in
-   permissions, deployment, account environment, security, or data model.
-8. Phase 1 can proceed after Phase 0.5 creates the schema foundation.
-9. Accepted Phase 5/6 decisions:
-   - `profile_key` format is `{workspace_id}/{platform}/acc_{account_id}`;
-   - task timeout is a run-level wall-clock deadline controlled by
-     administrator Runtime Strategy;
-   - lock expiry is the run deadline plus cleanup buffer;
-   - account/profile locks use inline `social_accounts` fields;
-   - proxy concurrency uses `resource_locks`.
-10. Before Phase 5/6 coding, complete Phase 0.5 schema foundation and verify
-    that run timeout fields, profile keys, lock fields, and `resource_locks`
-    exist.
+1. deploy the worktree branch to the target single-server environment;
+2. configure real platform account, proxy, AI, SMTP, and domain/HTTPS settings;
+3. run `scripts/server_like_validation.py` on the target host if possible;
+4. complete one real web QR scan, crawl, report, and email-send loop;
+5. record pilot results and any production-only blockers in `TEST_RESULTS.md`
+   before customer handoff.
 
 ## Latest Verification
 
-No server-like acceptance run has been completed for the new plan yet.
+Phase 9 security and operations verification passed on 2026-06-14:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_9 or doctor_reports_deployment_diagnostics or readiness_status_reports_checks or sensitive_text_is_redacted"`
+- Result: 6 passed, 210 deselected, 1 warning.
+- `uv run python scripts/server_like_validation.py`
+- Result: PASS, 11 checks passed: service web UI reachable, administrator
+  login over HTTP, web QR/status login flow primary, local-window login
+  disabled, same-platform profiles separated, profile-key runtime paths under
+  the persistent profile root, account/profile lock limit enforced through
+  runtime API, proxy lock enforced through `resource_locks`, profile metadata
+  survives restart, no local Chrome dependency, and headless Playwright
+  Chromium available.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 216 passed, 3 warnings.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+
+Earlier Phase 7 and Phase 8 verification remains recorded in
+`docs/TEST_RESULTS.md`.

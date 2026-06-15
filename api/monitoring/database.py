@@ -7,20 +7,50 @@ from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
+from .account_environment import (
+    ACCOUNT_PROFILE_ROOT,
+    account_profile_environment,
+    default_account_profile_key,
+    resolve_account_profile_path,
+)
+from .auth import generate_session_token, hash_password, hash_session_token, verify_password
 from .mediacrawler_login import LOGIN_TYPE_LABELS, PLATFORM_LOGIN_TYPES, SUPPORTED_MONITOR_PLATFORMS, get_mediacrawler_login_capability
+from .login_status import (
+    LOGIN_STATE_NEEDS_VERIFICATION,
+    LOGIN_STATE_PLATFORM_ERROR,
+    LOGIN_STATE_PREPARING,
+    LOGIN_STATE_QRCODE_FAILED,
+    LOGIN_STATE_SUCCESS,
+    LOGIN_STATE_TIMEOUT,
+    LOGIN_STATE_WAITING_CONFIRM,
+    LOGIN_STATE_WAITING_QRCODE,
+    LOGIN_STATE_WAITING_SCAN,
+    PENDING_LOGIN_STATES,
+    STRUCTURED_LOGIN_STATES,
+    normalize_login_state,
+)
 from .prompts import DEFAULT_PROMPT
 from .security import MONITOR_DATA_DIR, customer_safe_text, decrypt_secret, encrypt_secret, mask_secret, redact_sensitive
+from .settings import (
+    DEFINITIONS_BY_KEY,
+    effective_runtime_settings,
+    setting_value_json,
+    validate_runtime_setting,
+)
 
 
 DB_PATH = MONITOR_DATA_DIR / "monitor.sqlite"
+DEFAULT_WORKSPACE_ID = 1
+DEFAULT_WORKSPACE_NAME = "Default Workspace"
 DEFAULT_EMAIL_SUBJECT_TEMPLATE = "【律所舆情日报】{law_firm_name} - {date}"
 DEFAULT_EMAIL_TEMPLATE_NAME = "标准舆情日报模板"
 JOB_TEMPLATE_PLACEHOLDERS = ("请改成", "目标律所", "律所简称", "律师事务所简称")
 JOB_TARGET_TYPES = {"search", "detail", "creator"}
 JOB_OUTPUT_MODES = {"internal", "json", "excel"}
 JOB_BROWSER_MODES = {"server_qrcode", "profile", "local_window"}
-
-ACCOUNT_PROFILE_ROOT = MONITOR_DATA_DIR / "account_profiles"
+USER_ROLES = {"administrator", "normal"}
+USER_STATUSES = {"active", "disabled"}
+SESSION_TTL_SECONDS = 8 * 60 * 60
 
 
 def utc_now() -> str:
@@ -53,8 +83,67 @@ def init_db() -> None:
     with get_conn() as conn:
         conn.executescript(
             """
+            CREATE TABLE IF NOT EXISTS workspaces (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                name TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'active',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS users (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
+                email TEXT NOT NULL UNIQUE,
+                display_name TEXT NOT NULL DEFAULT '',
+                password_hash TEXT NOT NULL DEFAULT '',
+                role TEXT NOT NULL DEFAULT 'normal',
+                status TEXT NOT NULL DEFAULT 'active',
+                last_login_at TEXT,
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS user_sessions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                user_id INTEGER NOT NULL,
+                session_token_hash TEXT NOT NULL UNIQUE,
+                status TEXT NOT NULL DEFAULT 'active',
+                created_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                last_active_at TEXT,
+                user_agent TEXT NOT NULL DEFAULT '',
+                ip_address TEXT NOT NULL DEFAULT ''
+            );
+
+            CREATE TABLE IF NOT EXISTS system_settings (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
+                key TEXT NOT NULL,
+                value_json TEXT NOT NULL DEFAULT 'null',
+                value_type TEXT NOT NULL DEFAULT 'json',
+                is_locked INTEGER NOT NULL DEFAULT 0,
+                source TEXT NOT NULL DEFAULT 'database',
+                updated_by INTEGER,
+                updated_at TEXT NOT NULL,
+                UNIQUE(workspace_id, key)
+            );
+
+            CREATE TABLE IF NOT EXISTS audit_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
+                user_id INTEGER,
+                action_type TEXT NOT NULL,
+                resource_type TEXT NOT NULL DEFAULT '',
+                resource_id TEXT NOT NULL DEFAULT '',
+                details_json TEXT NOT NULL DEFAULT '{}',
+                ip_address TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS monitor_jobs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
                 law_firm_name TEXT NOT NULL,
                 aliases TEXT NOT NULL DEFAULT '[]',
                 exclude_words TEXT NOT NULL DEFAULT '[]',
@@ -80,6 +169,8 @@ def init_db() -> None:
                 is_internal INTEGER NOT NULL DEFAULT 0,
                 next_run_at TEXT,
                 last_run_at TEXT,
+                created_by INTEGER,
+                updated_by INTEGER,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
@@ -142,6 +233,7 @@ def init_db() -> None:
 
             CREATE TABLE IF NOT EXISTS ai_key_profiles (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
                 name TEXT NOT NULL,
                 provider TEXT NOT NULL DEFAULT 'openai',
                 base_url TEXT NOT NULL DEFAULT '',
@@ -153,6 +245,8 @@ def init_db() -> None:
                 last_test_status TEXT NOT NULL DEFAULT 'untested',
                 last_test_at TEXT,
                 last_test_error TEXT NOT NULL DEFAULT '',
+                created_by INTEGER,
+                updated_by INTEGER,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
@@ -171,21 +265,26 @@ def init_db() -> None:
 
             CREATE TABLE IF NOT EXISTS email_templates (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
                 name TEXT NOT NULL,
                 subject_template TEXT NOT NULL DEFAULT '【律所舆情日报】{law_firm_name} - {date}',
                 html_template TEXT NOT NULL DEFAULT '',
                 is_active INTEGER NOT NULL DEFAULT 0,
+                created_by INTEGER,
+                updated_by INTEGER,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS social_accounts (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
                 name TEXT NOT NULL,
                 platform TEXT NOT NULL,
                 login_type TEXT NOT NULL DEFAULT 'qrcode',
                 cookies_encrypted TEXT NOT NULL DEFAULT '',
                 status TEXT NOT NULL DEFAULT 'standby',
+                profile_key TEXT NOT NULL DEFAULT '',
                 profile_path TEXT NOT NULL DEFAULT '',
                 proxy_id INTEGER,
                 is_draft INTEGER NOT NULL DEFAULT 0,
@@ -198,12 +297,18 @@ def init_db() -> None:
                 last_used_at TEXT,
                 last_checked_at TEXT,
                 last_error TEXT NOT NULL DEFAULT '',
+                locked_by_run_id INTEGER,
+                locked_at TEXT,
+                lock_expires_at TEXT,
+                created_by INTEGER,
+                updated_by INTEGER,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS proxy_profiles (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
                 name TEXT NOT NULL,
                 provider TEXT NOT NULL DEFAULT 'manual',
                 proxy_url_encrypted TEXT NOT NULL DEFAULT '',
@@ -212,19 +317,25 @@ def init_db() -> None:
                 notes TEXT NOT NULL DEFAULT '',
                 last_checked_at TEXT,
                 last_error TEXT NOT NULL DEFAULT '',
+                created_by INTEGER,
+                updated_by INTEGER,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS login_sessions (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
                 platform TEXT NOT NULL,
                 account_id INTEGER,
-                status TEXT NOT NULL DEFAULT 'waiting_manual_browser',
+                status TEXT NOT NULL DEFAULT 'preparing',
                 login_url TEXT NOT NULL DEFAULT '',
                 qr_image TEXT NOT NULL DEFAULT '',
+                profile_key TEXT NOT NULL DEFAULT '',
                 profile_path TEXT NOT NULL DEFAULT '',
                 message TEXT NOT NULL DEFAULT '',
+                created_by INTEGER,
+                updated_by INTEGER,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 expires_at TEXT
@@ -232,16 +343,25 @@ def init_db() -> None:
 
             CREATE TABLE IF NOT EXISTS crawl_runs (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
                 job_id INTEGER REFERENCES monitor_jobs(id) ON DELETE SET NULL,
+                account_id INTEGER,
+                proxy_id INTEGER,
                 status TEXT NOT NULL,
                 started_at TEXT NOT NULL,
                 finished_at TEXT,
                 summary TEXT NOT NULL DEFAULT '{}',
-                error_message TEXT
+                error_message TEXT,
+                timeout_seconds INTEGER,
+                deadline_at TEXT,
+                timeout_reason TEXT,
+                created_by INTEGER,
+                updated_by INTEGER
             );
 
             CREATE TABLE IF NOT EXISTS raw_contents (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
                 platform TEXT NOT NULL,
                 content_id TEXT NOT NULL,
                 job_id INTEGER,
@@ -258,11 +378,14 @@ def init_db() -> None:
                 raw_json TEXT NOT NULL,
                 first_seen_at TEXT NOT NULL,
                 last_seen_at TEXT NOT NULL,
+                created_by INTEGER,
+                updated_by INTEGER,
                 UNIQUE(job_id, platform, content_id)
             );
 
             CREATE TABLE IF NOT EXISTS raw_comments (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
                 platform TEXT NOT NULL,
                 comment_id TEXT NOT NULL,
                 content_id TEXT NOT NULL,
@@ -271,11 +394,14 @@ def init_db() -> None:
                 create_time INTEGER,
                 raw_json TEXT NOT NULL,
                 first_seen_at TEXT NOT NULL,
+                created_by INTEGER,
+                updated_by INTEGER,
                 UNIQUE(platform, comment_id)
             );
 
             CREATE TABLE IF NOT EXISTS ai_evaluations (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
                 raw_content_id INTEGER NOT NULL REFERENCES raw_contents(id) ON DELETE CASCADE,
                 run_id INTEGER,
                 status TEXT NOT NULL,
@@ -287,11 +413,14 @@ def init_db() -> None:
                 recommended_action TEXT NOT NULL DEFAULT '',
                 raw_response TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL,
+                created_by INTEGER,
+                updated_by INTEGER,
                 UNIQUE(raw_content_id)
             );
 
             CREATE TABLE IF NOT EXISTS reports (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
                 run_id INTEGER NOT NULL REFERENCES crawl_runs(id) ON DELETE CASCADE,
                 job_id INTEGER,
                 html_path TEXT NOT NULL,
@@ -300,9 +429,30 @@ def init_db() -> None:
                 email_status TEXT NOT NULL DEFAULT 'pending',
                 email_error TEXT,
                 summary TEXT NOT NULL DEFAULT '{}',
+                created_by INTEGER,
+                updated_by INTEGER,
                 created_at TEXT NOT NULL
             );
+
+            CREATE TABLE IF NOT EXISTS resource_locks (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
+                resource_type TEXT NOT NULL,
+                resource_id INTEGER NOT NULL,
+                run_id INTEGER NOT NULL,
+                locked_at TEXT NOT NULL,
+                expires_at TEXT NOT NULL,
+                UNIQUE(resource_type, resource_id, run_id)
+            );
             """
+        )
+        now = utc_now()
+        conn.execute(
+            """
+            INSERT OR IGNORE INTO workspaces (id, name, status, created_at, updated_at)
+            VALUES (?, ?, 'active', ?, ?)
+            """,
+            (DEFAULT_WORKSPACE_ID, DEFAULT_WORKSPACE_NAME, now, now),
         )
         _ensure_column(conn, "monitor_jobs", "is_internal", "INTEGER NOT NULL DEFAULT 0")
         _ensure_column(conn, "monitor_jobs", "enable_sub_comments", "INTEGER NOT NULL DEFAULT 0")
@@ -332,8 +482,8 @@ def init_db() -> None:
         _ensure_column(conn, "social_accounts", "platform_home_url", "TEXT NOT NULL DEFAULT ''")
         _ensure_column(conn, "social_accounts", "platform_identity_checked_at", "TEXT")
         _migrate_raw_contents_unique_by_job(conn)
+        _ensure_phase_05_schema(conn)
         mark_selftest_jobs_internal(conn)
-        now = utc_now()
         conn.execute(
             "INSERT OR IGNORE INTO ai_configs (id, updated_at) VALUES (1, ?)",
             (now,),
@@ -395,22 +545,62 @@ def row_to_job(conn: sqlite3.Connection, row: sqlite3.Row) -> dict[str, Any]:
     return result
 
 
-def list_jobs(include_internal: bool = False) -> list[dict[str, Any]]:
+def _actor_scope_clause(
+    actor: dict[str, Any] | None,
+    table_alias: str = "",
+    owner_column: str = "created_by",
+    workspace_column: str = "workspace_id",
+) -> tuple[str, list[Any]]:
+    if not actor:
+        return "", []
+    prefix = f"{table_alias}." if table_alias else ""
+    workspace_id = _safe_int(actor.get("workspace_id")) or DEFAULT_WORKSPACE_ID
+    clauses = [f"{prefix}{workspace_column}=?"]
+    params: list[Any] = [workspace_id]
+    if actor.get("role") != "administrator":
+        clauses.append(f"{prefix}{owner_column}=?")
+        params.append(_safe_int(actor.get("id")) or 0)
+    return " AND ".join(clauses), params
+
+
+def user_can_access_job(job: dict[str, Any] | None, actor: dict[str, Any] | None) -> bool:
+    if not job or not actor:
+        return False
+    if (_safe_int(job.get("workspace_id")) or DEFAULT_WORKSPACE_ID) != (_safe_int(actor.get("workspace_id")) or DEFAULT_WORKSPACE_ID):
+        return False
+    if actor.get("role") == "administrator":
+        return True
+    return _safe_int(job.get("created_by")) == (_safe_int(actor.get("id")) or 0)
+
+
+def list_jobs(include_internal: bool = False, actor: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     with get_conn() as conn:
-        if include_internal:
-            rows = conn.execute("SELECT * FROM monitor_jobs ORDER BY id DESC").fetchall()
-        else:
-            rows = conn.execute("SELECT * FROM monitor_jobs WHERE is_internal=0 ORDER BY id DESC").fetchall()
+        clauses = []
+        params: list[Any] = []
+        if not include_internal:
+            clauses.append("is_internal=0")
+        actor_clause, actor_params = _actor_scope_clause(actor)
+        if actor_clause:
+            clauses.append(actor_clause)
+            params.extend(actor_params)
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        rows = conn.execute(f"SELECT * FROM monitor_jobs{where} ORDER BY id DESC", params).fetchall()
         return [row_to_job(conn, row) for row in rows]
 
 
-def get_job(job_id: int) -> dict[str, Any] | None:
+def get_job(job_id: int, actor: dict[str, Any] | None = None) -> dict[str, Any] | None:
     with get_conn() as conn:
-        row = conn.execute("SELECT * FROM monitor_jobs WHERE id=?", (job_id,)).fetchone()
+        actor_clause, actor_params = _actor_scope_clause(actor)
+        where = "id=?"
+        params: list[Any] = [job_id]
+        if actor_clause:
+            where += f" AND {actor_clause}"
+            params.extend(actor_params)
+        row = conn.execute(f"SELECT * FROM monitor_jobs WHERE {where}", params).fetchone()
         return row_to_job(conn, row) if row else None
 
 
-def save_job(payload: dict[str, Any], job_id: int | None = None) -> dict[str, Any]:
+def save_job(payload: dict[str, Any], job_id: int | None = None, actor: dict[str, Any] | None = None) -> dict[str, Any]:
     now = utc_now()
     law_firm_name = (payload.get("law_firm_name") or "").strip()
     if not law_firm_name:
@@ -441,9 +631,17 @@ def save_job(payload: dict[str, Any], job_id: int | None = None) -> dict[str, An
     account_id = _optional_existing_id(payload.get("account_id") or payload.get("job_account_id"), "social_accounts", "social account")
     proxy_id = _optional_existing_id(payload.get("proxy_id") or payload.get("job_proxy_id"), "proxy_profiles", "proxy profile")
     enable_sub_comments = bool(payload.get("enable_sub_comments", False))
+    workspace_id = (_safe_int((actor or {}).get("workspace_id")) or DEFAULT_WORKSPACE_ID) if actor else DEFAULT_WORKSPACE_ID
+    actor_id = _safe_int((actor or {}).get("id")) if actor else None
     with get_conn() as conn:
         if job_id:
-            exists = conn.execute("SELECT id FROM monitor_jobs WHERE id=?", (job_id,)).fetchone()
+            actor_clause, actor_params = _actor_scope_clause(actor)
+            exists_sql = "SELECT * FROM monitor_jobs WHERE id=?"
+            exists_params: list[Any] = [job_id]
+            if actor_clause:
+                exists_sql += f" AND {actor_clause}"
+                exists_params.extend(actor_params)
+            exists = conn.execute(exists_sql, exists_params).fetchone()
             if not exists:
                 raise ValueError("job not found")
             conn.execute(
@@ -452,7 +650,7 @@ def save_job(payload: dict[str, Any], job_id: int | None = None) -> dict[str, An
                     enable_comments=?, enable_sub_comments=?, time_window_type=?, custom_start=?, custom_end=?,
                     frequency=?, cron_expr=?, email_time=?, target_type=?, max_pages=?, max_items=?,
                     start_page=?, output_mode=?, browser_mode=?, ai_profile_id=?, email_template_id=?,
-                    account_id=?, proxy_id=?, enabled=?, is_internal=?, updated_at=?
+                    account_id=?, proxy_id=?, enabled=?, is_internal=?, updated_by=?, updated_at=?
                 WHERE id=?
                 """,
                 (
@@ -479,6 +677,7 @@ def save_job(payload: dict[str, Any], job_id: int | None = None) -> dict[str, An
                     proxy_id,
                     1 if payload.get("enabled", True) else 0,
                     1 if payload.get("is_internal", False) else 0,
+                    actor_id,
                     now,
                     job_id,
                 ),
@@ -491,14 +690,15 @@ def save_job(payload: dict[str, Any], job_id: int | None = None) -> dict[str, An
             cur = conn.execute(
                 """
                 INSERT INTO monitor_jobs (
-                    law_firm_name, aliases, exclude_words, enable_comments, enable_sub_comments, time_window_type,
+                    workspace_id, law_firm_name, aliases, exclude_words, enable_comments, enable_sub_comments, time_window_type,
                     custom_start, custom_end, frequency, cron_expr, email_time, target_type, max_pages, max_items,
                     start_page, output_mode, browser_mode, ai_profile_id, email_template_id, account_id, proxy_id,
-                    enabled, is_internal,
+                    enabled, is_internal, created_by, updated_by,
                     created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
+                    workspace_id,
                     law_firm_name,
                     _json_dumps(aliases),
                     _json_dumps(exclude_words),
@@ -522,6 +722,8 @@ def save_job(payload: dict[str, Any], job_id: int | None = None) -> dict[str, An
                     proxy_id,
                     1 if payload.get("enabled", True) else 0,
                     1 if payload.get("is_internal", False) else 0,
+                    actor_id,
+                    actor_id,
                     now,
                     now,
                 ),
@@ -572,6 +774,456 @@ def _ensure_column(conn: sqlite3.Connection, table: str, column: str, definition
     columns = [row["name"] for row in conn.execute(f"PRAGMA table_info({table})").fetchall()]
     if column not in columns:
         conn.execute(f"ALTER TABLE {table} ADD COLUMN {column} {definition}")
+
+
+def _ensure_phase_05_schema(conn: sqlite3.Connection) -> None:
+    ownership_tables = [
+        "monitor_jobs",
+        "social_accounts",
+        "proxy_profiles",
+        "login_sessions",
+        "crawl_runs",
+        "raw_contents",
+        "raw_comments",
+        "ai_evaluations",
+        "reports",
+        "email_templates",
+        "ai_key_profiles",
+    ]
+    for table in ownership_tables:
+        _ensure_column(conn, table, "workspace_id", f"INTEGER NOT NULL DEFAULT {DEFAULT_WORKSPACE_ID}")
+        _ensure_column(conn, table, "created_by", "INTEGER")
+        _ensure_column(conn, table, "updated_by", "INTEGER")
+
+    _ensure_column(conn, "social_accounts", "profile_key", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "social_accounts", "locked_by_run_id", "INTEGER")
+    _ensure_column(conn, "social_accounts", "locked_at", "TEXT")
+    _ensure_column(conn, "social_accounts", "lock_expires_at", "TEXT")
+    _ensure_column(conn, "login_sessions", "profile_key", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "crawl_runs", "account_id", "INTEGER")
+    _ensure_column(conn, "crawl_runs", "proxy_id", "INTEGER")
+    _ensure_column(conn, "crawl_runs", "timeout_seconds", "INTEGER")
+    _ensure_column(conn, "crawl_runs", "deadline_at", "TEXT")
+    _ensure_column(conn, "crawl_runs", "timeout_reason", "TEXT")
+    _backfill_social_account_profile_keys(conn)
+    _backfill_login_session_profile_keys(conn)
+
+    conn.executescript(
+        """
+        CREATE INDEX IF NOT EXISTS idx_users_workspace_role_status
+            ON users(workspace_id, role, status);
+        CREATE INDEX IF NOT EXISTS idx_user_sessions_token_status
+            ON user_sessions(session_token_hash, status);
+        CREATE INDEX IF NOT EXISTS idx_user_sessions_user_status
+            ON user_sessions(user_id, status);
+        CREATE INDEX IF NOT EXISTS idx_system_settings_workspace_key
+            ON system_settings(workspace_id, key);
+        CREATE INDEX IF NOT EXISTS idx_audit_logs_workspace_created
+            ON audit_logs(workspace_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_account_lock_status
+            ON social_accounts(locked_by_run_id, lock_expires_at);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_resource_locks_unique
+            ON resource_locks(resource_type, resource_id, run_id);
+        CREATE INDEX IF NOT EXISTS idx_resource_lock_lookup
+            ON resource_locks(resource_type, resource_id, expires_at);
+        CREATE INDEX IF NOT EXISTS idx_resource_lock_cleanup
+            ON resource_locks(expires_at);
+        """
+    )
+
+
+def _backfill_social_account_profile_keys(conn: sqlite3.Connection) -> None:
+    rows = conn.execute(
+        """
+        SELECT id, workspace_id, platform FROM social_accounts
+        WHERE COALESCE(profile_key, '') = ''
+        """
+    ).fetchall()
+    for row in rows:
+        conn.execute(
+            "UPDATE social_accounts SET profile_key=? WHERE id=?",
+            (
+                _default_account_profile_key(
+                    _safe_int(row["workspace_id"]) or DEFAULT_WORKSPACE_ID,
+                    str(row["platform"] or ""),
+                    int(row["id"]),
+                ),
+                row["id"],
+            ),
+        )
+
+
+def _backfill_login_session_profile_keys(conn: sqlite3.Connection) -> None:
+    rows = conn.execute(
+        """
+        SELECT s.id AS session_id, a.profile_key AS account_profile_key
+        FROM login_sessions s
+        JOIN social_accounts a ON a.id = s.account_id
+        WHERE COALESCE(s.profile_key, '') = ''
+          AND COALESCE(a.profile_key, '') <> ''
+        """
+    ).fetchall()
+    for row in rows:
+        conn.execute(
+            "UPDATE login_sessions SET profile_key=? WHERE id=?",
+            (row["account_profile_key"], row["session_id"]),
+        )
+
+
+def bootstrap_admin_from_env(email: str | None, password: str | None, display_name: str | None = None) -> dict[str, Any] | None:
+    normalized_email = _normalize_email(email)
+    if not normalized_email or not password:
+        return None
+    now = utc_now()
+    with get_conn() as conn:
+        existing_admin = conn.execute(
+            "SELECT * FROM users WHERE role='administrator' AND status='active' ORDER BY id LIMIT 1"
+        ).fetchone()
+        if existing_admin:
+            return _row_to_user(dict(existing_admin))
+        row = conn.execute("SELECT * FROM users WHERE lower(email)=lower(?)", (normalized_email,)).fetchone()
+        if row:
+            conn.execute(
+                """
+                UPDATE users SET password_hash=?, role='administrator', status='active',
+                    display_name=COALESCE(NULLIF(?, ''), display_name), updated_at=?
+                WHERE id=?
+                """,
+                (hash_password(password), display_name or "", now, row["id"]),
+            )
+            target_id = int(row["id"])
+        else:
+            cur = conn.execute(
+                """
+                INSERT INTO users (workspace_id, email, display_name, password_hash, role, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, 'administrator', 'active', ?, ?)
+                """,
+                (DEFAULT_WORKSPACE_ID, normalized_email, display_name or normalized_email, hash_password(password), now, now),
+            )
+            target_id = int(cur.lastrowid)
+        _record_audit_log(conn, DEFAULT_WORKSPACE_ID, target_id, "bootstrap_admin", "user", str(target_id), {})
+    return get_user(target_id)
+
+
+def has_active_administrator() -> bool:
+    with get_conn() as conn:
+        row = conn.execute("SELECT 1 FROM users WHERE role='administrator' AND status='active' LIMIT 1").fetchone()
+    return bool(row)
+
+
+def list_users() -> list[dict[str, Any]]:
+    with get_conn() as conn:
+        rows = conn.execute("SELECT * FROM users ORDER BY role, id").fetchall()
+    return [_row_to_user(dict(row)) for row in rows]
+
+
+def get_user(user_id: int | None) -> dict[str, Any] | None:
+    if not user_id:
+        return None
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+    return _row_to_user(dict(row)) if row else None
+
+
+def get_user_by_email(email: str | None) -> dict[str, Any] | None:
+    normalized = _normalize_email(email)
+    if not normalized:
+        return None
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM users WHERE lower(email)=lower(?)", (normalized,)).fetchone()
+    return _row_to_user(dict(row)) if row else None
+
+
+def save_user(payload: dict[str, Any], user_id: int | None = None, actor_id: int | None = None) -> dict[str, Any]:
+    password = str(payload.get("password") or "")
+    now = utc_now()
+    with get_conn() as conn:
+        if user_id:
+            current = conn.execute("SELECT * FROM users WHERE id=?", (user_id,)).fetchone()
+            if not current:
+                raise ValueError("user not found")
+            email = _normalize_email(payload.get("email") or current["email"])
+            role = _validate_user_role(payload.get("role") or current["role"])
+            status = _validate_user_status(payload.get("status") or current["status"])
+            display_name = str(payload.get("display_name") or current["display_name"] or email).strip()
+            duplicate = conn.execute("SELECT id FROM users WHERE lower(email)=lower(?)", (email,)).fetchone()
+            if duplicate and int(duplicate["id"]) != int(user_id):
+                raise ValueError("email already exists")
+            assignments = [
+                "email=?",
+                "display_name=?",
+                "role=?",
+                "status=?",
+                "updated_at=?",
+            ]
+            values: list[Any] = [email, display_name, role, status, now]
+            if password:
+                assignments.append("password_hash=?")
+                values.append(hash_password(password))
+            values.append(user_id)
+            conn.execute(f"UPDATE users SET {', '.join(assignments)} WHERE id=?", values)
+            target_id = int(user_id)
+            action = "update_user"
+        else:
+            email = _normalize_email(payload.get("email"))
+            if not email:
+                raise ValueError("email is required")
+            role = _validate_user_role(payload.get("role") or "normal")
+            status = _validate_user_status(payload.get("status") or "active")
+            display_name = str(payload.get("display_name") or email).strip()
+            duplicate = conn.execute("SELECT id FROM users WHERE lower(email)=lower(?)", (email,)).fetchone()
+            if duplicate:
+                raise ValueError("email already exists")
+            if not password:
+                raise ValueError("password is required")
+            cur = conn.execute(
+                """
+                INSERT INTO users (workspace_id, email, display_name, password_hash, role, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (DEFAULT_WORKSPACE_ID, email, display_name, hash_password(password), role, status, now, now),
+            )
+            target_id = int(cur.lastrowid)
+            action = "create_user"
+        _record_audit_log(conn, DEFAULT_WORKSPACE_ID, actor_id, action, "user", str(target_id), {"role": role, "status": status})
+    return get_user(target_id) or {}
+
+
+def authenticate_user(email: str | None, password: str | None) -> dict[str, Any] | None:
+    normalized = _normalize_email(email)
+    if not normalized or not password:
+        return None
+    with get_conn() as conn:
+        row = conn.execute("SELECT * FROM users WHERE lower(email)=lower(?)", (normalized,)).fetchone()
+        if not row or row["status"] != "active":
+            return None
+        if not verify_password(str(password), str(row["password_hash"] or "")):
+            return None
+        now = utc_now()
+        conn.execute("UPDATE users SET last_login_at=?, updated_at=? WHERE id=?", (now, now, row["id"]))
+        refreshed = conn.execute("SELECT * FROM users WHERE id=?", (row["id"],)).fetchone()
+    return _row_to_user(dict(refreshed)) if refreshed else None
+
+
+def create_user_session(
+    user_id: int,
+    user_agent: str = "",
+    ip_address: str = "",
+    ttl_seconds: int = SESSION_TTL_SECONDS,
+) -> tuple[str, dict[str, Any]]:
+    token = generate_session_token()
+    now_dt = datetime.now(timezone.utc)
+    now = now_dt.isoformat()
+    expires_at = (now_dt + timedelta(seconds=ttl_seconds)).isoformat()
+    with get_conn() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO user_sessions (
+                user_id, session_token_hash, status, created_at, expires_at,
+                last_active_at, user_agent, ip_address
+            ) VALUES (?, ?, 'active', ?, ?, ?, ?, ?)
+            """,
+            (user_id, hash_session_token(token), now, expires_at, now, user_agent[:500], ip_address[:120]),
+        )
+        session_id = int(cur.lastrowid)
+        row = conn.execute("SELECT * FROM user_sessions WHERE id=?", (session_id,)).fetchone()
+    return token, dict(row)
+
+
+def get_user_for_session_token(token: str | None) -> dict[str, Any] | None:
+    if not token:
+        return None
+    token_hash = hash_session_token(token)
+    now_dt = datetime.now(timezone.utc)
+    with get_conn() as conn:
+        row = conn.execute(
+            """
+            SELECT s.id AS session_id, s.expires_at, s.status AS session_status, u.*
+            FROM user_sessions s
+            JOIN users u ON u.id = s.user_id
+            WHERE s.session_token_hash=?
+            """,
+            (token_hash,),
+        ).fetchone()
+        if not row:
+            return None
+        expires_at = _parse_iso_datetime(row["expires_at"])
+        if row["session_status"] != "active" or not expires_at or expires_at <= now_dt:
+            conn.execute("UPDATE user_sessions SET status='expired' WHERE id=?", (row["session_id"],))
+            return None
+        if row["status"] != "active":
+            return None
+        now = now_dt.isoformat()
+        conn.execute("UPDATE user_sessions SET last_active_at=? WHERE id=?", (now, row["session_id"]))
+        result = _row_to_user(dict(row))
+        result["session_id"] = int(row["session_id"])
+    return result
+
+
+def invalidate_user_session(token: str | None) -> None:
+    if not token:
+        return
+    with get_conn() as conn:
+        conn.execute("UPDATE user_sessions SET status='expired' WHERE session_token_hash=?", (hash_session_token(token),))
+
+
+def record_audit_log(
+    action_type: str,
+    resource_type: str,
+    resource_id: str | int,
+    details: dict[str, Any] | None = None,
+    user_id: int | None = None,
+    workspace_id: int = DEFAULT_WORKSPACE_ID,
+    ip_address: str = "",
+) -> None:
+    with get_conn() as conn:
+        _record_audit_log(
+            conn,
+            workspace_id,
+            user_id,
+            action_type,
+            resource_type,
+            str(resource_id),
+            details or {},
+            ip_address=ip_address,
+        )
+
+
+def list_audit_logs(limit: int = 100) -> list[dict[str, Any]]:
+    limit = _coerce_limit(limit, 100)
+    sql = "SELECT * FROM audit_logs ORDER BY id DESC"
+    params: list[Any] = []
+    if limit > 0:
+        sql += " LIMIT ?"
+        params.append(limit)
+    with get_conn() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return [dict(row) for row in rows]
+
+
+def list_runtime_settings() -> dict[str, dict[str, Any]]:
+    db_values: dict[str, Any] = {}
+    with get_conn() as conn:
+        rows = conn.execute(
+            "SELECT key, value_json FROM system_settings WHERE workspace_id=?",
+            (DEFAULT_WORKSPACE_ID,),
+        ).fetchall()
+    for row in rows:
+        key = str(row["key"] or "")
+        if key not in DEFINITIONS_BY_KEY:
+            continue
+        db_values[key] = _json_loads(row["value_json"], DEFINITIONS_BY_KEY[key].default)
+    return effective_runtime_settings(db_values=db_values)
+
+
+def get_runtime_setting_value(key: str) -> Any:
+    settings = list_runtime_settings()
+    if key not in settings:
+        raise ValueError(f"unknown runtime setting: {key}")
+    return settings[key]["value"]
+
+
+def save_runtime_settings(payload: dict[str, Any], actor_id: int | None = None) -> dict[str, dict[str, Any]]:
+    if not isinstance(payload, dict):
+        raise ValueError("settings payload must be an object")
+    current = list_runtime_settings()
+    now = utc_now()
+    changed: dict[str, Any] = {}
+    with get_conn() as conn:
+        for key, raw_value in payload.items():
+            if key not in DEFINITIONS_BY_KEY:
+                raise ValueError(f"unknown runtime setting: {key}")
+            if current[key]["is_locked"]:
+                raise ValueError(f"{key} is locked by deployment configuration")
+            value = validate_runtime_setting(key, raw_value)
+            changed[key] = value
+            conn.execute(
+                """
+                INSERT INTO system_settings (
+                    workspace_id, key, value_json, value_type, is_locked, source,
+                    updated_by, updated_at
+                ) VALUES (?, ?, ?, ?, 0, 'database', ?, ?)
+                ON CONFLICT(workspace_id, key) DO UPDATE SET
+                    value_json=excluded.value_json,
+                    value_type=excluded.value_type,
+                    is_locked=0,
+                    source='database',
+                    updated_by=excluded.updated_by,
+                    updated_at=excluded.updated_at
+                """,
+                (
+                    DEFAULT_WORKSPACE_ID,
+                    key,
+                    setting_value_json(value),
+                    DEFINITIONS_BY_KEY[key].value_type,
+                    actor_id,
+                    now,
+                ),
+            )
+        if changed:
+            _record_audit_log(conn, DEFAULT_WORKSPACE_ID, actor_id, "update_runtime_settings", "system_settings", "runtime", changed)
+    return list_runtime_settings()
+
+
+def _row_to_user(row: dict[str, Any]) -> dict[str, Any]:
+    row.pop("password_hash", None)
+    return row
+
+
+def _normalize_email(value: Any) -> str:
+    return str(value or "").strip().lower()
+
+
+def _validate_user_role(role: str) -> str:
+    if role not in USER_ROLES:
+        raise ValueError("invalid user role")
+    return role
+
+
+def _validate_user_status(status: str) -> str:
+    if status not in USER_STATUSES:
+        raise ValueError("invalid user status")
+    return status
+
+
+def _record_audit_log(
+    conn: sqlite3.Connection,
+    workspace_id: int,
+    user_id: int | None,
+    action_type: str,
+    resource_type: str,
+    resource_id: str,
+    details: dict[str, Any] | None = None,
+    ip_address: str = "",
+) -> None:
+    conn.execute(
+        """
+        INSERT INTO audit_logs (
+            workspace_id, user_id, action_type, resource_type, resource_id,
+            details_json, ip_address, created_at
+        ) VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+        """,
+        (
+            workspace_id,
+            user_id,
+            action_type,
+            resource_type,
+            resource_id,
+            json.dumps(_redact_json(details or {}), ensure_ascii=False),
+            ip_address,
+            utc_now(),
+        ),
+    )
+
+
+def _parse_iso_datetime(value: Any) -> datetime | None:
+    try:
+        parsed = datetime.fromisoformat(str(value or "").replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def _migrate_raw_contents_unique_by_job(conn: sqlite3.Connection) -> None:
@@ -1333,13 +1985,47 @@ def _trim_error(error: str | None) -> str:
     return redact_sensitive(str(error or ""))[:1000]
 
 
-def create_run(job_id: int, summary: dict[str, Any] | None = None) -> int:
+def create_run(job_id: int, summary: dict[str, Any] | None = None, timeout_seconds: int | None = None) -> int:
     with get_conn() as conn:
+        job = conn.execute("SELECT workspace_id, created_by FROM monitor_jobs WHERE id=?", (job_id,)).fetchone()
+        workspace_id = _safe_int(job["workspace_id"]) if job else DEFAULT_WORKSPACE_ID
+        created_by = _safe_int(job["created_by"]) if job else None
+        started_at = datetime.now(timezone.utc)
+        deadline_at = (started_at + timedelta(seconds=int(timeout_seconds))).isoformat() if timeout_seconds else None
         cur = conn.execute(
-            "INSERT INTO crawl_runs (job_id, status, started_at, summary) VALUES (?, 'running', ?, ?)",
-            (job_id, utc_now(), json.dumps(_redact_json(summary or {}), ensure_ascii=False)),
+            """
+            INSERT INTO crawl_runs (
+                workspace_id, job_id, status, started_at, summary,
+                timeout_seconds, deadline_at, created_by, updated_by
+            )
+            VALUES (?, ?, 'running', ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                workspace_id or DEFAULT_WORKSPACE_ID,
+                job_id,
+                started_at.isoformat(),
+                json.dumps(_redact_json(summary or {}), ensure_ascii=False),
+                timeout_seconds,
+                deadline_at,
+                created_by,
+                created_by,
+            ),
         )
         return int(cur.lastrowid)
+
+
+def set_run_resource_bindings(run_id: int, account_id: int | None = None, proxy_id: int | None = None) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            """
+            UPDATE crawl_runs
+            SET account_id=COALESCE(?, account_id),
+                proxy_id=COALESCE(?, proxy_id),
+                updated_by=updated_by
+            WHERE id=?
+            """,
+            (account_id, proxy_id, run_id),
+        )
 
 
 def update_run_summary(run_id: int, summary: dict[str, Any]) -> None:
@@ -1350,11 +2036,15 @@ def update_run_summary(run_id: int, summary: dict[str, Any]) -> None:
         )
 
 
-def finish_run(run_id: int, status: str, summary: dict[str, Any], error: str | None = None) -> None:
+def finish_run(run_id: int, status: str, summary: dict[str, Any], error: str | None = None, timeout_reason: str | None = None) -> None:
     with get_conn() as conn:
         conn.execute(
-            "UPDATE crawl_runs SET status=?, finished_at=?, summary=?, error_message=? WHERE id=?",
-            (status, utc_now(), json.dumps(_redact_json(summary), ensure_ascii=False), _trim_error(error), run_id),
+            """
+            UPDATE crawl_runs
+            SET status=?, finished_at=?, summary=?, error_message=?, timeout_reason=COALESCE(?, timeout_reason)
+            WHERE id=?
+            """,
+            (status, utc_now(), json.dumps(_redact_json(summary), ensure_ascii=False), _trim_error(error), _trim_error(timeout_reason), run_id),
         )
 
 
@@ -1365,6 +2055,9 @@ def record_skipped_run(job_id: int, reason: str, summary: dict[str, Any] | None 
     payload.setdefault("skip_reason", reason)
     now = utc_now()
     with get_conn() as conn:
+        job = conn.execute("SELECT workspace_id, created_by FROM monitor_jobs WHERE id=?", (job_id,)).fetchone()
+        workspace_id = _safe_int(job["workspace_id"]) if job else DEFAULT_WORKSPACE_ID
+        created_by = _safe_int(job["created_by"]) if job else None
         if cooldown_seconds > 0:
             cutoff = (datetime.now(timezone.utc) - timedelta(seconds=cooldown_seconds)).isoformat()
             existing = conn.execute(
@@ -1379,34 +2072,277 @@ def record_skipped_run(job_id: int, reason: str, summary: dict[str, Any] | None 
                 return int(existing["id"])
         cur = conn.execute(
             """
-            INSERT INTO crawl_runs (job_id, status, started_at, finished_at, summary, error_message)
-            VALUES (?, 'skipped', ?, ?, ?, ?)
+            INSERT INTO crawl_runs (workspace_id, job_id, status, started_at, finished_at, summary, error_message, created_by, updated_by)
+            VALUES (?, ?, 'skipped', ?, ?, ?, ?, ?, ?)
             """,
-            (job_id, now, now, json.dumps(_redact_json(payload), ensure_ascii=False), _trim_error(reason)),
+            (
+                workspace_id or DEFAULT_WORKSPACE_ID,
+                job_id,
+                now,
+                now,
+                json.dumps(_redact_json(payload), ensure_ascii=False),
+                _trim_error(reason),
+                created_by,
+                created_by,
+            ),
         )
         return int(cur.lastrowid)
 
 
-def get_run(run_id: int) -> dict[str, Any] | None:
+def acquire_account_lock(account_id: int | None, run_id: int, lock_expires_at: str | None = None) -> bool:
+    if not account_id:
+        return True
+    now = utc_now()
     with get_conn() as conn:
         row = conn.execute(
+            "SELECT locked_by_run_id FROM social_accounts WHERE id=?",
+            (account_id,),
+        ).fetchone()
+        if not row:
+            return False
+        if row["locked_by_run_id"] and int(row["locked_by_run_id"]) != int(run_id):
+            return False
+        cur = conn.execute(
             """
+            UPDATE social_accounts
+            SET locked_by_run_id=?, locked_at=?, lock_expires_at=?, updated_at=?
+            WHERE id=? AND (
+                locked_by_run_id IS NULL
+                OR locked_by_run_id=?
+            )
+            """,
+            (run_id, now, lock_expires_at or "", now, account_id, run_id),
+        )
+        return cur.rowcount == 1
+
+
+def release_account_lock(account_id: int | None, run_id: int | None = None) -> None:
+    if not account_id:
+        return
+    with get_conn() as conn:
+        if run_id:
+            conn.execute(
+                """
+                UPDATE social_accounts
+                SET locked_by_run_id=NULL, locked_at=NULL, lock_expires_at=NULL, updated_at=?
+                WHERE id=? AND locked_by_run_id=?
+                """,
+                (utc_now(), account_id, run_id),
+            )
+        else:
+            conn.execute(
+                """
+                UPDATE social_accounts
+                SET locked_by_run_id=NULL, locked_at=NULL, lock_expires_at=NULL, updated_at=?
+                WHERE id=?
+                """,
+                (utc_now(), account_id),
+            )
+
+
+def acquire_proxy_lock(proxy_id: int | None, run_id: int, expires_at: str | None = None, workspace_id: int | None = None) -> bool:
+    if not proxy_id:
+        return True
+    now = utc_now()
+    with get_conn() as conn:
+        proxy = conn.execute(
+            "SELECT workspace_id, max_concurrency, status FROM proxy_profiles WHERE id=?",
+            (proxy_id,),
+        ).fetchone()
+        if not proxy or proxy["status"] != "active":
+            return False
+        limit = max(1, _safe_int(proxy["max_concurrency"]) or 1)
+        existing = conn.execute(
+            """
+            SELECT id FROM resource_locks
+            WHERE resource_type='proxy' AND resource_id=? AND run_id=?
+            """,
+            (proxy_id, run_id),
+        ).fetchone()
+        if existing:
+            return True
+        active_count = conn.execute(
+            """
+            SELECT COUNT(*) AS n
+            FROM resource_locks l
+            JOIN crawl_runs r ON r.id = l.run_id
+            WHERE l.resource_type='proxy'
+              AND l.resource_id=?
+              AND r.status='running'
+            """,
+            (proxy_id,),
+        ).fetchone()["n"]
+        if int(active_count or 0) >= limit:
+            return False
+        try:
+            conn.execute(
+                """
+                INSERT INTO resource_locks (workspace_id, resource_type, resource_id, run_id, locked_at, expires_at)
+                VALUES (?, 'proxy', ?, ?, ?, ?)
+                """,
+                (_safe_int(workspace_id) or _safe_int(proxy["workspace_id"]) or DEFAULT_WORKSPACE_ID, proxy_id, run_id, now, expires_at or ""),
+            )
+        except sqlite3.IntegrityError:
+            return True
+        return True
+
+
+def release_proxy_locks(run_id: int, proxy_id: int | None = None) -> None:
+    with get_conn() as conn:
+        if proxy_id:
+            conn.execute(
+                "DELETE FROM resource_locks WHERE resource_type='proxy' AND resource_id=? AND run_id=?",
+                (proxy_id, run_id),
+            )
+        else:
+            conn.execute("DELETE FROM resource_locks WHERE run_id=?", (run_id,))
+
+
+def release_run_resource_locks(run_id: int) -> None:
+    with get_conn() as conn:
+        conn.execute(
+            """
+            UPDATE social_accounts
+            SET locked_by_run_id=NULL, locked_at=NULL, lock_expires_at=NULL, updated_at=?
+            WHERE locked_by_run_id=?
+            """,
+            (utc_now(), run_id),
+        )
+        conn.execute("DELETE FROM resource_locks WHERE run_id=?", (run_id,))
+
+
+def recover_stale_runs_and_locks(reason: str = "scheduler_recovery") -> dict[str, int]:
+    now_dt = datetime.now(timezone.utc)
+    now = now_dt.isoformat()
+    recovered_runs = 0
+    released_account_locks = 0
+    released_proxy_locks = 0
+    with get_conn() as conn:
+        running_rows = conn.execute(
+            """
+            SELECT id, summary, deadline_at
+            FROM crawl_runs
+            WHERE status='running'
+            """
+        ).fetchall()
+        for row in running_rows:
+            deadline = _parse_iso_datetime(row["deadline_at"])
+            if deadline and deadline <= now_dt:
+                summary = _json_loads(row["summary"], {})
+                if not isinstance(summary, dict):
+                    summary = {}
+                summary["timeout"] = True
+                summary["timeout_reason"] = "任务达到系统运行时间上限，恢复流程已释放资源锁"
+                summary["recovered_by"] = reason
+                cur = conn.execute(
+                    """
+                    UPDATE crawl_runs
+                    SET status='timeout', finished_at=?, summary=?, error_message=?, timeout_reason=COALESCE(timeout_reason, ?)
+                    WHERE id=? AND status='running'
+                    """,
+                    (
+                        now,
+                        json.dumps(_redact_json(summary), ensure_ascii=False),
+                        _trim_error(summary["timeout_reason"]),
+                        _trim_error(reason),
+                        row["id"],
+                    ),
+                )
+                if cur.rowcount:
+                    recovered_runs += 1
+        terminal_statuses = ("success", "partial_failed", "failed", "timeout", "cancelled", "interrupted", "skipped")
+        placeholders = ",".join("?" for _ in terminal_statuses)
+        rows = conn.execute(
+            f"""
+            SELECT a.id
+            FROM social_accounts a
+            LEFT JOIN crawl_runs r ON r.id = a.locked_by_run_id
+            WHERE a.locked_by_run_id IS NOT NULL
+              AND (
+                r.id IS NULL
+                OR r.status IN ({placeholders})
+              )
+            """,
+            terminal_statuses,
+        ).fetchall()
+        account_ids = [int(row["id"]) for row in rows]
+        if account_ids:
+            conn.execute(
+                f"""
+                UPDATE social_accounts
+                SET locked_by_run_id=NULL, locked_at=NULL, lock_expires_at=NULL, updated_at=?
+                WHERE id IN ({",".join("?" for _ in account_ids)})
+                """,
+                [now, *account_ids],
+            )
+            released_account_locks = len(account_ids)
+        proxy_rows = conn.execute(
+            f"""
+            SELECT l.id
+            FROM resource_locks l
+            LEFT JOIN crawl_runs r ON r.id = l.run_id
+            WHERE r.id IS NULL
+               OR r.status IN ({placeholders})
+            """,
+            terminal_statuses,
+        ).fetchall()
+        proxy_lock_ids = [int(row["id"]) for row in proxy_rows]
+        if proxy_lock_ids:
+            conn.execute(
+                f"DELETE FROM resource_locks WHERE id IN ({','.join('?' for _ in proxy_lock_ids)})",
+                proxy_lock_ids,
+            )
+            released_proxy_locks = len(proxy_lock_ids)
+    return {
+        "recovered_runs": recovered_runs,
+        "released_account_locks": released_account_locks,
+        "released_proxy_locks": released_proxy_locks,
+    }
+
+
+def get_run(run_id: int, actor: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    with get_conn() as conn:
+        actor_clause = ""
+        actor_params: list[Any] = []
+        if actor:
+            actor_clause = "r.workspace_id=? AND (?='administrator' OR COALESCE(j.created_by, r.created_by)=?)"
+            actor_params = [
+                _safe_int(actor.get("workspace_id")) or DEFAULT_WORKSPACE_ID,
+                actor.get("role"),
+                _safe_int(actor.get("id")) or 0,
+            ]
+        where = "r.id=?"
+        params: list[Any] = [run_id]
+        if actor_clause:
+            where += f" AND {actor_clause}"
+            params.extend(actor_params)
+        row = conn.execute(
+            f"""
             SELECT r.*, j.law_firm_name FROM crawl_runs r
             LEFT JOIN monitor_jobs j ON j.id = r.job_id
-            WHERE r.id=?
+            WHERE {where}
             """,
-            (run_id,),
+            params,
         ).fetchone()
     return _hydrate_run_row(row) if row else None
 
 
-def list_runs(limit: int = 100) -> list[dict[str, Any]]:
+def list_runs(limit: int = 100, actor: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     sql = """
         SELECT r.*, j.law_firm_name FROM crawl_runs r
         LEFT JOIN monitor_jobs j ON j.id = r.job_id
-        ORDER BY r.id DESC
     """
     params: list[Any] = []
+    if actor:
+        sql += " WHERE r.workspace_id=? AND (?='administrator' OR COALESCE(j.created_by, r.created_by)=?)"
+        params.extend(
+            [
+                _safe_int(actor.get("workspace_id")) or DEFAULT_WORKSPACE_ID,
+                actor.get("role"),
+                _safe_int(actor.get("id")) or 0,
+            ]
+        )
+    sql += " ORDER BY r.id DESC"
     if limit > 0:
         sql += " LIMIT ?"
         params.append(limit)
@@ -1456,6 +2392,7 @@ def _run_display_status(status: str, summary: dict[str, Any]) -> str:
         "partial_failed": "部分失败",
         "failed": "失败",
         "cancelled": "已停止",
+        "timeout": "已超时",
     }
     return labels.get(status, status or "")
 
@@ -1464,6 +2401,8 @@ def _run_display_error(item: dict[str, Any], summary: dict[str, Any]) -> str:
     status = str(item.get("status") or "")
     if status == "skipped":
         return str(summary.get("skip_reason") or item.get("error_message") or "")
+    if status == "timeout":
+        return str(summary.get("timeout_reason") or item.get("timeout_reason") or item.get("error_message") or "")
     if item.get("error_message"):
         return str(item.get("error_message") or "")
     if summary.get("cancel_reason"):
@@ -1487,14 +2426,23 @@ def _elapsed_seconds(started_at: Any) -> int:
         return 0
 
 
-def list_reports(limit: int = 100) -> list[dict[str, Any]]:
+def list_reports(limit: int = 100, actor: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     limit = _coerce_limit(limit)
     sql = """
         SELECT reports.*, monitor_jobs.id AS current_job_id, monitor_jobs.law_firm_name FROM reports
         LEFT JOIN monitor_jobs ON monitor_jobs.id = reports.job_id
-        ORDER BY reports.id DESC
     """
     params: list[Any] = []
+    if actor:
+        sql += " WHERE reports.workspace_id=? AND (?='administrator' OR COALESCE(monitor_jobs.created_by, reports.created_by)=?)"
+        params.extend(
+            [
+                _safe_int(actor.get("workspace_id")) or DEFAULT_WORKSPACE_ID,
+                actor.get("role"),
+                _safe_int(actor.get("id")) or 0,
+            ]
+        )
+    sql += " ORDER BY reports.id DESC"
     if limit > 0:
         sql += " LIMIT ?"
         params.append(limit)
@@ -1510,15 +2458,26 @@ def list_reports(limit: int = 100) -> list[dict[str, Any]]:
     return result
 
 
-def get_report(report_id: int) -> dict[str, Any] | None:
+def get_report(report_id: int, actor: dict[str, Any] | None = None) -> dict[str, Any] | None:
     with get_conn() as conn:
+        where = "reports.id=?"
+        params: list[Any] = [report_id]
+        if actor:
+            where += " AND reports.workspace_id=? AND (?='administrator' OR COALESCE(monitor_jobs.created_by, reports.created_by)=?)"
+            params.extend(
+                [
+                    _safe_int(actor.get("workspace_id")) or DEFAULT_WORKSPACE_ID,
+                    actor.get("role"),
+                    _safe_int(actor.get("id")) or 0,
+                ]
+            )
         row = conn.execute(
-            """
+            f"""
             SELECT reports.*, monitor_jobs.id AS current_job_id, monitor_jobs.law_firm_name FROM reports
             LEFT JOIN monitor_jobs ON monitor_jobs.id = reports.job_id
-            WHERE reports.id=?
+            WHERE {where}
             """,
-            (report_id,),
+            params,
         ).fetchone()
     if not row:
         return None
@@ -1578,7 +2537,7 @@ def _attach_report_lead_counts(reports: list[dict[str, Any]]) -> None:
         report["summary"] = summary
 
 
-def list_leads(limit: int = 100) -> list[dict[str, Any]]:
+def list_leads(limit: int = 100, actor: dict[str, Any] | None = None) -> list[dict[str, Any]]:
     limit = _coerce_limit(limit)
     sql = """
         SELECT
@@ -1592,9 +2551,18 @@ def list_leads(limit: int = 100) -> list[dict[str, Any]]:
         FROM raw_contents c
         LEFT JOIN monitor_jobs j ON j.id = c.job_id
         LEFT JOIN ai_evaluations e ON e.raw_content_id = c.id
-        ORDER BY c.id DESC
     """
     params: list[Any] = []
+    if actor:
+        sql += " WHERE c.workspace_id=? AND (?='administrator' OR COALESCE(j.created_by, c.created_by)=?)"
+        params.extend(
+            [
+                _safe_int(actor.get("workspace_id")) or DEFAULT_WORKSPACE_ID,
+                actor.get("role"),
+                _safe_int(actor.get("id")) or 0,
+            ]
+        )
+    sql += " ORDER BY c.id DESC"
     if limit > 0:
         sql += " LIMIT ?"
         params.append(limit)
@@ -1622,21 +2590,101 @@ def _customer_safe_payload(value: Any) -> Any:
     return value
 
 
-def get_dashboard_summary() -> dict[str, Any]:
+def get_dashboard_summary(actor: dict[str, Any] | None = None) -> dict[str, Any]:
+    actor_params: list[Any] = []
+    job_scope = "is_internal=0"
+    run_scope = "1=1"
+    report_scope = "1=1"
+    content_scope = "1=1"
+    eval_scope = "1=1"
+    latest_run_scope = "1=1"
+    if actor:
+        workspace_id = _safe_int(actor.get("workspace_id")) or DEFAULT_WORKSPACE_ID
+        actor_id = _safe_int(actor.get("id")) or 0
+        role = str(actor.get("role") or "")
+        job_scope += " AND workspace_id=?"
+        actor_params.append(workspace_id)
+        if role != "administrator":
+            job_scope += " AND created_by=?"
+            actor_params.append(actor_id)
+        run_scope = "r.workspace_id=? AND (?='administrator' OR COALESCE(j.created_by, r.created_by)=?)"
+        report_scope = "reports.workspace_id=? AND (?='administrator' OR COALESCE(monitor_jobs.created_by, reports.created_by)=?)"
+        content_scope = "c.workspace_id=? AND (?='administrator' OR COALESCE(j.created_by, c.created_by)=?)"
+        eval_scope = "e.workspace_id=? AND (?='administrator' OR COALESCE(j.created_by, c.created_by, e.created_by)=?)"
+        latest_run_scope = run_scope
+        scoped_params = [workspace_id, role, actor_id]
+    else:
+        scoped_params = []
     with get_conn() as conn:
-        jobs_total = conn.execute("SELECT COUNT(*) AS n FROM monitor_jobs WHERE is_internal=0").fetchone()["n"]
-        jobs_enabled = conn.execute("SELECT COUNT(*) AS n FROM monitor_jobs WHERE is_internal=0 AND enabled=1").fetchone()["n"]
-        runs_total = conn.execute("SELECT COUNT(*) AS n FROM crawl_runs").fetchone()["n"]
-        contents_total = conn.execute("SELECT COUNT(*) AS n FROM raw_contents").fetchone()["n"]
-        reports_total = conn.execute("SELECT COUNT(*) AS n FROM reports").fetchone()["n"]
-        pending_review = conn.execute("SELECT COUNT(*) AS n FROM ai_evaluations WHERE status='pending_review'").fetchone()["n"]
-        negative_total = conn.execute("SELECT COUNT(*) AS n FROM ai_evaluations WHERE is_related=1 AND is_negative=1").fetchone()["n"]
-        high_total = conn.execute("SELECT COUNT(*) AS n FROM ai_evaluations WHERE is_related=1 AND is_negative=1 AND risk_level='high'").fetchone()["n"]
-        social_total = conn.execute("SELECT COUNT(*) AS n FROM social_accounts WHERE COALESCE(is_draft, 0)=0").fetchone()["n"]
-        proxy_total = conn.execute("SELECT COUNT(*) AS n FROM proxy_profiles").fetchone()["n"]
-        ai_profiles_total = conn.execute("SELECT COUNT(*) AS n FROM ai_key_profiles").fetchone()["n"]
-        login_sessions_total = conn.execute("SELECT COUNT(*) AS n FROM login_sessions").fetchone()["n"]
-        latest_runs = conn.execute("SELECT status, summary, started_at, finished_at FROM crawl_runs ORDER BY id DESC LIMIT 20").fetchall()
+        jobs_total = conn.execute(f"SELECT COUNT(*) AS n FROM monitor_jobs WHERE {job_scope}", actor_params).fetchone()["n"]
+        jobs_enabled = conn.execute(f"SELECT COUNT(*) AS n FROM monitor_jobs WHERE {job_scope} AND enabled=1", actor_params).fetchone()["n"]
+        runs_total = conn.execute(
+            f"""
+            SELECT COUNT(*) AS n FROM crawl_runs r
+            LEFT JOIN monitor_jobs j ON j.id = r.job_id
+            WHERE {run_scope}
+            """,
+            scoped_params,
+        ).fetchone()["n"]
+        contents_total = conn.execute(
+            f"""
+            SELECT COUNT(*) AS n FROM raw_contents c
+            LEFT JOIN monitor_jobs j ON j.id = c.job_id
+            WHERE {content_scope}
+            """,
+            scoped_params,
+        ).fetchone()["n"]
+        reports_total = conn.execute(
+            f"""
+            SELECT COUNT(*) AS n FROM reports
+            LEFT JOIN monitor_jobs ON monitor_jobs.id = reports.job_id
+            WHERE {report_scope}
+            """,
+            scoped_params,
+        ).fetchone()["n"]
+        pending_review = conn.execute(
+            f"""
+            SELECT COUNT(*) AS n FROM ai_evaluations e
+            LEFT JOIN raw_contents c ON c.id = e.raw_content_id
+            LEFT JOIN monitor_jobs j ON j.id = c.job_id
+            WHERE {eval_scope} AND e.status='pending_review'
+            """,
+            scoped_params,
+        ).fetchone()["n"]
+        negative_total = conn.execute(
+            f"""
+            SELECT COUNT(*) AS n FROM ai_evaluations e
+            LEFT JOIN raw_contents c ON c.id = e.raw_content_id
+            LEFT JOIN monitor_jobs j ON j.id = c.job_id
+            WHERE {eval_scope} AND e.is_related=1 AND e.is_negative=1
+            """,
+            scoped_params,
+        ).fetchone()["n"]
+        high_total = conn.execute(
+            f"""
+            SELECT COUNT(*) AS n FROM ai_evaluations e
+            LEFT JOIN raw_contents c ON c.id = e.raw_content_id
+            LEFT JOIN monitor_jobs j ON j.id = c.job_id
+            WHERE {eval_scope} AND e.is_related=1 AND e.is_negative=1 AND e.risk_level='high'
+            """,
+            scoped_params,
+        ).fetchone()["n"]
+        if actor and actor.get("role") != "administrator":
+            social_total = proxy_total = ai_profiles_total = login_sessions_total = 0
+        else:
+            social_total = conn.execute("SELECT COUNT(*) AS n FROM social_accounts WHERE COALESCE(is_draft, 0)=0").fetchone()["n"]
+            proxy_total = conn.execute("SELECT COUNT(*) AS n FROM proxy_profiles").fetchone()["n"]
+            ai_profiles_total = conn.execute("SELECT COUNT(*) AS n FROM ai_key_profiles").fetchone()["n"]
+            login_sessions_total = conn.execute("SELECT COUNT(*) AS n FROM login_sessions").fetchone()["n"]
+        latest_runs = conn.execute(
+            f"""
+            SELECT r.status, r.summary, r.started_at, r.finished_at FROM crawl_runs r
+            LEFT JOIN monitor_jobs j ON j.id = r.job_id
+            WHERE {latest_run_scope}
+            ORDER BY r.id DESC LIMIT 20
+            """,
+            scoped_params,
+        ).fetchall()
     failed_runs = 0
     skipped_runs = 0
     platform_counts: dict[str, int] = {}
@@ -1960,9 +3008,17 @@ def save_social_account(payload: dict[str, Any], account_id: int | None = None) 
     status = _validate_pool_status(payload.get("status") or "standby")
     is_draft = 1 if payload.get("is_draft") else 0
     now = utc_now()
-    profile_path = (payload.get("profile_path") or "").strip()
-    if account_id and not profile_path:
-        profile_path = _default_account_profile_path(platform, name, account_id)
+    profile_key = (payload.get("profile_key") or "").strip()
+    if account_id and not profile_key:
+        with get_conn() as conn:
+            row = conn.execute("SELECT workspace_id, profile_key FROM social_accounts WHERE id=?", (account_id,)).fetchone()
+        if row and row["profile_key"]:
+            profile_key = str(row["profile_key"])
+        else:
+            profile_key = _default_account_profile_key(_safe_int(row["workspace_id"]) if row else DEFAULT_WORKSPACE_ID, platform, account_id)
+    profile_path = ""
+    if profile_key:
+        profile_path = str(resolve_account_profile_path(profile_key))
     proxy_id = _safe_int(payload.get("proxy_id")) or None
     if proxy_id and not get_proxy_profile(proxy_id, masked=True):
         raise ValueError("proxy not found")
@@ -1986,6 +3042,7 @@ def save_social_account(payload: dict[str, Any], account_id: int | None = None) 
         login_type,
         encrypt_secret(cookies),
         status,
+        profile_key,
         profile_path,
         proxy_id,
         is_draft,
@@ -1994,7 +3051,7 @@ def save_social_account(payload: dict[str, Any], account_id: int | None = None) 
         now,
     )
     with get_conn() as conn:
-        _ensure_unique_account_profile(conn, profile_path, account_id)
+        _ensure_unique_account_profile(conn, profile_key, account_id)
         if account_id:
             exists = conn.execute("SELECT id FROM social_accounts WHERE id=?", (account_id,)).fetchone()
             if not exists:
@@ -2005,7 +3062,7 @@ def save_social_account(payload: dict[str, Any], account_id: int | None = None) 
             conn.execute(
                 """
                 UPDATE social_accounts SET name=?, platform=?, login_type=?, cookies_encrypted=?, status=?,
-                    profile_path=?, proxy_id=?, is_draft=?, notes=?, last_error=?, updated_at=? WHERE id=?
+                    profile_key=?, profile_path=?, proxy_id=?, is_draft=?, notes=?, last_error=?, updated_at=? WHERE id=?
                 """,
                 (*values, account_id),
             )
@@ -2014,19 +3071,19 @@ def save_social_account(payload: dict[str, Any], account_id: int | None = None) 
             cur = conn.execute(
                 """
                 INSERT INTO social_accounts (
-                    name, platform, login_type, cookies_encrypted, status, profile_path, proxy_id, is_draft, notes,
+                    name, platform, login_type, cookies_encrypted, status, profile_key, profile_path, proxy_id, is_draft, notes,
                     last_error, created_at, updated_at
-                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (*values[:-1], now, now),
             )
             target_id = int(cur.lastrowid)
-            if not profile_path:
-                profile_path = _default_account_profile_path(platform, name, target_id)
-                _ensure_unique_account_profile(conn, profile_path, target_id)
+            if not profile_key:
+                profile_key = _default_account_profile_key(DEFAULT_WORKSPACE_ID, platform, target_id)
+                profile_path = str(resolve_account_profile_path(profile_key))
                 conn.execute(
-                    "UPDATE social_accounts SET profile_path=?, updated_at=? WHERE id=?",
-                    (profile_path, now, target_id),
+                    "UPDATE social_accounts SET profile_key=?, profile_path=?, updated_at=? WHERE id=?",
+                    (profile_key, profile_path, now, target_id),
                 )
     return get_social_account(target_id) or {}
 
@@ -2059,7 +3116,8 @@ def confirm_social_account(account_id: int, payload: dict[str, Any] | None = Non
         "login_type": payload.get("login_type") or account.get("login_type") or "qrcode",
         "status": payload.get("status") or ("active" if account.get("status") == "active" else account.get("status") or "standby"),
         "proxy_id": payload.get("proxy_id") if "proxy_id" in payload else account.get("proxy_id"),
-        "profile_path": payload.get("profile_path") or account.get("profile_path") or "",
+        "profile_key": account.get("profile_key") or "",
+        "profile_path": account.get("profile_path") or "",
         "notes": payload.get("notes") if "notes" in payload else account.get("notes") or "",
         "last_error": payload.get("last_error") if "last_error" in payload else account.get("last_error") or "",
         "is_draft": False,
@@ -2089,12 +3147,12 @@ def get_social_account(account_id: int, masked: bool = True) -> dict[str, Any] |
     return _row_to_pool_item(dict(row), masked=masked) if row else None
 
 
-def _ensure_unique_account_profile(conn: sqlite3.Connection, profile_path: str, account_id: int | None = None) -> None:
-    profile_path = str(profile_path or "").strip()
-    if not profile_path:
+def _ensure_unique_account_profile(conn: sqlite3.Connection, profile_key: str, account_id: int | None = None) -> None:
+    profile_key = str(profile_key or "").strip()
+    if not profile_key:
         return
-    params: list[Any] = [profile_path]
-    sql = "SELECT id FROM social_accounts WHERE lower(profile_path)=lower(?)"
+    params: list[Any] = [profile_key]
+    sql = "SELECT id FROM social_accounts WHERE lower(profile_key)=lower(?)"
     if account_id:
         sql += " AND id<>?"
         params.append(account_id)
@@ -2110,6 +3168,10 @@ def _default_account_profile_path(platform: str, account_name: str, account_id: 
     return str((ACCOUNT_PROFILE_ROOT / platform / slug).resolve())
 
 
+def _default_account_profile_key(workspace_id: int | None, platform: str, account_id: int | None) -> str:
+    return default_account_profile_key(workspace_id or DEFAULT_WORKSPACE_ID, platform, account_id)
+
+
 def delete_social_account(account_id: int) -> None:
     with get_conn() as conn:
         conn.execute("DELETE FROM social_accounts WHERE id=?", (account_id,))
@@ -2119,12 +3181,13 @@ def update_social_account_login_state(account_id: int | None, status: str, messa
     if not account_id:
         return None
     now = utc_now()
-    if status == "success":
+    status = normalize_login_state(status)
+    if status == LOGIN_STATE_SUCCESS:
         account_status = "active"
         last_error = ""
         last_used_at = now
-    elif status in {"waiting_verification", "waiting_manual_browser", "failed", "expired"}:
-        account_status = "limited" if status == "waiting_verification" else "standby"
+    elif status in {LOGIN_STATE_NEEDS_VERIFICATION, LOGIN_STATE_QRCODE_FAILED, LOGIN_STATE_TIMEOUT, LOGIN_STATE_PLATFORM_ERROR}:
+        account_status = "limited" if status == LOGIN_STATE_NEEDS_VERIFICATION else "standby"
         last_error = customer_safe_text(message)
         last_used_at = None
     else:
@@ -2262,7 +3325,14 @@ def create_login_session(payload: dict[str, Any]) -> dict[str, Any]:
     _validate_platform(platform)
     account_id = _safe_int(payload.get("account_id")) or None
     login_url = (payload.get("login_url") or "").strip()
-    profile_path = (payload.get("profile_path") or "").strip()
+    profile_key = (payload.get("profile_key") or "").strip()
+    account = None
+    if account_id and not profile_key:
+        account = get_social_account(account_id, masked=False)
+        profile_key = str((account or {}).get("profile_key") or "")
+    profile_path = ""
+    if profile_key:
+        profile_path = str(resolve_account_profile_path(profile_key))
     message = payload.get("message") or (
         "正在创建平台登录会话；如二维码或验证状态无法回传，可使用网页登录窗口人工处理。"
     )
@@ -2271,16 +3341,17 @@ def create_login_session(payload: dict[str, Any]) -> dict[str, Any]:
         cur = conn.execute(
             """
             INSERT INTO login_sessions (
-                platform, account_id, status, login_url, qr_image, profile_path,
+                platform, account_id, status, login_url, qr_image, profile_key, profile_path,
                 message, created_at, updated_at, expires_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 platform,
                 account_id,
-                "waiting_manual_browser",
+                normalize_login_state(payload.get("status") or LOGIN_STATE_PREPARING),
                 login_url,
                 payload.get("qr_image") or "",
+                profile_key,
                 profile_path,
                 message,
                 now,
@@ -2331,13 +3402,18 @@ def latest_successful_login_session_at(platform: str) -> str:
     return str(row["updated_at"] or "") if row else ""
 
 
-def expire_login_sessions_for_account(account_id: int | None, platform: str, profile_path: str = "") -> list[int]:
+def expire_login_sessions_for_account(account_id: int | None, platform: str, profile_path: str = "", profile_key: str = "") -> list[int]:
     _validate_platform(platform)
-    clauses = ["platform=?", "status IN ('waiting_qrcode', 'waiting_verification', 'waiting_manual_browser', 'scanned')"]
+    pending_statuses = tuple(PENDING_LOGIN_STATES | {"waiting_qrcode", "waiting_verification", "waiting_manual_browser", "scanned"})
+    clauses = [f"platform=?", f"status IN ({','.join('?' for _ in pending_statuses)})"]
     params: list[Any] = [platform]
+    params.extend(pending_statuses)
     if account_id:
         clauses.append("account_id=?")
         params.append(account_id)
+    elif profile_key:
+        clauses.append("profile_key=?")
+        params.append(profile_key)
     elif profile_path:
         clauses.append("profile_path=?")
         params.append(profile_path)
@@ -2351,14 +3427,19 @@ def expire_login_sessions_for_account(account_id: int | None, platform: str, pro
         if ids:
             placeholders = ",".join("?" for _ in ids)
             conn.execute(
-                f"UPDATE login_sessions SET status='expired', message=?, updated_at=? WHERE id IN ({placeholders})",
-                ["已被新的登录会话替换", now, *ids],
+                f"UPDATE login_sessions SET status=?, message=?, updated_at=? WHERE id IN ({placeholders})",
+                [LOGIN_STATE_TIMEOUT, "已被新的登录会话替换", now, *ids],
             )
     return ids
 
 
 def update_login_session_status(session_id: int, status: str, message: str = "", qr_image: str = "") -> dict[str, Any]:
-    allowed = {"waiting_qrcode", "waiting_verification", "waiting_manual_browser", "scanned", "success", "expired", "failed"}
+    status = normalize_login_state(status)
+    allowed = STRUCTURED_LOGIN_STATES | {
+        LOGIN_STATE_WAITING_QRCODE,
+        LOGIN_STATE_WAITING_SCAN,
+        LOGIN_STATE_WAITING_CONFIRM,
+    }
     if status not in allowed:
         raise ValueError("invalid login session status")
     with get_conn() as conn:
@@ -2392,6 +3473,14 @@ def _row_to_pool_item(row: dict[str, Any], masked: bool = True) -> dict[str, Any
     row["cookies"] = mask_secret(encrypted) if masked else raw_cookies
     row["has_cookies"] = bool(raw_cookies)
     row["is_draft"] = bool(row.get("is_draft"))
+    try:
+        profile_env = account_profile_environment(row)
+    except ValueError:
+        profile_env = {"profile_key": row.get("profile_key") or "", "runtime_path": "", "profile_path": "", "profile_configured": False}
+    row["profile_key"] = profile_env.get("profile_key") or row.get("profile_key") or ""
+    row["profile_configured"] = bool(profile_env.get("profile_configured"))
+    row["profile_runtime_path"] = "" if masked else str(profile_env.get("runtime_path") or "")
+    row["profile_path"] = "" if masked else str(profile_env.get("profile_path") or "")
     platform = row.get("platform")
     if platform in SUPPORTED_MONITOR_PLATFORMS:
         capability = get_mediacrawler_login_capability(str(platform))
