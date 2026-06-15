@@ -241,13 +241,13 @@ scope, and rollback path.
 
 ### Phase 11B - Base Layout And Navigation Visual Foundation
 
-- [ ] Move base layout, shell, header, navigation, button, card, and toolbar
+- [x] Move base layout, shell, header, navigation, button, card, and toolbar
       styling into `monitor.css`.
-- [ ] Keep page structure and business data flow unchanged.
-- [ ] Apply the accepted Apple-style visual foundation to desktop layout and
+- [x] Keep page structure and business data flow unchanged.
+- [x] Apply the accepted Apple-style visual foundation to desktop layout and
       navigation.
-- [ ] Keep administrator and normal-user menu visibility unchanged.
-- [ ] Verify desktop 1440px navigation, page switching, login/logout, and core
+- [x] Keep administrator and normal-user menu visibility unchanged.
+- [x] Verify desktop 1440px navigation, page switching, login/logout, and core
       pages have no visible regressions.
 
 ### Phase 11C - Interaction Components And Floating Menu Fix

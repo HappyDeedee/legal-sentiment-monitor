@@ -11,6 +11,48 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
   `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-15 - Phase 11B Base Layout And Navigation Visual Foundation Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`, isolated local FastAPI service with
+temporary monitor data.
+
+Result:
+
+- Moved the base desktop shell, side navigation, brand, header, button,
+  metric-card, toolbar, page-toolbar, toolbar-actions, and page-actions styling
+  into `api/webui/monitor/monitor.css`.
+- Kept table, modal, form, report-preview, task-wizard, AI-rule,
+  mail-template, and resource-specific styles in the existing inline style
+  block for later Phase 11C/11D and page-specific batches.
+- Preserved page IDs, navigation data attributes, inline JavaScript behavior,
+  business data flow, and administrator/normal-user menu visibility.
+- Applied the first low-noise Apple-style desktop foundation through a quieter
+  shell width, translucent header, refined navigation spacing, and shared
+  button/card/toolbar styling.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_11a or phase_11b or monitor_page_uses"`
+- Result: 4 passed, 214 deselected, 1 warning.
+- Runtime HTTP check on isolated service:
+  - `/monitor`: HTTP 200;
+  - `/static/monitor/monitor.css`: HTTP 200;
+  - `/static/monitor/monitor.js`: HTTP 200.
+- Playwright desktop 1440px authenticated smoke check:
+  login, logout, dashboard, monitoring task list, run center, report center,
+  task-create entry, Resource Management popover, and System Configuration
+  popover remained reachable; no console errors or page errors were reported.
+
+Limitations:
+
+- Phase 11B does not implement shared interaction helpers, fixed/portal row
+  menu positioning, or mobile responsive navigation. Those remain for Phase
+  11C and Phase 11D.
+
 ## 2026-06-15 - Phase 11A Frontend Module Boundary Verified
 
 Environment: worktree

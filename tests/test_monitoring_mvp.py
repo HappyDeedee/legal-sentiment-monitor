@@ -7171,10 +7171,12 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
 
 def test_monitor_page_uses_consistent_buttons_tables_and_modal_actions():
     page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    monitor_css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    frontend_source = page + "\n" + monitor_css
 
-    assert "white-space:nowrap" in page
-    assert "word-break:keep-all" in page
-    assert "min-height:36px" in page
+    assert "white-space: nowrap" in frontend_source or "white-space:nowrap" in frontend_source
+    assert "word-break: keep-all" in frontend_source or "word-break:keep-all" in frontend_source
+    assert "min-height: 36px" in frontend_source or "min-height:36px" in frontend_source
     assert ".row > * { flex:0 1 auto; }" in page
     assert ".row > button, .row > a { flex:0 0 auto; }" in page
     assert ".wide-actions { display:inline-flex; gap:6px; align-items:center; flex-wrap:nowrap;" in page
@@ -7197,7 +7199,7 @@ def test_monitor_page_uses_consistent_buttons_tables_and_modal_actions():
     assert ".ui-icon svg" in page
     assert '<symbol id="icon-dashboard"' in page
     assert '<use href="#icon-monitor">' in page
-    assert ".page-toolbar { display:flex;" in page
+    assert ".page-toolbar {" in frontend_source
     assert "report-workspace" not in page
     assert ".schema-item { grid-template-columns:1fr; }" in page
     assert ".action-menu-host" in page
@@ -7295,6 +7297,44 @@ def test_phase_11a_monitor_static_boundary_and_tokens_are_quiet():
 
     for forbidden_js in ["console.", "window.", "globalThis", "document.", "addEventListener"]:
         assert forbidden_js not in js
+
+
+def test_phase_11b_base_layout_styles_live_in_monitor_css():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+
+    for selector in [
+        ".shell {",
+        ".shell > aside",
+        ".brand {",
+        "nav {",
+        ".nav-group {",
+        "nav button {",
+        "header {",
+        ".header-title strong",
+        ".metric-card {",
+        "button.primary",
+        "button.secondary",
+        "button.danger",
+        ".toolbar {",
+        ".toolbar-actions {",
+    ]:
+        assert selector in css
+
+    inline_style = page[page.index("<style>") : page.index("</style>")]
+    inline_base_style = inline_style.split("@media", 1)[0]
+    for migrated_selector in [
+        ".shell {",
+        ".shell > aside",
+        ".brand {",
+        "nav { display:grid",
+        "nav button {",
+        "header {",
+        "button.primary, button.secondary, button.danger",
+        ".toolbar {",
+        "\n    .toolbar-actions {",
+    ]:
+        assert migrated_selector not in inline_base_style
 
 
 def test_cli_run_due_runs_only_due_enabled_jobs(monkeypatch):
