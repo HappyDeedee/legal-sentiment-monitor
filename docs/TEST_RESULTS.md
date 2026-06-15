@@ -11,6 +11,54 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
   `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-15 - Phase 11C Interaction Components And Floating Menu Fix Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`, isolated local FastAPI service with
+temporary monitor data.
+
+Result:
+
+- Added shared toast, loading, empty-state, modal, drawer, and action-menu
+  styles to `api/webui/monitor/monitor.css`.
+- Added the `window.MonitorUI` helper boundary in
+  `api/webui/monitor/monitor.js` for toast, loading, empty-state,
+  close-menu, portal-root, and fixed floating-menu positioning helpers.
+- Reworked account, monitoring-task, AI-rule, and report row menus to use
+  fixed viewport placement and viewport-edge adjustment.
+- Kept the no-build Vanilla JavaScript/CSS path and did not introduce a
+  floating-position dependency, so no new `DECISIONS.md` entry was required.
+- Verified that proxy, AI access, and mail-template surfaces currently use
+  direct edit/test/preview actions rather than row menus, so no clipped row-menu
+  surface exists there in Phase 11C.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_11a or phase_11b or phase_11c or monitor_page_uses"`
+- Result: 5 passed, 214 deselected, 1 warning.
+- Runtime HTTP check on isolated service:
+  - `/monitor`: HTTP 200;
+  - `/static/monitor/monitor.css`: HTTP 200;
+  - `/static/monitor/monitor.js`: HTTP 200.
+- Playwright authenticated interaction check:
+  - account, monitoring-task, AI-rule, and report row menus used
+    `position: fixed`;
+  - active menus stayed inside the viewport;
+  - outside click and Escape closed menus;
+  - page changes and action execution close menus through the shared
+    close-menu path;
+  - 1024px and 390px smoke checks for monitoring tasks, run center, and report
+    center completed without console or page errors.
+
+Limitations:
+
+- Phase 11C does not implement the Phase 11D responsive foundation or mobile
+  navigation. Responsive breakpoint and touch-navigation work remains the next
+  allowed execution goal.
+
 ## 2026-06-15 - Phase 11B Base Layout And Navigation Visual Foundation Verified
 
 Environment: worktree

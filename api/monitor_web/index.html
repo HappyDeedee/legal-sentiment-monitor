@@ -69,7 +69,6 @@
     .status.ok { background:#ecfdf5; color:#047857; }
     .status.warn { background:#fff7ed; color:#b45309; }
     .status.bad { background:#fef2f2; color:#b42318; }
-    .toast { position:fixed; right:18px; top:76px; background:#111827; color:#fff; padding:10px 14px; border-radius:6px; display:none; max-width:460px; z-index:60; }
     .auth-screen { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:#f8fafc; z-index:70; padding:20px; }
     .auth-screen.active { display:flex; }
     .auth-panel { width:min(420px, 100%); border:1px solid var(--line); border-radius:8px; background:#fff; box-shadow:0 24px 60px rgba(15,23,42,.18); padding:24px; }
@@ -223,19 +222,6 @@
     .account-quick-filter { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 12px; }
     .account-quick-filter button { border:1px solid var(--line); background:#fff; color:#263244; border-radius:999px; padding:6px 10px; cursor:pointer; font-weight:600; }
     .account-quick-filter button.active { border-color:#93c5fd; background:var(--primary-weak); color:#1d4ed8; }
-    .account-actions { position:relative; display:flex; gap:6px; flex-wrap:nowrap; align-items:center; justify-content:flex-end; }
-    .account-action-menu { position:absolute; right:0; top:36px; min-width:154px; display:none; padding:6px; background:#fff; border:1px solid var(--line); border-radius:8px; box-shadow:0 18px 38px rgba(15,23,42,.18); z-index:8; }
-    .account-action-menu.active { display:grid; gap:4px; }
-    .account-action-menu button { width:100%; justify-content:flex-start; text-align:left; }
-    .action-menu-host { position:relative; display:inline-flex; }
-    .action-menu { position:absolute; right:0; top:36px; min-width:150px; display:none; padding:6px; background:#fff; border:1px solid var(--line); border-radius:8px; box-shadow:0 18px 38px rgba(15,23,42,.18); z-index:9; }
-    .action-menu.active { display:grid; gap:4px; }
-    .action-menu a, .action-menu button { width:100%; min-height:32px; display:flex; align-items:center; justify-content:flex-start; border:0; border-radius:6px; background:#fff; color:var(--text); padding:7px 9px; text-align:left; text-decoration:none; font-weight:650; cursor:pointer; }
-    .action-menu a:hover, .action-menu button:hover { background:var(--primary-weak); color:#1d4ed8; }
-    .report-action-menu { position:fixed; display:none; min-width:168px; padding:6px; background:#fff; border:1px solid var(--line); border-radius:8px; box-shadow:0 18px 38px rgba(15,23,42,.18); z-index:90; }
-    .report-action-menu.active { display:grid; gap:4px; }
-    .report-action-menu a, .report-action-menu button { width:100%; min-height:32px; display:flex; align-items:center; justify-content:flex-start; border:0; border-radius:6px; background:#fff; color:var(--text); padding:7px 9px; text-align:left; text-decoration:none; font-weight:650; cursor:pointer; white-space:nowrap; }
-    .report-action-menu a:hover, .report-action-menu button:hover { background:var(--primary-weak); color:#1d4ed8; }
     .account-table tr.active td { background:#eff6ff; }
     .account-name-cell strong { display:block; font-size:13px; }
     .account-name-cell span { display:block; margin-top:3px; color:var(--muted); font-size:12px; }
@@ -295,42 +281,12 @@
     .platform-login-panel.active { display:block; }
     details.advanced { margin-top:14px; border-top:1px solid var(--line); padding-top:12px; }
     details.advanced summary { cursor:pointer; color:var(--muted); font-weight:700; }
-    .modal-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; margin-bottom:6px; }
-    .modal-head h3 { margin-bottom:4px; }
-    .modal-close { min-width:34px; min-height:34px; border:1px solid var(--line); background:#fff; border-radius:6px; width:34px; height:34px; cursor:pointer; font-size:20px; line-height:1; padding:0; }
     .detail-tabs { display:flex; gap:8px; border-bottom:1px solid var(--line); margin:12px 0 16px; }
     .detail-tabs button { border:0; background:transparent; padding:10px 12px; cursor:pointer; color:var(--muted); font-weight:700; }
     .detail-tabs button.active { color:var(--primary); border-bottom:2px solid var(--primary); }
     .account-tab { display:none; }
     .account-tab.active { display:block; }
     .detail-block { border-top:1px solid var(--line); padding-top:14px; margin-top:14px; }
-    .drawer-backdrop { position:fixed; inset:0; display:none; background:rgba(15,23,42,.38); z-index:30; }
-    .drawer-backdrop.active { display:block; }
-    .drawer {
-      position:fixed;
-      top:50%;
-      left:50%;
-      right:auto;
-      width:min(980px, calc(100% - 36px));
-      height:auto;
-      max-height:calc(100vh - 72px);
-      overflow:auto;
-      background:#fff;
-      color:var(--text);
-      border:1px solid var(--line);
-      border-radius:8px;
-      box-shadow:0 24px 70px rgba(15,23,42,.28);
-      padding:18px;
-      display:flex;
-      flex-direction:column;
-      transform:translate(-50%, -48%) scale(.98);
-      opacity:0;
-      pointer-events:none;
-      transition:transform .18s ease, opacity .18s ease;
-      z-index:31;
-    }
-    .drawer.active { transform:translate(-50%, -50%) scale(1); opacity:1; pointer-events:auto; }
-    .drawer-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px; }
     .drawer-actions { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
     .drawer .logbox { flex:1; min-height:420px; max-height:none; margin:0; }
     .log-modal { height:min(760px, calc(100vh - 72px)); }
@@ -1407,7 +1363,77 @@
       {field:'recommended_action', type:'string', description:'建议运营人员下一步如何复核或处理。', used_for:'报告中的处理建议。'}
     ];
     const lines = id => document.getElementById(id).value.split(/\n|,/).map(s=>s.trim()).filter(Boolean);
-    const toast = msg => { const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; setTimeout(()=>el.style.display='none', 3500); };
+    const toast = (msg, type='info') => {
+      if(window.MonitorUI && window.MonitorUI.showToast) return window.MonitorUI.showToast(msg, type);
+      const el=document.getElementById('toast');
+      el.textContent=msg;
+      el.className='toast active ' + (type || 'info');
+      el.style.display='block';
+      setTimeout(()=>{ el.classList.remove('active'); el.style.display='none'; }, 3500);
+      return el;
+    };
+    function positionFloatingMenu(triggerEl, menuEl, options={}){
+      if(window.MonitorUI && window.MonitorUI.positionFloatingMenu){
+        return window.MonitorUI.positionFloatingMenu(triggerEl, menuEl, options);
+      }
+      if(!triggerEl || !menuEl) return null;
+      const margin=Number(options.margin||12);
+      const gap=Number(options.gap||6);
+      const rect=triggerEl.getBoundingClientRect();
+      menuEl.classList.add('is-floating');
+      menuEl.style.position='fixed';
+      menuEl.style.right='auto';
+      menuEl.style.bottom='auto';
+      menuEl.style.visibility='hidden';
+      menuEl.style.left='0px';
+      menuEl.style.top='0px';
+      const menuWidth=menuEl.offsetWidth || Number(options.width||168);
+      const menuHeight=menuEl.offsetHeight || Number(options.height||160);
+      const preferredLeft=options.align==='left' ? rect.left : rect.right - menuWidth;
+      const left=Math.max(margin, Math.min(window.innerWidth - menuWidth - margin, preferredLeft));
+      const belowTop=rect.bottom + gap;
+      const aboveTop=rect.top - menuHeight - gap;
+      const top=belowTop + menuHeight + margin <= window.innerHeight
+        ? belowTop
+        : Math.max(margin, Math.min(window.innerHeight - menuHeight - margin, aboveTop));
+      menuEl.style.left=Math.round(left)+'px';
+      menuEl.style.top=Math.round(top)+'px';
+      menuEl.style.visibility='';
+      return {left, top, width:menuWidth, height:menuHeight};
+    }
+    function closeFloatingMenus(){
+      openAccountMenuId=null;
+      openJobMenuId=null;
+      openAIRuleMenuId=null;
+      closeReportActionMenu();
+      renderAccountList();
+      renderJobsTable();
+      renderAIRuleProfiles([...aiRuleProfileCache.values()]);
+    }
+    function positionAccountActionMenu(){
+      if(openAccountMenuId===null) return;
+      const menu=document.getElementById('account_menu_'+openAccountMenuId);
+      const anchor=document.querySelector(`[data-account-menu-button="${openAccountMenuId}"]`);
+      if(menu && anchor) positionFloatingMenu(anchor, menu, {width:172, height:150});
+    }
+    function positionJobActionMenu(){
+      if(openJobMenuId===null) return;
+      const menu=document.getElementById('job_menu_'+openJobMenuId);
+      const anchor=document.querySelector(`[data-job-menu-button="${openJobMenuId}"]`);
+      if(menu && anchor) positionFloatingMenu(anchor, menu, {width:168, height:120});
+    }
+    function positionAIRuleActionMenu(){
+      if(openAIRuleMenuId===null) return;
+      const menu=document.getElementById('ai_rule_menu_'+openAIRuleMenuId);
+      const anchor=document.querySelector(`[data-ai-rule-menu-button="${openAIRuleMenuId}"]`);
+      if(menu && anchor) positionFloatingMenu(anchor, menu, {width:172, height:132});
+    }
+    function positionActiveFloatingMenus(){
+      positionAccountActionMenu();
+      positionJobActionMenu();
+      positionAIRuleActionMenu();
+      positionReportActionMenu();
+    }
     function showLogin(message=''){
       authReady=false;
       currentSession=null;
@@ -1554,8 +1580,12 @@
         closeReportActionMenu();
       }
     });
-    window.addEventListener('resize', positionReportActionMenu);
-    window.addEventListener('scroll', positionReportActionMenu, true);
+    document.addEventListener('keydown', event => {
+      if(event.key === 'Escape') closeFloatingMenus();
+    });
+    document.addEventListener('monitor:close-floating-menus', closeFloatingMenus);
+    window.addEventListener('resize', positionActiveFloatingMenus);
+    window.addEventListener('scroll', positionActiveFloatingMenus, true);
 
     function toggleNavMenu(menu){
       const target=document.getElementById('nav_menu_'+menu);
@@ -1571,6 +1601,7 @@
         toast('当前账号没有访问该页面的权限');
         return;
       }
+      closeFloatingMenus();
       document.querySelectorAll('nav button, section').forEach(x=>x.classList.remove('active'));
       const parent = btn.classList.contains('sub') ? btn.closest('.nav-group')?.querySelector('button[data-menu]') : btn;
       if(parent) parent.classList.add('active');
@@ -2118,6 +2149,7 @@
       renderAccountBulkBar(accounts);
       updateAccountBulkToolbar();
       document.getElementById('social_accounts_table').innerHTML = accounts.length ? accountLedgerTable(accounts, selectedId) : '<div class="empty">没有匹配的账号。可以点击右上角“新增账号”。</div>';
+      positionAccountActionMenu();
     }
     function renderAccountBulkBar(accounts){
       let bar=document.getElementById('account_bulk_bar');
@@ -2174,12 +2206,12 @@
         <td class="col-actions" onclick="event.stopPropagation()">
           <div class="account-actions">
             <button class="secondary" onclick="editSocialAccount(${id})">详情</button>
-            <button class="secondary" onclick="toggleAccountActionMenu(${id})">更多</button>
+            <button class="secondary" data-account-menu-button="${id}" onclick="toggleAccountActionMenu(${id})">更多</button>
             <div id="account_menu_${id}" class="account-action-menu${menuOpen?' active':''}">
-              <button class="secondary" ${checking?'disabled':''} onclick="checkSocialAccountLogin(${id})">${checking?'检测中':'检测登录态'}</button>
-              <button class="secondary" onclick="reloginSocialAccount(${id})">重新登录</button>
-              <button class="secondary" onclick="setSocialAccountStatus(${id}, '${a.status==='disabled'?'standby':'disabled'}')">${a.status==='disabled'?'启用账号':'停用账号'}</button>
-              <button class="danger" onclick="deleteSocialAccount(${id})">删除账号</button>
+              <button class="secondary" ${checking?'disabled':''} onclick="checkSocialAccountLogin(${id}); closeFloatingMenus();">${checking?'检测中':'检测登录态'}</button>
+              <button class="secondary" onclick="reloginSocialAccount(${id}); closeFloatingMenus();">重新登录</button>
+              <button class="secondary" onclick="setSocialAccountStatus(${id}, '${a.status==='disabled'?'standby':'disabled'}'); closeFloatingMenus();">${a.status==='disabled'?'启用账号':'停用账号'}</button>
+              <button class="danger" onclick="deleteSocialAccount(${id}); closeFloatingMenus();">删除账号</button>
             </div>
           </div>
         </td>
@@ -2906,6 +2938,7 @@
       const target=document.getElementById('jobs_table');
       if(!target) return;
       target.innerHTML = table(['任务ID','律所','平台','平台搜索词','频率','上次运行','下次运行','状态','操作'], filteredJobs([...jobCache.values()]).map(j=>jobRow(j)));
+      positionJobActionMenu();
     }
     function filteredJobs(jobs){
       const query=(val('job_search')||'').trim().toLowerCase();
@@ -2934,11 +2967,11 @@
       return `<div class="wide-actions">
         ${primary}
         <span class="action-menu-host">
-          <button class="secondary" onclick="toggleJobActionMenu(${id})">更多</button>
+          <button class="secondary" data-job-menu-button="${id}" onclick="toggleJobActionMenu(${id})">更多</button>
           <span id="job_menu_${id}" class="action-menu${open?' active':''}">
-            <button type="button" onclick="editJob(${id})">编辑任务</button>
-            <button type="button" onclick="toggleJob(${id}, ${j.enabled})">${j.enabled?'暂停任务':'恢复任务'}</button>
-            <button type="button" onclick="deleteJob(${id})">删除任务</button>
+            <button type="button" onclick="editJob(${id}); closeFloatingMenus();">编辑任务</button>
+            <button type="button" onclick="toggleJob(${id}, ${j.enabled}); closeFloatingMenus();">${j.enabled?'暂停任务':'恢复任务'}</button>
+            <button type="button" onclick="deleteJob(${id}); closeFloatingMenus();">删除任务</button>
           </span>
         </span>
       </div>`;
@@ -3186,6 +3219,7 @@
           aiRuleActions(rule)
         ])
       );
+      positionAIRuleActionMenu();
     }
     function aiRuleActions(rule){
       const id=Number(rule.id);
@@ -3193,11 +3227,11 @@
       return `<div class="wide-actions">
         <button class="secondary" onclick="editAIRuleProfile(${id})">详情</button>
         <span class="action-menu-host">
-          <button class="secondary" onclick="toggleAIRuleActionMenu(${id})">更多</button>
+          <button class="secondary" data-ai-rule-menu-button="${id}" onclick="toggleAIRuleActionMenu(${id})">更多</button>
           <span id="ai_rule_menu_${id}" class="action-menu${open?' active':''}">
-            <button type="button" onclick="testAIRuleProfile(${id})">测试规则</button>
-            ${rule.is_active ? '' : `<button type="button" onclick="activateAIRuleProfile(${id})">设为默认</button>`}
-            <button type="button" onclick="deleteAIRuleProfile(${id})">删除规则</button>
+            <button type="button" onclick="testAIRuleProfile(${id}); closeFloatingMenus();">测试规则</button>
+            ${rule.is_active ? '' : `<button type="button" onclick="activateAIRuleProfile(${id}); closeFloatingMenus();">设为默认</button>`}
+            <button type="button" onclick="deleteAIRuleProfile(${id}); closeFloatingMenus();">删除规则</button>
           </span>
         </span>
       </div>`;
@@ -4076,13 +4110,7 @@
       const menu=document.getElementById('report_action_menu');
       const anchor=(reportMenuAnchor && document.contains(reportMenuAnchor)) ? reportMenuAnchor : document.querySelector(`[data-report-menu-button="${openReportMenuId}"]`);
       if(!menu || !anchor) return;
-      const rect=anchor.getBoundingClientRect();
-      const menuWidth=menu.offsetWidth || 168;
-      const menuHeight=menu.offsetHeight || 160;
-      const left=Math.max(12, Math.min(window.innerWidth - menuWidth - 12, rect.right - menuWidth));
-      const top=Math.max(12, Math.min(window.innerHeight - menuHeight - 12, rect.bottom + 6));
-      menu.style.left=left+'px';
-      menu.style.top=top+'px';
+      positionFloatingMenu(anchor, menu, {width:188, height:160});
     }
     async function createSystemCheckReport(){ const res=await api('/reports/system-check',{method:'POST'}); if(!res.ok){toast(await err(res));return;} toast('系统诊断报告已生成'); await Promise.all([loadReports(), loadRuns(), loadReadiness(), loadDoctor(), loadDashboard()]); }
     async function previewReport(id){

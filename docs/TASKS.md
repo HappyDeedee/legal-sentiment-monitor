@@ -252,21 +252,25 @@ scope, and rollback path.
 
 ### Phase 11C - Interaction Components And Floating Menu Fix
 
-- [ ] Add standard toast, loading, empty-state, modal, and action-menu styles
+- [x] Add standard toast, loading, empty-state, modal, and action-menu styles
       to `monitor.css`.
-- [ ] Add a `MonitorUI` helper boundary in `monitor.js` for toast, loading,
+- [x] Add a `MonitorUI` helper boundary in `monitor.js` for toast, loading,
       empty-state, menu close, and floating menu positioning helpers.
-- [ ] Replace clipped row action menu behavior with fixed or portal-style
+- [x] Replace clipped row action menu behavior with fixed or portal-style
       positioning.
-- [ ] Implement or equivalent `positionFloatingMenu(triggerEl, menuEl)`
+- [x] Implement or equivalent `positionFloatingMenu(triggerEl, menuEl)`
       behavior.
-- [ ] Decide whether a local helper is enough or a lightweight floating
+- [x] Decide whether a local helper is enough or a lightweight floating
       positioning library is needed; record any new dependency in
       `DECISIONS.md` before adding it.
-- [ ] Ensure menus close on outside click, escape, page change, and successful
+- [x] Ensure menus close on outside click, escape, page change, and successful
       action.
-- [ ] Verify account, proxy, report, AI, mail-template, and modal-contained row
+- [x] Verify account, proxy, report, AI, mail-template, and modal-contained row
       menus are not clipped by scroll containers or modal boundaries.
+      Account, monitoring-task, AI-rule, and report row menus were verified
+      with fixed viewport placement. Proxy, AI access, and mail-template
+      surfaces currently expose direct edit/test/preview actions rather than
+      row menus, so no clipped row-menu surface exists there in Phase 11C.
 
 ### Phase 11D - Responsive Foundation
 

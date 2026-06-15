@@ -18,8 +18,9 @@ roadmap. Phase 10 - Frontend Architecture And Technology Decision is complete
 as a documentation and architecture decision phase. Phase 10.5 - Phase 10-18
 Global Plan Review Gate is complete and found no P0/P1 blockers after the
 granularity refinements. Phase 11A - Frontend Module Boundary And CSS Token
-Layer and Phase 11B - Base Layout And Navigation Visual Foundation are
-complete and verified. Phase 11C is the next allowed execution goal.
+Layer, Phase 11B - Base Layout And Navigation Visual Foundation, and Phase
+11C - Interaction Components And Floating Menu Fix are complete and verified.
+Phase 11D is the next allowed execution goal.
 The active SQLite schema now provides the foundation tables and columns
 required before later implementation work, and the web/API layer now has
 session login, administrator/normal-user roles, menu visibility,
@@ -56,8 +57,8 @@ diagnostics, and retention-setting diagnostics.
   documentation and architecture decision phase.
 - Phase 10.5 - Phase 10-18 Global Plan Review Gate: complete as a
   documentation-only review gate.
-- Phase 11 - Frontend Design System: Phase 11A and Phase 11B complete and
-  verified; Phase 11C is the next allowed execution goal.
+- Phase 11 - Frontend Design System: Phase 11A, Phase 11B, and Phase 11C
+  complete and verified; Phase 11D is the next allowed execution goal.
 - Phase 12 - Navigation And Page Entry Redesign: planned, not implemented.
 - Phase 13 - Overview Operations Home Redesign: planned as Phase 13A-13C, not
   implemented.
@@ -202,7 +203,7 @@ validation with real deployment credentials.
 
 ## In Progress
 
-- Phase 11C execution preparation. No Phase 11C-18 implementation work is in
+- Phase 11D execution preparation. No Phase 11D-18 implementation work is in
   progress.
 
 ## Known Risks
@@ -228,9 +229,10 @@ validation with real deployment credentials.
 - Phase 7 and Phase 8 automated checks do not prove real AI provider, SMTP,
   real platform QR scanning, or real platform crawling behavior; those remain
   deployment and pilot risks.
-- Phase 11C-18 plans depend on future implementation and verification. The
+- Phase 11D-18 plans depend on future implementation and verification. The
   current frontend has the Phase 11A local static module boundary and the Phase
-  11B base desktop shell/navigation/button/card/toolbar styling foundation.
+  11B base desktop shell/navigation/button/card/toolbar styling foundation, and
+  the Phase 11C shared interaction helper/fixed floating-menu foundation.
 - Phase 11 must not be run as one large implementation goal. It is split into
   Phase 11A module boundary and tokens, Phase 11B base layout/navigation
   visual foundation, Phase 11C interaction components and floating menus, and
@@ -242,20 +244,46 @@ validation with real deployment credentials.
   and frontend/responsive batches.
 - Phase 10.5 follow-up global review found no remaining P0/P1 blockers.
   Remaining review notes are P2 implementation refinements and do not block
-  Phase 11C.
+  Phase 11D.
 
 ## Next Step
 
 Next allowed implementation step:
 
-1. start Phase 11C only;
-2. add shared interaction component styles and the `MonitorUI` helper boundary;
-3. replace clipped row action menu behavior with fixed or portal-style
-   positioning;
-4. verify account, proxy, report, AI, mail-template, and modal-contained row
-   menus are not clipped before moving to Phase 11D.
+1. start Phase 11D only;
+2. implement the accepted desktop/tablet/mobile breakpoints;
+3. add touch-safe mobile navigation using the documented hamburger/drawer
+   direction or document an equivalent before implementation;
+4. make toolbars, form grids, metric grids, modals, and dense tables usable at
+   1440px, 1024px, and 390px before moving to Phase 12A.
 
 ## Latest Verification
+
+Phase 11C interaction components and floating menu verification on
+2026-06-15:
+
+- Added shared toast, loading, empty-state, modal, drawer, and action-menu
+  styles to `api/webui/monitor/monitor.css`.
+- Added the `window.MonitorUI` helper boundary in
+  `api/webui/monitor/monitor.js` with toast, loading, empty-state,
+  close-menu, portal-root, and fixed floating-menu positioning helpers.
+- Reworked account, monitoring-task, AI-rule, and report row menus to use
+  fixed viewport placement through local helpers instead of a new dependency.
+- Verified row menus close on outside click, Escape, page change, and action
+  execution. Proxy, AI access, and mail-template surfaces currently use direct
+  edit/test/preview actions and have no row-menu clipping surface in this
+  batch.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_11a or phase_11b or phase_11c or monitor_page_uses"`
+- Result: 5 passed, 214 deselected, 1 warning.
+- Runtime HTTP check on isolated local service:
+  `/monitor`, `/static/monitor/monitor.css`, and
+  `/static/monitor/monitor.js` returned HTTP 200.
+- Playwright authenticated interaction check:
+  account, monitoring-task, AI-rule, and report menus used `position: fixed`,
+  stayed inside the viewport, and closed on outside click and Escape; run
+  center and report center smoke checks passed at 1024px and 390px.
 
 Phase 11B base layout and navigation visual foundation verification on
 2026-06-15:

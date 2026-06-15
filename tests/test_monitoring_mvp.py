@@ -7202,9 +7202,9 @@ def test_monitor_page_uses_consistent_buttons_tables_and_modal_actions():
     assert ".page-toolbar {" in frontend_source
     assert "report-workspace" not in page
     assert ".schema-item { grid-template-columns:1fr; }" in page
-    assert ".action-menu-host" in page
-    assert ".action-menu.active" in page
-    assert ".report-action-menu { position:fixed;" in page
+    assert ".action-menu-host" in frontend_source
+    assert ".action-menu.active" in frontend_source
+    assert ".report-action-menu {" in frontend_source
     assert "openReportMenuId" in page
     assert "resourceStat(label, value)" in page
     assert "renderProxyProfilesTable" in page
@@ -7247,7 +7247,7 @@ def test_monitor_page_uses_consistent_buttons_tables_and_modal_actions():
     assert not [word for word in forbidden if word in page]
 
 
-def test_phase_11a_monitor_static_boundary_and_tokens_are_quiet():
+def test_phase_11a_monitor_static_boundary_and_tokens_are_available():
     page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
     css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
     js = Path("api/webui/monitor/monitor.js").read_text(encoding="utf-8")
@@ -7295,7 +7295,7 @@ def test_phase_11a_monitor_static_boundary_and_tokens_are_quiet():
     ]:
         assert legacy_alias not in css
 
-    for forbidden_js in ["console.", "window.", "globalThis", "document.", "addEventListener"]:
+    for forbidden_js in ["console.", "globalThis"]:
         assert forbidden_js not in js
 
 
@@ -7335,6 +7335,68 @@ def test_phase_11b_base_layout_styles_live_in_monitor_css():
         "\n    .toolbar-actions {",
     ]:
         assert migrated_selector not in inline_base_style
+
+
+def test_phase_11c_interaction_helpers_and_floating_menus():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    js = Path("api/webui/monitor/monitor.js").read_text(encoding="utf-8")
+    inline_style = page[page.index("<style>") : page.index("</style>")]
+
+    for helper in [
+        "root.MonitorUI = Object.freeze",
+        "showToast",
+        "showLoading",
+        "renderEmptyState",
+        "closeFloatingMenus",
+        "positionFloatingMenu",
+        "ensurePortalRoot",
+    ]:
+        assert helper in js
+
+    assert "console." not in js
+    assert "import " not in js
+
+    for selector in [
+        ".toast {",
+        ".monitor-loading",
+        ".empty-state",
+        ".drawer-backdrop {",
+        ".drawer {",
+        ".modal-close",
+        ".action-menu,",
+        ".account-action-menu,",
+        ".report-action-menu {",
+        ".monitor-portal-root",
+    ]:
+        assert selector in css
+
+    assert "position: fixed;" in css
+    assert ".account-action-menu { position:absolute" not in inline_style
+    assert ".action-menu { position:absolute" not in inline_style
+    assert ".report-action-menu {" not in inline_style
+
+    for marker in [
+        "function positionFloatingMenu(triggerEl, menuEl",
+        "window.MonitorUI.positionFloatingMenu",
+        "function positionActiveFloatingMenus()",
+        "document.addEventListener('keydown'",
+        "event.key === 'Escape'",
+        "document.addEventListener('monitor:close-floating-menus', closeFloatingMenus)",
+        "window.addEventListener('resize', positionActiveFloatingMenus)",
+        "window.addEventListener('scroll', positionActiveFloatingMenus, true)",
+        "closeFloatingMenus();",
+        "data-account-menu-button",
+        "data-job-menu-button",
+        "data-ai-rule-menu-button",
+        "data-report-menu-button",
+        "positionFloatingMenu(anchor, menu",
+    ]:
+        assert marker in page
+
+    assert "data-proxy-menu-button" not in page
+    assert "data-ai-profile-menu-button" not in page
+    assert "data-email-template-menu-button" not in page
 
 
 def test_cli_run_due_runs_only_due_enabled_jobs(monkeypatch):
