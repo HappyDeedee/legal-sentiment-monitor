@@ -7440,7 +7440,7 @@ def test_phase_11d_responsive_foundation_and_mobile_navigation():
         ".mobile-nav-backdrop",
         "body.mobile-nav-open",
         "body.mobile-nav-open .shell > aside",
-        ".nav-popover",
+        ".nav-sublist",
         ".table-wrap",
         ".page-toolbar .toolbar-actions",
         ".drawer {",
@@ -7454,6 +7454,60 @@ def test_phase_11d_responsive_foundation_and_mobile_navigation():
     assert "max-height: calc(100dvh - 18px);" in css
     assert ".table-wrap table" in css
     assert "min-width: 760px !important;" in css
+
+
+def test_phase_12a_navigation_groups_and_login_landing():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    inline_style = page[page.index("<style>") : page.index("</style>")]
+
+    for forbidden in [
+        "nav-popover",
+        "data-menu=",
+        "toggleNavMenu",
+        "closeNavMenus",
+    ]:
+        assert forbidden not in page
+        assert forbidden not in css
+
+    for marker in [
+        'class="nav-group nav-group-collapsible"',
+        'data-nav-group="resources"',
+        'data-nav-group-toggle="resources"',
+        'id="nav_group_resources"',
+        'data-nav-group="settings"',
+        'data-nav-group-toggle="settings"',
+        'id="nav_group_settings"',
+        'aria-expanded="true"',
+        'class="nav-sublist"',
+        'class="nav-caret"',
+        'id="mobile_account_area"',
+        'id="mobile_current_user_badge"',
+        'class="account-area"',
+        "function routeToOperationsHome()",
+        "routeToOperationsHome();",
+        "const NAV_GROUPS = {",
+        "function toggleNavGroup(group)",
+        "function setNavGroupExpanded(group, expanded)",
+        "function expandNavGroupForTab(tab)",
+        "activateNavTab(dashboardButton, {skipLoad:true})",
+        "activateNavTab(btn, options={})",
+        "if(!options.skipLoad) loadSectionData(btn.dataset.tab)",
+    ]:
+        assert marker in page
+
+    for selector in [
+        ".nav-group-collapsible",
+        ".nav-group-toggle",
+        ".nav-caret",
+        ".nav-sublist",
+        ".nav-group.is-collapsed .nav-sublist",
+        ".account-area",
+        ".mobile-account-area",
+    ]:
+        assert selector in css
+
+    assert ".nav-popover" not in inline_style
 
 
 def test_cli_run_due_runs_only_due_enabled_jobs(monkeypatch):

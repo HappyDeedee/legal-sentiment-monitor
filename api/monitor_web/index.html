@@ -17,23 +17,6 @@
     }
     * { box-sizing: border-box; }
     body { margin:0; font-family:"Inter","Microsoft YaHei",Arial,sans-serif; background:var(--bg); color:var(--text); font-size:14px; }
-    .nav-popover {
-      position:absolute;
-      left:calc(100% + 10px);
-      top:0;
-      width:188px;
-      display:none;
-      padding:8px;
-      background:#fff;
-      color:var(--text);
-      border:1px solid var(--line);
-      border-radius:8px;
-      box-shadow:0 18px 45px rgba(15,23,42,.22);
-      z-index:55;
-    }
-    .nav-popover.active { display:grid; gap:4px; }
-    .nav-popover::before { content:""; position:absolute; left:-10px; top:14px; width:10px; height:28px; }
-    .nav-popover button:hover, .nav-popover button.active { background:var(--primary-weak); color:#1d4ed8; }
     .content { min-width:0; overflow:hidden; }
     section { display:none; padding:22px 24px 34px; }
     section.active { display:block; }
@@ -347,6 +330,10 @@
         <strong>Legal Sentiment</strong>
         <span>企业级律所舆情监控</span>
       </div>
+      <div id="mobile_account_area" class="mobile-account-area">
+        <div id="mobile_current_user_badge" class="small"></div>
+        <button class="secondary" onclick="logout()">退出</button>
+      </div>
       <nav id="primary_navigation">
         <div class="nav-group">
           <button class="active" data-tab="dashboard" data-menu-key="overview"><span class="ui-icon"><svg><use href="#icon-dashboard"></use></svg></span>总览</button>
@@ -360,17 +347,17 @@
         <div class="nav-group">
           <button data-tab="reports" data-menu-key="report_center"><span class="ui-icon"><svg><use href="#icon-report"></use></svg></span>报告中心</button>
         </div>
-        <div class="nav-group">
-          <button data-menu="resources" data-default-tab="accounts" data-menu-key="platform_accounts"><span class="ui-icon"><svg><use href="#icon-resource"></use></svg></span>资源管理</button>
-          <div class="nav-popover" id="nav_menu_resources">
+        <div class="nav-group nav-group-collapsible" data-nav-group="resources">
+          <button class="nav-group-toggle" type="button" data-nav-group-toggle="resources" data-default-tab="accounts" data-menu-key="platform_accounts" aria-controls="nav_group_resources" aria-expanded="true"><span class="ui-icon"><svg><use href="#icon-resource"></use></svg></span><span>资源管理</span><span class="nav-caret" aria-hidden="true"></span></button>
+          <div class="nav-sublist" id="nav_group_resources">
             <button class="sub" data-tab="accounts" data-menu-key="platform_accounts">平台账号</button>
             <button class="sub" data-tab="proxies" data-menu-key="proxy_resources">代理资源</button>
             <button class="sub" data-tab="ai" data-menu-key="ai_access">AI 接入</button>
           </div>
         </div>
-        <div class="nav-group">
-          <button data-menu="settings" data-default-tab="ai_rules" data-menu-key="ai_rules"><span class="ui-icon"><svg><use href="#icon-settings"></use></svg></span>系统配置</button>
-          <div class="nav-popover" id="nav_menu_settings">
+        <div class="nav-group nav-group-collapsible" data-nav-group="settings">
+          <button class="nav-group-toggle" type="button" data-nav-group-toggle="settings" data-default-tab="ai_rules" data-menu-key="ai_rules" aria-controls="nav_group_settings" aria-expanded="true"><span class="ui-icon"><svg><use href="#icon-settings"></use></svg></span><span>系统配置</span><span class="nav-caret" aria-hidden="true"></span></button>
+          <div class="nav-sublist" id="nav_group_settings">
             <button class="sub" data-tab="ai_rules" data-menu-key="ai_rules">AI 评估规则</button>
             <button class="sub" data-tab="email" data-menu-key="mail_config">邮件配置</button>
             <button class="sub" data-tab="email_templates" data-menu-key="mail_templates">邮件模板</button>
@@ -391,10 +378,12 @@
           <span>抖音 / 快手 / 小红书 · 平台采集服务</span>
         </div>
         <div class="row header-actions">
-          <div id="current_user_badge" class="small"></div>
           <div id="top_status" class="small"></div>
           <button class="secondary" onclick="loadAll()">刷新全局状态</button>
-          <button class="secondary" onclick="logout()">退出</button>
+          <div class="account-area">
+            <div id="current_user_badge" class="small"></div>
+            <button class="secondary" onclick="logout()">退出</button>
+          </div>
         </div>
       </header>
       <section id="dashboard" class="active">
@@ -1308,6 +1297,10 @@
     let currentRunLogText = '';
     let accountAttentionOnly = false;
     let openAccountMenuId = null;
+    const NAV_GROUPS = {
+      resources: ['accounts', 'proxies', 'ai'],
+      settings: ['ai_rules', 'email', 'email_templates', 'runtime', 'doctor']
+    };
     const TAB_PERMISSION_KEYS = {
       dashboard: 'overview',
       jobs: 'monitoring',
@@ -1459,13 +1452,17 @@
       renderProxySelectOptions();
       renderJobAIProfileOptions();
       renderJobEmailTemplateOptions();
+      routeToOperationsHome();
       await loadAll();
     }
     function renderCurrentUser(){
-      const el=document.getElementById('current_user_badge');
-      if(!el || !currentSession) return;
+      if(!currentSession) return;
       const role=currentSession.role==='administrator' ? '管理员' : '普通用户';
-      el.innerHTML=`<span class="status ok">${esc(role)}</span> ${esc(currentSession.display_name || currentSession.email || '')}`;
+      const html=`<span class="status ok">${esc(role)}</span> ${esc(currentSession.display_name || currentSession.email || '')}`;
+      ['current_user_badge','mobile_current_user_badge'].forEach(id=>{
+        const el=document.getElementById(id);
+        if(el) el.innerHTML=html;
+      });
     }
     function isAdminUser(){ return currentSession && currentSession.role === 'administrator'; }
     function applyJobFormRoleMode(){
@@ -1504,6 +1501,7 @@
         renderCurrentUser();
         applyMenuPermissions();
         applyJobFormRoleMode();
+        routeToOperationsHome();
         await loadAll();
       } finally {
         if(button){ button.disabled=false; button.textContent=oldText; }
@@ -1550,15 +1548,13 @@
     }, true);
     document.querySelectorAll('nav button').forEach(btn => btn.onclick = event => {
       event.stopPropagation();
-      if(btn.dataset.menu){
-        toggleNavMenu(btn.dataset.menu);
+      if(btn.dataset.navGroupToggle){
+        toggleNavGroup(btn.dataset.navGroupToggle);
         return;
       }
-      closeNavMenus();
       activateNavTab(btn);
     });
     document.addEventListener('click', event => {
-      if(!event.target.closest('nav')) closeNavMenus();
       if(!event.target.closest('.account-actions')){
         if(openAccountMenuId !== null){
           openAccountMenuId = null;
@@ -1591,30 +1587,44 @@
     });
     document.getElementById('mobile_nav_backdrop')?.addEventListener('click', closeMobileNav);
 
-    function toggleNavMenu(menu){
-      const target=document.getElementById('nav_menu_'+menu);
-      const active=target && target.classList.contains('active');
-      closeNavMenus();
-      if(target && !active) target.classList.add('active');
+    function toggleNavGroup(group){
+      const wrapper=document.querySelector(`[data-nav-group="${group}"]`);
+      if(!wrapper || wrapper.classList.contains('is-hidden')) return;
+      setNavGroupExpanded(group, !wrapper.classList.contains('is-expanded'));
     }
-    function closeNavMenus(){
-      document.querySelectorAll('.nav-popover').forEach(menu=>menu.classList.remove('active'));
+    function setNavGroupExpanded(group, expanded){
+      const wrapper=document.querySelector(`[data-nav-group="${group}"]`);
+      const toggle=document.querySelector(`[data-nav-group-toggle="${group}"]`);
+      if(!wrapper) return;
+      wrapper.classList.toggle('is-expanded', !!expanded);
+      wrapper.classList.toggle('is-collapsed', !expanded);
+      if(toggle) toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
     }
-    function activateNavTab(btn){
+    function expandNavGroupForTab(tab){
+      Object.entries(NAV_GROUPS).forEach(([group, tabs])=>{
+        if(tabs.includes(tab)) setNavGroupExpanded(group, true);
+      });
+    }
+    function routeToOperationsHome(){
+      const dashboardButton=document.querySelector('nav button[data-tab="dashboard"]:not(.is-hidden)');
+      if(dashboardButton) activateNavTab(dashboardButton, {skipLoad:true});
+    }
+    function activateNavTab(btn, options={}){
       if(!canOpenTab(btn.dataset.tab)){
         toast('当前账号没有访问该页面的权限');
         return;
       }
       closeFloatingMenus();
       document.querySelectorAll('nav button, section').forEach(x=>x.classList.remove('active'));
-      const parent = btn.classList.contains('sub') ? btn.closest('.nav-group')?.querySelector('button[data-menu]') : btn;
+      expandNavGroupForTab(btn.dataset.tab);
+      const parent = btn.classList.contains('sub') ? btn.closest('.nav-group')?.querySelector('.nav-group-toggle') : btn;
       if(parent) parent.classList.add('active');
       btn.classList.add('active');
       const section=document.getElementById(btn.dataset.tab);
       if(section) section.classList.add('active');
       if(btn.dataset.subview) switchSubview(btn.dataset.tab, btn.dataset.subview);
       else ensureDefaultSubview(btn.dataset.tab);
-      loadSectionData(btn.dataset.tab);
+      if(!options.skipLoad) loadSectionData(btn.dataset.tab);
       closeMobileNav();
     }
     function loadSectionData(tab){
@@ -1646,11 +1656,14 @@
       document.querySelectorAll('section[id]').forEach(section=>{
         if(!canOpenTab(section.id)) section.classList.remove('active');
       });
-      document.querySelectorAll('.nav-popover').forEach(menu=>{
-        const visible=[...menu.querySelectorAll('button.sub')].some(btn=>!btn.classList.contains('is-hidden'));
-        const trigger=menu.closest('.nav-group')?.querySelector('button[data-menu]');
+      document.querySelectorAll('.nav-sublist').forEach(list=>{
+        const visible=[...list.querySelectorAll('button.sub')].some(btn=>!btn.classList.contains('is-hidden'));
+        const group=list.closest('.nav-group');
+        const trigger=group?.querySelector('.nav-group-toggle');
+        if(group) group.classList.toggle('is-hidden', !visible);
         if(trigger) trigger.classList.toggle('is-hidden', !visible);
       });
+      Object.keys(NAV_GROUPS).forEach(group=>setNavGroupExpanded(group, true));
       const active=document.querySelector('nav button.active:not(.is-hidden)');
       if(!active){
         const first=document.querySelector('nav button[data-tab]:not(.is-hidden)');

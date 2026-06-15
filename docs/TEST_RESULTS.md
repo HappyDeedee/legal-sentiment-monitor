@@ -11,6 +11,57 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
   `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-15 - Phase 12A Navigation Structure And Login Landing Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`, isolated local FastAPI service with
+temporary monitor data.
+
+Result:
+
+- Replaced detached hover popovers for Resource Management and System
+  Configuration with expandable navigation groups.
+- Routed successful form login and session restore to Operations Home
+  (`dashboard`) when no explicit allowed destination is present.
+- Grouped authenticated user identity and logout in the desktop top-right
+  account area and added a predictable mobile account area in the navigation
+  drawer.
+- Preserved administrator and normal-user menu visibility rules.
+- Added
+  `tests/test_monitoring_mvp.py::test_phase_12a_navigation_groups_and_login_landing`.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before implementation and after documentation
+  close-out.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_12a or phase_11a or phase_11b or phase_11c or phase_11d or monitor_page_uses"`
+- Result after documentation close-out: 7 passed, 214 deselected, 1 warning.
+- Runtime HTTP check on isolated service:
+  - `/monitor`: HTTP 200;
+  - `/static/monitor/monitor.css`: HTTP 200;
+  - `/static/monitor/monitor.js`: HTTP 200.
+- Playwright authenticated browser validation:
+  - form login landed on `dashboard`;
+  - session restore landed on `dashboard`;
+  - administrator Resource Management and System Configuration groups were
+    visible and expandable/collapsible;
+  - mobile nested `email_templates` page switching worked and closed the
+    drawer;
+  - normal-user navigation contained only `总览`, `舆情监控`, `运行中心`, and
+    `报告中心`;
+  - authenticated console/page errors were empty.
+
+Limitations:
+
+- Phase 12A only changes navigation structure, login/session landing, and
+  account/logout grouping. Phase 12B still needs to standardize page entry
+  headers, descriptions, primary actions, toolbar areas, and role-specific
+  task-loop shortcuts.
+- No API contract, data model, schema migration, or permission model changes
+  were made in this batch.
+
 ## 2026-06-15 - Phase 11D Responsive Foundation Verified
 
 Environment: worktree

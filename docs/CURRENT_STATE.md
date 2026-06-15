@@ -18,7 +18,8 @@ roadmap. Phase 10 - Frontend Architecture And Technology Decision is complete
 as a documentation and architecture decision phase. Phase 10.5 - Phase 10-18
 Global Plan Review Gate is complete and found no P0/P1 blockers after the
 granularity refinements. Phase 11 - Frontend Design System is complete and
-verified through Phase 11A, Phase 11B, Phase 11C, and Phase 11D. Phase 12A is
+verified through Phase 11A, Phase 11B, Phase 11C, and Phase 11D. Phase 12A -
+Navigation Structure And Login Landing is complete and verified. Phase 12B is
 the next allowed execution goal.
 The active SQLite schema now provides the foundation tables and columns
 required before later implementation work, and the web/API layer now has
@@ -38,7 +39,9 @@ headless browser verification, administrator-operation audit logs, sensitive
 value redaction, resource-alert diagnostics, backup guidance, disk-space
   diagnostics, retention-setting diagnostics, Phase 11 local static frontend
   assets, base shell/navigation visual styles, fixed floating-menu behavior,
-  and responsive desktop/tablet/mobile navigation and layout foundations.
+  responsive desktop/tablet/mobile navigation and layout foundations, Phase
+  12A expandable primary navigation groups, operations-home login/session
+  landing, and grouped account/logout controls.
 
 ## Implementation Status
 
@@ -60,8 +63,8 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   documentation-only review gate.
 - Phase 11 - Frontend Design System: complete and verified through Phase
   11A-11D.
-- Phase 12 - Navigation And Page Entry Redesign: planned; Phase 12A is the
-  next allowed execution goal.
+- Phase 12 - Navigation And Page Entry Redesign: in progress; Phase 12A is
+  complete and verified, and Phase 12B is the next allowed execution goal.
 - Phase 13 - Overview Operations Home Redesign: planned as Phase 13A-13C, not
   implemented.
 - Phase 14 - Run Center Data Model Preparation: planned, not implemented.
@@ -205,7 +208,7 @@ validation with real deployment credentials.
 
 ## In Progress
 
-- Phase 12A execution preparation. No Phase 12A-18 implementation work is in
+- Phase 12B execution preparation. No Phase 12B-18 implementation work is in
   progress.
 
 ## Known Risks
@@ -231,7 +234,7 @@ validation with real deployment credentials.
 - Phase 7 and Phase 8 automated checks do not prove real AI provider, SMTP,
   real platform QR scanning, or real platform crawling behavior; those remain
   deployment and pilot risks.
-- Phase 12A-18 plans depend on future implementation and verification. The
+- Phase 12B-18 plans depend on future implementation and verification. The
   current frontend has the complete Phase 11 foundation: local static module
   boundary, base desktop shell/navigation/button/card/toolbar styling, shared
   interaction helper/fixed floating-menu behavior, and responsive
@@ -240,6 +243,10 @@ validation with real deployment credentials.
   and tokens, Phase 11B base layout/navigation visual foundation, Phase 11C
   interaction components and floating menus, and Phase 11D responsive
   foundation.
+- Phase 12A replaced detached Resource Management and System Configuration
+  popover navigation with expandable groups, routed login/session restore to
+  Operations Home, and grouped user identity/logout controls for desktop and
+  mobile.
 - Email idempotency, run archive/noise filtering, and report task grouping are
   accepted data-model directions but are not active schema features yet.
 - The first global Phase 10-18 review found that Phase 13, Phase 17, and Phase
@@ -247,20 +254,39 @@ validation with real deployment credentials.
   and frontend/responsive batches.
 - Phase 10.5 follow-up global review found no remaining P0/P1 blockers.
   Remaining review notes are P2 implementation refinements and do not block
-  Phase 12A.
+  Phase 12B.
 
 ## Next Step
 
 Next allowed implementation step:
 
-1. start Phase 12A only;
-2. replace Resource Management and System Configuration popover navigation with
-   expandable navigation groups;
-3. keep login success and session restore on an allowed operations-home path;
-4. preserve administrator and normal-user menu visibility, mobile navigation,
-   and Phase 11 responsive behavior before moving to Phase 12B.
+1. start Phase 12B only;
+2. standardize page entries around the monitoring task loop;
+3. preserve the Phase 12A expandable navigation, login/session landing,
+   account/logout grouping, and role visibility behavior;
+4. verify administrator and normal-user entry paths before moving to Phase 13A.
 
 ## Latest Verification
+
+Phase 12A navigation structure and login landing verification on
+2026-06-15:
+
+- Replaced detached hover popovers for Resource Management and System
+  Configuration with expandable navigation groups in
+  `api/monitor_web/index.html` and `api/webui/monitor/monitor.css`.
+- Routed successful login and session restore to Operations Home when no
+  explicit allowed destination is present.
+- Grouped authenticated user identity and logout in the desktop top-right
+  account area and added a predictable mobile account area in the navigation
+  drawer.
+- Preserved administrator and normal-user menu visibility rules.
+- Runtime browser validation on an isolated local service verified `/monitor`,
+  `/static/monitor/monitor.css`, and `/static/monitor/monitor.js` returned HTTP
+  200; form login and session restore landed on `dashboard`; administrator
+  groups expanded/collapsed; mobile nested navigation reached
+  `email_templates` and closed the drawer; normal-user navigation only exposed
+  `总览`, `舆情监控`, `运行中心`, and `报告中心`; authenticated console/page errors
+  were empty.
 
 Phase 11D responsive foundation verification on
 2026-06-15:

@@ -294,13 +294,13 @@ Phase 12 is planned and depends on Phase 11. Execute it as Phase 12A-12B.
 
 ### Phase 12A - Navigation Structure And Login Landing
 
-- [ ] Route login success to Operations Home.
-- [ ] Move authenticated user identity and logout into one top-right control
+- [x] Route login success to Operations Home.
+- [x] Move authenticated user identity and logout into one top-right control
       group on desktop and a predictable account area on mobile.
-- [ ] Replace Resource Management and System Configuration popover navigation
+- [x] Replace Resource Management and System Configuration popover navigation
       with expandable navigation groups.
-- [ ] Preserve administrator and normal-user menu visibility rules.
-- [ ] Verify login, logout, session restore, and page switching.
+- [x] Preserve administrator and normal-user menu visibility rules.
+- [x] Verify login, logout, session restore, and page switching.
 
 ### Phase 12B - Page Entry And Role Flow
 
