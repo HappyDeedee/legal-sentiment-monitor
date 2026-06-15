@@ -35,6 +35,16 @@ Status values:
 - CR-016: Phase 0.5 And Code-State Documentation Hardening
 - CR-017: Runtime Strategy Page Layout Detail
 - CR-018: Crawl Range Capability Boundaries
+- CR-019: Frontend Navigation And Page Entry Redesign
+- CR-020: Frontend Design System
+- CR-021: Overview Operations Home Redesign
+- CR-022: Run Center Governance
+- CR-023: Report Center Task Grouping
+- CR-024: Email Delivery Governance
+- CR-025: Email Delivery Tracking Data Model
+- CR-026: Run Visibility And Noise Filtering Data Model
+- CR-027: Frontend Technology Stack Decision
+- CR-028: Global Phase 10-18 Plan Review Gate
 
 ## CR-001 - Documentation Governance Bootstrap
 
@@ -692,3 +702,372 @@ Acceptance:
   approximate results within the selected range;
 - tests cover range validation and timeout behavior without assuming exact
   platform-native page/time filtering on every platform.
+
+## CR-019 - Frontend Navigation And Page Entry Redesign
+
+Date: 2026-06-15
+
+Source: user console review
+
+Module: frontend navigation and user flow
+
+Requirement:
+
+Redesign the console page entries and navigation around the monitoring task
+loop: operations home, monitoring tasks, run center, report center, email
+delivery, and administrator resource support. Resource Management and System
+Configuration must stop relying on detached popover navigation and should be
+usable on desktop, tablet, and mobile.
+
+Reason:
+
+The current navigation hierarchy is hard to understand, Resource Management and
+System Configuration use popover menus that are difficult on mobile, and the
+user identity/logout area has weak visual grouping.
+
+Status: Accepted
+
+Related tasks:
+
+- Phase 12 in `TASKS.md`
+
+Acceptance:
+
+- login routes to an operations home;
+- administrator and normal-user page entries follow the task loop;
+- user identity and logout are grouped at the top right;
+- Resource Management and System Configuration are expandable navigation
+  groups, not hover-only popovers;
+- mobile navigation works without hover.
+
+## CR-020 - Frontend Design System
+
+Date: 2026-06-15
+
+Source: user console review and external plan audit
+
+Module: frontend design system
+
+Requirement:
+
+Create a unified frontend design system covering visual language, interaction
+patterns, and responsive layout. The design direction should be Apple-style:
+clean, high-end, low-noise, enterprise-ready, and still dense enough for
+repeated operational work.
+
+Reason:
+
+The current console feels plain and uneven. Visual hierarchy, button levels,
+table density, empty states, loading states, floating menus, and responsive
+behavior need to be governed as one system instead of being patched page by
+page.
+
+Status: Accepted
+
+Related tasks:
+
+- Phase 11 in `TASKS.md`
+
+Acceptance:
+
+- `UI_UX_GUIDELINES.md` defines visual, interaction, and responsive rules;
+- `FRONTEND_ARCHITECTURE.md` defines breakpoints and implementation strategy;
+- desktop, tablet, and mobile layouts have explicit behavior;
+- row "more" menus are not clipped by scroll containers;
+- pages use consistent spacing, status tags, toolbars, modals, and action
+  hierarchy.
+
+## CR-021 - Overview Operations Home Redesign
+
+Date: 2026-06-15
+
+Source: user console review
+
+Module: overview and operations home
+
+Requirement:
+
+Replace the text-heavy overview with an operations home focused on task health,
+run activity, report generation, email delivery, suspected negative lead trends,
+and drilldown entry points. Long system-running and platform-status blocks
+should be removed from the default home view or reduced to concise
+administrator health summaries.
+
+Reason:
+
+The current overview is stretched by system status content, feels mostly
+textual, and does not give operators a clear visual understanding of monitoring
+activity or next actions.
+
+Status: Accepted
+
+Related tasks:
+
+- Phase 13 in `TASKS.md`
+
+Acceptance:
+
+- operations home has visual metrics and drilldowns;
+- system diagnostics are not the dominant first-screen content;
+- account/platform availability appears as a concise business signal;
+- normal users see their own task/report health, not administrator resource
+  internals.
+
+## CR-022 - Run Center Governance
+
+Date: 2026-06-15
+
+Source: user console review
+
+Module: run center
+
+Requirement:
+
+Redesign the run center with pagination, filtering, visible/noise separation,
+archive and restore operations, clearer run grouping, and reduced duplicate or
+diagnostic noise in the default list.
+
+Reason:
+
+The current run center has no pagination, limited filtering, no practical
+delete/hide behavior, and presents repeated or skipped records in a way that
+feels noisy.
+
+Status: Accepted
+
+Related tasks:
+
+- Phase 15 in `TASKS.md`
+
+Acceptance:
+
+- run list has pagination and useful filters;
+- default list shows visible operational records first;
+- archive hides a run without physically deleting it;
+- administrators can view archived records;
+- test runs can be hidden by default when noise filtering is enabled;
+- logs remain refreshable, copyable, and downloadable.
+
+## CR-023 - Report Center Task Grouping
+
+Date: 2026-06-15
+
+Source: user console review and confirmed user decision
+
+Module: report center
+
+Requirement:
+
+Group reports by monitoring task by default, with a stable snapshot for reports
+whose original task has been deleted or is otherwise unavailable. Use
+`reports.job_snapshot_json` for report history context instead of relying only
+on a nullable `job_id`.
+
+Reason:
+
+The current report center behaves like one flat list, which makes it difficult
+to connect reports back to a law-firm monitoring task. Existing `reports.job_id`
+can be nullable, so historical reports need independent task context.
+
+Status: Accepted
+
+Related tasks:
+
+- Phase 18 in `TASKS.md`
+
+Acceptance:
+
+- report center groups by active task when `job_id` resolves;
+- report center groups orphan reports using `job_snapshot_json`;
+- deleted-task reports show business context such as law firm, platforms,
+  keywords, and frequency;
+- report preview and lead details still switch by selected report.
+
+## CR-024 - Email Delivery Governance
+
+Date: 2026-06-15
+
+Source: user console review
+
+Module: report email delivery
+
+Requirement:
+
+Prevent duplicate automatic emails for the same task and schedule window while
+allowing explicit manual resend with audit-friendly delivery history.
+
+Reason:
+
+The user reported receiving multiple emails even though only one monitoring
+task was configured. Current email sending is state-light and does not record
+delivery attempts in a way that supports idempotency or operator review.
+
+Status: Accepted
+
+Related tasks:
+
+- Phase 17 in `TASKS.md`
+
+Acceptance:
+
+- automatic delivery is idempotent by task and schedule window;
+- manual resend is allowed but recorded separately;
+- report center shows delivery history and latest status;
+- email failure does not block report generation.
+
+## CR-025 - Email Delivery Tracking Data Model
+
+Date: 2026-06-15
+
+Source: user confirmation after external plan audit
+
+Module: data model and email delivery
+
+Requirement:
+
+Add an `email_delivery_logs` table to record automatic and manual report email
+attempts. Use `send_window_key` for automatic-send idempotency.
+
+Confirmed rules:
+
+- `daily`: `{job_id}_{YYYY-MM-DD}`;
+- `6h`, `12h`, and `cron`: `{job_id}_{YYYY-MM-DD}_{HH}`;
+- automatic send: one successful or in-flight auto delivery per
+  `job_id + send_window_key`;
+- manual resend: use `send_type = manual_resend`, allow repeat attempts, and
+  record the triggering user when available.
+
+Reason:
+
+The `reports` table only stores latest email status/error and cannot represent
+multiple attempts, manual resend, or idempotent automatic delivery history.
+
+Status: Accepted
+
+Related tasks:
+
+- Phase 16 in `TASKS.md`
+- Phase 17 in `TASKS.md`
+
+Acceptance:
+
+- `DATA_MODEL.md` defines `email_delivery_logs`;
+- `SCHEMA_MIGRATION.md` defines compatible migration steps;
+- send-window generation matches the currently supported frequencies:
+  `daily`, `6h`, `12h`, and `cron`;
+- tests cover repeated scheduler triggers and manual resend.
+
+## CR-026 - Run Visibility And Noise Filtering Data Model
+
+Date: 2026-06-15
+
+Source: user confirmation after external plan audit
+
+Module: data model and run center
+
+Requirement:
+
+Add run visibility and run type fields to support archive, restore, and noise
+filtering without physically deleting run records.
+
+Confirmed fields:
+
+- `crawl_runs.visibility TEXT DEFAULT 'visible'`, with values `visible` and
+  `archived`;
+- `crawl_runs.run_type TEXT DEFAULT 'scheduled'`, with values `scheduled`,
+  `manual`, and `test`;
+- `crawl_runs.archived_at TEXT NULL`;
+- `crawl_runs.archived_by INTEGER NULL`.
+
+Reason:
+
+The run center needs to hide duplicate or low-value operational noise while
+preserving execution history for administrators and audits.
+
+Status: Accepted
+
+Related tasks:
+
+- Phase 14 in `TASKS.md`
+- Phase 15 in `TASKS.md`
+
+Acceptance:
+
+- default run list shows `visibility = visible`;
+- archive changes visibility but does not delete records;
+- administrators can view archived records;
+- test runs can be filtered separately from scheduled/manual runs;
+- old run records are backfilled with `visible` and `scheduled` defaults.
+
+## CR-027 - Frontend Technology Stack Decision
+
+Date: 2026-06-15
+
+Source: user confirmation after external plan audit
+
+Module: frontend architecture
+
+Requirement:
+
+Use Vanilla JavaScript plus CSS custom properties for the console redesign.
+Keep optional lightweight dependencies limited to focused charting or floating
+menu placement needs. Do not migrate this round to Tailwind, Alpine.js,
+Petite-Vue, React, Vue, or another major frontend stack.
+
+Reason:
+
+The existing console is vanilla JavaScript and no-build. A full framework
+migration would add risk before the product flow, visual system, responsive
+rules, run governance, report grouping, and email delivery behavior are
+stabilized.
+
+Status: Accepted
+
+Related tasks:
+
+- Phase 10 in `TASKS.md`
+
+Acceptance:
+
+- `FRONTEND_ARCHITECTURE.md` records the accepted stack;
+- no new framework/build pipeline is required by Phase 10-18 plans;
+- any optional lightweight library must be justified and recorded before code
+  implementation.
+
+## CR-028 - Global Phase 10-18 Plan Review Gate
+
+Date: 2026-06-15
+
+Source: user correction during plan-review workflow
+
+Module: project governance and roadmap planning
+
+Requirement:
+
+Before generating a phase-specific execution goal for Phase 11-18, agents must
+review the full Phase 10-18 roadmap as one connected plan. The review must
+evaluate global executability, implementation granularity, cross-phase
+dependencies, cross-phase impact risks, rollback boundaries, verification
+coverage, and whether the roadmap can achieve the final console goal.
+
+Reason:
+
+A single-phase readiness review can incorrectly conclude that one small batch
+is safe while missing whether the full roadmap is coherent, sufficiently
+landable, and aligned with the monitoring task-loop product goal.
+
+Status: Accepted
+
+Related tasks:
+
+- Phase 10.5 in `TASKS.md`
+
+Acceptance:
+
+- `AGENT_WORKFLOW.md` requires global roadmap review before phase-specific
+  execution goals;
+- `TASKS.md` includes a Phase 10.5 global review gate before Phase 11;
+- `FRONTEND_ARCHITECTURE.md` documents cross-phase impact review points;
+- `TEST_PLAN.md` includes a Phase 10.5 global plan review checklist;
+- no Phase 11A-only goal is generated until the global Phase 10-18 review has
+  no P0/P1 blockers.

@@ -78,6 +78,7 @@ def check_specialist_references(issues: list[str]) -> None:
     workflow = read(DOCS / "AGENT_WORKFLOW.md")
     references = agents + "\n" + workflow
     specialist_docs = [
+        "FRONTEND_ARCHITECTURE.md",
         "UI_UX_GUIDELINES.md",
         "PRODUCT_REQUIREMENTS.md",
         "ROLES_AND_PERMISSIONS.md",

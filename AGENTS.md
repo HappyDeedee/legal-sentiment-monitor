@@ -31,6 +31,12 @@ Required checks:
 5. If the next phase is unclear, stop and report the blocking ambiguity instead
    of choosing a later task opportunistically.
 
+For roadmap or plan-review requests, review the full roadmap end-to-end before
+narrowing to an execution batch. The review must consider cross-phase
+dependencies, whether one phase's changes affect later phases, batch size,
+rollback risk, implementation granularity, and whether the roadmap still
+converges on the final product goal.
+
 Phase 0.5 is complete only when:
 
 - every Phase 0.5 task in `docs/TASKS.md` is marked `[x]`;
@@ -46,6 +52,8 @@ foundation is complete.
 
 Read the relevant specialist document before touching a related area:
 
+- Frontend architecture or console-wide UI redesign:
+  `docs/FRONTEND_ARCHITECTURE.md`
 - UI changes: `docs/UI_UX_GUIDELINES.md`
 - Product/page behavior: `docs/PRODUCT_REQUIREMENTS.md`
 - Role or permission changes: `docs/ROLES_AND_PERMISSIONS.md`

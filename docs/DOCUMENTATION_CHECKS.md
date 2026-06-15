@@ -1,8 +1,7 @@
 # Documentation Checks
 
-This document defines the intended documentation consistency check for coding
-agents. The script is not implemented yet; this file is the specification for
-the future `scripts/check_docs.py` task.
+This document defines the documentation consistency check for coding agents.
+The implemented script is `scripts/check_docs.py`.
 
 ## Purpose
 
@@ -10,10 +9,10 @@ Before and after each implementation phase, verify that project documents stay
 consistent with each other and that no accepted requirement exists only in chat
 history.
 
-## Intended Command
+## Command
 
 ```text
-python scripts/check_docs.py
+uv run python scripts/check_docs.py
 ```
 
 The command should be safe to run locally and in CI. It should not modify files.
@@ -76,4 +75,6 @@ FAIL docs consistency
 
 ## Status
 
-Specification exists. Script implementation is still pending in `TASKS.md`.
+Specification exists and `scripts/check_docs.py` is implemented. Keep this
+document and the script aligned when new specialist documents, CR patterns, or
+phase checks are added.

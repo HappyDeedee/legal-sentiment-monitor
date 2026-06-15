@@ -13,6 +13,14 @@ Design goals:
 - consistent interaction patterns;
 - role-appropriate complexity.
 
+Phase 10-18 visual direction:
+
+- Apple-style clean enterprise interface;
+- calm, low-noise surfaces;
+- strong but restrained hierarchy;
+- polished spacing, readable density, and precise interaction feedback;
+- no marketing-style landing page after login.
+
 ## Frontend Technology Stack
 
 Current implementation:
@@ -22,6 +30,15 @@ Current implementation:
 - no external UI component framework in V1 unless a later decision changes the
   frontend stack;
 - custom modal and table interactions should follow the rules in this document.
+
+Accepted Phase 10-18 direction:
+
+- keep Vanilla JavaScript plus CSS custom properties;
+- do not introduce Tailwind, Alpine.js, Petite-Vue, React, Vue, or a required
+  frontend build pipeline in this redesign round;
+- optional lightweight libraries may be considered only for focused charting or
+  floating menu positioning, and must be recorded before implementation;
+- use `FRONTEND_ARCHITECTURE.md` as the frontend architecture reference.
 
 Do not introduce a new UI framework or component library only for a single page
 without a change request and decision.
@@ -37,6 +54,16 @@ Use a consistent admin layout:
 - toolbar;
 - main content area;
 - modal area.
+
+Phase 10-18 layout requirements:
+
+- login success opens the operations home;
+- user identity and logout are grouped at the top right on desktop;
+- vague global banners such as generic scheduler/configuration status should be
+  removed or rewritten into specific actionable state;
+- page refresh controls should be page-specific and show what was refreshed;
+- page headers should keep title, summary, primary action, and user controls in
+  predictable positions.
 
 ## Menu Structure
 
@@ -65,6 +92,16 @@ Normal user:
 - Run Center
 - Report Center
 
+Phase 10-18 menu behavior:
+
+- Overview should be renamed or treated as Operations Home in user-facing
+  structure;
+- Resource Management and System Configuration use expanded navigation groups,
+  not detached hover-only popovers;
+- mobile navigation must work by tap, not hover;
+- nested pages should remain reachable with clear active states and without
+  clipped submenus.
+
 ## Page Structure
 
 Every page should follow this structure:
@@ -81,6 +118,112 @@ Avoid:
 - large inline creation forms on first-level pages;
 - repeated menus and tabs for the same function;
 - showing administrator resource details to normal users.
+
+Operations pages should prioritize:
+
+- one clear primary action;
+- compact key metrics;
+- filters before large lists;
+- direct drilldown to the next likely operational page;
+- visible last-updated time for refreshable data.
+
+Do not let diagnostic or platform status blocks dominate the home page.
+
+## Design System
+
+Use CSS custom properties for:
+
+- color tokens;
+- surface and border colors;
+- spacing scale;
+- radius scale;
+- shadows;
+- status colors;
+- typography scale.
+
+Visual rules:
+
+- use restrained neutral surfaces with clear content contrast;
+- avoid one-note color palettes;
+- reserve bright colors for state, risk, and primary action;
+- keep cards and controls at modest radii unless a later design decision
+  changes the system;
+- use consistent status tags for running, success, warning, failed, archived,
+  manual-review, and pending states;
+- use compact headings inside dashboards, tables, sidebars, and modals.
+
+Interaction rules:
+
+- every save, test, run, stop, archive, restore, resend, and refresh action
+  needs loading, success, and error feedback;
+- destructive or history-changing actions require confirmation;
+- disabled controls must explain why when the reason is business-relevant;
+- more menus close on outside click, escape, successful action, and navigation
+  change;
+- row action menus must not be clipped by table or scroll containers.
+
+## Responsive Layout
+
+Breakpoints:
+
+- mobile: `< 768px`;
+- tablet: `768px - 1279px`;
+- desktop: `>= 1280px`.
+
+Desktop:
+
+- persistent left navigation;
+- top-right user/logout group;
+- full data tables where comparison matters;
+- toolbars with search, filters, refresh, and batch actions in one row when
+  space allows.
+
+Tablet:
+
+- collapsible side navigation;
+- page headers and toolbars may wrap;
+- secondary table columns may hide or move into row details;
+- modals use safe margins and sticky action footers.
+
+Mobile:
+
+- top hamburger navigation or equivalent touch drawer;
+- no hover-only page entry;
+- tables convert to cards or summary rows with detail panels;
+- long forms use step sections and reachable bottom actions;
+- report preview and run logs may use near-fullscreen dialogs.
+
+Responsive acceptance:
+
+- no overlapping controls or text;
+- no clipped popover menus;
+- all primary flows remain reachable;
+- button text fits its container;
+- modal actions remain accessible on mobile.
+
+## Table And List Rules
+
+Desktop tables may show dense operational information, but mobile should not
+inherit every column.
+
+Run Center:
+
+- desktop: table with pagination and filters;
+- tablet: hide secondary columns and keep status/actions visible;
+- mobile: cards or summary rows with status, task, platform, time, and actions.
+
+Report Center:
+
+- desktop: grouped task/report table and preview area;
+- tablet: grouped list with report detail panel;
+- mobile: task groups as expandable sections, report preview in a modal or
+  separate detail view.
+
+Action menus:
+
+- render above scroll containers with fixed or portal-style positioning;
+- keep a minimum touch target;
+- never depend on the table row height changing after menu open.
 
 ## Runtime Strategy Page
 

@@ -200,6 +200,151 @@ After migration:
 - normal-user UI never sees raw profile paths;
 - server-like login/profile reuse test passes.
 
+## Phase 14 - Run Center Visibility Fields
+
+This phase is planned for the console optimization roadmap and is not
+implemented yet.
+
+Add fields to `crawl_runs`:
+
+```text
+visibility TEXT DEFAULT "visible"
+run_type TEXT DEFAULT "scheduled"
+archived_at TEXT NULL
+archived_by INTEGER NULL
+```
+
+Backfill:
+
+```text
+visibility = "visible" where null
+run_type = "scheduled" where null
+archived_at = null
+archived_by = null
+```
+
+Compatibility rules:
+
+- do not delete old run records;
+- do not physically delete archived runs;
+- old list APIs may keep returning all runs until Phase 15 adds filters, but
+  the default Phase 15 UI should show visible records first;
+- keep existing `status` semantics separate from `visibility`.
+
+Recommended indexes:
+
+```text
+idx_crawl_runs_visibility on crawl_runs(workspace_id, visibility, started_at)
+idx_crawl_runs_type_status on crawl_runs(workspace_id, run_type, status)
+```
+
+## Phase 16 - Email Delivery Logs
+
+This phase is planned for the console optimization roadmap and is not
+implemented yet.
+
+Create `email_delivery_logs`:
+
+```text
+id INTEGER PRIMARY KEY
+workspace_id INTEGER NOT NULL
+job_id INTEGER NOT NULL
+report_id INTEGER NULL
+send_window_key TEXT NOT NULL
+send_type TEXT NOT NULL
+sent_by INTEGER NULL
+sent_at TEXT NULL
+status TEXT NOT NULL
+error_message TEXT NULL
+recipients_json TEXT NULL
+created_at TEXT NOT NULL
+```
+
+Allowed `send_type` values:
+
+```text
+auto
+manual_resend
+```
+
+Allowed `status` values:
+
+```text
+pending
+sending
+sent
+failed
+skipped
+```
+
+Window-key rules:
+
+```text
+daily -> {job_id}_{YYYY-MM-DD}
+6h -> {job_id}_{YYYY-MM-DD}_{HH}
+12h -> {job_id}_{YYYY-MM-DD}_{HH}
+cron -> {job_id}_{YYYY-MM-DD}_{HH}
+```
+
+Recommended indexes and constraints:
+
+```text
+idx_email_delivery_job_window on email_delivery_logs(workspace_id, job_id, send_window_key)
+idx_email_delivery_report on email_delivery_logs(workspace_id, report_id, created_at)
+idx_email_delivery_status on email_delivery_logs(workspace_id, status, created_at)
+```
+
+Automatic-send idempotency should enforce one active or successful automatic
+send for the same `workspace_id + job_id + send_window_key + send_type=auto`.
+SQLite may require this through a partial unique index or transactional
+application logic, depending on the current migration helper capabilities.
+
+Compatibility rules:
+
+- keep existing report `email_status` and `email_error` as latest-state fields
+  during migration;
+- backfill is optional for old reports because old attempts were not recorded;
+- do not store SMTP credentials or full secret configuration in delivery logs.
+
+## Phase 18 - Report Job Snapshot
+
+This phase is planned for the console optimization roadmap and is not
+implemented yet.
+
+Add field to `reports`:
+
+```text
+job_snapshot_json TEXT NULL
+```
+
+Recommended snapshot:
+
+```json
+{
+  "job_id": 123,
+  "law_firm_name": "Example law firm",
+  "platforms": ["xhs", "dy"],
+  "keywords": ["keyword A", "keyword B"],
+  "frequency": "daily",
+  "deleted_at": null
+}
+```
+
+Backfill strategy:
+
+1. For reports whose `job_id` still resolves to `monitor_jobs`, populate the
+   snapshot from the current task row.
+2. For reports with missing or null `job_id`, leave `job_snapshot_json` null or
+   populate only safely recoverable report context.
+3. Report center should label unrecoverable rows as historical reports with
+   limited context, not as current active tasks.
+
+Compatibility rules:
+
+- do not require `job_snapshot_json` for old reports at first read;
+- never use snapshot content to bypass workspace or owner filtering;
+- keep `job_id` for active task relations.
+
 ## Blocking Decisions
 
 No CR-012 account-environment decisions remain open.
@@ -214,3 +359,7 @@ Confirmed:
 - proxy concurrency uses `resource_locks`;
 - lock timeout follows the run deadline plus cleanup buffer;
 - minimal audit log is included in MVP.
+- Phase 10-18 run archive uses `visibility = visible | archived`.
+- Phase 10-18 run type uses `scheduled | manual | test`.
+- Phase 10-18 email delivery uses `email_delivery_logs`.
+- Phase 10-18 report orphan handling uses `reports.job_snapshot_json`.

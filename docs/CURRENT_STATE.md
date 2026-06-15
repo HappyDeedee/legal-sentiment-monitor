@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-06-14
+Last updated: 2026-06-15
 
 ## Current Phase
 
@@ -13,6 +13,12 @@ Phase 6 - Server Login Flow is complete and verified locally. Phase 7 - Runs,
 Reports, And AI is complete and verified locally. Phase 8 - Server-Like
 Validation is complete and verified through an isolated server-like service
 process. Phase 9 - Security And Operations is complete and verified locally.
+Phase 10-18 console optimization planning has been accepted as the next
+roadmap. Phase 10 - Frontend Architecture And Technology Decision is complete
+as a documentation and architecture decision phase. Phase 10.5 - Phase 10-18
+Global Plan Review Gate is complete and found no P0/P1 blockers after the
+granularity refinements. Phase 11A is the next allowed execution goal, but
+Phase 11-18 implementation work has not started yet.
 The active SQLite schema now provides the foundation tables and columns
 required before later implementation work, and the web/API layer now has
 session login, administrator/normal-user roles, menu visibility,
@@ -45,6 +51,22 @@ diagnostics, and retention-setting diagnostics.
 - Phase 8 - Server-Like Validation: complete and verified through automated
   server-like validation.
 - Phase 9 - Security And Operations: complete and verified locally.
+- Phase 10 - Frontend Architecture And Technology Decision: complete as a
+  documentation and architecture decision phase.
+- Phase 10.5 - Phase 10-18 Global Plan Review Gate: complete as a
+  documentation-only review gate.
+- Phase 11 - Frontend Design System: planned as Phase 11A-11D, not
+  implemented; Phase 11A is allowed as the next execution goal.
+- Phase 12 - Navigation And Page Entry Redesign: planned, not implemented.
+- Phase 13 - Overview Operations Home Redesign: planned as Phase 13A-13C, not
+  implemented.
+- Phase 14 - Run Center Data Model Preparation: planned, not implemented.
+- Phase 15 - Run Center Governance And Frontend: planned, not implemented.
+- Phase 16 - Email Delivery Data Model Preparation: planned, not implemented.
+- Phase 17 - Email Delivery Governance: planned as Phase 17A-17B, not
+  implemented.
+- Phase 18 - Report Center Task Grouping: planned as Phase 18A-18B, not
+  implemented.
 - Phase 5/6 - Account Environment and Server Login: profile key, timeout, and
   lock-storage decisions are accepted; Phase 5 account environment runtime and
   Phase 6 login-flow runtime are complete.
@@ -162,10 +184,25 @@ validation with real deployment credentials.
   paths, doctor diagnostics include disk-space, retention-setting, backup-set,
   and resource-alert checks, and deployment docs describe database, profile,
   report, encryption-key, and configuration backups.
+- Phase 10-18 console optimization requirements have been accepted in
+  documentation:
+  - navigation and page entries will be rebuilt around the monitoring task
+    loop;
+  - the frontend design system will combine Apple-style visual language,
+    interaction patterns, and responsive behavior;
+  - the operations home will replace the text-heavy overview;
+  - run center governance will use logical archive and noise filtering;
+  - email automatic sending will use delivery logs and schedule-window
+    idempotency;
+  - report center grouping will use monitoring task grouping and
+    `job_snapshot_json` for orphan report history;
+  - the frontend technology stack remains Vanilla JavaScript plus CSS custom
+    properties for this redesign round.
 
 ## In Progress
 
-- None for the documented V1 roadmap.
+- Phase 11A execution preparation. No Phase 11-18 code implementation is in
+  progress.
 
 ## Known Risks
 
@@ -190,19 +227,62 @@ validation with real deployment credentials.
 - Phase 7 and Phase 8 automated checks do not prove real AI provider, SMTP,
   real platform QR scanning, or real platform crawling behavior; those remain
   deployment and pilot risks.
+- Phase 11-18 plans depend on future implementation and verification. The
+  current frontend is still the pre-redesign console until those phases are
+  implemented.
+- Phase 11 must not be run as one large implementation goal. It is split into
+  Phase 11A module boundary and tokens, Phase 11B base layout/navigation
+  visual foundation, Phase 11C interaction components and floating menus, and
+  Phase 11D responsive foundation.
+- Email idempotency, run archive/noise filtering, and report task grouping are
+  accepted data-model directions but are not active schema features yet.
+- The first global Phase 10-18 review found that Phase 13, Phase 17, and Phase
+  18 were too coarse as single goals. The plan now splits them into data/API
+  and frontend/responsive batches.
+- Phase 10.5 follow-up global review found no remaining P0/P1 blockers.
+  Remaining review notes are P2 implementation refinements and do not block
+  Phase 11A.
 
 ## Next Step
 
-Prepare for pilot deployment:
+Next allowed implementation step:
 
-1. deploy the worktree branch to the target single-server environment;
-2. configure real platform account, proxy, AI, SMTP, and domain/HTTPS settings;
-3. run `scripts/server_like_validation.py` on the target host if possible;
-4. complete one real web QR scan, crawl, report, and email-send loop;
-5. record pilot results and any production-only blockers in `TEST_RESULTS.md`
-   before customer handoff.
+1. start Phase 11A only;
+2. create the local monitor CSS/JS module boundary;
+3. define namespaced design-token custom properties;
+4. keep visible UI and existing inline CSS/JS behavior unchanged;
+5. verify `/monitor`, static asset loading, core smoke flows, and unchanged
+   1440px/1024px/390px layouts before moving to Phase 11B.
 
 ## Latest Verification
+
+Phase 10-18 documentation planning verification on 2026-06-15:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+
+Phase 10.5 global roadmap review verification on 2026-06-15:
+
+- Phase 10-18 global复审 result: PASS; no P0/P1 blockers.
+- Phase 13, Phase 17, and Phase 18 have been split into smaller execution
+  batches.
+- Phase 11A is allowed as the next execution goal.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+
+Phase 10 frontend architecture verification on 2026-06-15:
+
+- Frontend structure audit found the monitor console is served from
+  `api/monitor_web/index.html`, over 4,000 lines long, with inline CSS and
+  JavaScript and coarse `1100px`/`720px` breakpoints.
+- The FastAPI app keeps `/monitor` as the direct console entry and already
+  exposes `/static` for local static assets.
+- Decision: keep `/monitor` and the no-build path, but Phase 11 should split
+  the design-system layer into local CSS/JS modules instead of expanding the
+  inline file.
+- Follow-up planning refinement: Phase 11 is split into 11A-11D, Phase 12 is
+  split into 12A-12B, and Phase 15 is split into 15A-15B so each batch can be
+  executed and verified with a bounded goal.
 
 Phase 9 security and operations verification passed on 2026-06-14:
 

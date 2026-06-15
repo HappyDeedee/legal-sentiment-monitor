@@ -191,3 +191,300 @@ Use the standard permission test data:
 - Run a task using the server-side browser/profile.
 - Restart service/container and verify profile reuse.
 - Verify no acceptance step depends on local Chrome.
+
+## Phase 10 Frontend Architecture Tests
+
+- `FRONTEND_ARCHITECTURE.md` exists and is referenced by `AGENTS.md`,
+  `AGENT_WORKFLOW.md`, and `scripts/check_docs.py`.
+- Accepted frontend stack is Vanilla JavaScript plus CSS custom properties.
+- No Phase 10-18 planning document requires Tailwind, Alpine.js, Petite-Vue,
+  React, Vue, or a new build pipeline.
+- Optional lightweight libraries are limited to focused charting or floating
+  menu placement and require a recorded decision before implementation.
+- `uv run python scripts/check_docs.py` passes after documentation updates.
+
+## Phase 10.5 Global Plan Review Tests
+
+- The Phase 10-18 roadmap is reviewed as one connected plan before any
+  Phase 11A-only execution goal is generated.
+- The review covers final-goal fit, phase ordering, cross-phase dependencies,
+  implementation granularity, rollback boundaries, and verification coverage.
+- The review identifies whether Phase 11 changes affect later navigation,
+  operations-home, run-center, email-delivery, or report-grouping work.
+- The review identifies whether Phase 14, Phase 16, or Phase 18 data-model
+  decisions need migration, backfill, or compatibility notes before frontend
+  work continues.
+- The review rejects any plan that can only prove one batch is safe while
+  leaving the overall roadmap too coarse or disconnected to reach the final
+  console goal.
+
+## Phase 11 Frontend Design System Tests
+
+Phase 11 must be verified in smaller batches.
+
+### Phase 11A Module Boundary And Token Tests
+
+- `api/webui/monitor/monitor.css` exists.
+- `api/webui/monitor/monitor.js` exists.
+- `/monitor` loads the local CSS and JS assets with HTTP 200.
+- Existing inline CSS/JS remains in place unless the batch explicitly migrates
+  a section.
+- CSS custom-property tokens exist for color, typography, spacing, radius,
+  shadow, z-index, status colors, and breakpoints.
+- Phase 11A token variables use new namespaces such as `--color-*`,
+  `--space-*`, and `--font-*`.
+- Phase 11A does not define legacy inline aliases such as `--bg`, `--surface`,
+  `--primary`, or `--radius`.
+- `monitor.css` is loaded before the inline style block so Phase 11A cannot
+  override current visible UI.
+- `monitor.js` is loaded after the inline script block.
+- `monitor.js` does not execute visible UI logic in Phase 11A.
+- `monitor.js` does not define global variables or functions in Phase 11A.
+- No intentional visible UI change is introduced in Phase 11A.
+- Desktop 1440px layout is unchanged.
+- Tablet 1024px layout is unchanged.
+- Mobile 390px layout is unchanged.
+- Login, logout, navigation, task list, run center, and report preview still
+  work.
+
+### Phase 11 Core Function Protection Checklist
+
+Run the relevant parts of this checklist after each Phase 11 batch:
+
+- authentication:
+  - administrator login/logout;
+  - normal-user login/logout where test credentials are available;
+  - session restore.
+- navigation:
+  - page switching across core pages;
+  - administrator menu visibility;
+  - normal-user menu visibility;
+  - Resource Management and System Configuration entry behavior until Phase 12
+    replaces the current structure.
+- monitoring tasks:
+  - task list loading;
+  - task creation wizard entry;
+  - task editing where available;
+  - task deletion confirmation;
+  - manual run trigger.
+- run center:
+  - run list loading;
+  - run status display;
+  - run log modal;
+  - run log refresh, copy, and download.
+- report center:
+  - report list loading;
+  - report preview switching;
+  - report download links;
+  - lead detail inspection.
+- administrator resources:
+  - account list and account detail modal;
+  - account QR login entry;
+  - proxy list and edit/test flows where available;
+  - AI access and AI rule pages;
+  - mail configuration and mail-template pages;
+  - runtime settings and system diagnostics pages.
+- overlays and feedback:
+  - modal open/close;
+  - form validation messages;
+  - confirmation dialogs;
+  - toast notifications.
+- end-to-end smoke paths:
+  - create task entry -> run center -> report center;
+  - administrator account login entry -> account status;
+  - mail test entry -> result feedback.
+
+### Phase 11B Base Layout And Navigation Visual Tests
+
+- Base shell, header, navigation, button, card, and toolbar styling loads from
+  `monitor.css`.
+- Desktop 1440px layout is visually stable and follows the accepted
+  low-noise Apple-style direction.
+- Administrator and normal-user menu visibility remain unchanged.
+- Navigation switching, login/logout, task list, run center, and report center
+  remain usable.
+- There are no obvious regressions in modal layout or table scrolling on
+  desktop.
+
+### Phase 11C Interaction And Floating Menu Tests
+
+- Standard toast, loading, empty-state, modal, and action-menu styles exist.
+- `MonitorUI` or an equivalent helper boundary exists for shared UI behavior.
+- Floating row menus use fixed or portal-style positioning rather than being
+  clipped inside table scroll containers.
+- Row menus close on outside click, escape, page change, and successful action.
+- Account, proxy, report, AI, mail-template, and modal-contained row menus are
+  not clipped.
+- Existing toast, modal, save/test/run/stop/resend, and report-download flows
+  still work.
+- If a lightweight floating library is introduced, it is recorded in
+  `DECISIONS.md` before implementation.
+
+### Phase 11D Responsive Foundation Tests
+
+- Responsive rules cover desktop `>= 1280px`, tablet `768px - 1279px`, and
+  mobile `< 768px`.
+- Desktop 1440px, tablet 1024px, and mobile 390px views have no severe
+  overlapping text or controls.
+- Mobile navigation is usable by touch and does not depend on hover.
+- Mobile navigation opens from a hamburger button and closes predictably, or
+  the chosen equivalent touch-safe pattern is documented before implementation.
+- Toolbars, form grids, metric grids, modals, and dense tables remain usable on
+  tablet and mobile.
+- Dense tables are at least scroll-safe on mobile; page-specific card
+  conversion can be completed in later phases.
+- Primary actions and modal action buttons remain reachable on mobile.
+
+## Phase 12 Navigation And Page Entry Tests
+
+### Phase 12A Navigation Structure And Login Landing Tests
+
+- Login success opens the operations home.
+- Session restore opens an allowed page and can return to operations home.
+- Administrator navigation includes operations home, monitoring, run center,
+  report center, resource management, and system configuration.
+- Normal-user navigation includes only permitted user-facing pages.
+- Resource Management and System Configuration use expandable navigation
+  groups instead of detached hover-only popovers.
+- User identity and logout are grouped in the top-right account area on
+  desktop and remain reachable on mobile.
+- Mobile navigation can open, close, select nested pages, and preserve active
+  state without clipped menus.
+
+### Phase 12B Page Entry And Role Flow Tests
+
+- Page title, description, primary action, and toolbar structure are consistent
+  across core pages.
+- Task-loop shortcuts lead to create task, run center, report center, email
+  delivery status, and relevant resource issue pages.
+- Administrator and normal-user paths are tested separately.
+- Normal users do not see hidden administrator resource details through page
+  entries, shortcuts, or empty states.
+- Existing role and owner-scope tests still pass.
+
+## Phase 13 Overview Operations Home Tests
+
+### Phase 13A Operations Home Data Layer Tests
+
+- Operations-home API returns task health, run activity, report activity,
+  email delivery status, suspected lead metrics, and concise resource health
+  using real persisted data or documented empty states.
+- Administrator aggregates can include workspace-wide resource health.
+- Normal-user aggregates are scoped to the user's own tasks, runs, reports,
+  and business-safe signals.
+- Existing `/api/monitor/dashboard` consumers remain compatible during the
+  migration or the response version is documented.
+- Missing metrics are represented as unavailable or empty, not fabricated.
+
+### Phase 13B Operations Home Desktop Visual Tests
+
+- Operations home shows task health, run activity, report activity, email
+  delivery status, suspected lead metrics, and resource health summary.
+- Long scheduler, platform, browser, or deployment diagnostic blocks do not
+  dominate the home page.
+- Metrics provide drilldown links to Monitoring, Run Center, Report Center, or
+  administrator resource pages.
+- Page-level refresh updates operations-home data and shows last-updated time.
+
+### Phase 13C Operations Home Responsive And Role Tests
+
+- Normal users only see own task/report/run health and business-safe resource
+  signals.
+- Desktop 1440px, tablet 1024px, and mobile 390px layouts have no severe
+  overlap, hidden primary actions, or unreadable metric cards.
+- Administrator resource health drilldowns remain hidden from normal users.
+
+## Phase 14 Run Center Data Model Tests
+
+- `crawl_runs` has `visibility`, `run_type`, `archived_at`, and `archived_by`.
+- Existing runs are backfilled with `visibility = visible` and
+  `run_type = scheduled`.
+- Valid `visibility` values are `visible` and `archived`.
+- Valid `run_type` values are `scheduled`, `manual`, and `test`.
+- Migration keeps existing runs, logs, report links, and current status values
+  readable.
+
+## Phase 15 Run Center Governance Tests
+
+### Phase 15A Run Center API And Data Governance Tests
+
+- Run API/query layer supports pagination.
+- Run API/query layer supports filters for task/law firm, status, platform, run
+  type, visibility, and date.
+- Default list hides archived records.
+- Administrators can view archived records through an explicit filter.
+- Archive changes visibility without physically deleting the run.
+- Restore returns the run to the default visible list.
+- Owner/workspace scope is preserved for paginated and filtered results.
+- Existing run logs, report links, and status values remain readable.
+
+### Phase 15B Run Center Frontend Tests
+
+- Run center shows pagination controls.
+- Run center exposes filters for task/law firm, status, platform, run type,
+  visibility, and date.
+- Archive and restore row actions require confirmation.
+- Test/noise records can be filtered separately from scheduled/manual runs.
+- Run logs remain refreshable, copyable, and downloadable.
+- Desktop, tablet, and mobile layouts keep status and actions reachable.
+
+## Phase 16 Email Delivery Data Model Tests
+
+- `email_delivery_logs` exists with workspace, job, report, window key, send
+  type, sender, sent time, status, error, recipients, and created time fields.
+- Automatic send rows use `send_type = auto`.
+- Manual resend rows use `send_type = manual_resend`.
+- `daily` send-window keys use `{job_id}_{YYYY-MM-DD}`.
+- `6h`, `12h`, and `cron` send-window keys use
+  `{job_id}_{YYYY-MM-DD}_{HH}`.
+- Existing `reports.email_status` and `reports.email_error` remain readable as
+  latest-state compatibility fields.
+- Delivery logs do not store SMTP secrets.
+
+## Phase 17 Email Delivery Governance Tests
+
+### Phase 17A Email Idempotency And Delivery Logic Tests
+
+- Repeating the same automatic scheduler window does not send duplicate emails
+  for the same job and `send_window_key`.
+- Manual resend is allowed after an automatic send and creates a separate
+  delivery log.
+- Failed automatic delivery is recorded and does not block report generation.
+- `send_window_key` generation matches `daily`, `6h`, `12h`, and `cron`
+  rules.
+- Delivery logs store recipient summaries and customer-safe errors without SMTP
+  secrets.
+
+### Phase 17B Email Delivery History Frontend Tests
+
+- Report center shows latest delivery state and delivery history.
+- Normal-user resend permissions remain owner-scoped.
+- Administrator can inspect delivery failures without seeing SMTP secrets.
+- Manual resend UI requires confirmation and updates the latest status/history.
+- Desktop, tablet, and mobile report-center delivery surfaces remain usable.
+
+## Phase 18 Report Center Task Grouping Tests
+
+### Phase 18A Report Job Snapshot Data Model Tests
+
+- `reports.job_snapshot_json` is created for new reports.
+- Existing reports with resolvable `job_id` are backfilled with recoverable task
+  context.
+- Reports with unrecoverable context remain readable as limited-context
+  historical reports.
+- Snapshot content never bypasses owner/workspace filtering.
+
+### Phase 18B Report Center Task Grouping Frontend Tests
+
+- Active-task reports group under their monitoring task.
+- Deleted or missing-task reports group using `job_snapshot_json`.
+- Orphan reports show law firm, platform, keyword, frequency, and deleted-task
+  context when available.
+- Reports with no recoverable snapshot remain visible as historical reports
+  with limited context.
+- Switching selected reports still updates preview and lead details.
+- Owner/workspace filtering is enforced for grouped and orphan reports.
+- Report downloads, email delivery status/history, and row actions continue to
+  work after grouping.
+- Desktop, tablet, and mobile grouped-report layouts keep report selection and
+  primary actions reachable.

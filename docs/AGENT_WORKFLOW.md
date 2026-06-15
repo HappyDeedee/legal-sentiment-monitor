@@ -19,6 +19,8 @@ schema foundation work is complete.
 
 Specialist document routing:
 
+- frontend architecture or console-wide UI redesign:
+  `docs/FRONTEND_ARCHITECTURE.md`
 - UI/page work: `docs/UI_UX_GUIDELINES.md` and
   `docs/PRODUCT_REQUIREMENTS.md`
 - user/permission work: `docs/ROLES_AND_PERMISSIONS.md` and
@@ -42,6 +44,28 @@ If documents conflict, follow this priority:
 If a later decision supersedes an earlier decision, keep both entries in
 `DECISIONS.md` and add a short `Superseded by` note to the older decision when
 safe to do so without rewriting its meaning.
+
+## Global Roadmap Review
+
+When the user asks for a plan review, roadmap audit, execution-readiness
+review, or goal-command review for a multi-phase roadmap, start with the whole
+roadmap rather than the next implementation batch.
+
+The review must answer:
+
+- whether the roadmap is executable enough to reach the final product goal;
+- whether the phase order and dependencies are coherent;
+- whether each phase is small enough for a safe goal, with a clear file/data
+  boundary, rollback path, and verification standard;
+- whether changes in one phase create migration, UI, API, permission, data,
+  or test risks for later phases;
+- whether cross-cutting concerns such as role scope, responsive behavior,
+  report history, email idempotency, data migration, and no-build deployment
+  are preserved across the whole roadmap.
+
+Only after the global review is complete should the agent generate or approve a
+phase-specific execution goal such as a Phase 11A goal. A phase-specific goal
+is an execution gate, not a substitute for the global roadmap review.
 
 ## New Requirement Intake
 

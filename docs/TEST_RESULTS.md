@@ -11,6 +11,288 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
   `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-15 - Phase 10-18 Systematic Global Review Reconfirmed
+
+Environment: local repository documentation update in `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Reviewed the systematic global Phase 10-18 audit covering roadmap linkage,
+  task landability, granularity, functional completeness, testing,
+  acceptance standards, documentation write-back, and execution-goal readiness.
+- Accepted the review conclusion that Phase 10-18 has no P0/P1 blockers after
+  the previous Phase 13, Phase 17, and Phase 18 granularity refinements.
+- Reconfirmed that Phase 11A remains the next allowed execution goal.
+- Recorded the remaining findings as P2 implementation refinements:
+  - Phase 13A may define more concrete operations-home data sources during
+    implementation;
+  - Phase 11B may add more quantified Apple-style visual references during
+    token/layout implementation;
+  - Phase 11C may define exact `MonitorUI` API signatures with JSDoc during
+    implementation;
+  - later Phase 12-18 batches may extend phase-specific regression checklists
+    as implementation evidence accumulates.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+
+Limitations:
+
+- This is a documentation-only review confirmation. No Phase 11A code
+  implementation was performed.
+
+## 2026-06-15 - Phase 10.5 Global Review Verified
+
+Environment: local repository documentation update in `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Reviewed the follow-up Phase 10-18 global plan复审.
+- Accepted the conclusion that the revised roadmap has no remaining P0/P1
+  blockers.
+- Confirmed remaining review notes are P2 refinements that can be handled
+  during implementation.
+- Marked Phase 10.5 review tasks complete in `TASKS.md`.
+- Updated `CURRENT_STATE.md` so Phase 11A is the next allowed execution goal.
+- Updated `TRACEABILITY.md` so CR-028 is verified.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+
+Limitations:
+
+- This is a documentation-only gate verification. No Phase 11A code
+  implementation was performed.
+
+## 2026-06-15 - Phase 10-18 Global Plan Review Follow-Up
+
+Environment: local repository documentation update in `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Reviewed the global Phase 10-18 landability audit.
+- Accepted the core finding that Phase 13, Phase 17, and Phase 18 were still
+  too coarse as single implementation goals.
+- Split Phase 13 into:
+  - Phase 13A Operations Home Data Layer;
+  - Phase 13B Operations Home Desktop Visual Metrics;
+  - Phase 13C Operations Home Responsive And Role Views.
+- Split Phase 17 into:
+  - Phase 17A Email Idempotency And Delivery Logic;
+  - Phase 17B Email Delivery History Frontend.
+- Split Phase 18 into:
+  - Phase 18A Report Job Snapshot Data Model;
+  - Phase 18B Report Center Task Grouping Frontend.
+- Strengthened Phase 11B/11C/11D, Phase 12A/12B, Phase 13, Phase 17, and
+  Phase 18 implementation boundaries in `FRONTEND_ARCHITECTURE.md`.
+- Added explicit Phase 14 index and Phase 15 run-list response compatibility
+  tasks.
+- Added matching Phase 13A-C, Phase 17A-B, and Phase 18A-B verification
+  coverage to `TEST_PLAN.md`.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+
+Limitations:
+
+- This is a documentation-only plan refinement. It does not complete Phase 10.5
+  and does not implement Phase 11-18 code.
+
+## 2026-06-15 - Global Phase 10-18 Plan Review Gate Added
+
+Environment: local repository documentation update in `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Accepted the user's correction that Phase 10-18 review must be global and
+  cross-phase, not a Phase 11A-only readiness review.
+- Added CR-028 for the global Phase 10-18 plan review gate.
+- Added Phase 10.5 to `TASKS.md` as a documentation-only review gate before
+  Phase 11 implementation.
+- Updated `AGENTS.md` and `AGENT_WORKFLOW.md` so agents must review the whole
+  roadmap before generating a phase-specific execution goal.
+- Updated `FRONTEND_ARCHITECTURE.md` with cross-phase impact review points
+  covering Phase 11 through Phase 18.
+- Updated `TEST_PLAN.md`, `TRACEABILITY.md`, and `CURRENT_STATE.md` so the
+  global review gate is tracked, testable, and reflected as the current next
+  step.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+
+Limitations:
+
+- This is a documentation-only governance update. It does not complete the
+  Phase 10.5 global plan review and does not implement Phase 11A code.
+
+## 2026-06-15 - Phase 11A Goal Boundary Tightening
+
+Environment: local repository documentation update in `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Reviewed the Phase 11A execution readiness audit and accepted its conclusion
+  that Phase 11A can be prepared as a bounded goal.
+- Tightened Phase 11A documentation before implementation:
+  - `monitor.css` must use new namespaced tokens such as `--color-*`,
+    `--space-*`, and `--font-*`;
+  - Phase 11A must not define legacy aliases such as `--bg`, `--surface`,
+    `--primary`, or `--radius`;
+  - legacy aliases are deferred to Phase 11B when inline styles are migrated;
+  - `monitor.js` must not define global variables/functions, log to console, or
+    execute UI behavior in Phase 11A;
+  - 1440px desktop, 1024px tablet, and 390px mobile layouts must remain
+    unchanged.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+
+Limitations:
+
+- This is a documentation-only follow-up. No Phase 11A code implementation was
+  performed.
+
+## 2026-06-15 - Phase 11A Execution Readiness Review Follow-Up
+
+Environment: local repository documentation update in `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Reviewed the implementation-granularity audit that marked Phase 11A safe to
+  execute as a bounded goal.
+- Accepted the audit conclusion that Phase 11A is small enough for one goal:
+  create `monitor.css`, create `monitor.js`, reference both from
+  `api/monitor_web/index.html`, define tokens, and keep visible UI unchanged.
+- Added more precise Phase 11A execution rules:
+  - `monitor.css` should load before the existing inline `<style>` block;
+  - `monitor.js` should load after the existing inline `<script>` block;
+  - `monitor.js` should remain quiet and avoid console logging or UI behavior
+    in Phase 11A;
+  - rollback is limited to removing the two static references and the two new
+    files.
+- Accepted the P2 note that Phase 11C may need a lightweight floating-position
+  library, but kept that as a Phase 11C decision that must be recorded in
+  `DECISIONS.md` before adding any dependency.
+- Accepted the P2 note that Phase 11D mobile navigation needs a concrete
+  direction and documented top-left hamburger plus left-side drawer as the
+  default direction.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+
+Limitations:
+
+- This is a documentation-only follow-up. No Phase 11A code implementation was
+  performed.
+
+## 2026-06-15 - Phase 11/12/15 Granularity Planning Refinement
+
+Environment: local repository documentation update in `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Reviewed the implementation-readiness audit and accepted the finding that
+  Phase 11 was too large for one safe goal.
+- Split Phase 11 into:
+  - Phase 11A module boundary and CSS token layer;
+  - Phase 11B base layout and navigation visual foundation;
+  - Phase 11C interaction components and floating menu fix;
+  - Phase 11D responsive foundation.
+- Split Phase 12 into:
+  - Phase 12A navigation structure and login landing;
+  - Phase 12B page entry and role flow.
+- Split Phase 15 into:
+  - Phase 15A run center API and data governance;
+  - Phase 15B run center frontend refinement.
+- Added regression-protection guidance to `FRONTEND_ARCHITECTURE.md` so Phase
+  11 batches protect login/logout, navigation, task list, run center, report
+  preview, account login entry, resource pages, modals, toasts, and role-based
+  menu visibility.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+
+Limitations:
+
+- This is a planning refinement only. No Phase 11 code implementation was
+  performed.
+
+## 2026-06-15 - Phase 10 Frontend Architecture Decision Complete
+
+Environment: local repository documentation and source-structure audit in
+`E:\myproject\MediaCrawler`.
+
+Result:
+
+- Completed the Phase 10 architecture decision without implementing UI code.
+- Verified `AGENTS.md`, `AGENT_WORKFLOW.md`, and `scripts/check_docs.py`
+  include `FRONTEND_ARCHITECTURE.md`.
+- Audited the current monitor frontend structure:
+  - `/monitor` serves `api/monitor_web/index.html`;
+  - the monitor console is a single inline HTML/CSS/JavaScript file over 4,000
+    lines long;
+  - current responsive behavior relies mainly on coarse `1100px` and `720px`
+    breakpoints;
+  - `/static` is already available for local static assets through FastAPI.
+- Recorded the Phase 11 implementation direction: keep the `/monitor` entry
+  and no-build deployment path, but introduce local CSS/JS module boundaries
+  for the design-system layer before broad UI rewrite.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+
+Limitations:
+
+- No frontend visual, interaction, or responsive implementation was changed.
+- Phase 11-18 remain planned and unimplemented.
+
+## 2026-06-15 - Phase 10-18 Console Optimization Planning
+
+Environment: local repository documentation update in `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Added Phase 10-18 documentation planning for console-wide optimization.
+- Accepted CR-019 to CR-027 covering navigation, design system, operations
+  home, run center governance, report grouping, email delivery governance,
+  email delivery tracking data model, run visibility data model, and frontend
+  technology stack.
+- Added `FRONTEND_ARCHITECTURE.md` with the accepted Vanilla JavaScript plus CSS
+  custom properties direction, responsive breakpoints, navigation strategy,
+  table/modal/floating-menu patterns, and operations-home architecture.
+- Updated product, UI/UX, data model, schema migration, tasks, current state,
+  traceability, and test planning documents for Phase 10-18.
+- Synchronized `AGENTS.md`, `AGENT_WORKFLOW.md`, and `scripts/check_docs.py`
+  so the new frontend architecture document is discoverable by agents and
+  documentation checks.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+
+Limitations:
+
+- No Phase 10-18 application code or database migration was implemented.
+- The current web console remains the pre-redesign implementation until the
+  planned phases are executed.
+
 ## 2026-06-14 - Phase 9 Security And Operations Verified
 
 Environment: local worktree `E:\myproject\MediaCrawler-worktrees\v1-roadmap`

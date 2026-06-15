@@ -100,3 +100,52 @@ short `Superseded by` note rather than deleting history.
   retention cleanup jobs are not added in V1; operators should use the
   diagnostics and backup guidance during pilot operations until a later cleanup
   job is explicitly planned.
+
+## 2026-06-15
+
+- Phase 10-18 will be a documentation-first console optimization roadmap before
+  implementation starts. The accepted product direction is a full console
+  redesign, not a small visual patch.
+- The console should be rebuilt around the monitoring task loop: operations
+  home, monitoring task creation/management, run center, report center, and
+  email delivery. Administrator resource management supports this loop.
+- Login should route users to an operations home. The operations home should
+  use visual metrics, drilldowns, task health, report status, email delivery
+  status, and concise resource health instead of long diagnostic text blocks.
+- Resource Management and System Configuration should be expandable navigation
+  groups, not detached hover-only popover menus. Mobile navigation must work
+  without hover.
+- The authenticated user identity and logout action should be grouped together
+  at the top right.
+- CR-020 is one unified Frontend Design System requirement. Visual language,
+  interaction patterns, and responsive behavior are strongly coupled and should
+  not be split into separate CRs for this roadmap.
+- The visual direction is Apple-style: clean, high-end, low-noise,
+  enterprise-ready, and still efficient for repeated operational work.
+- Frontend breakpoints for Phase 10-18 are mobile below 768px, tablet from
+  768px to 1279px, and desktop at 1280px and above.
+- The frontend technology stack for this redesign remains Vanilla JavaScript
+  plus CSS custom properties. Do not introduce Tailwind, Alpine.js,
+  Petite-Vue, React, Vue, or a new required build pipeline in this round.
+  Optional lightweight libraries may be considered only for focused charting or
+  floating menu placement needs and must be recorded before implementation.
+- Run records should use logical archive/hide behavior instead of hard delete.
+  The accepted data-model direction is `crawl_runs.visibility` with `visible`
+  and `archived`, `crawl_runs.run_type` with `scheduled`, `manual`, and
+  `test`, plus `archived_at` and `archived_by`.
+- Report center should group reports by monitoring task by default. Historical
+  reports whose task cannot be resolved should use `reports.job_snapshot_json`
+  to preserve law firm, platform, keyword, frequency, and deleted-task context.
+- Email automatic delivery idempotency should use a new
+  `email_delivery_logs` table. Automatic sends are deduped by task and
+  schedule window, while manual resend is allowed and logged separately.
+- `send_window_key` generation for the current scheduler frequencies is:
+  `daily` uses `{job_id}_{YYYY-MM-DD}`; `6h`, `12h`, and `cron` use
+  `{job_id}_{YYYY-MM-DD}_{HH}`. Weekly and monthly frequencies are not part of
+  the current confirmed scheduler behavior.
+- Phase 10-18 plan reviews must be global before they become phase-specific.
+  Agents must first audit the full roadmap for final-goal fit, cross-phase
+  dependencies, implementation granularity, rollback boundaries, verification
+  coverage, and cross-phase impact risks. A Phase 11A-only readiness review is
+  not enough to approve execution of the roadmap or generate an execution
+  goal.

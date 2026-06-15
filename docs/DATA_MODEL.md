@@ -25,6 +25,14 @@ Phase 0.5 will add:
 Current code should be checked before implementation work begins. Do not assume
 these tables or columns already exist until Phase 0.5 is completed and verified.
 
+Phase 10-18 console optimization planning has been accepted, but its data-model
+changes are not implemented yet. Planned additions include:
+
+- run visibility and run type fields on `crawl_runs`;
+- `email_delivery_logs` for email send history and automatic-send
+  idempotency;
+- `reports.job_snapshot_json` for deleted or missing task report grouping.
+
 ## Scope
 
 V1 should support:
@@ -38,6 +46,8 @@ V1 should support:
 - raw content;
 - AI evaluations;
 - reports.
+- Phase 10-18 console governance for run visibility, report grouping, and
+  email delivery history.
 
 ## Workspace Strategy
 
@@ -236,10 +246,36 @@ proxy_id
 timeout_seconds
 deadline_at
 timeout_reason
+visibility
+run_type
+archived_at
+archived_by
 ```
 
 Run status should include `timeout` for runs stopped by the run-level wall-clock
 deadline. Timeout runs may still have partial results.
+
+Phase 10-18 run-center governance fields:
+
+```text
+visibility TEXT DEFAULT "visible"
+run_type TEXT DEFAULT "scheduled"
+archived_at TEXT NULL
+archived_by INTEGER NULL
+```
+
+`visibility` values:
+
+- `visible`: default operational record;
+- `archived`: hidden from the default list but available through administrator
+  filters.
+
+`run_type` values:
+
+- `scheduled`: scheduler-triggered run;
+- `manual`: user-triggered immediate run;
+- `test`: test or diagnostic run that may be hidden by default when noise
+  filtering is enabled.
 
 ### raw_contents
 
@@ -267,7 +303,81 @@ job_id
 run_id
 created_by
 send_status
+job_snapshot_json
 ```
+
+`job_id` may be nullable for old or orphaned report history. Phase 18 should
+add `job_snapshot_json` so report grouping does not depend only on the current
+task row.
+
+Recommended `job_snapshot_json` fields:
+
+```json
+{
+  "job_id": 123,
+  "law_firm_name": "Example law firm",
+  "platforms": ["xhs", "dy"],
+  "keywords": ["keyword A", "keyword B"],
+  "frequency": "daily",
+  "deleted_at": null
+}
+```
+
+Rules:
+
+- capture the snapshot when the report is created;
+- if a task is later deleted or unavailable, keep the report grouped by the
+  snapshot business context;
+- do not use the snapshot to bypass owner/workspace permissions.
+
+### email_delivery_logs
+
+Phase 16 should add a dedicated table for email delivery history and
+automatic-send idempotency:
+
+```text
+id
+workspace_id
+job_id
+report_id
+send_window_key
+send_type
+sent_by
+sent_at
+status
+error_message
+recipients_json
+created_at
+```
+
+`send_type` values:
+
+- `auto`: automatic scheduler/report delivery;
+- `manual_resend`: explicit user-triggered resend.
+
+`status` values:
+
+- `pending`;
+- `sending`;
+- `sent`;
+- `failed`;
+- `skipped`.
+
+`send_window_key` rules for current scheduler frequencies:
+
+- `daily`: `{job_id}_{YYYY-MM-DD}`;
+- `6h`: `{job_id}_{YYYY-MM-DD}_{HH}`;
+- `12h`: `{job_id}_{YYYY-MM-DD}_{HH}`;
+- `cron`: `{job_id}_{YYYY-MM-DD}_{HH}`.
+
+Idempotency rules:
+
+- automatic delivery should not send more than once for the same
+  `job_id + send_window_key`;
+- manual resend may repeat and should not consume the automatic-send idempotency
+  key;
+- delivery attempts should preserve recipient summary and failure text without
+  storing SMTP secrets.
 
 ## Migration Principles
 
@@ -278,6 +388,8 @@ send_status
 - Keep secret values encrypted.
 - Do not treat expired locks as directly reusable; recover the owning run before
   releasing persisted locks.
+- Add Phase 10-18 fields in compatibility steps with defaults and without
+  deleting current report, run, or email status fields.
 
 ## Confirmed Items
 
@@ -289,3 +401,12 @@ send_status
   `resource_locks`.
 - Administrator task timeout is a run-level wall-clock deadline and is not
   estimated from crawl range.
+- Phase 10-18 frontend stack remains Vanilla JavaScript plus CSS custom
+  properties.
+- Run archive uses `visibility = visible | archived` and does not hard delete
+  records.
+- Run type uses `scheduled | manual | test`.
+- Report grouping uses `reports.job_snapshot_json` for orphan/deleted-task
+  report history.
+- Email idempotency uses `email_delivery_logs` and schedule-window keys:
+  daily by date; `6h`, `12h`, and `cron` by hour.
