@@ -5,10 +5,10 @@ and may require migration from the current schema.
 
 ## Implementation Status
 
-This is a target planning document. Most Phase 0.5 tables and fields described
-here do not exist in the current codebase yet.
+This is a target planning document. Phase 0.5 schema foundation has been
+implemented and verified in the current codebase.
 
-Phase 0.5 will add:
+Phase 0.5 added:
 
 - `workspaces`;
 - `users`;
@@ -22,13 +22,18 @@ Phase 0.5 will add:
 - account/profile lock fields on `social_accounts`;
 - `resource_locks` for proxy concurrency.
 
-Current code should be checked before implementation work begins. Do not assume
-these tables or columns already exist until Phase 0.5 is completed and verified.
+Current code should still be checked before implementation work begins, but the
+Phase 0.5 foundation is now an active schema feature in this worktree.
 
-Phase 10-18 console optimization planning has been accepted, but its data-model
-changes are not implemented yet. Planned additions include:
+Phase 10-18 console optimization planning has been accepted. Phase 14 has
+implemented and verified these run-center data-model fields:
 
 - run visibility and run type fields on `crawl_runs`;
+- `crawl_runs.archived_at`;
+- `crawl_runs.archived_by`;
+
+Remaining planned additions include:
+
 - `email_delivery_logs` for email send history and automatic-send
   idempotency;
 - `reports.job_snapshot_json` for deleted or missing task report grouping.

@@ -368,17 +368,19 @@ views in one goal.
 
 Planning status:
 
-Phase 14 is planned before run-center frontend implementation.
+Phase 14 is complete and verified. It only prepared the run-center data model;
+Phase 15 must still implement pagination, filters, archive/restore APIs, and
+frontend governance.
 
-- [ ] Add `crawl_runs.visibility` with values `visible` and `archived`.
-- [ ] Add `crawl_runs.run_type` with values `scheduled`, `manual`, and `test`.
-- [ ] Add `crawl_runs.archived_at`.
-- [ ] Add `crawl_runs.archived_by`.
-- [ ] Backfill existing runs with `visibility = visible` and
+- [x] Add `crawl_runs.visibility` with values `visible` and `archived`.
+- [x] Add `crawl_runs.run_type` with values `scheduled`, `manual`, and `test`.
+- [x] Add `crawl_runs.archived_at`.
+- [x] Add `crawl_runs.archived_by`.
+- [x] Backfill existing runs with `visibility = visible` and
       `run_type = scheduled`.
-- [ ] Add recommended indexes for visibility/date and run type/status filters,
+- [x] Add recommended indexes for visibility/date and run type/status filters,
       following `SCHEMA_MIGRATION.md`.
-- [ ] Update `DATA_MODEL.md` and `SCHEMA_MIGRATION.md` with migration details.
+- [x] Update `DATA_MODEL.md` and `SCHEMA_MIGRATION.md` with migration details.
 
 ## Phase 15 - Run Center Governance And Frontend
 

@@ -7932,6 +7932,75 @@ def test_phase_13c_operations_home_responsive_role_views():
     assert "crawl_runs.visibility" not in page
 
 
+def test_phase_14_run_center_visibility_fields_migrate_and_backfill():
+    init_db()
+    jobs_snapshot = _snapshot_monitor_jobs()
+    snapshots = {
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+    }
+    _clear_monitor_jobs()
+    try:
+        with get_conn() as conn:
+            columns = _table_columns(conn, "crawl_runs")
+            assert {"visibility", "run_type", "archived_at", "archived_by"} <= columns
+            index_names = {
+                row["name"]
+                for row in conn.execute("PRAGMA index_list(crawl_runs)").fetchall()
+            }
+            assert "idx_crawl_runs_visibility" in index_names
+            assert "idx_crawl_runs_type_status" in index_names
+
+        job = save_job(
+            {
+                "law_firm_name": "Phase14迁移律所",
+                "aliases": [],
+                "exclude_words": [],
+                "keywords": ["Phase14迁移律所投诉"],
+                "platforms": ["dy"],
+                "recipients": [],
+            }
+        )
+        run_id = create_run(job["id"], {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        finish_run(run_id, "success", {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        report = create_report(run_id, job, {"job_id": job["id"], "law_firm_name": job["law_firm_name"], "platforms": ["dy"]})
+
+        run = get_run(run_id)
+        assert run["visibility"] == "visible"
+        assert run["run_type"] == "scheduled"
+        assert run["archived_at"] is None
+        assert run["archived_by"] is None
+        assert any(item["id"] == run_id and item["visibility"] == "visible" for item in list_runs(0))
+        assert get_report(report["id"])["run_id"] == run_id
+
+        with get_conn() as conn:
+            conn.execute("UPDATE crawl_runs SET visibility='', run_type='' WHERE id=?", (run_id,))
+        init_db()
+
+        migrated = get_run(run_id)
+        assert migrated["visibility"] == "visible"
+        assert migrated["run_type"] == "scheduled"
+        with get_conn() as conn:
+            observed_visibility = {
+                row["visibility"]
+                for row in conn.execute(
+                    "SELECT DISTINCT visibility FROM crawl_runs WHERE visibility IS NOT NULL"
+                ).fetchall()
+            }
+            observed_run_types = {
+                row["run_type"]
+                for row in conn.execute(
+                    "SELECT DISTINCT run_type FROM crawl_runs WHERE run_type IS NOT NULL"
+                ).fetchall()
+            }
+        assert observed_visibility <= {"visible", "archived"}
+        assert observed_run_types <= {"scheduled", "manual", "test"}
+    finally:
+        _restore_table("reports", snapshots["reports"])
+        _restore_table("crawl_runs", snapshots["crawl_runs"])
+        _restore_monitor_jobs(jobs_snapshot)
+
+
 def test_cli_run_due_runs_only_due_enabled_jobs(monkeypatch):
     init_db()
     jobs_snapshot = _snapshot_monitor_jobs()

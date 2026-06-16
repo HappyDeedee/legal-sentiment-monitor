@@ -11,6 +11,51 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
 `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-16 - Phase 14 Run Center Data Model Preparation Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`.
+
+Result:
+
+- Added compatible `crawl_runs` schema fields for run-center governance:
+  `visibility`, `run_type`, `archived_at`, and `archived_by`.
+- New database creation now includes `visibility = visible` and
+  `run_type = scheduled` defaults.
+- Existing database migration adds the same fields, backfills empty values to
+  `visible` and `scheduled`, and preserves `archived_at` and `archived_by` as
+  nullable fields.
+- Added recommended Phase 14 indexes:
+  `idx_crawl_runs_visibility` on `(workspace_id, visibility, started_at)` and
+  `idx_crawl_runs_type_status` on `(workspace_id, run_type, status)`.
+- Added
+  `tests/test_monitoring_mvp.py::test_phase_14_run_center_visibility_fields_migrate_and_backfill`.
+- Verified existing run reads, run list reads, report links, and status values
+  remain readable after the migration.
+- Did not implement Phase 15 pagination, filters, archive/restore APIs,
+  default archived hiding, frontend run-center controls, email delivery logs,
+  or report grouping.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before implementation and after verification.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k phase_14`
+- Result: 1 passed, 225 deselected, 1 warning.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_14 or phase_13c or phase_13b or phase_13a or phase_12b or phase_12a or phase_11a or phase_11b or phase_11c or phase_11d or monitor_page_uses or readiness_dashboard"`
+- Result: 13 passed, 213 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 226 passed, 3 warnings.
+
+Limitations:
+
+- Phase 14 is data-model preparation only. Run-center pagination, filtering,
+  default visible-only behavior, archive/restore APIs, and responsive frontend
+  controls remain Phase 15A/15B work.
+- Phase 16 email delivery logs and Phase 18 report snapshots remain planned
+  and unimplemented.
+
 ## 2026-06-16 - Phase 13C Operations Home Responsive And Role Views Verified
 
 Environment: worktree

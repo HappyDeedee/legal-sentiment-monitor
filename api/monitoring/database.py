@@ -355,6 +355,10 @@ def init_db() -> None:
                 timeout_seconds INTEGER,
                 deadline_at TEXT,
                 timeout_reason TEXT,
+                visibility TEXT NOT NULL DEFAULT 'visible',
+                run_type TEXT NOT NULL DEFAULT 'scheduled',
+                archived_at TEXT,
+                archived_by INTEGER,
                 created_by INTEGER,
                 updated_by INTEGER
             );
@@ -805,6 +809,7 @@ def _ensure_phase_05_schema(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "crawl_runs", "timeout_seconds", "INTEGER")
     _ensure_column(conn, "crawl_runs", "deadline_at", "TEXT")
     _ensure_column(conn, "crawl_runs", "timeout_reason", "TEXT")
+    _ensure_phase_14_run_center_schema(conn)
     _backfill_social_account_profile_keys(conn)
     _backfill_login_session_profile_keys(conn)
 
@@ -828,6 +833,23 @@ def _ensure_phase_05_schema(conn: sqlite3.Connection) -> None:
             ON resource_locks(resource_type, resource_id, expires_at);
         CREATE INDEX IF NOT EXISTS idx_resource_lock_cleanup
             ON resource_locks(expires_at);
+        """
+    )
+
+
+def _ensure_phase_14_run_center_schema(conn: sqlite3.Connection) -> None:
+    _ensure_column(conn, "crawl_runs", "visibility", "TEXT NOT NULL DEFAULT 'visible'")
+    _ensure_column(conn, "crawl_runs", "run_type", "TEXT NOT NULL DEFAULT 'scheduled'")
+    _ensure_column(conn, "crawl_runs", "archived_at", "TEXT")
+    _ensure_column(conn, "crawl_runs", "archived_by", "INTEGER")
+    conn.execute("UPDATE crawl_runs SET visibility='visible' WHERE COALESCE(visibility, '') = ''")
+    conn.execute("UPDATE crawl_runs SET run_type='scheduled' WHERE COALESCE(run_type, '') = ''")
+    conn.executescript(
+        """
+        CREATE INDEX IF NOT EXISTS idx_crawl_runs_visibility
+            ON crawl_runs(workspace_id, visibility, started_at);
+        CREATE INDEX IF NOT EXISTS idx_crawl_runs_type_status
+            ON crawl_runs(workspace_id, run_type, status);
         """
     )
 

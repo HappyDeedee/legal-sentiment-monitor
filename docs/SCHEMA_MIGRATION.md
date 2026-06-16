@@ -202,8 +202,9 @@ After migration:
 
 ## Phase 14 - Run Center Visibility Fields
 
-This phase is planned for the console optimization roadmap and is not
-implemented yet.
+This phase is implemented and verified for the console optimization roadmap.
+It prepares the data model only; Phase 15 must still add API filters,
+archive/restore actions, default visible-only behavior, and frontend controls.
 
 Add fields to `crawl_runs`:
 
@@ -237,6 +238,15 @@ Recommended indexes:
 idx_crawl_runs_visibility on crawl_runs(workspace_id, visibility, started_at)
 idx_crawl_runs_type_status on crawl_runs(workspace_id, run_type, status)
 ```
+
+Implementation notes:
+
+- new database creation includes the four fields with compatible defaults;
+- existing database migration adds missing fields through `_ensure_column`;
+- empty existing `visibility` values are backfilled to `visible`;
+- empty existing `run_type` values are backfilled to `scheduled`;
+- tests verify the fields, indexes, backfill, and compatibility with run,
+  run-list, report-link, and status reads.
 
 ## Phase 16 - Email Delivery Logs
 
