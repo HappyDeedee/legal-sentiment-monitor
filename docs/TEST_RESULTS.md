@@ -11,6 +11,67 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
 `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-16 - Phase 18B Report Center Task Grouping Frontend Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`.
+
+Result:
+
+- Updated the report-center frontend list rendering path to group reports by
+  active monitoring task when `job_id` resolves.
+- Grouped deleted-task and missing-task reports from the Phase 18A
+  `job_snapshot` customer-safe fields.
+- Added deleted-task, historical snapshot, and limited-context labels while
+  avoiding raw `job_snapshot_json` exposure.
+- Preserved selected-report preview, report-specific lead switching, download
+  links, latest email delivery status, delivery history, manual resend menu
+  entry, and row actions.
+- Added grouped report-center styles for desktop, tablet, and mobile.
+- Did not change schema, migrations, API authorization, owner/workspace scope,
+  or V1 product boundaries.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before documentation update.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_18b or phase_18a or phase_17b or report_resend_email_updates_status or report_history_keeps_law_firm_snapshot_after_job_deleted or leads_api_can_scope_items_to_selected_report"`
+- Result: 8 passed, 228 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 236 passed, 3 warnings.
+- `python -m py_compile tests\test_monitoring_mvp.py`
+- Result: PASS.
+- Inline monitor page script parse check with `node --check` against the
+  extracted inline script.
+- Result: PASS.
+- Browser validation on isolated service `127.0.0.1:19218` with temporary
+  monitor data:
+  - `/monitor`, `/static/monitor/monitor.css`, and
+    `/static/monitor/monitor.js` returned HTTP 200;
+  - administrator login opened Report Center with four validated group types:
+    active task, deleted task, missing-task snapshot, and limited-context
+    historical report;
+  - group headers showed task/snapshot labels plus platform, keyword, and
+    frequency context without raw snapshot JSON;
+  - report ID 1 preview opened the drawer, scoped lead detail to report ID 1,
+    kept download menu links under report ID 1, and displayed the automatic
+    delivery-history row;
+  - 1440px, 1024px, and 390px checks found four grouped sections, no
+    page-level horizontal overflow, and no authenticated console/page errors;
+  - normal-user login kept Report Center visible and administrator resource or
+    diagnostics entries hidden.
+
+Limitations:
+
+- Browser validation used isolated temporary sample data, not production data.
+- Real platform crawling, real SMTP delivery, real AI provider behavior, and
+  production credentials remain production pilot risks inherited from earlier
+  phases.
+- The Codex in-app browser returned `net::ERR_BLOCKED_BY_CLIENT` for the local
+  validation URL, so equivalent local Playwright validation was used against
+  the same isolated FastAPI service.
+
 ## 2026-06-16 - Phase 18A Report Job Snapshot Data Model Verified
 
 Environment: worktree

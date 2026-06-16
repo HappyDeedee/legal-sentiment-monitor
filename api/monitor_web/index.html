@@ -4443,13 +4443,130 @@
     function renderReportsTable(){
       const target=document.getElementById('reports_table');
       if(!target) return;
-      target.innerHTML=table(['报告 ID','律所','新增','疑似负面','高风险','待复核','邮件','创建时间','操作'], (currentReports||[]).map(reportRow));
+      const reports=currentReports||[];
+      if(!reports.length){
+        target.innerHTML='<div class="empty">暂无报告。调整筛选条件后可重新查看。</div>';
+        return;
+      }
+      target.innerHTML=`<div class="report-task-groups">${groupReportsByTask(reports).map(renderReportTaskGroup).join('')}</div>`;
       positionReportActionMenu();
+    }
+    function groupReportsByTask(reports){
+      const groups=[];
+      const byKey=new Map();
+      (reports||[]).forEach((report, index)=>{
+        const context=reportGroupingContext(report);
+        const key=reportGroupKey(context, report);
+        if(!byKey.has(key)){
+          const group={key, context, reports:[], order:index, totals:{newContents:0, negative:0, high:0, pending:0}, flags:{active:false, deleted:false, limited:false, historical:false}};
+          byKey.set(key, group);
+          groups.push(group);
+        }
+        const group=byKey.get(key);
+        const summary=report.summary||{};
+        group.reports.push(report);
+        group.totals.newContents += Number(summary.new_contents||0);
+        group.totals.negative += Number(summary.negative_count||0);
+        group.totals.high += Number(summary.high_count||0);
+        group.totals.pending += Number(summary.pending_review_count||0);
+        group.flags.active = group.flags.active || (!report.job_deleted && !report.limited_context && !!context.jobId);
+        group.flags.deleted = group.flags.deleted || !!report.job_deleted;
+        group.flags.limited = group.flags.limited || !!report.limited_context;
+        group.flags.historical = group.flags.historical || (!context.jobId && !report.limited_context);
+      });
+      return groups;
+    }
+    function reportGroupingContext(report){
+      const snapshot=(report && report.job_snapshot && typeof report.job_snapshot==='object' && !Array.isArray(report.job_snapshot)) ? report.job_snapshot : {};
+      const summary=(report && report.summary && typeof report.summary==='object' && !Array.isArray(report.summary)) ? report.summary : {};
+      const platformResults=(summary.platform_results && typeof summary.platform_results==='object' && !Array.isArray(summary.platform_results)) ? summary.platform_results : {};
+      const snapshotPlatforms=normalizedReportList(snapshot.platforms);
+      const summaryPlatforms=normalizedReportList(summary.platforms);
+      const platforms=snapshotPlatforms.length ? snapshotPlatforms : (summaryPlatforms.length ? summaryPlatforms : Object.keys(platformResults));
+      const keywords=normalizedReportList(snapshot.keywords).length ? normalizedReportList(snapshot.keywords) : normalizedReportList(summary.keywords);
+      const jobId=safeReportInt(snapshot.job_id) || safeReportInt(report?.job_id) || safeReportInt(summary.job_id);
+      const lawFirm=cleanCustomerText(report?.display_law_firm_name || report?.law_firm_name || snapshot.law_firm_name || summary.law_firm_name || '历史报告');
+      return {
+        jobId,
+        lawFirm,
+        platforms,
+        keywords,
+        frequency: snapshot.frequency || summary.frequency || '',
+        deletedAt: snapshot.deleted_at || '',
+      };
+    }
+    function safeReportInt(value){
+      const n=Number(value);
+      return Number.isFinite(n) && n>0 ? n : null;
+    }
+    function normalizedReportList(value){
+      if(Array.isArray(value)) return value.map(item=>String(item||'').trim()).filter(Boolean);
+      if(typeof value==='string') return value.split(/[,，、/]/).map(item=>item.trim()).filter(Boolean);
+      return [];
+    }
+    function reportGroupKey(context, report){
+      if(report?.limited_context) return 'limited:historical';
+      if(!report?.job_deleted && context.jobId) return `active:${context.jobId}`;
+      if(context.jobId) return `snapshot:${context.jobId}`;
+      const fingerprint=[context.lawFirm, context.platforms.join(','), context.keywords.join(','), context.frequency].join('|').replace(/\s+/g,' ').trim().toLowerCase();
+      return fingerprint ? `snapshot:${fingerprint}` : 'limited:historical';
+    }
+    function renderReportTaskGroup(group){
+      const context=group.context;
+      return `<details class="report-task-group ${group.flags.deleted?'is-deleted':''} ${group.flags.limited?'is-limited':''}" data-report-group-key="${esc(group.key)}" open>
+        <summary class="report-task-group-head">
+          <div class="report-task-group-title">
+            <div class="report-task-group-title-row">
+              <strong>${esc(context.lawFirm)}</strong>
+              <span class="report-task-group-badges">${reportGroupBadges(group)}</span>
+            </div>
+            <p>${esc(reportGroupSummaryText(group))}</p>
+          </div>
+          <span class="report-task-group-count">${esc(group.reports.length)} 份报告</span>
+        </summary>
+        <div class="report-task-group-body">
+          <div class="report-task-group-meta">${reportGroupMetaChips(group).join('')}</div>
+          ${table(['报告 ID','律所','新增','疑似负面','高风险','待复核','邮件','创建时间','操作'], group.reports.map(reportRow))}
+        </div>
+      </details>`;
+    }
+    function reportGroupBadges(group){
+      const badges=[];
+      if(group.flags.limited) badges.push('<span class="status warn">上下文有限</span>');
+      else if(group.flags.deleted) badges.push('<span class="status warn">原任务已删除</span>');
+      else if(group.flags.active) badges.push('<span class="status ok">活跃任务</span>');
+      else badges.push('<span class="status">历史快照</span>');
+      if(group.context.jobId) badges.push(`<span class="status">任务 #${esc(group.context.jobId)}</span>`);
+      return badges.join('');
+    }
+    function reportGroupSummaryText(group){
+      const totals=group.totals;
+      const base=`新增 ${totals.newContents} / 疑似负面 ${totals.negative} / 高风险 ${totals.high} / 待复核 ${totals.pending}`;
+      if(group.flags.limited) return `${base}；旧报告缺少任务快照，仍可逐份预览、下载和查看线索。`;
+      if(group.flags.deleted) return `${base}；使用报告保存的任务快照展示历史上下文。`;
+      return `${base}；按监控任务汇总报告记录。`;
+    }
+    function reportGroupMetaChips(group){
+      const context=group.context;
+      const platformText=context.platforms.length ? formatPlatforms(context.platforms) : '未记录';
+      const keywordText=context.keywords.length ? context.keywords.join(' / ') : '未记录';
+      const chips=[
+        `<span title="${esc(platformText)}">平台：${esc(platformText)}</span>`,
+        `<span title="${esc(keywordText)}">关键词：${esc(keywordText)}</span>`,
+      ];
+      if(context.frequency) chips.push(`<span>频率：${esc(formatReportFrequency(context.frequency))}</span>`);
+      if(context.deletedAt) chips.push(`<span>删除时间：${esc(formatTime(context.deletedAt))}</span>`);
+      if(group.flags.limited) chips.push('<span>历史报告：任务上下文有限</span>');
+      return chips;
+    }
+    function formatReportFrequency(frequency){
+      const labels={daily:'每天','12h':'每 12 小时','6h':'每 6 小时',cron:'自定义计划'};
+      return labels[frequency] || frequency || '未记录';
     }
     function reportRow(r){
       return [
         r.id,
-        esc(r.display_law_firm_name||r.law_firm_name||''),
+        esc(reportGroupingContext(r).lawFirm),
         esc((r.summary||{}).new_contents||0),
         esc((r.summary||{}).negative_count||0),
         esc((r.summary||{}).high_count||0),

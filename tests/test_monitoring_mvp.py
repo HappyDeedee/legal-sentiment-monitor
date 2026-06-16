@@ -8905,6 +8905,58 @@ def test_phase_17b_report_center_delivery_history_frontend_hooks():
     assert "@media (max-width: 767px)" in css
 
 
+def test_phase_18b_report_center_task_grouping_frontend_hooks():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    frontend_source = page + "\n" + css
+
+    reports_section = page[page.index('<section id="reports"') : page.index('<section id="doctor"')]
+    for hook in [
+        "groupReportsByTask",
+        "reportGroupingContext",
+        "reportGroupKey",
+        "renderReportTaskGroup",
+        "reportGroupBadges",
+        "reportGroupSummaryText",
+        "reportGroupMetaChips",
+        "formatReportFrequency",
+    ]:
+        assert hook in page
+    assert 'target.innerHTML=`<div class="report-task-groups">' in page
+    assert "if(report?.limited_context) return 'limited:historical'" in page
+    assert 'return `active:${context.jobId}`' in page
+    assert 'return `snapshot:${context.jobId}`' in page
+    assert "原任务已删除" in page
+    assert "上下文有限" in page
+    assert "历史快照" in page
+    assert "平台：" in page
+    assert "关键词：" in page
+    assert "频率：" in page
+    assert "删除时间：" in page
+    assert "job_snapshot_json" not in reports_section
+    assert "recipients_json" not in reports_section
+    assert "smtp_password" not in reports_section
+    assert "previewReport(${reportId})" in page
+    assert "toggleReportActionMenu(${reportId}, this)" in page
+    assert "loadEmailDeliveryHistory(${Number(id)})" in page
+    assert "/reports/${Number(id)}/download?type=html" in page
+    assert "/leads?'+qs.toString()" in page
+    for selector in [
+        ".report-task-groups",
+        ".report-task-group",
+        ".report-task-group-head",
+        ".report-task-group-title-row",
+        ".report-task-group-badges",
+        ".report-task-group-count",
+        ".report-task-group-meta",
+        ".report-task-group.is-deleted",
+        ".report-task-group.is-limited",
+    ]:
+        assert selector in frontend_source
+    assert "@media (max-width: 1279px)" in css
+    assert "@media (max-width: 767px)" in css
+
+
 def test_cli_run_due_runs_only_due_enabled_jobs(monkeypatch):
     init_db()
     jobs_snapshot = _snapshot_monitor_jobs()

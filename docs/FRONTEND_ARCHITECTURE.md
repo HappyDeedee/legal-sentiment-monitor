@@ -17,9 +17,10 @@ home responsive and role views is complete and verified. Phase 14 run center
 data model preparation and Phase 15A run center API/data governance are
 complete and verified. Phase 15B run center frontend refinement is complete
 and verified. Phase 16 email delivery data model preparation, Phase 17A email
-idempotency/delivery logic, and Phase 17B report-center delivery-history
-frontend are complete and verified. Phase 18A report job snapshot data model is
-the next roadmap batch and is not a frontend implementation phase.
+idempotency/delivery logic, Phase 17B report-center delivery-history frontend,
+Phase 18A report job snapshot data model, and Phase 18B report-center task
+grouping frontend are complete and verified. The accepted Phase 10-18 console
+optimization roadmap is complete through Phase 18B.
 
 Agents must use this document together with:
 

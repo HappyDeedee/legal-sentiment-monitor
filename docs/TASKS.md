@@ -387,8 +387,8 @@ frontend governance.
 Planning status:
 
 Phase 15 depends on Phase 14. Phase 15A and Phase 15B are complete and
-verified. Phase 16, Phase 17A, Phase 17B, and Phase 18A are also complete and
-verified; Phase 18B is the next implementation batch.
+verified. Phase 16, Phase 17A, Phase 17B, Phase 18A, and Phase 18B are also
+complete and verified.
 
 ### Phase 15A - Run Center API And Data Governance
 
@@ -480,8 +480,7 @@ Planning status:
 
 Phase 18 depends on Phase 10-11 and the accepted report snapshot data model.
 Execute it as Phase 18A-18B so snapshot persistence lands before frontend
-grouping consumes it. Phase 18A is complete and verified; Phase 18B is the next
-allowed implementation batch.
+grouping consumes it. Phase 18A and Phase 18B are complete and verified.
 
 ### Phase 18A - Report Job Snapshot Data Model
 
@@ -500,10 +499,10 @@ allowed implementation batch.
 
 ### Phase 18B - Report Center Task Grouping Frontend
 
-- [ ] Group reports by monitoring task when `job_id` resolves.
-- [ ] Group orphan or deleted-task reports using `job_snapshot_json`.
-- [ ] Show deleted-task or limited-context labels where appropriate.
-- [ ] Preserve report preview and lead detail switching by selected report.
-- [ ] Preserve download links, email delivery status/history, and row actions.
-- [ ] Verify grouped report behavior for active, deleted, missing-task, and
+- [x] Group reports by monitoring task when `job_id` resolves.
+- [x] Group orphan or deleted-task reports using `job_snapshot_json`.
+- [x] Show deleted-task or limited-context labels where appropriate.
+- [x] Preserve report preview and lead detail switching by selected report.
+- [x] Preserve download links, email delivery status/history, and row actions.
+- [x] Verify grouped report behavior for active, deleted, missing-task, and
       limited-context reports on desktop, tablet, and mobile.

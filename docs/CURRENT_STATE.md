@@ -31,7 +31,8 @@ Preparation is complete and verified. Phase 17A - Email Idempotency And
 Delivery Logic is complete and verified. Phase 17B - Email Delivery History
 Frontend is complete and verified. Phase 18A - Report Job Snapshot Data Model
 is complete and verified. Phase 18B - Report Center Task Grouping Frontend is
-the next allowed execution goal.
+complete and verified. Phase 10-18 console optimization is complete through
+the accepted roadmap.
 The active SQLite schema now provides the foundation tables and columns
 required before later implementation work, and the web/API layer now has
 session login, administrator/normal-user roles, menu visibility,
@@ -77,7 +78,10 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   state, automatic/manual delivery history, recipient summaries, and
   customer-safe delivery errors without exposing SMTP secrets, plus Phase 18A
   report snapshots store task context for new and backfilled reports while
-  keeping unrecoverable historical reports readable with limited context.
+  keeping unrecoverable historical reports readable with limited context, and
+  Phase 18B groups report-center rows by active task or stored snapshot while
+  preserving preview, lead switching, downloads, delivery history, and row
+  actions.
 
 ## Implementation Status
 
@@ -109,14 +113,14 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
 - Phase 16 - Email Delivery Data Model Preparation: complete and verified.
 - Phase 17 - Email Delivery Governance: complete and verified through Phase
   17A-17B.
-- Phase 18 - Report Center Task Grouping: Phase 18A data model is complete and
-  verified; Phase 18B frontend grouping remains planned.
+- Phase 18 - Report Center Task Grouping: complete and verified through Phase
+  18A-18B.
 - Phase 5/6 - Account Environment and Server Login: profile key, timeout, and
   lock-storage decisions are accepted; Phase 5 account environment runtime and
   Phase 6 login-flow runtime are complete.
 
 The documented V1 product roadmap is implemented through Phase 9 in this
-worktree, and the console optimization roadmap is verified through Phase 18A.
+worktree, and the console optimization roadmap is verified through Phase 18B.
 Production pilot handoff still requires live platform, SMTP, and AI-provider
 validation with real deployment credentials.
 
@@ -246,9 +250,8 @@ validation with real deployment credentials.
 
 ## In Progress
 
-- No active implementation batch is currently in progress. Phase 18A report
-  job snapshot data model is complete; Phase 18B report-center task grouping
-  frontend is the next allowed implementation batch.
+- No active implementation batch is currently in progress. Phase 10-18 console
+  optimization is complete and verified through Phase 18B.
 
 ## Known Risks
 
@@ -273,8 +276,7 @@ validation with real deployment credentials.
 - Phase 7 and Phase 8 automated checks do not prove real AI provider, SMTP,
   real platform QR scanning, or real platform crawling behavior; those remain
   deployment and pilot risks.
-- Phase 18B report-center task grouping depends on future implementation and
-  verification. The
+- Phase 18B report-center task grouping is implemented and verified. The
   current frontend has the complete Phase 11-12 foundation and Phase 13A data
   contract: local static module
   boundary, base desktop shell/navigation/button/card/toolbar styling, shared
@@ -300,7 +302,11 @@ validation with real deployment credentials.
   `reports.job_snapshot_json`, new-report snapshot persistence, compatible
   backfill for reports whose `job_id` resolves, deleted-task snapshot context,
   limited-context flags for unrecoverable old reports, and owner/workspace
-  filtering that does not trust snapshot content.
+  filtering that does not trust snapshot content. Phase 18B now consumes those
+  fields in the report center to group active reports by task, group deleted or
+  missing-task reports by stored snapshot, label deleted and limited-context
+  history, and keep preview, lead detail switching, downloads, delivery
+  history, and row actions tied to the selected report.
 - Phase 11 was completed as four verified batches: Phase 11A module boundary
   and tokens, Phase 11B base layout/navigation visual foundation, Phase 11C
   interaction components and floating menus, and Phase 11D responsive
@@ -332,29 +338,63 @@ validation with real deployment credentials.
   email delivery logs are active schema features after Phase 16. Automatic-send
   idempotency in the scheduler/report delivery workflow is active after Phase
   17A; report-center delivery-history UI is active after Phase 17B; report
-  snapshots are active after Phase 18A. Report task grouping remains Phase 18B
-  work.
+  snapshots are active after Phase 18A; report task grouping is active after
+  Phase 18B.
 - The first global Phase 10-18 review found that Phase 13, Phase 17, and Phase
   18 were too coarse as single goals. The plan now splits them into data/API
   and frontend/responsive batches.
 - Phase 10.5 follow-up global review found no remaining P0/P1 blockers.
-  Remaining review notes are P2 implementation refinements and do not block
-  Phase 18A. Phase 18B remains governed by the same accepted plan and must not
-  bypass Phase 18A snapshot/permission behavior.
+  Remaining review notes were P2 implementation refinements and did not block
+  Phase 11-18 execution. Phase 18B preserved Phase 18A snapshot/permission
+  behavior and did not use snapshot content to grant access.
 
 ## Next Step
 
 Next allowed implementation step:
 
-1. start Phase 18B only;
-2. group reports by active monitoring task when `job_id` resolves;
-3. group deleted or missing-task reports using `job_snapshot_json`;
-4. show deleted-task and limited-context labels where appropriate;
-5. preserve report preview, lead detail switching, downloads, delivery
-   history, row actions, and owner/workspace scope on desktop, tablet, and
-   mobile.
+1. prepare production pilot handoff and deployment-specific validation;
+2. verify real platform QR scanning, real platform crawling, SMTP delivery, and
+   AI-provider behavior with production credentials;
+3. keep Phase 10-18 console behavior under regression protection during any
+   pilot hardening.
 
 ## Latest Verification
+
+Phase 18B report-center task grouping frontend verification on 2026-06-16:
+
+- Updated the report-center list rendering path to group reports by active
+  monitoring task when `job_id` resolves.
+- Grouped deleted or missing-task reports using the customer-safe
+  `job_snapshot` fields exposed by Phase 18A.
+- Added deleted-task, historical snapshot, and limited-context labels without
+  exposing raw `job_snapshot_json`.
+- Preserved per-report preview, lead detail switching, download links, email
+  delivery latest state/history, manual resend menu entry, and row actions.
+- Added responsive grouped-report styles for desktop, tablet, and mobile.
+- Verified administrator and normal-user role paths without changing API,
+  schema, permission, or data-scope behavior.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before documentation update.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_18b or phase_18a or phase_17b or report_resend_email_updates_status or report_history_keeps_law_firm_snapshot_after_job_deleted or leads_api_can_scope_items_to_selected_report"`
+- Result: 8 passed, 228 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 236 passed, 3 warnings.
+- Inline monitor page script parse check and `python -m py_compile
+  tests\test_monitoring_mvp.py`
+- Result: PASS.
+- Browser validation on isolated service `127.0.0.1:19218` with temporary
+  data:
+  - `/monitor`, `/static/monitor/monitor.css`, and
+    `/static/monitor/monitor.js` returned HTTP 200;
+  - administrator login opened Report Center with active-task, deleted-task,
+    missing-task snapshot, and limited-context historical groups;
+  - grouped report labels, platform/keyword/frequency chips, preview drawer,
+    report-specific lead switching, report download menu links, latest email
+    status, and delivery-history rows stayed tied to report ID 1;
+  - 1440px, 1024px, and 390px report-center checks found four groups, no
+    page-level horizontal overflow, and no authenticated console/page errors;
+  - normal-user login kept Report Center visible and administrator resource or
+    diagnostics entries hidden.
 
 Phase 18A report job snapshot data model verification on 2026-06-16:
 
