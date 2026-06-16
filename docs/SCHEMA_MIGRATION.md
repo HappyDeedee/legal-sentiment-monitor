@@ -202,8 +202,9 @@ After migration:
 
 ## Phase 14 - Run Center Visibility Fields
 
-This phase is planned for the console optimization roadmap and is not
-implemented yet.
+This phase is implemented and verified for the console optimization roadmap.
+It prepares the data model only; Phase 15 must still add API filters,
+archive/restore actions, default visible-only behavior, and frontend controls.
 
 Add fields to `crawl_runs`:
 
@@ -238,10 +239,22 @@ idx_crawl_runs_visibility on crawl_runs(workspace_id, visibility, started_at)
 idx_crawl_runs_type_status on crawl_runs(workspace_id, run_type, status)
 ```
 
+Implementation notes:
+
+- new database creation includes the four fields with compatible defaults;
+- existing database migration adds missing fields through `_ensure_column`;
+- empty existing `visibility` values are backfilled to `visible`;
+- empty existing `run_type` values are backfilled to `scheduled`;
+- tests verify the fields, indexes, backfill, and compatibility with run,
+  run-list, report-link, and status reads.
+
 ## Phase 16 - Email Delivery Logs
 
-This phase is planned for the console optimization roadmap and is not
-implemented yet.
+This phase is implemented and verified for the console optimization roadmap.
+It prepared the data model only; Phase 17A has connected scheduler/mailer
+delivery logic, automatic-send idempotency, and manual resend logging to this
+foundation. Phase 17B has surfaced scoped delivery history in the report
+center. Phase 18A report snapshots are now separate implemented schema work.
 
 Create `email_delivery_logs`:
 
@@ -292,12 +305,14 @@ Recommended indexes and constraints:
 idx_email_delivery_job_window on email_delivery_logs(workspace_id, job_id, send_window_key)
 idx_email_delivery_report on email_delivery_logs(workspace_id, report_id, created_at)
 idx_email_delivery_status on email_delivery_logs(workspace_id, status, created_at)
+idx_email_delivery_auto_window_unique on email_delivery_logs(workspace_id, job_id, send_window_key, send_type)
+  where send_type = "auto" and status in ("pending", "sending", "sent")
 ```
 
-Automatic-send idempotency should enforce one active or successful automatic
-send for the same `workspace_id + job_id + send_window_key + send_type=auto`.
-SQLite may require this through a partial unique index or transactional
-application logic, depending on the current migration helper capabilities.
+Automatic-send idempotency foundation is implemented through a SQLite partial
+unique index. It enforces one active or successful automatic delivery row for
+the same `workspace_id + job_id + send_window_key + send_type=auto`, while
+allowing failed/skipped retries and repeated manual resend rows.
 
 Compatibility rules:
 
@@ -306,10 +321,21 @@ Compatibility rules:
 - backfill is optional for old reports because old attempts were not recorded;
 - do not store SMTP credentials or full secret configuration in delivery logs.
 
+Implementation notes:
+
+- new database creation includes `email_delivery_logs`;
+- existing database migration creates the table if missing and ensures every
+  required column exists;
+- invalid legacy `send_type` values are normalized to `auto`;
+- invalid legacy `status` values are normalized to `pending`;
+- missing `recipients_json` values are normalized to `[]`;
+- tests verify the fields, indexes, partial unique index behavior, window-key
+  rules, old report email fields, and delivery-log secret redaction.
+
 ## Phase 18 - Report Job Snapshot
 
-This phase is planned for the console optimization roadmap and is not
-implemented yet.
+Phase 18A is implemented and verified for the console optimization roadmap. It
+prepares the data model for Phase 18B frontend task grouping.
 
 Add field to `reports`:
 
@@ -333,17 +359,34 @@ Recommended snapshot:
 Backfill strategy:
 
 1. For reports whose `job_id` still resolves to `monitor_jobs`, populate the
-   snapshot from the current task row.
+   snapshot from the current task row. This is implemented in compatible
+   schema initialization.
 2. For reports with missing or null `job_id`, leave `job_snapshot_json` null or
    populate only safely recoverable report context.
 3. Report center should label unrecoverable rows as historical reports with
-   limited context, not as current active tasks.
+   limited context, not as current active tasks. Phase 18A exposes the
+   limited-context data flags; Phase 18B must render the final grouped labels.
 
 Compatibility rules:
 
 - do not require `job_snapshot_json` for old reports at first read;
 - never use snapshot content to bypass workspace or owner filtering;
 - keep `job_id` for active task relations.
+- when a task is deleted through the monitor API, update the report snapshot's
+  `deleted_at` context before removing the task row.
+- keep Phase 18A data-model behavior separate from Phase 18B frontend grouping.
+
+Implementation notes:
+
+- new database creation includes `reports.job_snapshot_json`;
+- existing database migration ensures the column exists and backfills
+  resolvable reports;
+- report creation persists a snapshot immediately;
+- report reads expose customer-safe `job_snapshot`, `job_deleted`,
+  `legacy_without_job_snapshot`, and `limited_context` fields for later
+  grouping;
+- tests verify new-report persistence, backfill, deleted-task readability,
+  unrecoverable limited context, and owner/workspace scope.
 
 ## Blocking Decisions
 

@@ -2,13 +2,25 @@ from __future__ import annotations
 
 import html
 import json
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
 from openpyxl import Workbook
 
-from .database import MONITOR_DATA_DIR, get_job, get_report, get_conn, utc_now
+from .database import (
+    MONITOR_DATA_DIR,
+    email_send_window_key,
+    get_job,
+    get_report,
+    get_conn,
+    record_email_delivery_log,
+    report_job_snapshot,
+    report_job_snapshot_json,
+    try_record_email_delivery_log,
+    update_email_delivery_log_status,
+    utc_now,
+)
 from .mailer import send_report
 from .normalizer import PLATFORM_LABELS
 from .security import customer_safe_text, redact_sensitive
@@ -30,14 +42,15 @@ def create_report(run_id: int, job: dict[str, Any], summary: dict[str, Any]) -> 
     html_path.write_text(html_text, encoding="utf-8")
     md_path.write_text(md_text, encoding="utf-8")
     write_excel(xlsx_path, records)
+    snapshot_json = report_job_snapshot_json(job)
     with get_conn() as conn:
         cur = conn.execute(
             """
             INSERT INTO reports (
                 workspace_id, run_id, job_id, html_path, markdown_path, excel_path,
-                summary, created_by, updated_by, created_at
+                job_snapshot_json, summary, created_by, updated_by, created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 int(job.get("workspace_id") or 1),
@@ -46,6 +59,7 @@ def create_report(run_id: int, job: dict[str, Any], summary: dict[str, Any]) -> 
                 str(html_path),
                 str(md_path),
                 str(xlsx_path),
+                snapshot_json,
                 json.dumps(summary, ensure_ascii=False),
                 job.get("created_by"),
                 job.get("created_by"),
@@ -58,6 +72,8 @@ def create_report(run_id: int, job: dict[str, Any], summary: dict[str, Any]) -> 
         "run_id": run_id,
         "job_id": job["id"],
         "law_firm_name": job.get("law_firm_name", ""),
+        "job_snapshot": report_job_snapshot(job),
+        "job_snapshot_json": snapshot_json,
         "summary": summary,
         "html_path": str(html_path),
         "markdown_path": str(md_path),
@@ -74,7 +90,23 @@ def update_report_email_status(report_id: int, status: str, error: str | None = 
         )
 
 
-def resend_report_email(report_id: int) -> tuple[bool, str | None, dict[str, Any]]:
+def send_report_with_delivery_log(
+    job: dict[str, Any],
+    report: dict[str, Any],
+    *,
+    send_type: str = "auto",
+    actor: dict[str, Any] | None = None,
+    sent_at: datetime | None = None,
+) -> tuple[bool, str | None, dict[str, Any], dict[str, Any] | None]:
+    send_at = sent_at or datetime.now(timezone.utc)
+    if send_type == "manual_resend":
+        return _send_report_manual_resend(job, report, actor, send_at)
+    if send_type != "auto":
+        raise ValueError("invalid email send type")
+    return _send_report_auto(job, report, send_at)
+
+
+def resend_report_email(report_id: int, actor: dict[str, Any] | None = None) -> tuple[bool, str | None, dict[str, Any]]:
     report = get_report(report_id)
     if not report:
         raise ValueError("report not found")
@@ -83,10 +115,85 @@ def resend_report_email(report_id: int) -> tuple[bool, str | None, dict[str, Any
         "law_firm_name": report.get("law_firm_name") or "",
         "recipients": [],
     }
-    ok, error = send_report(job, report)
-    update_report_email_status(report_id, "sent" if ok else "failed", error)
+    ok, error, _refreshed_report, _log = send_report_with_delivery_log(job, report, send_type="manual_resend", actor=actor)
     refreshed = get_report(report_id) or report
     return ok, error, refreshed
+
+
+def _send_report_auto(job: dict[str, Any], report: dict[str, Any], send_at: datetime) -> tuple[bool, str | None, dict[str, Any], dict[str, Any] | None]:
+    window_key = email_send_window_key(int(job.get("id") or report.get("job_id") or 0), str(job.get("frequency") or "daily"), send_at)
+    pending = try_record_email_delivery_log(
+        {
+            "workspace_id": job.get("workspace_id") or report.get("workspace_id"),
+            "job_id": job.get("id") or report.get("job_id"),
+            "report_id": report.get("id"),
+            "send_window_key": window_key,
+            "send_type": "auto",
+            "sent_at": send_at.isoformat(),
+            "status": "pending",
+            "recipients": _delivery_recipients(job),
+        }
+    )
+    if pending is None:
+        message = "同一任务和发送窗口已存在自动邮件交付记录，已跳过重复发送"
+        record_email_delivery_log(
+            {
+                "workspace_id": job.get("workspace_id") or report.get("workspace_id"),
+                "job_id": job.get("id") or report.get("job_id"),
+                "report_id": report.get("id"),
+                "send_window_key": window_key,
+                "send_type": "auto",
+                "sent_at": send_at.isoformat(),
+                "status": "skipped",
+                "error_message": message,
+                "recipients": _delivery_recipients(job),
+            }
+        )
+        update_report_email_status(int(report["id"]), "skipped", message)
+        refreshed = get_report(int(report["id"])) or report
+        return False, message, refreshed, None
+    ok, error = send_report(job, report)
+    safe_error = redact_sensitive(error)
+    status = "sent" if ok else "failed"
+    log = update_email_delivery_log_status(int(pending["id"]), status, safe_error, send_at.isoformat())
+    update_report_email_status(int(report["id"]), status, safe_error)
+    refreshed = get_report(int(report["id"])) or report
+    return ok, safe_error, refreshed, log
+
+
+def _send_report_manual_resend(
+    job: dict[str, Any],
+    report: dict[str, Any],
+    actor: dict[str, Any] | None,
+    send_at: datetime,
+) -> tuple[bool, str | None, dict[str, Any], dict[str, Any]]:
+    ok, error = send_report(job, report)
+    safe_error = redact_sensitive(error)
+    status = "sent" if ok else "failed"
+    log = record_email_delivery_log(
+        {
+            "workspace_id": job.get("workspace_id") or report.get("workspace_id"),
+            "job_id": job.get("id") or report.get("job_id"),
+            "report_id": report.get("id"),
+            "send_window_key": email_send_window_key(int(job.get("id") or report.get("job_id") or 0), str(job.get("frequency") or "daily"), send_at),
+            "send_type": "manual_resend",
+            "sent_by": (actor or {}).get("id"),
+            "sent_at": send_at.isoformat(),
+            "status": status,
+            "error_message": safe_error,
+            "recipients": _delivery_recipients(job),
+        }
+    )
+    update_report_email_status(int(report["id"]), status, safe_error)
+    refreshed = get_report(int(report["id"])) or report
+    return ok, safe_error, refreshed, log
+
+
+def _delivery_recipients(job: dict[str, Any]) -> list[str]:
+    recipients = job.get("recipients") or []
+    if recipients:
+        return [str(item).strip() for item in recipients if str(item).strip()]
+    return []
 
 
 def render_html(job: dict[str, Any], summary: dict[str, Any], records: list[dict[str, Any]]) -> str:

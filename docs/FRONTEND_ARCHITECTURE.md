@@ -7,7 +7,20 @@ responsive behavior, and component boundaries before UI implementation begins.
 ## Status
 
 Planning accepted on 2026-06-15. Phase 10 architecture review is complete.
-Phase 11 design-system implementation has not started.
+Phase 11A module boundary, Phase 11B base layout, Phase 11C interaction
+helper/floating-menu, and Phase 11D responsive foundation batches are complete
+and verified. Phase 12A navigation structure and login landing is complete and
+verified. Phase 12B page entry and role flow is complete and verified. Phase
+13A operations-home data layer is complete and verified. Phase 13B operations
+home desktop visual metrics is complete and verified. Phase 13C operations
+home responsive and role views is complete and verified. Phase 14 run center
+data model preparation and Phase 15A run center API/data governance are
+complete and verified. Phase 15B run center frontend refinement is complete
+and verified. Phase 16 email delivery data model preparation, Phase 17A email
+idempotency/delivery logic, Phase 17B report-center delivery-history frontend,
+Phase 18A report job snapshot data model, and Phase 18B report-center task
+grouping frontend are complete and verified. The accepted Phase 10-18 console
+optimization roadmap is complete through Phase 18B.
 
 Agents must use this document together with:
 
@@ -141,7 +154,9 @@ Required cross-phase checks:
 - Phase 16 must land email delivery logs and idempotency keys before Phase 17
   displays delivery history or changes resend behavior.
 - Phase 17 must keep report generation tolerant of SMTP failure and must not
-  block Phase 18 report grouping or preview switching.
+  block Phase 18 report grouping or preview switching. Phase 17B is complete:
+  the report center now shows latest delivery state and scoped delivery history
+  without adding new frontend dependencies.
 - Phase 18 report grouping must preserve selected-report preview, lead detail
   switching, owner/workspace scope, and deleted-task history through
   `job_snapshot_json`.

@@ -9,7 +9,905 @@ How to read this file:
 - older entries are historical snapshots and may mention states that were later
   superseded by newer entries above them;
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
-  `docs/TRACEABILITY.md` for final current-state decisions.
+`docs/TRACEABILITY.md` for final current-state decisions.
+
+## 2026-06-16 - Phase 18B Report Center Task Grouping Frontend Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`.
+
+Result:
+
+- Updated the report-center frontend list rendering path to group reports by
+  active monitoring task when `job_id` resolves.
+- Grouped deleted-task and missing-task reports from the Phase 18A
+  `job_snapshot` customer-safe fields.
+- Added deleted-task, historical snapshot, and limited-context labels while
+  avoiding raw `job_snapshot_json` exposure.
+- Preserved selected-report preview, report-specific lead switching, download
+  links, latest email delivery status, delivery history, manual resend menu
+  entry, and row actions.
+- Added grouped report-center styles for desktop, tablet, and mobile.
+- Did not change schema, migrations, API authorization, owner/workspace scope,
+  or V1 product boundaries.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before documentation update.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_18b or phase_18a or phase_17b or report_resend_email_updates_status or report_history_keeps_law_firm_snapshot_after_job_deleted or leads_api_can_scope_items_to_selected_report"`
+- Result: 8 passed, 228 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 236 passed, 3 warnings.
+- `python -m py_compile tests\test_monitoring_mvp.py`
+- Result: PASS.
+- Inline monitor page script parse check with `node --check` against the
+  extracted inline script.
+- Result: PASS.
+- Browser validation on isolated service `127.0.0.1:19218` with temporary
+  monitor data:
+  - `/monitor`, `/static/monitor/monitor.css`, and
+    `/static/monitor/monitor.js` returned HTTP 200;
+  - administrator login opened Report Center with four validated group types:
+    active task, deleted task, missing-task snapshot, and limited-context
+    historical report;
+  - group headers showed task/snapshot labels plus platform, keyword, and
+    frequency context without raw snapshot JSON;
+  - report ID 1 preview opened the drawer, scoped lead detail to report ID 1,
+    kept download menu links under report ID 1, and displayed the automatic
+    delivery-history row;
+  - 1440px, 1024px, and 390px checks found four grouped sections, no
+    page-level horizontal overflow, and no authenticated console/page errors;
+  - normal-user login kept Report Center visible and administrator resource or
+    diagnostics entries hidden.
+
+Limitations:
+
+- Browser validation used isolated temporary sample data, not production data.
+- Real platform crawling, real SMTP delivery, real AI provider behavior, and
+  production credentials remain production pilot risks inherited from earlier
+  phases.
+- The Codex in-app browser returned `net::ERR_BLOCKED_BY_CLIENT` for the local
+  validation URL, so equivalent local Playwright validation was used against
+  the same isolated FastAPI service.
+
+## 2026-06-16 - Phase 18A Report Job Snapshot Data Model Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`.
+
+Result:
+
+- Added `reports.job_snapshot_json` to new SQLite database creation and
+  compatible existing-database migration.
+- Added shared report job snapshot builders for task ID, law firm, platforms,
+  search keywords, frequency, and deleted-task context.
+- Persisted snapshots for newly generated reports.
+- Backfilled snapshots for existing reports whose `job_id` still resolves to a
+  monitoring task.
+- Updated task deletion to mark report snapshots with deleted-task context
+  before the task row is removed.
+- Kept unrecoverable old reports readable as limited-context historical
+  reports.
+- Preserved `job_id` for active and historical task relations.
+- Preserved owner/workspace filtering by resolving reports through current
+  report/job/creator scope; snapshot content is never used to grant access.
+- Exposed customer-safe `job_snapshot`, `job_deleted`,
+  `legacy_without_job_snapshot`, and `limited_context` fields for Phase 18B
+  consumption.
+- Did not implement Phase 18B frontend report grouping, grouped layouts, or
+  responsive grouped-report UI.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before documentation update.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k phase_18a`
+- Result: 2 passed, 233 deselected, 1 warning.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_18a or phase_17b or phase_17a or phase_16 or report_resend_email_updates_status or report_history_keeps_law_firm_snapshot_after_job_deleted or list_reports_limit_zero"`
+- Result: 10 passed, 225 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 235 passed, 3 warnings.
+- `python -m py_compile api\monitoring\database.py api\monitoring\reporting.py api\routers\monitor.py tests\test_monitoring_mvp.py`
+- Result: PASS.
+
+Limitations:
+
+- Phase 18A is data-model preparation only. Phase 18B must still implement
+  report-center grouping, deleted-task/limited-context labels, and desktop,
+  tablet, and mobile grouped-report verification.
+- Browser validation was not rerun because Phase 18A has no visual UI change.
+  Existing Phase 17B browser validation remains the latest report-center
+  frontend proof until Phase 18B.
+- Real platform crawling, real SMTP delivery, real AI provider behavior, and
+  production credentials remain production pilot risks inherited from earlier
+  phases.
+
+## 2026-06-16 - Phase 17B Email Delivery History Frontend Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`.
+
+Result:
+
+- Added report delivery-history API access for
+  `/api/monitor/reports/{report_id}/email-delivery-logs`, scoped through the
+  current actor and report visibility.
+- Returned report latest-state fields and customer-safe delivery-log rows
+  without exposing SMTP passwords, tokens, cookies, proxy secrets, or internal
+  redaction labels.
+- Updated the report center with latest delivery status cells, a
+  delivery-history panel, refresh control, and report action-menu entry for
+  viewing history.
+- Displayed send type, status, time, recipient summary, send-window key, and
+  customer-safe error messages.
+- Required confirmation before manual resend and refreshed both the report list
+  and selected delivery history after resend.
+- Preserved report preview, lead detail switching, report downloads, run
+  center, task list, task-create entry, logout, and role-visible navigation.
+- Did not add Phase 18 report snapshots/grouping, schema changes, or frontend
+  dependencies.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before documentation update.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k phase_17b`
+- Result: 2 passed, 231 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_17b or phase_17a or phase_16 or report_resend_email_updates_status or phase_1_http_routes_enforce_sessions_roles_and_owner_scope or monitor_page_uses"`
+- Result: 9 passed, 224 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 233 passed, 3 warnings.
+- `python -m py_compile api\routers\monitor.py api\monitoring\database.py api\monitoring\reporting.py tests\test_monitoring_mvp.py`
+- Result: PASS.
+- `node --check api\webui\monitor\monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check
+- Result: PASS.
+- Isolated browser service on `127.0.0.1:19217`:
+  - `/monitor`, `/static/monitor/monitor.css`, and
+    `/static/monitor/monitor.js` returned HTTP 200;
+  - administrator login opened the console and Report Center;
+  - delivery history rendered automatic and manual-resend rows with
+    recipients, window key, status, time, and customer-safe error text;
+  - 1440px, 1024px, and 390px report-center checks kept the delivery-history
+    surface usable without page-level horizontal overflow;
+  - report preview drawer, report row menu, run center, task list,
+    task-create entry, logout, and normal-user role-visible navigation were
+    checked with no console errors.
+
+Limitations:
+
+- Browser validation used isolated temporary data and did not prove real SMTP
+  delivery, real platform crawling, or production credential behavior.
+- Phase 18 report snapshots and grouped report-center UI remain planned and
+  unimplemented.
+
+## 2026-06-16 - Phase 17A Email Idempotency And Delivery Logic Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`.
+
+Result:
+
+- Connected automatic report email delivery to `email_delivery_logs`.
+- Used the accepted `send_window_key` helper for `daily`, `6h`, `12h`, and
+  `cron` schedule windows.
+- Added automatic-send idempotency for
+  `workspace_id + job_id + send_window_key + send_type=auto`; repeated
+  automatic delivery in the same window is recorded as `skipped` and does not
+  call the mailer again.
+- Recorded automatic pending/sent/failed/skipped delivery rows with recipient
+  summaries and customer-safe error messages.
+- Recorded explicit manual resend as a separate `manual_resend` delivery row
+  with `sent_by` while leaving automatic idempotency independent.
+- Preserved report generation when SMTP fails and kept
+  `reports.email_status` / `reports.email_error` as latest-state
+  compatibility fields until Phase 17B delivery-history UI is implemented.
+- Carried run-source labels through CLI and scheduler paths so automatic and
+  manual run summaries remain distinguishable.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before documentation update.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k phase_17a`
+- Result: 2 passed, 229 deselected, 1 warning.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_17a or phase_16 or phase_15b or phase_15a or phase_14 or report_resend_email_updates_status or phase_7_run_job_generates_report_without_ai_or_email or cli_run_due or scheduler"`
+- Result: 20 passed, 211 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 231 passed, 3 warnings.
+- `python -m py_compile api\monitoring\database.py api\monitoring\reporting.py api\monitoring\runner.py api\monitoring\scheduler.py api\monitoring\cli.py api\routers\monitor.py tests\test_monitoring_mvp.py`
+- Result: PASS.
+
+Limitations:
+
+- Phase 17A is backend delivery-governance work only. It does not add the
+  Phase 17B report-center delivery-history frontend and does not implement
+  Phase 18 report grouping or report snapshots.
+- Real SMTP delivery, real platform crawling, and production credential
+  behavior remain production pilot risks inherited from earlier phases.
+
+## 2026-06-16 - Phase 16 Email Delivery Data Model Preparation Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`.
+
+Result:
+
+- Added `email_delivery_logs` to new SQLite database creation and compatible
+  existing-database migration.
+- Stored `workspace_id`, `job_id`, `report_id`, `send_window_key`,
+  `send_type`, `sent_by`, `sent_at`, `status`, `error_message`,
+  `recipients_json`, and `created_at`.
+- Added `email_send_window_key` for the accepted `daily`, `6h`, `12h`, and
+  `cron` rules.
+- Added delivery-log insert/list helpers that preserve customer-safe error
+  text and recipient summaries without storing SMTP passwords, proxy
+  credentials, or tokens.
+- Added recommended indexes:
+  `idx_email_delivery_job_window`, `idx_email_delivery_report`, and
+  `idx_email_delivery_status`.
+- Added partial unique index `idx_email_delivery_auto_window_unique` for one
+  pending/sending/sent automatic row per workspace, task, schedule window, and
+  `send_type=auto`.
+- Preserved existing `reports.email_status` and `reports.email_error`
+  latest-state compatibility fields.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before documentation update.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k phase_16`
+- Result: 1 passed, 228 deselected, 1 warning.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_16 or phase_15b or phase_15a or phase_14 or report_resend_email_updates_status"`
+- Result: 5 passed, 224 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 229 passed, 3 warnings.
+- `python -m py_compile api/monitoring/database.py tests/test_monitoring_mvp.py`
+- Result: PASS.
+
+Limitations:
+
+- Phase 16 is data-model preparation only. It does not connect scheduler or
+  mailer delivery behavior to the log table, does not prevent duplicate sends
+  end to end, and does not add report-center delivery-history UI. Those remain
+  Phase 17A and Phase 17B work.
+- Real SMTP delivery remains a production pilot risk inherited from earlier
+  phases.
+
+## 2026-06-16 - Phase 15B Run Center Frontend Refinement Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`.
+
+Result:
+
+- Added run-center pagination UI with summary and previous/next controls.
+- Added task/law-firm, status, platform, run type, visibility, date, and page
+  size filters.
+- Default run-center view now requests `run_type=operational`, which separates
+  scheduled/manual operational records from test/diagnostic noise.
+- Added administrator archive and restore row actions with confirmation while
+  keeping normal users scoped to visible records.
+- Preserved run-log drawer refresh, copy, and download controls.
+- Added frontend/CSS regression coverage for the Phase 15B controls and kept
+  Phase 16/18 terms out of this frontend batch.
+- Added the `operational` run-type API alias needed by the default frontend
+  view while preserving `scheduled`, `manual`, and `test` filters.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before documentation update.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_15b or phase_15a"`
+- Result: 2 passed, 226 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_15b or phase_15a or phase_14 or run_logs or list_runs"`
+- Result: 4 passed, 224 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 228 passed, 3 warnings.
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check
+- Result: PASS.
+- Isolated browser service on `127.0.0.1:19180`:
+  - `/monitor`, `/static/monitor/monitor.css`, and
+    `/static/monitor/monitor.js` returned HTTP 200;
+  - administrator login opened the operations home and Run Center;
+  - Run Center showed pagination, filters, default visible/operational
+    summary, row status, log, and archive actions;
+  - test/diagnostic records were hidden from the default operational view and
+    visible through the run-type filter;
+  - the run-log drawer opened with real `crawler.log` content and displayed
+    refresh, copy, and download controls;
+  - administrator archive/restore API behavior was verified against the
+    running service;
+  - normal-user API scope returned `403` for archived visibility and archive
+    action;
+  - desktop 1440px, tablet 1024px, and mobile 390px run-center layouts kept
+    filters, status, actions, summary, pagination, and list content reachable
+    without horizontal page overflow.
+
+Limitations:
+
+- Browser validation used isolated temporary data and did not prove real
+  platform crawling, SMTP delivery, or AI-provider behavior.
+- Phase 16 email delivery logs and Phase 18 report snapshots remain planned
+  and unimplemented.
+
+## 2026-06-16 - Phase 15A Run Center API And Data Governance Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`.
+
+Result:
+
+- Added run API/query pagination while preserving the existing `runs` and
+  `running_job_ids` response fields.
+- Added `pagination` and `filters` response metadata for the run list API.
+- Added filters for task ID, law firm, status, platform, run type, visibility,
+  and date range.
+- Added administrator-only archive and restore APIs that update
+  `crawl_runs.visibility`, `archived_at`, and `archived_by` without physically
+  deleting run records.
+- Default run-list API behavior hides archived records. Administrators can
+  request archived or all records explicitly; normal users receive `403` for
+  archived/all visibility requests.
+- Preserved owner/workspace scope for paginated and filtered run results.
+- Preserved existing status values, report links, and run-log access for
+  visible records. Archived run logs and stop actions are hidden from normal
+  users.
+- Added
+  `tests/test_monitoring_mvp.py::test_phase_15a_run_center_api_pagination_filters_archive_and_scope`.
+- Did not implement Phase 15B frontend pagination, filter controls, or row
+  archive/restore actions.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before implementation and after verification.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k phase_15a`
+- Result: 1 passed, 226 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_15a or run_logs or list_runs"`
+- Result: 2 passed, 225 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 227 passed, 3 warnings.
+
+Limitations:
+
+- Phase 15A is API/data governance only. Run-center frontend pagination,
+  filter controls, archive/restore confirmations, and responsive run-center
+  layout remain Phase 15B work.
+- Phase 16 email delivery logs and Phase 18 report snapshots remain planned
+  and unimplemented.
+
+## 2026-06-16 - Phase 14 Run Center Data Model Preparation Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`.
+
+Result:
+
+- Added compatible `crawl_runs` schema fields for run-center governance:
+  `visibility`, `run_type`, `archived_at`, and `archived_by`.
+- New database creation now includes `visibility = visible` and
+  `run_type = scheduled` defaults.
+- Existing database migration adds the same fields, backfills empty values to
+  `visible` and `scheduled`, and preserves `archived_at` and `archived_by` as
+  nullable fields.
+- Added recommended Phase 14 indexes:
+  `idx_crawl_runs_visibility` on `(workspace_id, visibility, started_at)` and
+  `idx_crawl_runs_type_status` on `(workspace_id, run_type, status)`.
+- Added
+  `tests/test_monitoring_mvp.py::test_phase_14_run_center_visibility_fields_migrate_and_backfill`.
+- Verified existing run reads, run list reads, report links, and status values
+  remain readable after the migration.
+- Did not implement Phase 15 pagination, filters, archive/restore APIs,
+  default archived hiding, frontend run-center controls, email delivery logs,
+  or report grouping.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before implementation and after verification.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k phase_14`
+- Result: 1 passed, 225 deselected, 1 warning.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_14 or phase_13c or phase_13b or phase_13a or phase_12b or phase_12a or phase_11a or phase_11b or phase_11c or phase_11d or monitor_page_uses or readiness_dashboard"`
+- Result: 13 passed, 213 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 226 passed, 3 warnings.
+
+Limitations:
+
+- Phase 14 is data-model preparation only. Run-center pagination, filtering,
+  default visible-only behavior, archive/restore APIs, and responsive frontend
+  controls remain Phase 15A/15B work.
+- Phase 16 email delivery logs and Phase 18 report snapshots remain planned
+  and unimplemented.
+
+## 2026-06-16 - Phase 13C Operations Home Responsive And Role Views Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`, isolated local FastAPI service with
+temporary monitor data.
+
+Result:
+
+- Adapted the operations home for 1024px tablet and 390px mobile layouts with
+  explicit wrapping rules for metric cards, drilldown entries, resource
+  signals, and the administrator health summary.
+- Replaced the home-page detailed diagnostics block with a compact
+  administrator-only health summary and moved detailed readiness, scheduler,
+  system-checklist, and platform-status sections to System Diagnostics.
+- Kept normal users scoped to their own task/run/report metrics and
+  business-safe resource wording `资源由管理员维护`; normal users do not see
+  administrator resource drilldowns or System Diagnostics shortcuts.
+- Preserved administrator resource health as concise signals with drilldowns to
+  resource pages and System Diagnostics.
+- Added
+  `tests/test_monitoring_mvp.py::test_phase_13c_operations_home_responsive_role_views`.
+- No schema migration, API contract change, email delivery logs, run archive
+  fields, report snapshots, chart dependency, or new frontend framework was
+  added.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before implementation and after verification.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_13c or phase_13b or phase_13a or phase_12b or phase_12a or phase_11a or phase_11b or phase_11c or phase_11d or monitor_page_uses or readiness_dashboard"`
+- Result: 12 passed, 213 deselected, 3 warnings.
+- Inline script parse check for `api/monitor_web/index.html` plus
+  `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Runtime HTTP check on isolated service:
+  - `/monitor`: HTTP 200 and contained `运营首页`;
+  - `/static/monitor/monitor.css`: HTTP 200 and contained
+    `.operations-admin-health`;
+  - `/static/monitor/monitor.js`: HTTP 200 and contained `MonitorUI`.
+- Browser validation:
+  - administrator login reached Operations Home;
+  - administrator 1440px, 1024px, and 390px checks found five operations metric
+    cards, the compact administrator health summary, visible primary actions,
+    and no horizontal overflow;
+  - administrator System Diagnostics drilldown reached readiness, scheduler,
+    and platform status details;
+  - normal-user login used a fresh browser context;
+  - normal-user navigation exposed only `总览`, `舆情监控`, `运行中心`, and
+    `报告中心`;
+  - normal users saw business-safe resource wording `资源由管理员维护`;
+  - normal users did not see administrator account/resource drilldowns,
+    administrator health summary, or System Diagnostics shortcuts;
+  - normal-user 1024px and 390px checks found no horizontal overflow;
+  - normal-user task drawer, Run Center, Report Center, and logout path
+    remained reachable;
+  - authenticated console/page errors were empty. The unauthenticated
+    session-check 401 before login remains existing login behavior and was not
+    treated as an authenticated console regression.
+
+Limitations:
+
+- Phase 13C closes the operations-home responsive and role-view batch. Phase 14
+  is still required before run-center archive/noise filtering and must add its
+  accepted data-model fields and migration/backfill tests first.
+- Real platform QR scanning, real platform crawling, real AI provider, and real
+  SMTP delivery remain production pilot risks inherited from earlier phases.
+
+## 2026-06-16 - Phase 13B Operations Home Desktop Visual Metrics Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`, isolated local FastAPI service with
+temporary monitor data.
+
+Result:
+
+- Replaced the default text-heavy Overview dashboard with an operations-home
+  visual metric layout in `api/monitor_web/index.html`.
+- Rendered task health, run activity, report/review status, email delivery
+  latest state, suspected negative leads, and concise resource health from the
+  Phase 13A operations-home API contract, with a legacy summary fallback for
+  compatibility.
+- Added drilldowns into Monitoring, Run Center, Report Center, report email
+  delivery status, and administrator platform-account resources where
+  permitted.
+- Moved long readiness, scheduler, and platform diagnostics into a collapsed
+  administrator-only diagnostics section so they no longer dominate the default
+  home page.
+- Added operations-home layout and metric styles to
+  `api/webui/monitor/monitor.css`.
+- Added
+  `tests/test_monitoring_mvp.py::test_phase_13b_operations_home_desktop_visual_metrics`.
+- Chose native HTML/CSS rather than a chart dependency, so no new dependency or
+  `DECISIONS.md` entry was required.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before and after code verification.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_13b or phase_13a or phase_12b or phase_12a or phase_11a or phase_11b or phase_11c or phase_11d or monitor_page_uses or readiness_dashboard"`
+- Result: 11 passed, 213 deselected, 3 warnings.
+- Inline script parse check for `api/monitor_web/index.html` plus
+  `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Runtime HTTP check on isolated service:
+  - `/monitor`: HTTP 200 and contained `运营首页`;
+  - `/static/monitor/monitor.css`: HTTP 200 and contained
+    `.operations-metric-grid`;
+  - `/static/monitor/monitor.js`: HTTP 200 and contained `MonitorUI`.
+- Browser validation:
+  - administrator login reached Operations Home;
+  - administrator saw five operations metric cards;
+  - administrator drilldowns reached Monitoring, Run Center, Report Center,
+    report email delivery status, and Platform Accounts;
+  - administrator diagnostics were collapsed by default;
+  - administrator 1440px, 1024px, and 390px checks found no horizontal
+    overflow;
+  - normal-user login used a fresh browser context;
+  - normal-user navigation exposed only `总览`, `舆情监控`, `运行中心`, and
+    `报告中心`;
+  - normal users saw business-safe resource wording `资源由管理员维护`;
+  - normal users did not see the administrator resource drilldown or system
+    diagnostics;
+  - normal-user task drawer, Report Center, and logout path remained
+    reachable;
+  - authenticated console/page errors were empty. The unauthenticated
+    session-check 401 before login remains existing login behavior and was not
+    treated as an authenticated console regression.
+
+Limitations:
+
+- Phase 13B implements the desktop visual metric surface and role-safe
+  drilldowns. Phase 13C still needs the dedicated responsive and role-view
+  close-out required by the roadmap.
+- No schema migration, run archive/noise filtering, email delivery log,
+  delivery-history UI, report grouping, or report snapshot behavior was added
+  in this batch.
+
+## 2026-06-15 - Phase 13A Operations Home Data Layer Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`.
+
+Result:
+
+- Added an operations-home data contract under the existing
+  `/api/monitor/dashboard` API surface.
+- Extended the existing dashboard summary with `summary.operations_home` while
+  preserving all existing flat dashboard fields for compatibility.
+- Returned the same object as top-level `operations_home` so Phase 13B can
+  migrate the frontend without breaking old summary consumers.
+- Aggregated task health, run activity, report activity, email delivery latest
+  state, suspected lead metrics, and concise resource health from existing
+  persisted tables.
+- Represented missing delivery history as unavailable instead of fabricating
+  Phase 16/17 delivery-log metrics.
+- Preserved administrator workspace-wide visibility and normal-user
+  owner/workspace scope. Normal users receive business-safe resource health and
+  no platform account, proxy, AI profile, or login-session counts.
+- Added
+  `tests/test_monitoring_mvp.py::test_phase_13a_operations_home_data_layer_scopes_real_aggregates`.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before implementation.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k phase_13a`
+- Result: 1 passed, 222 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_13a or phase_12b or phase_12a or phase_11a or phase_11b or phase_11c or phase_11d or monitor_page_uses or readiness_dashboard"`
+- Result: 10 passed, 213 deselected, 3 warnings.
+
+Limitations:
+
+- Phase 13A only adds the API/data layer. It does not implement the Phase 13B
+  desktop visual metrics or Phase 13C responsive/role-specific frontend view.
+- No schema migration, email delivery log, run archive, or report grouping
+  behavior was added in this batch.
+
+## 2026-06-15 - Phase 12B Page Entry And Role Flow Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`, isolated local FastAPI service with
+temporary monitor data.
+
+Result:
+
+- Added consistent page entry headers for Operations Home, Monitoring, Run
+  Center, Report Center, account resources, proxy resources, AI access, AI
+  rules, mail configuration, mail templates, runtime settings, and system
+  diagnostics.
+- Added role-aware task-loop shortcuts for creating a monitoring task, viewing
+  runs, viewing reports, checking report email delivery status, and resolving
+  administrator resource issues.
+- Added a report-center email delivery entry that keeps latest report email
+  status and manual resend discovery in the task loop without implementing the
+  later delivery-log data model.
+- Changed the shell refresh action to refresh the current page instead of a
+  global-status-only action.
+- Added
+  `tests/test_monitoring_mvp.py::test_phase_12b_page_entry_and_role_flow_shortcuts`.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before implementation and after documentation
+  close-out.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_12b or phase_12a or phase_11a or phase_11b or phase_11c or phase_11d or monitor_page_uses"`
+- Result after documentation close-out: 8 passed, 214 deselected, 1 warning.
+- Runtime HTTP check on isolated service:
+  - `/monitor`: HTTP 200;
+  - `/static/monitor/monitor.css`: HTTP 200;
+  - `/static/monitor/monitor.js`: HTTP 200.
+- Browser validation:
+  - administrator login landed on `dashboard`;
+  - 12 page entries existed in the DOM;
+  - administrator Operations Home showed 5 shortcuts including the resource
+    support shortcut;
+  - create-task shortcut opened the task drawer;
+  - task -> runs -> reports shortcuts navigated successfully;
+  - report-center email delivery entry was visible;
+  - normal-user navigation contained only `总览`, `舆情监控`, `运行中心`, and
+    `报告中心`;
+  - normal-user Operations Home showed 4 task-loop shortcuts and no visible
+    administrator resource shortcuts;
+  - normal-user email delivery shortcut navigated to Report Center and the
+    email delivery entry;
+  - 1440px, 1024px, and 390px checks found no business-area horizontal
+    overflow for page entries, shortcut blocks, or the email delivery entry;
+  - 390px mobile navigation opened, selected Monitoring, and closed;
+  - page console errors were empty.
+
+Limitations:
+
+- Phase 12B only standardizes page entry structure and role-safe task-loop
+  navigation. Phase 13A must still define the real operations-home data
+  contract and aggregates.
+- No backend API contract, database schema, permission model, email-delivery
+  log, run archive, or report grouping changes were made in this batch.
+
+## 2026-06-15 - Phase 12A Navigation Structure And Login Landing Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`, isolated local FastAPI service with
+temporary monitor data.
+
+Result:
+
+- Replaced detached hover popovers for Resource Management and System
+  Configuration with expandable navigation groups.
+- Routed successful form login and session restore to Operations Home
+  (`dashboard`) when no explicit allowed destination is present.
+- Grouped authenticated user identity and logout in the desktop top-right
+  account area and added a predictable mobile account area in the navigation
+  drawer.
+- Preserved administrator and normal-user menu visibility rules.
+- Added
+  `tests/test_monitoring_mvp.py::test_phase_12a_navigation_groups_and_login_landing`.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before implementation and after documentation
+  close-out.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_12a or phase_11a or phase_11b or phase_11c or phase_11d or monitor_page_uses"`
+- Result after documentation close-out: 7 passed, 214 deselected, 1 warning.
+- Runtime HTTP check on isolated service:
+  - `/monitor`: HTTP 200;
+  - `/static/monitor/monitor.css`: HTTP 200;
+  - `/static/monitor/monitor.js`: HTTP 200.
+- Playwright authenticated browser validation:
+  - form login landed on `dashboard`;
+  - session restore landed on `dashboard`;
+  - administrator Resource Management and System Configuration groups were
+    visible and expandable/collapsible;
+  - mobile nested `email_templates` page switching worked and closed the
+    drawer;
+  - normal-user navigation contained only `总览`, `舆情监控`, `运行中心`, and
+    `报告中心`;
+  - authenticated console/page errors were empty.
+
+Limitations:
+
+- Phase 12A only changes navigation structure, login/session landing, and
+  account/logout grouping. Phase 12B still needs to standardize page entry
+  headers, descriptions, primary actions, toolbar areas, and role-specific
+  task-loop shortcuts.
+- No API contract, data model, schema migration, or permission model changes
+  were made in this batch.
+
+## 2026-06-15 - Phase 11D Responsive Foundation Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`, isolated local FastAPI service with
+temporary monitor data.
+
+Result:
+
+- Implemented accepted responsive breakpoints in
+  `api/webui/monitor/monitor.css`: desktop `>= 1280px`, tablet
+  `768px - 1279px`, and mobile `< 768px`.
+- Added touch-safe mobile navigation in `api/monitor_web/index.html` using a
+  top-left hamburger button, left-side drawer, and backdrop.
+- Added mobile navigation behavior for toggle open, backdrop close, Escape
+  close, page-switch close, and desktop-resize reset.
+- Made shell, header actions, page heads, toolbars, grids, modals/drawers,
+  action rows, toasts, and dense tables usable or scroll-safe on tablet and
+  mobile.
+- Added a normal-user frontend permission guard so mail-template preview
+  polling does not call administrator-only endpoints.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before implementation.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_11a or phase_11b or phase_11c or phase_11d or monitor_page_uses"`
+- Result before documentation close-out: 6 passed, 214 deselected, 1 warning.
+- Runtime HTTP check on isolated service:
+  - `/monitor`: HTTP 200;
+  - `/static/monitor/monitor.css`: HTTP 200;
+  - `/static/monitor/monitor.js`: HTTP 200.
+- Playwright authenticated browser validation:
+  - administrator dashboard loaded at 1440px with 12 navigation entries;
+  - normal user loaded with only `总览`, `舆情监控`, `运行中心`, and `报告中心`;
+  - tablet 1024px mobile navigation opened, closed by backdrop, and closed by
+    Escape;
+  - mobile 390px navigation opened, page switch closed the drawer, and the
+    task-create drawer remained reachable;
+  - desktop task drawer, run log drawer, report preview drawer, and report
+    action menu opened successfully;
+  - authenticated administrator and normal-user paths reported no console or
+    page errors.
+
+Limitations:
+
+- Phase 11D keeps dense tables scroll-safe on mobile. Full page-specific card
+  conversions remain for later page phases.
+- Phase 11D does not restructure Resource Management or System Configuration
+  popover navigation; that is the next allowed Phase 12A work.
+
+## 2026-06-15 - Phase 11C Interaction Components And Floating Menu Fix Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`, isolated local FastAPI service with
+temporary monitor data.
+
+Result:
+
+- Added shared toast, loading, empty-state, modal, drawer, and action-menu
+  styles to `api/webui/monitor/monitor.css`.
+- Added the `window.MonitorUI` helper boundary in
+  `api/webui/monitor/monitor.js` for toast, loading, empty-state,
+  close-menu, portal-root, and fixed floating-menu positioning helpers.
+- Reworked account, monitoring-task, AI-rule, and report row menus to use
+  fixed viewport placement and viewport-edge adjustment.
+- Kept the no-build Vanilla JavaScript/CSS path and did not introduce a
+  floating-position dependency, so no new `DECISIONS.md` entry was required.
+- Verified that proxy, AI access, and mail-template surfaces currently use
+  direct edit/test/preview actions rather than row menus, so no clipped row-menu
+  surface exists there in Phase 11C.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_11a or phase_11b or phase_11c or monitor_page_uses"`
+- Result: 5 passed, 214 deselected, 1 warning.
+- Runtime HTTP check on isolated service:
+  - `/monitor`: HTTP 200;
+  - `/static/monitor/monitor.css`: HTTP 200;
+  - `/static/monitor/monitor.js`: HTTP 200.
+- Playwright authenticated interaction check:
+  - account, monitoring-task, AI-rule, and report row menus used
+    `position: fixed`;
+  - active menus stayed inside the viewport;
+  - outside click and Escape closed menus;
+  - page changes and action execution close menus through the shared
+    close-menu path;
+  - 1024px and 390px smoke checks for monitoring tasks, run center, and report
+    center completed without console or page errors.
+
+Limitations:
+
+- Phase 11C does not implement the Phase 11D responsive foundation or mobile
+  navigation. Responsive breakpoint and touch-navigation work remains the next
+  allowed execution goal.
+
+## 2026-06-15 - Phase 11B Base Layout And Navigation Visual Foundation Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`, isolated local FastAPI service with
+temporary monitor data.
+
+Result:
+
+- Moved the base desktop shell, side navigation, brand, header, button,
+  metric-card, toolbar, page-toolbar, toolbar-actions, and page-actions styling
+  into `api/webui/monitor/monitor.css`.
+- Kept table, modal, form, report-preview, task-wizard, AI-rule,
+  mail-template, and resource-specific styles in the existing inline style
+  block for later Phase 11C/11D and page-specific batches.
+- Preserved page IDs, navigation data attributes, inline JavaScript behavior,
+  business data flow, and administrator/normal-user menu visibility.
+- Applied the first low-noise Apple-style desktop foundation through a quieter
+  shell width, translucent header, refined navigation spacing, and shared
+  button/card/toolbar styling.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_11a or phase_11b or monitor_page_uses"`
+- Result: 4 passed, 214 deselected, 1 warning.
+- Runtime HTTP check on isolated service:
+  - `/monitor`: HTTP 200;
+  - `/static/monitor/monitor.css`: HTTP 200;
+  - `/static/monitor/monitor.js`: HTTP 200.
+- Playwright desktop 1440px authenticated smoke check:
+  login, logout, dashboard, monitoring task list, run center, report center,
+  task-create entry, Resource Management popover, and System Configuration
+  popover remained reachable; no console errors or page errors were reported.
+
+Limitations:
+
+- Phase 11B does not implement shared interaction helpers, fixed/portal row
+  menu positioning, or mobile responsive navigation. Those remain for Phase
+  11C and Phase 11D.
+
+## 2026-06-15 - Phase 11A Frontend Module Boundary Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`, isolated local FastAPI service with
+temporary monitor data.
+
+Result:
+
+- Created `api/webui/monitor/monitor.css` with namespaced design-token custom
+  properties for color, typography, spacing, radius, shadows, z-index, status
+  colors, motion, and breakpoints.
+- Created `api/webui/monitor/monitor.js` as a quiet Phase 11A module boundary
+  with no console logging, global variables/functions, event listeners, or UI
+  behavior.
+- Referenced `/static/monitor/monitor.css` before the existing inline
+  `<style>` block and `/static/monitor/monitor.js` after the existing inline
+  `<script>` block.
+- Kept the existing inline CSS/JS in place and did not introduce an intentional
+  visual redesign in this batch.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_11a or monitor_page_uses"`
+- Result: 3 passed, 214 deselected, 4 warnings.
+- Runtime HTTP check on isolated service:
+  - `/monitor`: HTTP 200;
+  - `/static/monitor/monitor.css`: HTTP 200;
+  - `/static/monitor/monitor.js`: HTTP 200.
+- Playwright authenticated smoke check at 1440px, 1024px, and 390px:
+  dashboard, monitoring task list, run center, report center, and task-create
+  entry remained reachable; no console errors or page errors were reported.
+
+Limitations:
+
+- Phase 11A only creates the static module boundary and token layer. Base
+  layout migration, visible Apple-style visual foundation, shared interaction
+  helpers, floating-menu fixes, and responsive navigation remain for Phase
+  11B-11D.
 
 ## 2026-06-15 - Phase 10-18 Systematic Global Review Reconfirmed
 

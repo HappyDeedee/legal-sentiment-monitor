@@ -4,6 +4,7 @@
   <meta charset="utf-8">
   <meta name="viewport" content="width=device-width, initial-scale=1">
   <title>律所舆情运营系统</title>
+  <link rel="stylesheet" href="/static/monitor/monitor.css">
   <style>
     :root {
       color-scheme: light;
@@ -16,38 +17,7 @@
     }
     * { box-sizing: border-box; }
     body { margin:0; font-family:"Inter","Microsoft YaHei",Arial,sans-serif; background:var(--bg); color:var(--text); font-size:14px; }
-    .shell { display:grid; grid-template-columns:252px minmax(0,1fr); min-height:100vh; min-width:0; }
-    .shell > aside { background:var(--nav); color:#e5e7eb; padding:18px 14px; position:sticky; top:0; height:100vh; overflow:visible; z-index:20; }
-    .brand { padding:8px 10px 18px; border-bottom:1px solid rgba(255,255,255,.08); margin-bottom:14px; }
-    .brand strong { display:block; color:#fff; font-size:17px; letter-spacing:.2px; }
-    .brand span { display:block; margin-top:4px; color:#9ca3af; font-size:12px; }
-    nav { display:grid; gap:10px; }
-    .nav-group { display:grid; gap:3px; position:relative; }
-    .nav-label { color:#94a3b8; font-size:12px; padding:8px 10px 3px; }
-    nav button { width:100%; display:flex; align-items:center; gap:10px; text-align:left; border:0; background:transparent; color:#cbd5e1; padding:10px 12px; border-radius:6px; cursor:pointer; margin:0; white-space:nowrap; font-weight:650; }
-    nav button.sub { padding:9px 10px; color:#334155; font-size:13px; border-radius:6px; }
-    nav button.active, nav button:hover { background:#1f2937; color:#fff; }
-    .nav-popover {
-      position:absolute;
-      left:calc(100% + 10px);
-      top:0;
-      width:188px;
-      display:none;
-      padding:8px;
-      background:#fff;
-      color:var(--text);
-      border:1px solid var(--line);
-      border-radius:8px;
-      box-shadow:0 18px 45px rgba(15,23,42,.22);
-      z-index:55;
-    }
-    .nav-popover.active { display:grid; gap:4px; }
-    .nav-popover::before { content:""; position:absolute; left:-10px; top:14px; width:10px; height:28px; }
-    .nav-popover button:hover, .nav-popover button.active { background:var(--primary-weak); color:#1d4ed8; }
     .content { min-width:0; overflow:hidden; }
-    header { height:64px; display:flex; align-items:center; justify-content:space-between; padding:0 24px; border-bottom:1px solid var(--line); background:rgba(255,255,255,.92); position:sticky; top:0; z-index:4; backdrop-filter:blur(10px); }
-    .header-title strong { display:block; font-size:16px; }
-    .header-title span { color:var(--muted); font-size:12px; }
     section { display:none; padding:22px 24px 34px; }
     section.active { display:block; }
     .page-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:16px; }
@@ -56,8 +26,7 @@
     .grid { display:grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap:14px; }
     .grid-3 { display:grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap:14px; }
     .grid-4 { display:grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap:14px; }
-    .panel, .metric-card { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:16px; margin-bottom:16px; box-shadow:var(--shadow-sm); }
-    .metric-card { min-height:104px; }
+    .panel { background:var(--surface); border:1px solid var(--line); border-radius:var(--radius); padding:16px; margin-bottom:16px; box-shadow:var(--shadow-sm); }
     .metric-label { color:var(--muted); font-size:12px; }
     .metric-value { margin-top:8px; font-size:28px; font-weight:700; }
     .metric-note { margin-top:8px; color:var(--muted); font-size:12px; }
@@ -71,16 +40,8 @@
     .row > button, .row > a { flex:0 0 auto; }
     .checks label { display:inline-flex; align-items:center; gap:6px; margin-right:14px; color:#263244; font-weight:500; }
     .checks input, input[type=checkbox] { width:auto; }
-    button.primary, button.secondary, button.danger { min-width:76px; min-height:36px; display:inline-flex; align-items:center; justify-content:center; gap:6px; border-radius:var(--radius-sm); padding:8px 12px; cursor:pointer; font-weight:650; line-height:1.2; white-space:nowrap; word-break:keep-all; transition:background .15s ease,border-color .15s ease,opacity .15s ease,box-shadow .15s ease; }
-    button.primary { background:var(--primary); color:#fff; border:1px solid var(--primary); }
-    button.secondary { background:#fff; color:#263244; border:1px solid var(--line); }
-    button.danger { background:#fff7ed; color:var(--danger); border:1px solid #fed7aa; }
-    button.primary:hover, button.secondary:hover, button.danger:hover { box-shadow:0 2px 8px rgba(15,23,42,.08); }
-    button:disabled { opacity:.62; cursor:progress; }
     .ui-icon { width:16px; height:16px; display:inline-block; flex:0 0 auto; vertical-align:-3px; }
     .ui-icon svg { width:16px; height:16px; display:block; stroke:currentColor; fill:none; stroke-width:2; stroke-linecap:round; stroke-linejoin:round; }
-    .btn-compact { min-width:60px !important; min-height:32px !important; padding:6px 9px !important; font-size:12px; }
-    .btn-icon { min-width:36px !important; width:36px; padding:0 !important; }
     table { width:100%; border-collapse:separate; border-spacing:0; font-size:13px; }
     th, td { min-width:72px; border-bottom:1px solid var(--line); text-align:left; padding:10px; vertical-align:top; word-break:normal; overflow-wrap:break-word; }
     th { color:var(--muted); font-weight:700; background:#f8fafc; white-space:nowrap; }
@@ -91,7 +52,6 @@
     .status.ok { background:#ecfdf5; color:#047857; }
     .status.warn { background:#fff7ed; color:#b45309; }
     .status.bad { background:#fef2f2; color:#b42318; }
-    .toast { position:fixed; right:18px; top:76px; background:#111827; color:#fff; padding:10px 14px; border-radius:6px; display:none; max-width:460px; z-index:60; }
     .auth-screen { position:fixed; inset:0; display:none; align-items:center; justify-content:center; background:#f8fafc; z-index:70; padding:20px; }
     .auth-screen.active { display:flex; }
     .auth-panel { width:min(420px, 100%); border:1px solid var(--line); border-radius:8px; background:#fff; box-shadow:0 24px 60px rgba(15,23,42,.18); padding:24px; }
@@ -155,12 +115,6 @@
     .rule-accordion textarea { margin-top:8px; min-height:86px; background:#fff; }
     .rule-output-compact { max-height:256px; overflow:auto; }
     .rule-modal-actions { position:sticky; bottom:-18px; margin:14px -18px -18px; padding:14px 18px; border-top:1px solid var(--line); background:#fff; display:flex; align-items:center; justify-content:space-between; gap:12px; z-index:5; }
-    .toolbar { display:flex; gap:10px; align-items:end; flex-wrap:wrap; margin-bottom:12px; }
-    .toolbar > div { min-width:150px; flex:1; }
-    .page-toolbar { display:flex; gap:10px; align-items:end; flex-wrap:wrap; margin-bottom:12px; }
-    .page-toolbar > div { min-width:150px; flex:1 1 160px; }
-    .page-toolbar .toolbar-actions { flex:0 0 auto; display:flex; gap:8px; align-items:center; justify-content:flex-end; }
-    .toolbar-actions { display:flex; gap:8px; align-items:center; justify-content:flex-end; flex-wrap:wrap; }
     .readiness-summary { display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap; margin:12px 0; padding:12px; border:1px solid var(--line); border-radius:8px; background:#fbfdff; }
     .readiness-summary.ready { border-color:#86efac; background:#f0fdf4; }
     .readiness-summary.pending { border-color:#fed7aa; background:#fff7ed; }
@@ -232,7 +186,6 @@
     .section-tabs button.active { background:var(--primary-weak); border-color:#93c5fd; color:#1d4ed8; }
     .subview { display:none; }
     .subview.active { display:block; }
-    .page-actions { display:flex; gap:8px; align-items:center; justify-content:flex-end; flex-wrap:wrap; }
     .table-wrap { position:relative; overflow:auto; border:1px solid var(--line); border-radius:8px; background:#fff; }
     .table-wrap table { min-width:920px; }
     .truncate { max-width:240px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; }
@@ -252,19 +205,6 @@
     .account-quick-filter { display:flex; gap:8px; flex-wrap:wrap; margin:10px 0 12px; }
     .account-quick-filter button { border:1px solid var(--line); background:#fff; color:#263244; border-radius:999px; padding:6px 10px; cursor:pointer; font-weight:600; }
     .account-quick-filter button.active { border-color:#93c5fd; background:var(--primary-weak); color:#1d4ed8; }
-    .account-actions { position:relative; display:flex; gap:6px; flex-wrap:nowrap; align-items:center; justify-content:flex-end; }
-    .account-action-menu { position:absolute; right:0; top:36px; min-width:154px; display:none; padding:6px; background:#fff; border:1px solid var(--line); border-radius:8px; box-shadow:0 18px 38px rgba(15,23,42,.18); z-index:8; }
-    .account-action-menu.active { display:grid; gap:4px; }
-    .account-action-menu button { width:100%; justify-content:flex-start; text-align:left; }
-    .action-menu-host { position:relative; display:inline-flex; }
-    .action-menu { position:absolute; right:0; top:36px; min-width:150px; display:none; padding:6px; background:#fff; border:1px solid var(--line); border-radius:8px; box-shadow:0 18px 38px rgba(15,23,42,.18); z-index:9; }
-    .action-menu.active { display:grid; gap:4px; }
-    .action-menu a, .action-menu button { width:100%; min-height:32px; display:flex; align-items:center; justify-content:flex-start; border:0; border-radius:6px; background:#fff; color:var(--text); padding:7px 9px; text-align:left; text-decoration:none; font-weight:650; cursor:pointer; }
-    .action-menu a:hover, .action-menu button:hover { background:var(--primary-weak); color:#1d4ed8; }
-    .report-action-menu { position:fixed; display:none; min-width:168px; padding:6px; background:#fff; border:1px solid var(--line); border-radius:8px; box-shadow:0 18px 38px rgba(15,23,42,.18); z-index:90; }
-    .report-action-menu.active { display:grid; gap:4px; }
-    .report-action-menu a, .report-action-menu button { width:100%; min-height:32px; display:flex; align-items:center; justify-content:flex-start; border:0; border-radius:6px; background:#fff; color:var(--text); padding:7px 9px; text-align:left; text-decoration:none; font-weight:650; cursor:pointer; white-space:nowrap; }
-    .report-action-menu a:hover, .report-action-menu button:hover { background:var(--primary-weak); color:#1d4ed8; }
     .account-table tr.active td { background:#eff6ff; }
     .account-name-cell strong { display:block; font-size:13px; }
     .account-name-cell span { display:block; margin-top:3px; color:var(--muted); font-size:12px; }
@@ -324,42 +264,12 @@
     .platform-login-panel.active { display:block; }
     details.advanced { margin-top:14px; border-top:1px solid var(--line); padding-top:12px; }
     details.advanced summary { cursor:pointer; color:var(--muted); font-weight:700; }
-    .modal-head { display:flex; align-items:flex-start; justify-content:space-between; gap:14px; margin-bottom:6px; }
-    .modal-head h3 { margin-bottom:4px; }
-    .modal-close { min-width:34px; min-height:34px; border:1px solid var(--line); background:#fff; border-radius:6px; width:34px; height:34px; cursor:pointer; font-size:20px; line-height:1; padding:0; }
     .detail-tabs { display:flex; gap:8px; border-bottom:1px solid var(--line); margin:12px 0 16px; }
     .detail-tabs button { border:0; background:transparent; padding:10px 12px; cursor:pointer; color:var(--muted); font-weight:700; }
     .detail-tabs button.active { color:var(--primary); border-bottom:2px solid var(--primary); }
     .account-tab { display:none; }
     .account-tab.active { display:block; }
     .detail-block { border-top:1px solid var(--line); padding-top:14px; margin-top:14px; }
-    .drawer-backdrop { position:fixed; inset:0; display:none; background:rgba(15,23,42,.38); z-index:30; }
-    .drawer-backdrop.active { display:block; }
-    .drawer {
-      position:fixed;
-      top:50%;
-      left:50%;
-      right:auto;
-      width:min(980px, calc(100% - 36px));
-      height:auto;
-      max-height:calc(100vh - 72px);
-      overflow:auto;
-      background:#fff;
-      color:var(--text);
-      border:1px solid var(--line);
-      border-radius:8px;
-      box-shadow:0 24px 70px rgba(15,23,42,.28);
-      padding:18px;
-      display:flex;
-      flex-direction:column;
-      transform:translate(-50%, -48%) scale(.98);
-      opacity:0;
-      pointer-events:none;
-      transition:transform .18s ease, opacity .18s ease;
-      z-index:31;
-    }
-    .drawer.active { transform:translate(-50%, -50%) scale(1); opacity:1; pointer-events:auto; }
-    .drawer-head { display:flex; align-items:flex-start; justify-content:space-between; gap:12px; margin-bottom:10px; }
     .drawer-actions { display:flex; gap:8px; flex-wrap:wrap; margin-bottom:10px; }
     .drawer .logbox { flex:1; min-height:420px; max-height:none; margin:0; }
     .log-modal { height:min(760px, calc(100vh - 72px)); }
@@ -387,34 +297,6 @@
     .form-actions { position:sticky; bottom:-18px; z-index:5; margin:16px -18px -18px; display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap; border-top:1px solid var(--line); padding:14px 18px; background:#fff; }
     .rule-modal-actions .row, .ai-test-actions .row, .account-flow-actions .row, .resource-modal-actions .row { width:auto; flex:0 0 auto; justify-content:flex-end; }
     .rule-modal-actions > .small, .ai-test-actions > .small, .account-flow-actions .small, .resource-modal-actions .small { max-width:620px; }
-    @media (max-width: 1100px) { .shell { grid-template-columns:minmax(0,1fr); width:100%; overflow:hidden; } .shell > aside { position:static; height:auto; width:100%; max-width:100%; min-width:0; overflow:visible; } nav { display:flex; width:100%; max-width:100%; min-width:0; overflow-x:auto; overflow-y:hidden; } .nav-group { flex:0 0 auto; } nav button { min-width:max-content; } .nav-popover { position:fixed; top:78px; left:12px; right:12px; width:auto; max-width:360px; } .grid, .grid-3, .grid-4, .split, .settings-panel-grid, .template-editor-layout, .diagnostic-layout, .settings-grid, .artifact-grid, .resource-summary-grid, .wizard-steps { grid-template-columns:1fr; } section { padding:16px; } }
-    @media (max-width: 1100px) { .account-filter, .account-modal-grid, .login-card-grid, .rule-builder-grid, .rule-flow, .rule-sections, .rule-modal-flow, .rule-accordion, .diagnostic-grid { grid-template-columns:1fr; } .template-preview-panel { position:static; } }
-    @media (max-width: 720px) {
-      body { font-size:13px; }
-      header { height:auto; min-height:60px; padding:12px 14px; align-items:flex-start; gap:10px; flex-direction:column; }
-      .page-head, .account-ledger-head { flex-direction:column; align-items:stretch; }
-      .page-actions, .row { width:100%; }
-      .row > div { flex:1 1 100%; min-width:100%; }
-      .row > button, .row > a { flex:0 0 auto; }
-      .drawer {
-        width:calc(100% - 18px);
-        max-height:calc(100vh - 18px);
-        padding:14px;
-      }
-      .template-modal, .form-drawer { width:calc(100% - 18px); }
-      .drawer .logbox { min-height:320px; }
-      iframe { min-height:420px; }
-      .metric-value { font-size:24px; }
-      .toolbar > div { min-width:100%; }
-      .wide-actions { min-width:220px; }
-      .account-bulk-toolbar { justify-content:flex-start; }
-      .account-bulk-toolbar button { flex:0 0 auto; }
-      .rule-modal-actions, .ai-test-actions, .account-flow-actions, .resource-modal-actions { align-items:stretch; }
-      .rule-modal-actions > .small, .ai-test-actions > .small, .account-flow-actions .small, .resource-modal-actions .small { display:none; }
-      .rule-modal-actions .row, .ai-test-actions .row, .account-flow-actions .row, .resource-modal-actions .row { width:100%; }
-      .rule-modal-actions button, .ai-test-actions button, .account-flow-actions button, .resource-modal-actions button { flex:1 1 auto; }
-      .schema-item { grid-template-columns:1fr; }
-    }
   </style>
 </head>
 <body>
@@ -441,13 +323,18 @@
     <symbol id="icon-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.6 6"></path><path d="M3 12a9 9 0 0 1 15.6-6"></path><path d="M3 4v6h6"></path><path d="M21 20v-6h-6"></path></symbol>
     <symbol id="icon-more" viewBox="0 0 24 24"><path d="M12 12h.01"></path><path d="M19 12h.01"></path><path d="M5 12h.01"></path></symbol>
   </svg>
+  <div id="mobile_nav_backdrop" class="mobile-nav-backdrop" aria-hidden="true"></div>
   <div class="shell">
-    <aside>
+    <aside id="primary_sidebar" aria-label="主导航">
       <div class="brand">
         <strong>Legal Sentiment</strong>
         <span>企业级律所舆情监控</span>
       </div>
-      <nav>
+      <div id="mobile_account_area" class="mobile-account-area">
+        <div id="mobile_current_user_badge" class="small"></div>
+        <button class="secondary" onclick="logout()">退出</button>
+      </div>
+      <nav id="primary_navigation">
         <div class="nav-group">
           <button class="active" data-tab="dashboard" data-menu-key="overview"><span class="ui-icon"><svg><use href="#icon-dashboard"></use></svg></span>总览</button>
         </div>
@@ -460,17 +347,17 @@
         <div class="nav-group">
           <button data-tab="reports" data-menu-key="report_center"><span class="ui-icon"><svg><use href="#icon-report"></use></svg></span>报告中心</button>
         </div>
-        <div class="nav-group">
-          <button data-menu="resources" data-default-tab="accounts" data-menu-key="platform_accounts"><span class="ui-icon"><svg><use href="#icon-resource"></use></svg></span>资源管理</button>
-          <div class="nav-popover" id="nav_menu_resources">
+        <div class="nav-group nav-group-collapsible" data-nav-group="resources">
+          <button class="nav-group-toggle" type="button" data-nav-group-toggle="resources" data-default-tab="accounts" data-menu-key="platform_accounts" aria-controls="nav_group_resources" aria-expanded="true"><span class="ui-icon"><svg><use href="#icon-resource"></use></svg></span><span>资源管理</span><span class="nav-caret" aria-hidden="true"></span></button>
+          <div class="nav-sublist" id="nav_group_resources">
             <button class="sub" data-tab="accounts" data-menu-key="platform_accounts">平台账号</button>
             <button class="sub" data-tab="proxies" data-menu-key="proxy_resources">代理资源</button>
             <button class="sub" data-tab="ai" data-menu-key="ai_access">AI 接入</button>
           </div>
         </div>
-        <div class="nav-group">
-          <button data-menu="settings" data-default-tab="ai_rules" data-menu-key="ai_rules"><span class="ui-icon"><svg><use href="#icon-settings"></use></svg></span>系统配置</button>
-          <div class="nav-popover" id="nav_menu_settings">
+        <div class="nav-group nav-group-collapsible" data-nav-group="settings">
+          <button class="nav-group-toggle" type="button" data-nav-group-toggle="settings" data-default-tab="ai_rules" data-menu-key="ai_rules" aria-controls="nav_group_settings" aria-expanded="true"><span class="ui-icon"><svg><use href="#icon-settings"></use></svg></span><span>系统配置</span><span class="nav-caret" aria-hidden="true"></span></button>
+          <div class="nav-sublist" id="nav_group_settings">
             <button class="sub" data-tab="ai_rules" data-menu-key="ai_rules">AI 评估规则</button>
             <button class="sub" data-tab="email" data-menu-key="mail_config">邮件配置</button>
             <button class="sub" data-tab="email_templates" data-menu-key="mail_templates">邮件模板</button>
@@ -482,52 +369,60 @@
     </aside>
     <div class="content">
       <header>
+        <button id="mobile_nav_toggle" class="mobile-nav-toggle" type="button" aria-controls="primary_navigation" aria-expanded="false" aria-label="打开导航">
+          <span class="mobile-nav-icon" aria-hidden="true"></span>
+          <span>导航</span>
+        </button>
         <div class="header-title">
           <strong>舆情监控运营后台</strong>
           <span>抖音 / 快手 / 小红书 · 平台采集服务</span>
         </div>
-        <div class="row" style="flex:0 0 auto">
-          <div id="current_user_badge" class="small"></div>
+        <div class="row header-actions">
           <div id="top_status" class="small"></div>
-          <button class="secondary" onclick="loadAll()">刷新全局状态</button>
-          <button class="secondary" onclick="logout()">退出</button>
+          <button class="secondary" onclick="refreshActiveSection()">刷新当前页面</button>
+          <div class="account-area">
+            <div id="current_user_badge" class="small"></div>
+            <button class="secondary" onclick="logout()">退出</button>
+          </div>
         </div>
       </header>
       <section id="dashboard" class="active">
-        <div class="page-head">
-          <div><h2>总览</h2><p>汇总任务、采集、线索、报告和资源运行状态。</p></div>
-          <button class="secondary" onclick="loadDashboard()">刷新总览</button>
-        </div>
-        <div id="dashboard_metrics" class="grid-4"></div>
-        <div class="grid">
-          <div class="panel">
-            <h3>系统运行状态</h3>
-            <div id="readiness_summary"></div>
-            <div id="ops_checklist"></div>
-            <div id="readiness_actions"></div>
-            <div id="readiness_table"></div>
-          </div>
-          <div class="panel">
-            <h3>调度器状态</h3>
-            <div id="scheduler_status"></div>
+        <div class="page-head page-entry" data-page-entry="dashboard">
+          <div class="page-title-block"><span class="page-kicker">运营首页</span><h2>运营首页</h2><p>围绕监控任务、运行记录、报告和邮件交付查看当前运营状态。</p></div>
+          <div class="page-actions">
+            <button class="primary" data-shortcut-tab="jobs" data-shortcut-action="new-job" data-menu-key="monitoring">新建监控任务</button>
+            <button class="secondary" onclick="refreshActiveSection()">刷新首页</button>
           </div>
         </div>
-        <div class="panel">
-          <h3>平台状态</h3>
-          <div id="platform_status_table"></div>
+        <div id="task_loop_shortcuts" class="task-loop-shortcuts" aria-label="监控任务流快捷入口">
+          <button class="shortcut-card shortcut-primary" type="button" data-shortcut-tab="jobs" data-shortcut-action="new-job" data-menu-key="monitoring"><span>01</span><strong>创建监控任务</strong><em>填写律所、平台搜索词、调度和收件人。</em></button>
+          <button class="shortcut-card" type="button" data-shortcut-tab="runs" data-menu-key="run_center"><span>02</span><strong>查看运行中心</strong><em>跟进采集状态、失败原因和运行日志。</em></button>
+          <button class="shortcut-card" type="button" data-shortcut-tab="reports" data-menu-key="report_center"><span>03</span><strong>查看报告中心</strong><em>预览报告正文、线索明细和下载归档。</em></button>
+          <button class="shortcut-card" type="button" data-shortcut-tab="reports" data-shortcut-target="email_delivery_status_entry" data-menu-key="report_center"><span>04</span><strong>检查邮件交付</strong><em>查看报告邮件状态，并按需手动重发。</em></button>
+          <button class="shortcut-card admin-entry" type="button" data-shortcut-tab="accounts" data-menu-key="platform_accounts"><span>05</span><strong>处理资源问题</strong><em>维护账号登录态、代理、AI 接入和邮件配置。</em></button>
         </div>
+        <div class="operations-home" aria-label="运营指标">
+          <div id="operations_home_meta" class="operations-home-meta"></div>
+          <div id="dashboard_metrics" class="operations-metric-grid"></div>
+          <div class="operations-home-lower">
+            <div id="operations_home_drilldowns" class="operations-drilldowns" aria-label="运营钻取入口"></div>
+            <div id="operations_home_resource" class="operations-resource-panel"></div>
+          </div>
+        </div>
+        <div id="operations_home_admin_health" class="operations-admin-health admin-entry" data-menu-key="system_diagnostics"></div>
       </section>
 
       <section id="jobs">
-        <div class="page-head">
-          <div><h2>舆情监控</h2><p>配置律所舆情任务，把平台采集、过滤去重、AI 评估和报告发送串联起来。</p></div>
+        <div class="page-head page-entry" data-page-entry="jobs">
+          <div class="page-title-block"><span class="page-kicker">任务监控</span><h2>舆情监控</h2><p>配置律所舆情任务，把平台采集、过滤去重、AI 评估和报告发送串联起来。</p></div>
           <div class="page-actions">
             <button class="primary" onclick="openNewJobDrawer()">新建任务</button>
             <button class="secondary" onclick="refreshJobSchedule()">刷新调度时间</button>
+            <button class="secondary" data-shortcut-tab="runs" data-menu-key="run_center">查看运行中心</button>
           </div>
         </div>
         <div class="panel">
-          <div class="toolbar">
+          <div class="toolbar page-filter-region" data-filter-region="jobs">
             <div><label>任务搜索</label><input id="job_search" placeholder="律所名称 / 平台搜索词"></div>
             <div><label>平台</label><select id="job_platform_filter"><option value="">全部平台</option><option value="dy">抖音</option><option value="ks">快手</option><option value="xhs">小红书</option></select></div>
             <div><label>状态</label><select id="job_status_filter"><option value="">全部状态</option><option value="enabled">启用</option><option value="paused">暂停</option><option value="running">运行中</option></select></div>
@@ -672,11 +567,12 @@
       </div>
 
       <section id="accounts">
-        <div class="page-head">
-          <div><h2>平台账号</h2><p>维护抖音、快手、小红书账号资源、登录状态和代理绑定。任务只选择账号，不在任务里修改账号资料。</p></div>
-          <div class="row" style="flex:0 0 auto">
+        <div class="page-head page-entry" data-page-entry="accounts">
+          <div class="page-title-block"><span class="page-kicker">资源支撑</span><h2>平台账号</h2><p>维护抖音、快手、小红书账号资源、登录状态和代理绑定。任务只选择账号，不在任务里修改账号资料。</p></div>
+          <div class="page-actions">
             <button class="primary" onclick="openNewSocialAccountModal()">新增账号</button>
             <button class="secondary" onclick="loadAccountsPool()">刷新账号</button>
+            <button class="secondary" data-shortcut-tab="jobs" data-menu-key="monitoring">返回任务</button>
           </div>
         </div>
         <div id="account_metrics" class="grid-4"></div>
@@ -696,7 +592,7 @@
                 <button id="account_bulk_delete_btn" class="danger" onclick="deleteSelectedSocialAccounts()">批量删除</button>
               </div>
             </div>
-            <div class="account-filter">
+            <div class="account-filter page-filter-region" data-filter-region="accounts">
               <div><label>搜索</label><input id="account_search" placeholder="账号名称 / 备注"></div>
               <div><label>平台</label><select id="account_platform_filter"><option value="">全部平台</option><option value="dy">抖音</option><option value="ks">快手</option><option value="xhs">小红书</option></select></div>
               <div><label>可用性</label><select id="account_status_filter"><option value="">全部状态</option><option value="collectable">可采集</option><option value="unchecked">待检测</option><option value="relogin">需重新登录</option><option value="verification">需要人工验证</option><option value="disabled">停用</option></select></div>
@@ -803,11 +699,12 @@
       </section>
 
       <section id="proxies">
-        <div class="page-head">
-          <div><h2>代理资源</h2><p>维护代理来源、并发上限和可用状态。代理可绑定到账号或任务，采集时按绑定关系使用。</p></div>
+        <div class="page-head page-entry" data-page-entry="proxies">
+          <div class="page-title-block"><span class="page-kicker">资源支撑</span><h2>代理资源</h2><p>维护代理来源、并发上限和可用状态。代理可绑定到账号或任务，采集时按绑定关系使用。</p></div>
           <div class="page-actions">
             <button class="primary" onclick="openProxyDrawer()">新增代理</button>
             <button class="secondary" onclick="loadProxyPool()">刷新代理</button>
+            <button class="secondary" data-shortcut-tab="accounts" data-menu-key="platform_accounts">查看账号</button>
           </div>
         </div>
         <div id="proxy_resource_summary" class="resource-summary-grid"></div>
@@ -819,7 +716,7 @@
             </div>
             <div class="inline-status"><span id="proxy_resource_count">-</span></div>
           </div>
-          <div class="resource-toolbar">
+          <div class="resource-toolbar page-filter-region" data-filter-region="proxies">
             <div><label>搜索</label><input id="proxy_search" placeholder="代理名称 / 供应商 / 备注"></div>
             <div><label>状态</label><select id="proxy_status_filter"><option value="">全部状态</option><option value="active">可用</option><option value="standby">待机</option><option value="limited">受限</option><option value="disabled">停用</option></select></div>
             <div class="toolbar-actions">
@@ -863,11 +760,12 @@
       </div>
 
       <section id="ai">
-        <div class="page-head">
-          <div><h2>AI 接入</h2><p>维护 OpenAI-compatible / Anthropic-compatible 协议的模型连接资源，可被监控任务绑定。</p></div>
+        <div class="page-head page-entry" data-page-entry="ai">
+          <div class="page-title-block"><span class="page-kicker">资源支撑</span><h2>AI 接入</h2><p>维护 OpenAI-compatible / Anthropic-compatible 协议的模型连接资源，可被监控任务绑定。</p></div>
           <div class="page-actions">
             <button class="primary" onclick="openAIProfileDrawer()">新增 AI 接入</button>
             <button class="secondary" onclick="loadAIProfiles()">刷新 AI 接入</button>
+            <button class="secondary" data-shortcut-tab="ai_rules" data-menu-key="ai_rules">查看评估规则</button>
           </div>
         </div>
         <div id="ai_resource_summary" class="resource-summary-grid"></div>
@@ -879,7 +777,7 @@
             </div>
             <div class="inline-status"><span id="ai_resource_count">-</span></div>
           </div>
-          <div class="resource-toolbar">
+          <div class="resource-toolbar page-filter-region" data-filter-region="ai">
             <div><label>搜索</label><input id="ai_profile_search" placeholder="接入名称 / 模型 / Base URL"></div>
             <div><label>接口协议</label><select id="ai_profile_provider_filter"><option value="">全部协议</option><option value="openai">OpenAI-compatible</option><option value="anthropic">Anthropic-compatible</option></select></div>
             <div><label>测试状态</label><select id="ai_profile_test_filter"><option value="">全部状态</option><option value="success">最近通过</option><option value="failed">最近失败</option><option value="untested">尚未测试</option></select></div>
@@ -975,11 +873,12 @@
       </div>
 
       <section id="ai_rules">
-        <div class="page-head">
-          <div><h2>AI 评估规则</h2><p>维护可复用的舆情判断规则。当前默认规则会用于任务采集后的 AI 初筛。</p></div>
+        <div class="page-head page-entry" data-page-entry="ai_rules">
+          <div class="page-title-block"><span class="page-kicker">系统配置</span><h2>AI 评估规则</h2><p>维护可复用的舆情判断规则。当前默认规则会用于任务采集后的 AI 初筛。</p></div>
           <div class="page-actions">
             <button class="primary" onclick="openNewAIRuleModal()">新增评估规则</button>
             <button class="secondary" onclick="loadAIRuleProfiles()">刷新规则</button>
+            <button class="secondary" data-shortcut-tab="ai" data-menu-key="ai_access">查看 AI 接入</button>
           </div>
         </div>
         <div class="panel">
@@ -1086,12 +985,13 @@
       </div>
 
       <section id="email">
-        <div class="page-head">
-          <div><h2>邮件配置</h2><p>配置 SMTP、发件人和默认收件人。HTML 邮件样式在“邮件模板”中维护。</p></div>
+        <div class="page-head page-entry" data-page-entry="email">
+          <div class="page-title-block"><span class="page-kicker">邮件交付</span><h2>邮件配置</h2><p>配置 SMTP、发件人和默认收件人。HTML 邮件样式在“邮件模板”中维护。</p></div>
           <div class="page-actions">
             <button class="primary" onclick="openMailConfigModal()">编辑邮件配置</button>
             <button class="secondary" onclick="openMailTestModal()">发送测试邮件</button>
             <button class="secondary" onclick="loadEmail()">刷新配置</button>
+            <button class="secondary" data-shortcut-tab="reports" data-shortcut-target="email_delivery_status_entry" data-menu-key="report_center">查看交付状态</button>
           </div>
         </div>
         <div class="resource-summary-grid">
@@ -1173,11 +1073,12 @@
       </div>
 
       <section id="email_templates">
-        <div class="page-head">
-          <div><h2>邮件模板</h2><p>管理报告邮件的标题模板和 HTML 正文，支持变量和实时预览。</p></div>
+        <div class="page-head page-entry" data-page-entry="email_templates">
+          <div class="page-title-block"><span class="page-kicker">邮件交付</span><h2>邮件模板</h2><p>管理报告邮件的标题模板和 HTML 正文，支持变量和实时预览。</p></div>
           <div class="page-actions">
             <button class="primary" onclick="openEmailTemplateDrawer()">新增邮件模板</button>
             <button class="secondary" onclick="loadEmailTemplates()">刷新模板</button>
+            <button class="secondary" data-shortcut-tab="email" data-menu-key="mail_config">查看邮件配置</button>
           </div>
         </div>
         <div id="email_template_resource_summary" class="resource-summary-grid"></div>
@@ -1189,7 +1090,7 @@
             </div>
             <div class="inline-status"><span id="email_template_summary">-</span></div>
           </div>
-          <div class="resource-toolbar">
+          <div class="resource-toolbar page-filter-region" data-filter-region="email_templates">
             <div><label>搜索</label><input id="email_template_search" placeholder="模板名称 / 标题模板"></div>
             <div><label>状态</label><select id="email_template_status_filter"><option value="">全部模板</option><option value="active">当前使用</option><option value="standby">备用</option></select></div>
             <div class="toolbar-actions">
@@ -1202,11 +1103,12 @@
       </section>
 
       <section id="runtime">
-        <div class="page-head">
-          <div><h2>运行策略</h2><p>配置采集并发、运行超时、登录会话、调度间隔和保留周期。</p></div>
+        <div class="page-head page-entry" data-page-entry="runtime">
+          <div class="page-title-block"><span class="page-kicker">系统配置</span><h2>运行策略</h2><p>配置采集并发、运行超时、登录会话、调度间隔和保留周期。</p></div>
           <div class="page-actions">
             <button class="secondary" onclick="loadRuntimeSettings()">刷新策略</button>
             <button class="primary" onclick="saveRuntimeSettings()">保存策略</button>
+            <button class="secondary" data-shortcut-tab="doctor" data-menu-key="system_diagnostics">查看系统诊断</button>
           </div>
         </div>
         <div class="panel">
@@ -1215,38 +1117,63 @@
       </section>
 
       <section id="runs">
-        <div class="page-head">
-          <div><h2>运行中心</h2><p>查看每次采集运行状态、失败原因和日志。运行记录会保留，即使原任务已删除。</p></div>
+        <div class="page-head page-entry" data-page-entry="runs">
+          <div class="page-title-block"><span class="page-kicker">运行中心</span><h2>运行中心</h2><p>查看每次采集运行状态、失败原因和日志。运行记录会保留，即使原任务已删除。</p></div>
           <div class="page-actions">
+            <button class="primary" data-shortcut-tab="jobs" data-shortcut-action="new-job" data-menu-key="monitoring">新建任务</button>
             <button class="secondary" onclick="loadRuns()">刷新运行记录</button>
+            <button class="secondary" data-shortcut-tab="reports" data-menu-key="report_center">查看报告</button>
           </div>
         </div>
         <div id="running_summary"></div>
         <div class="panel">
-          <div class="page-toolbar">
+          <div class="page-toolbar page-filter-region" data-filter-region="runs">
             <div>
-              <label>显示范围</label>
-              <select id="run_limit" onchange="loadRuns()">
-                <option value="50">最近 50 条</option>
+              <label>任务 / 律所</label>
+              <input id="run_task_filter" placeholder="任务 ID 或律所名称" onkeydown="if(event.key==='Enter') applyRunFilters()">
+            </div>
+            <div><label>状态</label><select id="run_status_filter" onchange="applyRunFilters()"><option value="">全部状态</option><option value="running">运行中</option><option value="success">成功</option><option value="partial_failed">部分失败</option><option value="failed">失败</option><option value="timeout">超时</option><option value="cancelled">已停止</option><option value="skipped">已跳过</option><option value="diagnostic">诊断记录</option></select></div>
+            <div><label>平台</label><select id="run_platform_filter" onchange="applyRunFilters()"><option value="">全部平台</option><option value="dy">抖音</option><option value="ks">快手</option><option value="xhs">小红书</option></select></div>
+            <div><label>运行类型</label><select id="run_type_filter" onchange="applyRunFilters()"><option value="operational" selected>运营记录</option><option value="">全部类型</option><option value="scheduled">自动调度</option><option value="manual">手动运行</option><option value="test">测试/诊断</option></select></div>
+            <div class="run-admin-control"><label>可见性</label><select id="run_visibility_filter" onchange="applyRunFilters()"><option value="visible">默认可见</option><option value="archived">已归档</option><option value="all">全部记录</option></select></div>
+            <div><label>开始日期</label><input id="run_date_from" type="date" onchange="applyRunFilters()"></div>
+            <div><label>结束日期</label><input id="run_date_to" type="date" onchange="applyRunFilters()"></div>
+            <div>
+              <label>每页数量</label>
+              <select id="run_limit" onchange="applyRunFilters()">
+                <option value="20">每页 20 条</option>
+                <option value="50">每页 50 条</option>
                 <option value="100" selected>最近 100 条</option>
                 <option value="200">最近 200 条</option>
                 <option value="0">全部运行记录</option>
               </select>
             </div>
-            <div class="toolbar-actions"><button class="secondary" onclick="loadRuns()">刷新</button></div>
+            <div class="toolbar-actions"><button class="secondary" onclick="applyRunFilters()">筛选</button><button class="secondary" onclick="clearRunFilters()">清空</button><button class="secondary" onclick="loadRuns()">刷新</button></div>
           </div>
+          <div id="run_filter_summary" class="run-center-meta"></div>
           <div id="runs_table"></div>
+          <div id="run_pagination" class="run-pagination"></div>
         </div>
       </section>
       <section id="reports">
-        <div class="page-head">
-          <div><h2>报告中心</h2><p>筛选报告、预览邮件正文、查看线索明细，并按需下载归档文件。</p></div>
+        <div class="page-head page-entry" data-page-entry="reports">
+          <div class="page-title-block"><span class="page-kicker">报告中心</span><h2>报告中心</h2><p>筛选报告、预览邮件正文、查看线索明细，并按需下载归档文件。</p></div>
           <div class="page-actions">
+            <button class="primary" data-shortcut-tab="jobs" data-shortcut-action="new-job" data-menu-key="monitoring">新建任务</button>
             <button class="secondary" onclick="loadReports()">刷新报告</button>
+            <button class="secondary" data-shortcut-tab="runs" data-menu-key="run_center">查看运行</button>
           </div>
         </div>
+        <div id="email_delivery_status_entry" class="email-delivery-entry">
+          <div>
+            <span class="status">邮件交付</span>
+            <strong>报告邮件状态与交付历史</strong>
+            <p>报告列表展示最新邮件状态；选择报告后可查看自动发送和手动重发记录。</p>
+          </div>
+          <button class="secondary" type="button" onclick="loadReports()">刷新报告邮件状态</button>
+        </div>
         <div class="panel">
-          <div class="page-toolbar">
+          <div class="page-toolbar page-filter-region" data-filter-region="reports">
             <div><label>律所</label><input id="report_law_firm" placeholder="输入律所名称"></div>
             <div><label>平台</label><select id="report_platform"><option value="">全部</option><option value="dy">抖音</option><option value="ks">快手</option><option value="xhs">小红书</option></select></div>
             <div><label>风险</label><select id="report_risk"><option value="">全部</option><option value="high">高风险</option><option value="negative">疑似负面</option><option value="pending">待人工复核</option><option value="none">无风险</option></select></div>
@@ -1259,6 +1186,16 @@
         <div class="panel">
           <h3>报告列表</h3>
           <div id="reports_table"></div>
+        </div>
+        <div class="panel email-delivery-history-panel">
+          <div class="panel-title-row">
+            <div>
+              <h3>邮件交付历史</h3>
+              <p id="email_delivery_history_scope" class="small">选择报告后查看自动发送和手动重发记录。</p>
+            </div>
+            <button class="secondary" type="button" onclick="refreshSelectedEmailDeliveryHistory()">刷新历史</button>
+          </div>
+          <div id="email_delivery_history"></div>
         </div>
         <div class="panel">
           <h3>线索明细</h3>
@@ -1273,11 +1210,12 @@
         </div>
       </section>
       <section id="doctor">
-        <div class="page-head">
-          <div><h2>系统诊断</h2><p>检查基础配置、运行状态和报告链路，便于管理员快速定位待处理项。</p></div>
+        <div class="page-head page-entry" data-page-entry="doctor">
+          <div class="page-title-block"><span class="page-kicker">系统诊断</span><h2>系统诊断</h2><p>检查基础配置、运行状态和报告链路，便于管理员快速定位待处理项。</p></div>
           <div class="page-actions">
             <button class="secondary" onclick="loadDoctor()">重新诊断</button>
             <button class="primary" onclick="runSmokeCheck()">运行系统诊断</button>
+            <button class="secondary" data-shortcut-tab="accounts" data-menu-key="platform_accounts">处理账号资源</button>
           </div>
         </div>
         <div class="diagnostic-layout">
@@ -1290,6 +1228,23 @@
             <h3>下一步处理</h3>
             <div id="doctor_recommendations"></div>
           </div>
+        </div>
+        <div class="grid">
+          <div class="panel">
+            <h3>系统运行状态</h3>
+            <div id="readiness_summary"></div>
+            <div id="ops_checklist"></div>
+            <div id="readiness_actions"></div>
+            <div id="readiness_table"></div>
+          </div>
+          <div class="panel">
+            <h3>调度器状态</h3>
+            <div id="scheduler_status"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>平台状态</h3>
+          <div id="platform_status_table"></div>
         </div>
       </section>
     </div>
@@ -1399,11 +1354,17 @@
     let openJobMenuId = null;
     let openAIRuleMenuId = null;
     let currentReports = [];
+    let selectedEmailDeliveryReportId = null;
     let defaultAIPrompt = '';
     let currentRunLogId = null;
     let currentRunLogText = '';
     let accountAttentionOnly = false;
     let openAccountMenuId = null;
+    const runListState = {page: 1, totalPages: 1};
+    const NAV_GROUPS = {
+      resources: ['accounts', 'proxies', 'ai'],
+      settings: ['ai_rules', 'email', 'email_templates', 'runtime', 'doctor']
+    };
     const TAB_PERMISSION_KEYS = {
       dashboard: 'overview',
       jobs: 'monitoring',
@@ -1436,7 +1397,93 @@
       {field:'recommended_action', type:'string', description:'建议运营人员下一步如何复核或处理。', used_for:'报告中的处理建议。'}
     ];
     const lines = id => document.getElementById(id).value.split(/\n|,/).map(s=>s.trim()).filter(Boolean);
-    const toast = msg => { const el=document.getElementById('toast'); el.textContent=msg; el.style.display='block'; setTimeout(()=>el.style.display='none', 3500); };
+    const toast = (msg, type='info') => {
+      if(window.MonitorUI && window.MonitorUI.showToast) return window.MonitorUI.showToast(msg, type);
+      const el=document.getElementById('toast');
+      el.textContent=msg;
+      el.className='toast active ' + (type || 'info');
+      el.style.display='block';
+      setTimeout(()=>{ el.classList.remove('active'); el.style.display='none'; }, 3500);
+      return el;
+    };
+    function positionFloatingMenu(triggerEl, menuEl, options={}){
+      if(window.MonitorUI && window.MonitorUI.positionFloatingMenu){
+        return window.MonitorUI.positionFloatingMenu(triggerEl, menuEl, options);
+      }
+      if(!triggerEl || !menuEl) return null;
+      const margin=Number(options.margin||12);
+      const gap=Number(options.gap||6);
+      const rect=triggerEl.getBoundingClientRect();
+      menuEl.classList.add('is-floating');
+      menuEl.style.position='fixed';
+      menuEl.style.right='auto';
+      menuEl.style.bottom='auto';
+      menuEl.style.visibility='hidden';
+      menuEl.style.left='0px';
+      menuEl.style.top='0px';
+      const menuWidth=menuEl.offsetWidth || Number(options.width||168);
+      const menuHeight=menuEl.offsetHeight || Number(options.height||160);
+      const preferredLeft=options.align==='left' ? rect.left : rect.right - menuWidth;
+      const left=Math.max(margin, Math.min(window.innerWidth - menuWidth - margin, preferredLeft));
+      const belowTop=rect.bottom + gap;
+      const aboveTop=rect.top - menuHeight - gap;
+      const top=belowTop + menuHeight + margin <= window.innerHeight
+        ? belowTop
+        : Math.max(margin, Math.min(window.innerHeight - menuHeight - margin, aboveTop));
+      menuEl.style.left=Math.round(left)+'px';
+      menuEl.style.top=Math.round(top)+'px';
+      menuEl.style.visibility='';
+      return {left, top, width:menuWidth, height:menuHeight};
+    }
+    function closeFloatingMenus(){
+      openAccountMenuId=null;
+      openJobMenuId=null;
+      openAIRuleMenuId=null;
+      closeReportActionMenu();
+      renderAccountList();
+      renderJobsTable();
+      renderAIRuleProfiles([...aiRuleProfileCache.values()]);
+    }
+    function positionAccountActionMenu(){
+      if(openAccountMenuId===null) return;
+      const menu=document.getElementById('account_menu_'+openAccountMenuId);
+      const anchor=document.querySelector(`[data-account-menu-button="${openAccountMenuId}"]`);
+      if(menu && anchor) positionFloatingMenu(anchor, menu, {width:172, height:150});
+    }
+    function positionJobActionMenu(){
+      if(openJobMenuId===null) return;
+      const menu=document.getElementById('job_menu_'+openJobMenuId);
+      const anchor=document.querySelector(`[data-job-menu-button="${openJobMenuId}"]`);
+      if(menu && anchor) positionFloatingMenu(anchor, menu, {width:168, height:120});
+    }
+    function positionAIRuleActionMenu(){
+      if(openAIRuleMenuId===null) return;
+      const menu=document.getElementById('ai_rule_menu_'+openAIRuleMenuId);
+      const anchor=document.querySelector(`[data-ai-rule-menu-button="${openAIRuleMenuId}"]`);
+      if(menu && anchor) positionFloatingMenu(anchor, menu, {width:172, height:132});
+    }
+    function positionActiveFloatingMenus(){
+      positionAccountActionMenu();
+      positionJobActionMenu();
+      positionAIRuleActionMenu();
+      positionReportActionMenu();
+    }
+    function setMobileNavOpen(open){
+      document.body.classList.toggle('mobile-nav-open', !!open);
+      const toggle=document.getElementById('mobile_nav_toggle');
+      const backdrop=document.getElementById('mobile_nav_backdrop');
+      if(toggle){
+        toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+        toggle.setAttribute('aria-label', open ? '关闭导航' : '打开导航');
+      }
+      if(backdrop) backdrop.setAttribute('aria-hidden', open ? 'false' : 'true');
+    }
+    function closeMobileNav(){
+      setMobileNavOpen(false);
+    }
+    function toggleMobileNav(){
+      setMobileNavOpen(!document.body.classList.contains('mobile-nav-open'));
+    }
     function showLogin(message=''){
       authReady=false;
       currentSession=null;
@@ -1465,19 +1512,32 @@
       renderCurrentUser();
       applyMenuPermissions();
       applyJobFormRoleMode();
+      applyRunCenterRoleMode();
       renderJobAccountOptions([...socialAccountCache.values()].filter(a=>!a.is_draft));
       renderProxySelectOptions();
       renderJobAIProfileOptions();
       renderJobEmailTemplateOptions();
+      routeToOperationsHome();
       await loadAll();
     }
     function renderCurrentUser(){
-      const el=document.getElementById('current_user_badge');
-      if(!el || !currentSession) return;
+      if(!currentSession) return;
       const role=currentSession.role==='administrator' ? '管理员' : '普通用户';
-      el.innerHTML=`<span class="status ok">${esc(role)}</span> ${esc(currentSession.display_name || currentSession.email || '')}`;
+      const html=`<span class="status ok">${esc(role)}</span> ${esc(currentSession.display_name || currentSession.email || '')}`;
+      ['current_user_badge','mobile_current_user_badge'].forEach(id=>{
+        const el=document.getElementById(id);
+        if(el) el.innerHTML=html;
+      });
     }
     function isAdminUser(){ return currentSession && currentSession.role === 'administrator'; }
+    function applyRunCenterRoleMode(){
+      const admin=isAdminUser();
+      document.querySelectorAll('.run-admin-control').forEach(el=>{ el.style.display=admin ? '' : 'none'; });
+      if(!admin){
+        const visibility=document.getElementById('run_visibility_filter');
+        if(visibility) visibility.value='visible';
+      }
+    }
     function applyJobFormRoleMode(){
       const admin=isAdminUser();
       document.querySelectorAll('.admin-only-job-field').forEach(el=>{ el.style.display=admin ? '' : 'none'; });
@@ -1514,6 +1574,8 @@
         renderCurrentUser();
         applyMenuPermissions();
         applyJobFormRoleMode();
+        applyRunCenterRoleMode();
+        routeToOperationsHome();
         await loadAll();
       } finally {
         if(button){ button.disabled=false; button.textContent=oldText; }
@@ -1560,15 +1622,13 @@
     }, true);
     document.querySelectorAll('nav button').forEach(btn => btn.onclick = event => {
       event.stopPropagation();
-      if(btn.dataset.menu){
-        toggleNavMenu(btn.dataset.menu);
+      if(btn.dataset.navGroupToggle){
+        toggleNavGroup(btn.dataset.navGroupToggle);
         return;
       }
-      closeNavMenus();
       activateNavTab(btn);
     });
     document.addEventListener('click', event => {
-      if(!event.target.closest('nav')) closeNavMenus();
       if(!event.target.closest('.account-actions')){
         if(openAccountMenuId !== null){
           openAccountMenuId = null;
@@ -1583,36 +1643,107 @@
         closeReportActionMenu();
       }
     });
-    window.addEventListener('resize', positionReportActionMenu);
-    window.addEventListener('scroll', positionReportActionMenu, true);
+    document.addEventListener('keydown', event => {
+      if(event.key === 'Escape'){
+        closeFloatingMenus();
+        closeMobileNav();
+      }
+    });
+    document.addEventListener('monitor:close-floating-menus', closeFloatingMenus);
+    window.addEventListener('resize', positionActiveFloatingMenus);
+    window.addEventListener('resize', () => {
+      if(window.innerWidth >= 1280) closeMobileNav();
+    });
+    window.addEventListener('scroll', positionActiveFloatingMenus, true);
+    document.getElementById('mobile_nav_toggle')?.addEventListener('click', event => {
+      event.stopPropagation();
+      toggleMobileNav();
+    });
+    document.getElementById('mobile_nav_backdrop')?.addEventListener('click', closeMobileNav);
+    bindShortcutButtons();
 
-    function toggleNavMenu(menu){
-      const target=document.getElementById('nav_menu_'+menu);
-      const active=target && target.classList.contains('active');
-      closeNavMenus();
-      if(target && !active) target.classList.add('active');
+    function toggleNavGroup(group){
+      const wrapper=document.querySelector(`[data-nav-group="${group}"]`);
+      if(!wrapper || wrapper.classList.contains('is-hidden')) return;
+      setNavGroupExpanded(group, !wrapper.classList.contains('is-expanded'));
     }
-    function closeNavMenus(){
-      document.querySelectorAll('.nav-popover').forEach(menu=>menu.classList.remove('active'));
+    function setNavGroupExpanded(group, expanded){
+      const wrapper=document.querySelector(`[data-nav-group="${group}"]`);
+      const toggle=document.querySelector(`[data-nav-group-toggle="${group}"]`);
+      if(!wrapper) return;
+      wrapper.classList.toggle('is-expanded', !!expanded);
+      wrapper.classList.toggle('is-collapsed', !expanded);
+      if(toggle) toggle.setAttribute('aria-expanded', expanded ? 'true' : 'false');
     }
-    function activateNavTab(btn){
+    function expandNavGroupForTab(tab){
+      Object.entries(NAV_GROUPS).forEach(([group, tabs])=>{
+        if(tabs.includes(tab)) setNavGroupExpanded(group, true);
+      });
+    }
+    function routeToOperationsHome(){
+      const dashboardButton=document.querySelector('nav button[data-tab="dashboard"]:not(.is-hidden)');
+      if(dashboardButton) activateNavTab(dashboardButton, {skipLoad:true});
+    }
+    function activeTabId(){
+      return document.querySelector('section.active')?.id || 'dashboard';
+    }
+    function refreshActiveSection(){
+      const tab=activeTabId();
+      loadSectionData(tab);
+      toast(tab==='dashboard' ? '运营首页已刷新' : '当前页面已刷新');
+    }
+    function navigateShortcut(tab, options={}){
+      if(!canOpenTab(tab)){
+        toast('当前账号没有访问该页面的权限');
+        return;
+      }
+      switchTab(tab);
+      if(options.target){
+        setTimeout(()=>{
+          const target=document.getElementById(options.target);
+          if(target) target.scrollIntoView({behavior:'smooth', block:'start'});
+        }, 0);
+      }
+      if(options.action==='new-job'){
+        setTimeout(()=>openNewJobDrawer(), 0);
+      }
+    }
+    function bindShortcutButtons(root=document){
+      root.querySelectorAll('[data-shortcut-tab]').forEach(btn=>{
+        if(btn.dataset.shortcutBound) return;
+        btn.dataset.shortcutBound = '1';
+        btn.addEventListener('click', event=>{
+          event.preventDefault();
+          navigateShortcut(btn.dataset.shortcutTab, {
+            target: btn.dataset.shortcutTarget || '',
+            action: btn.dataset.shortcutAction || ''
+          });
+        });
+      });
+    }
+    function activateNavTab(btn, options={}){
       if(!canOpenTab(btn.dataset.tab)){
         toast('当前账号没有访问该页面的权限');
         return;
       }
+      closeFloatingMenus();
       document.querySelectorAll('nav button, section').forEach(x=>x.classList.remove('active'));
-      const parent = btn.classList.contains('sub') ? btn.closest('.nav-group')?.querySelector('button[data-menu]') : btn;
+      expandNavGroupForTab(btn.dataset.tab);
+      const parent = btn.classList.contains('sub') ? btn.closest('.nav-group')?.querySelector('.nav-group-toggle') : btn;
       if(parent) parent.classList.add('active');
       btn.classList.add('active');
       const section=document.getElementById(btn.dataset.tab);
       if(section) section.classList.add('active');
       if(btn.dataset.subview) switchSubview(btn.dataset.tab, btn.dataset.subview);
       else ensureDefaultSubview(btn.dataset.tab);
-      loadSectionData(btn.dataset.tab);
+      if(!options.skipLoad) loadSectionData(btn.dataset.tab);
+      closeMobileNav();
     }
     function loadSectionData(tab){
       if(!canOpenTab(tab)) return;
-      if(tab==='dashboard') loadDashboard();
+      if(tab==='dashboard') {
+        loadDashboard();
+      }
       if(tab==='accounts') { loadProxyPool(); loadAccountsPool(); }
       if(tab==='proxies') loadProxyPool();
       if(tab==='ai') loadAIProfiles();
@@ -1622,7 +1753,13 @@
       if(tab==='runtime') loadRuntimeSettings();
       if(tab==='runs') loadRuns();
       if(tab==='reports') loadReports();
-      if(tab==='doctor') loadDoctor();
+      if(tab==='doctor') {
+        loadDoctor();
+        loadReadiness();
+        loadSchedulerStatus();
+        loadPlatformStatus();
+        loadSystemChecklist();
+      }
     }
 
     function canMenu(key){
@@ -1636,14 +1773,23 @@
       document.querySelectorAll('nav button[data-menu-key]').forEach(btn=>{
         btn.classList.toggle('is-hidden', !canMenu(btn.dataset.menuKey));
       });
+      document.querySelectorAll('[data-shortcut-tab][data-menu-key]').forEach(btn=>{
+        btn.classList.toggle('is-hidden', !canMenu(btn.dataset.menuKey));
+      });
+      document.querySelectorAll('.admin-entry[data-menu-key]').forEach(el=>{
+        el.classList.toggle('is-hidden', !canMenu(el.dataset.menuKey));
+      });
       document.querySelectorAll('section[id]').forEach(section=>{
         if(!canOpenTab(section.id)) section.classList.remove('active');
       });
-      document.querySelectorAll('.nav-popover').forEach(menu=>{
-        const visible=[...menu.querySelectorAll('button.sub')].some(btn=>!btn.classList.contains('is-hidden'));
-        const trigger=menu.closest('.nav-group')?.querySelector('button[data-menu]');
+      document.querySelectorAll('.nav-sublist').forEach(list=>{
+        const visible=[...list.querySelectorAll('button.sub')].some(btn=>!btn.classList.contains('is-hidden'));
+        const group=list.closest('.nav-group');
+        const trigger=group?.querySelector('.nav-group-toggle');
+        if(group) group.classList.toggle('is-hidden', !visible);
         if(trigger) trigger.classList.toggle('is-hidden', !visible);
       });
+      Object.keys(NAV_GROUPS).forEach(group=>setNavGroupExpanded(group, true));
       const active=document.querySelector('nav button.active:not(.is-hidden)');
       if(!active){
         const first=document.querySelector('nav button[data-tab]:not(.is-hidden)');
@@ -1680,13 +1826,13 @@
       if(!authReady) return;
       const loads = [
         safeLoad('总览', loadDashboard),
-        safeLoad('运行状态', loadReadiness),
-        safeLoad('调度状态', loadSchedulerStatus),
-        safeLoad('平台状态', loadPlatformStatus),
         safeLoad('运行记录', loadRuns),
         safeLoad('报告中心', loadReports)
       ];
       addPermittedLoad(loads, '系统状态', 'system_diagnostics', loadSystemChecklist);
+      addPermittedLoad(loads, '运行状态', 'system_diagnostics', loadReadiness);
+      addPermittedLoad(loads, '调度状态', 'system_diagnostics', loadSchedulerStatus);
+      addPermittedLoad(loads, '平台状态', 'system_diagnostics', loadPlatformStatus);
       addPermittedLoad(loads, '登录能力', 'platform_accounts', loadPlatformLoginConfigs);
       addPermittedLoad(loads, '账号资源', 'platform_accounts', loadAccountsPool);
       addPermittedLoad(loads, '登录会话', 'platform_accounts', loadLoginSessions);
@@ -1703,21 +1849,178 @@
     async function loadDashboard(){
       const data=await (await api('/dashboard')).json();
       const s=data.summary||{};
+      const home=data.operations_home || s.operations_home || legacyOperationsHome(s);
       const scheduler=data.scheduler||{};
       const readiness=data.readiness||{};
       document.getElementById('top_status').innerHTML = `<span class="status ${scheduler.enabled?'ok':'warn'}">${scheduler.enabled?'调度运行中':'调度未启用'}</span> <span class="status ${readiness.ready?'ok':'warn'}">${readiness.ready?'运行正常':'配置待完善'}</span>`;
-      document.getElementById('dashboard_metrics').innerHTML = [
-        metricCard('监控任务', s.jobs_total||0, `启用 ${s.jobs_enabled||0}`),
-        metricCard('采集内容', s.contents_total||0, `运行 ${s.runs_total||0} 次`),
-        metricCard('风险线索', s.negative_total||0, `高风险 ${s.high_total||0}`),
-        metricCard('待人工复核', s.pending_review||0, `报告 ${s.reports_total||0} 份`),
-        metricCard('账号资源', s.social_accounts_total||0, '社媒账号'),
-        metricCard('代理资源', s.proxy_profiles_total||0, '可绑定代理'),
-        metricCard('AI 接入', s.ai_profiles_total||0, '模型连接资源'),
-        metricCard('登录会话', s.login_sessions_total||0, '扫码登录记录'),
-        metricCard('近 20 次失败', s.failed_runs_recent||0, `平台：${esc(formatPlatformCounts(s.platform_counts_recent||{}))}`),
-        metricCard('预检拦截', s.skipped_runs_recent||0, '登录态/配置阻断')
-      ].join('');
+      renderOperationsHome(home);
+    }
+    function legacyOperationsHome(summary){
+      return {
+        last_updated_at: new Date().toISOString(),
+        scope: isAdminUser() ? 'workspace' : 'own',
+        task_health: {total: summary.jobs_total||0, active: summary.jobs_enabled||0, paused: Math.max(0, (summary.jobs_total||0) - (summary.jobs_enabled||0)), needs_attention: (summary.failed_runs_recent||0) + (summary.skipped_runs_recent||0) + (summary.pending_review||0)},
+        run_activity: {total: summary.runs_total||0, today: 0, running: 0, failed_recent: summary.failed_runs_recent||0, skipped_recent: summary.skipped_runs_recent||0, platform_counts_recent: summary.platform_counts_recent||{}},
+        report_activity: {total: summary.reports_total||0, generated: summary.reports_total||0, manual_review: summary.pending_review||0, email_failed: 0, email_unsent: 0},
+        email_delivery: {total: summary.reports_total||0, sent: 0, failed: 0, unsent: 0, history_available: false},
+        lead_metrics: {contents_total: summary.contents_total||0, suspected_negative: summary.negative_total||0, high_risk: summary.high_total||0, pending_review: summary.pending_review||0, trend_available: false},
+        resource_health: isAdminUser()
+          ? {scope: 'workspace', status: 'needs_attention', social_accounts_total: summary.social_accounts_total||0, proxy_profiles_total: summary.proxy_profiles_total||0, ai_profiles_total: summary.ai_profiles_total||0, login_sessions_total: summary.login_sessions_total||0, signals: []}
+          : {scope: 'business_safe', status: 'available', signals: [{label: '采集资源', status: 'available', note: '资源由管理员维护'}]}
+      };
+    }
+    function renderOperationsHome(home){
+      const updated=document.getElementById('operations_home_meta');
+      if(updated){
+        const scopeLabel=home.scope === 'own' ? '当前账号数据' : '工作区数据';
+        updated.innerHTML=`<span class="status ${home.scope==='own'?'':'ok'}">${esc(scopeLabel)}</span><span>最后更新 ${esc(formatTime(home.last_updated_at))}</span>`;
+      }
+      const metrics=document.getElementById('dashboard_metrics');
+      if(metrics){
+        metrics.innerHTML=[
+          operationsMetricCard({
+            tone: (home.task_health?.needs_attention||0) ? 'attention' : 'ok',
+            label: '任务健康',
+            value: home.task_health?.total||0,
+            note: `启用 ${home.task_health?.active||0} / 暂停 ${home.task_health?.paused||0}`,
+            detail: `${home.task_health?.needs_attention||0} 个待处理信号`,
+            tab: 'jobs',
+            menuKey: 'monitoring',
+            actionLabel: '查看任务'
+          }),
+          operationsMetricCard({
+            tone: (home.run_activity?.failed_recent||0) ? 'attention' : ((home.run_activity?.running||0) ? 'live' : ''),
+            label: '运行活动',
+            value: home.run_activity?.today||0,
+            note: `运行中 ${home.run_activity?.running||0} / 累计 ${home.run_activity?.total||0}`,
+            detail: `近 20 次失败 ${home.run_activity?.failed_recent||0}，预检拦截/登录态/配置阻断 ${home.run_activity?.skipped_recent||0}`,
+            tab: 'runs',
+            menuKey: 'run_center',
+            actionLabel: '查看运行'
+          }),
+          operationsMetricCard({
+            tone: (home.report_activity?.manual_review||0) ? 'review' : 'ok',
+            label: '报告与复核',
+            value: home.report_activity?.total||0,
+            note: `已生成 ${home.report_activity?.generated||0} 份`,
+            detail: `${home.report_activity?.manual_review||0} 条线索待人工复核`,
+            tab: 'reports',
+            menuKey: 'report_center',
+            actionLabel: '查看报告'
+          }),
+          operationsMetricCard({
+            tone: (home.email_delivery?.failed||0) ? 'attention' : ((home.email_delivery?.unsent||0) ? 'review' : 'ok'),
+            label: '邮件交付',
+            value: home.email_delivery?.sent||0,
+            note: `失败 ${home.email_delivery?.failed||0} / 未发送 ${home.email_delivery?.unsent||0}`,
+            detail: home.email_delivery?.history_available ? '交付历史可查看' : '当前展示报告最新交付状态',
+            tab: 'reports',
+            menuKey: 'report_center',
+            target: 'email_delivery_status_entry',
+            actionLabel: '检查交付'
+          }),
+          operationsMetricCard({
+            tone: (home.lead_metrics?.high_risk||0) ? 'risk' : ((home.lead_metrics?.suspected_negative||0) ? 'review' : ''),
+            label: '疑似负面线索',
+            value: home.lead_metrics?.suspected_negative||0,
+            note: `高风险 ${home.lead_metrics?.high_risk||0} / 待复核 ${home.lead_metrics?.pending_review||0}`,
+            detail: `采集内容 ${home.lead_metrics?.contents_total||0} 条`,
+            tab: 'reports',
+            menuKey: 'report_center',
+            actionLabel: '查看线索'
+          })
+        ].join('');
+      }
+      const drilldowns=document.getElementById('operations_home_drilldowns');
+      if(drilldowns) drilldowns.innerHTML=renderOperationsDrilldowns(home);
+      const resource=document.getElementById('operations_home_resource');
+      if(resource) resource.innerHTML=renderOperationsResourceHealth(home.resource_health||{});
+      const adminHealth=document.getElementById('operations_home_admin_health');
+      if(adminHealth) adminHealth.innerHTML=renderOperationsAdminHealth(home);
+      applyMenuPermissions();
+      bindShortcutButtons(document.getElementById('dashboard'));
+    }
+    function operationsMetricCard(card){
+      const tone=card.tone ? ` is-${card.tone}` : '';
+      const target=card.target ? ` data-shortcut-target="${esc(card.target)}"` : '';
+      return `<article class="operations-metric-card${tone}">
+        <div class="operations-metric-head"><span>${esc(card.label)}</span><i></i></div>
+        <strong>${esc(card.value)}</strong>
+        <p>${esc(card.note)}</p>
+        <div class="operations-metric-foot">
+          <span>${esc(card.detail)}</span>
+          <button class="ghost btn-compact" type="button" data-shortcut-tab="${esc(card.tab)}" data-menu-key="${esc(card.menuKey)}"${target}>${esc(card.actionLabel)}</button>
+        </div>
+      </article>`;
+    }
+    function renderOperationsDrilldowns(home){
+      const items=[
+        {label: '新建监控任务', note: `${home.task_health?.active||0} 个任务启用中`, tab: 'jobs', menuKey: 'monitoring', action: 'new-job'},
+        {label: '运行中心', note: `${home.run_activity?.running||0} 个运行中，今日 ${home.run_activity?.today||0} 次`, tab: 'runs', menuKey: 'run_center'},
+        {label: '报告中心', note: `${home.report_activity?.total||0} 份报告，${home.lead_metrics?.pending_review||0} 条待复核`, tab: 'reports', menuKey: 'report_center'},
+        {label: '邮件交付', note: `${home.email_delivery?.failed||0} 个失败，${home.email_delivery?.unsent||0} 个未发送`, tab: 'reports', menuKey: 'report_center', target: 'email_delivery_status_entry'}
+      ];
+      if((home.resource_health||{}).scope === 'workspace'){
+        items.push({label: '资源支撑', note: resourceHealthSummary(home.resource_health), tab: 'accounts', menuKey: 'platform_accounts'});
+      }
+      return `<div class="operations-section-head"><div><span>钻取入口</span><strong>按任务流继续处理</strong></div></div><div class="operations-drilldown-list">${items.map(item=>{
+        const target=item.target ? ` data-shortcut-target="${esc(item.target)}"` : '';
+        const action=item.action ? ` data-shortcut-action="${esc(item.action)}"` : '';
+        return `<button class="operations-drilldown" type="button" data-shortcut-tab="${esc(item.tab)}" data-menu-key="${esc(item.menuKey)}"${target}${action}>
+          <strong>${esc(item.label)}</strong><span>${esc(item.note)}</span>
+        </button>`;
+      }).join('')}</div>`;
+    }
+    function renderOperationsResourceHealth(resource){
+      const admin=resource.scope === 'workspace';
+      const status=resource.status || (admin ? 'needs_attention' : 'available');
+      const title=admin ? '资源健康' : '采集资源';
+      const note=admin ? resourceHealthSummary(resource) : '资源由管理员维护';
+      const signals=(resource.signals||[]).length ? resource.signals : (admin ? [
+        {label:'平台账号', status: resource.social_accounts_total ? 'ready' : 'empty', count: resource.social_accounts_total||0},
+        {label:'代理资源', status: resource.proxy_profiles_total ? 'ready' : 'empty', count: resource.proxy_profiles_total||0},
+        {label:'AI 接入', status: resource.ai_profiles_total ? 'ready' : 'empty', count: resource.ai_profiles_total||0},
+        {label:'登录会话', status: resource.login_sessions_total ? 'ready' : 'empty', count: resource.login_sessions_total||0}
+      ] : [{label:'采集资源', status:'available', note:'资源由管理员维护'}]);
+      return `<div class="operations-section-head"><div><span>${esc(title)}</span><strong>${esc(resourceStatusText(status))}</strong></div><span class="status ${status==='ready'||status==='available'?'ok':'warn'}">${esc(admin ? '管理员可处理' : '业务可见')}</span></div>
+        <p class="operations-resource-note">${esc(note)}</p>
+        <div class="operations-resource-signals">${signals.map(signal=>`<div class="operations-resource-signal ${resourceSignalClass(signal.status)}">
+          <span>${esc(signal.label)}</span><strong>${esc(signal.count ?? signal.note ?? resourceStatusText(signal.status))}</strong>
+        </div>`).join('')}</div>`;
+    }
+    function renderOperationsAdminHealth(home){
+      const resource=home.resource_health||{};
+      if(resource.scope !== 'workspace') return '';
+      const status=resource.status || 'needs_attention';
+      const taskAttention=home.task_health?.needs_attention||0;
+      const runAttention=(home.run_activity?.failed_recent||0) + (home.run_activity?.skipped_recent||0);
+      const reportAttention=(home.report_activity?.manual_review||0) + (home.email_delivery?.failed||0);
+      const tone=status==='ready' || status==='available' ? 'ok' : 'warn';
+      return `<div class="operations-admin-health-card">
+        <div>
+          <span class="status ${tone}">${esc(resourceStatusText(status))}</span>
+          <strong>系统健康摘要</strong>
+          <p>首页仅保留精简运营健康信号，详细运行状态、调度器和平台诊断请进入系统诊断查看。</p>
+        </div>
+        <div class="operations-admin-health-signals" aria-label="系统健康摘要">
+          <span>任务待处理 ${esc(taskAttention)}</span>
+          <span>运行异常 ${esc(runAttention)}</span>
+          <span>报告/邮件关注 ${esc(reportAttention)}</span>
+        </div>
+        <button class="secondary" type="button" data-shortcut-tab="doctor" data-menu-key="system_diagnostics">查看系统诊断</button>
+      </div>`;
+    }
+    function resourceHealthSummary(resource){
+      if(!resource || resource.scope !== 'workspace') return '资源由管理员维护';
+      return `账号 ${resource.social_accounts_total||0} / 代理 ${resource.proxy_profiles_total||0} / AI ${resource.ai_profiles_total||0} / 会话 ${resource.login_sessions_total||0}`;
+    }
+    function resourceStatusText(status){
+      return {ready:'资源可用',available:'资源可用',needs_attention:'需要关注',empty:'待配置'}[status] || status || '状态未明';
+    }
+    function resourceSignalClass(status){
+      if(status === 'ready' || status === 'available') return 'is-ok';
+      if(status === 'empty' || status === 'needs_attention') return 'is-attention';
+      return '';
     }
     function metricCard(label, value, note){ return `<div class="metric-card"><div class="metric-label">${esc(label)}</div><div class="metric-value">${esc(value)}</div><div class="metric-note">${note}</div></div>`; }
     async function loadSystemChecklist(){
@@ -2147,6 +2450,7 @@
       renderAccountBulkBar(accounts);
       updateAccountBulkToolbar();
       document.getElementById('social_accounts_table').innerHTML = accounts.length ? accountLedgerTable(accounts, selectedId) : '<div class="empty">没有匹配的账号。可以点击右上角“新增账号”。</div>';
+      positionAccountActionMenu();
     }
     function renderAccountBulkBar(accounts){
       let bar=document.getElementById('account_bulk_bar');
@@ -2203,12 +2507,12 @@
         <td class="col-actions" onclick="event.stopPropagation()">
           <div class="account-actions">
             <button class="secondary" onclick="editSocialAccount(${id})">详情</button>
-            <button class="secondary" onclick="toggleAccountActionMenu(${id})">更多</button>
+            <button class="secondary" data-account-menu-button="${id}" onclick="toggleAccountActionMenu(${id})">更多</button>
             <div id="account_menu_${id}" class="account-action-menu${menuOpen?' active':''}">
-              <button class="secondary" ${checking?'disabled':''} onclick="checkSocialAccountLogin(${id})">${checking?'检测中':'检测登录态'}</button>
-              <button class="secondary" onclick="reloginSocialAccount(${id})">重新登录</button>
-              <button class="secondary" onclick="setSocialAccountStatus(${id}, '${a.status==='disabled'?'standby':'disabled'}')">${a.status==='disabled'?'启用账号':'停用账号'}</button>
-              <button class="danger" onclick="deleteSocialAccount(${id})">删除账号</button>
+              <button class="secondary" ${checking?'disabled':''} onclick="checkSocialAccountLogin(${id}); closeFloatingMenus();">${checking?'检测中':'检测登录态'}</button>
+              <button class="secondary" onclick="reloginSocialAccount(${id}); closeFloatingMenus();">重新登录</button>
+              <button class="secondary" onclick="setSocialAccountStatus(${id}, '${a.status==='disabled'?'standby':'disabled'}'); closeFloatingMenus();">${a.status==='disabled'?'启用账号':'停用账号'}</button>
+              <button class="danger" onclick="deleteSocialAccount(${id}); closeFloatingMenus();">删除账号</button>
             </div>
           </div>
         </td>
@@ -2935,6 +3239,7 @@
       const target=document.getElementById('jobs_table');
       if(!target) return;
       target.innerHTML = table(['任务ID','律所','平台','平台搜索词','频率','上次运行','下次运行','状态','操作'], filteredJobs([...jobCache.values()]).map(j=>jobRow(j)));
+      positionJobActionMenu();
     }
     function filteredJobs(jobs){
       const query=(val('job_search')||'').trim().toLowerCase();
@@ -2963,11 +3268,11 @@
       return `<div class="wide-actions">
         ${primary}
         <span class="action-menu-host">
-          <button class="secondary" onclick="toggleJobActionMenu(${id})">更多</button>
+          <button class="secondary" data-job-menu-button="${id}" onclick="toggleJobActionMenu(${id})">更多</button>
           <span id="job_menu_${id}" class="action-menu${open?' active':''}">
-            <button type="button" onclick="editJob(${id})">编辑任务</button>
-            <button type="button" onclick="toggleJob(${id}, ${j.enabled})">${j.enabled?'暂停任务':'恢复任务'}</button>
-            <button type="button" onclick="deleteJob(${id})">删除任务</button>
+            <button type="button" onclick="editJob(${id}); closeFloatingMenus();">编辑任务</button>
+            <button type="button" onclick="toggleJob(${id}, ${j.enabled}); closeFloatingMenus();">${j.enabled?'暂停任务':'恢复任务'}</button>
+            <button type="button" onclick="deleteJob(${id}); closeFloatingMenus();">删除任务</button>
           </span>
         </span>
       </div>`;
@@ -3215,6 +3520,7 @@
           aiRuleActions(rule)
         ])
       );
+      positionAIRuleActionMenu();
     }
     function aiRuleActions(rule){
       const id=Number(rule.id);
@@ -3222,11 +3528,11 @@
       return `<div class="wide-actions">
         <button class="secondary" onclick="editAIRuleProfile(${id})">详情</button>
         <span class="action-menu-host">
-          <button class="secondary" onclick="toggleAIRuleActionMenu(${id})">更多</button>
+          <button class="secondary" data-ai-rule-menu-button="${id}" onclick="toggleAIRuleActionMenu(${id})">更多</button>
           <span id="ai_rule_menu_${id}" class="action-menu${open?' active':''}">
-            <button type="button" onclick="testAIRuleProfile(${id})">测试规则</button>
-            ${rule.is_active ? '' : `<button type="button" onclick="activateAIRuleProfile(${id})">设为默认</button>`}
-            <button type="button" onclick="deleteAIRuleProfile(${id})">删除规则</button>
+            <button type="button" onclick="testAIRuleProfile(${id}); closeFloatingMenus();">测试规则</button>
+            ${rule.is_active ? '' : `<button type="button" onclick="activateAIRuleProfile(${id}); closeFloatingMenus();">设为默认</button>`}
+            <button type="button" onclick="deleteAIRuleProfile(${id}); closeFloatingMenus();">删除规则</button>
           </span>
         </span>
       </div>`;
@@ -3942,10 +4248,12 @@
       document.body.style.overflow='';
     }
     function scheduleEmailPreview(){
+      if(!canMenu('mail_templates')) return;
       if(emailPreviewTimer) clearTimeout(emailPreviewTimer);
       emailPreviewTimer=setTimeout(()=>previewEmailTemplate(false), 350);
     }
     async function previewEmailTemplate(showToast=true){
+      if(!canMenu('mail_templates')) return;
       const payload={subject_template:val('email_template_subject'),html_template:val('email_html_template'),law_firm_name:'海安律所'};
       const res=await api('/email-templates/preview',{method:'POST',body:JSON.stringify(payload)});
       if(!res.ok){ if(showToast) toast(await err(res)); return; }
@@ -3956,20 +4264,94 @@
     }
 
     async function loadRuns(){
-      const limit=val('run_limit') || '100';
-      const data=await (await api('/runs?limit='+encodeURIComponent(limit))).json();
+      const qs=runQueryParams();
+      const res=await api('/runs?'+qs.toString());
+      if(!res.ok){ toast(await err(res)); return false; }
+      const data=await res.json();
       const running=data.running_job_ids||[];
       runningJobIds.clear();
       running.forEach(id=>runningJobIds.add(Number(id)));
       document.getElementById('running_summary').innerHTML = running.length ? `<div class="notice">正在运行的任务 ID：${esc(running.join(', '))}<div class="small">运行 ID 是单次执行记录，任务 ID 是任务管理里的配置编号。</div></div>` : '';
-      document.getElementById('runs_table').innerHTML=table(['运行 ID','任务 ID','任务名称 / 律所','平台','关键词摘要','状态','开始时间','耗时','采集数','新增数','疑似负面数','高风险数','待复核数','失败原因','操作'], data.runs.map(runRow));
+      const runs=data.runs||[];
+      const pagination=data.pagination||{page:runListState.page,per_page:Number(val('run_limit')||100),total:runs.length,total_pages:1};
+      runListState.page=Number(pagination.page||1);
+      runListState.totalPages=Number(pagination.total_pages||1);
+      renderRunFilterSummary(data.filters||{}, pagination);
+      document.getElementById('runs_table').innerHTML=runs.length
+        ? table(['运行 ID','任务 ID','任务名称 / 律所','平台','关键词摘要','类型','可见性','状态','开始时间','耗时','采集数','新增数','疑似负面数','高风险数','待复核数','失败原因','操作'], runs.map(runRow))
+        : '<div class="empty run-empty-state"><strong>暂无运行记录</strong><span>请调整筛选条件，或从监控任务发起一次运行。</span></div>';
+      renderRunPagination(pagination);
       return running.length > 0;
+    }
+    function runQueryParams(){
+      const qs=new URLSearchParams();
+      qs.set('limit', val('run_limit') || '100');
+      qs.set('page', String(runListState.page || 1));
+      const query=String(val('run_task_filter')||'').trim();
+      if(query){
+        if(/^\d+$/.test(query)) qs.set('task_id', query);
+        else qs.set('law_firm', query);
+      }
+      const status=val('run_status_filter');
+      const platform=val('run_platform_filter');
+      const runType=val('run_type_filter');
+      const dateFrom=val('run_date_from');
+      const dateTo=val('run_date_to');
+      if(status) qs.set('status', status==='diagnostic'?'self'+'test':status);
+      if(platform) qs.set('platform', platform);
+      if(runType) qs.set('run_type', runType);
+      if(dateFrom) qs.set('date_from', dateFrom);
+      if(dateTo) qs.set('date_to', dateTo);
+      const visibility=isAdminUser() ? (val('run_visibility_filter') || 'visible') : 'visible';
+      qs.set('visibility', visibility);
+      return qs;
+    }
+    function applyRunFilters(){
+      runListState.page=1;
+      return loadRuns();
+    }
+    function clearRunFilters(){
+      ['run_task_filter','run_status_filter','run_platform_filter','run_date_from','run_date_to'].forEach(id=>set(id,''));
+      set('run_type_filter','operational');
+      set('run_limit','100');
+      if(isAdminUser()) set('run_visibility_filter','visible');
+      runListState.page=1;
+      return loadRuns();
+    }
+    function changeRunPage(page){
+      runListState.page=Math.max(1, Math.min(Number(page)||1, runListState.totalPages||1));
+      return loadRuns();
+    }
+    function renderRunFilterSummary(filters, pagination){
+      const parts=[];
+      const visibility=filters.visibility || (isAdminUser()?val('run_visibility_filter'):'visible');
+      parts.push(`可见性：${formatRunVisibilityText(visibility)}`);
+      if(filters.run_type) parts.push(`类型：${formatRunTypeText(filters.run_type)}`);
+      if(filters.status) parts.push(`状态：${formatRunStatus(filters.status)}`);
+      if(filters.platform) parts.push(`平台：${formatPlatforms([filters.platform])}`);
+      if(filters.law_firm) parts.push(`律所：${filters.law_firm}`);
+      if(filters.job_id) parts.push(`任务 ID：${filters.job_id}`);
+      if(filters.date_from || filters.date_to) parts.push(`日期：${filters.date_from||'不限'} 至 ${filters.date_to||'不限'}`);
+      const total=Number(pagination.total||0);
+      document.getElementById('run_filter_summary').innerHTML=`<span class="status ${visibility==='archived'?'warn':'ok'}">${esc(total)} 条</span><span>${esc(parts.join(' / '))}</span><span class="small">默认展示可见记录；测试/诊断记录可通过运行类型单独查看。</span>`;
+    }
+    function renderRunPagination(pagination){
+      const page=Number(pagination.page||1);
+      const totalPages=Number(pagination.total_pages||1);
+      const total=Number(pagination.total||0);
+      const perPage=Number(pagination.per_page||0);
+      const label=perPage>0 ? `第 ${page} / ${totalPages} 页，共 ${total} 条` : `共 ${total} 条`;
+      document.getElementById('run_pagination').innerHTML=`<div class="small">${esc(label)}</div><div class="toolbar-actions"><button class="secondary" ${page<=1?'disabled':''} onclick="changeRunPage(${page-1})">上一页</button><button class="secondary" ${page>=totalPages?'disabled':''} onclick="changeRunPage(${page+1})">下一页</button></div>`;
     }
     function runRow(r){
       const s=r.summary||{};
       const jobLabel=`${r.law_firm_name||r.display_law_firm_name||'原任务已删除'}${r.job_deleted?'（原任务已删除）':''}`;
       const actions=[`<button class="secondary" onclick="loadRunLogs(${Number(r.id)})">查看日志</button>`];
       if(r.status==='running') actions.push(`<button class="danger" onclick="stopRun(${Number(r.id)})">停止</button>`);
+      if(isAdminUser()){
+        if(r.visibility==='archived') actions.push(`<button class="secondary" onclick="restoreRun(${Number(r.id)})">恢复</button>`);
+        else actions.push(`<button class="secondary" onclick="archiveRun(${Number(r.id)})">归档</button>`);
+      }
       const failureText=runDisplayError(r, s);
       const keywords=(s.keywords||[]).join(' / ');
       return [
@@ -3978,6 +4360,8 @@
         esc(jobLabel),
         esc(formatPlatforms(s.platforms)),
         `<div class="truncate" title="${esc(keywords)}">${esc(keywords||'-')}</div>`,
+        runTypeBadge(r.run_type),
+        runVisibilityBadge(r.visibility),
         runStatusBadge(r),
         esc(formatTime(r.started_at)),
         esc(formatDuration(s.duration_seconds)),
@@ -3987,8 +4371,20 @@
         esc(s.high_count||0),
         esc(s.pending_review_count||0),
         failureText ? esc(cleanCustomerText(failureText)) : formatFailures(s),
-        `<div class="wide-actions">${actions.join(' ')}</div>`
+        `<div class="wide-actions run-actions">${actions.join(' ')}</div>`
       ];
+    }
+    async function archiveRun(id){
+      if(!confirm('确认归档这条运行记录？归档后默认列表将不再显示它。')) return;
+      const res=await api('/runs/'+id+'/archive',{method:'POST'});
+      toast(res.ok?'运行记录已归档':await err(res));
+      await Promise.all([loadRuns(), loadDashboard()]);
+    }
+    async function restoreRun(id){
+      if(!confirm('确认恢复这条运行记录？恢复后它会回到默认可见列表。')) return;
+      const res=await api('/runs/'+id+'/restore',{method:'POST'});
+      toast(res.ok?'运行记录已恢复':await err(res));
+      await Promise.all([loadRuns(), loadDashboard()]);
     }
     async function stopRun(id){
       if(!confirm('确认停止这条运行记录对应的任务？')) return;
@@ -4047,18 +4443,135 @@
     function renderReportsTable(){
       const target=document.getElementById('reports_table');
       if(!target) return;
-      target.innerHTML=table(['报告 ID','律所','新增','疑似负面','高风险','待复核','邮件','创建时间','操作'], (currentReports||[]).map(reportRow));
+      const reports=currentReports||[];
+      if(!reports.length){
+        target.innerHTML='<div class="empty">暂无报告。调整筛选条件后可重新查看。</div>';
+        return;
+      }
+      target.innerHTML=`<div class="report-task-groups">${groupReportsByTask(reports).map(renderReportTaskGroup).join('')}</div>`;
       positionReportActionMenu();
+    }
+    function groupReportsByTask(reports){
+      const groups=[];
+      const byKey=new Map();
+      (reports||[]).forEach((report, index)=>{
+        const context=reportGroupingContext(report);
+        const key=reportGroupKey(context, report);
+        if(!byKey.has(key)){
+          const group={key, context, reports:[], order:index, totals:{newContents:0, negative:0, high:0, pending:0}, flags:{active:false, deleted:false, limited:false, historical:false}};
+          byKey.set(key, group);
+          groups.push(group);
+        }
+        const group=byKey.get(key);
+        const summary=report.summary||{};
+        group.reports.push(report);
+        group.totals.newContents += Number(summary.new_contents||0);
+        group.totals.negative += Number(summary.negative_count||0);
+        group.totals.high += Number(summary.high_count||0);
+        group.totals.pending += Number(summary.pending_review_count||0);
+        group.flags.active = group.flags.active || (!report.job_deleted && !report.limited_context && !!context.jobId);
+        group.flags.deleted = group.flags.deleted || !!report.job_deleted;
+        group.flags.limited = group.flags.limited || !!report.limited_context;
+        group.flags.historical = group.flags.historical || (!context.jobId && !report.limited_context);
+      });
+      return groups;
+    }
+    function reportGroupingContext(report){
+      const snapshot=(report && report.job_snapshot && typeof report.job_snapshot==='object' && !Array.isArray(report.job_snapshot)) ? report.job_snapshot : {};
+      const summary=(report && report.summary && typeof report.summary==='object' && !Array.isArray(report.summary)) ? report.summary : {};
+      const platformResults=(summary.platform_results && typeof summary.platform_results==='object' && !Array.isArray(summary.platform_results)) ? summary.platform_results : {};
+      const snapshotPlatforms=normalizedReportList(snapshot.platforms);
+      const summaryPlatforms=normalizedReportList(summary.platforms);
+      const platforms=snapshotPlatforms.length ? snapshotPlatforms : (summaryPlatforms.length ? summaryPlatforms : Object.keys(platformResults));
+      const keywords=normalizedReportList(snapshot.keywords).length ? normalizedReportList(snapshot.keywords) : normalizedReportList(summary.keywords);
+      const jobId=safeReportInt(snapshot.job_id) || safeReportInt(report?.job_id) || safeReportInt(summary.job_id);
+      const lawFirm=cleanCustomerText(report?.display_law_firm_name || report?.law_firm_name || snapshot.law_firm_name || summary.law_firm_name || '历史报告');
+      return {
+        jobId,
+        lawFirm,
+        platforms,
+        keywords,
+        frequency: snapshot.frequency || summary.frequency || '',
+        deletedAt: snapshot.deleted_at || '',
+      };
+    }
+    function safeReportInt(value){
+      const n=Number(value);
+      return Number.isFinite(n) && n>0 ? n : null;
+    }
+    function normalizedReportList(value){
+      if(Array.isArray(value)) return value.map(item=>String(item||'').trim()).filter(Boolean);
+      if(typeof value==='string') return value.split(/[,，、/]/).map(item=>item.trim()).filter(Boolean);
+      return [];
+    }
+    function reportGroupKey(context, report){
+      if(report?.limited_context) return 'limited:historical';
+      if(!report?.job_deleted && context.jobId) return `active:${context.jobId}`;
+      if(context.jobId) return `snapshot:${context.jobId}`;
+      const fingerprint=[context.lawFirm, context.platforms.join(','), context.keywords.join(','), context.frequency].join('|').replace(/\s+/g,' ').trim().toLowerCase();
+      return fingerprint ? `snapshot:${fingerprint}` : 'limited:historical';
+    }
+    function renderReportTaskGroup(group){
+      const context=group.context;
+      return `<details class="report-task-group ${group.flags.deleted?'is-deleted':''} ${group.flags.limited?'is-limited':''}" data-report-group-key="${esc(group.key)}" open>
+        <summary class="report-task-group-head">
+          <div class="report-task-group-title">
+            <div class="report-task-group-title-row">
+              <strong>${esc(context.lawFirm)}</strong>
+              <span class="report-task-group-badges">${reportGroupBadges(group)}</span>
+            </div>
+            <p>${esc(reportGroupSummaryText(group))}</p>
+          </div>
+          <span class="report-task-group-count">${esc(group.reports.length)} 份报告</span>
+        </summary>
+        <div class="report-task-group-body">
+          <div class="report-task-group-meta">${reportGroupMetaChips(group).join('')}</div>
+          ${table(['报告 ID','律所','新增','疑似负面','高风险','待复核','邮件','创建时间','操作'], group.reports.map(reportRow))}
+        </div>
+      </details>`;
+    }
+    function reportGroupBadges(group){
+      const badges=[];
+      if(group.flags.limited) badges.push('<span class="status warn">上下文有限</span>');
+      else if(group.flags.deleted) badges.push('<span class="status warn">原任务已删除</span>');
+      else if(group.flags.active) badges.push('<span class="status ok">活跃任务</span>');
+      else badges.push('<span class="status">历史快照</span>');
+      if(group.context.jobId) badges.push(`<span class="status">任务 #${esc(group.context.jobId)}</span>`);
+      return badges.join('');
+    }
+    function reportGroupSummaryText(group){
+      const totals=group.totals;
+      const base=`新增 ${totals.newContents} / 疑似负面 ${totals.negative} / 高风险 ${totals.high} / 待复核 ${totals.pending}`;
+      if(group.flags.limited) return `${base}；旧报告缺少任务快照，仍可逐份预览、下载和查看线索。`;
+      if(group.flags.deleted) return `${base}；使用报告保存的任务快照展示历史上下文。`;
+      return `${base}；按监控任务汇总报告记录。`;
+    }
+    function reportGroupMetaChips(group){
+      const context=group.context;
+      const platformText=context.platforms.length ? formatPlatforms(context.platforms) : '未记录';
+      const keywordText=context.keywords.length ? context.keywords.join(' / ') : '未记录';
+      const chips=[
+        `<span title="${esc(platformText)}">平台：${esc(platformText)}</span>`,
+        `<span title="${esc(keywordText)}">关键词：${esc(keywordText)}</span>`,
+      ];
+      if(context.frequency) chips.push(`<span>频率：${esc(formatReportFrequency(context.frequency))}</span>`);
+      if(context.deletedAt) chips.push(`<span>删除时间：${esc(formatTime(context.deletedAt))}</span>`);
+      if(group.flags.limited) chips.push('<span>历史报告：任务上下文有限</span>');
+      return chips;
+    }
+    function formatReportFrequency(frequency){
+      const labels={daily:'每天','12h':'每 12 小时','6h':'每 6 小时',cron:'自定义计划'};
+      return labels[frequency] || frequency || '未记录';
     }
     function reportRow(r){
       return [
         r.id,
-        esc(r.display_law_firm_name||r.law_firm_name||''),
+        esc(reportGroupingContext(r).lawFirm),
         esc((r.summary||{}).new_contents||0),
         esc((r.summary||{}).negative_count||0),
         esc((r.summary||{}).high_count||0),
         esc((r.summary||{}).pending_review_count||0),
-        esc(emailStatusLabel(r.email_status)),
+        reportEmailStatusCell(r),
         esc(formatTime(r.created_at)),
         reportActions(r.id)
       ];
@@ -4072,6 +4585,7 @@
     }
     function reportFloatingMenu(id){
       return `
+        <button type="button" onclick="loadEmailDeliveryHistory(${Number(id)}); closeReportActionMenu();">查看交付历史</button>
         <button type="button" onclick="resendReportEmail(${Number(id)}); closeReportActionMenu();">重发邮件</button>
         <a href="/api/monitor/reports/${Number(id)}/download?type=html" target="_blank" onclick="closeReportActionMenu()">下载 HTML</a>
         <a href="/api/monitor/reports/${Number(id)}/download?type=excel" target="_blank" onclick="closeReportActionMenu()">下载 Excel</a>
@@ -4105,13 +4619,7 @@
       const menu=document.getElementById('report_action_menu');
       const anchor=(reportMenuAnchor && document.contains(reportMenuAnchor)) ? reportMenuAnchor : document.querySelector(`[data-report-menu-button="${openReportMenuId}"]`);
       if(!menu || !anchor) return;
-      const rect=anchor.getBoundingClientRect();
-      const menuWidth=menu.offsetWidth || 168;
-      const menuHeight=menu.offsetHeight || 160;
-      const left=Math.max(12, Math.min(window.innerWidth - menuWidth - 12, rect.right - menuWidth));
-      const top=Math.max(12, Math.min(window.innerHeight - menuHeight - 12, rect.bottom + 6));
-      menu.style.left=left+'px';
-      menu.style.top=top+'px';
+      positionFloatingMenu(anchor, menu, {width:204, height:196});
     }
     async function createSystemCheckReport(){ const res=await api('/reports/system-check',{method:'POST'}); if(!res.ok){toast(await err(res));return;} toast('系统诊断报告已生成'); await Promise.all([loadReports(), loadRuns(), loadReadiness(), loadDoctor(), loadDashboard()]); }
     async function previewReport(id){
@@ -4119,6 +4627,7 @@
       document.getElementById('report_preview').srcdoc = '正在加载报告...';
       document.getElementById('leads_scope').textContent = '正在加载当前报告线索...';
       document.getElementById('report_email_subject').textContent = '';
+      loadEmailDeliveryHistory(id, {silent:true});
       const previewRes=await api('/reports/'+id+'/email-preview');
       if(!previewRes.ok){ document.getElementById('report_preview').srcdoc='邮件预览读取失败。'; toast(await err(previewRes)); return; }
       const preview=(await previewRes.json()).preview || {};
@@ -4147,7 +4656,76 @@
         esc(cleanCustomerText(x.law_firm_name||'')), esc(formatPlatforms([x.platform])), esc(formatLeadStatus(x)), esc(cleanCustomerText(x.title||'')), esc(cleanCustomerText(x.source_keyword||'')), esc(cleanCustomerText(x.reason||'')), esc(cleanCustomerText((x.evidence_quotes||[]).join(' / '))), leadLinks(x)
       ]));
     }
-    async function resendReportEmail(id){ const res=await api('/reports/'+id+'/resend-email',{method:'POST'}); if(!res.ok){toast(await err(res));return;} const data=await res.json(); toast(data.ok?'报告邮件已重新发送':'重发失败：'+(data.error||'请检查邮件配置')); loadReports(); }
+    function reportEmailStatusCell(report){
+      const status=report?.email_status || '';
+      const error=report?.email_error || '';
+      const tone=status==='sent' ? 'ok' : (status==='failed' ? 'warn' : '');
+      return `<button class="email-status-button ${tone}" type="button" onclick="loadEmailDeliveryHistory(${Number(report.id)})">
+        <span>${esc(emailStatusLabel(status))}</span>
+        ${error ? `<small>${esc(cleanCustomerText(error))}</small>` : ''}
+      </button>`;
+    }
+    async function loadEmailDeliveryHistory(id, options={}){
+      selectedEmailDeliveryReportId=Number(id);
+      const scope=document.getElementById('email_delivery_history_scope');
+      const target=document.getElementById('email_delivery_history');
+      const report=(currentReports||[]).find(item=>Number(item.id)===Number(id)) || {};
+      if(scope) scope.textContent=`报告 ID ${id} 的邮件交付历史`;
+      if(target) target.innerHTML='<div class="notice">正在读取邮件交付历史...</div>';
+      const res=await api('/reports/'+Number(id)+'/email-delivery-logs?limit=20');
+      if(!res.ok){
+        if(target) target.innerHTML='<div class="notice warn">邮件交付历史读取失败。</div>';
+        if(!options.silent) toast(await err(res));
+        return;
+      }
+      const data=await res.json();
+      renderEmailDeliveryHistory(data.delivery_logs||[], data.report || report);
+      if(!options.silent) document.getElementById('email_delivery_status_entry')?.scrollIntoView({behavior:'smooth', block:'start'});
+    }
+    function refreshSelectedEmailDeliveryHistory(){
+      if(!selectedEmailDeliveryReportId){ toast('请先选择一份报告'); return; }
+      loadEmailDeliveryHistory(selectedEmailDeliveryReportId);
+    }
+    function renderEmailDeliveryHistory(logs, report={}){
+      const target=document.getElementById('email_delivery_history');
+      if(!target) return;
+      const latest=report?.email_status ? `<div class="email-delivery-latest">
+        <span class="status ${report.email_status==='sent'?'ok':(report.email_status==='failed'?'warn':'')}">${esc(emailStatusLabel(report.email_status))}</span>
+        ${report.email_error ? `<strong>${esc(cleanCustomerText(report.email_error))}</strong>` : '<strong>暂无失败信息</strong>'}
+      </div>` : '';
+      if(!logs.length){
+        target.innerHTML=latest + '<div class="empty">暂无邮件交付历史。</div>';
+        return;
+      }
+      target.innerHTML=latest + `<div class="email-delivery-history-list">${logs.map(renderEmailDeliveryLog).join('')}</div>`;
+    }
+    function renderEmailDeliveryLog(log){
+      const recipients=(log.recipients||[]).filter(Boolean).join('、') || '未记录收件人';
+      const statusTone=log.status==='sent' ? 'ok' : (log.status==='failed' ? 'warn' : '');
+      const sendType=log.send_type==='manual_resend' ? '手动重发' : '自动发送';
+      const error=log.error_message ? `<p>${esc(cleanCustomerText(log.error_message))}</p>` : '';
+      return `<div class="email-delivery-history-item">
+        <div class="email-delivery-history-main">
+          <strong>${esc(sendType)}</strong>
+          <span>${esc(formatTime(log.sent_at || log.created_at))}</span>
+        </div>
+        <div class="email-delivery-history-meta">
+          <span class="status ${statusTone}">${esc(emailDeliveryStatusLabel(log.status))}</span>
+          <span>收件人：${esc(recipients)}</span>
+          <span>窗口：${esc(log.send_window_key||'-')}</span>
+        </div>
+        ${error}
+      </div>`;
+    }
+    async function resendReportEmail(id){
+      if(!confirm('确认手动重发这份报告邮件？系统会单独记录本次重发历史。')) return;
+      const res=await api('/reports/'+id+'/resend-email',{method:'POST'});
+      if(!res.ok){toast(await err(res));return;}
+      const data=await res.json();
+      toast(data.ok?'报告邮件已重新发送':'重发失败：'+(data.error||'请检查邮件配置'));
+      await loadReports();
+      await loadEmailDeliveryHistory(id, {silent:true});
+    }
     async function loadDoctor(){
       if(!canMenu('system_diagnostics')) return;
       const data=await (await api('/doctor')).json();
@@ -4275,11 +4853,16 @@
   </div>
 </div>`; }
     function formatDuration(seconds){ const n=Number(seconds||0); if(n<60) return `${n}s`; return `${Math.floor(n/60)}m ${n%60}s`; }
-    function formatRunStatus(status){ const labels={running:'运行中',success:'成功',partial_failed:'部分失败',failed:'失败',cancelled:'已停止',skipped:'已跳过'}; return labels[status]||status||''; }
+    function formatRunStatus(status){ const diagnostic='self'+'test'; const labels={running:'运行中',success:'成功',partial_failed:'部分失败',failed:'失败',timeout:'超时',cancelled:'已停止',skipped:'已跳过',[diagnostic]:'诊断记录'}; return labels[status]||status||''; }
     function runStatusBadge(run){ const status=run.status||''; const cls=status==='success'?'ok':(status==='failed'||status==='partial_failed'?'bad':(status==='running'?'warn':(status==='skipped'?'warn':''))); return `<span class="status ${cls}">${esc(run.display_status || formatRunStatus(status))}</span>`; }
+    function formatRunTypeText(type){ return {operational:'运营记录',scheduled:'自动调度',manual:'手动运行',test:'测试/诊断'}[type] || type || '全部类型'; }
+    function runTypeBadge(type){ const value=type||'scheduled'; return `<span class="status ${value==='test'?'warn':''}">${esc(formatRunTypeText(value))}</span>`; }
+    function formatRunVisibilityText(visibility){ return visibility==='archived'?'已归档':(visibility==='all'?'全部记录':'默认可见'); }
+    function runVisibilityBadge(visibility){ const value=visibility||'visible'; return `<span class="status ${value==='archived'?'warn':'ok'}">${esc(formatRunVisibilityText(value))}</span>`; }
     function runDisplayError(run, summary){ if(run.display_error) return run.display_error; if(run.status==='skipped') return summary.skip_reason || run.error_message || '运行前检查未通过，已跳过本次调度'; return run.error_message || ''; }
     function formatFailures(summary){ const results=summary.platform_results||{}; const failed=summary.failed_platforms||[]; const cancelled=summary.cancelled_platforms||[]; const rows=[]; failed.forEach(p=>rows.push(`<div><strong>${esc(formatPlatforms([p]))}</strong>：${esc(cleanCustomerText((results[p]||{}).error||'失败'))}</div>`)); cancelled.forEach(p=>rows.push(`<div><strong>${esc(formatPlatforms([p]))}</strong>：已停止</div>`)); if(summary.cancel_reason) rows.push(`<div>${esc(cleanCustomerText(summary.cancel_reason))}</div>`); return rows.join(''); }
-    function emailStatusLabel(status){ return {pending:'待发送',sent:'已发送',failed:'发送失败',skipped:'未发送'}[status] || status || '-'; }
+    function emailStatusLabel(status){ return {pending:'待发送',sending:'发送中',sent:'已发送',failed:'发送失败',skipped:'未发送'}[status] || status || '-'; }
+    function emailDeliveryStatusLabel(status){ return {pending:'待发送',sending:'发送中',sent:'发送成功',failed:'发送失败',skipped:'已跳过'}[status] || status || '-'; }
     function formatLeadStatus(item){ if(item.eval_status==='pending_review') return '待人工复核'; if(item.is_related && item.is_negative) return item.risk_level==='high' ? '高风险' : '疑似负面'; return '无风险'; }
     function leadLinks(item){ const links=[]; if(item.content_url) links.push(`<a href="${esc(item.content_url)}" target="_blank">内容</a>`); if(item.cover_url) links.push(`<a href="${esc(item.cover_url)}" target="_blank">封面</a>`); return links.length ? `<div class="wide-actions">${links.join(' ')}</div>` : '-'; }
     function val(id){ return document.getElementById(id).value; } function set(id,v){ document.getElementById(id).value = v ?? ''; }
@@ -4347,5 +4930,6 @@
     resetProxyForm();
     bootApp();
 </script>
+<script type="module" src="/static/monitor/monitor.js"></script>
 </body>
 </html>

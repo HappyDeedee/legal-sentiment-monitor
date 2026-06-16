@@ -5,10 +5,10 @@ and may require migration from the current schema.
 
 ## Implementation Status
 
-This is a target planning document. Most Phase 0.5 tables and fields described
-here do not exist in the current codebase yet.
+This is a target planning document. Phase 0.5 schema foundation has been
+implemented and verified in the current codebase.
 
-Phase 0.5 will add:
+Phase 0.5 added:
 
 - `workspaces`;
 - `users`;
@@ -22,16 +22,21 @@ Phase 0.5 will add:
 - account/profile lock fields on `social_accounts`;
 - `resource_locks` for proxy concurrency.
 
-Current code should be checked before implementation work begins. Do not assume
-these tables or columns already exist until Phase 0.5 is completed and verified.
+Current code should still be checked before implementation work begins, but the
+Phase 0.5 foundation is now an active schema feature in this worktree.
 
-Phase 10-18 console optimization planning has been accepted, but its data-model
-changes are not implemented yet. Planned additions include:
+Phase 10-18 console optimization planning has been accepted. Phase 14, Phase
+16, and Phase 18A have implemented and verified these data-model fields:
 
 - run visibility and run type fields on `crawl_runs`;
-- `email_delivery_logs` for email send history and automatic-send
-  idempotency;
+- `crawl_runs.archived_at`;
+- `crawl_runs.archived_by`;
+- `email_delivery_logs` for email delivery history and automatic-send
+  idempotency foundation;
 - `reports.job_snapshot_json` for deleted or missing task report grouping.
+
+Remaining planned additions include Phase 18B frontend grouping behavior, not a
+new schema field.
 
 ## Scope
 
@@ -306,9 +311,9 @@ send_status
 job_snapshot_json
 ```
 
-`job_id` may be nullable for old or orphaned report history. Phase 18 should
-add `job_snapshot_json` so report grouping does not depend only on the current
-task row.
+`job_id` may be nullable for old or orphaned report history. Phase 18A adds
+`job_snapshot_json` so report grouping does not depend only on the current task
+row.
 
 Recommended `job_snapshot_json` fields:
 
@@ -326,14 +331,18 @@ Recommended `job_snapshot_json` fields:
 Rules:
 
 - capture the snapshot when the report is created;
+- backfill the snapshot when an existing report's `job_id` still resolves to a
+  monitoring task;
 - if a task is later deleted or unavailable, keep the report grouped by the
   snapshot business context;
+- keep unrecoverable old reports readable as limited-context historical
+  reports;
 - do not use the snapshot to bypass owner/workspace permissions.
 
 ### email_delivery_logs
 
-Phase 16 should add a dedicated table for email delivery history and
-automatic-send idempotency:
+Phase 16 adds a dedicated table for email delivery history and automatic-send
+idempotency foundation:
 
 ```text
 id
@@ -372,12 +381,19 @@ created_at
 
 Idempotency rules:
 
-- automatic delivery should not send more than once for the same
-  `job_id + send_window_key`;
+- the schema enforces at most one `pending`, `sending`, or `sent` automatic
+  delivery row for the same
+  `workspace_id + job_id + send_window_key + send_type=auto`;
+- failed or skipped automatic rows may be followed by a later retry row;
 - manual resend may repeat and should not consume the automatic-send idempotency
   key;
 - delivery attempts should preserve recipient summary and failure text without
-  storing SMTP secrets.
+  storing SMTP secrets;
+- Phase 17A connects scheduler/report delivery logic to this schema so
+  automatic sends are idempotent by schedule window, duplicate automatic
+  attempts are skipped, automatic failures are logged without blocking report
+  generation, and manual resend uses separate `manual_resend` rows. Phase 17B
+  still needs to expose this delivery history in the report center.
 
 ## Migration Principles
 

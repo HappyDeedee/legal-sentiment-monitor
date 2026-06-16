@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import sqlite3
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -15,7 +16,7 @@ from api.monitoring.ai import _build_endpoint, _parse_json, _validate_ai_output,
 from api.monitoring.ai import DEFAULT_PROMPT
 from api.monitoring.auth import SESSION_COOKIE_NAME
 from api.monitoring.account_environment import resolve_account_profile_path
-from api.monitoring.database import acquire_account_lock, acquire_proxy_lock, authenticate_user, bootstrap_admin_from_env, create_login_session, create_run, expire_login_sessions_for_account, finish_run, get_active_ai_key_profile, get_ai_config, get_conn, get_dashboard_summary, get_email_config, get_job, get_login_session, get_platform_login_config, get_report, get_run, get_runtime_setting_value, get_social_account, get_user_by_email, init_db, list_ai_key_profiles, list_ai_rule_profiles, list_email_templates, list_jobs, list_leads, list_login_sessions, list_platform_login_configs, list_proxy_profiles, list_reports, list_runtime_settings, list_runs, list_social_accounts, list_users, mark_selftest_jobs_internal, record_skipped_run, recover_stale_runs_and_locks, release_account_lock, release_proxy_locks, release_run_resource_locks, render_email_template_preview, save_ai_config, save_ai_key_profile, save_ai_rule_profile, save_email_config, save_email_template, save_job, save_platform_login_config, save_proxy_profile, save_runtime_settings, save_social_account, save_user, set_active_ai_key_profile, set_active_ai_rule_profile, update_social_account_check_state
+from api.monitoring.database import acquire_account_lock, acquire_proxy_lock, authenticate_user, bootstrap_admin_from_env, create_login_session, create_run, email_send_window_key, expire_login_sessions_for_account, finish_run, get_active_ai_key_profile, get_ai_config, get_conn, get_dashboard_summary, get_email_config, get_job, get_login_session, get_platform_login_config, get_report, get_run, get_runtime_setting_value, get_social_account, get_user_by_email, init_db, list_ai_key_profiles, list_ai_rule_profiles, list_email_delivery_logs, list_email_templates, list_jobs, list_leads, list_login_sessions, list_platform_login_configs, list_proxy_profiles, list_reports, list_runtime_settings, list_runs, list_social_accounts, list_users, mark_selftest_jobs_internal, record_email_delivery_log, record_skipped_run, recover_stale_runs_and_locks, release_account_lock, release_proxy_locks, release_run_resource_locks, render_email_template_preview, save_ai_config, save_ai_key_profile, save_ai_rule_profile, save_email_config, save_email_template, save_job, save_platform_login_config, save_proxy_profile, save_runtime_settings, save_social_account, save_user, set_active_ai_key_profile, set_active_ai_rule_profile, update_social_account_check_state
 from api.monitoring.mediacrawler_login import get_mediacrawler_login_capability
 from api.monitoring.login_browser import build_login_browser_command, open_login_browser, open_login_browser_with_command
 import api.monitoring.account_check as account_check_module
@@ -27,7 +28,7 @@ from api.monitoring.normalizer import collect_platform_outputs, in_time_window, 
 from api.monitoring.platform_status import list_platform_status
 from api.monitoring.preflight import build_job_preflight
 from api.monitoring.readiness import get_readiness_status
-from api.monitoring.reporting import create_report, resend_report_email
+from api.monitoring.reporting import create_report, resend_report_email, send_report_with_delivery_log
 from api.monitoring.security import redact_sensitive
 from api.monitoring.selftest import create_sample_report
 from api.monitoring.smoke import run_smoke_check
@@ -453,6 +454,235 @@ def test_phase_1_http_routes_enforce_sessions_roles_and_owner_scope():
         _restore_table("audit_logs", snapshots["audit_logs"])
 
 
+def test_phase_13a_operations_home_data_layer_scopes_real_aggregates():
+    from api import main as api_main
+
+    init_db()
+    snapshots = {
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "raw_contents": _snapshot_table("raw_contents"),
+        "ai_evaluations": _snapshot_table("ai_evaluations"),
+        "audit_logs": _snapshot_table("audit_logs"),
+        "user_sessions": _snapshot_table("user_sessions"),
+        "users": _snapshot_table("users"),
+        "social_accounts": _snapshot_table("social_accounts"),
+        "proxy_profiles": _snapshot_table("proxy_profiles"),
+        "ai_key_profiles": _snapshot_table("ai_key_profiles"),
+        "login_sessions": _snapshot_table("login_sessions"),
+    }
+    jobs_snapshot = _snapshot_monitor_jobs()
+    try:
+        with get_conn() as conn:
+            for table in [
+                "ai_evaluations",
+                "raw_contents",
+                "reports",
+                "crawl_runs",
+                "user_sessions",
+                "audit_logs",
+                "users",
+                "social_accounts",
+                "proxy_profiles",
+                "ai_key_profiles",
+                "login_sessions",
+            ]:
+                conn.execute(f"DELETE FROM {table}")
+        _clear_monitor_jobs()
+
+        admin = bootstrap_admin_from_env("phase13a-admin@example.com", "AdminPass123!", "Phase 13A Admin")
+        user1 = save_user(
+            {
+                "email": "phase13a-user1@example.com",
+                "display_name": "Phase 13A User One",
+                "password": "UserPass123!",
+                "role": "normal",
+            },
+            actor_id=int(admin["id"]),
+        )
+        user2 = save_user(
+            {
+                "email": "phase13a-user2@example.com",
+                "display_name": "Phase 13A User Two",
+                "password": "UserPass456!",
+                "role": "normal",
+            },
+            actor_id=int(admin["id"]),
+        )
+        job1 = save_job(
+            {
+                "law_firm_name": "海安律所",
+                "keywords": ["海安律所避雷"],
+                "platforms": ["dy"],
+                "recipients": ["ops@example.com"],
+                "enabled": True,
+            },
+            actor=user1,
+        )
+        job2 = save_job(
+            {
+                "law_firm_name": "恒泰律所",
+                "keywords": ["恒泰律所投诉"],
+                "platforms": ["ks"],
+                "recipients": ["ops@example.com"],
+                "enabled": False,
+            },
+            actor=user2,
+        )
+        run1 = create_run(job1["id"], {"job_id": job1["id"], "law_firm_name": job1["law_firm_name"], "platforms": ["dy"]})
+        run2 = create_run(job2["id"], {"job_id": job2["id"], "law_firm_name": job2["law_firm_name"], "platforms": ["ks"]})
+        finish_run(run1, "success", {"job_id": job1["id"], "law_firm_name": job1["law_firm_name"], "platforms": ["dy"]})
+        finish_run(run2, "failed", {"job_id": job2["id"], "law_firm_name": job2["law_firm_name"], "platforms": ["ks"]}, "平台登录态失效")
+        report1 = create_report(
+            run1,
+            job1,
+            {
+                "job_id": job1["id"],
+                "law_firm_name": job1["law_firm_name"],
+                "platforms": ["dy"],
+                "negative_count": 1,
+                "high_count": 1,
+                "pending_review_count": 0,
+            },
+        )
+        report2 = create_report(
+            run2,
+            job2,
+            {
+                "job_id": job2["id"],
+                "law_firm_name": job2["law_firm_name"],
+                "platforms": ["ks"],
+                "negative_count": 0,
+                "high_count": 0,
+                "pending_review_count": 1,
+            },
+        )
+        with get_conn() as conn:
+            now = datetime.now(timezone.utc).isoformat()
+            rows = [
+                (job1, run1, user1, "dy", "phase13a-user1-negative", "海安律所避雷", "海安律所退费争议"),
+                (job2, run2, user2, "ks", "phase13a-user2-pending", "恒泰律所投诉", "恒泰律所沟通争议"),
+            ]
+            raw_ids = []
+            for job, run_id, owner, platform, content_id, keyword, title in rows:
+                conn.execute(
+                    """
+                    INSERT INTO raw_contents (
+                        workspace_id, platform, content_id, job_id, run_id,
+                        law_firm_name, source_keyword, title, description,
+                        author_name, content_url, cover_url, publish_time,
+                        comment_count, raw_json, first_seen_at, last_seen_at,
+                        created_by, updated_by
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        1,
+                        platform,
+                        content_id,
+                        job["id"],
+                        run_id,
+                        job["law_firm_name"],
+                        keyword,
+                        title,
+                        "服务争议",
+                        "用户",
+                        "https://example.com/" + content_id,
+                        "",
+                        int(datetime.now(timezone.utc).timestamp()),
+                        0,
+                        "{}",
+                        now,
+                        now,
+                        owner["id"],
+                        owner["id"],
+                    ),
+                )
+                raw_ids.append(int(conn.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]))
+            conn.execute(
+                """
+                INSERT INTO ai_evaluations (
+                    workspace_id, raw_content_id, run_id, status, is_related,
+                    is_negative, risk_level, reason, evidence_quotes,
+                    recommended_action, raw_response, created_at, created_by,
+                    updated_by
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (1, raw_ids[0], run1, "ok", 1, 1, "high", "疑似负面", '["退费争议"]', "人工复核", "{}", now, user1["id"], user1["id"]),
+            )
+            conn.execute(
+                """
+                INSERT INTO ai_evaluations (
+                    workspace_id, raw_content_id, run_id, status, is_related,
+                    is_negative, risk_level, reason, evidence_quotes,
+                    recommended_action, raw_response, created_at, created_by,
+                    updated_by
+                ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                """,
+                (1, raw_ids[1], run2, "pending_review", 0, 0, "low", "待人工复核", "[]", "人工复核", "{}", now, user2["id"], user2["id"]),
+            )
+            conn.execute("UPDATE reports SET email_status='sent', email_error='' WHERE id=?", (report1["id"],))
+            conn.execute("UPDATE reports SET email_status='failed', email_error='SMTP 配置未完成' WHERE id=?", (report2["id"],))
+
+        save_proxy_profile({"name": "Phase 13A Proxy", "provider": "manual", "proxy_url": "http://user:pass@example.com:8080", "status": "active"})
+        save_social_account({"name": "Phase 13A Account", "platform": "dy", "login_type": "qrcode", "status": "active"})
+        save_ai_key_profile({"name": "Phase 13A AI", "provider": "openai", "base_url": "https://api.example.com", "api_key": "sk-test", "model": "test", "is_active": True})
+        create_login_session({"platform": "dy", "account_id": None, "login_url": "https://www.douyin.com/"})
+
+        admin_summary = get_dashboard_summary(actor=admin)
+        user1_summary = get_dashboard_summary(actor=user1)
+        user2_summary = get_dashboard_summary(actor=user2)
+
+        assert admin_summary["jobs_total"] == 2
+        assert admin_summary["operations_home"]["task_health"]["total"] == 2
+        assert admin_summary["operations_home"]["run_activity"]["failed_recent"] == 1
+        assert admin_summary["operations_home"]["report_activity"]["total"] == 2
+        assert admin_summary["operations_home"]["email_delivery"]["failed"] == 1
+        assert admin_summary["operations_home"]["lead_metrics"]["suspected_negative"] == 1
+        assert admin_summary["operations_home"]["lead_metrics"]["pending_review"] == 1
+        assert admin_summary["operations_home"]["resource_health"]["scope"] == "workspace"
+        assert admin_summary["operations_home"]["resource_health"]["social_accounts_total"] == 1
+
+        assert user1_summary["operations_home"]["task_health"]["total"] == 1
+        assert user1_summary["operations_home"]["run_activity"]["failed_recent"] == 0
+        assert user1_summary["operations_home"]["report_activity"]["total"] == 1
+        assert user1_summary["operations_home"]["email_delivery"]["sent"] == 1
+        assert user1_summary["operations_home"]["email_delivery"]["failed"] == 0
+        assert user1_summary["operations_home"]["lead_metrics"]["suspected_negative"] == 1
+        assert user1_summary["operations_home"]["lead_metrics"]["pending_review"] == 0
+        assert user1_summary["operations_home"]["resource_health"]["scope"] == "business_safe"
+        assert "social_accounts_total" not in user1_summary["operations_home"]["resource_health"]
+
+        assert user2_summary["operations_home"]["task_health"]["active"] == 0
+        assert user2_summary["operations_home"]["task_health"]["paused"] == 1
+        assert user2_summary["operations_home"]["run_activity"]["failed_recent"] == 1
+        assert user2_summary["operations_home"]["email_delivery"]["failed"] == 1
+        assert user2_summary["operations_home"]["lead_metrics"]["pending_review"] == 1
+
+        transport = httpx.ASGITransport(app=api_main.app)
+
+        async def exercise_dashboard_contract() -> None:
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as normal_client:
+                login = await normal_client.post(
+                    "/api/auth/login",
+                    json={"email": "phase13a-user1@example.com", "password": "UserPass123!"},
+                )
+                assert login.status_code == 200
+                response = await normal_client.get("/api/monitor/dashboard")
+                assert response.status_code == 200
+                payload = response.json()
+                assert payload["summary"]["jobs_total"] == 1
+                assert payload["operations_home"] == payload["summary"]["operations_home"]
+                assert payload["operations_home"]["task_health"]["total"] == 1
+                assert payload["operations_home"]["resource_health"]["scope"] == "business_safe"
+                assert "social_accounts_total" not in payload["operations_home"]["resource_health"]
+
+        asyncio.run(exercise_dashboard_contract())
+    finally:
+        _restore_monitor_jobs(jobs_snapshot)
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+
 def test_phase_4_normal_user_task_api_ignores_advanced_resource_fields():
     from api import main as api_main
 
@@ -815,8 +1045,11 @@ def test_phase_2_run_job_marks_run_timeout_with_partial_results(monkeypatch):
 
         monkeypatch.setattr(runner_module, "run_platform", fake_run_platform)
         monkeypatch.setattr(runner_module, "create_report", lambda run_id, job, summary: {"id": 9876, "run_id": run_id, "job_id": job["id"], "summary": summary})
-        monkeypatch.setattr(runner_module, "send_report", lambda job, report: (False, "未配置收件人"))
-        monkeypatch.setattr(runner_module, "update_report_email_status", lambda *args, **kwargs: None)
+        monkeypatch.setattr(
+            runner_module,
+            "send_report_with_delivery_log",
+            lambda job, report, send_type="auto": (False, "未配置收件人", report, None),
+        )
 
         result = asyncio.run(runner_module.run_job(job["id"]))
         run = get_run(result["run_id"])
@@ -5328,7 +5561,7 @@ def test_phase_7_run_job_generates_report_without_ai_or_email(monkeypatch):
 
     try:
         monkeypatch.setattr(runner_module, "run_platform", fake_run_platform)
-        monkeypatch.setattr(runner_module, "send_report", fake_send_report)
+        monkeypatch.setattr("api.monitoring.reporting.send_report", fake_send_report)
 
         result = asyncio.run(run_monitor_job(job["id"]))
         run = get_run(int(result["run_id"]))
@@ -7171,10 +7404,12 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
 
 def test_monitor_page_uses_consistent_buttons_tables_and_modal_actions():
     page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    monitor_css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    frontend_source = page + "\n" + monitor_css
 
-    assert "white-space:nowrap" in page
-    assert "word-break:keep-all" in page
-    assert "min-height:36px" in page
+    assert "white-space: nowrap" in frontend_source or "white-space:nowrap" in frontend_source
+    assert "word-break: keep-all" in frontend_source or "word-break:keep-all" in frontend_source
+    assert "min-height: 36px" in frontend_source or "min-height:36px" in frontend_source
     assert ".row > * { flex:0 1 auto; }" in page
     assert ".row > button, .row > a { flex:0 0 auto; }" in page
     assert ".wide-actions { display:inline-flex; gap:6px; align-items:center; flex-wrap:nowrap;" in page
@@ -7197,12 +7432,12 @@ def test_monitor_page_uses_consistent_buttons_tables_and_modal_actions():
     assert ".ui-icon svg" in page
     assert '<symbol id="icon-dashboard"' in page
     assert '<use href="#icon-monitor">' in page
-    assert ".page-toolbar { display:flex;" in page
+    assert ".page-toolbar {" in frontend_source
     assert "report-workspace" not in page
-    assert ".schema-item { grid-template-columns:1fr; }" in page
-    assert ".action-menu-host" in page
-    assert ".action-menu.active" in page
-    assert ".report-action-menu { position:fixed;" in page
+    assert ".schema-item { grid-template-columns:1fr; }" in page or ".schema-item {" in monitor_css
+    assert ".action-menu-host" in frontend_source
+    assert ".action-menu.active" in frontend_source
+    assert ".report-action-menu {" in frontend_source
     assert "openReportMenuId" in page
     assert "resourceStat(label, value)" in page
     assert "renderProxyProfilesTable" in page
@@ -7243,6 +7478,1483 @@ def test_monitor_page_uses_consistent_buttons_tables_and_modal_actions():
         "运行三平台采集",
     ]
     assert not [word for word in forbidden if word in page]
+
+
+def test_phase_11a_monitor_static_boundary_and_tokens_are_available():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    js = Path("api/webui/monitor/monitor.js").read_text(encoding="utf-8")
+
+    stylesheet = '<link rel="stylesheet" href="/static/monitor/monitor.css">'
+    module_script = '<script type="module" src="/static/monitor/monitor.js"></script>'
+
+    assert stylesheet in page
+    assert module_script in page
+    assert page.index(stylesheet) < page.index("<style>")
+    assert page.index("</script>") < page.index(module_script)
+
+    for token in [
+        "--color-neutral-0",
+        "--color-primary-600",
+        "--color-status-success-text",
+        "--color-status-warning-text",
+        "--color-status-danger-text",
+        "--color-status-info-text",
+        "--color-navigation-bg",
+        "--font-family-sans",
+        "--font-size-md",
+        "--font-weight-semibold",
+        "--line-height-base",
+        "--space-4",
+        "--space-page-x",
+        "--radius-control-medium",
+        "--shadow-elevation-1",
+        "--z-floating-menu",
+        "--transition-duration-base",
+        "--breakpoint-mobile-max",
+        "--breakpoint-tablet-min",
+        "--breakpoint-desktop-min",
+    ]:
+        assert token in css
+
+    for legacy_alias in [
+        "--bg:",
+        "--surface:",
+        "--line:",
+        "--text:",
+        "--muted:",
+        "--primary:",
+        "--radius:",
+    ]:
+        assert legacy_alias not in css
+
+    for forbidden_js in ["console.", "globalThis"]:
+        assert forbidden_js not in js
+
+
+def test_phase_11b_base_layout_styles_live_in_monitor_css():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+
+    for selector in [
+        ".shell {",
+        ".shell > aside",
+        ".brand {",
+        "nav {",
+        ".nav-group {",
+        "nav button {",
+        "header {",
+        ".header-title strong",
+        ".metric-card {",
+        "button.primary",
+        "button.secondary",
+        "button.danger",
+        ".toolbar {",
+        ".toolbar-actions {",
+    ]:
+        assert selector in css
+
+    inline_style = page[page.index("<style>") : page.index("</style>")]
+    inline_base_style = inline_style.split("@media", 1)[0]
+    for migrated_selector in [
+        ".shell {",
+        ".shell > aside",
+        ".brand {",
+        "nav { display:grid",
+        "nav button {",
+        "header {",
+        "button.primary, button.secondary, button.danger",
+        ".toolbar {",
+        "\n    .toolbar-actions {",
+    ]:
+        assert migrated_selector not in inline_base_style
+
+
+def test_phase_11c_interaction_helpers_and_floating_menus():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    js = Path("api/webui/monitor/monitor.js").read_text(encoding="utf-8")
+    inline_style = page[page.index("<style>") : page.index("</style>")]
+
+    for helper in [
+        "root.MonitorUI = Object.freeze",
+        "showToast",
+        "showLoading",
+        "renderEmptyState",
+        "closeFloatingMenus",
+        "positionFloatingMenu",
+        "ensurePortalRoot",
+    ]:
+        assert helper in js
+
+    assert "console." not in js
+    assert "import " not in js
+
+    for selector in [
+        ".toast {",
+        ".monitor-loading",
+        ".empty-state",
+        ".drawer-backdrop {",
+        ".drawer {",
+        ".modal-close",
+        ".action-menu,",
+        ".account-action-menu,",
+        ".report-action-menu {",
+        ".monitor-portal-root",
+    ]:
+        assert selector in css
+
+    assert "position: fixed;" in css
+    assert ".account-action-menu { position:absolute" not in inline_style
+    assert ".action-menu { position:absolute" not in inline_style
+    assert ".report-action-menu {" not in inline_style
+
+    for marker in [
+        "function positionFloatingMenu(triggerEl, menuEl",
+        "window.MonitorUI.positionFloatingMenu",
+        "function positionActiveFloatingMenus()",
+        "document.addEventListener('keydown'",
+        "event.key === 'Escape'",
+        "document.addEventListener('monitor:close-floating-menus', closeFloatingMenus)",
+        "window.addEventListener('resize', positionActiveFloatingMenus)",
+        "window.addEventListener('scroll', positionActiveFloatingMenus, true)",
+        "closeFloatingMenus();",
+        "data-account-menu-button",
+        "data-job-menu-button",
+        "data-ai-rule-menu-button",
+        "data-report-menu-button",
+        "positionFloatingMenu(anchor, menu",
+    ]:
+        assert marker in page
+
+    assert "data-proxy-menu-button" not in page
+    assert "data-ai-profile-menu-button" not in page
+    assert "data-email-template-menu-button" not in page
+
+
+def test_phase_11d_responsive_foundation_and_mobile_navigation():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    inline_style = page[page.index("<style>") : page.index("</style>")]
+
+    for marker in [
+        'id="mobile_nav_toggle"',
+        'class="mobile-nav-toggle"',
+        'aria-controls="primary_navigation"',
+        'aria-expanded="false"',
+        'id="mobile_nav_backdrop"',
+        'class="mobile-nav-backdrop"',
+        'id="primary_sidebar"',
+        'id="primary_navigation"',
+        'class="row header-actions"',
+    ]:
+        assert marker in page
+
+    for marker in [
+        "function setMobileNavOpen(open)",
+        "function closeMobileNav()",
+        "function toggleMobileNav()",
+        "document.body.classList.toggle('mobile-nav-open'",
+        "document.getElementById('mobile_nav_toggle')?.addEventListener('click'",
+        "document.getElementById('mobile_nav_backdrop')?.addEventListener('click', closeMobileNav)",
+        "if(window.innerWidth >= 1280) closeMobileNav()",
+        "closeMobileNav();",
+        "if(!canMenu('mail_templates')) return;",
+    ]:
+        assert marker in page
+
+    assert "@media (max-width: 1279px)" in css
+    assert "@media (max-width: 767px)" in css
+    assert "@media (max-width: 1100px)" not in inline_style
+    assert "@media (max-width: 720px)" not in inline_style
+
+    for selector in [
+        ".mobile-nav-toggle",
+        ".mobile-nav-backdrop",
+        "body.mobile-nav-open",
+        "body.mobile-nav-open .shell > aside",
+        ".nav-sublist",
+        ".table-wrap",
+        ".page-toolbar .toolbar-actions",
+        ".drawer {",
+        ".template-modal,",
+        ".form-drawer,",
+    ]:
+        assert selector in css
+
+    assert "grid-template-columns: minmax(0, 1fr);" in css
+    assert "height: 100dvh;" in css
+    assert "max-height: calc(100dvh - 18px);" in css
+    assert ".table-wrap table" in css
+    assert "min-width: 760px !important;" in css
+
+
+def test_phase_12a_navigation_groups_and_login_landing():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    inline_style = page[page.index("<style>") : page.index("</style>")]
+
+    for forbidden in [
+        "nav-popover",
+        "data-menu=",
+        "toggleNavMenu",
+        "closeNavMenus",
+    ]:
+        assert forbidden not in page
+        assert forbidden not in css
+
+    for marker in [
+        'class="nav-group nav-group-collapsible"',
+        'data-nav-group="resources"',
+        'data-nav-group-toggle="resources"',
+        'id="nav_group_resources"',
+        'data-nav-group="settings"',
+        'data-nav-group-toggle="settings"',
+        'id="nav_group_settings"',
+        'aria-expanded="true"',
+        'class="nav-sublist"',
+        'class="nav-caret"',
+        'id="mobile_account_area"',
+        'id="mobile_current_user_badge"',
+        'class="account-area"',
+        "function routeToOperationsHome()",
+        "routeToOperationsHome();",
+        "const NAV_GROUPS = {",
+        "function toggleNavGroup(group)",
+        "function setNavGroupExpanded(group, expanded)",
+        "function expandNavGroupForTab(tab)",
+        "activateNavTab(dashboardButton, {skipLoad:true})",
+        "activateNavTab(btn, options={})",
+        "if(!options.skipLoad) loadSectionData(btn.dataset.tab)",
+    ]:
+        assert marker in page
+
+    for selector in [
+        ".nav-group-collapsible",
+        ".nav-group-toggle",
+        ".nav-caret",
+        ".nav-sublist",
+        ".nav-group.is-collapsed .nav-sublist",
+        ".account-area",
+        ".mobile-account-area",
+    ]:
+        assert selector in css
+
+    assert ".nav-popover" not in inline_style
+
+
+def test_phase_12b_page_entry_and_role_flow_shortcuts():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+
+    for entry in [
+        'data-page-entry="dashboard"',
+        'data-page-entry="jobs"',
+        'data-page-entry="runs"',
+        'data-page-entry="reports"',
+        'data-page-entry="accounts"',
+        'data-page-entry="proxies"',
+        'data-page-entry="ai"',
+        'data-page-entry="ai_rules"',
+        'data-page-entry="email"',
+        'data-page-entry="email_templates"',
+        'data-page-entry="runtime"',
+        'data-page-entry="doctor"',
+    ]:
+        assert entry in page
+
+    for marker in [
+        "运营首页",
+        "任务监控",
+        "运行中心",
+        "报告中心",
+        "邮件交付",
+        "资源支撑",
+        "系统配置",
+        'id="task_loop_shortcuts"',
+        'class="task-loop-shortcuts"',
+        'data-shortcut-action="new-job"',
+        'data-shortcut-target="email_delivery_status_entry"',
+        'id="email_delivery_status_entry"',
+        "报告邮件状态与交付历史",
+        "报告列表展示最新邮件状态",
+        "function refreshActiveSection()",
+        "function navigateShortcut(tab, options={})",
+        "function bindShortcutButtons(root=document)",
+        "root.querySelectorAll('[data-shortcut-tab]').forEach",
+        "document.querySelectorAll('[data-shortcut-tab][data-menu-key]')",
+        "btn.classList.toggle('is-hidden', !canMenu(btn.dataset.menuKey))",
+        "document.querySelectorAll('.admin-entry[data-menu-key]')",
+        "if(options.action==='new-job')",
+        "openNewJobDrawer()",
+        "loadReadiness();",
+        "loadSchedulerStatus();",
+        "loadPlatformStatus();",
+        "addPermittedLoad(loads, '系统状态', 'system_diagnostics', loadSystemChecklist);",
+    ]:
+        assert marker in page
+
+    for selector in [
+        ".page-entry",
+        ".page-title-block",
+        ".page-kicker",
+        ".page-filter-region",
+        ".task-loop-shortcuts",
+        ".shortcut-card",
+        ".shortcut-primary",
+        ".email-delivery-entry",
+    ]:
+        assert selector in css
+
+    assert "刷新全局状态" not in page
+    assert "刷新当前页面" in page
+
+    # Normal-user shortcuts and page actions must not expose administrator
+    # resource entries when menu permissions hide them.
+    assert 'class="shortcut-card admin-entry" type="button" data-shortcut-tab="accounts" data-menu-key="platform_accounts"' in page
+    assert 'data-shortcut-tab="accounts" data-menu-key="platform_accounts">处理账号资源' in page
+    assert 'data-shortcut-tab="doctor" data-menu-key="system_diagnostics"' in page
+    assert 'data-shortcut-tab="email" data-menu-key="mail_config"' in page
+    assert 'data-shortcut-tab="ai_rules" data-menu-key="ai_rules"' in page
+
+    assert "/api/monitor/dashboard" not in page
+    assert "email_delivery_logs" not in page
+    assert "job_snapshot_json" not in page
+    assert "crawl_runs.visibility" not in page
+
+
+def test_phase_13b_operations_home_desktop_visual_metrics():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+
+    for marker in [
+        'class="operations-home"',
+        'id="operations_home_meta"',
+        'id="dashboard_metrics" class="operations-metric-grid"',
+        'id="operations_home_drilldowns"',
+        'id="operations_home_resource"',
+        'id="operations_home_admin_health" class="operations-admin-health admin-entry" data-menu-key="system_diagnostics"',
+        "const home=data.operations_home || s.operations_home || legacyOperationsHome(s)",
+        "function renderOperationsHome(home)",
+        "function operationsMetricCard(card)",
+        "function renderOperationsDrilldowns(home)",
+        "function renderOperationsResourceHealth(resource)",
+        "function renderOperationsAdminHealth(home)",
+        "bindShortcutButtons(document.getElementById('dashboard'))",
+        "data-shortcut-target=\"email_delivery_status_entry\"",
+        "data-shortcut-tab=\"accounts\" data-menu-key=\"platform_accounts\"",
+        "资源由管理员维护",
+        "当前展示报告最新交付状态",
+    ]:
+        assert marker in page
+
+    for label in [
+        "任务健康",
+        "运行活动",
+        "报告与复核",
+        "邮件交付",
+        "疑似负面线索",
+        "资源健康",
+        "钻取入口",
+        "系统健康摘要",
+    ]:
+        assert label in page
+
+    for selector in [
+        ".operations-home",
+        ".operations-home-meta",
+        ".operations-metric-grid",
+        ".operations-metric-card",
+        ".operations-home-lower",
+        ".operations-drilldowns",
+        ".operations-resource-panel",
+        ".operations-drilldown-list",
+        ".operations-resource-signals",
+        ".operations-admin-health",
+    ]:
+        assert selector in css
+
+    assert "new Chart(" not in page
+    assert "chart.js" not in page.lower()
+    assert "email_delivery_logs" not in page
+    assert "job_snapshot_json" not in page
+    assert "crawl_runs.visibility" not in page
+
+
+def test_phase_13c_operations_home_responsive_role_views():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+
+    dashboard_section = page.split('<section id="dashboard" class="active">', 1)[1].split('<section id="jobs">', 1)[0]
+    doctor_section = page.split('<section id="doctor">', 1)[1].split('<div id="toast"', 1)[0]
+    load_section = page.split("function loadSectionData(tab){", 1)[1].split("function canMenu", 1)[0]
+
+    assert 'id="operations_home_admin_health" class="operations-admin-health admin-entry" data-menu-key="system_diagnostics"' in dashboard_section
+    assert "renderOperationsAdminHealth(home)" in page
+    assert "function renderOperationsAdminHealth(home)" in page
+    assert 'data-shortcut-tab="doctor" data-menu-key="system_diagnostics">查看系统诊断' in page
+
+    for diagnostic_mount in [
+        'id="readiness_summary"',
+        'id="ops_checklist"',
+        'id="readiness_actions"',
+        'id="readiness_table"',
+        'id="scheduler_status"',
+        'id="platform_status_table"',
+    ]:
+        assert diagnostic_mount not in dashboard_section
+        assert diagnostic_mount in doctor_section
+
+    assert "if(tab==='dashboard') {\n        loadDashboard();\n      }" in load_section
+    assert "if(tab==='doctor') {\n        loadDoctor();\n        loadReadiness();\n        loadSchedulerStatus();\n        loadPlatformStatus();\n        loadSystemChecklist();\n      }" in load_section
+    assert "safeLoad('运行状态', loadReadiness)" not in page
+    assert "addPermittedLoad(loads, '运行状态', 'system_diagnostics', loadReadiness)" in page
+
+    for selector in [
+        ".operations-admin-health",
+        ".operations-admin-health-card",
+        ".operations-admin-health-signals",
+        ".operations-metric-foot button",
+    ]:
+        assert selector in css
+
+    tablet_block = css.split("@media (max-width: 1279px)", 1)[1].split("@media (max-width: 767px)", 1)[0]
+    mobile_block = css.split("@media (max-width: 767px)", 1)[1]
+    assert ".operations-home {\n    width: 100%;\n    overflow: hidden;\n  }" in tablet_block
+    assert ".operations-metric-grid" in tablet_block
+    assert ".operations-resource-signals {\n    grid-template-columns: repeat(4, minmax(0, 1fr));\n  }" in tablet_block
+    assert ".operations-admin-health-card {\n    align-items: flex-start;\n    flex-wrap: wrap;\n  }" in tablet_block
+    assert ".operations-metric-foot button {\n    width: 100%;\n    justify-content: center;\n    white-space: normal;\n  }" in mobile_block
+    assert ".operations-admin-health-signals {\n    display: grid;\n    grid-template-columns: minmax(0, 1fr);\n    width: 100%;\n  }" in mobile_block
+
+    assert "资源由管理员维护" in page
+    assert "social_accounts_total" not in dashboard_section.split("function renderOperationsAdminHealth", 1)[-1]
+    assert "new Chart(" not in page
+    assert "chart.js" not in page.lower()
+    assert "email_delivery_logs" not in page
+    assert "job_snapshot_json" not in page
+    assert "crawl_runs.visibility" not in page
+
+
+def test_phase_14_run_center_visibility_fields_migrate_and_backfill():
+    init_db()
+    jobs_snapshot = _snapshot_monitor_jobs()
+    snapshots = {
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+    }
+    _clear_monitor_jobs()
+    try:
+        with get_conn() as conn:
+            columns = _table_columns(conn, "crawl_runs")
+            assert {"visibility", "run_type", "archived_at", "archived_by"} <= columns
+            index_names = {
+                row["name"]
+                for row in conn.execute("PRAGMA index_list(crawl_runs)").fetchall()
+            }
+            assert "idx_crawl_runs_visibility" in index_names
+            assert "idx_crawl_runs_type_status" in index_names
+
+        job = save_job(
+            {
+                "law_firm_name": "Phase14迁移律所",
+                "aliases": [],
+                "exclude_words": [],
+                "keywords": ["Phase14迁移律所投诉"],
+                "platforms": ["dy"],
+                "recipients": [],
+            }
+        )
+        run_id = create_run(job["id"], {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        finish_run(run_id, "success", {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        report = create_report(run_id, job, {"job_id": job["id"], "law_firm_name": job["law_firm_name"], "platforms": ["dy"]})
+
+        run = get_run(run_id)
+        assert run["visibility"] == "visible"
+        assert run["run_type"] == "scheduled"
+        assert run["archived_at"] is None
+        assert run["archived_by"] is None
+        assert any(item["id"] == run_id and item["visibility"] == "visible" for item in list_runs(0))
+        assert get_report(report["id"])["run_id"] == run_id
+
+        with get_conn() as conn:
+            conn.execute("UPDATE crawl_runs SET visibility='', run_type='' WHERE id=?", (run_id,))
+        init_db()
+
+        migrated = get_run(run_id)
+        assert migrated["visibility"] == "visible"
+        assert migrated["run_type"] == "scheduled"
+        with get_conn() as conn:
+            observed_visibility = {
+                row["visibility"]
+                for row in conn.execute(
+                    "SELECT DISTINCT visibility FROM crawl_runs WHERE visibility IS NOT NULL"
+                ).fetchall()
+            }
+            observed_run_types = {
+                row["run_type"]
+                for row in conn.execute(
+                    "SELECT DISTINCT run_type FROM crawl_runs WHERE run_type IS NOT NULL"
+                ).fetchall()
+            }
+        assert observed_visibility <= {"visible", "archived"}
+        assert observed_run_types <= {"scheduled", "manual", "test"}
+    finally:
+        _restore_table("reports", snapshots["reports"])
+        _restore_table("crawl_runs", snapshots["crawl_runs"])
+        _restore_monitor_jobs(jobs_snapshot)
+
+
+def test_phase_15a_run_center_api_pagination_filters_archive_and_scope():
+    from api import main as api_main
+
+    init_db()
+    snapshots = {
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "audit_logs": _snapshot_table("audit_logs"),
+        "user_sessions": _snapshot_table("user_sessions"),
+        "users": _snapshot_table("users"),
+    }
+    jobs_snapshot = _snapshot_monitor_jobs()
+    try:
+        with get_conn() as conn:
+            for table in ["reports", "crawl_runs", "audit_logs", "user_sessions", "users"]:
+                conn.execute(f"DELETE FROM {table}")
+        _clear_monitor_jobs()
+
+        admin = bootstrap_admin_from_env("phase15a-admin@example.com", "AdminPass123!", "Phase 15A Admin")
+        user1 = save_user(
+            {
+                "email": "phase15a-user1@example.com",
+                "display_name": "Phase 15A User One",
+                "password": "UserPass123!",
+                "role": "normal",
+            },
+            actor_id=int(admin["id"]),
+        )
+        user2 = save_user(
+            {
+                "email": "phase15a-user2@example.com",
+                "display_name": "Phase 15A User Two",
+                "password": "UserPass456!",
+                "role": "normal",
+            },
+            actor_id=int(admin["id"]),
+        )
+        job1 = save_job(
+            {
+                "law_firm_name": "海安律所",
+                "keywords": ["海安律所避雷"],
+                "platforms": ["dy"],
+                "recipients": [],
+            },
+            actor=user1,
+        )
+        job2 = save_job(
+            {
+                "law_firm_name": "恒泰律所",
+                "keywords": ["恒泰律所投诉"],
+                "platforms": ["ks"],
+                "recipients": [],
+            },
+            actor=user2,
+        )
+        run_visible = create_run(job1["id"], {"job_id": job1["id"], "law_firm_name": job1["law_firm_name"], "platforms": ["dy"], "keywords": job1["keywords"]})
+        finish_run(run_visible, "success", {"job_id": job1["id"], "law_firm_name": job1["law_firm_name"], "platforms": ["dy"], "keywords": job1["keywords"]})
+        run_archived = create_run(job1["id"], {"job_id": job1["id"], "law_firm_name": job1["law_firm_name"], "platforms": ["ks"], "keywords": job1["keywords"]})
+        finish_run(run_archived, "failed", {"job_id": job1["id"], "law_firm_name": job1["law_firm_name"], "platforms": ["ks"], "keywords": job1["keywords"]}, "登录态失效")
+        run_other_user = create_run(job2["id"], {"job_id": job2["id"], "law_firm_name": job2["law_firm_name"], "platforms": ["ks"], "keywords": job2["keywords"]})
+        finish_run(run_other_user, "success", {"job_id": job2["id"], "law_firm_name": job2["law_firm_name"], "platforms": ["ks"], "keywords": job2["keywords"]})
+        report = create_report(run_visible, job1, {"job_id": job1["id"], "law_firm_name": job1["law_firm_name"], "platforms": ["dy"]})
+        with get_conn() as conn:
+            conn.execute("UPDATE crawl_runs SET visibility='archived', archived_at=?, archived_by=? WHERE id=?", (datetime.now(timezone.utc).isoformat(), admin["id"], run_archived))
+            conn.execute("UPDATE crawl_runs SET run_type='manual' WHERE id=?", (run_visible,))
+            conn.execute("UPDATE crawl_runs SET run_type='test' WHERE id=?", (run_other_user,))
+
+        transport = httpx.ASGITransport(app=api_main.app)
+
+        async def exercise() -> None:
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as normal_client:
+                login = await normal_client.post(
+                    "/api/auth/login",
+                    json={"email": "phase15a-user1@example.com", "password": "UserPass123!"},
+                )
+                assert login.status_code == 200
+                default_runs = await normal_client.get("/api/monitor/runs")
+                assert default_runs.status_code == 200
+                default_payload = default_runs.json()
+                assert {item["id"] for item in default_payload["runs"]} == {run_visible}
+                assert default_payload["pagination"]["total"] == 1
+                assert default_payload["filters"]["visibility"] == "visible"
+                assert default_payload["runs"][0]["run_type"] == "manual"
+                assert "visibility" in default_payload["runs"][0]
+
+                archived_forbidden = await normal_client.get("/api/monitor/runs", params={"visibility": "archived"})
+                assert archived_forbidden.status_code == 403
+                archive_forbidden = await normal_client.post(f"/api/monitor/runs/{run_visible}/archive")
+                assert archive_forbidden.status_code == 403
+                archived_logs = await normal_client.get(f"/api/monitor/runs/{run_archived}/logs")
+                assert archived_logs.status_code == 404
+                other_logs = await normal_client.get(f"/api/monitor/runs/{run_other_user}/logs")
+                assert other_logs.status_code == 404
+
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as admin_client:
+                login = await admin_client.post(
+                    "/api/auth/login",
+                    json={"email": "phase15a-admin@example.com", "password": "AdminPass123!"},
+                )
+                assert login.status_code == 200
+                default_runs = await admin_client.get("/api/monitor/runs")
+                assert {item["id"] for item in default_runs.json()["runs"]} == {run_other_user, run_visible}
+                operational_runs = await admin_client.get("/api/monitor/runs", params={"run_type": "operational"})
+                assert operational_runs.status_code == 200
+                assert {item["id"] for item in operational_runs.json()["runs"]} == {run_visible}
+                assert operational_runs.json()["filters"]["run_type"] == "operational"
+                archived_runs = await admin_client.get("/api/monitor/runs", params={"visibility": "archived"})
+                assert archived_runs.status_code == 200
+                assert {item["id"] for item in archived_runs.json()["runs"]} == {run_archived}
+
+                filtered = await admin_client.get(
+                    "/api/monitor/runs",
+                    params={
+                        "visibility": "all",
+                        "law_firm": "海安",
+                        "status": "success",
+                        "platform": "dy",
+                        "run_type": "manual",
+                        "page": 1,
+                        "limit": 1,
+                    },
+                )
+                filtered_payload = filtered.json()
+                assert [item["id"] for item in filtered_payload["runs"]] == [run_visible]
+                assert filtered_payload["pagination"] == {"page": 1, "per_page": 1, "total": 1, "total_pages": 1}
+                assert filtered_payload["filters"]["visibility"] == "all"
+
+                archived = await admin_client.post(f"/api/monitor/runs/{run_visible}/archive")
+                assert archived.status_code == 200
+                assert archived.json()["run"]["visibility"] == "archived"
+                assert archived.json()["run"]["archived_at"]
+                assert archived.json()["run"]["archived_by"] == admin["id"]
+                default_after_archive = await admin_client.get("/api/monitor/runs")
+                assert run_visible not in {item["id"] for item in default_after_archive.json()["runs"]}
+
+                restored = await admin_client.post(f"/api/monitor/runs/{run_visible}/restore")
+                assert restored.status_code == 200
+                assert restored.json()["run"]["visibility"] == "visible"
+                assert restored.json()["run"]["archived_at"] is None
+                assert restored.json()["run"]["archived_by"] is None
+
+                logs = await admin_client.get(f"/api/monitor/runs/{run_visible}/logs")
+                assert logs.status_code == 200
+                report_detail = await admin_client.get(f"/api/monitor/reports/{report['id']}")
+                assert report_detail.status_code == 200
+                assert report_detail.json()["report"]["run_id"] == run_visible
+
+        asyncio.run(exercise())
+    finally:
+        _restore_table("reports", snapshots["reports"])
+        _restore_table("crawl_runs", snapshots["crawl_runs"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
+        _restore_table("user_sessions", snapshots["user_sessions"])
+        _restore_table("users", snapshots["users"])
+        _restore_monitor_jobs(jobs_snapshot)
+
+
+def test_phase_15b_run_center_frontend_filters_pagination_archive_controls():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+
+    assert 'id="run_task_filter"' in page
+    assert 'id="run_status_filter"' in page
+    assert 'id="run_platform_filter"' in page
+    assert 'id="run_type_filter"' in page
+    assert 'id="run_visibility_filter"' in page
+    assert 'id="run_date_from"' in page
+    assert 'id="run_date_to"' in page
+    assert 'id="run_pagination"' in page
+    assert 'id="run_filter_summary"' in page
+    assert "function runQueryParams()" in page
+    assert "qs.set('page', String(runListState.page || 1))" in page
+    assert "qs.set('visibility', visibility)" in page
+    assert "qs.set('task_id', query)" in page
+    assert "qs.set('law_firm', query)" in page
+    assert "qs.set('run_type', runType)" in page
+    assert '<option value="operational" selected>运营记录</option>' in page
+    assert "set('run_type_filter','operational')" in page
+    assert "function renderRunPagination(pagination)" in page
+    assert "function applyRunFilters()" in page
+    assert "function clearRunFilters()" in page
+    assert "function archiveRun(id)" in page
+    assert "function restoreRun(id)" in page
+    assert "confirm('确认归档这条运行记录？归档后默认列表将不再显示它。')" in page
+    assert "confirm('确认恢复这条运行记录？恢复后它会回到默认可见列表。')" in page
+    assert "applyRunCenterRoleMode()" in page
+    assert "document.querySelectorAll('.run-admin-control')" in page
+    assert "if(!admin)" in page and "visibility.value='visible'" in page
+    assert "runTypeBadge(r.run_type)" in page
+    assert "runVisibilityBadge(r.visibility)" in page
+    assert "测试/诊断" in page
+    assert "默认可见" in page
+    assert "已归档" in page
+    assert "全部记录" in page
+    assert "loadRunLogs" in page
+    assert "copyCurrentRunLogs" in page
+    assert "downloadCurrentRunLogs" in page
+    assert "/runs/'+id+'/archive" in page
+    assert "/runs/'+id+'/restore" in page
+    assert ".run-center-meta" in css
+    assert ".run-pagination" in css
+    assert ".run-actions" in css
+    assert "email_delivery_logs" not in page
+    assert "job_snapshot_json" not in page
+
+
+def test_phase_16_email_delivery_logs_schema_window_keys_and_compatibility():
+    init_db()
+    jobs_snapshot = _snapshot_monitor_jobs()
+    snapshots = {
+        "email_delivery_logs": _snapshot_table("email_delivery_logs"),
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+    }
+    _clear_monitor_jobs()
+    try:
+        with get_conn() as conn:
+            columns = _table_columns(conn, "email_delivery_logs")
+            assert {
+                "workspace_id",
+                "job_id",
+                "report_id",
+                "send_window_key",
+                "send_type",
+                "sent_by",
+                "sent_at",
+                "status",
+                "error_message",
+                "recipients_json",
+                "created_at",
+            } <= columns
+            index_names = {
+                row["name"]
+                for row in conn.execute("PRAGMA index_list(email_delivery_logs)").fetchall()
+            }
+            assert "idx_email_delivery_job_window" in index_names
+            assert "idx_email_delivery_report" in index_names
+            assert "idx_email_delivery_status" in index_names
+            assert "idx_email_delivery_auto_window_unique" in index_names
+
+        job = save_job(
+            {
+                "law_firm_name": "Phase16邮件律所",
+                "keywords": ["Phase16邮件律所投诉"],
+                "platforms": ["dy"],
+                "recipients": ["ops@example.com"],
+            }
+        )
+        run_id = create_run(job["id"], {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        finish_run(run_id, "success", {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        report = create_report(run_id, job, {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        send_at = datetime(2026, 6, 16, 15, 45, tzinfo=timezone.utc)
+
+        assert email_send_window_key(job["id"], "daily", send_at) == f"{job['id']}_2026-06-16"
+        for frequency in ["6h", "12h", "cron"]:
+            assert email_send_window_key(job["id"], frequency, send_at) == f"{job['id']}_2026-06-16_15"
+
+        auto = record_email_delivery_log(
+            {
+                "workspace_id": job["workspace_id"],
+                "job_id": job["id"],
+                "report_id": report["id"],
+                "send_window_key": email_send_window_key(job["id"], "daily", send_at),
+                "send_type": "auto",
+                "sent_at": send_at.isoformat(),
+                "status": "sent",
+                "error_message": "smtp_password=super-secret proxy_url=http://user:pass@example.test:8080",
+                "recipients": ["ops@example.com"],
+            }
+        )
+        assert auto["send_type"] == "auto"
+        assert auto["status"] == "sent"
+        assert auto["send_window_key"] == f"{job['id']}_2026-06-16"
+        assert auto["recipients"] == ["ops@example.com"]
+        assert "super-secret" not in auto["error_message"]
+        assert "pass@example" not in auto["error_message"]
+
+        with pytest.raises(sqlite3.IntegrityError):
+            record_email_delivery_log(
+                {
+                    "workspace_id": job["workspace_id"],
+                    "job_id": job["id"],
+                    "report_id": report["id"],
+                    "send_window_key": auto["send_window_key"],
+                    "send_type": "auto",
+                    "status": "pending",
+                    "recipients": ["ops@example.com"],
+                }
+            )
+
+        failed_window = email_send_window_key(job["id"], "6h", datetime(2026, 6, 16, 16, 0, tzinfo=timezone.utc))
+        failed_auto = record_email_delivery_log(
+            {
+                "workspace_id": job["workspace_id"],
+                "job_id": job["id"],
+                "report_id": report["id"],
+                "send_window_key": failed_window,
+                "send_type": "auto",
+                "status": "failed",
+                "error_message": "token=secret-token",
+                "recipients_json": json.dumps(["ops@example.com"]),
+            }
+        )
+        retried_auto = record_email_delivery_log(
+            {
+                "workspace_id": job["workspace_id"],
+                "job_id": job["id"],
+                "report_id": report["id"],
+                "send_window_key": failed_window,
+                "send_type": "auto",
+                "status": "sending",
+                "recipients": ["ops@example.com"],
+            }
+        )
+        assert failed_auto["status"] == "failed"
+        assert retried_auto["status"] == "sending"
+
+        manual_one = record_email_delivery_log(
+            {
+                "workspace_id": job["workspace_id"],
+                "job_id": job["id"],
+                "report_id": report["id"],
+                "send_window_key": auto["send_window_key"],
+                "send_type": "manual_resend",
+                "sent_by": 1,
+                "status": "sent",
+                "recipients": ["ops@example.com"],
+            }
+        )
+        manual_two = record_email_delivery_log(
+            {
+                "workspace_id": job["workspace_id"],
+                "job_id": job["id"],
+                "report_id": report["id"],
+                "send_window_key": auto["send_window_key"],
+                "send_type": "manual_resend",
+                "sent_by": 1,
+                "status": "sent",
+                "recipients": ["ops@example.com"],
+            }
+        )
+        assert manual_one["send_type"] == "manual_resend"
+        assert manual_two["send_type"] == "manual_resend"
+
+        with get_conn() as conn:
+            conn.execute(
+                "UPDATE reports SET email_status='failed', email_error=? WHERE id=?",
+                ("smtp_password=super-secret", report["id"]),
+            )
+            raw_log = conn.execute(
+                "SELECT error_message, recipients_json FROM email_delivery_logs WHERE id=?",
+                (auto["id"],),
+            ).fetchone()
+        assert "super-secret" not in raw_log["error_message"]
+        assert "pass@example" not in raw_log["error_message"]
+        assert "ops@example.com" in raw_log["recipients_json"]
+        refreshed_report = get_report(report["id"])
+        assert refreshed_report["email_status"] == "failed"
+        assert "super-secret" not in refreshed_report["email_error"]
+        assert any(item["id"] == report["id"] and item["email_status"] == "failed" for item in list_reports(0))
+        logs = list_email_delivery_logs(report_id=report["id"], limit=10)
+        assert {item["send_type"] for item in logs} == {"auto", "manual_resend"}
+        assert all("super-secret" not in (item.get("error_message") or "") for item in logs)
+    finally:
+        _restore_table("email_delivery_logs", snapshots["email_delivery_logs"])
+        _restore_table("reports", snapshots["reports"])
+        _restore_table("crawl_runs", snapshots["crawl_runs"])
+        _restore_monitor_jobs(jobs_snapshot)
+
+
+def test_phase_17a_auto_delivery_is_idempotent_and_manual_resend_is_separate(monkeypatch):
+    init_db()
+    jobs_snapshot = _snapshot_monitor_jobs()
+    snapshots = {
+        "email_delivery_logs": _snapshot_table("email_delivery_logs"),
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+    }
+    _clear_monitor_jobs()
+    send_calls: list[int] = []
+    try:
+        with get_conn() as conn:
+            for table in ["email_delivery_logs", "reports", "crawl_runs"]:
+                conn.execute(f"DELETE FROM {table}")
+        job = save_job(
+            {
+                "law_firm_name": "Phase17A交付律所",
+                "keywords": ["Phase17A交付律所投诉"],
+                "platforms": ["dy"],
+                "recipients": ["ops@example.com"],
+                "frequency": "daily",
+                "email_time": "09:00",
+            }
+        )
+        run_id = create_run(job["id"], {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        finish_run(run_id, "success", {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        report = create_report(run_id, job, {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        send_at = datetime(2026, 6, 16, 9, 30, tzinfo=timezone.utc)
+
+        def fake_send_report(job_arg, report_arg):
+            send_calls.append(int(report_arg["id"]))
+            return True, None
+
+        monkeypatch.setattr("api.monitoring.reporting.send_report", fake_send_report)
+
+        ok_first, error_first, refreshed_first, log_first = send_report_with_delivery_log(
+            job,
+            report,
+            send_type="auto",
+            sent_at=send_at,
+        )
+        ok_second, error_second, refreshed_second, log_second = send_report_with_delivery_log(
+            job,
+            report,
+            send_type="auto",
+            sent_at=send_at,
+        )
+        manual_actor = {"id": 42, "workspace_id": job["workspace_id"], "role": "normal"}
+        ok_manual, error_manual, refreshed_manual = resend_report_email(report["id"], actor=manual_actor)
+
+        logs = list_email_delivery_logs(report_id=report["id"], limit=20)
+
+        assert ok_first is True
+        assert error_first in (None, "")
+        assert refreshed_first["email_status"] == "sent"
+        assert log_first and log_first["send_type"] == "auto"
+        assert log_first["status"] == "sent"
+        assert log_first["send_window_key"] == f"{job['id']}_2026-06-16"
+        assert ok_second is False
+        assert "已跳过重复发送" in (error_second or "")
+        assert refreshed_second["email_status"] == "skipped"
+        assert log_second is None
+        assert ok_manual is True
+        assert error_manual in (None, "")
+        assert refreshed_manual["email_status"] == "sent"
+        assert send_calls == [report["id"], report["id"]]
+        assert sum(1 for item in logs if item["send_type"] == "auto" and item["status"] == "sent") == 1
+        assert sum(1 for item in logs if item["send_type"] == "auto" and item["status"] == "skipped") == 1
+        manual_logs = [item for item in logs if item["send_type"] == "manual_resend"]
+        assert len(manual_logs) == 1
+        assert manual_logs[0]["sent_by"] == manual_actor["id"]
+        assert manual_logs[0]["status"] == "sent"
+    finally:
+        _restore_table("email_delivery_logs", snapshots["email_delivery_logs"])
+        _restore_table("reports", snapshots["reports"])
+        _restore_table("crawl_runs", snapshots["crawl_runs"])
+        _restore_monitor_jobs(jobs_snapshot)
+
+
+def test_phase_17a_failed_auto_delivery_records_log_without_blocking_report(monkeypatch):
+    init_db()
+    jobs_snapshot = _snapshot_monitor_jobs()
+    snapshots = {
+        "email_delivery_logs": _snapshot_table("email_delivery_logs"),
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "raw_contents": _snapshot_table("raw_contents"),
+        "raw_comments": _snapshot_table("raw_comments"),
+        "ai_evaluations": _snapshot_table("ai_evaluations"),
+    }
+    _clear_monitor_jobs()
+    content_id = "pytest_phase17a_auto_delivery_001"
+    now_ts = int(datetime.now(timezone.utc).timestamp())
+    try:
+        with get_conn() as conn:
+            for table in ["email_delivery_logs", "reports", "crawl_runs", "raw_contents", "raw_comments", "ai_evaluations"]:
+                conn.execute(f"DELETE FROM {table}")
+        job = save_job(
+            {
+                "law_firm_name": "Phase17A失败律所",
+                "keywords": ["Phase17A失败律所投诉"],
+                "platforms": ["dy"],
+                "recipients": ["ops@example.com"],
+                "frequency": "daily",
+                "email_time": "09:00",
+                "enable_comments": False,
+            }
+        )
+
+        async def fake_run_platform(job_arg, run_id, platform, run_dir):
+            return ingest_outputs(
+                job_arg,
+                run_id,
+                platform,
+                [
+                    {
+                        "aweme_id": content_id,
+                        "title": "Phase17A失败律所投诉",
+                        "desc": "收费争议需要人工复核",
+                        "create_time": now_ts,
+                        "share_url": "https://www.douyin.com/video/phase17a",
+                    }
+                ],
+                [],
+            )
+
+        monkeypatch.setattr(runner_module, "run_platform", fake_run_platform)
+        monkeypatch.setattr(
+            "api.monitoring.reporting.send_report",
+            lambda job_arg, report_arg: (False, "smtp_password=super-secret token=hidden"),
+        )
+
+        result = asyncio.run(run_monitor_job(job["id"]))
+        report = get_report(int(result["report"]["id"]))
+        logs = list_email_delivery_logs(report_id=report["id"], limit=10)
+
+        assert result["status"] == "success"
+        assert report and report["email_status"] == "failed"
+        assert "super-secret" not in (report["email_error"] or "")
+        assert result["summary"]["email_status"] == "failed"
+        assert "email_delivery_log_id" in result["summary"]
+        assert logs and logs[0]["send_type"] == "auto"
+        assert logs[0]["status"] == "failed"
+        assert logs[0]["send_window_key"].startswith(f"{job['id']}_")
+        assert "super-secret" not in (logs[0].get("error_message") or "")
+        assert "hidden" not in (logs[0].get("error_message") or "")
+        assert logs[0]["recipients"] == ["ops@example.com"]
+    finally:
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+        _restore_monitor_jobs(jobs_snapshot)
+
+
+def test_phase_17b_email_delivery_history_api_scope_and_safe_fields():
+    from api import main as api_main
+
+    init_db()
+    jobs_snapshot = _snapshot_monitor_jobs()
+    snapshots = {
+        "email_delivery_logs": _snapshot_table("email_delivery_logs"),
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "users": _snapshot_table("users"),
+        "user_sessions": _snapshot_table("user_sessions"),
+        "audit_logs": _snapshot_table("audit_logs"),
+    }
+    _clear_monitor_jobs()
+    try:
+        with get_conn() as conn:
+            for table in ["email_delivery_logs", "reports", "crawl_runs", "user_sessions", "audit_logs"]:
+                conn.execute(f"DELETE FROM {table}")
+        bootstrap_actor = bootstrap_admin_from_env("phase17b-bootstrap@example.com", "AdminPass123!", "Phase 17B Bootstrap")
+        assert bootstrap_actor
+        admin = save_user(
+            {
+                "email": "phase17b-admin@example.com",
+                "display_name": "Phase 17B Admin",
+                "password": "AdminPass123!",
+                "role": "administrator",
+            },
+            actor_id=int(bootstrap_actor["id"]),
+        )
+        user1 = save_user(
+            {
+                "email": "phase17b-user1@example.com",
+                "display_name": "Phase 17B User 1",
+                "password": "UserPass123!",
+                "role": "normal",
+            },
+            actor_id=int(admin["id"]),
+        )
+        user2 = save_user(
+            {
+                "email": "phase17b-user2@example.com",
+                "display_name": "Phase 17B User 2",
+                "password": "UserPass456!",
+                "role": "normal",
+            },
+            actor_id=int(admin["id"]),
+        )
+        job1 = save_job(
+            {
+                "law_firm_name": "Phase17B用户一律所",
+                "keywords": ["Phase17B用户一律所投诉"],
+                "platforms": ["dy"],
+                "recipients": ["user1@example.com"],
+                "frequency": "daily",
+            },
+            actor=user1,
+        )
+        job2 = save_job(
+            {
+                "law_firm_name": "Phase17B用户二律所",
+                "keywords": ["Phase17B用户二律所投诉"],
+                "platforms": ["dy"],
+                "recipients": ["user2@example.com"],
+                "frequency": "daily",
+            },
+            actor=user2,
+        )
+        run1 = create_run(job1["id"], {"job_id": job1["id"], "law_firm_name": job1["law_firm_name"]})
+        run2 = create_run(job2["id"], {"job_id": job2["id"], "law_firm_name": job2["law_firm_name"]})
+        finish_run(run1, "success", {"job_id": job1["id"], "law_firm_name": job1["law_firm_name"]})
+        finish_run(run2, "success", {"job_id": job2["id"], "law_firm_name": job2["law_firm_name"]})
+        report1 = create_report(run1, job1, {"job_id": job1["id"], "law_firm_name": job1["law_firm_name"]})
+        report2 = create_report(run2, job2, {"job_id": job2["id"], "law_firm_name": job2["law_firm_name"]})
+        record_email_delivery_log(
+            {
+                "workspace_id": job1["workspace_id"],
+                "job_id": job1["id"],
+                "report_id": report1["id"],
+                "send_window_key": f"{job1['id']}_2026-06-16",
+                "send_type": "auto",
+                "status": "failed",
+                "sent_at": "2026-06-16T09:00:00+00:00",
+                "error_message": "smtp_password=super-secret token=hidden",
+                "recipients": ["user1@example.com"],
+            }
+        )
+        record_email_delivery_log(
+            {
+                "workspace_id": job1["workspace_id"],
+                "job_id": job1["id"],
+                "report_id": report1["id"],
+                "send_window_key": f"{job1['id']}_2026-06-16",
+                "send_type": "manual_resend",
+                "sent_by": user1["id"],
+                "status": "sent",
+                "sent_at": "2026-06-16T09:30:00+00:00",
+                "recipients": ["user1@example.com"],
+            }
+        )
+        record_email_delivery_log(
+            {
+                "workspace_id": job2["workspace_id"],
+                "job_id": job2["id"],
+                "report_id": report2["id"],
+                "send_window_key": f"{job2['id']}_2026-06-16",
+                "send_type": "auto",
+                "status": "sent",
+                "sent_at": "2026-06-16T09:00:00+00:00",
+                "recipients": ["user2@example.com"],
+            }
+        )
+
+        transport = httpx.ASGITransport(app=api_main.app)
+
+        async def exercise() -> None:
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as user_client:
+                login = await user_client.post(
+                    "/api/auth/login",
+                    json={"email": "phase17b-user1@example.com", "password": "UserPass123!"},
+                )
+                assert login.status_code == 200
+                owned = await user_client.get(f"/api/monitor/reports/{report1['id']}/email-delivery-logs")
+                assert owned.status_code == 200
+                payload = owned.json()
+                logs = payload["delivery_logs"]
+                assert [item["send_type"] for item in logs] == ["manual_resend", "auto"]
+                assert logs[0]["sent_by"] == user1["id"]
+                assert logs[0]["recipients"] == ["user1@example.com"]
+                assert "super-secret" not in str(payload)
+                assert "hidden" not in str(payload)
+                assert "smtp_password" not in str(payload)
+                assert "recipients_json" not in str(payload)
+                assert "workspace_id" not in str(payload)
+                other = await user_client.get(f"/api/monitor/reports/{report2['id']}/email-delivery-logs")
+                assert other.status_code == 404
+
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as admin_client:
+                login = await admin_client.post(
+                    "/api/auth/login",
+                    json={"email": "phase17b-admin@example.com", "password": "AdminPass123!"},
+                )
+                assert login.status_code == 200
+                admin_view = await admin_client.get(f"/api/monitor/reports/{report2['id']}/email-delivery-logs")
+                assert admin_view.status_code == 200
+                assert admin_view.json()["delivery_logs"][0]["recipients"] == ["user2@example.com"]
+
+        asyncio.run(exercise())
+    finally:
+        _restore_table("email_delivery_logs", snapshots["email_delivery_logs"])
+        _restore_table("reports", snapshots["reports"])
+        _restore_table("crawl_runs", snapshots["crawl_runs"])
+        _restore_table("users", snapshots["users"])
+        _restore_table("user_sessions", snapshots["user_sessions"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
+        _restore_monitor_jobs(jobs_snapshot)
+
+
+def test_phase_18a_report_job_snapshots_persist_backfill_and_limited_context():
+    init_db()
+    jobs_snapshot = _snapshot_monitor_jobs()
+    snapshots = {
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+    }
+    _clear_monitor_jobs()
+    try:
+        with get_conn() as conn:
+            for table in ["reports", "crawl_runs"]:
+                conn.execute(f"DELETE FROM {table}")
+        with get_conn() as conn:
+            assert "job_snapshot_json" in _table_columns(conn, "reports")
+
+        job = save_job(
+            {
+                "law_firm_name": "Phase18A快照律所",
+                "keywords": ["Phase18A快照律所投诉", "Phase18A快照律所退费"],
+                "platforms": ["dy", "xhs"],
+                "recipients": ["ops@example.com"],
+                "frequency": "daily",
+                "email_time": "09:00",
+            }
+        )
+        run_id = create_run(job["id"], {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        finish_run(run_id, "success", {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        report = create_report(
+            run_id,
+            job,
+            {"job_id": job["id"], "law_firm_name": job["law_firm_name"], "platforms": job["platforms"]},
+        )
+        stored = get_report(report["id"])
+
+        assert report["job_snapshot"]["job_id"] == job["id"]
+        assert stored["job_snapshot"] == {
+            "job_id": job["id"],
+            "law_firm_name": "Phase18A快照律所",
+            "platforms": ["dy", "xhs"],
+            "keywords": ["Phase18A快照律所投诉", "Phase18A快照律所退费"],
+            "frequency": "daily",
+            "deleted_at": None,
+        }
+        assert stored["job_deleted"] is False
+        assert stored["limited_context"] is False
+
+        with get_conn() as conn:
+            conn.execute("UPDATE reports SET job_snapshot_json=NULL WHERE id=?", (report["id"],))
+        init_db()
+        backfilled = get_report(report["id"])
+        assert backfilled["job_snapshot"]["law_firm_name"] == "Phase18A快照律所"
+        assert backfilled["job_snapshot"]["platforms"] == ["dy", "xhs"]
+        assert backfilled["job_snapshot"]["keywords"] == ["Phase18A快照律所投诉", "Phase18A快照律所退费"]
+
+        asyncio.run(monitor_router.remove_job(job["id"]))
+        after_delete = get_report(report["id"])
+        assert after_delete
+        assert after_delete["job_id"] == job["id"]
+        assert after_delete["job_deleted"] is True
+        assert after_delete["display_law_firm_name"] == "Phase18A快照律所"
+        assert after_delete["job_snapshot"]["deleted_at"]
+        assert after_delete["limited_context"] is False
+
+        now = datetime.now(timezone.utc).isoformat()
+        with get_conn() as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO crawl_runs (workspace_id, job_id, status, started_at, finished_at, summary)
+                VALUES (1, NULL, 'success', ?, ?, '{}')
+                """,
+                (now, now),
+            )
+            orphan_run_id = int(cur.lastrowid)
+            cur = conn.execute(
+                """
+                INSERT INTO reports (
+                    workspace_id, run_id, job_id, html_path, markdown_path, excel_path,
+                    job_snapshot_json, summary, created_at
+                ) VALUES (1, ?, NULL, ?, ?, ?, NULL, '{}', ?)
+                """,
+                (
+                    orphan_run_id,
+                    str(Path("monitor_data/reports/orphan.html")),
+                    str(Path("monitor_data/reports/orphan.md")),
+                    str(Path("monitor_data/reports/orphan.xlsx")),
+                    now,
+                ),
+            )
+            orphan_report_id = int(cur.lastrowid)
+        orphan = get_report(orphan_report_id)
+        assert orphan
+        assert orphan["legacy_without_job_snapshot"] is True
+        assert orphan["limited_context"] is True
+        assert orphan["display_law_firm_name"] == "历史报告"
+
+        missing_context_job = save_job(
+            {
+                "law_firm_name": "Phase18A缺失上下文律所",
+                "keywords": ["Phase18A缺失上下文律所投诉"],
+                "platforms": ["dy"],
+                "recipients": [],
+            }
+        )
+        missing_run_id = create_run(missing_context_job["id"], {})
+        missing_report = create_report(missing_run_id, missing_context_job, {})
+        with get_conn() as conn:
+            conn.execute("UPDATE reports SET job_snapshot_json=NULL, summary='{}' WHERE id=?", (missing_report["id"],))
+            conn.execute("DELETE FROM monitor_jobs WHERE id=?", (missing_context_job["id"],))
+        missing = get_report(missing_report["id"])
+        assert missing
+        assert missing["job_deleted"] is True
+        assert missing["legacy_without_job_snapshot"] is True
+        assert missing["limited_context"] is True
+    finally:
+        _restore_table("reports", snapshots["reports"])
+        _restore_table("crawl_runs", snapshots["crawl_runs"])
+        _restore_monitor_jobs(jobs_snapshot)
+
+
+def test_phase_18a_report_snapshot_does_not_bypass_owner_scope():
+    init_db()
+    jobs_snapshot = _snapshot_monitor_jobs()
+    snapshots = {
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "user_sessions": _snapshot_table("user_sessions"),
+        "audit_logs": _snapshot_table("audit_logs"),
+        "users": _snapshot_table("users"),
+    }
+    _clear_monitor_jobs()
+    try:
+        with get_conn() as conn:
+            for table in ["reports", "crawl_runs", "user_sessions", "audit_logs", "users"]:
+                conn.execute(f"DELETE FROM {table}")
+        admin = bootstrap_admin_from_env("phase18a-admin@example.com", "AdminPass123!", "Admin")
+        user_one = save_user(
+            {
+                "email": "phase18a-user1@example.com",
+                "display_name": "User One",
+                "password": "UserPass123!",
+                "role": "normal",
+            },
+            actor_id=int(admin["id"]),
+        )
+        user_two = save_user(
+            {
+                "email": "phase18a-user2@example.com",
+                "display_name": "User Two",
+                "password": "UserPass123!",
+                "role": "normal",
+            },
+            actor_id=int(admin["id"]),
+        )
+        actor_one = {"id": user_one["id"], "role": "normal", "workspace_id": 1}
+        actor_two = {"id": user_two["id"], "role": "normal", "workspace_id": 1}
+        job = save_job(
+            {
+                "law_firm_name": "Phase18A权限律所",
+                "keywords": ["Phase18A权限律所投诉"],
+                "platforms": ["dy"],
+                "recipients": [],
+            },
+            actor=actor_one,
+        )
+        run_id = create_run(job["id"], {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        finish_run(run_id, "success", {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        report = create_report(run_id, job, {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+
+        assert get_report(report["id"], actor=actor_one)
+        assert get_report(report["id"], actor=actor_two) is None
+        assert any(item["id"] == report["id"] for item in list_reports(0, actor=actor_one))
+        assert all(item["id"] != report["id"] for item in list_reports(0, actor=actor_two))
+
+        asyncio.run(monitor_router.remove_job(job["id"], user=actor_one))
+        assert get_report(report["id"], actor=actor_one)
+        assert get_report(report["id"], actor=actor_two) is None
+        assert all(item["id"] != report["id"] for item in list_reports(0, actor=actor_two))
+    finally:
+        _restore_table("reports", snapshots["reports"])
+        _restore_table("crawl_runs", snapshots["crawl_runs"])
+        _restore_table("user_sessions", snapshots["user_sessions"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
+        _restore_table("users", snapshots["users"])
+        _restore_monitor_jobs(jobs_snapshot)
+
+
+def test_phase_17b_report_center_delivery_history_frontend_hooks():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    frontend_source = page + "\n" + css
+
+    reports_section = page[page.index('<section id="reports"') : page.index('<section id="doctor"')]
+    assert "邮件交付历史" in reports_section
+    assert "email_delivery_history" in reports_section
+    assert "email_delivery_history_scope" in reports_section
+    assert "查看交付历史" in page
+    assert "loadEmailDeliveryHistory" in page
+    assert "refreshSelectedEmailDeliveryHistory" in page
+    assert "renderEmailDeliveryHistory" in page
+    assert "renderEmailDeliveryLog" in page
+    assert "email-delivery-logs" in page
+    assert "confirm('确认手动重发这份报告邮件？系统会单独记录本次重发历史。')" in page
+    assert "await loadEmailDeliveryHistory(id, {silent:true})" in page
+    assert "reportEmailStatusCell" in page
+    assert "emailDeliveryStatusLabel" in page
+    assert "recipients_json" not in reports_section
+    assert "smtp_password" not in reports_section
+    for selector in [
+        ".email-delivery-history-panel",
+        ".email-status-button",
+        ".email-delivery-latest",
+        ".email-delivery-history-list",
+        ".email-delivery-history-item",
+        ".panel-title-row",
+    ]:
+        assert selector in frontend_source
+    assert "@media (max-width: 1279px)" in css
+    assert "@media (max-width: 767px)" in css
+
+
+def test_phase_18b_report_center_task_grouping_frontend_hooks():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    frontend_source = page + "\n" + css
+
+    reports_section = page[page.index('<section id="reports"') : page.index('<section id="doctor"')]
+    for hook in [
+        "groupReportsByTask",
+        "reportGroupingContext",
+        "reportGroupKey",
+        "renderReportTaskGroup",
+        "reportGroupBadges",
+        "reportGroupSummaryText",
+        "reportGroupMetaChips",
+        "formatReportFrequency",
+    ]:
+        assert hook in page
+    assert 'target.innerHTML=`<div class="report-task-groups">' in page
+    assert "if(report?.limited_context) return 'limited:historical'" in page
+    assert 'return `active:${context.jobId}`' in page
+    assert 'return `snapshot:${context.jobId}`' in page
+    assert "原任务已删除" in page
+    assert "上下文有限" in page
+    assert "历史快照" in page
+    assert "平台：" in page
+    assert "关键词：" in page
+    assert "频率：" in page
+    assert "删除时间：" in page
+    assert "job_snapshot_json" not in reports_section
+    assert "recipients_json" not in reports_section
+    assert "smtp_password" not in reports_section
+    assert "previewReport(${reportId})" in page
+    assert "toggleReportActionMenu(${reportId}, this)" in page
+    assert "loadEmailDeliveryHistory(${Number(id)})" in page
+    assert "/reports/${Number(id)}/download?type=html" in page
+    assert "/leads?'+qs.toString()" in page
+    for selector in [
+        ".report-task-groups",
+        ".report-task-group",
+        ".report-task-group-head",
+        ".report-task-group-title-row",
+        ".report-task-group-badges",
+        ".report-task-group-count",
+        ".report-task-group-meta",
+        ".report-task-group.is-deleted",
+        ".report-task-group.is-limited",
+    ]:
+        assert selector in frontend_source
+    assert "@media (max-width: 1279px)" in css
+    assert "@media (max-width: 767px)" in css
 
 
 def test_cli_run_due_runs_only_due_enabled_jobs(monkeypatch):
@@ -7297,7 +9009,7 @@ def test_cli_run_due_runs_only_due_enabled_jobs(monkeypatch):
         }
     )
 
-    async def fake_run_job(job_id):
+    async def fake_run_job(job_id, source="manual"):
         run_calls.append(job_id)
         return {"run_id": 999, "status": "success", "summary": {}, "report": {}}
 
@@ -7344,7 +9056,7 @@ def test_cli_run_due_skips_legacy_template_placeholder_jobs(monkeypatch):
             conn.execute("INSERT INTO job_keywords (job_id, keyword) VALUES (?, ?)", (job_id, "目标律所避雷"))
             conn.execute("INSERT INTO job_platforms (job_id, platform) VALUES (?, ?)", (job_id, "dy"))
 
-        async def fake_run_job(job_id):
+        async def fake_run_job(job_id, source="manual"):
             run_calls.append(job_id)
             return {"run_id": 999, "status": "success", "summary": {}, "report": {}}
 
@@ -7393,7 +9105,7 @@ def test_cli_run_due_blocks_preflight_and_records_skipped_run(monkeypatch):
             ],
         )
 
-        async def fake_run_job(job_id):
+        async def fake_run_job(job_id, source="manual"):
             run_calls.append(job_id)
             return {"run_id": 999, "status": "success", "summary": {}, "report": {}}
 

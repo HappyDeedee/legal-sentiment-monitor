@@ -5,6 +5,7 @@ import sqlite3
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from sqlite3 import IntegrityError
 from typing import Any
 
 from .account_environment import (
@@ -50,6 +51,8 @@ JOB_OUTPUT_MODES = {"internal", "json", "excel"}
 JOB_BROWSER_MODES = {"server_qrcode", "profile", "local_window"}
 USER_ROLES = {"administrator", "normal"}
 USER_STATUSES = {"active", "disabled"}
+EMAIL_DELIVERY_SEND_TYPES = {"auto", "manual_resend"}
+EMAIL_DELIVERY_STATUSES = {"pending", "sending", "sent", "failed", "skipped"}
 SESSION_TTL_SECONDS = 8 * 60 * 60
 
 
@@ -355,6 +358,10 @@ def init_db() -> None:
                 timeout_seconds INTEGER,
                 deadline_at TEXT,
                 timeout_reason TEXT,
+                visibility TEXT NOT NULL DEFAULT 'visible',
+                run_type TEXT NOT NULL DEFAULT 'scheduled',
+                archived_at TEXT,
+                archived_by INTEGER,
                 created_by INTEGER,
                 updated_by INTEGER
             );
@@ -423,6 +430,7 @@ def init_db() -> None:
                 workspace_id INTEGER NOT NULL DEFAULT 1,
                 run_id INTEGER NOT NULL REFERENCES crawl_runs(id) ON DELETE CASCADE,
                 job_id INTEGER,
+                job_snapshot_json TEXT,
                 html_path TEXT NOT NULL,
                 markdown_path TEXT NOT NULL,
                 excel_path TEXT NOT NULL,
@@ -431,6 +439,21 @@ def init_db() -> None:
                 summary TEXT NOT NULL DEFAULT '{}',
                 created_by INTEGER,
                 updated_by INTEGER,
+                created_at TEXT NOT NULL
+            );
+
+            CREATE TABLE IF NOT EXISTS email_delivery_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
+                job_id INTEGER NOT NULL,
+                report_id INTEGER,
+                send_window_key TEXT NOT NULL,
+                send_type TEXT NOT NULL CHECK(send_type IN ('auto', 'manual_resend')),
+                sent_by INTEGER,
+                sent_at TEXT,
+                status TEXT NOT NULL CHECK(status IN ('pending', 'sending', 'sent', 'failed', 'skipped')),
+                error_message TEXT,
+                recipients_json TEXT,
                 created_at TEXT NOT NULL
             );
 
@@ -543,6 +566,31 @@ def row_to_job(conn: sqlite3.Connection, row: sqlite3.Row) -> dict[str, Any]:
     result["enable_sub_comments"] = bool(result.get("enable_sub_comments", 0))
     result["is_internal"] = bool(result.get("is_internal", 0))
     return result
+
+
+def report_job_snapshot(job: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not job:
+        return None
+    job_id = _safe_int(job.get("id") or job.get("job_id"))
+    if not job_id:
+        return None
+    platforms = [customer_safe_text(str(item)) for item in (job.get("platforms") or []) if str(item).strip()]
+    keywords = [customer_safe_text(str(item)) for item in (job.get("keywords") or []) if str(item).strip()]
+    return {
+        "job_id": job_id,
+        "law_firm_name": customer_safe_text(job.get("law_firm_name")),
+        "platforms": platforms,
+        "keywords": keywords,
+        "frequency": customer_safe_text(job.get("frequency") or ""),
+        "deleted_at": job.get("deleted_at") or None,
+    }
+
+
+def report_job_snapshot_json(job: dict[str, Any] | None) -> str | None:
+    snapshot = report_job_snapshot(job)
+    if not snapshot:
+        return None
+    return json.dumps(snapshot, ensure_ascii=False)
 
 
 def _actor_scope_clause(
@@ -805,6 +853,9 @@ def _ensure_phase_05_schema(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "crawl_runs", "timeout_seconds", "INTEGER")
     _ensure_column(conn, "crawl_runs", "deadline_at", "TEXT")
     _ensure_column(conn, "crawl_runs", "timeout_reason", "TEXT")
+    _ensure_phase_14_run_center_schema(conn)
+    _ensure_phase_16_email_delivery_schema(conn)
+    _ensure_phase_18_report_snapshot_schema(conn)
     _backfill_social_account_profile_keys(conn)
     _backfill_login_session_profile_keys(conn)
 
@@ -830,6 +881,97 @@ def _ensure_phase_05_schema(conn: sqlite3.Connection) -> None:
             ON resource_locks(expires_at);
         """
     )
+
+
+def _ensure_phase_14_run_center_schema(conn: sqlite3.Connection) -> None:
+    _ensure_column(conn, "crawl_runs", "visibility", "TEXT NOT NULL DEFAULT 'visible'")
+    _ensure_column(conn, "crawl_runs", "run_type", "TEXT NOT NULL DEFAULT 'scheduled'")
+    _ensure_column(conn, "crawl_runs", "archived_at", "TEXT")
+    _ensure_column(conn, "crawl_runs", "archived_by", "INTEGER")
+    conn.execute("UPDATE crawl_runs SET visibility='visible' WHERE COALESCE(visibility, '') = ''")
+    conn.execute("UPDATE crawl_runs SET run_type='scheduled' WHERE COALESCE(run_type, '') = ''")
+    conn.executescript(
+        """
+        CREATE INDEX IF NOT EXISTS idx_crawl_runs_visibility
+            ON crawl_runs(workspace_id, visibility, started_at);
+        CREATE INDEX IF NOT EXISTS idx_crawl_runs_type_status
+            ON crawl_runs(workspace_id, run_type, status);
+        """
+    )
+
+
+def _ensure_phase_16_email_delivery_schema(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS email_delivery_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            workspace_id INTEGER NOT NULL DEFAULT 1,
+            job_id INTEGER NOT NULL,
+            report_id INTEGER,
+            send_window_key TEXT NOT NULL,
+            send_type TEXT NOT NULL DEFAULT 'auto',
+            sent_by INTEGER,
+            sent_at TEXT,
+            status TEXT NOT NULL DEFAULT 'pending',
+            error_message TEXT,
+            recipients_json TEXT,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    _ensure_column(conn, "email_delivery_logs", "workspace_id", f"INTEGER NOT NULL DEFAULT {DEFAULT_WORKSPACE_ID}")
+    _ensure_column(conn, "email_delivery_logs", "job_id", "INTEGER NOT NULL DEFAULT 0")
+    _ensure_column(conn, "email_delivery_logs", "report_id", "INTEGER")
+    _ensure_column(conn, "email_delivery_logs", "send_window_key", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "email_delivery_logs", "send_type", "TEXT NOT NULL DEFAULT 'auto'")
+    _ensure_column(conn, "email_delivery_logs", "sent_by", "INTEGER")
+    _ensure_column(conn, "email_delivery_logs", "sent_at", "TEXT")
+    _ensure_column(conn, "email_delivery_logs", "status", "TEXT NOT NULL DEFAULT 'pending'")
+    _ensure_column(conn, "email_delivery_logs", "error_message", "TEXT")
+    _ensure_column(conn, "email_delivery_logs", "recipients_json", "TEXT")
+    _ensure_column(conn, "email_delivery_logs", "created_at", "TEXT NOT NULL DEFAULT ''")
+    now = utc_now()
+    conn.execute(
+        "UPDATE email_delivery_logs SET workspace_id=? WHERE COALESCE(workspace_id, 0) = 0",
+        (DEFAULT_WORKSPACE_ID,),
+    )
+    conn.execute("UPDATE email_delivery_logs SET send_type='auto' WHERE send_type NOT IN ('auto', 'manual_resend')")
+    conn.execute(
+        "UPDATE email_delivery_logs SET status='pending' WHERE status NOT IN ('pending', 'sending', 'sent', 'failed', 'skipped')"
+    )
+    conn.execute("UPDATE email_delivery_logs SET recipients_json='[]' WHERE recipients_json IS NULL")
+    conn.execute("UPDATE email_delivery_logs SET created_at=? WHERE COALESCE(created_at, '') = ''", (now,))
+    conn.executescript(
+        """
+        CREATE INDEX IF NOT EXISTS idx_email_delivery_job_window
+            ON email_delivery_logs(workspace_id, job_id, send_window_key);
+        CREATE INDEX IF NOT EXISTS idx_email_delivery_report
+            ON email_delivery_logs(workspace_id, report_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_email_delivery_status
+            ON email_delivery_logs(workspace_id, status, created_at);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_email_delivery_auto_window_unique
+            ON email_delivery_logs(workspace_id, job_id, send_window_key, send_type)
+            WHERE send_type='auto' AND status IN ('pending', 'sending', 'sent');
+        """
+    )
+
+
+def _ensure_phase_18_report_snapshot_schema(conn: sqlite3.Connection) -> None:
+    _ensure_column(conn, "reports", "job_snapshot_json", "TEXT")
+    rows = conn.execute(
+        """
+        SELECT reports.id AS report_id, monitor_jobs.*
+        FROM reports
+        JOIN monitor_jobs ON monitor_jobs.id = reports.job_id
+        WHERE COALESCE(reports.job_snapshot_json, '') = ''
+        """
+    ).fetchall()
+    for row in rows:
+        job = row_to_job(conn, row)
+        conn.execute(
+            "UPDATE reports SET job_snapshot_json=? WHERE id=?",
+            (report_job_snapshot_json(job), row["report_id"]),
+        )
 
 
 def _backfill_social_account_profile_keys(conn: sqlite3.Connection) -> None:
@@ -1427,7 +1569,22 @@ def _parse_date(value: Any) -> datetime | None:
 
 def delete_job(job_id: int) -> None:
     with get_conn() as conn:
+        _mark_report_snapshots_job_deleted(conn, job_id)
         conn.execute("DELETE FROM monitor_jobs WHERE id=?", (job_id,))
+
+
+def _mark_report_snapshots_job_deleted(conn: sqlite3.Connection, job_id: int) -> None:
+    row = conn.execute("SELECT * FROM monitor_jobs WHERE id=?", (job_id,)).fetchone()
+    if not row:
+        return
+    snapshot = report_job_snapshot(row_to_job(conn, row))
+    if not snapshot:
+        return
+    snapshot["deleted_at"] = utc_now()
+    conn.execute(
+        "UPDATE reports SET job_snapshot_json=? WHERE job_id=?",
+        (json.dumps(snapshot, ensure_ascii=False), job_id),
+    )
 
 
 def has_running_run_for_job(job_id: int) -> bool:
@@ -2327,28 +2484,180 @@ def get_run(run_id: int, actor: dict[str, Any] | None = None) -> dict[str, Any] 
     return _hydrate_run_row(row) if row else None
 
 
+def _run_actor_scope_clause(actor: dict[str, Any] | None) -> tuple[str, list[Any]]:
+    if not actor:
+        return "", []
+    return (
+        "r.workspace_id=? AND (?='administrator' OR COALESCE(j.created_by, r.created_by)=?)",
+        [
+            _safe_int(actor.get("workspace_id")) or DEFAULT_WORKSPACE_ID,
+            actor.get("role"),
+            _safe_int(actor.get("id")) or 0,
+        ],
+    )
+
+
+def _run_filter_clause(filters: dict[str, Any] | None, *, include_archived_default: bool = False) -> tuple[str, list[Any], dict[str, Any]]:
+    filters = dict(filters or {})
+    clauses: list[str] = []
+    params: list[Any] = []
+    applied: dict[str, Any] = {}
+
+    visibility = str(filters.get("visibility") or ("all" if include_archived_default else "visible")).strip()
+    if visibility not in {"visible", "archived", "all"}:
+        visibility = "visible"
+    if visibility != "all":
+        clauses.append("r.visibility=?")
+        params.append(visibility)
+    applied["visibility"] = visibility
+
+    run_type = str(filters.get("run_type") or "").strip()
+    if run_type == "operational":
+        clauses.append("COALESCE(r.run_type, 'scheduled') IN ('scheduled', 'manual')")
+        applied["run_type"] = run_type
+    elif run_type in {"scheduled", "manual", "test"}:
+        clauses.append("r.run_type=?")
+        params.append(run_type)
+        applied["run_type"] = run_type
+
+    status = str(filters.get("status") or "").strip()
+    if status:
+        clauses.append("r.status=?")
+        params.append(status)
+        applied["status"] = status
+
+    job_id = _safe_int(filters.get("job_id") or filters.get("task_id"))
+    if job_id is not None:
+        clauses.append("r.job_id=?")
+        params.append(job_id)
+        applied["job_id"] = job_id
+
+    law_firm = str(filters.get("law_firm") or filters.get("task") or "").strip()
+    if law_firm:
+        clauses.append("(j.law_firm_name LIKE ? OR r.summary LIKE ?)")
+        like = f"%{law_firm}%"
+        params.extend([like, like])
+        applied["law_firm"] = law_firm
+
+    platform = str(filters.get("platform") or "").strip()
+    if platform:
+        clauses.append("r.summary LIKE ?")
+        params.append(f"%\"{platform}\"%")
+        applied["platform"] = platform
+
+    date_from = str(filters.get("date_from") or "").strip()
+    if date_from:
+        clauses.append("substr(r.started_at, 1, 10) >= ?")
+        params.append(date_from[:10])
+        applied["date_from"] = date_from[:10]
+
+    date_to = str(filters.get("date_to") or "").strip()
+    if date_to:
+        clauses.append("substr(r.started_at, 1, 10) <= ?")
+        params.append(date_to[:10])
+        applied["date_to"] = date_to[:10]
+
+    return " AND ".join(clauses), params, applied
+
+
 def list_runs(limit: int = 100, actor: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-    sql = """
-        SELECT r.*, j.law_firm_name FROM crawl_runs r
+    page = list_runs_page(page=1, per_page=limit, actor=actor, include_archived_default=True)
+    return page["items"]
+
+
+def list_runs_page(
+    page: int = 1,
+    per_page: int = 100,
+    actor: dict[str, Any] | None = None,
+    filters: dict[str, Any] | None = None,
+    include_archived_default: bool = False,
+) -> dict[str, Any]:
+    page = max(1, _safe_int(page) or 1)
+    per_page = _coerce_limit(per_page, default=100)
+    filter_clause, filter_params, applied_filters = _run_filter_clause(
+        filters,
+        include_archived_default=include_archived_default,
+    )
+    scope_clause, scope_params = _run_actor_scope_clause(actor)
+    clauses = [clause for clause in (scope_clause, filter_clause) if clause]
+    where_sql = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+    params = [*scope_params, *filter_params]
+    base_sql = """
+        FROM crawl_runs r
         LEFT JOIN monitor_jobs j ON j.id = r.job_id
     """
-    params: list[Any] = []
-    if actor:
-        sql += " WHERE r.workspace_id=? AND (?='administrator' OR COALESCE(j.created_by, r.created_by)=?)"
-        params.extend(
-            [
-                _safe_int(actor.get("workspace_id")) or DEFAULT_WORKSPACE_ID,
-                actor.get("role"),
-                _safe_int(actor.get("id")) or 0,
-            ]
-        )
-    sql += " ORDER BY r.id DESC"
-    if limit > 0:
-        sql += " LIMIT ?"
-        params.append(limit)
     with get_conn() as conn:
-        rows = conn.execute(sql, params).fetchall()
-    return [_hydrate_run_row(row) for row in rows]
+        total = int(
+            conn.execute(
+                f"SELECT COUNT(*) AS n {base_sql}{where_sql}",
+                params,
+            ).fetchone()["n"]
+            or 0
+        )
+        sql = f"""
+            SELECT r.*, j.law_firm_name {base_sql}{where_sql}
+            ORDER BY r.id DESC
+        """
+        query_params = list(params)
+        if per_page > 0:
+            sql += " LIMIT ? OFFSET ?"
+            query_params.extend([per_page, (page - 1) * per_page])
+        rows = conn.execute(sql, query_params).fetchall()
+    items = [_hydrate_run_row(row) for row in rows]
+    total_pages = 1 if per_page <= 0 else max(1, (total + per_page - 1) // per_page)
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": total_pages,
+        "filters": applied_filters,
+    }
+
+
+def set_run_visibility(run_id: int, visibility: str, actor: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    if visibility not in {"visible", "archived"}:
+        raise ValueError("invalid run visibility")
+    actor_scope, actor_params = _run_actor_scope_clause(actor)
+    where = "r.id=?"
+    params: list[Any] = [run_id]
+    if actor_scope:
+        where += f" AND {actor_scope}"
+        params.extend(actor_params)
+    with get_conn() as conn:
+        row = conn.execute(
+            f"""
+            SELECT r.id FROM crawl_runs r
+            LEFT JOIN monitor_jobs j ON j.id = r.job_id
+            WHERE {where}
+            """,
+            params,
+        ).fetchone()
+        if not row:
+            return None
+        if visibility == "archived":
+            archived_at = utc_now()
+            archived_by = _safe_int((actor or {}).get("id"))
+        else:
+            archived_at = None
+            archived_by = None
+        conn.execute(
+            """
+            UPDATE crawl_runs
+            SET visibility=?, archived_at=?, archived_by=?
+            WHERE id=?
+            """,
+            (visibility, archived_at, archived_by, run_id),
+        )
+    return get_run(run_id, actor=actor)
+
+
+def archive_run(run_id: int, actor: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    return set_run_visibility(run_id, "archived", actor=actor)
+
+
+def restore_run(run_id: int, actor: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    return set_run_visibility(run_id, "visible", actor=actor)
 
 
 def _hydrate_run_row(row: sqlite3.Row) -> dict[str, Any]:
@@ -2488,20 +2797,207 @@ def get_report(report_id: int, actor: dict[str, Any] | None = None) -> dict[str,
     return report
 
 
+def email_send_window_key(job_id: int, frequency: str, when: datetime | str | None = None) -> str:
+    target_id = _safe_int(job_id)
+    if not target_id:
+        raise ValueError("job_id is required")
+    if isinstance(when, datetime):
+        send_at = when
+    elif when:
+        send_at = _parse_iso_datetime(when)
+        if send_at is None:
+            raise ValueError("invalid send time")
+    else:
+        send_at = datetime.now(timezone.utc)
+    if send_at.tzinfo is None:
+        send_at = send_at.replace(tzinfo=timezone.utc)
+    send_at = send_at.astimezone(timezone.utc)
+    normalized_frequency = str(frequency or "daily").strip().lower()
+    if normalized_frequency == "daily":
+        return f"{target_id}_{send_at.date().isoformat()}"
+    if normalized_frequency in {"6h", "12h", "cron"}:
+        return f"{target_id}_{send_at.date().isoformat()}_{send_at.strftime('%H')}"
+    raise ValueError("invalid email send frequency")
+
+
+def record_email_delivery_log(payload: dict[str, Any]) -> dict[str, Any]:
+    send_type = str(payload.get("send_type") or "").strip()
+    if send_type not in EMAIL_DELIVERY_SEND_TYPES:
+        raise ValueError("invalid email delivery send_type")
+    status = str(payload.get("status") or "").strip()
+    if status not in EMAIL_DELIVERY_STATUSES:
+        raise ValueError("invalid email delivery status")
+    job_id = _safe_int(payload.get("job_id"))
+    if not job_id:
+        raise ValueError("job_id is required")
+    report_id = _safe_int(payload.get("report_id"))
+    sent_by = _safe_int(payload.get("sent_by"))
+    workspace_id = _safe_int(payload.get("workspace_id"))
+    send_window_key = str(payload.get("send_window_key") or "").strip()
+    if not send_window_key:
+        frequency = str(payload.get("frequency") or "daily")
+        send_window_key = email_send_window_key(job_id, frequency, payload.get("sent_at") or payload.get("created_at"))
+    recipients_json = _email_recipients_json(payload.get("recipients_json", payload.get("recipients")))
+    sent_at = str(payload.get("sent_at") or "").strip() or None
+    created_at = str(payload.get("created_at") or "").strip() or utc_now()
+    with get_conn() as conn:
+        if not workspace_id:
+            row = conn.execute("SELECT workspace_id FROM monitor_jobs WHERE id=?", (job_id,)).fetchone()
+            workspace_id = _safe_int(row["workspace_id"]) if row else DEFAULT_WORKSPACE_ID
+        cur = conn.execute(
+            """
+            INSERT INTO email_delivery_logs (
+                workspace_id, job_id, report_id, send_window_key, send_type,
+                sent_by, sent_at, status, error_message, recipients_json, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                workspace_id or DEFAULT_WORKSPACE_ID,
+                job_id,
+                report_id,
+                send_window_key,
+                send_type,
+                sent_by,
+                sent_at,
+                status,
+                customer_safe_text(payload.get("error_message")),
+                recipients_json,
+                created_at,
+            ),
+        )
+        row = conn.execute("SELECT * FROM email_delivery_logs WHERE id=?", (int(cur.lastrowid),)).fetchone()
+    return _hydrate_email_delivery_log(dict(row))
+
+
+def try_record_email_delivery_log(payload: dict[str, Any]) -> dict[str, Any] | None:
+    try:
+        return record_email_delivery_log(payload)
+    except IntegrityError:
+        return None
+
+
+def update_email_delivery_log_status(
+    log_id: int,
+    status: str,
+    error_message: str | None = None,
+    sent_at: str | None = None,
+) -> dict[str, Any] | None:
+    if status not in EMAIL_DELIVERY_STATUSES:
+        raise ValueError("invalid email delivery status")
+    with get_conn() as conn:
+        conn.execute(
+            """
+            UPDATE email_delivery_logs
+            SET status=?, error_message=?, sent_at=COALESCE(?, sent_at)
+            WHERE id=?
+            """,
+            (status, customer_safe_text(error_message), sent_at, log_id),
+        )
+        row = conn.execute("SELECT * FROM email_delivery_logs WHERE id=?", (log_id,)).fetchone()
+    return _hydrate_email_delivery_log(dict(row)) if row else None
+
+
+def list_email_delivery_logs(
+    job_id: int | None = None,
+    report_id: int | None = None,
+    limit: int = 100,
+    actor: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    limit = _coerce_limit(limit)
+    clauses: list[str] = []
+    params: list[Any] = []
+    if job_id is not None:
+        clauses.append("email_delivery_logs.job_id=?")
+        params.append(job_id)
+    if report_id is not None:
+        clauses.append("email_delivery_logs.report_id=?")
+        params.append(report_id)
+    if actor:
+        clauses.append(
+            "email_delivery_logs.workspace_id=? AND (?='administrator' OR COALESCE(monitor_jobs.created_by, reports.created_by)=?)"
+        )
+        params.extend(
+            [
+                _safe_int(actor.get("workspace_id")) or DEFAULT_WORKSPACE_ID,
+                actor.get("role"),
+                _safe_int(actor.get("id")) or 0,
+            ]
+        )
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    sql = f"""
+        SELECT email_delivery_logs.*
+        FROM email_delivery_logs
+        LEFT JOIN monitor_jobs ON monitor_jobs.id = email_delivery_logs.job_id
+        LEFT JOIN reports ON reports.id = email_delivery_logs.report_id
+        {where}
+        ORDER BY email_delivery_logs.id DESC
+    """
+    if limit > 0:
+        sql += " LIMIT ?"
+        params.append(limit)
+    with get_conn() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return [_hydrate_email_delivery_log(dict(row)) for row in rows]
+
+
+def _email_recipients_json(value: Any) -> str:
+    if isinstance(value, str):
+        loaded = _json_loads(value, [])
+        if loaded != [] or value.strip() in {"[]", ""}:
+            value = loaded
+        else:
+            value = [value]
+    if not isinstance(value, list):
+        value = []
+    return json.dumps([customer_safe_text(str(item)) for item in value if str(item).strip()], ensure_ascii=False)
+
+
+def _hydrate_email_delivery_log(item: dict[str, Any]) -> dict[str, Any]:
+    item["error_message"] = customer_safe_text(item.get("error_message"))
+    item["recipients"] = _json_loads(item.get("recipients_json"), [])
+    item["recipients"] = [customer_safe_text(str(value)) for value in item["recipients"]]
+    item["recipients_json"] = json.dumps(item["recipients"], ensure_ascii=False)
+    return item
+
+
 def _hydrate_report_item(item: dict[str, Any]) -> None:
     summary = item.get("summary") or {}
     if not isinstance(summary, dict):
         summary = {}
+    snapshot = _json_loads(item.get("job_snapshot_json"), {})
+    if not isinstance(snapshot, dict):
+        snapshot = {}
+    snapshot = _customer_safe_payload(snapshot)
     snapshot_job_id = _safe_int(summary.get("job_id"))
+    report_snapshot_job_id = _safe_int(snapshot.get("job_id"))
     report_job_id = _safe_int(item.get("job_id"))
     current_job_id = _safe_int(item.get("current_job_id"))
     item["summary"] = _customer_safe_payload(summary)
+    item["job_snapshot"] = snapshot
     if not item.get("law_firm_name"):
-        item["law_firm_name"] = summary.get("law_firm_name") or ""
+        item["law_firm_name"] = snapshot.get("law_firm_name") or summary.get("law_firm_name") or ""
     item["law_firm_name"] = customer_safe_text(item.get("law_firm_name"))
-    item["display_law_firm_name"] = customer_safe_text(item.get("law_firm_name") or summary.get("law_firm_name") or "")
+    item["display_law_firm_name"] = customer_safe_text(
+        item.get("law_firm_name")
+        or snapshot.get("law_firm_name")
+        or summary.get("law_firm_name")
+        or "历史报告"
+    )
     item["email_error"] = customer_safe_text(item.get("email_error"))
-    item["job_deleted"] = bool((snapshot_job_id or report_job_id) and not current_job_id)
+    item["job_deleted"] = bool((report_snapshot_job_id or snapshot_job_id or report_job_id) and not current_job_id)
+    has_recoverable_context = bool(
+        report_snapshot_job_id
+        or snapshot_job_id
+        or snapshot.get("law_firm_name")
+        or snapshot.get("platforms")
+        or snapshot.get("keywords")
+        or summary.get("law_firm_name")
+        or summary.get("platforms")
+        or summary.get("keywords")
+    )
+    item["legacy_without_job_snapshot"] = bool(not current_job_id and not has_recoverable_context)
+    item["limited_context"] = bool(item["legacy_without_job_snapshot"])
 
 
 def _attach_report_lead_counts(reports: list[dict[str, Any]]) -> None:
@@ -2676,6 +3172,32 @@ def get_dashboard_summary(actor: dict[str, Any] | None = None) -> dict[str, Any]
             proxy_total = conn.execute("SELECT COUNT(*) AS n FROM proxy_profiles").fetchone()["n"]
             ai_profiles_total = conn.execute("SELECT COUNT(*) AS n FROM ai_key_profiles").fetchone()["n"]
             login_sessions_total = conn.execute("SELECT COUNT(*) AS n FROM login_sessions").fetchone()["n"]
+        running_runs = conn.execute(
+            f"""
+            SELECT COUNT(*) AS n FROM crawl_runs r
+            LEFT JOIN monitor_jobs j ON j.id = r.job_id
+            WHERE {run_scope} AND r.status='running'
+            """,
+            scoped_params,
+        ).fetchone()["n"]
+        today_prefix = datetime.now(timezone.utc).date().isoformat()
+        runs_today = conn.execute(
+            f"""
+            SELECT COUNT(*) AS n FROM crawl_runs r
+            LEFT JOIN monitor_jobs j ON j.id = r.job_id
+            WHERE {run_scope} AND substr(COALESCE(r.started_at, ''), 1, 10)=?
+            """,
+            [*scoped_params, today_prefix],
+        ).fetchone()["n"]
+        email_rows = conn.execute(
+            f"""
+            SELECT reports.email_status, COUNT(*) AS n FROM reports
+            LEFT JOIN monitor_jobs ON monitor_jobs.id = reports.job_id
+            WHERE {report_scope}
+            GROUP BY reports.email_status
+            """,
+            scoped_params,
+        ).fetchall()
         latest_runs = conn.execute(
             f"""
             SELECT r.status, r.summary, r.started_at, r.finished_at FROM crawl_runs r
@@ -2696,22 +3218,133 @@ def get_dashboard_summary(actor: dict[str, Any] | None = None) -> dict[str, Any]
         summary = _json_loads(row["summary"], {})
         for platform in summary.get("platforms") or []:
             platform_counts[platform] = platform_counts.get(platform, 0) + 1
+    email_status_counts = {str(row["email_status"] or "pending"): int(row["n"] or 0) for row in email_rows}
+    sent_statuses = {"sent", "success", "delivered"}
+    failed_statuses = {"failed", "error"}
+    email_sent = sum(count for status, count in email_status_counts.items() if status in sent_statuses)
+    email_failed = sum(count for status, count in email_status_counts.items() if status in failed_statuses)
+    email_unsent = max(0, int(reports_total or 0) - email_sent - email_failed)
+    jobs_total_int = int(jobs_total or 0)
+    jobs_enabled_int = int(jobs_enabled or 0)
+    runs_total_int = int(runs_total or 0)
+    reports_total_int = int(reports_total or 0)
+    contents_total_int = int(contents_total or 0)
+    pending_review_int = int(pending_review or 0)
+    negative_total_int = int(negative_total or 0)
+    high_total_int = int(high_total or 0)
+    social_total_int = int(social_total or 0)
+    proxy_total_int = int(proxy_total or 0)
+    ai_profiles_total_int = int(ai_profiles_total or 0)
+    login_sessions_total_int = int(login_sessions_total or 0)
+    is_admin_view = not actor or actor.get("role") == "administrator"
+    if is_admin_view:
+        resource_health = {
+            "scope": "workspace",
+            "status": "ready" if social_total_int and proxy_total_int and ai_profiles_total_int else "needs_attention",
+            "social_accounts_total": social_total_int,
+            "proxy_profiles_total": proxy_total_int,
+            "ai_profiles_total": ai_profiles_total_int,
+            "login_sessions_total": login_sessions_total_int,
+            "signals": [
+                {
+                    "key": "account_pool",
+                    "label": "平台账号",
+                    "status": "ready" if social_total_int else "empty",
+                    "count": social_total_int,
+                },
+                {
+                    "key": "proxy_pool",
+                    "label": "代理资源",
+                    "status": "ready" if proxy_total_int else "empty",
+                    "count": proxy_total_int,
+                },
+                {
+                    "key": "ai_access",
+                    "label": "AI 接入",
+                    "status": "ready" if ai_profiles_total_int else "empty",
+                    "count": ai_profiles_total_int,
+                },
+                {
+                    "key": "login_sessions",
+                    "label": "登录会话",
+                    "status": "ready" if login_sessions_total_int else "empty",
+                    "count": login_sessions_total_int,
+                },
+            ],
+        }
+    else:
+        resource_health = {
+            "scope": "business_safe",
+            "status": "available",
+            "signals": [
+                {
+                    "key": "resource_supply",
+                    "label": "采集资源",
+                    "status": "available",
+                    "note": "资源由管理员维护",
+                }
+            ],
+        }
+    operations_home = {
+        "last_updated_at": utc_now(),
+        "scope": "workspace" if is_admin_view else "own",
+        "task_health": {
+            "total": jobs_total_int,
+            "active": jobs_enabled_int,
+            "paused": max(0, jobs_total_int - jobs_enabled_int),
+            "needs_attention": int(failed_runs + skipped_runs + email_failed + pending_review_int),
+        },
+        "run_activity": {
+            "total": runs_total_int,
+            "today": int(runs_today or 0),
+            "running": int(running_runs or 0),
+            "failed_recent": failed_runs,
+            "skipped_recent": skipped_runs,
+            "platform_counts_recent": platform_counts,
+        },
+        "report_activity": {
+            "total": reports_total_int,
+            "generated": reports_total_int,
+            "manual_review": pending_review_int,
+            "email_failed": email_failed,
+            "email_unsent": email_unsent,
+        },
+        "email_delivery": {
+            "source": "reports.email_status",
+            "total": reports_total_int,
+            "sent": email_sent,
+            "failed": email_failed,
+            "unsent": email_unsent,
+            "history_available": False,
+            "history_note": "邮件交付历史将在报告中心交付历史阶段展示",
+            "status_counts": email_status_counts,
+        },
+        "lead_metrics": {
+            "contents_total": contents_total_int,
+            "suspected_negative": negative_total_int,
+            "high_risk": high_total_int,
+            "pending_review": pending_review_int,
+            "trend_available": False,
+        },
+        "resource_health": resource_health,
+    }
     return {
-        "jobs_total": int(jobs_total or 0),
-        "jobs_enabled": int(jobs_enabled or 0),
-        "runs_total": int(runs_total or 0),
-        "reports_total": int(reports_total or 0),
-        "contents_total": int(contents_total or 0),
-        "pending_review": int(pending_review or 0),
-        "negative_total": int(negative_total or 0),
-        "high_total": int(high_total or 0),
+        "jobs_total": jobs_total_int,
+        "jobs_enabled": jobs_enabled_int,
+        "runs_total": runs_total_int,
+        "reports_total": reports_total_int,
+        "contents_total": contents_total_int,
+        "pending_review": pending_review_int,
+        "negative_total": negative_total_int,
+        "high_total": high_total_int,
         "failed_runs_recent": failed_runs,
         "skipped_runs_recent": skipped_runs,
         "platform_counts_recent": platform_counts,
-        "social_accounts_total": int(social_total or 0),
-        "proxy_profiles_total": int(proxy_total or 0),
-        "ai_profiles_total": int(ai_profiles_total or 0),
-        "login_sessions_total": int(login_sessions_total or 0),
+        "social_accounts_total": social_total_int,
+        "proxy_profiles_total": proxy_total_int,
+        "ai_profiles_total": ai_profiles_total_int,
+        "login_sessions_total": login_sessions_total_int,
+        "operations_home": operations_home,
     }
 
 

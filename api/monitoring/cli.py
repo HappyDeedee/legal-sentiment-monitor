@@ -77,7 +77,7 @@ async def run_one_job(job_id: int) -> dict[str, Any]:
         run_id = record_skipped_run(job_id, reason, _skip_summary(job, "preflight_blocked", preflight, source="cli"))
         _refresh_schedule_state(job_id)
         return {"ok": False, "failed": 1, "ran": 0, "skipped": 1, "results": [{"job_id": job_id, "run_id": run_id, "status": "skipped", "reason": reason, "preflight": preflight}]}
-    result = await run_job(job_id)
+    result = await run_job(job_id, source="cli_manual")
     _refresh_schedule_state(job_id)
     return {"ok": True, "ran": 1, "results": [{"job_id": job_id, "status": result.get("status"), "result": result}]}
 
@@ -105,7 +105,7 @@ async def run_due_jobs(now: datetime | None = None) -> dict[str, Any]:
             results.append({"job_id": job_id, "run_id": run_id, "status": "skipped", "reason": reason, "preflight": preflight})
             continue
         try:
-            result = await run_job(job_id)
+            result = await run_job(job_id, source="cli_due")
             results.append({"job_id": job_id, "status": result.get("status"), "result": result})
         except Exception as exc:
             results.append({"job_id": job_id, "status": "failed", "error": redact_sensitive(f"{type(exc).__name__}: {exc}")})

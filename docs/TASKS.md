@@ -219,67 +219,71 @@ scope, and rollback path.
 
 ### Phase 11A - Frontend Module Boundary And CSS Token Layer
 
-- [ ] Create `api/webui/monitor/monitor.css`.
-- [ ] Create `api/webui/monitor/monitor.js`.
-- [ ] Reference the new local CSS/JS assets from `api/monitor_web/index.html`
+- [x] Create `api/webui/monitor/monitor.css`.
+- [x] Create `api/webui/monitor/monitor.js`.
+- [x] Reference the new local CSS/JS assets from `api/monitor_web/index.html`
       without removing existing inline CSS/JS.
-- [ ] Load `monitor.css` before the existing inline `<style>` block and load
+- [x] Load `monitor.css` before the existing inline `<style>` block and load
       `monitor.js` after the existing inline `<script>` block.
-- [ ] Define CSS custom-property tokens for colors, typography, spacing,
+- [x] Define CSS custom-property tokens for colors, typography, spacing,
       radius, shadows, z-index, status colors, and breakpoint values.
-- [ ] Use namespaced token variables such as `--color-*`, `--space-*`, and
+- [x] Use namespaced token variables such as `--color-*`, `--space-*`, and
       `--font-*`; do not define legacy aliases such as `--bg` or `--primary`
       in Phase 11A.
-- [ ] Keep `monitor.js` as a quiet module boundary with no console logging and
+- [x] Keep `monitor.js` as a quiet module boundary with no console logging and
       no global variable/function definitions or UI behavior in Phase 11A.
-- [ ] Keep the visible UI unchanged in this batch.
-- [ ] Verify `/monitor` loads and the new CSS/JS assets return HTTP 200.
-- [ ] Verify login, navigation, task list, run center, and report preview still
+- [x] Keep the visible UI unchanged in this batch.
+- [x] Verify `/monitor` loads and the new CSS/JS assets return HTTP 200.
+- [x] Verify login, navigation, task list, run center, and report preview still
       work through a browser smoke check.
-- [ ] Verify 1440px desktop, 1024px tablet, and 390px mobile layouts are
+- [x] Verify 1440px desktop, 1024px tablet, and 390px mobile layouts are
       unchanged.
 
 ### Phase 11B - Base Layout And Navigation Visual Foundation
 
-- [ ] Move base layout, shell, header, navigation, button, card, and toolbar
+- [x] Move base layout, shell, header, navigation, button, card, and toolbar
       styling into `monitor.css`.
-- [ ] Keep page structure and business data flow unchanged.
-- [ ] Apply the accepted Apple-style visual foundation to desktop layout and
+- [x] Keep page structure and business data flow unchanged.
+- [x] Apply the accepted Apple-style visual foundation to desktop layout and
       navigation.
-- [ ] Keep administrator and normal-user menu visibility unchanged.
-- [ ] Verify desktop 1440px navigation, page switching, login/logout, and core
+- [x] Keep administrator and normal-user menu visibility unchanged.
+- [x] Verify desktop 1440px navigation, page switching, login/logout, and core
       pages have no visible regressions.
 
 ### Phase 11C - Interaction Components And Floating Menu Fix
 
-- [ ] Add standard toast, loading, empty-state, modal, and action-menu styles
+- [x] Add standard toast, loading, empty-state, modal, and action-menu styles
       to `monitor.css`.
-- [ ] Add a `MonitorUI` helper boundary in `monitor.js` for toast, loading,
+- [x] Add a `MonitorUI` helper boundary in `monitor.js` for toast, loading,
       empty-state, menu close, and floating menu positioning helpers.
-- [ ] Replace clipped row action menu behavior with fixed or portal-style
+- [x] Replace clipped row action menu behavior with fixed or portal-style
       positioning.
-- [ ] Implement or equivalent `positionFloatingMenu(triggerEl, menuEl)`
+- [x] Implement or equivalent `positionFloatingMenu(triggerEl, menuEl)`
       behavior.
-- [ ] Decide whether a local helper is enough or a lightweight floating
+- [x] Decide whether a local helper is enough or a lightweight floating
       positioning library is needed; record any new dependency in
       `DECISIONS.md` before adding it.
-- [ ] Ensure menus close on outside click, escape, page change, and successful
+- [x] Ensure menus close on outside click, escape, page change, and successful
       action.
-- [ ] Verify account, proxy, report, AI, mail-template, and modal-contained row
+- [x] Verify account, proxy, report, AI, mail-template, and modal-contained row
       menus are not clipped by scroll containers or modal boundaries.
+      Account, monitoring-task, AI-rule, and report row menus were verified
+      with fixed viewport placement. Proxy, AI access, and mail-template
+      surfaces currently expose direct edit/test/preview actions rather than
+      row menus, so no clipped row-menu surface exists there in Phase 11C.
 
 ### Phase 11D - Responsive Foundation
 
-- [ ] Implement the accepted breakpoints: mobile `< 768px`, tablet
+- [x] Implement the accepted breakpoints: mobile `< 768px`, tablet
       `768px - 1279px`, desktop `>= 1280px`.
-- [ ] Add mobile navigation using a top-left hamburger button and left-side
+- [x] Add mobile navigation using a top-left hamburger button and left-side
       drawer, or document an equivalent touch-safe alternative before
       implementation.
-- [ ] Make toolbars, form grids, metric grids, modals, and dense tables usable
+- [x] Make toolbars, form grids, metric grids, modals, and dense tables usable
       on tablet and mobile.
-- [ ] Keep dense operational tables at least scroll-safe on mobile; page-level
+- [x] Keep dense operational tables at least scroll-safe on mobile; page-level
       card conversions can be completed in the later page-specific phases.
-- [ ] Verify 1440px desktop, 1024px tablet, and 390px mobile layouts have no
+- [x] Verify 1440px desktop, 1024px tablet, and 390px mobile layouts have no
       severe overlap, hidden primary actions, or hover-only required paths.
 
 ## Phase 12 - Navigation And Page Entry Redesign
@@ -290,24 +294,24 @@ Phase 12 is planned and depends on Phase 11. Execute it as Phase 12A-12B.
 
 ### Phase 12A - Navigation Structure And Login Landing
 
-- [ ] Route login success to Operations Home.
-- [ ] Move authenticated user identity and logout into one top-right control
+- [x] Route login success to Operations Home.
+- [x] Move authenticated user identity and logout into one top-right control
       group on desktop and a predictable account area on mobile.
-- [ ] Replace Resource Management and System Configuration popover navigation
+- [x] Replace Resource Management and System Configuration popover navigation
       with expandable navigation groups.
-- [ ] Preserve administrator and normal-user menu visibility rules.
-- [ ] Verify login, logout, session restore, and page switching.
+- [x] Preserve administrator and normal-user menu visibility rules.
+- [x] Verify login, logout, session restore, and page switching.
 
 ### Phase 12B - Page Entry And Role Flow
 
-- [ ] Rebuild page entries around the monitoring task loop: Operations Home,
+- [x] Rebuild page entries around the monitoring task loop: Operations Home,
       Monitoring, Run Center, Report Center, Email Delivery status, and
       administrator resource support.
-- [ ] Standardize page title, description, primary action, and toolbar areas.
-- [ ] Add task-loop shortcuts where useful: create task, view runs, view
+- [x] Standardize page title, description, primary action, and toolbar areas.
+- [x] Add task-loop shortcuts where useful: create task, view runs, view
       reports, inspect email delivery, and resolve resource issues.
-- [ ] Verify administrator and normal-user paths separately.
-- [ ] Confirm no hidden administrator resource details leak into normal-user
+- [x] Verify administrator and normal-user paths separately.
+- [x] Confirm no hidden administrator resource details leak into normal-user
       entry points.
 
 ## Phase 13 - Overview Operations Home Redesign
@@ -320,177 +324,185 @@ views in one goal.
 
 ### Phase 13A - Operations Home Data Layer
 
-- [ ] Define the operations-home API contract under the existing monitor API
+- [x] Define the operations-home API contract under the existing monitor API
       surface, reusing `api/routers/monitor.py` unless a small helper module is
       justified.
-- [ ] Define data sources for task health, run activity, report activity,
+- [x] Define data sources for task health, run activity, report activity,
       email delivery status, suspected lead metrics, and resource health.
-- [ ] Reuse existing tables where possible and document any missing metric as
+- [x] Reuse existing tables where possible and document any missing metric as
       a later enhancement instead of fabricating data.
-- [ ] Preserve administrator and normal-user owner/workspace scope in every
+- [x] Preserve administrator and normal-user owner/workspace scope in every
       aggregate.
-- [ ] Keep the existing `/api/monitor/dashboard` response compatible until the
+- [x] Keep the existing `/api/monitor/dashboard` response compatible until the
       frontend migration is complete, or document the response versioning
       strategy before changing it.
-- [ ] Verify API results for administrator and normal-user data scopes.
+- [x] Verify API results for administrator and normal-user data scopes.
 
 ### Phase 13B - Operations Home Desktop Visual Metrics
 
-- [ ] Replace the text-heavy overview content with a desktop operations home
+- [x] Replace the text-heavy overview content with a desktop operations home
       using Phase 11 design tokens and component patterns.
-- [ ] Add visual task, run, report, email delivery, suspected lead, and concise
+- [x] Add visual task, run, report, email delivery, suspected lead, and concise
       resource-health metric sections.
-- [ ] Add drilldown links into Monitoring, Run Center, Report Center, Email
+- [x] Add drilldown links into Monitoring, Run Center, Report Center, Email
       Delivery status, and administrator resource pages where permitted.
-- [ ] Decide whether a chart library is needed; record any chart dependency in
+- [x] Decide whether a chart library is needed; record any chart dependency in
       `DECISIONS.md` before adding it.
-- [ ] Keep long system-running, scheduler, platform, browser, and deployment
+- [x] Keep long system-running, scheduler, platform, browser, and deployment
       diagnostic blocks out of the default home page.
-- [ ] Verify desktop 1440px layout, drilldowns, and role-safe metric wording.
+- [x] Verify desktop 1440px layout, drilldowns, and role-safe metric wording.
 
 ### Phase 13C - Operations Home Responsive And Role Views
 
-- [ ] Adapt the operations home for 1024px tablet and 390px mobile layouts.
-- [ ] Ensure normal users see only own tasks, runs, reports, and business-safe
+- [x] Adapt the operations home for 1024px tablet and 390px mobile layouts.
+- [x] Ensure normal users see only own tasks, runs, reports, and business-safe
       health signals.
-- [ ] Ensure administrators see resource health as concise signals with
+- [x] Ensure administrators see resource health as concise signals with
       drilldowns to the correct resource pages.
-- [ ] Move detailed system diagnostics to System Diagnostics or keep only a
+- [x] Move detailed system diagnostics to System Diagnostics or keep only a
       compact health summary on the home page.
-- [ ] Verify no horizontal overflow, overlapping metric cards, hidden primary
+- [x] Verify no horizontal overflow, overlapping metric cards, hidden primary
       actions, or role leakage on tablet and mobile.
 
 ## Phase 14 - Run Center Data Model Preparation
 
 Planning status:
 
-Phase 14 is planned before run-center frontend implementation.
+Phase 14 is complete and verified. It only prepared the run-center data model;
+Phase 15 must still implement pagination, filters, archive/restore APIs, and
+frontend governance.
 
-- [ ] Add `crawl_runs.visibility` with values `visible` and `archived`.
-- [ ] Add `crawl_runs.run_type` with values `scheduled`, `manual`, and `test`.
-- [ ] Add `crawl_runs.archived_at`.
-- [ ] Add `crawl_runs.archived_by`.
-- [ ] Backfill existing runs with `visibility = visible` and
+- [x] Add `crawl_runs.visibility` with values `visible` and `archived`.
+- [x] Add `crawl_runs.run_type` with values `scheduled`, `manual`, and `test`.
+- [x] Add `crawl_runs.archived_at`.
+- [x] Add `crawl_runs.archived_by`.
+- [x] Backfill existing runs with `visibility = visible` and
       `run_type = scheduled`.
-- [ ] Add recommended indexes for visibility/date and run type/status filters,
+- [x] Add recommended indexes for visibility/date and run type/status filters,
       following `SCHEMA_MIGRATION.md`.
-- [ ] Update `DATA_MODEL.md` and `SCHEMA_MIGRATION.md` with migration details.
+- [x] Update `DATA_MODEL.md` and `SCHEMA_MIGRATION.md` with migration details.
 
 ## Phase 15 - Run Center Governance And Frontend
 
 Planning status:
 
-Phase 15 is planned and depends on Phase 14. Execute it as Phase 15A-15B.
+Phase 15 depends on Phase 14. Phase 15A and Phase 15B are complete and
+verified. Phase 16, Phase 17A, Phase 17B, Phase 18A, and Phase 18B are also
+complete and verified.
 
 ### Phase 15A - Run Center API And Data Governance
 
-- [ ] Add run pagination at the API/query layer.
-- [ ] Add filters for task, law firm, status, run type, visibility, date, and
+- [x] Add run pagination at the API/query layer.
+- [x] Add filters for task, law firm, status, run type, visibility, date, and
       platform.
-- [ ] Add archive and restore APIs.
-- [ ] Hide archived records from default API/list behavior while preserving
+- [x] Add archive and restore APIs.
+- [x] Hide archived records from default API/list behavior while preserving
       administrator access through explicit filters.
-- [ ] Preserve the existing run-list response fields while adding pagination,
+- [x] Preserve the existing run-list response fields while adding pagination,
       filter metadata, visibility, and run-type fields.
-- [ ] Preserve run logs, report links, owner/workspace scope, and existing
+- [x] Preserve run logs, report links, owner/workspace scope, and existing
       status values.
-- [ ] Verify API tests for pagination, filters, archive, restore, and default
+- [x] Verify API tests for pagination, filters, archive, restore, and default
       visibility behavior.
 
 ### Phase 15B - Run Center Frontend Refinement
 
-- [ ] Add pagination UI.
-- [ ] Add task/law-firm, status, platform, run type, visibility, and date
+- [x] Add pagination UI.
+- [x] Add task/law-firm, status, platform, run type, visibility, and date
       filters.
-- [ ] Add archive and restore row actions with confirmation.
-- [ ] Separate operational records from test/noise records in the default view.
-- [ ] Keep run logs refreshable, copyable, and downloadable.
-- [ ] Verify desktop, tablet, and mobile run-center layouts.
+- [x] Add archive and restore row actions with confirmation.
+- [x] Separate operational records from test/noise records in the default view.
+- [x] Keep run logs refreshable, copyable, and downloadable.
+- [x] Verify desktop, tablet, and mobile run-center layouts.
 
 ## Phase 16 - Email Delivery Data Model Preparation
 
 Planning status:
 
-Phase 16 is planned before email governance implementation.
+Phase 16 is complete and verified. It only prepared the email delivery data
+model; Phase 17A connected delivery logic, scheduler idempotency, and manual
+resend logging to this foundation.
 
-- [ ] Add `email_delivery_logs`.
-- [ ] Store `workspace_id`, `job_id`, `report_id`, `send_window_key`,
+- [x] Add `email_delivery_logs`.
+- [x] Store `workspace_id`, `job_id`, `report_id`, `send_window_key`,
       `send_type`, `sent_by`, `sent_at`, `status`, `error_message`,
       `recipients_json`, and `created_at`.
-- [ ] Use `send_type = auto` for scheduler sends and
+- [x] Use `send_type = auto` for scheduler sends and
       `send_type = manual_resend` for explicit resend.
-- [ ] Use `daily` window keys as `{job_id}_{YYYY-MM-DD}`.
-- [ ] Use `6h`, `12h`, and `cron` window keys as
+- [x] Use `daily` window keys as `{job_id}_{YYYY-MM-DD}`.
+- [x] Use `6h`, `12h`, and `cron` window keys as
       `{job_id}_{YYYY-MM-DD}_{HH}`.
-- [ ] Add indexes or uniqueness rules needed for automatic-send idempotency.
-- [ ] Update `DATA_MODEL.md` and `SCHEMA_MIGRATION.md`.
+- [x] Add indexes or uniqueness rules needed for automatic-send idempotency.
+- [x] Update `DATA_MODEL.md` and `SCHEMA_MIGRATION.md`.
 
 ## Phase 17 - Email Delivery Governance
 
 Planning status:
 
-Phase 17 is planned and depends on Phase 16. Execute it as Phase 17A-17B so
-delivery logic and report-center UI are verified separately.
+Phase 17 depends on Phase 16. Phase 17A and Phase 17B are complete and
+verified. Phase 17B kept report-center delivery-history UI separate from the
+backend delivery-governance work and did not implement Phase 18 report
+grouping.
 
 ### Phase 17A - Email Idempotency And Delivery Logic
 
-- [ ] Implement `send_window_key` generation for `daily`, `6h`, `12h`, and
+- [x] Implement `send_window_key` generation for `daily`, `6h`, `12h`, and
       `cron` using the accepted rules in `DATA_MODEL.md` and
       `SCHEMA_MIGRATION.md`.
-- [ ] Add automatic-send idempotency by `workspace_id + job_id +
+- [x] Add automatic-send idempotency by `workspace_id + job_id +
       send_window_key + send_type=auto`.
-- [ ] Record automatic delivery attempts, successes, failures, recipient
+- [x] Record automatic delivery attempts, successes, failures, recipient
       summaries, and customer-safe error messages in `email_delivery_logs`.
-- [ ] Allow manual resend while recording a separate
+- [x] Allow manual resend while recording a separate
       `send_type = manual_resend` delivery log.
-- [ ] Preserve report generation when SMTP is unavailable.
-- [ ] Keep existing latest-state report fields readable until the frontend is
+- [x] Preserve report generation when SMTP is unavailable.
+- [x] Keep existing latest-state report fields readable until the frontend is
       migrated to delivery history.
-- [ ] Verify repeated scheduler triggers do not send duplicate automatic
+- [x] Verify repeated scheduler triggers do not send duplicate automatic
       emails and manual resend creates a separate delivery record.
 
 ### Phase 17B - Email Delivery History Frontend
 
-- [ ] Surface latest delivery status and delivery history in the report center
+- [x] Surface latest delivery status and delivery history in the report center
       without exposing SMTP secrets.
-- [ ] Add manual resend UI with confirmation and clear success/failure
+- [x] Add manual resend UI with confirmation and clear success/failure
       feedback.
-- [ ] Show send type, status, time, recipient summary, and customer-safe error
+- [x] Show send type, status, time, recipient summary, and customer-safe error
       message.
-- [ ] Preserve report preview, lead detail switching, and report downloads.
-- [ ] Verify administrator and normal-user owner/workspace scope for delivery
+- [x] Preserve report preview, lead detail switching, and report downloads.
+- [x] Verify administrator and normal-user owner/workspace scope for delivery
       history and manual resend.
-- [ ] Verify desktop, tablet, and mobile report-center delivery surfaces.
+- [x] Verify desktop, tablet, and mobile report-center delivery surfaces.
 
 ## Phase 18 - Report Center Task Grouping
 
 Planning status:
 
-Phase 18 is planned and depends on Phase 10-11 and the accepted report snapshot
-data model. Execute it as Phase 18A-18B so snapshot persistence lands before
-frontend grouping consumes it.
+Phase 18 depends on Phase 10-11 and the accepted report snapshot data model.
+Execute it as Phase 18A-18B so snapshot persistence lands before frontend
+grouping consumes it. Phase 18A and Phase 18B are complete and verified.
 
 ### Phase 18A - Report Job Snapshot Data Model
 
-- [ ] Add `reports.job_snapshot_json`.
-- [ ] Save law firm, platforms, search keywords, frequency, task ID, and
+- [x] Add `reports.job_snapshot_json`.
+- [x] Save law firm, platforms, search keywords, frequency, task ID, and
       deleted-task context into the report snapshot for newly generated
       reports.
-- [ ] Backfill `job_snapshot_json` for existing reports whose `job_id` still
+- [x] Backfill `job_snapshot_json` for existing reports whose `job_id` still
       resolves to a monitoring task.
-- [ ] Leave unrecoverable old reports visible with a limited-context fallback
+- [x] Leave unrecoverable old reports visible with a limited-context fallback
       instead of blocking reads.
-- [ ] Preserve `job_id` for active task relations and never use snapshot
+- [x] Preserve `job_id` for active task relations and never use snapshot
       content to bypass owner/workspace permissions.
-- [ ] Verify new reports contain snapshots, backfilled reports remain readable,
+- [x] Verify new reports contain snapshots, backfilled reports remain readable,
       and reports still load after their task is deleted or missing.
 
 ### Phase 18B - Report Center Task Grouping Frontend
 
-- [ ] Group reports by monitoring task when `job_id` resolves.
-- [ ] Group orphan or deleted-task reports using `job_snapshot_json`.
-- [ ] Show deleted-task or limited-context labels where appropriate.
-- [ ] Preserve report preview and lead detail switching by selected report.
-- [ ] Preserve download links, email delivery status/history, and row actions.
-- [ ] Verify grouped report behavior for active, deleted, missing-task, and
+- [x] Group reports by monitoring task when `job_id` resolves.
+- [x] Group orphan or deleted-task reports using `job_snapshot_json`.
+- [x] Show deleted-task or limited-context labels where appropriate.
+- [x] Preserve report preview and lead detail switching by selected report.
+- [x] Preserve download links, email delivery status/history, and row actions.
+- [x] Verify grouped report behavior for active, deleted, missing-task, and
       limited-context reports on desktop, tablet, and mobile.

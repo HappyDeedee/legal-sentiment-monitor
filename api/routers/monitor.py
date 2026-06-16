@@ -12,6 +12,7 @@ from ..monitoring.auth_context import is_administrator, require_authenticated_us
 from ..monitoring.prompts import AI_OUTPUT_SCHEMA, DEFAULT_PROMPT, DEFAULT_PROMPT_SECTIONS
 from ..monitoring.database import (
     MONITOR_DATA_DIR,
+    archive_run,
     cancel_run,
     cancel_running_runs_for_job,
     create_login_session,
@@ -46,12 +47,14 @@ from ..monitoring.database import (
     list_ai_key_profiles,
     list_ai_rule_profiles,
     list_email_templates,
+    list_email_delivery_logs,
     list_login_sessions,
     list_platform_login_configs,
     list_proxy_profiles,
     list_reports,
     list_runtime_settings,
     list_runs,
+    list_runs_page,
     list_social_accounts,
     record_audit_log,
     mark_ai_key_profile_test_result,
@@ -69,6 +72,7 @@ from ..monitoring.database import (
     save_proxy_profile,
     save_runtime_settings,
     save_social_account,
+    restore_run,
     set_active_ai_key_profile,
     set_active_ai_rule_profile,
     set_job_enabled,
@@ -298,8 +302,10 @@ async def smoke(admin: dict[str, Any] = AdminUser):
 @router.get("/dashboard")
 async def dashboard(user: dict[str, Any] = CurrentUser):
     init_db()
+    summary = get_dashboard_summary(actor=_route_actor(user))
     return {
-        "summary": get_dashboard_summary(actor=_route_actor(user)),
+        "summary": summary,
+        "operations_home": summary.get("operations_home", {}),
         "readiness": _customer_view_readiness_status(get_readiness_status()),
         "scheduler": scheduler_status(),
     }
@@ -1051,15 +1057,73 @@ async def remove_proxy(proxy_id: int, admin: dict[str, Any] = AdminUser):
 
 
 @router.get("/runs")
-async def runs(limit: int = Query(100, ge=0, le=1000), user: dict[str, Any] = CurrentUser):
+async def runs(
+    limit: int = Query(100, ge=0, le=1000),
+    page: int = Query(1, ge=1),
+    task_id: int | None = Query(None, ge=1),
+    law_firm: str = "",
+    status: str = "",
+    platform: str = "",
+    run_type: str = Query("", description="operational|scheduled|manual|test"),
+    visibility: str = Query("", description="visible|archived|all"),
+    date_from: str = "",
+    date_to: str = "",
+    user: dict[str, Any] = CurrentUser,
+):
     init_db()
-    return {"runs": [_customer_view_run(item) for item in list_runs(limit, actor=_route_actor(user))], "running_job_ids": running_job_ids()}
+    actor = _route_actor(user)
+    requested_visibility = (visibility or "").strip()
+    if requested_visibility in {"archived", "all"} and not is_administrator(actor):
+        raise HTTPException(status_code=403, detail="只有管理员可以查看归档运行记录")
+    filters = {
+        "task_id": task_id,
+        "law_firm": law_firm,
+        "status": status,
+        "platform": platform,
+        "run_type": run_type,
+        "visibility": requested_visibility or "visible",
+        "date_from": date_from,
+        "date_to": date_to,
+    }
+    result = list_runs_page(page=page, per_page=limit, actor=actor, filters=filters)
+    return {
+        "runs": [_customer_view_run(item) for item in result["items"]],
+        "running_job_ids": running_job_ids(),
+        "pagination": {
+            "page": result["page"],
+            "per_page": result["per_page"],
+            "total": result["total"],
+            "total_pages": result["total_pages"],
+        },
+        "filters": result["filters"],
+    }
+
+
+@router.post("/runs/{run_id}/archive")
+async def archive_run_record(run_id: int, admin: dict[str, Any] = AdminUser):
+    run = archive_run(run_id, actor=_route_actor(admin))
+    if not run:
+        raise HTTPException(status_code=404, detail="run not found")
+    _audit_admin(admin, "archive_run", "crawl_run", run_id, {"visibility": "archived"})
+    return {"run": _customer_view_run(run)}
+
+
+@router.post("/runs/{run_id}/restore")
+async def restore_run_record(run_id: int, admin: dict[str, Any] = AdminUser):
+    run = restore_run(run_id, actor=_route_actor(admin))
+    if not run:
+        raise HTTPException(status_code=404, detail="run not found")
+    _audit_admin(admin, "restore_run", "crawl_run", run_id, {"visibility": "visible"})
+    return {"run": _customer_view_run(run)}
 
 
 @router.post("/runs/{run_id}/stop")
 async def stop_run_now(run_id: int, user: dict[str, Any] = CurrentUser):
-    run = get_run(run_id, actor=_route_actor(user))
+    actor = _route_actor(user)
+    run = get_run(run_id, actor=actor)
     if not run:
+        raise HTTPException(status_code=404, detail="run not found")
+    if run.get("visibility") == "archived" and not is_administrator(actor):
         raise HTTPException(status_code=404, detail="run not found")
     if run.get("status") != "running":
         raise HTTPException(status_code=400, detail="这条运行记录已经结束")
@@ -1078,7 +1142,9 @@ async def stop_run_now(run_id: int, user: dict[str, Any] = CurrentUser):
 
 @router.get("/runs/{run_id}/logs")
 async def run_logs(run_id: int, user: dict[str, Any] = CurrentUser):
-    if _route_actor(user) and not get_run(run_id, actor=_route_actor(user)):
+    actor = _route_actor(user)
+    run = get_run(run_id, actor=actor)
+    if not run or (run.get("visibility") == "archived" and not is_administrator(actor)):
         raise HTTPException(status_code=404, detail="run not found")
     run_root = MONITOR_DATA_DIR / "runs"
     logs = []
@@ -1223,12 +1289,22 @@ async def report_email_preview(report_id: int, user: dict[str, Any] = CurrentUse
         raise HTTPException(status_code=400, detail=redact_sensitive(f"{type(exc).__name__}: {exc}"))
 
 
+@router.get("/reports/{report_id}/email-delivery-logs")
+async def report_email_delivery_logs(report_id: int, limit: int = 20, user: dict[str, Any] = CurrentUser):
+    actor = _route_actor(user)
+    report = get_report(report_id, actor=actor)
+    if not report:
+        raise HTTPException(status_code=404, detail="report not found")
+    logs = list_email_delivery_logs(report_id=report_id, limit=_query_limit(limit, default=20, maximum=100), actor=actor)
+    return {"report": _customer_view_report(report), "delivery_logs": [_customer_view_email_delivery_log(item) for item in logs]}
+
+
 @router.post("/reports/{report_id}/resend-email")
 async def report_resend_email(report_id: int, user: dict[str, Any] = CurrentUser):
     try:
         if _route_actor(user) and not get_report(report_id, actor=_route_actor(user)):
             raise ValueError("report not found")
-        ok, error, report = resend_report_email(report_id)
+        ok, error, report = resend_report_email(report_id, actor=_route_actor(user))
         if is_administrator(user):
             _audit_admin(user, "resend_report_email", "report", report_id, {"status": "sent" if ok else "failed", "error": error or ""})
         return {"ok": ok, "error": customer_safe_text(error), "report": report}
@@ -1451,6 +1527,10 @@ def _customer_view_run(item: dict[str, Any]) -> dict[str, Any]:
         "display_status",
         "display_error",
         "summary",
+        "visibility",
+        "run_type",
+        "archived_at",
+        "archived_by",
     }
     view = {key: _customer_safe_value(value) for key, value in item.items() if key in allowed}
     view["error_message"] = customer_safe_text(item.get("error_message"))
@@ -1468,9 +1548,55 @@ def _customer_view_report(item: dict[str, Any]) -> dict[str, Any]:
         "law_firm_name",
         "display_law_firm_name",
         "job_deleted",
+        "legacy_without_job_snapshot",
+        "limited_context",
+        "job_snapshot",
         "summary",
     }
     return {key: _customer_safe_value(value) for key, value in item.items() if key in allowed}
+
+
+def _customer_view_email_delivery_log(item: dict[str, Any]) -> dict[str, Any]:
+    allowed = {
+        "id",
+        "job_id",
+        "report_id",
+        "send_window_key",
+        "send_type",
+        "sent_by",
+        "sent_at",
+        "status",
+        "error_message",
+        "recipients",
+        "created_at",
+    }
+    view = {key: _customer_safe_value(value) for key, value in item.items() if key in allowed}
+    view["error_message"] = _customer_safe_delivery_error(item.get("error_message"))
+    return view
+
+
+def _customer_safe_delivery_error(value: Any) -> str:
+    text = customer_safe_text(value)
+    for label in [
+        "smtp_password",
+        "smtp-password",
+        "password",
+        "api_key",
+        "api-key",
+        "x-api-key",
+        "authorization",
+        "token",
+        "secret",
+        "proxy_url",
+        "proxy-url",
+        "cookie",
+        "cookies_encrypted",
+        "api_key_encrypted",
+        "password_encrypted",
+    ]:
+        text = text.replace(f"{label}=[REDACTED]", "敏感信息已隐藏")
+        text = text.replace(f"{label}: [REDACTED]", "敏感信息已隐藏")
+    return text
 
 
 def _customer_view_lead(item: dict[str, Any]) -> dict[str, Any]:

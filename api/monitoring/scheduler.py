@@ -85,7 +85,7 @@ def launch_job(job_id: int, source: str = "manual") -> dict[str, Any]:
     clear_stop_request(job_id)
     _running_jobs.add(job_id)
     set_job_schedule_state(job_id, None)
-    _job_tasks[job_id] = asyncio.create_task(_run_and_release(job_id))
+    _job_tasks[job_id] = asyncio.create_task(_run_and_release(job_id, source=source))
     return {"started": True, "status": "queued", "job_id": job_id, "source": source}
 
 
@@ -173,9 +173,9 @@ def _runtime_setting_int(key: str, default: int) -> int:
             return default
 
 
-async def _run_and_release(job_id: int) -> None:
+async def _run_and_release(job_id: int, source: str = "manual") -> None:
     try:
-        await run_job(job_id)
+        await run_job(job_id, source=source)
     except Exception:
         # run_job already writes the failure into crawl_runs; keep background
         # tasks from leaking unhandled exceptions into the server loop.
