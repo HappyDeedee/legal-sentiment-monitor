@@ -340,17 +340,17 @@ views in one goal.
 
 ### Phase 13B - Operations Home Desktop Visual Metrics
 
-- [ ] Replace the text-heavy overview content with a desktop operations home
+- [x] Replace the text-heavy overview content with a desktop operations home
       using Phase 11 design tokens and component patterns.
-- [ ] Add visual task, run, report, email delivery, suspected lead, and concise
+- [x] Add visual task, run, report, email delivery, suspected lead, and concise
       resource-health metric sections.
-- [ ] Add drilldown links into Monitoring, Run Center, Report Center, Email
+- [x] Add drilldown links into Monitoring, Run Center, Report Center, Email
       Delivery status, and administrator resource pages where permitted.
-- [ ] Decide whether a chart library is needed; record any chart dependency in
+- [x] Decide whether a chart library is needed; record any chart dependency in
       `DECISIONS.md` before adding it.
-- [ ] Keep long system-running, scheduler, platform, browser, and deployment
+- [x] Keep long system-running, scheduler, platform, browser, and deployment
       diagnostic blocks out of the default home page.
-- [ ] Verify desktop 1440px layout, drilldowns, and role-safe metric wording.
+- [x] Verify desktop 1440px layout, drilldowns, and role-safe metric wording.
 
 ### Phase 13C - Operations Home Responsive And Role Views
 

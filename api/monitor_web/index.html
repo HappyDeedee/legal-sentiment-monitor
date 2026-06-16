@@ -401,24 +401,37 @@
           <button class="shortcut-card" type="button" data-shortcut-tab="reports" data-shortcut-target="email_delivery_status_entry" data-menu-key="report_center"><span>04</span><strong>检查邮件交付</strong><em>查看报告邮件状态，并按需手动重发。</em></button>
           <button class="shortcut-card admin-entry" type="button" data-shortcut-tab="accounts" data-menu-key="platform_accounts"><span>05</span><strong>处理资源问题</strong><em>维护账号登录态、代理、AI 接入和邮件配置。</em></button>
         </div>
-        <div id="dashboard_metrics" class="grid-4"></div>
-        <div class="grid">
-          <div class="panel">
-            <h3>系统运行状态</h3>
-            <div id="readiness_summary"></div>
-            <div id="ops_checklist"></div>
-            <div id="readiness_actions"></div>
-            <div id="readiness_table"></div>
-          </div>
-          <div class="panel">
-            <h3>调度器状态</h3>
-            <div id="scheduler_status"></div>
+        <div class="operations-home" aria-label="运营指标">
+          <div id="operations_home_meta" class="operations-home-meta"></div>
+          <div id="dashboard_metrics" class="operations-metric-grid"></div>
+          <div class="operations-home-lower">
+            <div id="operations_home_drilldowns" class="operations-drilldowns" aria-label="运营钻取入口"></div>
+            <div id="operations_home_resource" class="operations-resource-panel"></div>
           </div>
         </div>
-        <div class="panel">
-          <h3>平台状态</h3>
-          <div id="platform_status_table"></div>
-        </div>
+        <details class="operations-diagnostics admin-entry" data-menu-key="system_diagnostics">
+          <summary>
+            <span>系统诊断摘要</span>
+            <em>调度、平台和运行环境细节</em>
+          </summary>
+          <div class="grid">
+            <div class="panel">
+              <h3>系统运行状态</h3>
+              <div id="readiness_summary"></div>
+              <div id="ops_checklist"></div>
+              <div id="readiness_actions"></div>
+              <div id="readiness_table"></div>
+            </div>
+            <div class="panel">
+              <h3>调度器状态</h3>
+              <div id="scheduler_status"></div>
+            </div>
+          </div>
+          <div class="panel">
+            <h3>平台状态</h3>
+            <div id="platform_status_table"></div>
+          </div>
+        </details>
       </section>
 
       <section id="jobs">
@@ -1617,15 +1630,7 @@
       toggleMobileNav();
     });
     document.getElementById('mobile_nav_backdrop')?.addEventListener('click', closeMobileNav);
-    document.querySelectorAll('[data-shortcut-tab]').forEach(btn=>{
-      btn.addEventListener('click', event=>{
-        event.preventDefault();
-        navigateShortcut(btn.dataset.shortcutTab, {
-          target: btn.dataset.shortcutTarget || '',
-          action: btn.dataset.shortcutAction || ''
-        });
-      });
-    });
+    bindShortcutButtons();
 
     function toggleNavGroup(group){
       const wrapper=document.querySelector(`[data-nav-group="${group}"]`);
@@ -1672,6 +1677,19 @@
       if(options.action==='new-job'){
         setTimeout(()=>openNewJobDrawer(), 0);
       }
+    }
+    function bindShortcutButtons(root=document){
+      root.querySelectorAll('[data-shortcut-tab]').forEach(btn=>{
+        if(btn.dataset.shortcutBound) return;
+        btn.dataset.shortcutBound = '1';
+        btn.addEventListener('click', event=>{
+          event.preventDefault();
+          navigateShortcut(btn.dataset.shortcutTab, {
+            target: btn.dataset.shortcutTarget || '',
+            action: btn.dataset.shortcutAction || ''
+          });
+        });
+      });
     }
     function activateNavTab(btn, options={}){
       if(!canOpenTab(btn.dataset.tab)){
@@ -1725,6 +1743,9 @@
       });
       document.querySelectorAll('[data-shortcut-tab][data-menu-key]').forEach(btn=>{
         btn.classList.toggle('is-hidden', !canMenu(btn.dataset.menuKey));
+      });
+      document.querySelectorAll('.admin-entry[data-menu-key]').forEach(el=>{
+        el.classList.toggle('is-hidden', !canMenu(el.dataset.menuKey));
       });
       document.querySelectorAll('section[id]').forEach(section=>{
         if(!canOpenTab(section.id)) section.classList.remove('active');
@@ -1796,21 +1817,154 @@
     async function loadDashboard(){
       const data=await (await api('/dashboard')).json();
       const s=data.summary||{};
+      const home=data.operations_home || s.operations_home || legacyOperationsHome(s);
       const scheduler=data.scheduler||{};
       const readiness=data.readiness||{};
       document.getElementById('top_status').innerHTML = `<span class="status ${scheduler.enabled?'ok':'warn'}">${scheduler.enabled?'调度运行中':'调度未启用'}</span> <span class="status ${readiness.ready?'ok':'warn'}">${readiness.ready?'运行正常':'配置待完善'}</span>`;
-      document.getElementById('dashboard_metrics').innerHTML = [
-        metricCard('监控任务', s.jobs_total||0, `启用 ${s.jobs_enabled||0}`),
-        metricCard('采集内容', s.contents_total||0, `运行 ${s.runs_total||0} 次`),
-        metricCard('风险线索', s.negative_total||0, `高风险 ${s.high_total||0}`),
-        metricCard('待人工复核', s.pending_review||0, `报告 ${s.reports_total||0} 份`),
-        metricCard('账号资源', s.social_accounts_total||0, '社媒账号'),
-        metricCard('代理资源', s.proxy_profiles_total||0, '可绑定代理'),
-        metricCard('AI 接入', s.ai_profiles_total||0, '模型连接资源'),
-        metricCard('登录会话', s.login_sessions_total||0, '扫码登录记录'),
-        metricCard('近 20 次失败', s.failed_runs_recent||0, `平台：${esc(formatPlatformCounts(s.platform_counts_recent||{}))}`),
-        metricCard('预检拦截', s.skipped_runs_recent||0, '登录态/配置阻断')
-      ].join('');
+      renderOperationsHome(home);
+    }
+    function legacyOperationsHome(summary){
+      return {
+        last_updated_at: new Date().toISOString(),
+        scope: isAdminUser() ? 'workspace' : 'own',
+        task_health: {total: summary.jobs_total||0, active: summary.jobs_enabled||0, paused: Math.max(0, (summary.jobs_total||0) - (summary.jobs_enabled||0)), needs_attention: (summary.failed_runs_recent||0) + (summary.skipped_runs_recent||0) + (summary.pending_review||0)},
+        run_activity: {total: summary.runs_total||0, today: 0, running: 0, failed_recent: summary.failed_runs_recent||0, skipped_recent: summary.skipped_runs_recent||0, platform_counts_recent: summary.platform_counts_recent||{}},
+        report_activity: {total: summary.reports_total||0, generated: summary.reports_total||0, manual_review: summary.pending_review||0, email_failed: 0, email_unsent: 0},
+        email_delivery: {total: summary.reports_total||0, sent: 0, failed: 0, unsent: 0, history_available: false},
+        lead_metrics: {contents_total: summary.contents_total||0, suspected_negative: summary.negative_total||0, high_risk: summary.high_total||0, pending_review: summary.pending_review||0, trend_available: false},
+        resource_health: isAdminUser()
+          ? {scope: 'workspace', status: 'needs_attention', social_accounts_total: summary.social_accounts_total||0, proxy_profiles_total: summary.proxy_profiles_total||0, ai_profiles_total: summary.ai_profiles_total||0, login_sessions_total: summary.login_sessions_total||0, signals: []}
+          : {scope: 'business_safe', status: 'available', signals: [{label: '采集资源', status: 'available', note: '资源由管理员维护'}]}
+      };
+    }
+    function renderOperationsHome(home){
+      const updated=document.getElementById('operations_home_meta');
+      if(updated){
+        const scopeLabel=home.scope === 'own' ? '当前账号数据' : '工作区数据';
+        updated.innerHTML=`<span class="status ${home.scope==='own'?'':'ok'}">${esc(scopeLabel)}</span><span>最后更新 ${esc(formatTime(home.last_updated_at))}</span>`;
+      }
+      const metrics=document.getElementById('dashboard_metrics');
+      if(metrics){
+        metrics.innerHTML=[
+          operationsMetricCard({
+            tone: (home.task_health?.needs_attention||0) ? 'attention' : 'ok',
+            label: '任务健康',
+            value: home.task_health?.total||0,
+            note: `启用 ${home.task_health?.active||0} / 暂停 ${home.task_health?.paused||0}`,
+            detail: `${home.task_health?.needs_attention||0} 个待处理信号`,
+            tab: 'jobs',
+            menuKey: 'monitoring',
+            actionLabel: '查看任务'
+          }),
+          operationsMetricCard({
+            tone: (home.run_activity?.failed_recent||0) ? 'attention' : ((home.run_activity?.running||0) ? 'live' : ''),
+            label: '运行活动',
+            value: home.run_activity?.today||0,
+            note: `运行中 ${home.run_activity?.running||0} / 累计 ${home.run_activity?.total||0}`,
+            detail: `近 20 次失败 ${home.run_activity?.failed_recent||0}，预检拦截/登录态/配置阻断 ${home.run_activity?.skipped_recent||0}`,
+            tab: 'runs',
+            menuKey: 'run_center',
+            actionLabel: '查看运行'
+          }),
+          operationsMetricCard({
+            tone: (home.report_activity?.manual_review||0) ? 'review' : 'ok',
+            label: '报告与复核',
+            value: home.report_activity?.total||0,
+            note: `已生成 ${home.report_activity?.generated||0} 份`,
+            detail: `${home.report_activity?.manual_review||0} 条线索待人工复核`,
+            tab: 'reports',
+            menuKey: 'report_center',
+            actionLabel: '查看报告'
+          }),
+          operationsMetricCard({
+            tone: (home.email_delivery?.failed||0) ? 'attention' : ((home.email_delivery?.unsent||0) ? 'review' : 'ok'),
+            label: '邮件交付',
+            value: home.email_delivery?.sent||0,
+            note: `失败 ${home.email_delivery?.failed||0} / 未发送 ${home.email_delivery?.unsent||0}`,
+            detail: home.email_delivery?.history_available ? '交付历史可查看' : '当前展示报告最新交付状态',
+            tab: 'reports',
+            menuKey: 'report_center',
+            target: 'email_delivery_status_entry',
+            actionLabel: '检查交付'
+          }),
+          operationsMetricCard({
+            tone: (home.lead_metrics?.high_risk||0) ? 'risk' : ((home.lead_metrics?.suspected_negative||0) ? 'review' : ''),
+            label: '疑似负面线索',
+            value: home.lead_metrics?.suspected_negative||0,
+            note: `高风险 ${home.lead_metrics?.high_risk||0} / 待复核 ${home.lead_metrics?.pending_review||0}`,
+            detail: `采集内容 ${home.lead_metrics?.contents_total||0} 条`,
+            tab: 'reports',
+            menuKey: 'report_center',
+            actionLabel: '查看线索'
+          })
+        ].join('');
+      }
+      const drilldowns=document.getElementById('operations_home_drilldowns');
+      if(drilldowns) drilldowns.innerHTML=renderOperationsDrilldowns(home);
+      const resource=document.getElementById('operations_home_resource');
+      if(resource) resource.innerHTML=renderOperationsResourceHealth(home.resource_health||{});
+      applyMenuPermissions();
+      bindShortcutButtons(document.getElementById('dashboard'));
+    }
+    function operationsMetricCard(card){
+      const tone=card.tone ? ` is-${card.tone}` : '';
+      const target=card.target ? ` data-shortcut-target="${esc(card.target)}"` : '';
+      return `<article class="operations-metric-card${tone}">
+        <div class="operations-metric-head"><span>${esc(card.label)}</span><i></i></div>
+        <strong>${esc(card.value)}</strong>
+        <p>${esc(card.note)}</p>
+        <div class="operations-metric-foot">
+          <span>${esc(card.detail)}</span>
+          <button class="ghost btn-compact" type="button" data-shortcut-tab="${esc(card.tab)}" data-menu-key="${esc(card.menuKey)}"${target}>${esc(card.actionLabel)}</button>
+        </div>
+      </article>`;
+    }
+    function renderOperationsDrilldowns(home){
+      const items=[
+        {label: '新建监控任务', note: `${home.task_health?.active||0} 个任务启用中`, tab: 'jobs', menuKey: 'monitoring', action: 'new-job'},
+        {label: '运行中心', note: `${home.run_activity?.running||0} 个运行中，今日 ${home.run_activity?.today||0} 次`, tab: 'runs', menuKey: 'run_center'},
+        {label: '报告中心', note: `${home.report_activity?.total||0} 份报告，${home.lead_metrics?.pending_review||0} 条待复核`, tab: 'reports', menuKey: 'report_center'},
+        {label: '邮件交付', note: `${home.email_delivery?.failed||0} 个失败，${home.email_delivery?.unsent||0} 个未发送`, tab: 'reports', menuKey: 'report_center', target: 'email_delivery_status_entry'}
+      ];
+      if((home.resource_health||{}).scope === 'workspace'){
+        items.push({label: '资源支撑', note: resourceHealthSummary(home.resource_health), tab: 'accounts', menuKey: 'platform_accounts'});
+      }
+      return `<div class="operations-section-head"><div><span>钻取入口</span><strong>按任务流继续处理</strong></div></div><div class="operations-drilldown-list">${items.map(item=>{
+        const target=item.target ? ` data-shortcut-target="${esc(item.target)}"` : '';
+        const action=item.action ? ` data-shortcut-action="${esc(item.action)}"` : '';
+        return `<button class="operations-drilldown" type="button" data-shortcut-tab="${esc(item.tab)}" data-menu-key="${esc(item.menuKey)}"${target}${action}>
+          <strong>${esc(item.label)}</strong><span>${esc(item.note)}</span>
+        </button>`;
+      }).join('')}</div>`;
+    }
+    function renderOperationsResourceHealth(resource){
+      const admin=resource.scope === 'workspace';
+      const status=resource.status || (admin ? 'needs_attention' : 'available');
+      const title=admin ? '资源健康' : '采集资源';
+      const note=admin ? resourceHealthSummary(resource) : '资源由管理员维护';
+      const signals=(resource.signals||[]).length ? resource.signals : (admin ? [
+        {label:'平台账号', status: resource.social_accounts_total ? 'ready' : 'empty', count: resource.social_accounts_total||0},
+        {label:'代理资源', status: resource.proxy_profiles_total ? 'ready' : 'empty', count: resource.proxy_profiles_total||0},
+        {label:'AI 接入', status: resource.ai_profiles_total ? 'ready' : 'empty', count: resource.ai_profiles_total||0},
+        {label:'登录会话', status: resource.login_sessions_total ? 'ready' : 'empty', count: resource.login_sessions_total||0}
+      ] : [{label:'采集资源', status:'available', note:'资源由管理员维护'}]);
+      return `<div class="operations-section-head"><div><span>${esc(title)}</span><strong>${esc(resourceStatusText(status))}</strong></div><span class="status ${status==='ready'||status==='available'?'ok':'warn'}">${esc(admin ? '管理员可处理' : '业务可见')}</span></div>
+        <p class="operations-resource-note">${esc(note)}</p>
+        <div class="operations-resource-signals">${signals.map(signal=>`<div class="operations-resource-signal ${resourceSignalClass(signal.status)}">
+          <span>${esc(signal.label)}</span><strong>${esc(signal.count ?? signal.note ?? resourceStatusText(signal.status))}</strong>
+        </div>`).join('')}</div>`;
+    }
+    function resourceHealthSummary(resource){
+      if(!resource || resource.scope !== 'workspace') return '资源由管理员维护';
+      return `账号 ${resource.social_accounts_total||0} / 代理 ${resource.proxy_profiles_total||0} / AI ${resource.ai_profiles_total||0} / 会话 ${resource.login_sessions_total||0}`;
+    }
+    function resourceStatusText(status){
+      return {ready:'资源可用',available:'资源可用',needs_attention:'需要关注',empty:'待配置'}[status] || status || '状态未明';
+    }
+    function resourceSignalClass(status){
+      if(status === 'ready' || status === 'available') return 'is-ok';
+      if(status === 'empty' || status === 'needs_attention') return 'is-attention';
+      return '';
     }
     function metricCard(label, value, note){ return `<div class="metric-card"><div class="metric-label">${esc(label)}</div><div class="metric-value">${esc(value)}</div><div class="metric-note">${note}</div></div>`; }
     async function loadSystemChecklist(){

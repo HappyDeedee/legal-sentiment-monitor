@@ -11,6 +11,77 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
 `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-16 - Phase 13B Operations Home Desktop Visual Metrics Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`, isolated local FastAPI service with
+temporary monitor data.
+
+Result:
+
+- Replaced the default text-heavy Overview dashboard with an operations-home
+  visual metric layout in `api/monitor_web/index.html`.
+- Rendered task health, run activity, report/review status, email delivery
+  latest state, suspected negative leads, and concise resource health from the
+  Phase 13A operations-home API contract, with a legacy summary fallback for
+  compatibility.
+- Added drilldowns into Monitoring, Run Center, Report Center, report email
+  delivery status, and administrator platform-account resources where
+  permitted.
+- Moved long readiness, scheduler, and platform diagnostics into a collapsed
+  administrator-only diagnostics section so they no longer dominate the default
+  home page.
+- Added operations-home layout and metric styles to
+  `api/webui/monitor/monitor.css`.
+- Added
+  `tests/test_monitoring_mvp.py::test_phase_13b_operations_home_desktop_visual_metrics`.
+- Chose native HTML/CSS rather than a chart dependency, so no new dependency or
+  `DECISIONS.md` entry was required.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before and after code verification.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_13b or phase_13a or phase_12b or phase_12a or phase_11a or phase_11b or phase_11c or phase_11d or monitor_page_uses or readiness_dashboard"`
+- Result: 11 passed, 213 deselected, 3 warnings.
+- Inline script parse check for `api/monitor_web/index.html` plus
+  `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Runtime HTTP check on isolated service:
+  - `/monitor`: HTTP 200 and contained `运营首页`;
+  - `/static/monitor/monitor.css`: HTTP 200 and contained
+    `.operations-metric-grid`;
+  - `/static/monitor/monitor.js`: HTTP 200 and contained `MonitorUI`.
+- Browser validation:
+  - administrator login reached Operations Home;
+  - administrator saw five operations metric cards;
+  - administrator drilldowns reached Monitoring, Run Center, Report Center,
+    report email delivery status, and Platform Accounts;
+  - administrator diagnostics were collapsed by default;
+  - administrator 1440px, 1024px, and 390px checks found no horizontal
+    overflow;
+  - normal-user login used a fresh browser context;
+  - normal-user navigation exposed only `总览`, `舆情监控`, `运行中心`, and
+    `报告中心`;
+  - normal users saw business-safe resource wording `资源由管理员维护`;
+  - normal users did not see the administrator resource drilldown or system
+    diagnostics;
+  - normal-user task drawer, Report Center, and logout path remained
+    reachable;
+  - authenticated console/page errors were empty. The unauthenticated
+    session-check 401 before login remains existing login behavior and was not
+    treated as an authenticated console regression.
+
+Limitations:
+
+- Phase 13B implements the desktop visual metric surface and role-safe
+  drilldowns. Phase 13C still needs the dedicated responsive and role-view
+  close-out required by the roadmap.
+- No schema migration, run archive/noise filtering, email delivery log,
+  delivery-history UI, report grouping, or report snapshot behavior was added
+  in this batch.
+
 ## 2026-06-15 - Phase 13A Operations Home Data Layer Verified
 
 Environment: worktree

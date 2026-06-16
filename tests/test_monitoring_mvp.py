@@ -7776,9 +7776,11 @@ def test_phase_12b_page_entry_and_role_flow_shortcuts():
         "报告列表展示最新邮件状态",
         "function refreshActiveSection()",
         "function navigateShortcut(tab, options={})",
-        "document.querySelectorAll('[data-shortcut-tab]').forEach",
+        "function bindShortcutButtons(root=document)",
+        "root.querySelectorAll('[data-shortcut-tab]').forEach",
         "document.querySelectorAll('[data-shortcut-tab][data-menu-key]')",
         "btn.classList.toggle('is-hidden', !canMenu(btn.dataset.menuKey))",
+        "document.querySelectorAll('.admin-entry[data-menu-key]')",
         "if(options.action==='new-job')",
         "openNewJobDrawer()",
         "loadReadiness();",
@@ -7812,6 +7814,63 @@ def test_phase_12b_page_entry_and_role_flow_shortcuts():
     assert 'data-shortcut-tab="ai_rules" data-menu-key="ai_rules"' in page
 
     assert "/api/monitor/dashboard" not in page
+    assert "email_delivery_logs" not in page
+    assert "job_snapshot_json" not in page
+    assert "crawl_runs.visibility" not in page
+
+
+def test_phase_13b_operations_home_desktop_visual_metrics():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+
+    for marker in [
+        'class="operations-home"',
+        'id="operations_home_meta"',
+        'id="dashboard_metrics" class="operations-metric-grid"',
+        'id="operations_home_drilldowns"',
+        'id="operations_home_resource"',
+        'class="operations-diagnostics admin-entry" data-menu-key="system_diagnostics"',
+        "const home=data.operations_home || s.operations_home || legacyOperationsHome(s)",
+        "function renderOperationsHome(home)",
+        "function operationsMetricCard(card)",
+        "function renderOperationsDrilldowns(home)",
+        "function renderOperationsResourceHealth(resource)",
+        "bindShortcutButtons(document.getElementById('dashboard'))",
+        "data-shortcut-target=\"email_delivery_status_entry\"",
+        "data-shortcut-tab=\"accounts\" data-menu-key=\"platform_accounts\"",
+        "资源由管理员维护",
+        "当前展示报告最新交付状态",
+    ]:
+        assert marker in page
+
+    for label in [
+        "任务健康",
+        "运行活动",
+        "报告与复核",
+        "邮件交付",
+        "疑似负面线索",
+        "资源健康",
+        "钻取入口",
+        "系统诊断摘要",
+    ]:
+        assert label in page
+
+    for selector in [
+        ".operations-home",
+        ".operations-home-meta",
+        ".operations-metric-grid",
+        ".operations-metric-card",
+        ".operations-home-lower",
+        ".operations-drilldowns",
+        ".operations-resource-panel",
+        ".operations-drilldown-list",
+        ".operations-resource-signals",
+        ".operations-diagnostics",
+    ]:
+        assert selector in css
+
+    assert "new Chart(" not in page
+    assert "chart.js" not in page.lower()
     assert "email_delivery_logs" not in page
     assert "job_snapshot_json" not in page
     assert "crawl_runs.visibility" not in page

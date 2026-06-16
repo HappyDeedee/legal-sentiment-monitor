@@ -531,6 +531,258 @@ button:disabled {
   background: var(--color-primary-50);
 }
 
+.operations-home {
+  display: grid;
+  gap: var(--space-4);
+  margin-bottom: var(--space-4);
+}
+
+.operations-home-meta {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  color: var(--color-neutral-500);
+  font-size: var(--font-size-xs);
+}
+
+.operations-metric-grid {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-3);
+}
+
+.operations-metric-card {
+  min-height: 184px;
+  display: grid;
+  grid-template-rows: auto auto auto 1fr;
+  gap: var(--space-2);
+  padding: var(--space-4);
+  border: 1px solid rgba(221, 229, 239, 0.9);
+  border-top: 3px solid var(--color-neutral-300);
+  border-radius: var(--radius-card-medium);
+  background: var(--color-neutral-0);
+  box-shadow: var(--shadow-elevation-1);
+}
+
+.operations-metric-card.is-ok {
+  border-top-color: #10b981;
+}
+
+.operations-metric-card.is-live {
+  border-top-color: #0ea5e9;
+}
+
+.operations-metric-card.is-review {
+  border-top-color: #f59e0b;
+}
+
+.operations-metric-card.is-attention,
+.operations-metric-card.is-risk {
+  border-top-color: #e11d48;
+}
+
+.operations-metric-head,
+.operations-metric-foot,
+.operations-section-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-2);
+}
+
+.operations-metric-head span,
+.operations-section-head span {
+  color: var(--color-neutral-500);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.operations-metric-head i {
+  width: 8px;
+  height: 8px;
+  margin-top: 4px;
+  border-radius: 999px;
+  background: currentColor;
+  color: var(--color-neutral-300);
+}
+
+.operations-metric-card.is-ok .operations-metric-head i {
+  color: #10b981;
+}
+
+.operations-metric-card.is-live .operations-metric-head i {
+  color: #0ea5e9;
+}
+
+.operations-metric-card.is-review .operations-metric-head i {
+  color: #f59e0b;
+}
+
+.operations-metric-card.is-attention .operations-metric-head i,
+.operations-metric-card.is-risk .operations-metric-head i {
+  color: #e11d48;
+}
+
+.operations-metric-card strong {
+  color: var(--color-neutral-900);
+  font-size: 34px;
+  line-height: 1;
+}
+
+.operations-metric-card p,
+.operations-resource-note {
+  margin: 0;
+  color: var(--color-neutral-600);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-relaxed);
+}
+
+.operations-metric-foot {
+  align-self: end;
+  align-items: center;
+}
+
+.operations-metric-foot span {
+  min-width: 0;
+  color: var(--color-neutral-500);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-base);
+}
+
+.operations-home-lower {
+  display: grid;
+  grid-template-columns: minmax(0, 1.55fr) minmax(280px, 0.9fr);
+  gap: var(--space-3);
+  align-items: stretch;
+}
+
+.operations-drilldowns,
+.operations-resource-panel {
+  min-width: 0;
+  padding: var(--space-4);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-card-medium);
+  background: var(--color-neutral-0);
+  box-shadow: var(--shadow-elevation-1);
+}
+
+.operations-section-head strong {
+  display: block;
+  margin-top: 2px;
+  color: var(--color-neutral-900);
+  font-size: var(--font-size-lg);
+}
+
+.operations-drilldown-list {
+  display: grid;
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.operations-drilldown {
+  min-height: 86px;
+  display: grid;
+  align-content: start;
+  gap: var(--space-1);
+  padding: var(--space-3);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-control-medium);
+  background: var(--color-neutral-25);
+  color: var(--color-neutral-800);
+  text-align: left;
+}
+
+.operations-drilldown:hover {
+  border-color: var(--color-primary-500);
+  background: var(--color-primary-50);
+}
+
+.operations-drilldown strong {
+  font-size: var(--font-size-sm);
+}
+
+.operations-drilldown span {
+  color: var(--color-neutral-500);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-relaxed);
+}
+
+.operations-resource-signals {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: var(--space-2);
+  margin-top: var(--space-3);
+}
+
+.operations-resource-signal {
+  min-height: 64px;
+  padding: var(--space-3);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-control-medium);
+  background: var(--color-neutral-25);
+}
+
+.operations-resource-signal.is-ok {
+  border-color: var(--color-status-success-border);
+  background: var(--color-status-success-bg);
+}
+
+.operations-resource-signal.is-attention {
+  border-color: var(--color-status-warning-border);
+  background: var(--color-status-warning-bg);
+}
+
+.operations-resource-signal span,
+.operations-resource-signal strong {
+  display: block;
+}
+
+.operations-resource-signal span {
+  color: var(--color-neutral-500);
+  font-size: var(--font-size-xs);
+  font-weight: var(--font-weight-bold);
+}
+
+.operations-resource-signal strong {
+  margin-top: var(--space-1);
+  color: var(--color-neutral-900);
+  font-size: var(--font-size-lg);
+}
+
+.operations-diagnostics {
+  margin-top: var(--space-2);
+}
+
+.operations-diagnostics > summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-3);
+  padding: var(--space-3) var(--space-4);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-card-medium);
+  background: var(--color-neutral-0);
+  box-shadow: var(--shadow-elevation-1);
+  cursor: pointer;
+}
+
+.operations-diagnostics > summary span {
+  color: var(--color-neutral-800);
+  font-weight: var(--font-weight-bold);
+}
+
+.operations-diagnostics > summary em {
+  color: var(--color-neutral-500);
+  font-size: var(--font-size-xs);
+  font-style: normal;
+}
+
+.operations-diagnostics[open] > summary {
+  margin-bottom: var(--space-3);
+}
+
 .email-delivery-entry {
   display: flex;
   align-items: center;
@@ -889,9 +1141,15 @@ button:disabled {
   }
 
   .grid-4,
+  .operations-metric-grid,
   .resource-summary-grid,
   .wizard-steps {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
+  }
+
+  .operations-home-lower,
+  .operations-drilldown-list {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .task-loop-shortcuts {
@@ -1056,6 +1314,10 @@ button:disabled {
   .grid,
   .grid-3,
   .grid-4,
+  .operations-metric-grid,
+  .operations-home-lower,
+  .operations-drilldown-list,
+  .operations-resource-signals,
   .settings-grid,
   .artifact-grid,
   .resource-summary-grid,
