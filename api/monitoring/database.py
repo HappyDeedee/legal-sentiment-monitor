@@ -50,6 +50,8 @@ JOB_OUTPUT_MODES = {"internal", "json", "excel"}
 JOB_BROWSER_MODES = {"server_qrcode", "profile", "local_window"}
 USER_ROLES = {"administrator", "normal"}
 USER_STATUSES = {"active", "disabled"}
+EMAIL_DELIVERY_SEND_TYPES = {"auto", "manual_resend"}
+EMAIL_DELIVERY_STATUSES = {"pending", "sending", "sent", "failed", "skipped"}
 SESSION_TTL_SECONDS = 8 * 60 * 60
 
 
@@ -438,6 +440,21 @@ def init_db() -> None:
                 created_at TEXT NOT NULL
             );
 
+            CREATE TABLE IF NOT EXISTS email_delivery_logs (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
+                job_id INTEGER NOT NULL,
+                report_id INTEGER,
+                send_window_key TEXT NOT NULL,
+                send_type TEXT NOT NULL CHECK(send_type IN ('auto', 'manual_resend')),
+                sent_by INTEGER,
+                sent_at TEXT,
+                status TEXT NOT NULL CHECK(status IN ('pending', 'sending', 'sent', 'failed', 'skipped')),
+                error_message TEXT,
+                recipients_json TEXT,
+                created_at TEXT NOT NULL
+            );
+
             CREATE TABLE IF NOT EXISTS resource_locks (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 workspace_id INTEGER NOT NULL DEFAULT 1,
@@ -810,6 +827,7 @@ def _ensure_phase_05_schema(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "crawl_runs", "deadline_at", "TEXT")
     _ensure_column(conn, "crawl_runs", "timeout_reason", "TEXT")
     _ensure_phase_14_run_center_schema(conn)
+    _ensure_phase_16_email_delivery_schema(conn)
     _backfill_social_account_profile_keys(conn)
     _backfill_login_session_profile_keys(conn)
 
@@ -850,6 +868,62 @@ def _ensure_phase_14_run_center_schema(conn: sqlite3.Connection) -> None:
             ON crawl_runs(workspace_id, visibility, started_at);
         CREATE INDEX IF NOT EXISTS idx_crawl_runs_type_status
             ON crawl_runs(workspace_id, run_type, status);
+        """
+    )
+
+
+def _ensure_phase_16_email_delivery_schema(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS email_delivery_logs (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            workspace_id INTEGER NOT NULL DEFAULT 1,
+            job_id INTEGER NOT NULL,
+            report_id INTEGER,
+            send_window_key TEXT NOT NULL,
+            send_type TEXT NOT NULL DEFAULT 'auto',
+            sent_by INTEGER,
+            sent_at TEXT,
+            status TEXT NOT NULL DEFAULT 'pending',
+            error_message TEXT,
+            recipients_json TEXT,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    _ensure_column(conn, "email_delivery_logs", "workspace_id", f"INTEGER NOT NULL DEFAULT {DEFAULT_WORKSPACE_ID}")
+    _ensure_column(conn, "email_delivery_logs", "job_id", "INTEGER NOT NULL DEFAULT 0")
+    _ensure_column(conn, "email_delivery_logs", "report_id", "INTEGER")
+    _ensure_column(conn, "email_delivery_logs", "send_window_key", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "email_delivery_logs", "send_type", "TEXT NOT NULL DEFAULT 'auto'")
+    _ensure_column(conn, "email_delivery_logs", "sent_by", "INTEGER")
+    _ensure_column(conn, "email_delivery_logs", "sent_at", "TEXT")
+    _ensure_column(conn, "email_delivery_logs", "status", "TEXT NOT NULL DEFAULT 'pending'")
+    _ensure_column(conn, "email_delivery_logs", "error_message", "TEXT")
+    _ensure_column(conn, "email_delivery_logs", "recipients_json", "TEXT")
+    _ensure_column(conn, "email_delivery_logs", "created_at", "TEXT NOT NULL DEFAULT ''")
+    now = utc_now()
+    conn.execute(
+        "UPDATE email_delivery_logs SET workspace_id=? WHERE COALESCE(workspace_id, 0) = 0",
+        (DEFAULT_WORKSPACE_ID,),
+    )
+    conn.execute("UPDATE email_delivery_logs SET send_type='auto' WHERE send_type NOT IN ('auto', 'manual_resend')")
+    conn.execute(
+        "UPDATE email_delivery_logs SET status='pending' WHERE status NOT IN ('pending', 'sending', 'sent', 'failed', 'skipped')"
+    )
+    conn.execute("UPDATE email_delivery_logs SET recipients_json='[]' WHERE recipients_json IS NULL")
+    conn.execute("UPDATE email_delivery_logs SET created_at=? WHERE COALESCE(created_at, '') = ''", (now,))
+    conn.executescript(
+        """
+        CREATE INDEX IF NOT EXISTS idx_email_delivery_job_window
+            ON email_delivery_logs(workspace_id, job_id, send_window_key);
+        CREATE INDEX IF NOT EXISTS idx_email_delivery_report
+            ON email_delivery_logs(workspace_id, report_id, created_at);
+        CREATE INDEX IF NOT EXISTS idx_email_delivery_status
+            ON email_delivery_logs(workspace_id, status, created_at);
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_email_delivery_auto_window_unique
+            ON email_delivery_logs(workspace_id, job_id, send_window_key, send_type)
+            WHERE send_type='auto' AND status IN ('pending', 'sending', 'sent');
         """
     )
 
@@ -2660,6 +2734,142 @@ def get_report(report_id: int, actor: dict[str, Any] | None = None) -> dict[str,
     _hydrate_report_item(report)
     _attach_report_lead_counts([report])
     return report
+
+
+def email_send_window_key(job_id: int, frequency: str, when: datetime | str | None = None) -> str:
+    target_id = _safe_int(job_id)
+    if not target_id:
+        raise ValueError("job_id is required")
+    if isinstance(when, datetime):
+        send_at = when
+    elif when:
+        send_at = _parse_iso_datetime(when)
+        if send_at is None:
+            raise ValueError("invalid send time")
+    else:
+        send_at = datetime.now(timezone.utc)
+    if send_at.tzinfo is None:
+        send_at = send_at.replace(tzinfo=timezone.utc)
+    send_at = send_at.astimezone(timezone.utc)
+    normalized_frequency = str(frequency or "daily").strip().lower()
+    if normalized_frequency == "daily":
+        return f"{target_id}_{send_at.date().isoformat()}"
+    if normalized_frequency in {"6h", "12h", "cron"}:
+        return f"{target_id}_{send_at.date().isoformat()}_{send_at.strftime('%H')}"
+    raise ValueError("invalid email send frequency")
+
+
+def record_email_delivery_log(payload: dict[str, Any]) -> dict[str, Any]:
+    send_type = str(payload.get("send_type") or "").strip()
+    if send_type not in EMAIL_DELIVERY_SEND_TYPES:
+        raise ValueError("invalid email delivery send_type")
+    status = str(payload.get("status") or "").strip()
+    if status not in EMAIL_DELIVERY_STATUSES:
+        raise ValueError("invalid email delivery status")
+    job_id = _safe_int(payload.get("job_id"))
+    if not job_id:
+        raise ValueError("job_id is required")
+    report_id = _safe_int(payload.get("report_id"))
+    sent_by = _safe_int(payload.get("sent_by"))
+    workspace_id = _safe_int(payload.get("workspace_id"))
+    send_window_key = str(payload.get("send_window_key") or "").strip()
+    if not send_window_key:
+        frequency = str(payload.get("frequency") or "daily")
+        send_window_key = email_send_window_key(job_id, frequency, payload.get("sent_at") or payload.get("created_at"))
+    recipients_json = _email_recipients_json(payload.get("recipients_json", payload.get("recipients")))
+    sent_at = str(payload.get("sent_at") or "").strip() or None
+    created_at = str(payload.get("created_at") or "").strip() or utc_now()
+    with get_conn() as conn:
+        if not workspace_id:
+            row = conn.execute("SELECT workspace_id FROM monitor_jobs WHERE id=?", (job_id,)).fetchone()
+            workspace_id = _safe_int(row["workspace_id"]) if row else DEFAULT_WORKSPACE_ID
+        cur = conn.execute(
+            """
+            INSERT INTO email_delivery_logs (
+                workspace_id, job_id, report_id, send_window_key, send_type,
+                sent_by, sent_at, status, error_message, recipients_json, created_at
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                workspace_id or DEFAULT_WORKSPACE_ID,
+                job_id,
+                report_id,
+                send_window_key,
+                send_type,
+                sent_by,
+                sent_at,
+                status,
+                customer_safe_text(payload.get("error_message")),
+                recipients_json,
+                created_at,
+            ),
+        )
+        row = conn.execute("SELECT * FROM email_delivery_logs WHERE id=?", (int(cur.lastrowid),)).fetchone()
+    return _hydrate_email_delivery_log(dict(row))
+
+
+def list_email_delivery_logs(
+    job_id: int | None = None,
+    report_id: int | None = None,
+    limit: int = 100,
+    actor: dict[str, Any] | None = None,
+) -> list[dict[str, Any]]:
+    limit = _coerce_limit(limit)
+    clauses: list[str] = []
+    params: list[Any] = []
+    if job_id is not None:
+        clauses.append("email_delivery_logs.job_id=?")
+        params.append(job_id)
+    if report_id is not None:
+        clauses.append("email_delivery_logs.report_id=?")
+        params.append(report_id)
+    if actor:
+        clauses.append(
+            "email_delivery_logs.workspace_id=? AND (?='administrator' OR COALESCE(monitor_jobs.created_by, reports.created_by)=?)"
+        )
+        params.extend(
+            [
+                _safe_int(actor.get("workspace_id")) or DEFAULT_WORKSPACE_ID,
+                actor.get("role"),
+                _safe_int(actor.get("id")) or 0,
+            ]
+        )
+    where = f"WHERE {' AND '.join(clauses)}" if clauses else ""
+    sql = f"""
+        SELECT email_delivery_logs.*
+        FROM email_delivery_logs
+        LEFT JOIN monitor_jobs ON monitor_jobs.id = email_delivery_logs.job_id
+        LEFT JOIN reports ON reports.id = email_delivery_logs.report_id
+        {where}
+        ORDER BY email_delivery_logs.id DESC
+    """
+    if limit > 0:
+        sql += " LIMIT ?"
+        params.append(limit)
+    with get_conn() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return [_hydrate_email_delivery_log(dict(row)) for row in rows]
+
+
+def _email_recipients_json(value: Any) -> str:
+    if isinstance(value, str):
+        loaded = _json_loads(value, [])
+        if loaded != [] or value.strip() in {"[]", ""}:
+            value = loaded
+        else:
+            value = [value]
+    if not isinstance(value, list):
+        value = []
+    return json.dumps([customer_safe_text(str(item)) for item in value if str(item).strip()], ensure_ascii=False)
+
+
+def _hydrate_email_delivery_log(item: dict[str, Any]) -> dict[str, Any]:
+    item["error_message"] = customer_safe_text(item.get("error_message"))
+    item["recipients"] = _json_loads(item.get("recipients_json"), [])
+    item["recipients"] = [customer_safe_text(str(value)) for value in item["recipients"]]
+    item["recipients_json"] = json.dumps(item["recipients"], ensure_ascii=False)
+    return item
 
 
 def _hydrate_report_item(item: dict[str, Any]) -> None:

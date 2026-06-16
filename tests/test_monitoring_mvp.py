@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import sqlite3
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -15,7 +16,7 @@ from api.monitoring.ai import _build_endpoint, _parse_json, _validate_ai_output,
 from api.monitoring.ai import DEFAULT_PROMPT
 from api.monitoring.auth import SESSION_COOKIE_NAME
 from api.monitoring.account_environment import resolve_account_profile_path
-from api.monitoring.database import acquire_account_lock, acquire_proxy_lock, authenticate_user, bootstrap_admin_from_env, create_login_session, create_run, expire_login_sessions_for_account, finish_run, get_active_ai_key_profile, get_ai_config, get_conn, get_dashboard_summary, get_email_config, get_job, get_login_session, get_platform_login_config, get_report, get_run, get_runtime_setting_value, get_social_account, get_user_by_email, init_db, list_ai_key_profiles, list_ai_rule_profiles, list_email_templates, list_jobs, list_leads, list_login_sessions, list_platform_login_configs, list_proxy_profiles, list_reports, list_runtime_settings, list_runs, list_social_accounts, list_users, mark_selftest_jobs_internal, record_skipped_run, recover_stale_runs_and_locks, release_account_lock, release_proxy_locks, release_run_resource_locks, render_email_template_preview, save_ai_config, save_ai_key_profile, save_ai_rule_profile, save_email_config, save_email_template, save_job, save_platform_login_config, save_proxy_profile, save_runtime_settings, save_social_account, save_user, set_active_ai_key_profile, set_active_ai_rule_profile, update_social_account_check_state
+from api.monitoring.database import acquire_account_lock, acquire_proxy_lock, authenticate_user, bootstrap_admin_from_env, create_login_session, create_run, email_send_window_key, expire_login_sessions_for_account, finish_run, get_active_ai_key_profile, get_ai_config, get_conn, get_dashboard_summary, get_email_config, get_job, get_login_session, get_platform_login_config, get_report, get_run, get_runtime_setting_value, get_social_account, get_user_by_email, init_db, list_ai_key_profiles, list_ai_rule_profiles, list_email_delivery_logs, list_email_templates, list_jobs, list_leads, list_login_sessions, list_platform_login_configs, list_proxy_profiles, list_reports, list_runtime_settings, list_runs, list_social_accounts, list_users, mark_selftest_jobs_internal, record_email_delivery_log, record_skipped_run, recover_stale_runs_and_locks, release_account_lock, release_proxy_locks, release_run_resource_locks, render_email_template_preview, save_ai_config, save_ai_key_profile, save_ai_rule_profile, save_email_config, save_email_template, save_job, save_platform_login_config, save_proxy_profile, save_runtime_settings, save_social_account, save_user, set_active_ai_key_profile, set_active_ai_rule_profile, update_social_account_check_state
 from api.monitoring.mediacrawler_login import get_mediacrawler_login_capability
 from api.monitoring.login_browser import build_login_browser_command, open_login_browser, open_login_browser_with_command
 import api.monitoring.account_check as account_check_module
@@ -8205,6 +8206,170 @@ def test_phase_15b_run_center_frontend_filters_pagination_archive_controls():
     assert ".run-actions" in css
     assert "email_delivery_logs" not in page
     assert "job_snapshot_json" not in page
+
+
+def test_phase_16_email_delivery_logs_schema_window_keys_and_compatibility():
+    init_db()
+    jobs_snapshot = _snapshot_monitor_jobs()
+    snapshots = {
+        "email_delivery_logs": _snapshot_table("email_delivery_logs"),
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+    }
+    _clear_monitor_jobs()
+    try:
+        with get_conn() as conn:
+            columns = _table_columns(conn, "email_delivery_logs")
+            assert {
+                "workspace_id",
+                "job_id",
+                "report_id",
+                "send_window_key",
+                "send_type",
+                "sent_by",
+                "sent_at",
+                "status",
+                "error_message",
+                "recipients_json",
+                "created_at",
+            } <= columns
+            index_names = {
+                row["name"]
+                for row in conn.execute("PRAGMA index_list(email_delivery_logs)").fetchall()
+            }
+            assert "idx_email_delivery_job_window" in index_names
+            assert "idx_email_delivery_report" in index_names
+            assert "idx_email_delivery_status" in index_names
+            assert "idx_email_delivery_auto_window_unique" in index_names
+
+        job = save_job(
+            {
+                "law_firm_name": "Phase16邮件律所",
+                "keywords": ["Phase16邮件律所投诉"],
+                "platforms": ["dy"],
+                "recipients": ["ops@example.com"],
+            }
+        )
+        run_id = create_run(job["id"], {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        finish_run(run_id, "success", {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        report = create_report(run_id, job, {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        send_at = datetime(2026, 6, 16, 15, 45, tzinfo=timezone.utc)
+
+        assert email_send_window_key(job["id"], "daily", send_at) == f"{job['id']}_2026-06-16"
+        for frequency in ["6h", "12h", "cron"]:
+            assert email_send_window_key(job["id"], frequency, send_at) == f"{job['id']}_2026-06-16_15"
+
+        auto = record_email_delivery_log(
+            {
+                "workspace_id": job["workspace_id"],
+                "job_id": job["id"],
+                "report_id": report["id"],
+                "send_window_key": email_send_window_key(job["id"], "daily", send_at),
+                "send_type": "auto",
+                "sent_at": send_at.isoformat(),
+                "status": "sent",
+                "error_message": "smtp_password=super-secret proxy_url=http://user:pass@example.test:8080",
+                "recipients": ["ops@example.com"],
+            }
+        )
+        assert auto["send_type"] == "auto"
+        assert auto["status"] == "sent"
+        assert auto["send_window_key"] == f"{job['id']}_2026-06-16"
+        assert auto["recipients"] == ["ops@example.com"]
+        assert "super-secret" not in auto["error_message"]
+        assert "pass@example" not in auto["error_message"]
+
+        with pytest.raises(sqlite3.IntegrityError):
+            record_email_delivery_log(
+                {
+                    "workspace_id": job["workspace_id"],
+                    "job_id": job["id"],
+                    "report_id": report["id"],
+                    "send_window_key": auto["send_window_key"],
+                    "send_type": "auto",
+                    "status": "pending",
+                    "recipients": ["ops@example.com"],
+                }
+            )
+
+        failed_window = email_send_window_key(job["id"], "6h", datetime(2026, 6, 16, 16, 0, tzinfo=timezone.utc))
+        failed_auto = record_email_delivery_log(
+            {
+                "workspace_id": job["workspace_id"],
+                "job_id": job["id"],
+                "report_id": report["id"],
+                "send_window_key": failed_window,
+                "send_type": "auto",
+                "status": "failed",
+                "error_message": "token=secret-token",
+                "recipients_json": json.dumps(["ops@example.com"]),
+            }
+        )
+        retried_auto = record_email_delivery_log(
+            {
+                "workspace_id": job["workspace_id"],
+                "job_id": job["id"],
+                "report_id": report["id"],
+                "send_window_key": failed_window,
+                "send_type": "auto",
+                "status": "sending",
+                "recipients": ["ops@example.com"],
+            }
+        )
+        assert failed_auto["status"] == "failed"
+        assert retried_auto["status"] == "sending"
+
+        manual_one = record_email_delivery_log(
+            {
+                "workspace_id": job["workspace_id"],
+                "job_id": job["id"],
+                "report_id": report["id"],
+                "send_window_key": auto["send_window_key"],
+                "send_type": "manual_resend",
+                "sent_by": 1,
+                "status": "sent",
+                "recipients": ["ops@example.com"],
+            }
+        )
+        manual_two = record_email_delivery_log(
+            {
+                "workspace_id": job["workspace_id"],
+                "job_id": job["id"],
+                "report_id": report["id"],
+                "send_window_key": auto["send_window_key"],
+                "send_type": "manual_resend",
+                "sent_by": 1,
+                "status": "sent",
+                "recipients": ["ops@example.com"],
+            }
+        )
+        assert manual_one["send_type"] == "manual_resend"
+        assert manual_two["send_type"] == "manual_resend"
+
+        with get_conn() as conn:
+            conn.execute(
+                "UPDATE reports SET email_status='failed', email_error=? WHERE id=?",
+                ("smtp_password=super-secret", report["id"]),
+            )
+            raw_log = conn.execute(
+                "SELECT error_message, recipients_json FROM email_delivery_logs WHERE id=?",
+                (auto["id"],),
+            ).fetchone()
+        assert "super-secret" not in raw_log["error_message"]
+        assert "pass@example" not in raw_log["error_message"]
+        assert "ops@example.com" in raw_log["recipients_json"]
+        refreshed_report = get_report(report["id"])
+        assert refreshed_report["email_status"] == "failed"
+        assert "super-secret" not in refreshed_report["email_error"]
+        assert any(item["id"] == report["id"] and item["email_status"] == "failed" for item in list_reports(0))
+        logs = list_email_delivery_logs(report_id=report["id"], limit=10)
+        assert {item["send_type"] for item in logs} == {"auto", "manual_resend"}
+        assert all("super-secret" not in (item.get("error_message") or "") for item in logs)
+    finally:
+        _restore_table("email_delivery_logs", snapshots["email_delivery_logs"])
+        _restore_table("reports", snapshots["reports"])
+        _restore_table("crawl_runs", snapshots["crawl_runs"])
+        _restore_monitor_jobs(jobs_snapshot)
 
 
 def test_cli_run_due_runs_only_due_enabled_jobs(monkeypatch):

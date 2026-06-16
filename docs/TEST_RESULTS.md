@@ -11,6 +11,55 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
 `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-16 - Phase 16 Email Delivery Data Model Preparation Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`.
+
+Result:
+
+- Added `email_delivery_logs` to new SQLite database creation and compatible
+  existing-database migration.
+- Stored `workspace_id`, `job_id`, `report_id`, `send_window_key`,
+  `send_type`, `sent_by`, `sent_at`, `status`, `error_message`,
+  `recipients_json`, and `created_at`.
+- Added `email_send_window_key` for the accepted `daily`, `6h`, `12h`, and
+  `cron` rules.
+- Added delivery-log insert/list helpers that preserve customer-safe error
+  text and recipient summaries without storing SMTP passwords, proxy
+  credentials, or tokens.
+- Added recommended indexes:
+  `idx_email_delivery_job_window`, `idx_email_delivery_report`, and
+  `idx_email_delivery_status`.
+- Added partial unique index `idx_email_delivery_auto_window_unique` for one
+  pending/sending/sent automatic row per workspace, task, schedule window, and
+  `send_type=auto`.
+- Preserved existing `reports.email_status` and `reports.email_error`
+  latest-state compatibility fields.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before documentation update.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k phase_16`
+- Result: 1 passed, 228 deselected, 1 warning.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_16 or phase_15b or phase_15a or phase_14 or report_resend_email_updates_status"`
+- Result: 5 passed, 224 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 229 passed, 3 warnings.
+- `python -m py_compile api/monitoring/database.py tests/test_monitoring_mvp.py`
+- Result: PASS.
+
+Limitations:
+
+- Phase 16 is data-model preparation only. It does not connect scheduler or
+  mailer delivery behavior to the log table, does not prevent duplicate sends
+  end to end, and does not add report-center delivery-history UI. Those remain
+  Phase 17A and Phase 17B work.
+- Real SMTP delivery remains a production pilot risk inherited from earlier
+  phases.
+
 ## 2026-06-16 - Phase 15B Run Center Frontend Refinement Verified
 
 Environment: worktree

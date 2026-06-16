@@ -27,7 +27,8 @@ Responsive And Role Views is complete and verified. Phase 14 - Run Center
 Data Model Preparation is complete and verified. Phase 15A - Run Center API
 And Data Governance is complete and verified. Phase 15B - Run Center Frontend
 Refinement is complete and verified. Phase 16 - Email Delivery Data Model
-Preparation is the next allowed execution goal.
+Preparation is complete and verified. Phase 17A - Email Idempotency And
+Delivery Logic is the next allowed execution goal.
 The active SQLite schema now provides the foundation tables and columns
 required before later implementation work, and the web/API layer now has
 session login, administrator/normal-user roles, menu visibility,
@@ -62,7 +63,10 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   archive/restore APIs, and response metadata for pagination, filters,
   visibility, and run type, plus Phase 15B run-center frontend pagination,
   filters, default operational-record view, administrator archive/restore row
-  controls with confirmation, and responsive run-center verification.
+  controls with confirmation, and responsive run-center verification, plus
+  Phase 16 email delivery log schema, send-window key helper, delivery-log
+  insert/list helpers, customer-safe delivery-log text handling, and partial
+  unique automatic-send window protection for Phase 17A delivery governance.
 
 ## Implementation Status
 
@@ -91,7 +95,7 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
 - Phase 14 - Run Center Data Model Preparation: complete and verified.
 - Phase 15 - Run Center Governance And Frontend: complete and verified through
   Phase 15A-15B.
-- Phase 16 - Email Delivery Data Model Preparation: planned, not implemented.
+- Phase 16 - Email Delivery Data Model Preparation: complete and verified.
 - Phase 17 - Email Delivery Governance: planned as Phase 17A-17B, not
   implemented.
 - Phase 18 - Report Center Task Grouping: planned as Phase 18A-18B, not
@@ -101,7 +105,7 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   Phase 6 login-flow runtime are complete.
 
 The documented V1 product roadmap is implemented through Phase 9 in this
-worktree, and the console optimization roadmap is verified through Phase 15B.
+worktree, and the console optimization roadmap is verified through Phase 16.
 Production pilot handoff still requires live platform, SMTP, and AI-provider
 validation with real deployment credentials.
 
@@ -231,8 +235,8 @@ validation with real deployment credentials.
 
 ## In Progress
 
-- Phase 16 execution preparation. No Phase 16 email delivery data-model
-  implementation work is in progress yet.
+- Phase 17A execution preparation. No Phase 17 email sending, idempotency
+  workflow, or report-center delivery-history frontend work is in progress yet.
 
 ## Known Risks
 
@@ -257,7 +261,7 @@ validation with real deployment credentials.
 - Phase 7 and Phase 8 automated checks do not prove real AI provider, SMTP,
   real platform QR scanning, or real platform crawling behavior; those remain
   deployment and pilot risks.
-- Phase 16-18 plans depend on future implementation and verification. The
+- Phase 17-18 plans depend on future implementation and verification. The
   current frontend has the complete Phase 11-12 foundation and Phase 13A data
   contract: local static module
   boundary, base desktop shell/navigation/button/card/toolbar styling, shared
@@ -272,7 +276,10 @@ validation with real deployment credentials.
   run type fields, and Phase 15A exposes the corresponding run-center
   governance API layer. Phase 15B now wires that API into the run-center
   frontend with pagination, filters, archive/restore actions, and operational
-  versus test/noise separation.
+  versus test/noise separation. Phase 16 now adds the email delivery log table,
+  window-key helper, safe delivery-log helpers, and auto-window uniqueness
+  foundation, but Phase 17A must still connect scheduler/send logic to this
+  foundation before duplicate automatic email behavior is considered fixed.
 - Phase 11 was completed as four verified batches: Phase 11A module boundary
   and tokens, Phase 11B base layout/navigation visual foundation, Phase 11C
   interaction components and floating menus, and Phase 11D responsive
@@ -297,12 +304,13 @@ validation with real deployment credentials.
   kept normal-user metrics business-safe, moved detailed readiness/scheduler/
   platform diagnostics to System Diagnostics, and retained only a compact
   administrator health summary on the home page.
-- Email idempotency and report task grouping are accepted data-model directions
-  but are not active schema features yet. Run visibility/noise-filtering data
-  fields are active schema features after Phase 14, and archive/restore APIs,
-  pagination, and filters are active after Phase 15A. Frontend run-center
-  controls are active after Phase 15B. Email delivery logs remain Phase 16
-  work.
+- Email idempotency workflow and report task grouping are accepted directions.
+  Run visibility/noise-filtering data fields are active schema features after
+  Phase 14, archive/restore APIs, pagination, and filters are active after
+  Phase 15A, frontend run-center controls are active after Phase 15B, and
+  email delivery logs are active schema features after Phase 16. Actual
+  automatic-send idempotency in the scheduler/mailer workflow remains Phase
+  17A work.
 - The first global Phase 10-18 review found that Phase 13, Phase 17, and Phase
   18 were too coarse as single goals. The plan now splits them into data/API
   and frontend/responsive batches.
@@ -314,15 +322,53 @@ validation with real deployment credentials.
 
 Next allowed implementation step:
 
-1. start Phase 16 only;
-2. add the `email_delivery_logs` data model according to `DATA_MODEL.md` and
-   `SCHEMA_MIGRATION.md`;
-3. verify migration, fields, indexes or uniqueness rules, backfill
-   compatibility, and rollback risk before Phase 17A;
-4. preserve existing report generation, resend, preview, download, and
-   run-center behavior while adding the delivery-log foundation.
+1. start Phase 17A only;
+2. connect automatic email delivery to the Phase 16 `email_delivery_logs`
+   foundation;
+3. enforce automatic-send idempotency by `workspace_id + job_id +
+   send_window_key + send_type=auto`;
+4. record automatic attempts, successes, failures, recipient summaries, and
+   customer-safe errors while preserving report generation when SMTP is
+   unavailable;
+5. allow manual resend as a separate `manual_resend` delivery log without
+   implementing the Phase 17B report-center history frontend yet.
 
 ## Latest Verification
+
+Phase 16 email delivery data model preparation verification on 2026-06-16:
+
+- Added `email_delivery_logs` to new database creation and compatible existing
+  database migration.
+- Stored `workspace_id`, `job_id`, `report_id`, `send_window_key`,
+  `send_type`, `sent_by`, `sent_at`, `status`, `error_message`,
+  `recipients_json`, and `created_at`.
+- Added allowed send types `auto` and `manual_resend`, allowed statuses
+  `pending`, `sending`, `sent`, `failed`, and `skipped`, and send-window key
+  generation for `daily`, `6h`, `12h`, and `cron`.
+- Added Phase 16 indexes:
+  `idx_email_delivery_job_window`, `idx_email_delivery_report`, and
+  `idx_email_delivery_status`.
+- Added partial unique index `idx_email_delivery_auto_window_unique` so one
+  pending, sending, or sent automatic delivery can exist for the same
+  workspace, task, window, and `send_type=auto`, while failed/skipped retries
+  and manual resend rows can be recorded separately.
+- Preserved existing `reports.email_status` and `reports.email_error`
+  compatibility fields.
+- Ensured delivery-log helper output and stored errors use customer-safe
+  sensitive text handling and do not store SMTP passwords, proxy credentials,
+  or tokens.
+- Did not implement Phase 17A scheduler/mailer send-flow idempotency or Phase
+  17B delivery-history frontend.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before documentation update.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k phase_16`
+- Result: 1 passed, 228 deselected, 1 warning.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_16 or phase_15b or phase_15a or phase_14 or report_resend_email_updates_status"`
+- Result: 5 passed, 224 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 229 passed, 3 warnings.
+- `python -m py_compile api/monitoring/database.py tests/test_monitoring_mvp.py`
+- Result: PASS.
 
 Phase 15B run center frontend refinement verification on 2026-06-16:
 

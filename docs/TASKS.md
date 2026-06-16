@@ -387,7 +387,8 @@ frontend governance.
 Planning status:
 
 Phase 15 depends on Phase 14. Phase 15A and Phase 15B are complete and
-verified. Phase 16 is the next implementation batch.
+verified. Phase 16 is also complete and verified; Phase 17A is the next
+implementation batch.
 
 ### Phase 15A - Run Center API And Data Governance
 
@@ -418,19 +419,21 @@ verified. Phase 16 is the next implementation batch.
 
 Planning status:
 
-Phase 16 is planned before email governance implementation.
+Phase 16 is complete and verified. It only prepares the email delivery data
+model; Phase 17A must still connect delivery logic, scheduler idempotency, and
+manual resend logging to this foundation.
 
-- [ ] Add `email_delivery_logs`.
-- [ ] Store `workspace_id`, `job_id`, `report_id`, `send_window_key`,
+- [x] Add `email_delivery_logs`.
+- [x] Store `workspace_id`, `job_id`, `report_id`, `send_window_key`,
       `send_type`, `sent_by`, `sent_at`, `status`, `error_message`,
       `recipients_json`, and `created_at`.
-- [ ] Use `send_type = auto` for scheduler sends and
+- [x] Use `send_type = auto` for scheduler sends and
       `send_type = manual_resend` for explicit resend.
-- [ ] Use `daily` window keys as `{job_id}_{YYYY-MM-DD}`.
-- [ ] Use `6h`, `12h`, and `cron` window keys as
+- [x] Use `daily` window keys as `{job_id}_{YYYY-MM-DD}`.
+- [x] Use `6h`, `12h`, and `cron` window keys as
       `{job_id}_{YYYY-MM-DD}_{HH}`.
-- [ ] Add indexes or uniqueness rules needed for automatic-send idempotency.
-- [ ] Update `DATA_MODEL.md` and `SCHEMA_MIGRATION.md`.
+- [x] Add indexes or uniqueness rules needed for automatic-send idempotency.
+- [x] Update `DATA_MODEL.md` and `SCHEMA_MIGRATION.md`.
 
 ## Phase 17 - Email Delivery Governance
 

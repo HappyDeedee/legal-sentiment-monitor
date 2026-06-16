@@ -250,8 +250,10 @@ Implementation notes:
 
 ## Phase 16 - Email Delivery Logs
 
-This phase is planned for the console optimization roadmap and is not
-implemented yet.
+This phase is implemented and verified for the console optimization roadmap.
+It prepares the data model only; Phase 17A must still connect scheduler/mailer
+delivery logic, automatic-send idempotency, and manual resend logging to this
+foundation.
 
 Create `email_delivery_logs`:
 
@@ -302,12 +304,14 @@ Recommended indexes and constraints:
 idx_email_delivery_job_window on email_delivery_logs(workspace_id, job_id, send_window_key)
 idx_email_delivery_report on email_delivery_logs(workspace_id, report_id, created_at)
 idx_email_delivery_status on email_delivery_logs(workspace_id, status, created_at)
+idx_email_delivery_auto_window_unique on email_delivery_logs(workspace_id, job_id, send_window_key, send_type)
+  where send_type = "auto" and status in ("pending", "sending", "sent")
 ```
 
-Automatic-send idempotency should enforce one active or successful automatic
-send for the same `workspace_id + job_id + send_window_key + send_type=auto`.
-SQLite may require this through a partial unique index or transactional
-application logic, depending on the current migration helper capabilities.
+Automatic-send idempotency foundation is implemented through a SQLite partial
+unique index. It enforces one active or successful automatic delivery row for
+the same `workspace_id + job_id + send_window_key + send_type=auto`, while
+allowing failed/skipped retries and repeated manual resend rows.
 
 Compatibility rules:
 
@@ -315,6 +319,17 @@ Compatibility rules:
   during migration;
 - backfill is optional for old reports because old attempts were not recorded;
 - do not store SMTP credentials or full secret configuration in delivery logs.
+
+Implementation notes:
+
+- new database creation includes `email_delivery_logs`;
+- existing database migration creates the table if missing and ensures every
+  required column exists;
+- invalid legacy `send_type` values are normalized to `auto`;
+- invalid legacy `status` values are normalized to `pending`;
+- missing `recipients_json` values are normalized to `[]`;
+- tests verify the fields, indexes, partial unique index behavior, window-key
+  rules, old report email fields, and delivery-log secret redaction.
 
 ## Phase 18 - Report Job Snapshot
 

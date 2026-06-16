@@ -25,17 +25,17 @@ Phase 0.5 added:
 Current code should still be checked before implementation work begins, but the
 Phase 0.5 foundation is now an active schema feature in this worktree.
 
-Phase 10-18 console optimization planning has been accepted. Phase 14 has
-implemented and verified these run-center data-model fields:
+Phase 10-18 console optimization planning has been accepted. Phase 14 and
+Phase 16 have implemented and verified these data-model fields:
 
 - run visibility and run type fields on `crawl_runs`;
 - `crawl_runs.archived_at`;
 - `crawl_runs.archived_by`;
+- `email_delivery_logs` for email delivery history and automatic-send
+  idempotency foundation.
 
 Remaining planned additions include:
 
-- `email_delivery_logs` for email send history and automatic-send
-  idempotency;
 - `reports.job_snapshot_json` for deleted or missing task report grouping.
 
 ## Scope
@@ -337,8 +337,8 @@ Rules:
 
 ### email_delivery_logs
 
-Phase 16 should add a dedicated table for email delivery history and
-automatic-send idempotency:
+Phase 16 adds a dedicated table for email delivery history and automatic-send
+idempotency foundation:
 
 ```text
 id
@@ -377,12 +377,16 @@ created_at
 
 Idempotency rules:
 
-- automatic delivery should not send more than once for the same
-  `job_id + send_window_key`;
+- the schema enforces at most one `pending`, `sending`, or `sent` automatic
+  delivery row for the same
+  `workspace_id + job_id + send_window_key + send_type=auto`;
+- failed or skipped automatic rows may be followed by a later retry row;
 - manual resend may repeat and should not consume the automatic-send idempotency
   key;
 - delivery attempts should preserve recipient summary and failure text without
   storing SMTP secrets.
+- Phase 17A must still connect scheduler/mailer logic to this schema before
+  duplicate automatic sends are prevented end to end.
 
 ## Migration Principles
 
