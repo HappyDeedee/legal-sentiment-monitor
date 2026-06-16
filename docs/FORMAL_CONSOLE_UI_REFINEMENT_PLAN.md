@@ -55,6 +55,10 @@ Not allowed:
 - no deleting buttons, filters, batch actions, row actions, drawers, modals,
   download actions, or confirmation flows;
 - no new dashboard metrics that require new backend fields.
+- no implementing the currently unrendered `Users And Permissions` page in
+  this phase. That surface is named in role documentation as a V1 permission
+  area, but it is not part of the current formal-console rendered page set; if
+  the user wants it implemented, record a separate new-capability CR.
 
 ## Target Experience
 
@@ -123,6 +127,19 @@ Always require a separate user confirmation or CR before:
 - adding metrics, charts, or visualizations that need new backend data;
 - changing customer-facing product terminology in a way that affects legal,
   permission, deployment, account, security, email, or report semantics.
+
+## Implementation Sequencing
+
+Implement Phase 21 as small frontend batches, not as one broad visual rewrite:
+
+- Workstreams A-O may be implemented and smoke-checked independently.
+- Each workstream must preserve its listed fields, buttons, overlays, menus,
+  role boundaries, and visible states before moving to the next workstream.
+- Phase 21P is the final cross-page verification gate after A-O are complete.
+- If Phase 21P finds a regression, rework the smallest affected workstream
+  rather than rewriting unrelated pages.
+- Do not mark any Phase 21 task complete until the corresponding code change,
+  browser check, and documentation update agree.
 
 ## Global Refinement Rules
 
@@ -212,6 +229,17 @@ Layout resilience must be checked at every accepted viewport:
   action, and secondary action readable and reachable;
 - loading, empty, and error states must preserve the same safe width behavior
   as loaded content.
+
+Concrete pass/fail examples:
+
+- Pass: on mobile `390x844`, a long law-firm name such as
+  `北京市海淀区恒泰律师事务所` wraps across readable multi-character lines inside
+  an Operations Home card, while the card's primary action remains reachable.
+- Pass: a desktop closed-loop track with task, run, report, and email steps
+  wraps or switches to compact rows before labels become narrow columns.
+- Fail: any card renders Chinese labels as a vertical sequence like
+  `任 / 务 / 配 / 置`, overlaps adjacent metrics, clips a required button, or
+  requires horizontal page scrolling at `1440x900`, `1024x768`, or `390x844`.
 
 ## Implementation Workstreams
 

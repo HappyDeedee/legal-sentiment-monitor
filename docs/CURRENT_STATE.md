@@ -70,7 +70,9 @@ a hard production risk: dashboard cards, closed-loop tracks, dense status
 cards, resource cards, run/report cards, and secondary overlays must not
 squeeze text into one-character vertical columns, overlap content, hide
 primary actions, or create horizontal overflow at `1440x900`, `1024x768`, or
-`390x844`.
+`390x844`. Phase 21 also explicitly excludes the currently unrendered
+`Users And Permissions` page; implementing that page would require a separate
+new-capability CR.
 The active SQLite schema now provides the foundation tables and columns
 required before later implementation work, and the web/API layer now has
 session login, administrator/normal-user roles, menu visibility,

@@ -961,9 +961,11 @@ implementation baseline is the latest formal `/monitor` console.
       verify it, what target experience to reach, and how acceptance will be
       judged.
 - [x] Confirm CR-040 as the accepted Phase 21 implementation scope.
-- [ ] Confirm whether the currently unrendered `Users And Permissions` surface
-      should be handled as a separate capability/follow-up CR rather than as
-      visual refinement.
+- [x] Confirm that the currently unrendered `Users And Permissions` surface is
+      out of Phase 21 scope. If the user wants it implemented later, record a
+      separate new-capability CR instead of treating it as visual refinement.
+- [ ] Implement Phase 21 in small frontend workstreams A-O with local
+      smoke-checks before the final Phase 21P cross-page verification gate.
 
 ### Phase 21A - Global Shell And Design Tokens
 

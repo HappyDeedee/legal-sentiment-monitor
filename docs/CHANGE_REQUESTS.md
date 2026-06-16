@@ -2120,9 +2120,9 @@ Non-goals:
   downloads, or runtime grouped tables.
 - Do not add new metrics, charts, or progress fields that require new backend
   data.
-- Do not implement the deferred `Users And Permissions` page in this CR; if the
-  user confirms that missing page should be implemented, record it as a
-  separate capability or follow-up CR.
+- Do not implement the currently unrendered `Users And Permissions` page in
+  this CR; if the user wants that missing page implemented later, record it as
+  a separate new-capability CR.
 
 Status: Accepted
 

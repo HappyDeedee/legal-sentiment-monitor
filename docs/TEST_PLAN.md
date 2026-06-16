@@ -858,6 +858,11 @@ blocked plan is allowed; code/schema/API changes are not.
 
 Phase 21 is an accepted frontend-only refinement phase for the formal
 `/monitor` console. These tests are the implementation gate for Phase 21A-21P.
+Before making Phase 21 code changes, implementers must read
+`docs/FORMAL_CONSOLE_UI_REFINEMENT_PLAN.md`; it defines the per-page
+preservation rules, allowed refinements, forbidden changes, and acceptance
+standards. Phase 21 must be implemented as small workstreams A-O with local
+smoke checks, then finalized through Phase 21P cross-page verification.
 
 ### Phase 21 Planning Document Tests
 
@@ -877,6 +882,9 @@ Phase 21 is an accepted frontend-only refinement phase for the formal
   template drawer, run log drawer, report preview drawer, and row more menus.
 - The plan states preserved behavior, allowed refinement, forbidden changes,
   verification method, and acceptance standard for each page or workstream.
+- The plan explicitly excludes the currently unrendered `Users And Permissions`
+  page from Phase 21 and requires a separate new-capability CR if that page is
+  later implemented.
 
 ### Phase 21 Static Verification Tests
 
@@ -962,6 +970,15 @@ Layout stress inputs:
   reasons, email status text, report titles, and run summaries.
 - Check dashboard cards, closed-loop/trajectory cards, metric cards, resource
   cards, run/report dense cards, and loading/empty/error states.
+- Pass example: on mobile `390x844`, `北京市海淀区恒泰律师事务所` wraps as readable
+  multi-character lines inside an Operations Home card and the card action
+  remains reachable.
+- Pass example: on desktop `1440x900`, a task -> run -> report -> email
+  closed-loop track wraps or switches to compact rows before step labels become
+  narrow columns.
+- Fail example: labels render as vertical single-character columns such as
+  `任 / 务 / 配 / 置`, content overlaps neighboring cards, required buttons are
+  clipped, or the page requires horizontal scroll.
 - The batch fails if any module shows text as one Chinese character per line,
   clips action buttons, overlaps neighboring content, or requires horizontal
   page scroll at the accepted viewports.

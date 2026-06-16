@@ -35,6 +35,15 @@ Result:
   dashboard cards, closed-loop/status tracks, dense resource cards, run/report
   cards, or secondary overlays show text collapse, overlaps, hidden actions, or
   horizontal overflow at `1440x900`, `1024x768`, or `390x844`.
+- Cross-validation review found one execution ambiguity around the currently
+  unrendered `Users And Permissions` page. The plan was refined so Phase 21
+  explicitly excludes that page and requires a separate new-capability CR if it
+  is implemented later.
+- Added implementation sequencing guidance: workstreams A-O should be handled
+  as small frontend batches with local smoke checks before Phase 21P full
+  cross-page verification.
+- Added concrete layout stress pass/fail examples for long law-firm names and
+  closed-loop cards.
 - Phase 21A-21P implementation tasks remain unchecked; no UI code has been
   implemented in this planning update.
 
