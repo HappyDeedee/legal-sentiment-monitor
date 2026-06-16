@@ -767,6 +767,10 @@ Pilot Gate D non-blocker/remediation boundary.
 - [x] Run server-like validation without relying on the operator's local Chrome.
 - [x] Verify administrator web-UI login and server-side platform QR/profile
       flow in the server-like environment.
+- [x] Add a default-safe Pilot Gate C evidence template and checker that can
+      validate operator-filled real-workflow evidence without starting
+      services, crawling platforms, calling AI, mutating databases, or sending
+      email.
 - [ ] Verify at least one real platform login and crawl path with persistent
       server-side account profile before pilot handoff.
 - [x] Verify AI unavailable or AI failure fallback does not block report
@@ -780,13 +784,17 @@ Pilot Gate D non-blocker/remediation boundary.
 - [ ] Verify pilot runs with real external services do not expose API
       keys, SMTP passwords, cookies, proxy credentials, raw profile paths,
       provider endpoints, local paths, or command lines.
+- [ ] After real external validation, fill a redacted operator evidence JSON
+      based on `docs/pilot_gate_c_evidence.example.json` and pass
+      `uv run python scripts/pilot_gate_c_evidence.py --check <evidence.json>`
+      before closing Pilot Gate C.
 
 ### Pilot Gate D - Non-Blocker Boundary
 
-- [ ] Confirm Phase 21, CR-038, Phase 19B-D, Phase 20, and CR-037 are not
+- [x] Confirm Phase 21, CR-038, Phase 19B-D, Phase 20, and CR-037 are not
       required for first usable pilot readiness unless a later accepted P0
       safety, security, or core-flow regression changes the boundary.
-- [ ] Confirm historical run `8317` remediation and orphan delivery evidence
+- [x] Confirm historical run `8317` remediation and orphan delivery evidence
       cleanup remain dry-run, backup, rollback, and explicit-operator-approval
       gated and are not performed automatically as part of pilot readiness.
 

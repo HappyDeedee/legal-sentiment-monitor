@@ -46,6 +46,7 @@ from api.monitoring.runner import evaluate_new_contents, ingest_outputs
 from api.monitoring.runner import run_job as run_monitor_job
 from api.monitoring.scheduler import _is_due, next_run_at, scheduler_disabled_reason, scheduler_status
 from tools.cdp_browser import resolve_cdp_user_data_dir
+from scripts.pilot_gate_c_evidence import build_template, validate_evidence, write_template
 
 
 @pytest.fixture(autouse=True)
@@ -80,6 +81,174 @@ def test_environment_check_returns_customer_safe_text(monkeypatch):
     assert result["output"] == "运行环境检查通过"
     for forbidden in ["MediaCrawler", "uv run", "main.py", "CLI"]:
         assert forbidden not in visible
+
+
+def _complete_pilot_gate_c_evidence():
+    payload = build_template()
+    payload["status"] = "passed"
+    payload["validation_window"].update(
+        {
+            "operator": "pilot operator",
+            "started_at": "2026-06-17T10:00:00+08:00",
+            "ended_at": "2026-06-17T10:30:00+08:00",
+        }
+    )
+    payload["server_like_environment"].update(
+        {
+            "environment_reference": "deployment log entry pilot-20260617",
+            "service_started": True,
+            "web_ui_admin_login": True,
+            "server_side_browser_used": True,
+            "local_chrome_not_required": True,
+            "profile_root_persistent": True,
+        }
+    )
+    payload["real_platform_workflow"].update(
+        {
+            "platform": "douyin",
+            "account_reference": "platform account id 12, redacted",
+            "web_qr_status_login_completed": True,
+            "server_side_profile_persisted": True,
+            "crawl_completed_with_server_profile": True,
+            "run_reference": "run id 345, redacted logs archived",
+            "report_reference": "report id 678, redacted artifact archived",
+            "report_generated": True,
+        }
+    )
+    payload["ai_fallback"].update(
+        {
+            "scenario": "AI disabled during pilot validation",
+            "ai_unavailable_or_failure_exercised": True,
+            "pending_review_or_manual_review_recorded": True,
+            "report_generated": True,
+            "evidence_reference": "run summary shows pending review counts",
+        }
+    )
+    payload["smtp_validation"].update(
+        {
+            "recipient_reference": "operator-approved pilot recipient",
+            "delivery_log_reference": "email delivery log id 901",
+            "explicit_opt_in_enabled_for_validation": True,
+            "real_smtp_send_succeeded": True,
+            "delivery_recorded": True,
+            "opt_in_disabled_after_validation": True,
+            "default_paths_non_sending_confirmed": True,
+        }
+    )
+    payload["redaction"].update(
+        {
+            "checked_surfaces": ["logs", "reports", "delivery_records", "ui_or_api"],
+            "no_sensitive_values_found": True,
+            "evidence_reference": "redaction checklist entry pilot-20260617",
+            "notes": "all references are masked",
+        }
+    )
+    payload["non_blocker_boundary"].update(
+        {
+            "non_blockers_confirmed": True,
+            "historical_mutation_not_performed": True,
+        }
+    )
+    return payload
+
+
+def test_pilot_gate_c_evidence_template_is_incomplete_and_side_effect_free(tmp_path):
+    target = tmp_path / "pilot_gate_c_evidence.json"
+
+    write_template(target)
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    issues = validate_evidence(payload)
+
+    assert payload["schema_version"] == "pilot_gate_c_v1"
+    assert payload["status"] == "incomplete"
+    assert issues
+    issue_text = json.dumps([issue.as_dict() for issue in issues], ensure_ascii=False)
+    assert "status" in issue_text
+    assert "required_true" in issue_text
+
+
+def test_pilot_gate_c_evidence_accepts_complete_redacted_operator_evidence():
+    payload = _complete_pilot_gate_c_evidence()
+
+    assert validate_evidence(payload) == []
+
+
+def test_pilot_gate_c_evidence_rejects_missing_required_real_workflow_evidence():
+    payload = _complete_pilot_gate_c_evidence()
+    payload["real_platform_workflow"]["crawl_completed_with_server_profile"] = False
+    payload["smtp_validation"]["delivery_log_reference"] = ""
+
+    issues = validate_evidence(payload)
+    issue_paths = {issue.path for issue in issues}
+
+    assert "real_platform_workflow.crawl_completed_with_server_profile" in issue_paths
+    assert "smtp_validation.delivery_log_reference" in issue_paths
+
+
+def test_pilot_gate_c_evidence_rejects_secret_like_values():
+    payload = _complete_pilot_gate_c_evidence()
+    payload["redaction"]["notes"] = "leaked key sk-proj-abcdefghijklmnopqrstuvwxyz"
+    payload["real_platform_workflow"]["profile_path"] = r"E:\server\profiles\dy\acc_12"
+
+    issues = validate_evidence(payload)
+    codes = {issue.code for issue in issues}
+
+    assert "sensitive_value" in codes
+    assert "sensitive_key" in codes
+
+
+def test_pilot_gate_c_evidence_rejects_wrong_schema_version():
+    payload = _complete_pilot_gate_c_evidence()
+    payload["schema_version"] = "pilot_gate_c_v0"
+
+    issues = validate_evidence(payload)
+
+    assert any(issue.code == "schema_version" and issue.path == "schema_version" for issue in issues)
+
+
+@pytest.mark.parametrize("placeholder", ["todo", "TBD", "replace_me", "<run id>"])
+def test_pilot_gate_c_evidence_rejects_placeholder_values(placeholder):
+    payload = _complete_pilot_gate_c_evidence()
+    payload["real_platform_workflow"]["run_reference"] = placeholder
+
+    issues = validate_evidence(payload)
+
+    assert any(issue.code == "required_text" and issue.path == "real_platform_workflow.run_reference" for issue in issues)
+
+
+def test_pilot_gate_c_evidence_requires_all_redaction_surfaces():
+    payload = _complete_pilot_gate_c_evidence()
+    payload["redaction"]["checked_surfaces"] = ["logs", "reports"]
+
+    issues = validate_evidence(payload)
+
+    assert any(
+        issue.code == "redaction_surfaces"
+        and "delivery_records" in issue.message
+        and "ui_or_api" in issue.message
+        for issue in issues
+    )
+
+
+@pytest.mark.parametrize(
+    "field_value",
+    [
+        "Authorization: Bearer abcdefghijklmnop",
+        "Cookie: sessionid=abcdef123456",
+        "smtp_password=secret123",
+        "https://api.openai.com/v1/chat/completions",
+        "https://user:pass@proxy.example.com:8080",
+        r"C:\Users\Administrator\.env",
+        "/app/data/account_profiles/1/dy/acc_12",
+    ],
+)
+def test_pilot_gate_c_evidence_rejects_additional_secret_patterns(field_value):
+    payload = _complete_pilot_gate_c_evidence()
+    payload["redaction"]["notes"] = field_value
+
+    issues = validate_evidence(payload)
+
+    assert any(issue.code == "sensitive_value" and issue.path == "$.redaction.notes" for issue in issues)
 
 
 def test_ai_endpoint_builder_handles_v1_and_full_paths():

@@ -230,6 +230,20 @@ MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=false
 
 脚本通过不等于真实平台扫码和真实采集已经完成；正式试点前仍要使用真实平台账号完成一次网页扫码、采集、报告和邮件闭环。
 
+真实 Pilot Gate C 验证完成后，不要把账号、Cookie、SMTP 密码、代理凭证、服务器路径或未脱敏日志写入仓库。先生成一份本地证据模板：
+
+```powershell
+uv run python scripts/pilot_gate_c_evidence.py --write-template docs/pilot_gate_c_evidence.example.json
+```
+
+复制模板到操作者本地的非 Git 证据文件中，只填写脱敏引用，例如运行 ID、报告 ID、发送记录 ID、已归档的脱敏截图/日志编号和检查结论。填写后运行：
+
+```powershell
+uv run python scripts/pilot_gate_c_evidence.py --check <operator-evidence.json>
+```
+
+这个校验只读取 JSON 证据，不启动服务、不爬取平台、不调用 AI、不修改数据库、不发送邮件。模板默认会校验失败；只有真实平台登录/采集、AI fallback、显式开启后的 SMTP 验证、恢复默认非发送状态、日志/报告/发送记录/UI 脱敏检查和非阻塞边界都填完整后才会通过。
+
 ## 9. 日常运维
 
 建议每天关注：

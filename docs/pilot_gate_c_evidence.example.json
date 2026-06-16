@@ -1,0 +1,55 @@
+{
+  "schema_version": "pilot_gate_c_v1",
+  "status": "incomplete",
+  "validation_window": {
+    "operator": "",
+    "started_at": "",
+    "ended_at": "",
+    "notes": "Fill this file only with redacted references after the real Pilot Gate C run."
+  },
+  "server_like_environment": {
+    "environment_reference": "",
+    "service_started": false,
+    "web_ui_admin_login": false,
+    "server_side_browser_used": false,
+    "local_chrome_not_required": false,
+    "profile_root_persistent": false
+  },
+  "real_platform_workflow": {
+    "platform": "",
+    "account_reference": "",
+    "web_qr_status_login_completed": false,
+    "server_side_profile_persisted": false,
+    "crawl_completed_with_server_profile": false,
+    "run_reference": "",
+    "report_reference": "",
+    "report_generated": false
+  },
+  "ai_fallback": {
+    "scenario": "",
+    "ai_unavailable_or_failure_exercised": false,
+    "pending_review_or_manual_review_recorded": false,
+    "report_generated": false,
+    "evidence_reference": ""
+  },
+  "smtp_validation": {
+    "recipient_reference": "",
+    "delivery_log_reference": "",
+    "explicit_opt_in_enabled_for_validation": false,
+    "real_smtp_send_succeeded": false,
+    "delivery_recorded": false,
+    "opt_in_disabled_after_validation": false,
+    "default_paths_non_sending_confirmed": false
+  },
+  "redaction": {
+    "checked_surfaces": [],
+    "no_sensitive_values_found": false,
+    "evidence_reference": "",
+    "notes": ""
+  },
+  "non_blocker_boundary": {
+    "non_blockers_confirmed": false,
+    "historical_mutation_not_performed": false,
+    "notes": "Phase 21, CR-038, Phase 19B-D, Phase 20, CR-037, run 8317 repair, and orphan evidence cleanup are outside the first-pilot blocker set unless a new accepted P0 regression changes that boundary."
+  }
+}

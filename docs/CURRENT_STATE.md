@@ -96,9 +96,12 @@ the current "system can be used first" readiness standard: first pilot use is
 blocked by the remaining real-external portion of the minimum server-like
 workflow; hidden-real-email safety and stuck-run lifecycle safety have both
 been implemented, locally verified, and externally reviewed. Automated
-server-like validation also passes, but pilot validation with a real platform
-account/session, one real crawl, and explicit-opt-in real SMTP credentials is
-still required before the whole gate can be closed. CR-041 is not blocked by Phase 21 visual refinement,
+server-like validation also passes, and a default-safe Pilot Gate C evidence
+template/checker is available for operator-filled real-workflow proof. The
+evidence checker is not a substitute for live credentials: pilot validation
+with a real platform account/session, one real crawl, explicit-opt-in real SMTP
+credentials, and real-run redaction evidence is still required before the
+whole gate can be closed. CR-041 is not blocked by Phase 21 visual refinement,
 CR-038 drawer accessibility, Phase 19 realtime progress, Phase 20 AI
 traceability, or CR-037 role/quota governance unless a later accepted P0
 regression changes that boundary.
@@ -235,10 +238,13 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   Phase 17.1A-B email side-effect safety and CR-035/Phase 7.1A-C run
   lifecycle/AI fallback/partial-report safety are implemented, locally
   verified, and read-only externally reviewed. Automated server-like validation
-  passes without relying on the operator's local Chrome. The gate still
+  passes without relying on the operator's local Chrome. A no-side-effect
+  Pilot Gate C evidence checker now provides a structured way to validate
+  redacted operator proof for the remaining real workflow. The gate still
   requires a real platform login/crawl path with a persistent server-side
-  account profile and explicit-opt-in real SMTP validation with operator
-  credentials before the system is described as ready for first pilot use.
+  account profile, explicit-opt-in real SMTP validation with operator
+  credentials, real-run redaction proof, and a passing operator evidence JSON
+  check before the system is described as ready for first pilot use.
 - Phase 5/6 - Account Environment and Server Login: profile key, timeout, and
   lock-storage decisions are accepted; Phase 5 account environment runtime and
   Phase 6 login-flow runtime are complete.
@@ -463,6 +469,14 @@ first usable pilot gate before that handoff can be described as ready.
   pilot use. Phase 21, CR-038, Phase 19B-D, Phase 20, and CR-037 are not first
   pilot blockers unless a later accepted P0 safety, security, or core-flow
   regression changes the boundary.
+- CR-041 Pilot Gate C now has a default-safe evidence template/checker:
+  `scripts/pilot_gate_c_evidence.py` can write
+  `docs/pilot_gate_c_evidence.example.json` and validate a separate
+  operator-filled evidence file. The checker only reads JSON evidence and
+  rejects missing real-workflow proof, placeholders, unchecked redaction
+  surfaces, secret-looking values, raw local paths, provider endpoints, proxy
+  credentials, cookies, and sensitive evidence keys. It does not start
+  services, crawl platforms, call AI, mutate data, or send email.
 - CR-031 is accepted but not implemented: active Run Center rows still depend
   on the current `crawl_runs.summary` update timing until Phase 19B-19D code
   work is completed. Operators may still need manual refresh or logs to
@@ -566,7 +580,8 @@ Next allowed implementation order:
 1. satisfy the remaining real-external portion of CR-041 Pilot Gate C with a
    server-like workflow: server-side login/profile path, one real platform
    crawl when credentials/session are available, AI fallback, explicit-opt-in
-   SMTP validation, and redaction checks;
+   SMTP validation, redaction checks, and a passing
+   `scripts/pilot_gate_c_evidence.py --check <operator-evidence.json>` result;
 2. handle CR-035/Phase 7.1D historical run remediation only through the
    dry-run, backup, rollback, and explicit-operator-approval gate;
 3. implement Phase 17.1C/17.2A remaining operator-facing recipient/template

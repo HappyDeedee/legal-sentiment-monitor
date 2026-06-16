@@ -11,6 +11,59 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
 `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-17 - CR-041 Pilot Gate C Evidence Checker
+
+Environment: isolated worktree
+`E:\myproject\MediaCrawler-worktrees\cr041-pilot-evidence`, branch
+`codex/cr041-pilot-evidence`.
+
+Result:
+
+- Added `scripts/pilot_gate_c_evidence.py`, a default-safe checker for
+  operator-filled Pilot Gate C real-workflow evidence.
+- Added `docs/pilot_gate_c_evidence.example.json` as an incomplete redacted
+  evidence template. The template is expected to fail validation until a real
+  operator validation run fills it with redacted references.
+- The checker only reads or writes the requested JSON file. It does not start
+  services, crawl platforms, call AI providers, mutate databases, inspect or
+  repair historical run `8317`, touch orphan email evidence, or send email.
+- The checker rejects missing real-platform/SMTP/AI-fallback evidence,
+  unchecked redaction surfaces, placeholders, secret-looking values, raw local
+  paths, provider endpoints, proxy credentials, cookies, and sensitive evidence
+  keys.
+- Pilot Gate D boundary was rechecked from current docs: Phase 21, CR-038,
+  Phase 19B-D, Phase 20, and CR-037 remain outside the first-pilot blocker set
+  unless a later accepted P0 regression changes the boundary; historical run
+  remediation and orphan evidence cleanup remain dry-run, backup, rollback,
+  and explicit-operator-approval gated.
+- CR-041 remains incomplete until real external platform login/crawl,
+  explicit-opt-in real SMTP validation, real-run redaction evidence, and a
+  passing operator-filled evidence JSON are available.
+
+Verification:
+
+- `python -m py_compile scripts\pilot_gate_c_evidence.py tests\test_monitoring_mvp.py`: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "pilot_gate_c_evidence"`:
+  17 passed, 249 deselected, 1 warning.
+- `uv run python scripts\pilot_gate_c_evidence.py --write-template docs\pilot_gate_c_evidence.example.json`: PASS.
+- `uv run python scripts\pilot_gate_c_evidence.py --check docs\pilot_gate_c_evidence.example.json`: expected FAIL because the committed template is intentionally incomplete.
+- `uv run python scripts/check_docs.py`: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`: 266 passed, 3
+  warnings.
+- `uv run python scripts/server_like_validation.py`: PASS. All 11 automated
+  server-like checks returned `ok: true`.
+
+External validation:
+
+- Read-only Claude Code review was run with Read/Grep/Glob-only tool access
+  and no edit/write/Bash/database/email/crawler/AI/service permissions.
+- Initial review found no Blocking issues and one Material test-coverage
+  finding for schema-version, placeholder, redaction-surface, and additional
+  secret-pattern branches.
+- Added the missing automated tests. Focused read-only recheck reported the
+  Material finding resolved and no remaining Blocking, Material, or Polish
+  findings for CR-041 evidence-checker coverage.
+
 ## 2026-06-17 - CR-041 Pre-Commit Verification Refresh
 
 Environment: local worktree `E:\myproject\MediaCrawler`, branch

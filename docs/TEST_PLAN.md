@@ -315,6 +315,14 @@ changes that boundary.
 - A server-like environment starts the service, web UI, server-side browser,
   database, report root, and account profile root without relying on the
   operator's local Chrome.
+- `uv run python scripts/pilot_gate_c_evidence.py --write-template
+  docs/pilot_gate_c_evidence.example.json` creates a redacted operator
+  evidence template and does not start services, crawl platforms, call AI,
+  mutate databases, or send email.
+- The generated template is intentionally incomplete and
+  `uv run python scripts/pilot_gate_c_evidence.py --check
+  docs/pilot_gate_c_evidence.example.json` must fail until real operator
+  evidence is filled.
 - Administrator web login works through the web UI.
 - At least one real platform account completes QR/status login through the web
   UI and persists a server-side profile.
@@ -326,6 +334,13 @@ changes that boundary.
 - Logs, reports, delivery records, and UI surfaces do not expose API keys,
   SMTP passwords, cookies, proxy credentials, raw profile paths, provider
   endpoints, local paths, or command lines.
+- A completed redacted Pilot Gate C evidence JSON must pass
+  `uv run python scripts/pilot_gate_c_evidence.py --check <evidence.json>`
+  before CR-041 is closed. The checker must reject missing real-workflow
+  evidence, unchecked redaction surfaces, placeholder fields, secret-looking
+  values, raw local paths, proxy credentials, cookies, provider endpoints, and
+  sensitive evidence keys such as password, token, API key, proxy URL, or
+  profile path.
 
 ### Pilot Gate D Non-Blocker Boundary Tests
 
