@@ -326,8 +326,7 @@ workspace_id + platform + content_id
 
 ### ai_evaluation_traces
 
-Status: Proposed for CR-034, pending confirmation. Do not implement until the
-permission, retention, and storage-shape confirmation items are resolved.
+Status: Accepted for CR-034 / Phase 20, not implemented yet.
 
 Purpose:
 
@@ -335,7 +334,7 @@ Persist exact AI evaluation trace snapshots for new evaluations so operators
 can inspect the input/output used for a specific run and content item without
 reconstructing historical requests from mutable rules or current content.
 
-Proposed fields:
+Accepted fields:
 
 ```text
 id
@@ -359,17 +358,38 @@ finished_at
 created_at
 ```
 
-Rules:
+Confirmed rules:
 
-- all prompt, request, response, and error fields must be redacted before
-  storage;
+- trace retention must be controlled by the administrator runtime setting
+  `ai_trace_retention_days`, defaulting to 30 days. Phase 20 must not hard-code
+  the retention window in the trace persistence layer;
+- normal-user trace APIs must return only business-safe input/output summaries
+  for the user's own runs. They must not return full prompt snapshots, request
+  payload snapshots, administrator debug metadata, or raw model responses;
+- raw model responses must be redacted before storage. Normal-user APIs must
+  not return raw model responses. Administrator APIs may return redacted raw
+  model responses for diagnosis. Unredacted raw model responses must not be
+  stored or exposed to any role;
+
+Additional rules:
+
+- prompt, request, response, and error fields must be redacted before storage;
 - API keys, authorization headers, cookies, proxy credentials, profile paths,
   account-session data, and server-local paths must never be stored in trace
   snapshots;
-- prompt, request, response, and comment snapshots must follow the confirmed
-  size and retention limits;
-- normal-user APIs should return business-safe summaries unless CR-034
-  confirms broader visibility;
+- prompt, request, response, and comment snapshots must follow the accepted
+  default size guardrails: each trace is about 64KB, prompt snapshot up to
+  16KB, request snapshot up to 24KB, response snapshot up to 24KB, and sampled
+  comments up to 20 comments with each comment truncated to a safe
+  per-comment length;
+- size limits are storage and API guardrails, not product-visible business
+  rules. They should be applied before writing trace snapshots and before
+  returning trace detail responses so one large prompt, request, model
+  response, or comment set cannot make the database row or API payload
+  unexpectedly large;
+- if size caps are accepted, oversized snapshots should be truncated and marked
+  with `truncated=true`; truncation must not block AI evaluation, report
+  generation, or final run status;
 - old evaluations without trace snapshots remain readable through
   `ai_evaluations` and should display a limited-context message.
 

@@ -172,6 +172,7 @@ cython_debug/
 /runs/
 /reports/
 /logs/
+/artifacts/
 monitor.yaml
 !monitor.example.yaml
 *.sqlite

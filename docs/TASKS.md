@@ -712,6 +712,77 @@ CR-036/Phase 17.1.
 - [!] Confirm whether automatic scheduled delivery and manual resend use the
       same policy or separate policies.
 
+## Minimum Usable Pilot Acceptance Gate
+
+Planning status:
+
+CR-041 is an accepted documentation-governance gate for deciding when the
+system can be used first in a small pilot. It tightens acceptance around the
+minimum safety and lifecycle conditions without making Phase 21 UI refinement,
+Phase 19 realtime progress, Phase 20 AI traceability, CR-038 drawer
+accessibility, or CR-037 quota governance blockers for the first usable pilot.
+
+This gate is complete only after the referenced implementation phases are
+implemented, verified, and recorded in `TEST_RESULTS.md`.
+
+Implementation order for satisfying this gate follows `CURRENT_STATE.md`:
+complete Phase 17.1A-B first, complete Phase 17.1C with Phase 17.2A when
+practical, complete Phase 7.1A-C, then verify Pilot Gates A-C and preserve the
+Pilot Gate D non-blocker/remediation boundary.
+
+### Pilot Gate A - Email Side-Effect Safety
+
+- [ ] Complete and verify CR-036/Phase 17.1A-B so automated tests, local
+      diagnostics, and ordinary local report-delivery paths cannot send hidden
+      real SMTP email.
+- [ ] Verify real SMTP is blocked by default even when the active database has
+      complete SMTP configuration and default recipients.
+- [ ] Verify automatic report delivery, manual resend, and mail-test paths all
+      use the same delivery-safety gate.
+- [ ] Verify blocked delivery still allows report generation and writes a
+      customer-safe skipped delivery state or confirmed equivalent.
+- [ ] Verify the automated test suite has a tripwire that fails on
+      `smtplib.SMTP` or `smtplib.SMTP_SSL` without explicit opt-in.
+
+### Pilot Gate B - Run Lifecycle And Partial Result Safety
+
+- [ ] Complete and verify CR-035/Phase 7.1A-C so new runs persist
+      `crawl_runs.job_id`, lifecycle finalization is idempotent, and terminal
+      statuses cannot be reopened by stale writers.
+- [ ] Verify success, failure, timeout, cancellation, interruption, and partial
+      AI/report paths all finalize to a terminal status and release locks
+      safely.
+- [ ] Verify AI item timeout, exception, and invalid JSON save
+      `pending_review` and continue when the run can safely continue.
+- [ ] Verify collected partial results can generate a report when AI is
+      unavailable, partially interrupted, or degraded to manual review.
+- [ ] Verify a simulated run with 271 collected contents and AI interruption
+      after item 250/251 cannot remain indefinitely `running`.
+
+### Pilot Gate C - Minimum Server-Like Real Workflow
+
+- [ ] Run server-like validation without relying on the operator's local Chrome.
+- [ ] Verify administrator web-UI login and server-side platform QR/profile
+      flow in the server-like environment.
+- [ ] Verify at least one real platform login and crawl path with persistent
+      server-side account profile before pilot handoff.
+- [ ] Verify AI unavailable or AI failure fallback does not block report
+      generation.
+- [ ] Verify explicit-opt-in SMTP delivery can send in pilot/production mode
+      while default local/test/diagnostic behavior remains non-sending.
+- [ ] Verify logs, reports, delivery records, and UI surfaces do not expose API
+      keys, SMTP passwords, cookies, proxy credentials, raw profile paths,
+      provider endpoints, local paths, or command lines.
+
+### Pilot Gate D - Non-Blocker Boundary
+
+- [ ] Confirm Phase 21, CR-038, Phase 19B-D, Phase 20, and CR-037 are not
+      required for first usable pilot readiness unless a later accepted P0
+      safety, security, or core-flow regression changes the boundary.
+- [ ] Confirm historical run `8317` remediation and orphan delivery evidence
+      cleanup remain dry-run, backup, rollback, and explicit-operator-approval
+      gated and are not performed automatically as part of pilot readiness.
+
 ## Phase 18 - Report Center Task Grouping
 
 Planning status:
@@ -818,36 +889,40 @@ heartbeat, terminal `interrupted` state, and AI progress fallback behavior.
 
 ## Phase 20 - Run Detail And AI Evaluation Traceability
 
-**BLOCKED - DO NOT IMPLEMENT**
+**ACCEPTED - NOT IMPLEMENTED**
 
 Planning status:
 
-Phase 20 is proposed and blocked until CR-034 confirmation items are resolved.
-It should not be implemented until role visibility, raw/redacted response
-visibility, trace retention, and storage shape are confirmed. This phase is
+Phase 20 is accepted for future implementation after CR-034 confirmation items
+were resolved. Trace retention must be an administrator-configurable runtime
+setting with a 30-day default, not a hard-coded value. Permission visibility is
+confirmed: normal users see only business-safe summaries for their own runs,
+administrators may see redacted prompt/request/response debug snapshots, and
+unredacted raw responses must not be exposed to any role. Trace storage uses a
+new `ai_evaluation_traces` table with capped/redacted JSON fields. This
+phase is
 separate from Phase 19 because it adds historical AI traceability and likely
 requires data-model and API changes, while Phase 19 focuses on run progress
 visibility.
 
-Required confirmations before any implementation:
-
-- normal-user versus administrator visibility for prompt snapshots, request
-  payloads, raw/redacted responses, and debug metadata;
-- trace retention and maximum stored size for prompt, request, response, and
-  sampled comments;
-- final storage shape, including whether `ai_evaluation_traces` is accepted.
-
 ### Phase 20A - Traceability Confirmation And Data Model Design
 
-- [!] Confirm the normal-user versus administrator visibility boundary for
-      prompt snapshots, request payloads, raw/redacted responses, and debug
-      metadata.
-- [!] Confirm trace retention and maximum stored size for prompt, request,
-      response, and sampled comments.
-- [!] Confirm storage shape: proposed `ai_evaluation_traces` table with
+- [x] Confirm visibility boundary: normal users see only business-safe
+      summaries for their own runs; administrators may see redacted
+      prompt/request/response debug snapshots; unredacted raw responses are not
+      exposed to any role.
+- [x] Confirm trace retention policy: make retention configurable through
+      administrator runtime settings, defaulting to 30 days.
+- [x] Confirm raw response visibility: normal users cannot see raw model
+      responses; administrators may see redacted raw model responses; no role
+      may see unredacted raw model responses.
+- [x] Confirm maximum stored size defaults: each trace is about 64KB, prompt
+      snapshot up to 16KB, request snapshot up to 24KB, response snapshot up to
+      24KB, and sampled comments up to 20 comments with per-comment truncation.
+- [x] Confirm storage shape: new `ai_evaluation_traces` table with
       redacted/capped JSON fields, linked to `run_id`, `raw_content_id`, and
       `ai_evaluations.id`.
-- [ ] After confirmation, update `DATA_MODEL.md` and `SCHEMA_MIGRATION.md`
+- [x] After confirmation, update `DATA_MODEL.md` and `SCHEMA_MIGRATION.md`
       from proposed notes to accepted implementation details.
 
 ### Phase 20B - AI Evaluation Trace Persistence

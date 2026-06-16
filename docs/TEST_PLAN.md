@@ -270,6 +270,71 @@ run class.
 - Restart service/container and verify profile reuse.
 - Verify no acceptance step depends on local Chrome.
 
+## Minimum Usable Pilot Acceptance Tests
+
+CR-041 defines the hard gate for "the system can be used first" in a small
+pilot. These tests narrow pilot readiness to safety, run lifecycle, and one
+real server-like workflow. They do not require Phase 21 UI refinement, Phase
+19 realtime progress, Phase 20 AI traceability, CR-038 sticky drawer close
+controls, or CR-037 role/quota governance unless a later accepted P0 regression
+changes that boundary.
+
+### Pilot Gate A Email Safety Tests
+
+- The full automated test suite can run with real-looking SMTP host, sender,
+  password, and default recipients present in the active database without
+  sending external email.
+- Without explicit real-email opt-in, automatic report delivery, manual resend,
+  and mail-test paths do not instantiate `smtplib.SMTP` or
+  `smtplib.SMTP_SSL`.
+- The SMTP tripwire fails loudly if tests reach the real SMTP implementation
+  without explicit opt-in.
+- Blocked delivery still allows report generation and records a customer-safe
+  skipped delivery state or confirmed equivalent.
+- With explicit real-email opt-in and complete SMTP configuration,
+  pilot/production validation can send through the real mailer and record the
+  trigger source and effective recipients when Phase 17.1C is included.
+
+### Pilot Gate B Run Lifecycle Tests
+
+- New runs persist `crawl_runs.job_id` in the column and keep compatible reads
+  for legacy rows whose `summary.job_id` resolves to an existing task.
+- Success, failure, timeout, cancellation, interruption, and partial-result
+  paths use idempotent finalization and cannot be reopened by stale writers.
+- Repeated or concurrent finalization releases account/profile/proxy locks as
+  a harmless no-op after the first release.
+- AI item timeout, exception, and invalid JSON save `pending_review` and
+  continue when the run can safely continue.
+- A simulated run with 271 collected contents and AI interruption after item
+  250/251 cannot remain indefinitely `running`.
+- Collected partial results can produce a report when AI is unavailable,
+  partially interrupted, or degraded to manual review.
+
+### Pilot Gate C Server-Like Real Workflow Tests
+
+- A server-like environment starts the service, web UI, server-side browser,
+  database, report root, and account profile root without relying on the
+  operator's local Chrome.
+- Administrator web login works through the web UI.
+- At least one real platform account completes QR/status login through the web
+  UI and persists a server-side profile.
+- At least one real monitoring task completes a platform crawl using the
+  server-side profile.
+- AI unavailable or provider failure does not block report generation.
+- Explicit-opt-in SMTP delivery succeeds in pilot/production validation, while
+  local/test/diagnostic defaults remain non-sending.
+- Logs, reports, delivery records, and UI surfaces do not expose API keys,
+  SMTP passwords, cookies, proxy credentials, raw profile paths, provider
+  endpoints, local paths, or command lines.
+
+### Pilot Gate D Non-Blocker Boundary Tests
+
+- Phase 21, CR-038, Phase 19B-D, Phase 20, and CR-037 are not listed as first
+  usable pilot blockers unless a later accepted P0 safety, security, or
+  core-flow regression changes the boundary.
+- Historical run `8317` remediation and orphan delivery evidence cleanup remain
+  dry-run, backup, rollback, and explicit-operator-approval gated.
+
 ## Phase 10 Frontend Architecture Tests
 
 - `FRONTEND_ARCHITECTURE.md` exists and is referenced by `AGENTS.md`,
@@ -776,20 +841,20 @@ CR-037 is deferred and should not block CR-036/Phase 17.1.
 
 ## Phase 20 Run Detail And AI Evaluation Traceability Tests
 
-Phase 20 is blocked until CR-034 confirmation items are resolved. After
-confirmation, use the following tests as the implementation gate.
-
-**Do not implement or execute Phase 20A-20E implementation tests until CR-034
-changes from Needs Confirmation to Accepted.** Documentation review of the
-blocked plan is allowed; code/schema/API changes are not.
+Phase 20 is accepted but not implemented. Use the following tests as the
+implementation gate when Phase 20 becomes the active execution batch.
 
 ### Phase 20A Confirmation And Data Model Tests
 
 - Confirmed permission rules distinguish normal-user business-safe evaluation
   detail from administrator debug detail.
-- Confirmed retention and size limits are documented before trace snapshots are
-  stored.
-- The accepted schema creates the chosen trace-storage shape and keeps old
+- Confirmed retention is implemented as an administrator-configurable runtime
+  setting with a 30-day default before trace snapshots are stored.
+- Confirmed default size limits are enforced before trace snapshots are stored:
+  each trace is about 64KB, prompt snapshot up to 16KB, request snapshot up to
+  24KB, response snapshot up to 24KB, and sampled comments up to 20 comments
+  with per-comment truncation.
+- The accepted schema creates `ai_evaluation_traces` and keeps old
   `ai_evaluations` rows readable.
 - Migration does not expose API keys, authorization headers, cookies, proxy
   credentials, profile paths, or server-local paths.
@@ -805,6 +870,13 @@ blocked plan is allowed; code/schema/API changes are not.
   state rather than reconstructed "exact" input.
 - Stored prompt/request/response fields are capped or truncated according to
   the confirmed size policy.
+- Truncated prompt, request, response, or sampled-comment snapshots include a
+  `truncated=true` marker or equivalent trace metadata.
+- Oversized trace snapshots do not block AI evaluation, report generation, or
+  terminal run finalization.
+- `ai_trace_retention_days` is visible in administrator runtime settings and
+  follows the same database override and environment-lock behavior as other
+  runtime retention settings once implemented.
 
 ### Phase 20C Run Detail API Tests
 
@@ -816,6 +888,14 @@ blocked plan is allowed; code/schema/API changes are not.
   caller's role and owner/workspace scope.
 - Normal users cannot read other users' run details or administrator-only debug
   fields.
+- Normal-user evaluation detail responses include only business-safe summaries
+  and do not include full prompt snapshots, request payload snapshots, or
+  administrator debug metadata.
+- Normal-user evaluation detail responses do not include raw model response
+  fields.
+- Administrator evaluation detail responses may include redacted raw model
+  response fields, but never unredacted raw responses, API keys, authorization
+  headers, cookies, proxy credentials, profile paths, or server-local paths.
 
 ### Phase 20D Run Detail Frontend Tests
 

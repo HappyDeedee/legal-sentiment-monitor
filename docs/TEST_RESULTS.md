@@ -11,6 +11,56 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
 `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-16 - CR-034 Decision Confirmation Closed
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- User confirmed the CR-034 visibility boundary: normal users see only
+  business-safe AI evaluation summaries for their own runs; administrators may
+  see redacted prompt/request/response debug snapshots; unredacted raw model
+  responses must not be stored or exposed to any role.
+- User confirmed AI trace retention must be administrator-configurable, with a
+  30-day default.
+- User accepted the default trace size guardrails: about 64KB per trace, 16KB
+  prompt snapshot, 24KB request snapshot, 24KB response snapshot, and up to 20
+  sampled comments with per-comment truncation.
+- User accepted `ai_evaluation_traces` as the storage shape for trace snapshots,
+  linked to `run_id`, `raw_content_id`, and `ai_evaluations.id`.
+- CR-034 was moved from Needs Confirmation / Partially Confirmed to Accepted in
+  the planning documents. Phase 20 remains not implemented.
+
+Verification:
+
+- Documentation-only decision update.
+- No code, database schema, runtime settings implementation, crawler behavior,
+  AI-provider call, or frontend behavior was changed.
+
+## 2026-06-16 - CR-041 Minimum Usable Pilot Acceptance Gate Planning
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Added CR-041 as an Accepted documentation-governance gate for deciding when
+  the system can be used first in a small pilot.
+- Tightened first-pilot acceptance around three hard gates: CR-036/Phase
+  17.1A-B hidden-real-email safety, CR-035/Phase 7.1A-C run lifecycle and
+  partial-result safety, and a minimum server-like real workflow.
+- Explicitly kept Phase 21 UI refinement, CR-038 sticky drawer close, Phase
+  19 realtime progress, Phase 20 AI traceability, and CR-037 role/quota
+  governance outside the first usable pilot blocker set unless a later accepted
+  P0 safety, security, or core-flow regression changes the boundary.
+- Linked CR-041 to `TASKS.md`, `TEST_PLAN.md`, `TRACEABILITY.md`,
+  `CURRENT_STATE.md`, and `DECISIONS.md`.
+- No code, database, SMTP, crawler, AI-provider, runtime data, or historical
+  evidence was changed.
+
+Verification:
+
+- Documentation-only planning update. Implementation remains pending.
+
 ## 2026-06-16 - Phase 21 Formal Console UI Refinement Planning
 
 Environment: local worktree `E:\myproject\MediaCrawler`.

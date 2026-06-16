@@ -292,7 +292,7 @@ Acceptance:
 
 ### 3.1 Run Detail And AI Evaluation Traceability
 
-Status: Proposed, pending CR-034 confirmation.
+Status: Accepted for CR-034 / Phase 20, not implemented yet.
 
 Purpose:
 
@@ -317,12 +317,20 @@ Proposed rules:
   delivery history, but should expose explicit "view leads" actions and link
   back to run detail where possible.
 
-Open confirmation:
+Confirmed:
 
-- normal-user visibility for prompt/request snapshots;
-- administrator visibility for raw or redacted model responses;
-- retention and size limits for trace snapshots;
-- final storage shape for trace snapshots.
+- trace retention must be administrator-configurable, defaulting to 30 days;
+- normal users should see only business-safe AI evaluation summaries for their
+  own runs, not full prompt snapshots, request payload snapshots, or
+  administrator debug metadata;
+- normal users must not see raw model responses;
+- administrators may see redacted raw model responses for diagnosis;
+- unredacted raw model responses must not be stored or exposed to any role.
+- trace storage uses a new `ai_evaluation_traces` table with capped/redacted
+  JSON fields;
+- accepted default size guardrails are: each trace is about 64KB, prompt
+  snapshot up to 16KB, request snapshot up to 24KB, response snapshot up to
+  24KB, and sampled comments up to 20 comments with per-comment truncation.
 
 ## 4. Report Center
 

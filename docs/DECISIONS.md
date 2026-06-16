@@ -203,3 +203,34 @@ short `Superseded by` note rather than deleting history.
   small set of administrator-selectable preset styles, while the generated
   report body is inserted by the system and each delivered email records the
   effective template used.
+- Confirmed for CR-034: AI evaluation trace retention must be an
+  administrator-configurable runtime setting, defaulting to 30 days, rather
+  than a hard-coded retention window.
+- Confirmed for CR-034: prompt/request/response/comment size limits are
+  storage and API guardrails for trace snapshots, not user-facing business
+  rules. The accepted default guardrails are about 64KB per trace, 16KB for the
+  prompt snapshot, 24KB for the request snapshot, 24KB for the response
+  snapshot, and up to 20 sampled comments with per-comment truncation.
+  Oversized trace fields should be truncated with an explicit marker and must
+  not block AI evaluation, report generation, or run finalization.
+- Confirmed for CR-034: normal users must not see raw AI model responses.
+  Administrators may see redacted raw model responses for diagnosis, but
+  unredacted raw model responses must not be stored or exposed to any role.
+- Confirmed for CR-041: "the system can be used first" is judged by a minimum
+  usable pilot gate, not by completion of every optimization roadmap item. The
+  hard first-pilot blockers are hidden-real-email safety, stuck-run lifecycle
+  safety, and a minimum server-like real workflow.
+- Confirmed for CR-041: Phase 21 UI refinement, CR-038 drawer accessibility,
+  Phase 19 realtime progress, Phase 20 AI traceability, and CR-037
+  role/quota governance do not block the first usable pilot unless a later
+  accepted P0 safety, security, or core-flow regression changes that boundary.
+- Confirmed for CR-041: historical run remediation and orphan email evidence
+  handling remain dry-run, backup, rollback, and explicit-operator-approval
+  gated; first-pilot readiness must not silently mutate historical evidence.
+- Confirmed for CR-034: normal users may see only business-safe AI evaluation
+  summaries for their own runs. Full prompt snapshots, request payload
+  snapshots, and administrator debug metadata are administrator-only.
+- Confirmed for CR-034: AI trace snapshots should be stored in a new
+  `ai_evaluation_traces` table linked to `run_id`, `raw_content_id`, and
+  `ai_evaluations.id`, rather than being added to `ai_evaluations` or stored
+  as run/report artifact files.

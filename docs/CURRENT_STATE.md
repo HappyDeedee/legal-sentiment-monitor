@@ -42,11 +42,15 @@ backend APIs, database schema, permissions, crawler behavior, AI provider
 logic, SMTP delivery, or Phase 19B-19D product scope. The CR-033 pass now also
 includes stable secondary drawer/modal button-level loading feedback for
 account login, resource saves, AI/mail tests, and template preview actions.
-CR-034 Run Detail And AI Evaluation Traceability is recorded as a Needs
-Confirmation requirement and
-proposed Phase 20 work; it is not ready for implementation until role
-visibility, raw/redacted response visibility, trace retention, size limits, and
-storage shape are confirmed. CR-035 Run Lifecycle Finalization And AI Stuck
+CR-034 Run Detail And AI Evaluation Traceability is accepted as Phase 20, but
+implementation has not started. Trace retention must be an
+administrator-configurable runtime setting with a 30-day default, not a
+hard-coded value. Permission visibility is also confirmed: normal users see
+only business-safe summaries for their own runs, administrators may see
+redacted prompt/request/response debug snapshots, and unredacted raw responses
+must not be exposed. Trace storage uses a new `ai_evaluation_traces` table
+with capped/redacted JSON fields and accepted default size guardrails. CR-035
+Run Lifecycle Finalization And AI Stuck
 Recovery Regression Fix is accepted as a follow-up for the completed Phase 7
 responsibility area; Phase 7 remains a historical verified snapshot, while
 Phase 7.1 is the accepted regression-fix task block for the newly observed
@@ -55,7 +59,7 @@ accepted as a follow-up for the completed
 Phase 17 email-delivery responsibility area after two unexpected real
 `日报 海安律所` emails were traced to temporary test/local run records and
 unmocked SMTP delivery. Phase 17 remains a historical verified snapshot, while
-Phase 17.1 is the proposed regression-fix task block for preventing tests and
+Phase 17.1 is the accepted regression-fix task block for preventing tests and
 local diagnostics from sending hidden real external mail while preserving an
 explicit production/pilot real-mail validation path. Historical unexpected
 email evidence is confirmed to be preserved by default. CR-037 Role-Based
@@ -72,7 +76,13 @@ squeeze text into one-character vertical columns, overlap content, hide
 primary actions, or create horizontal overflow at `1440x900`, `1024x768`, or
 `390x844`. Phase 21 also explicitly excludes the currently unrendered
 `Users And Permissions` page; implementing that page would require a separate
-new-capability CR.
+new-capability CR. CR-041 Minimum Usable Pilot Acceptance Gate is accepted as
+the current "system can be used first" readiness standard: first pilot use is
+blocked by hidden-real-email safety, stuck-run lifecycle safety, and a minimum
+server-like real workflow, but it is not blocked by Phase 21 visual refinement,
+CR-038 drawer accessibility, Phase 19 realtime progress, Phase 20 AI
+traceability, or CR-037 role/quota governance unless a later accepted P0
+regression changes that boundary.
 The active SQLite schema now provides the foundation tables and columns
 required before later implementation work, and the web/API layer now has
 session login, administrator/normal-user roles, menu visibility,
@@ -178,15 +188,23 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   Phase 19A documentation-governance rules are complete and verified; Phase
   19B-19D run-center realtime progress implementation is accepted but not
   started.
-- Phase 20 - Run Detail And AI Evaluation Traceability: proposed and blocked
-  pending CR-034 confirmation. Do not implement until permission, retention,
-  redaction, and storage-shape decisions are confirmed.
+- Phase 20 - Run Detail And AI Evaluation Traceability: accepted but not
+  implemented. Confirmed scope includes configurable `ai_trace_retention_days`
+  with a 30-day default, normal-user business-safe summaries only,
+  administrator redacted prompt/request/response debug snapshots, no
+  unredacted raw responses for any role, new `ai_evaluation_traces` storage,
+  and default trace size guardrails.
 - Phase 21 - Formal Console Page-Level UI/UX Refinement: accepted but not
   implemented. This is a frontend-only formal console refinement phase covering
   global shell/design tokens, navigation hierarchy, Operations Home,
   Monitoring, Platform Accounts, Proxies, AI Access, AI Rules, Mail
   Configuration, Mail Templates, Runtime Strategy, Run Center, Report Center,
   System Diagnostics, Login, and cross-page verification.
+- Minimum Usable Pilot Acceptance Gate: accepted but not satisfied. This gate
+  requires CR-036/Phase 17.1A-B email side-effect safety,
+  CR-035/Phase 7.1A-C run lifecycle/AI fallback/partial-report safety, and a
+  minimum server-like real workflow before the system is described as ready for
+  first pilot use.
 - Phase 5/6 - Account Environment and Server Login: profile key, timeout, and
   lock-storage decisions are accepted; Phase 5 account environment runtime and
   Phase 6 login-flow runtime are complete.
@@ -194,7 +212,8 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
 The documented V1 product roadmap is implemented through Phase 9 in this
 worktree, and the console optimization roadmap is verified through Phase 18B.
 Production pilot handoff still requires live platform, SMTP, and AI-provider
-validation with real deployment credentials.
+validation with real deployment credentials. CR-041 now defines the narrower
+first usable pilot gate before that handoff can be described as ready.
 
 ## Completed
 
@@ -366,11 +385,11 @@ validation with real deployment credentials.
   allowed visual changes, testing, verification, and acceptance criteria. The
   planning update does not change code and does not reopen CR-033; Phase 21
   implementation work remains not started.
-- CR-034 Run Detail And AI Evaluation Traceability has been recorded as a
-  proposed run-center optimization with data-model implications. The current
+- CR-034 Run Detail And AI Evaluation Traceability has been accepted as a
+  run-center optimization with data-model implications. The current
   code can construct AI input payloads and stores final evaluation results, but
   it does not persist exact prompt/request/input snapshots for historical
-  evaluations. Proposed Phase 20 remains blocked pending confirmation.
+  evaluations. Phase 20 implementation has not started.
 
 ## In Progress
 
@@ -378,8 +397,8 @@ validation with real deployment credentials.
   console optimization is complete and verified through Phase 18B. Phase 19A
   documentation governance is complete. Phase 19B-19D run-center realtime
   progress code work is not started. Phase 7.1 and Phase 17.1 are accepted but
-  not implemented. Phase 20 is proposed and blocked pending CR-034
-  confirmation. Phase 21 is accepted but not implemented. CR-037 is deferred.
+  not implemented. Phase 20 is accepted but not implemented. Phase 21 is
+  accepted but not implemented. CR-037 is deferred.
 
 ## Known Risks
 
@@ -404,6 +423,11 @@ validation with real deployment credentials.
 - Phase 7 and Phase 8 automated checks do not prove real AI provider, SMTP,
   real platform QR scanning, or real platform crawling behavior; those remain
   deployment and pilot risks.
+- CR-041 tightens the first usable pilot boundary: Phase 17.1A-B, Phase
+  7.1A-C, and a minimum server-like real workflow are required before first
+  pilot use. Phase 21, CR-038, Phase 19B-D, Phase 20, and CR-037 are not first
+  pilot blockers unless a later accepted P0 safety, security, or core-flow
+  regression changes the boundary.
 - CR-031 is accepted but not implemented: active Run Center rows still depend
   on the current `crawl_runs.summary` update timing until Phase 19B-19D code
   work is completed. Operators may still need manual refresh or logs to
@@ -423,11 +447,10 @@ validation with real deployment credentials.
 - CR-037 is deferred: normal-user email send/resend quotas and administrator
   policy controls are not yet designed. Existing V1 role permissions remain in
   force until a future confirmed phase changes them.
-- CR-034 is not accepted for implementation yet: storing and exposing AI
-  prompt/request/response details requires confirmed role visibility,
-  retention, redaction, and storage limits. Historical AI evaluations cannot
-  be treated as having exact input snapshots because those snapshots were not
-  persisted at evaluation time.
+- CR-034 is accepted but not implemented: storing and exposing AI
+  prompt/request/response details will add new trace persistence and role-safe
+  APIs. Historical AI evaluations cannot be treated as having exact input
+  snapshots because those snapshots were not persisted at evaluation time.
 - Phase 18B report-center task grouping is implemented and verified. The
   current frontend has the complete Phase 11-12 foundation and Phase 13A data
   contract: local static module
@@ -505,17 +528,32 @@ validation with real deployment credentials.
 
 ## Next Step
 
-Next allowed implementation step:
+Next allowed implementation order:
 
-1. implement CR-036/Phase 17.1 first so broad automated report-delivery tests
-   cannot send hidden real mail;
-2. implement CR-035/Phase 7.1 run lifecycle, retry, AI fallback, and stuck-run
-   recovery fixes;
-3. prepare production pilot handoff and deployment-specific validation;
-4. verify real platform QR scanning, real platform crawling, SMTP delivery,
-   and AI-provider behavior with production credentials;
-5. keep Phase 10-18 console behavior under regression protection during any
-   pilot hardening.
+1. implement CR-036/Phase 17.1A-B real SMTP safety gate and automated-test
+   SMTP tripwire so broad report-delivery tests cannot send hidden real mail;
+2. implement CR-036/Phase 17.1C effective-recipient traceability together with
+   CR-039/Phase 17.2A effective-template provenance when practical, so the
+   delivery-log/report metadata migration happens once;
+3. implement CR-035/Phase 7.1A-C run `job_id` integrity, idempotent
+   finalization, AI fallback, and partial-report generation;
+4. handle CR-035/Phase 7.1D historical run remediation only through the
+   dry-run, backup, rollback, and explicit-operator-approval gate;
+5. implement Phase 21 formal console page-level UI/UX refinement as
+   frontend-only workstreams with the Phase 21P cross-page layout-resilience
+   gate;
+6. implement CR-031/Phase 19B-19D realtime run-progress work after Phase 7.1
+   lifecycle fields are available, unless a deliberately small compatible
+   provisional-progress batch is documented first;
+7. schedule CR-034/Phase 20 implementation after higher-priority safety and
+   lifecycle work if run-detail traceability becomes the next execution batch;
+8. satisfy CR-041 Minimum Usable Pilot Acceptance Gate by completing the email
+   safety gate, run lifecycle/partial-result safety, and minimum server-like
+   real workflow validation;
+9. prepare production pilot handoff and deployment-specific validation after
+   the safety and lifecycle regression fixes are verified;
+10. verify real platform QR scanning, real platform crawling, SMTP delivery,
+   and AI-provider behavior with production credentials.
 
 ## Latest Verification
 

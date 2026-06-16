@@ -108,13 +108,17 @@ Confirmed:
 
 - use the flexible key-value `system_settings` table for V1.
 
-### Proposed Phase 20 - Add AI Evaluation Trace Snapshots
+### Accepted Phase 20 - Add AI Evaluation Trace Snapshots
 
-Status: Proposed for CR-034, pending confirmation. Do not implement until the
-role visibility, raw/redacted response visibility, retention, size limit, and
-storage-shape questions are confirmed.
+Status: Accepted for CR-034, not implemented yet. Phase 20 must add a
+configurable `ai_trace_retention_days` runtime setting with a 30-day default.
+Visibility is confirmed: normal-user APIs return only business-safe summaries,
+administrator APIs may return redacted prompt/request/response debug snapshots,
+unredacted raw responses must not be stored or exposed, and normal-user APIs
+must not return raw responses. Trace storage uses the new
+`ai_evaluation_traces` table with capped/redacted JSON fields.
 
-Proposed compatible migration:
+Accepted compatible migration:
 
 ```text
 CREATE TABLE ai_evaluation_traces (
@@ -140,7 +144,7 @@ CREATE TABLE ai_evaluation_traces (
 )
 ```
 
-Recommended indexes after confirmation:
+Accepted indexes:
 
 ```text
 workspace_id + run_id + raw_content_id
@@ -156,6 +160,15 @@ Compatibility:
   marked limited-context in the run-detail UI;
 - migration must be additive and must not rewrite or delete existing
   `ai_evaluations`, `raw_contents`, or `raw_comments` rows.
+- Phase 20 must add `ai_trace_retention_days` to runtime settings,
+  `monitor.example.yaml`, validation, and diagnostics/cleanup visibility in the
+  same implementation batch; trace retention must not be hard-coded.
+- Accepted default size caps must be enforced before storage and before
+  trace-detail API responses: each trace is about 64KB, prompt snapshot up to
+  16KB, request snapshot up to 24KB, response snapshot up to 24KB, and sampled
+  comments up to 20 comments with per-comment truncation. Oversized fields
+  should be truncated with a visible `truncated=true` marker rather than
+  failing AI evaluation or report generation.
 
 ### Step 5 - Add Run Timeout And Lock Fields
 

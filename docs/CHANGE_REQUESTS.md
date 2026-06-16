@@ -57,6 +57,7 @@ Status values:
 - CR-038: Sticky Close Controls For Scrollable Drawers
 - CR-039: Governed Report Email Template Presets And Template Provenance
 - CR-040: Formal Console Page-Level UI/UX Refinement
+- CR-041: Minimum Usable Pilot Acceptance Gate
 
 ## Entry Classification Rule
 
@@ -1385,17 +1386,27 @@ Requirement:
   profile paths, real server paths, and raw account/session data from all
   customer-facing responses and stored trace views.
 
-Confirmed decisions:
+Confirmed decisions so far:
 
-- Confirm whether normal users may see full prompt/request snapshots, or only
-  business-safe input/output summaries.
-- Confirm whether administrators may see raw model responses, or only redacted
-  raw responses.
-- Confirm trace retention policy and size limits for prompt, request, response,
-  and comments snapshots.
-- Confirm whether trace snapshots should be stored in a new table, extension
-  columns on `ai_evaluations`, or a report/run artifact file. The proposed
-  direction is a new database table with capped, redacted JSON fields.
+- AI evaluation trace retention must be an administrator-configurable runtime
+  setting, not a hard-coded value. The default should be 30 days.
+- Normal users should not see raw model responses. They should see only
+  structured business results and business-safe summaries.
+- Normal users should not see full prompt snapshots, request payload snapshots,
+  or administrator debug metadata. They should see only business-safe
+  input/output summaries for their own runs.
+- Administrators may see redacted raw model responses for diagnosis. Unredacted
+  raw model responses must not be exposed to any role.
+- Trace snapshot size limits are storage and API guardrails, not business
+  rules. The accepted default guardrails are: each trace is about 64KB, prompt
+  snapshot up to 16KB, request snapshot up to 24KB, response snapshot up to
+  24KB, and sampled comments up to 20 comments with each comment truncated to a
+  safe per-comment length. Oversized snapshots should be truncated, marked with
+  `truncated=true`, and must not block AI evaluation, report generation, or run
+  finalization.
+- Trace snapshots should be stored in a new `ai_evaluation_traces` table with
+  redacted/capped JSON fields, linked to `run_id`, `raw_content_id`, and
+  `ai_evaluations.id`.
 
 Non-goals:
 
@@ -1407,7 +1418,7 @@ Non-goals:
   persisted.
 - Do not introduce a new frontend framework or build pipeline.
 
-Status: Needs Confirmation
+Status: Accepted
 
 Related tasks:
 
@@ -2145,3 +2156,109 @@ Acceptance:
 - `TASKS.md`, `TEST_PLAN.md`, and `TRACEABILITY.md` link this CR to the
   planning document and future verification areas.
 - No production frontend code is changed as part of this planning-only update.
+
+## CR-041 - Minimum Usable Pilot Acceptance Gate
+
+Date: 2026-06-16
+
+Source: user request to tighten acceptance around the standard "the system can
+be used first" before continuing broader optimization work.
+
+Module: pilot readiness, test safety, run lifecycle, deployment acceptance
+
+Type: Documentation Governance
+
+Background:
+
+After CR-035, CR-036, CR-039, CR-040, and the Phase 19/21 roadmap were
+documented, the user clarified that near-term priority should be judged by
+whether the system can safely enter a small usable pilot, not by whether every
+console optimization, realtime progress enhancement, or AI traceability feature
+is finished.
+
+The previous documents already listed the correct tasks, but the acceptance
+boundary for "usable first" needed to be tighter and more explicit. In
+particular, the gate must prevent accidental real email, prevent stuck runs
+from hiding usable results, and prove one minimal server-like real workflow,
+while keeping non-essential enhancements out of the pilot blocker set.
+
+Purpose:
+
+Define the minimum hard acceptance gate before declaring the system ready for a
+small internal/customer pilot. The gate narrows the implementation focus to the
+few safety and lifecycle guarantees needed to operate the system first.
+
+Requirement:
+
+- The system must not be considered minimally usable while tests, diagnostics,
+  or ordinary local runs can accidentally send real SMTP email.
+- The system must not be considered minimally usable while a normal run can
+  remain indefinitely `running` after the background task disappears or AI
+  evaluation partially stops.
+- The minimum pilot gate must require a server-like validation path that does
+  not depend on the operator's local Chrome.
+- The minimum pilot gate must require at least one real platform login/crawl
+  path, AI failure fallback or unavailable-AI fallback, and explicit-opt-in
+  SMTP delivery validation before pilot handoff.
+- The gate must preserve evidence and avoid historical mutation by default;
+  historical run or orphan-email remediation remains dry-run, backup,
+  rollback, and explicit-operator-approval gated.
+- Phase 21 UI refinement, CR-038 drawer accessibility, Phase 19 realtime
+  progress display, Phase 20 AI traceability, and CR-037 role/quota governance
+  must not block the first usable pilot unless they expose a new accepted P0
+  safety, security, or core-flow regression.
+
+Scope boundary:
+
+- This CR tightens acceptance and implementation priority; it does not replace
+  CR-036, CR-035, CR-039, CR-040, or CR-031.
+- It does not add a new business capability, backend API, database schema, UI
+  page, crawler feature, AI-provider feature, or SMTP feature by itself.
+- It uses existing Phase 17.1A-B, Phase 7.1A-C, and deployment validation as
+  the hard pilot readiness path.
+
+Non-goals:
+
+- Do not require Phase 21 visual refinement for the first usable pilot.
+- Do not require Phase 19 realtime progress display if the run lifecycle is
+  safe and logs/refresh provide enough operational visibility for the pilot.
+- Do not require Phase 20 AI prompt/request/response traceability before the
+  first pilot.
+- Do not implement CR-037 role-based email quotas as part of the minimum pilot
+  gate.
+- Do not mark historical run `8317` or orphan delivery evidence repaired
+  without the existing explicit remediation gate.
+
+Status: Accepted
+
+Related tasks:
+
+- Minimum Usable Pilot Acceptance Gate in `TASKS.md`
+- CR-036/Phase 17.1A-B in `TASKS.md`
+- CR-035/Phase 7.1A-C in `TASKS.md`
+- Server-like and pilot validation in `TEST_PLAN.md`
+
+Acceptance:
+
+- CR-036/Phase 17.1A-B is implemented and verified: automated tests, local
+  diagnostics, and ordinary local report-delivery paths cannot reach real SMTP
+  without explicit opt-in, even when real SMTP configuration and default
+  recipients exist.
+- A test-level SMTP tripwire fails the automated suite if `smtplib.SMTP` or
+  `smtplib.SMTP_SSL` is reached without explicit opt-in.
+- Automatic report delivery, manual resend, and mail-test paths use the same
+  real-email safety gate; blocked delivery still lets report generation
+  complete and records a customer-safe skipped state or confirmed equivalent.
+- CR-035/Phase 7.1A-C is implemented and verified: new runs persist
+  `crawl_runs.job_id`; all success, failure, timeout, cancellation,
+  interruption, and partial-result paths finalize idempotently; AI item
+  timeout, exception, or invalid JSON falls back to `pending_review`; collected
+  partial results can produce a report when safe.
+- The regression scenario "271 collected contents, AI interruption after item
+  250/251" cannot leave the run indefinitely `running`.
+- A minimum server-like pilot validation proves web-UI login through
+  server-side browser/profile, one real platform crawl, AI unavailable/failure
+  fallback, explicit-opt-in SMTP delivery, and sensitive-value redaction.
+- Phase 21, CR-038, Phase 19B-D, Phase 20, and CR-037 remain outside the first
+  usable pilot blocker set unless a new accepted P0 regression changes the
+  boundary.

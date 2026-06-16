@@ -43,6 +43,20 @@ Confirmed V1 direction:
 Single-account and single-profile concurrency are fixed safety rules and should
 not be editable in V1.
 
+Planned for CR-034 / Phase 20:
+
+| Setting | Type | Default | Range | Apply |
+| --- | --- | --- | --- | --- |
+| ai_trace_retention_days | integer | 30 | 1-3650 | cleanup job |
+
+`ai_trace_retention_days` is not part of the current implemented runtime
+settings set. When Phase 20 implements AI evaluation trace snapshots, this
+setting must be added to the runtime settings defaults, database-backed
+administrator UI, safe example configuration, validation tests, and diagnostics
+or cleanup visibility in the same synchronized change. It controls how long
+stored AI trace snapshots are retained; it must not be hard-coded in the trace
+persistence layer.
+
 ## Task Timeout And Lock Recovery
 
 `crawler_timeout_seconds` is the administrator-controlled run-level wall-clock
@@ -207,6 +221,7 @@ scheduler:
 retention:
   run_log_days: 90
   report_days: 180
+  ai_trace_days: 30
 ```
 
 The database keys should use stable snake_case names such as
@@ -231,6 +246,7 @@ YAML-to-database key mapping:
 | scheduler.disabled | scheduler_disabled |
 | retention.run_log_days | run_log_retention_days |
 | retention.report_days | report_retention_days |
+| retention.ai_trace_days | ai_trace_retention_days |
 
 Do not commit real secrets in `monitor.yaml`; commit only `monitor.example.yaml`.
 
