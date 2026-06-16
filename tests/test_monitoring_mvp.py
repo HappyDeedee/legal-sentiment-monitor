@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import smtplib
 import sqlite3
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -16,14 +17,14 @@ from api.monitoring.ai import _build_endpoint, _parse_json, _validate_ai_output,
 from api.monitoring.ai import DEFAULT_PROMPT
 from api.monitoring.auth import SESSION_COOKIE_NAME
 from api.monitoring.account_environment import resolve_account_profile_path
-from api.monitoring.database import acquire_account_lock, acquire_proxy_lock, authenticate_user, bootstrap_admin_from_env, create_login_session, create_run, email_send_window_key, expire_login_sessions_for_account, finish_run, get_active_ai_key_profile, get_ai_config, get_conn, get_dashboard_summary, get_email_config, get_job, get_login_session, get_platform_login_config, get_report, get_run, get_runtime_setting_value, get_social_account, get_user_by_email, init_db, list_ai_key_profiles, list_ai_rule_profiles, list_email_delivery_logs, list_email_templates, list_jobs, list_leads, list_login_sessions, list_platform_login_configs, list_proxy_profiles, list_reports, list_runtime_settings, list_runs, list_social_accounts, list_users, mark_selftest_jobs_internal, record_email_delivery_log, record_skipped_run, recover_stale_runs_and_locks, release_account_lock, release_proxy_locks, release_run_resource_locks, render_email_template_preview, save_ai_config, save_ai_key_profile, save_ai_rule_profile, save_email_config, save_email_template, save_job, save_platform_login_config, save_proxy_profile, save_runtime_settings, save_social_account, save_user, set_active_ai_key_profile, set_active_ai_rule_profile, update_social_account_check_state
+from api.monitoring.database import acquire_account_lock, acquire_proxy_lock, authenticate_user, bootstrap_admin_from_env, create_login_session, create_run, email_send_window_key, expire_login_sessions_for_account, finish_run, get_active_ai_key_profile, get_ai_config, get_conn, get_dashboard_summary, get_email_config, get_job, get_login_session, get_platform_login_config, get_report, get_run, get_runtime_setting_value, get_social_account, get_user_by_email, has_running_run_for_job, init_db, list_ai_key_profiles, list_ai_rule_profiles, list_email_delivery_logs, list_email_templates, list_jobs, list_leads, list_login_sessions, list_platform_login_configs, list_proxy_profiles, list_reports, list_runtime_settings, list_runs, list_social_accounts, list_users, mark_selftest_jobs_internal, preview_crawl_run_job_id_backfill, record_email_delivery_log, record_skipped_run, recover_stale_runs_and_locks, release_account_lock, release_proxy_locks, release_run_resource_locks, render_email_template_preview, save_ai_config, save_ai_key_profile, save_ai_rule_profile, save_email_config, save_email_template, save_job, save_platform_login_config, save_proxy_profile, save_runtime_settings, save_social_account, save_user, set_active_ai_key_profile, set_active_ai_rule_profile, update_social_account_check_state
 from api.monitoring.mediacrawler_login import get_mediacrawler_login_capability
 from api.monitoring.login_browser import build_login_browser_command, open_login_browser, open_login_browser_with_command
 import api.monitoring.account_check as account_check_module
 import api.monitoring.login_qrcode as login_qrcode_module
 import api.monitoring.mediacrawler_login as mediacrawler_login_module
 from api.monitoring.login_state import login_window_status, record_login_window
-from api.monitoring.mailer import build_report_email, render_report_email_preview, send_test_email
+from api.monitoring.mailer import REAL_EMAIL_BLOCKED_MESSAGE, build_report_email, render_report_email_preview, send_report, send_test_email
 from api.monitoring.normalizer import collect_platform_outputs, in_time_window, normalize_content, parse_jsonl_file, resolve_window
 from api.monitoring.platform_status import list_platform_status
 from api.monitoring.preflight import build_job_preflight
@@ -2136,6 +2137,125 @@ def test_phase_5_recovery_marks_expired_running_run_before_releasing_locks():
             _restore_table(table, snapshot)
 
 
+def test_phase_7_1_run_identity_legacy_lookup_and_dry_run_backfill():
+    init_db()
+    snapshots = {"crawl_runs": _snapshot_table("crawl_runs")}
+    jobs_snapshot = _snapshot_monitor_jobs()
+    try:
+        _clear_monitor_jobs()
+        job = save_job(
+            {
+                "law_firm_name": "Phase71身份律所",
+                "keywords": ["Phase71身份律所投诉"],
+                "platforms": ["dy"],
+                "recipients": [],
+            }
+        )
+        run_id = create_run(job["id"], {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        with get_conn() as conn:
+            persisted = conn.execute("SELECT job_id FROM crawl_runs WHERE id=?", (run_id,)).fetchone()["job_id"]
+            conn.execute("UPDATE crawl_runs SET job_id=NULL WHERE id=?", (run_id,))
+            conn.execute(
+                "INSERT INTO crawl_runs (workspace_id, job_id, status, started_at, summary) VALUES (1, NULL, 'running', ?, ?)",
+                (
+                    datetime.now(timezone.utc).isoformat(),
+                    json.dumps({"job_id": 99999999, "law_firm_name": "未知律所"}, ensure_ascii=False),
+                ),
+            )
+
+        preview = preview_crawl_run_job_id_backfill()
+        applied = preview_crawl_run_job_id_backfill(apply=True)
+
+        assert persisted == job["id"]
+        assert any(item == {"run_id": run_id, "job_id": job["id"]} for item in preview["resolvable"])
+        assert any(item["summary_job_id"] == 99999999 for item in preview["unresolved"])
+        assert applied["applied"] == 1
+        assert get_run(run_id)["job_id"] == job["id"]
+        assert has_running_run_for_job(job["id"]) is True
+        assert preview_crawl_run_job_id_backfill()["unresolved"]
+    finally:
+        _restore_monitor_jobs(jobs_snapshot)
+        _restore_table("crawl_runs", snapshots["crawl_runs"])
+
+
+def test_phase_7_1_finish_run_is_idempotent_and_releases_locks():
+    init_db()
+    snapshots = {
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "social_accounts": _snapshot_table("social_accounts"),
+        "resource_locks": _snapshot_table("resource_locks"),
+        "proxy_profiles": _snapshot_table("proxy_profiles"),
+    }
+    jobs_snapshot = _snapshot_monitor_jobs()
+    try:
+        _clear_monitor_jobs()
+        account = save_social_account({"name": "Phase71终态账号", "platform": "dy", "login_type": "qrcode", "status": "active"})
+        proxy = save_proxy_profile({"name": "Phase71终态代理", "provider": "manual", "proxy_url": "http://u:p@127.0.0.1:8000", "status": "active", "max_concurrency": 1})
+        job = save_job({"law_firm_name": "Phase71终态律所", "keywords": ["Phase71终态律所"], "platforms": ["dy"], "recipients": []})
+        run_id = create_run(job["id"], {"job_id": job["id"], "phase_7_1_lifecycle": True}, timeout_seconds=120)
+        deadline = get_run(run_id)["deadline_at"]
+        assert acquire_account_lock(account["id"], run_id, deadline) is True
+        assert acquire_proxy_lock(proxy["id"], run_id, deadline) is True
+
+        finish_run(run_id, "success", {"job_id": job["id"], "phase": "terminal:success"})
+        finish_run(run_id, "failed", {"job_id": job["id"], "phase": "terminal:failed"}, "late writer should not reopen")
+        release_run_resource_locks(run_id)
+        release_run_resource_locks(run_id)
+
+        run = get_run(run_id)
+        account_after = get_social_account(account["id"], masked=False)
+        with get_conn() as conn:
+            proxy_locks = conn.execute("SELECT COUNT(*) AS n FROM resource_locks WHERE run_id=?", (run_id,)).fetchone()["n"]
+
+        assert run["status"] == "success"
+        assert run["summary"]["terminal_status"] == "success"
+        assert account_after["locked_by_run_id"] is None
+        assert proxy_locks == 0
+    finally:
+        _restore_monitor_jobs(jobs_snapshot)
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+
+def test_phase_7_1_stale_recovery_marks_new_lifecycle_rows_interrupted_not_legacy():
+    init_db()
+    snapshots = {"crawl_runs": _snapshot_table("crawl_runs"), "system_settings": _snapshot_table("system_settings")}
+    jobs_snapshot = _snapshot_monitor_jobs()
+    try:
+        _clear_monitor_jobs()
+        with get_conn() as conn:
+            conn.execute("DELETE FROM system_settings")
+        save_runtime_settings({"stale_run_heartbeat_grace_seconds": 60})
+        job = save_job({"law_firm_name": "Phase71中断律所", "keywords": ["Phase71中断律所"], "platforms": ["dy"], "recipients": []})
+        old_heartbeat = (datetime.now(timezone.utc) - timedelta(minutes=20)).isoformat()
+        future_deadline = (datetime.now(timezone.utc) + timedelta(hours=1)).isoformat()
+        phase_run = create_run(
+            job["id"],
+            {
+                "job_id": job["id"],
+                "phase_7_1_lifecycle": True,
+                "phase": "ai_evaluating",
+                "progress_updated_at": old_heartbeat,
+                "last_safe_result": {"evaluated": 250},
+            },
+            timeout_seconds=3600,
+        )
+        legacy_run = create_run(job["id"], {"job_id": job["id"], "progress_updated_at": old_heartbeat}, timeout_seconds=3600)
+        with get_conn() as conn:
+            conn.execute("UPDATE crawl_runs SET deadline_at=? WHERE id IN (?, ?)", (future_deadline, phase_run, legacy_run))
+
+        recovered = recover_stale_runs_and_locks("pytest_phase_7_1")
+
+        assert recovered["interrupted_runs"] == 1
+        assert get_run(phase_run)["status"] == "interrupted"
+        assert get_run(phase_run)["display_status"] == "执行中断"
+        assert get_run(legacy_run)["status"] == "running"
+    finally:
+        _restore_monitor_jobs(jobs_snapshot)
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+
 def test_ai_and_email_test_paths_reuse_config_validation():
     init_db()
     with pytest.raises(ValueError, match="invalid AI provider"):
@@ -2624,6 +2744,173 @@ def test_run_summary_and_log_api_redact_sensitive_values(tmp_path, monkeypatch):
     assert logs
     assert "session=abc" not in logs[0]["content"]
     assert "[REDACTED]" in logs[0]["content"]
+
+
+def test_phase_7_1_ai_invalid_json_exception_and_timeout_fallback_to_pending_review(monkeypatch):
+    async def run_case(case_name: str, fake_eval):
+        init_db()
+        snapshots = {
+            "crawl_runs": _snapshot_table("crawl_runs"),
+            "raw_contents": _snapshot_table("raw_contents"),
+            "raw_comments": _snapshot_table("raw_comments"),
+            "ai_evaluations": _snapshot_table("ai_evaluations"),
+            "system_settings": _snapshot_table("system_settings"),
+        }
+        jobs_snapshot = _snapshot_monitor_jobs()
+        content_id = f"pytest_phase_7_1_ai_{case_name}"
+        try:
+            _clear_monitor_jobs()
+            with get_conn() as conn:
+                for table in ["crawl_runs", "raw_contents", "raw_comments", "ai_evaluations", "system_settings"]:
+                    conn.execute(f"DELETE FROM {table}")
+            save_runtime_settings({"ai_item_timeout_seconds": 5, "ai_item_retry_count": 0})
+            job = save_job(
+                {
+                    "law_firm_name": f"Phase71AI{case_name}律所",
+                    "keywords": [f"Phase71AI{case_name}律所投诉"],
+                    "platforms": ["dy"],
+                    "recipients": [],
+                    "enable_comments": False,
+                    "time_window_type": "recent_1d",
+                }
+            )
+            run_id = create_run(job["id"], {"job_id": job["id"], "phase_7_1_lifecycle": True}, timeout_seconds=120)
+            item = {
+                "aweme_id": content_id,
+                "title": f"Phase71AI{case_name}律所投诉",
+                "desc": "需要人工复核",
+                "create_time": int(datetime.now(timezone.utc).timestamp()),
+            }
+            ingested = ingest_outputs(job, run_id, "dy", [item], [])
+            monkeypatch.setattr(runner_module, "evaluate_content", fake_eval)
+
+            summary = await evaluate_new_contents(job, run_id, ingested["content_db_ids"])
+
+            with get_conn() as conn:
+                row = conn.execute(
+                    "SELECT status, reason FROM ai_evaluations WHERE run_id=?",
+                    (run_id,),
+                ).fetchone()
+            assert summary["pending_review_count"] == 1
+            assert summary["ai_failed_fallback_evaluations"] == 1
+            assert summary["ai_unresolved_items"] == 0
+            assert row["status"] == "pending_review"
+            assert "复核" in row["reason"]
+        finally:
+            _cleanup_test_records(job["id"], content_id)
+            _restore_monitor_jobs(jobs_snapshot)
+            for table, snapshot in snapshots.items():
+                _restore_table(table, snapshot)
+
+    async def invalid_json(job, content, comments):
+        return {"not": "contract"}
+
+    async def raises(job, content, comments):
+        raise RuntimeError("provider crashed api_key=secret")
+
+    async def slow(job, content, comments):
+        await asyncio.sleep(0.02)
+        return {"status": "ok"}
+
+    async def tiny_timeout(run_id):
+        return 0.001
+
+    original_timeout = runner_module._ai_item_timeout_seconds
+    try:
+        asyncio.run(run_case("invalid", invalid_json))
+        asyncio.run(run_case("exception", raises))
+        monkeypatch.setattr(runner_module, "_ai_item_timeout_seconds", lambda run_id: 0.001)
+        asyncio.run(run_case("timeout", slow))
+    finally:
+        monkeypatch.setattr(runner_module, "_ai_item_timeout_seconds", original_timeout)
+
+
+def test_phase_7_1_ai_interruption_generates_partial_report_and_terminal_state(monkeypatch):
+    init_db()
+    snapshots = {
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "raw_contents": _snapshot_table("raw_contents"),
+        "raw_comments": _snapshot_table("raw_comments"),
+        "ai_evaluations": _snapshot_table("ai_evaluations"),
+        "email_delivery_logs": _snapshot_table("email_delivery_logs"),
+    }
+    jobs_snapshot = _snapshot_monitor_jobs()
+    content_ids = []
+    try:
+        _clear_monitor_jobs()
+        with get_conn() as conn:
+            for table in ["reports", "crawl_runs", "raw_contents", "raw_comments", "ai_evaluations", "email_delivery_logs"]:
+                conn.execute(f"DELETE FROM {table}")
+        job = save_job(
+            {
+                "law_firm_name": "Phase71部分报告律所",
+                "keywords": ["Phase71部分报告律所投诉"],
+                "platforms": ["dy"],
+                "recipients": [],
+                "enable_comments": False,
+                "time_window_type": "recent_1d",
+            }
+        )
+
+        async def fake_run_platform(job_arg, run_id, platform, run_dir):
+            items = []
+            for idx in range(1, 6):
+                cid = f"pytest_phase_7_1_partial_{idx}"
+                content_ids.append(cid)
+                items.append(
+                    {
+                        "aweme_id": cid,
+                        "title": f"Phase71部分报告律所投诉 {idx}",
+                        "desc": "收费争议",
+                        "create_time": int(datetime.now(timezone.utc).timestamp()),
+                    }
+                )
+            return ingest_outputs(job_arg, run_id, platform, items, [])
+
+        eval_calls = 0
+
+        async def fake_evaluate(job_arg, content, comments):
+            nonlocal eval_calls
+            eval_calls += 1
+            if str(content.get("content_id") or "").endswith(("_3", "_4", "_5")):
+                raise asyncio.CancelledError()
+            return {
+                "status": "ok",
+                "is_related": True,
+                "is_negative": True,
+                "risk_level": "high",
+                "reason": "命中投诉",
+                "evidence_quotes": [content.get("title")],
+                "recommended_action": "人工复核",
+                "raw_response": "{}",
+            }
+
+        monkeypatch.setattr(runner_module, "run_platform", fake_run_platform)
+        monkeypatch.setattr(runner_module, "evaluate_content", fake_evaluate)
+        monkeypatch.setattr(
+            runner_module,
+            "send_report_with_delivery_log",
+            lambda job, report, send_type="auto": (False, "未配置收件人", report, None),
+        )
+
+        result = asyncio.run(run_monitor_job(job["id"]))
+        run = get_run(result["run_id"])
+        reports = list_reports(10)
+        report = next(item for item in reports if item["run_id"] == result["run_id"])
+
+        assert result["status"] == "success"
+        assert run["status"] == "success"
+        assert result["summary"]["pending_review_count"] >= 3
+        assert result["summary"]["ai_unresolved_items"] == 0
+        assert report["summary"]["pending_review_count"] >= 3
+        assert Path(report["html_path"]).exists()
+    finally:
+        for cid in content_ids:
+            _cleanup_test_records(job["id"], cid)
+        _restore_monitor_jobs(jobs_snapshot)
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
 
 
 def test_ai_test_requires_contract_shaped_output():
@@ -8366,6 +8653,13 @@ def test_phase_16_email_delivery_logs_schema_window_keys_and_compatibility():
                 "status",
                 "error_message",
                 "recipients_json",
+                "trigger_source",
+                "effective_recipients_json",
+                "effective_recipient_source",
+                "email_template_id",
+                "email_template_name",
+                "email_template_source",
+                "email_subject_template",
                 "created_at",
             } <= columns
             index_names = {
@@ -8411,6 +8705,9 @@ def test_phase_16_email_delivery_logs_schema_window_keys_and_compatibility():
         assert auto["status"] == "sent"
         assert auto["send_window_key"] == f"{job['id']}_2026-06-16"
         assert auto["recipients"] == ["ops@example.com"]
+        assert auto["trigger_source"] == "scheduler_auto"
+        assert auto["effective_recipients"] == []
+        assert auto["effective_recipient_source"] == "limited_context"
         assert "super-secret" not in auto["error_message"]
         assert "pass@example" not in auto["error_message"]
 
@@ -8565,6 +8862,11 @@ def test_phase_17a_auto_delivery_is_idempotent_and_manual_resend_is_separate(mon
         assert log_first and log_first["send_type"] == "auto"
         assert log_first["status"] == "sent"
         assert log_first["send_window_key"] == f"{job['id']}_2026-06-16"
+        assert log_first["trigger_source"] == "scheduler_auto"
+        assert log_first["recipients"] == ["ops@example.com"]
+        assert log_first["effective_recipients"] == ["ops@example.com"]
+        assert log_first["effective_recipient_source"] == "task_recipients"
+        assert log_first["email_template_source"] in {"active_global_fallback", "default_renderer"}
         assert ok_second is False
         assert "已跳过重复发送" in (error_second or "")
         assert refreshed_second["email_status"] == "skipped"
@@ -8579,11 +8881,192 @@ def test_phase_17a_auto_delivery_is_idempotent_and_manual_resend_is_separate(mon
         assert len(manual_logs) == 1
         assert manual_logs[0]["sent_by"] == manual_actor["id"]
         assert manual_logs[0]["status"] == "sent"
+        assert manual_logs[0]["trigger_source"] == "manual_resend"
+        assert manual_logs[0]["effective_recipients"] == ["ops@example.com"]
     finally:
         _restore_table("email_delivery_logs", snapshots["email_delivery_logs"])
         _restore_table("reports", snapshots["reports"])
         _restore_table("crawl_runs", snapshots["crawl_runs"])
         _restore_monitor_jobs(jobs_snapshot)
+
+
+def test_phase_17_1_real_smtp_gate_skips_auto_delivery_with_default_recipients(monkeypatch):
+    init_db()
+    jobs_snapshot = _snapshot_monitor_jobs()
+    snapshots = {
+        "email_delivery_logs": _snapshot_table("email_delivery_logs"),
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "email_configs": _snapshot_singleton_table("email_configs"),
+    }
+    _clear_monitor_jobs()
+    try:
+        with get_conn() as conn:
+            for table in ["email_delivery_logs", "reports", "crawl_runs"]:
+                conn.execute(f"DELETE FROM {table}")
+        monkeypatch.delenv("MONITOR_ALLOW_REAL_EMAIL_SEND", raising=False)
+        save_email_config(
+            {
+                "smtp_host": "smtp.real-looking.example",
+                "smtp_port": 465,
+                "encryption": "ssl",
+                "sender": "sender@example.com",
+                "username": "sender@example.com",
+                "password": "super-secret",
+                "default_recipients": ["fallback@example.com"],
+            }
+        )
+        job = save_job(
+            {
+                "law_firm_name": "Phase17.1安全律所",
+                "keywords": ["Phase17.1安全律所投诉"],
+                "platforms": ["dy"],
+                "recipients": [],
+                "frequency": "daily",
+                "email_time": "09:00",
+            }
+        )
+        run_id = create_run(job["id"], {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        finish_run(run_id, "success", {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        report = create_report(run_id, job, {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+
+        ok, error, refreshed, log = send_report_with_delivery_log(job, report, send_type="auto")
+
+        assert ok is False
+        assert error == REAL_EMAIL_BLOCKED_MESSAGE
+        assert refreshed["email_status"] == "skipped"
+        assert log and log["status"] == "skipped"
+        assert log["recipients"] == []
+        assert log["effective_recipients"] == ["fallback@example.com"]
+        assert log["effective_recipient_source"] == "global_default_fallback"
+        assert log["trigger_source"] == "scheduler_auto"
+    finally:
+        _restore_table("email_delivery_logs", snapshots["email_delivery_logs"])
+        _restore_table("reports", snapshots["reports"])
+        _restore_table("crawl_runs", snapshots["crawl_runs"])
+        _restore_singleton_table("email_configs", snapshots["email_configs"])
+        _restore_monitor_jobs(jobs_snapshot)
+
+
+def test_phase_17_1_manual_resend_and_mail_test_are_blocked_without_opt_in(monkeypatch):
+    init_db()
+    jobs_snapshot = _snapshot_monitor_jobs()
+    snapshots = {
+        "email_delivery_logs": _snapshot_table("email_delivery_logs"),
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "email_configs": _snapshot_singleton_table("email_configs"),
+    }
+    _clear_monitor_jobs()
+    try:
+        with get_conn() as conn:
+            for table in ["email_delivery_logs", "reports", "crawl_runs"]:
+                conn.execute(f"DELETE FROM {table}")
+        monkeypatch.delenv("MONITOR_ALLOW_REAL_EMAIL_SEND", raising=False)
+        save_email_config(
+            {
+                "smtp_host": "smtp.real-looking.example",
+                "smtp_port": 465,
+                "encryption": "ssl",
+                "sender": "sender@example.com",
+                "username": "sender@example.com",
+                "password": "super-secret",
+                "default_recipients": ["ops@example.com"],
+            }
+        )
+        job = save_job(
+            {
+                "law_firm_name": "Phase17.1重发律所",
+                "keywords": ["Phase17.1重发律所投诉"],
+                "platforms": ["dy"],
+                "recipients": ["ops@example.com"],
+                "frequency": "daily",
+                "email_time": "09:00",
+            }
+        )
+        run_id = create_run(job["id"], {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        finish_run(run_id, "success", {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        report = create_report(run_id, job, {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+
+        ok, error, refreshed = resend_report_email(report["id"], actor={"id": 7, "workspace_id": job["workspace_id"], "role": "administrator"})
+        logs = list_email_delivery_logs(report_id=report["id"], limit=5)
+
+        assert ok is False
+        assert error == REAL_EMAIL_BLOCKED_MESSAGE
+        assert refreshed["email_status"] == "skipped"
+        assert logs and logs[0]["send_type"] == "manual_resend"
+        assert logs[0]["status"] == "skipped"
+        assert logs[0]["trigger_source"] == "manual_resend"
+        with pytest.raises(ValueError, match="真实邮件发送未启用"):
+            send_test_email({})
+    finally:
+        _restore_table("email_delivery_logs", snapshots["email_delivery_logs"])
+        _restore_table("reports", snapshots["reports"])
+        _restore_table("crawl_runs", snapshots["crawl_runs"])
+        _restore_singleton_table("email_configs", snapshots["email_configs"])
+        _restore_monitor_jobs(jobs_snapshot)
+
+
+def test_phase_17_1_explicit_real_email_opt_in_reaches_mocked_smtp(monkeypatch, tmp_path):
+    init_db()
+    email_snapshot = _snapshot_singleton_table("email_configs")
+    sent_messages = []
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout=30):
+            self.host = host
+            self.port = port
+            self.timeout = timeout
+
+        def login(self, username, password):
+            self.username = username
+            self.password = password
+
+        def send_message(self, msg):
+            sent_messages.append(msg)
+
+        def quit(self):
+            return None
+
+    try:
+        monkeypatch.setenv("MONITOR_ALLOW_REAL_EMAIL_SEND", "true")
+        monkeypatch.setattr(smtplib, "SMTP_SSL", FakeSMTP)
+        save_email_config(
+            {
+                "smtp_host": "smtp.real-looking.example",
+                "smtp_port": 465,
+                "encryption": "ssl",
+                "sender": "sender@example.com",
+                "username": "sender@example.com",
+                "password": "super-secret",
+                "default_recipients": ["ops@example.com"],
+            }
+        )
+
+        send_test_email({})
+        html_path = tmp_path / "report.html"
+        md_path = tmp_path / "report.md"
+        xlsx_path = tmp_path / "report.xlsx"
+        html_path.write_text("<article>显式验证报告</article>", encoding="utf-8")
+        md_path.write_text("# 显式验证报告", encoding="utf-8")
+        xlsx_path.write_bytes(b"placeholder")
+        ok, error = send_report(
+            {"law_firm_name": "Phase17.1显式发送律所", "recipients": ["report@example.com"], "platforms": ["dy"]},
+            {
+                "html_path": str(html_path),
+                "markdown_path": str(md_path),
+                "excel_path": str(xlsx_path),
+                "summary": {"job_id": 1, "law_firm_name": "Phase17.1显式发送律所", "platforms": ["dy"]},
+            },
+        )
+
+        assert ok is True
+        assert error is None
+        assert len(sent_messages) == 2
+        assert sent_messages[0]["To"] == "ops@example.com"
+        assert sent_messages[1]["To"] == "report@example.com"
+    finally:
+        _restore_singleton_table("email_configs", email_snapshot)
 
 
 def test_phase_17a_failed_auto_delivery_records_log_without_blocking_report(monkeypatch):
@@ -8852,14 +9335,15 @@ def test_phase_18a_report_job_snapshots_persist_backfill_and_limited_context():
         stored = get_report(report["id"])
 
         assert report["job_snapshot"]["job_id"] == job["id"]
-        assert stored["job_snapshot"] == {
+        assert stored["job_snapshot"].items() >= {
             "job_id": job["id"],
             "law_firm_name": "Phase18A快照律所",
             "platforms": ["dy", "xhs"],
             "keywords": ["Phase18A快照律所投诉", "Phase18A快照律所退费"],
             "frequency": "daily",
             "deleted_at": None,
-        }
+        }.items()
+        assert stored["job_snapshot"]["email_template"]["source"] in {"active_global_fallback", "default_renderer"}
         assert stored["job_deleted"] is False
         assert stored["limited_context"] is False
 

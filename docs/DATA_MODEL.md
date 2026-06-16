@@ -419,6 +419,12 @@ Recommended `job_snapshot_json` fields:
   "platforms": ["xhs", "dy"],
   "keywords": ["keyword A", "keyword B"],
   "frequency": "daily",
+  "email_template": {
+    "id": 12,
+    "name": "Daily report",
+    "source": "task_bound",
+    "subject_template": "Daily {law_firm_name}"
+  },
   "deleted_at": null
 }
 ```
@@ -430,6 +436,9 @@ Rules:
   monitoring task;
 - if a task is later deleted or unavailable, keep the report grouped by the
   snapshot business context;
+- for new reports, include customer-safe effective email-template provenance
+  so historical reports can explain task-bound versus active-global/default
+  template source without storing raw template HTML;
 - keep unrecoverable old reports readable as limited-context historical
   reports;
 - do not use the snapshot to bypass owner/workspace permissions.

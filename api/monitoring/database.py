@@ -54,6 +54,7 @@ USER_STATUSES = {"active", "disabled"}
 EMAIL_DELIVERY_SEND_TYPES = {"auto", "manual_resend"}
 EMAIL_DELIVERY_STATUSES = {"pending", "sending", "sent", "failed", "skipped"}
 SESSION_TTL_SECONDS = 8 * 60 * 60
+RUN_TERMINAL_STATUSES = {"success", "partial_failed", "failed", "timeout", "cancelled", "interrupted", "skipped", "selftest"}
 
 
 def utc_now() -> str:
@@ -454,6 +455,13 @@ def init_db() -> None:
                 status TEXT NOT NULL CHECK(status IN ('pending', 'sending', 'sent', 'failed', 'skipped')),
                 error_message TEXT,
                 recipients_json TEXT,
+                trigger_source TEXT NOT NULL DEFAULT '',
+                effective_recipients_json TEXT NOT NULL DEFAULT '[]',
+                effective_recipient_source TEXT NOT NULL DEFAULT '',
+                email_template_id INTEGER,
+                email_template_name TEXT NOT NULL DEFAULT '',
+                email_template_source TEXT NOT NULL DEFAULT '',
+                email_subject_template TEXT NOT NULL DEFAULT '',
                 created_at TEXT NOT NULL
             );
 
@@ -582,6 +590,7 @@ def report_job_snapshot(job: dict[str, Any] | None) -> dict[str, Any] | None:
         "platforms": platforms,
         "keywords": keywords,
         "frequency": customer_safe_text(job.get("frequency") or ""),
+        "email_template": effective_email_template_provenance(job),
         "deleted_at": job.get("deleted_at") or None,
     }
 
@@ -929,6 +938,13 @@ def _ensure_phase_16_email_delivery_schema(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "email_delivery_logs", "status", "TEXT NOT NULL DEFAULT 'pending'")
     _ensure_column(conn, "email_delivery_logs", "error_message", "TEXT")
     _ensure_column(conn, "email_delivery_logs", "recipients_json", "TEXT")
+    _ensure_column(conn, "email_delivery_logs", "trigger_source", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "email_delivery_logs", "effective_recipients_json", "TEXT NOT NULL DEFAULT '[]'")
+    _ensure_column(conn, "email_delivery_logs", "effective_recipient_source", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "email_delivery_logs", "email_template_id", "INTEGER")
+    _ensure_column(conn, "email_delivery_logs", "email_template_name", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "email_delivery_logs", "email_template_source", "TEXT NOT NULL DEFAULT ''")
+    _ensure_column(conn, "email_delivery_logs", "email_subject_template", "TEXT NOT NULL DEFAULT ''")
     _ensure_column(conn, "email_delivery_logs", "created_at", "TEXT NOT NULL DEFAULT ''")
     now = utc_now()
     conn.execute(
@@ -940,6 +956,12 @@ def _ensure_phase_16_email_delivery_schema(conn: sqlite3.Connection) -> None:
         "UPDATE email_delivery_logs SET status='pending' WHERE status NOT IN ('pending', 'sending', 'sent', 'failed', 'skipped')"
     )
     conn.execute("UPDATE email_delivery_logs SET recipients_json='[]' WHERE recipients_json IS NULL")
+    conn.execute("UPDATE email_delivery_logs SET trigger_source=CASE send_type WHEN 'manual_resend' THEN 'manual_resend' ELSE 'scheduler_auto' END WHERE COALESCE(trigger_source, '') = ''")
+    conn.execute("UPDATE email_delivery_logs SET effective_recipients_json='[]' WHERE COALESCE(effective_recipients_json, '') = ''")
+    conn.execute("UPDATE email_delivery_logs SET effective_recipient_source='limited_context' WHERE COALESCE(effective_recipient_source, '') = ''")
+    conn.execute("UPDATE email_delivery_logs SET email_template_name='' WHERE email_template_name IS NULL")
+    conn.execute("UPDATE email_delivery_logs SET email_template_source='' WHERE email_template_source IS NULL")
+    conn.execute("UPDATE email_delivery_logs SET email_subject_template='' WHERE email_subject_template IS NULL")
     conn.execute("UPDATE email_delivery_logs SET created_at=? WHERE COALESCE(created_at, '') = ''", (now,))
     conn.executescript(
         """
@@ -1587,11 +1609,25 @@ def _mark_report_snapshots_job_deleted(conn: sqlite3.Connection, job_id: int) ->
     )
 
 
+def _summary_job_id_expr(alias: str = "summary") -> str:
+    return f"CASE WHEN json_valid({alias}) THEN CAST(json_extract({alias}, '$.job_id') AS INTEGER) ELSE NULL END"
+
+
 def has_running_run_for_job(job_id: int) -> bool:
     with get_conn() as conn:
         row = conn.execute(
-            "SELECT 1 FROM crawl_runs WHERE job_id=? AND status='running' LIMIT 1",
-            (job_id,),
+            f"""
+            SELECT 1
+            FROM crawl_runs r
+            LEFT JOIN monitor_jobs j ON j.id={_summary_job_id_expr('r.summary')}
+            WHERE r.status='running'
+              AND (
+                r.job_id=?
+                OR (r.job_id IS NULL AND j.id=?)
+              )
+            LIMIT 1
+            """,
+            (job_id, job_id),
         ).fetchone()
     return bool(row)
 
@@ -1599,8 +1635,17 @@ def has_running_run_for_job(job_id: int) -> bool:
 def cancel_running_runs_for_job(job_id: int, message: str) -> int:
     with get_conn() as conn:
         rows = conn.execute(
-            "SELECT id, summary FROM crawl_runs WHERE job_id=? AND status='running'",
-            (job_id,),
+            f"""
+            SELECT r.id, r.summary
+            FROM crawl_runs r
+            LEFT JOIN monitor_jobs j ON j.id={_summary_job_id_expr('r.summary')}
+            WHERE r.status='running'
+              AND (
+                r.job_id=?
+                OR (r.job_id IS NULL AND j.id=?)
+              )
+            """,
+            (job_id, job_id),
         ).fetchall()
     count = 0
     for row in rows:
@@ -2194,14 +2239,50 @@ def update_run_summary(run_id: int, summary: dict[str, Any]) -> None:
 
 
 def finish_run(run_id: int, status: str, summary: dict[str, Any], error: str | None = None, timeout_reason: str | None = None) -> None:
+    if status not in RUN_TERMINAL_STATUSES:
+        raise ValueError(f"invalid terminal run status: {status}")
+    payload = dict(summary or {})
+    payload.setdefault("terminal_status", status)
+    payload.setdefault("finalized_at", utc_now())
+    payload["phase"] = payload.get("phase") or f"terminal:{status}"
+    payload["progress_updated_at"] = utc_now()
+    summary_json = json.dumps(_redact_json(payload), ensure_ascii=False)
+    trimmed_error = _trim_error(error)
+    trimmed_timeout = _trim_error(timeout_reason)
     with get_conn() as conn:
+        current = conn.execute("SELECT status FROM crawl_runs WHERE id=?", (run_id,)).fetchone()
+        if not current:
+            return
+        if str(current["status"] or "") in RUN_TERMINAL_STATUSES:
+            payload["terminal_status"] = str(current["status"] or "")
+            payload["phase"] = payload.get("phase") or f"terminal:{current['status']}"
+            summary_json = json.dumps(_redact_json(payload), ensure_ascii=False)
+            conn.execute(
+                """
+                UPDATE crawl_runs
+                SET summary=?,
+                    error_message=COALESCE(NULLIF(error_message, ''), ?),
+                    timeout_reason=COALESCE(timeout_reason, ?)
+                WHERE id=?
+                """,
+                (summary_json, trimmed_error, trimmed_timeout, run_id),
+            )
+            return
         conn.execute(
             """
             UPDATE crawl_runs
             SET status=?, finished_at=?, summary=?, error_message=?, timeout_reason=COALESCE(?, timeout_reason)
-            WHERE id=?
+            WHERE id=? AND status NOT IN (?, ?, ?, ?, ?, ?, ?, ?)
             """,
-            (status, utc_now(), json.dumps(_redact_json(summary), ensure_ascii=False), _trim_error(error), _trim_error(timeout_reason), run_id),
+            (
+                status,
+                utc_now(),
+                summary_json,
+                trimmed_error,
+                trimmed_timeout,
+                run_id,
+                *sorted(RUN_TERMINAL_STATUSES),
+            ),
         )
 
 
@@ -2368,29 +2449,76 @@ def release_run_resource_locks(run_id: int) -> None:
         conn.execute("DELETE FROM resource_locks WHERE run_id=?", (run_id,))
 
 
+def preview_crawl_run_job_id_backfill(apply: bool = False) -> dict[str, Any]:
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT r.id, {_summary_job_id_expr('r.summary')} AS summary_job_id, j.id AS resolved_job_id
+            FROM crawl_runs r
+            LEFT JOIN monitor_jobs j ON j.id={_summary_job_id_expr('r.summary')}
+            WHERE r.job_id IS NULL
+              AND {_summary_job_id_expr('r.summary')} IS NOT NULL
+            ORDER BY r.id
+            """
+        ).fetchall()
+        resolvable = [
+            {"run_id": int(row["id"]), "job_id": int(row["resolved_job_id"])}
+            for row in rows
+            if row["resolved_job_id"] is not None
+        ]
+        unresolved = [
+            {"run_id": int(row["id"]), "summary_job_id": int(row["summary_job_id"])}
+            for row in rows
+            if row["resolved_job_id"] is None and row["summary_job_id"] is not None
+        ]
+        applied = 0
+        if apply:
+            for item in resolvable:
+                cur = conn.execute(
+                    "UPDATE crawl_runs SET job_id=? WHERE id=? AND job_id IS NULL",
+                    (item["job_id"], item["run_id"]),
+                )
+                applied += cur.rowcount
+    return {"resolvable": resolvable, "unresolved": unresolved, "applied": applied, "dry_run": not apply}
+
+
 def recover_stale_runs_and_locks(reason: str = "scheduler_recovery") -> dict[str, int]:
     now_dt = datetime.now(timezone.utc)
     now = now_dt.isoformat()
     recovered_runs = 0
+    interrupted_runs = 0
     released_account_locks = 0
     released_proxy_locks = 0
+    try:
+        heartbeat_grace_seconds = int(get_runtime_setting_value("stale_run_heartbeat_grace_seconds"))
+    except Exception:
+        heartbeat_grace_seconds = 600
     with get_conn() as conn:
         running_rows = conn.execute(
             """
-            SELECT id, summary, deadline_at
-            FROM crawl_runs
-            WHERE status='running'
+            SELECT
+                r.id,
+                r.summary,
+                r.deadline_at,
+                r.account_id,
+                r.proxy_id,
+                EXISTS(SELECT 1 FROM social_accounts a WHERE a.locked_by_run_id=r.id) AS has_account_lock,
+                EXISTS(SELECT 1 FROM resource_locks l WHERE l.run_id=r.id) AS has_proxy_lock
+            FROM crawl_runs r
+            WHERE r.status='running'
             """
         ).fetchall()
         for row in running_rows:
             deadline = _parse_iso_datetime(row["deadline_at"])
+            summary = _json_loads(row["summary"], {})
+            if not isinstance(summary, dict):
+                summary = {}
             if deadline and deadline <= now_dt:
-                summary = _json_loads(row["summary"], {})
-                if not isinstance(summary, dict):
-                    summary = {}
                 summary["timeout"] = True
                 summary["timeout_reason"] = "任务达到系统运行时间上限，恢复流程已释放资源锁"
                 summary["recovered_by"] = reason
+                summary["phase"] = "terminal:timeout"
+                summary["progress_updated_at"] = now
                 cur = conn.execute(
                     """
                     UPDATE crawl_runs
@@ -2407,6 +2535,29 @@ def recover_stale_runs_and_locks(reason: str = "scheduler_recovery") -> dict[str
                 )
                 if cur.rowcount:
                     recovered_runs += 1
+                continue
+            if _should_interrupt_stale_run(row, summary, now_dt, heartbeat_grace_seconds):
+                summary["interrupted"] = True
+                summary["interruption_reason"] = "运行进程已无活跃证据，恢复流程已标记为中断"
+                summary["recovered_by"] = reason
+                summary["phase"] = "terminal:interrupted"
+                summary["progress_updated_at"] = now
+                summary.setdefault("unresolved_ai_count", 0)
+                cur = conn.execute(
+                    """
+                    UPDATE crawl_runs
+                    SET status='interrupted', finished_at=?, summary=?, error_message=?
+                    WHERE id=? AND status='running'
+                    """,
+                    (
+                        now,
+                        json.dumps(_redact_json(summary), ensure_ascii=False),
+                        _trim_error(summary["interruption_reason"]),
+                        row["id"],
+                    ),
+                )
+                if cur.rowcount:
+                    interrupted_runs += 1
         terminal_statuses = ("success", "partial_failed", "failed", "timeout", "cancelled", "interrupted", "skipped")
         placeholders = ",".join("?" for _ in terminal_statuses)
         rows = conn.execute(
@@ -2452,9 +2603,24 @@ def recover_stale_runs_and_locks(reason: str = "scheduler_recovery") -> dict[str
             released_proxy_locks = len(proxy_lock_ids)
     return {
         "recovered_runs": recovered_runs,
+        "interrupted_runs": interrupted_runs,
         "released_account_locks": released_account_locks,
         "released_proxy_locks": released_proxy_locks,
     }
+
+
+def _should_interrupt_stale_run(row: sqlite3.Row, summary: dict[str, Any], now_dt: datetime, heartbeat_grace_seconds: int) -> bool:
+    if not summary.get("phase_7_1_lifecycle"):
+        return False
+    if row["has_account_lock"] or row["has_proxy_lock"]:
+        return False
+    if summary.get("retry_state") in {"running", "waiting"}:
+        return False
+    progress_raw = summary.get("progress_updated_at") or summary.get("phase_started_at")
+    progress_at = _parse_iso_datetime(progress_raw)
+    if not progress_at:
+        return False
+    return (now_dt - progress_at).total_seconds() >= max(60, int(heartbeat_grace_seconds or 600))
 
 
 def get_run(run_id: int, actor: dict[str, Any] | None = None) -> dict[str, Any] | None:
@@ -2702,6 +2868,7 @@ def _run_display_status(status: str, summary: dict[str, Any]) -> str:
         "failed": "失败",
         "cancelled": "已停止",
         "timeout": "已超时",
+        "interrupted": "执行中断",
     }
     return labels.get(status, status or "")
 
@@ -2838,6 +3005,13 @@ def record_email_delivery_log(payload: dict[str, Any]) -> dict[str, Any]:
         frequency = str(payload.get("frequency") or "daily")
         send_window_key = email_send_window_key(job_id, frequency, payload.get("sent_at") or payload.get("created_at"))
     recipients_json = _email_recipients_json(payload.get("recipients_json", payload.get("recipients")))
+    effective_recipients_json = _email_recipients_json(payload.get("effective_recipients_json", payload.get("effective_recipients")))
+    trigger_source = customer_safe_text(str(payload.get("trigger_source") or _default_email_trigger_source(send_type)).strip())
+    effective_recipient_source = customer_safe_text(str(payload.get("effective_recipient_source") or "limited_context").strip())
+    email_template_id = _safe_int(payload.get("email_template_id"))
+    email_template_name = customer_safe_text(payload.get("email_template_name"))
+    email_template_source = customer_safe_text(payload.get("email_template_source"))
+    email_subject_template = customer_safe_text(payload.get("email_subject_template"))
     sent_at = str(payload.get("sent_at") or "").strip() or None
     created_at = str(payload.get("created_at") or "").strip() or utc_now()
     with get_conn() as conn:
@@ -2848,9 +3022,12 @@ def record_email_delivery_log(payload: dict[str, Any]) -> dict[str, Any]:
             """
             INSERT INTO email_delivery_logs (
                 workspace_id, job_id, report_id, send_window_key, send_type,
-                sent_by, sent_at, status, error_message, recipients_json, created_at
+                sent_by, sent_at, status, error_message, recipients_json,
+                trigger_source, effective_recipients_json, effective_recipient_source,
+                email_template_id, email_template_name, email_template_source,
+                email_subject_template, created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 workspace_id or DEFAULT_WORKSPACE_ID,
@@ -2863,6 +3040,13 @@ def record_email_delivery_log(payload: dict[str, Any]) -> dict[str, Any]:
                 status,
                 customer_safe_text(payload.get("error_message")),
                 recipients_json,
+                trigger_source,
+                effective_recipients_json,
+                effective_recipient_source,
+                email_template_id,
+                email_template_name,
+                email_template_source,
+                email_subject_template,
                 created_at,
             ),
         )
@@ -2958,7 +3142,40 @@ def _hydrate_email_delivery_log(item: dict[str, Any]) -> dict[str, Any]:
     item["recipients"] = _json_loads(item.get("recipients_json"), [])
     item["recipients"] = [customer_safe_text(str(value)) for value in item["recipients"]]
     item["recipients_json"] = json.dumps(item["recipients"], ensure_ascii=False)
+    item["trigger_source"] = customer_safe_text(item.get("trigger_source"))
+    item["effective_recipients"] = _json_loads(item.get("effective_recipients_json"), [])
+    item["effective_recipients"] = [customer_safe_text(str(value)) for value in item["effective_recipients"]]
+    item["effective_recipients_json"] = json.dumps(item["effective_recipients"], ensure_ascii=False)
+    item["effective_recipient_source"] = customer_safe_text(item.get("effective_recipient_source"))
+    item["email_template_name"] = customer_safe_text(item.get("email_template_name"))
+    item["email_template_source"] = customer_safe_text(item.get("email_template_source"))
+    item["email_subject_template"] = customer_safe_text(item.get("email_subject_template"))
     return item
+
+
+def _default_email_trigger_source(send_type: str) -> str:
+    return "manual_resend" if send_type == "manual_resend" else "scheduler_auto"
+
+
+def effective_email_template_provenance(job: dict[str, Any] | None) -> dict[str, Any]:
+    job = job or {}
+    template = None
+    source = "default_renderer"
+    template_id = _safe_int(job.get("email_template_id"))
+    if template_id:
+        template = get_email_template(template_id)
+        if template:
+            source = "task_bound"
+    if not template:
+        template = get_active_email_template()
+        if template:
+            source = "active_global_fallback"
+    return {
+        "id": _safe_int((template or {}).get("id")),
+        "name": customer_safe_text((template or {}).get("name")),
+        "source": source,
+        "subject_template": customer_safe_text((template or {}).get("subject_template") or DEFAULT_EMAIL_SUBJECT_TEMPLATE),
+    }
 
 
 def _hydrate_report_item(item: dict[str, Any]) -> None:

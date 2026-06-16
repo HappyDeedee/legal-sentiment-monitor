@@ -51,6 +51,8 @@ PLATFORM_DEBUG_PORTS = {"dy": 9223, "ks": 9224, "xhs": 9225}
 JOB_LOCK_TTL_SECONDS = int(os.environ.get("MONITOR_JOB_LOCK_TTL_SECONDS") or 21600)
 DEFAULT_CRAWLER_MAX_RETRIES = 1
 DEFAULT_CRAWLER_RETRY_DELAY_SECONDS = 3.0
+DEFAULT_AI_ITEM_TIMEOUT_SECONDS = 120
+DEFAULT_AI_ITEM_RETRY_COUNT = 1
 STOP_REQUESTS: set[int] = set()
 RUN_PROCESSES: dict[int, set[subprocess.Popen]] = defaultdict(set)
 PROCESS_LOCK = threading.Lock()
@@ -95,6 +97,9 @@ def _runtime_setting_int(key: str, default: int) -> int:
             "crawler_timeout_seconds": "MONITOR_CRAWLER_TIMEOUT_SECONDS",
             "crawler_retry_count": "MONITOR_CRAWLER_MAX_RETRIES",
             "crawler_retry_delay_seconds": "MONITOR_CRAWLER_RETRY_DELAY_SECONDS",
+            "ai_item_timeout_seconds": "MONITOR_AI_ITEM_TIMEOUT_SECONDS",
+            "ai_item_retry_count": "MONITOR_AI_ITEM_RETRY_COUNT",
+            "stale_run_heartbeat_grace_seconds": "MONITOR_STALE_RUN_HEARTBEAT_GRACE_SECONDS",
             "global_crawl_concurrency": "MONITOR_GLOBAL_CRAWL_CONCURRENCY",
             "lock_cleanup_buffer_seconds": "MONITOR_LOCK_CLEANUP_BUFFER_SECONDS",
             "per_platform_concurrency.dy": "MONITOR_PLATFORM_CONCURRENCY_DY",
@@ -156,6 +161,7 @@ async def _run_job_locked(job_id: int, source: str = "manual") -> dict[str, Any]
         "cancelled_platforms": [],
         "platform_results": {},
         "source": source,
+        "phase_7_1_lifecycle": True,
     }
     timeout_seconds = _runtime_setting_int("crawler_timeout_seconds", 900)
     started_at = datetime.now(timezone.utc)
@@ -166,9 +172,10 @@ async def _run_job_locked(job_id: int, source: str = "manual") -> dict[str, Any]
     run_dir = RUNS_DIR / f"job_{job_id}" / f"run_{run_id}_{datetime.now().strftime('%Y%m%d_%H%M%S')}"
     run_dir.mkdir(parents=True, exist_ok=True)
     summary["run_dir"] = str(run_dir)
-    update_run_summary(run_id, summary)
+    _mark_phase(run_id, summary, "preparing", last_safe_result={"job_id": job_id, "source": source})
     try:
         _raise_if_stop_requested(job_id)
+        _mark_phase(run_id, summary, "collecting", last_safe_result={"platforms": job.get("platforms", [])})
         tasks = [run_platform(job, run_id, platform, run_dir) for platform in job.get("platforms", [])]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         content_ids_for_eval: list[int] = []
@@ -199,7 +206,7 @@ async def _run_job_locked(job_id: int, source: str = "manual") -> dict[str, Any]
             summary["excluded_contents"] += result.get("excluded_contents", 0)
             summary["new_contents"] += result.get("new_contents", 0)
             content_ids_for_eval.extend(result.get("content_db_ids", []))
-        update_run_summary(run_id, summary)
+        _mark_phase(run_id, summary, "collected", last_safe_result={"new_contents": summary["new_contents"], "failed_platforms": summary["failed_platforms"]})
 
         if timed_out:
             raise CrawlerTimedOut(timeout_reason or _timeout_message(run_id))
@@ -213,11 +220,14 @@ async def _run_job_locked(job_id: int, source: str = "manual") -> dict[str, Any]
 
         _raise_if_stop_requested(job_id)
         _raise_if_deadline_passed(run_id)
+        _mark_phase(run_id, summary, "ai_evaluating", last_safe_result={"total_candidates": len(content_ids_for_eval)})
         eval_summary = await evaluate_new_contents(job, run_id, content_ids_for_eval)
         summary.update(eval_summary)
         _raise_if_stop_requested(job_id)
         _raise_if_deadline_passed(run_id)
+        _mark_phase(run_id, summary, "report_generating", last_safe_result={"ai_progress": summary.get("ai_progress")})
         report = create_report(run_id, job, summary)
+        _mark_phase(run_id, summary, "email_sending", last_safe_result={"report_id": report.get("id")})
         ok, error, refreshed_report, delivery_log = send_report_with_delivery_log(job, report, send_type="auto")
         error = redact_sensitive(error)
         report = refreshed_report
@@ -229,12 +239,14 @@ async def _run_job_locked(job_id: int, source: str = "manual") -> dict[str, Any]
             summary["email_error"] = error
         final_status = "partial_failed" if summary["failed_platforms"] else "success"
         summary["duration_seconds"] = _run_duration_seconds(run_id)
+        _mark_phase(run_id, summary, f"terminal:{final_status}", persist=False)
         finish_run(run_id, final_status, summary)
         _touch_job_last_run(job_id)
         return {"run_id": run_id, "status": final_status, "summary": summary, "report": report}
     except CrawlerStopped as exc:
         summary["cancelled"] = True
         summary["duration_seconds"] = _run_duration_seconds(run_id)
+        _mark_phase(run_id, summary, "terminal:cancelled", last_error=str(exc), persist=False)
         finish_run(run_id, "cancelled", summary, redact_sensitive(str(exc)))
         _touch_job_last_run(job_id)
         return {"run_id": run_id, "status": "cancelled", "summary": summary, "report": None}
@@ -244,7 +256,9 @@ async def _run_job_locked(job_id: int, source: str = "manual") -> dict[str, Any]
         summary["duration_seconds"] = _run_duration_seconds(run_id)
         report = None
         try:
+            _mark_phase(run_id, summary, "report_generating_after_timeout", last_safe_result={"new_contents": summary.get("new_contents", 0)})
             report = create_report(run_id, job, summary)
+            _mark_phase(run_id, summary, "email_sending_after_timeout", last_safe_result={"report_id": report.get("id")})
             ok, error, refreshed_report, delivery_log = send_report_with_delivery_log(job, report, send_type="auto")
             error = redact_sensitive(error)
             report = refreshed_report
@@ -257,6 +271,8 @@ async def _run_job_locked(job_id: int, source: str = "manual") -> dict[str, Any]
         except Exception as report_exc:
             summary["email_status"] = "failed"
             summary["email_error"] = redact_sensitive(f"超时后报告生成或发送失败：{type(report_exc).__name__}")
+            _mark_phase(run_id, summary, "timeout_report_failed", last_error=f"{type(report_exc).__name__}: {report_exc}", persist=False)
+        _mark_phase(run_id, summary, "terminal:timeout", persist=False)
         finish_run(run_id, "timeout", summary, summary["timeout_reason"], summary["timeout_reason"])
         _touch_job_last_run(job_id)
         return {"run_id": run_id, "status": "timeout", "summary": summary, "report": report}
@@ -264,11 +280,48 @@ async def _run_job_locked(job_id: int, source: str = "manual") -> dict[str, Any]
         request_stop_job(job_id)
         summary["cancelled"] = True
         summary["duration_seconds"] = _run_duration_seconds(run_id)
+        _mark_phase(run_id, summary, "terminal:cancelled", last_error="asyncio.CancelledError", persist=False)
         finish_run(run_id, "cancelled", summary, "任务已取消")
         _touch_job_last_run(job_id)
         raise
     except Exception as exc:
         summary["duration_seconds"] = _run_duration_seconds(run_id)
+        report = None
+        if _safe_int(summary.get("new_contents")):
+            try:
+                unresolved = _mark_unresolved_candidates_pending_review(run_id, content_ids_for_eval)
+                if unresolved:
+                    summary["pending_review_count"] = int(summary.get("pending_review_count") or 0) + unresolved
+                    summary["ai_failed_fallback_evaluations"] = int(summary.get("ai_failed_fallback_evaluations") or 0) + unresolved
+                    summary["ai_pending_review_items"] = int(summary.get("ai_pending_review_items") or 0) + unresolved
+                    summary["ai_unresolved_items"] = 0
+                    summary["ai_progress"] = {
+                        "total_candidates": len(content_ids_for_eval),
+                        "successful_evaluations": int(summary.get("ai_successful_evaluations") or 0),
+                        "failed_fallback_evaluations": int(summary.get("ai_failed_fallback_evaluations") or 0),
+                        "pending_review_items": int(summary.get("pending_review_count") or 0),
+                        "unresolved_items": 0,
+                        "evaluated_items": len(content_ids_for_eval),
+                    }
+                _mark_phase(run_id, summary, "report_generating_after_failure", last_error=f"{type(exc).__name__}: {exc}")
+                report = create_report(run_id, job, summary)
+                _mark_phase(run_id, summary, "email_sending_after_failure", last_safe_result={"report_id": report.get("id")})
+                ok, error, refreshed_report, delivery_log = send_report_with_delivery_log(job, report, send_type="auto")
+                error = redact_sensitive(error)
+                report = refreshed_report
+                summary["email_status"] = report.get("email_status") or ("sent" if ok else "failed")
+                if delivery_log:
+                    summary["email_delivery_log_id"] = delivery_log.get("id")
+                    summary["email_send_window_key"] = delivery_log.get("send_window_key")
+                if error:
+                    summary["email_error"] = error
+                _mark_phase(run_id, summary, "terminal:partial_failed", last_error=f"{type(exc).__name__}: {exc}", persist=False)
+                finish_run(run_id, "partial_failed", summary, f"{type(exc).__name__}: {redact_sensitive(str(exc))}")
+                _touch_job_last_run(job_id)
+                return {"run_id": run_id, "status": "partial_failed", "summary": summary, "report": report}
+            except Exception as report_exc:
+                summary["report_error"] = redact_sensitive(f"{type(report_exc).__name__}: {report_exc}")
+        _mark_phase(run_id, summary, "terminal:failed", last_error=f"{type(exc).__name__}: {exc}", persist=False)
         finish_run(run_id, "failed", summary, f"{type(exc).__name__}: {redact_sensitive(str(exc))}")
         _touch_job_last_run(job_id)
         raise
@@ -533,6 +586,9 @@ async def evaluate_new_contents(job: dict[str, Any], run_id: int, content_ids: l
     negative_count = 0
     high_count = 0
     pending_review_count = 0
+    successful_count = 0
+    fallback_count = 0
+    unresolved_count = 0
     with get_conn() as conn:
         rows = [
             dict(row)
@@ -541,18 +597,69 @@ async def evaluate_new_contents(job: dict[str, Any], run_id: int, content_ids: l
                 content_ids,
             ).fetchall()
         ] if content_ids else []
-    for row in rows:
+    ai_progress = {
+        "total_candidates": len(rows),
+        "successful_evaluations": 0,
+        "failed_fallback_evaluations": 0,
+        "pending_review_items": 0,
+        "unresolved_items": len(rows),
+        "evaluated_items": 0,
+    }
+    _merge_run_summary(
+        run_id,
+        {
+            "phase_7_1_lifecycle": True,
+            "phase": "ai_evaluating",
+            "ai_progress": ai_progress,
+            "progress_updated_at": utc_now(),
+        },
+    )
+    for index, row in enumerate(rows, start=1):
+        _raise_if_stop_requested(int(job.get("id") or 0))
+        _raise_if_deadline_passed(run_id)
         comments = _load_comments(row["platform"], row["content_id"])
-        evaluation = await evaluate_content(job, row, comments)
+        evaluation = await _evaluate_content_with_fallback(job, run_id, row, comments)
         if evaluation["status"] == "pending_review":
             pending_review_count += 1
+            fallback_count += 1
+        else:
+            successful_count += 1
         is_related_negative = bool(evaluation["is_related"] and evaluation["is_negative"])
         if is_related_negative:
             negative_count += 1
         if is_related_negative and evaluation["risk_level"] == "high":
             high_count += 1
         _save_evaluation(row["id"], run_id, evaluation)
-    return {"negative_count": negative_count, "high_count": high_count, "pending_review_count": pending_review_count}
+        unresolved_count = max(0, len(rows) - index)
+        ai_progress = {
+            "total_candidates": len(rows),
+            "successful_evaluations": successful_count,
+            "failed_fallback_evaluations": fallback_count,
+            "pending_review_items": pending_review_count,
+            "unresolved_items": unresolved_count,
+            "evaluated_items": index,
+        }
+        _merge_run_summary(
+            run_id,
+            {
+                "phase_7_1_lifecycle": True,
+                "phase": "ai_evaluating",
+                "progress_updated_at": utc_now(),
+                "last_safe_result": {"content_id": row.get("content_id"), "ai_progress": ai_progress},
+                "ai_progress": ai_progress,
+            },
+        )
+    return {
+        "negative_count": negative_count,
+        "high_count": high_count,
+        "pending_review_count": pending_review_count,
+        "ai_total_candidates": len(rows),
+        "ai_successful_evaluations": successful_count,
+        "ai_failed_fallback_evaluations": fallback_count,
+        "ai_pending_review_items": pending_review_count,
+        "ai_unresolved_items": unresolved_count,
+        "ai_progress": ai_progress,
+    }
 
 
 def _save_evaluation(content_db_id: int, run_id: int, evaluation: dict[str, Any]) -> None:
@@ -586,6 +693,144 @@ def _save_evaluation(content_db_id: int, run_id: int, evaluation: dict[str, Any]
                 content_db_id,
             ),
         )
+
+
+async def _evaluate_content_with_fallback(
+    job: dict[str, Any],
+    run_id: int,
+    content: dict[str, Any],
+    comments: list[dict[str, Any]],
+) -> dict[str, Any]:
+    max_attempts = max(1, _ai_item_retry_count() + 1)
+    last_error = ""
+    for attempt in range(1, max_attempts + 1):
+        _raise_if_deadline_passed(run_id)
+        try:
+            timeout_seconds = _ai_item_timeout_seconds(run_id)
+            evaluation = await asyncio.wait_for(evaluate_content(job, content, comments), timeout=timeout_seconds)
+            return _normalize_evaluation_result(evaluation, content)
+        except CrawlerTimedOut:
+            raise
+        except asyncio.CancelledError as exc:
+            task = asyncio.current_task()
+            if task and task.cancelling():
+                raise
+            last_error = f"CancelledError: {redact_sensitive(str(exc))}"
+            _merge_run_summary(
+                run_id,
+                {
+                    "phase_7_1_lifecycle": True,
+                    "phase": "ai_evaluating",
+                    "retry_state": "running" if attempt < max_attempts else "exhausted",
+                    "last_error": last_error,
+                    "progress_updated_at": utc_now(),
+                },
+            )
+            if attempt < max_attempts:
+                continue
+        except Exception as exc:
+            last_error = f"{type(exc).__name__}: {redact_sensitive(str(exc))}"
+            _merge_run_summary(
+                run_id,
+                {
+                    "phase_7_1_lifecycle": True,
+                    "phase": "ai_evaluating",
+                    "retry_state": "running" if attempt < max_attempts else "exhausted",
+                    "last_error": last_error,
+                    "progress_updated_at": utc_now(),
+                },
+            )
+            if attempt < max_attempts:
+                continue
+    return _pending_review_evaluation(f"AI 评估失败，已转人工复核：{last_error}", content)
+
+
+def _normalize_evaluation_result(evaluation: dict[str, Any], content: dict[str, Any]) -> dict[str, Any]:
+    try:
+        status = str(evaluation.get("status") or "")
+        if status not in {"ok", "pending_review"}:
+            raise ValueError("invalid evaluation status")
+        return {
+            "status": status,
+            "is_related": bool(evaluation.get("is_related")),
+            "is_negative": bool(evaluation.get("is_negative")),
+            "risk_level": str(evaluation.get("risk_level") or "low"),
+            "reason": str(evaluation.get("reason") or ""),
+            "evidence_quotes": list(evaluation.get("evidence_quotes") or []),
+            "recommended_action": str(evaluation.get("recommended_action") or ""),
+            "raw_response": str(evaluation.get("raw_response") or ""),
+        }
+    except Exception as exc:
+        return _pending_review_evaluation(f"AI 返回结构无效，已转人工复核：{type(exc).__name__}", content)
+
+
+def _pending_review_evaluation(reason: str, content: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "status": "pending_review",
+        "is_related": True,
+        "is_negative": False,
+        "risk_level": "low",
+        "reason": redact_sensitive(reason),
+        "evidence_quotes": [str(content.get("title") or content.get("description") or "")[:200]],
+        "recommended_action": "人工复核",
+        "raw_response": "",
+    }
+
+
+def _mark_unresolved_candidates_pending_review(run_id: int, content_ids: list[int]) -> int:
+    if not content_ids:
+        return 0
+    placeholders = ",".join("?" for _ in content_ids)
+    with get_conn() as conn:
+        rows = [
+            dict(row)
+            for row in conn.execute(
+                f"""
+                SELECT rc.*
+                FROM raw_contents rc
+                LEFT JOIN ai_evaluations ev ON ev.raw_content_id=rc.id AND ev.run_id=?
+                WHERE rc.id IN ({placeholders})
+                  AND ev.id IS NULL
+                """,
+                [run_id, *content_ids],
+            ).fetchall()
+        ]
+    for row in rows:
+        _save_evaluation(
+            int(row["id"]),
+            run_id,
+            _pending_review_evaluation("AI 评估未完成，已在运行收尾时转人工复核", row),
+        )
+    return len(rows)
+
+
+def _merge_run_summary(run_id: int, updates: dict[str, Any]) -> dict[str, Any]:
+    with get_conn() as conn:
+        row = conn.execute("SELECT summary FROM crawl_runs WHERE id=? AND status='running'", (run_id,)).fetchone()
+        if not row:
+            return {}
+        try:
+            summary = json.loads(row["summary"] or "{}")
+        except (TypeError, ValueError):
+            summary = {}
+        if not isinstance(summary, dict):
+            summary = {}
+        summary.update(updates)
+        conn.execute(
+            "UPDATE crawl_runs SET summary=? WHERE id=? AND status='running'",
+            (json.dumps(_redact_summary(summary), ensure_ascii=False), run_id),
+        )
+    return summary
+
+
+def _redact_summary(value: Any) -> Any:
+    if isinstance(value, dict):
+        return {str(key): _redact_summary(item) for key, item in value.items()}
+    if isinstance(value, list):
+        return [_redact_summary(item) for item in value]
+    if isinstance(value, str):
+        return redact_sensitive(value)
+    return value
 
 
 def _load_comments(platform: str, content_id: str) -> list[dict[str, Any]]:
@@ -808,6 +1053,39 @@ def _touch_job_last_run(job_id: int) -> None:
             "UPDATE monitor_jobs SET last_run_at=?, updated_at=? WHERE id=?",
             (utc_now(), utc_now(), job_id),
         )
+
+
+def _mark_phase(
+    run_id: int,
+    summary: dict[str, Any],
+    phase: str,
+    *,
+    last_safe_result: Any | None = None,
+    last_error: str | None = None,
+    persist: bool = True,
+) -> None:
+    now = utc_now()
+    summary["phase_7_1_lifecycle"] = True
+    if summary.get("phase") != phase:
+        summary["phase_started_at"] = now
+    summary["phase"] = phase
+    summary["progress_updated_at"] = now
+    if last_safe_result is not None:
+        summary["last_safe_result"] = _redact_summary(last_safe_result)
+    if last_error:
+        summary["last_error"] = redact_sensitive(last_error)
+    if persist:
+        update_run_summary(run_id, summary)
+
+
+def _ai_item_timeout_seconds(run_id: int) -> int:
+    configured = max(1, _runtime_setting_int("ai_item_timeout_seconds", DEFAULT_AI_ITEM_TIMEOUT_SECONDS))
+    remaining = _remaining_run_seconds(run_id)
+    return max(1, min(configured, remaining))
+
+
+def _ai_item_retry_count() -> int:
+    return max(0, _runtime_setting_int("ai_item_retry_count", DEFAULT_AI_ITEM_RETRY_COUNT))
 
 
 def _matches_exclude_words(content: dict[str, Any], job: dict[str, Any]) -> bool:

@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-06-16
+Last updated: 2026-06-17
 
 ## Current Phase
 
@@ -54,15 +54,30 @@ Run Lifecycle Finalization And AI Stuck
 Recovery Regression Fix is accepted as a follow-up for the completed Phase 7
 responsibility area; Phase 7 remains a historical verified snapshot, while
 Phase 7.1 is the accepted regression-fix task block for the newly observed
-stuck-run class. CR-036 Test And Local Email Delivery Safety Regression Fix is
+stuck-run class. Phase 7.1A-C is now implemented and verified locally: new
+runs persist `crawl_runs.job_id`, compatible legacy summary-based reads and
+dry-run backfill are available, run finalization is idempotent, terminal
+statuses are protected from stale writers, Phase 7.1 lifecycle heartbeats are
+persisted in `crawl_runs.summary`, stale Phase 7.1 rows can recover as
+`interrupted` without auto-repairing older historical rows, AI item
+timeout/exception/invalid-result paths fall back to `pending_review`, and
+partial/manual-review reports can still be generated. CR-036 Test And Local Email Delivery Safety Regression Fix is
 accepted as a follow-up for the completed
 Phase 17 email-delivery responsibility area after two unexpected real
 `日报 海安律所` emails were traced to temporary test/local run records and
 unmocked SMTP delivery. Phase 17 remains a historical verified snapshot, while
 Phase 17.1 is the accepted regression-fix task block for preventing tests and
 local diagnostics from sending hidden real external mail while preserving an
-explicit production/pilot real-mail validation path. Historical unexpected
-email evidence is confirmed to be preserved by default. CR-037 Role-Based
+explicit production/pilot real-mail validation path. Phase 17.1A-B is now
+implemented and verified locally with an environment-controlled real SMTP
+safety gate, read-only deployment runtime visibility, default non-sending
+automated/local/report-delivery behavior, explicit opt-in SMTP validation
+tests, and a suite-level SMTP tripwire. Phase 17.1C and Phase 17.2A backend
+metadata for effective recipients, trigger source, and effective template
+provenance is also implemented and verified for report snapshots and delivery
+logs; remaining operator-facing copy/preflight explanation and historical
+email/template explanation work stays open. Historical unexpected email
+evidence is confirmed to be preserved by default. CR-037 Role-Based
 Email Delivery Governance And Quotas is deferred as a future capability for
 administrator-managed normal-user send/resend policy and quotas. CR-040 Formal
 Console Page-Level UI/UX Refinement is accepted as Phase 21, a frontend-only
@@ -78,8 +93,12 @@ primary actions, or create horizontal overflow at `1440x900`, `1024x768`, or
 `Users And Permissions` page; implementing that page would require a separate
 new-capability CR. CR-041 Minimum Usable Pilot Acceptance Gate is accepted as
 the current "system can be used first" readiness standard: first pilot use is
-blocked by hidden-real-email safety, stuck-run lifecycle safety, and a minimum
-server-like real workflow, but it is not blocked by Phase 21 visual refinement,
+blocked by the remaining real-external portion of the minimum server-like
+workflow; hidden-real-email safety and stuck-run lifecycle safety have both
+been implemented, locally verified, and externally reviewed. Automated
+server-like validation also passes, but pilot validation with a real platform
+account/session, one real crawl, and explicit-opt-in real SMTP credentials is
+still required before the whole gate can be closed. CR-041 is not blocked by Phase 21 visual refinement,
 CR-038 drawer accessibility, Phase 19 realtime progress, Phase 20 AI
 traceability, or CR-037 role/quota governance unless a later accepted P0
 regression changes that boundary.
@@ -129,7 +148,13 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   records manual resend separately, keeps report latest-state fields readable,
   and Phase 17B report-center delivery-history UI/API surfaces latest delivery
   state, automatic/manual delivery history, recipient summaries, and
-  customer-safe delivery errors without exposing SMTP secrets, plus Phase 18A
+  customer-safe delivery errors without exposing SMTP secrets, plus Phase
+  17.1A-B real SMTP safety gating blocks automated/local hidden external sends
+  by default, records blocked deliveries as customer-safe skipped states,
+  keeps explicit opt-in pilot validation available, and installs an automated
+  SMTP tripwire, plus Phase 17.1C/17.2A backend delivery metadata records
+  effective recipients, recipient source, trigger source, and effective email
+  template provenance for new report snapshots and delivery logs, plus Phase 18A
   report snapshots store task context for new and backfilled reports while
   keeping unrecoverable historical reports readable with limited context, and
   Phase 18B groups report-center rows by active task or stored snapshot while
@@ -147,12 +172,17 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
 - Phase 5 - Account Environment: complete and verified.
 - Phase 6 - Server Login Flow: complete and verified locally.
 - Phase 7 - Runs, Reports, And AI: complete and verified locally.
-- Phase 7.1 - Runs, Reports, And AI Stuck Recovery Follow-up: accepted but not
-  implemented. Confirmed scope includes `interrupted` status, evidence-based
-  stale recovery with a 10-minute heartbeat grace period, retry-before-timeout
-  behavior, `ai_item_timeout_seconds=120`, active unresolved-AI fallback to
-  `pending_review`, AI progress counts, and prevention-first `job_id`
-  persistence.
+- Phase 7.1 - Runs, Reports, And AI Stuck Recovery Follow-up: partially
+  complete and verified locally. Phase 7.1A-C is implemented: new runs persist
+  `crawl_runs.job_id`, legacy `summary.job_id` rows are read compatibly and
+  dry-run backfillable when resolvable, terminal finalization is idempotent,
+  Phase 7.1 lifecycle summaries include phase/heartbeat/retry/error/progress
+  evidence, stale Phase 7.1 rows can recover as `interrupted` after the
+  confirmed evidence checks, AI item timeout/exception/invalid-result paths
+  fall back to `pending_review`, and partial/manual-review reports can be
+  generated. Phase 7.1D historical run `8317` remediation remains open and
+  still requires backup, rollback, dry-run preview, and explicit operator
+  approval.
 - Phase 8 - Server-Like Validation: complete and verified through automated
   server-like validation.
 - Phase 9 - Security And Operations: complete and verified locally.
@@ -172,16 +202,17 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
 - Phase 16 - Email Delivery Data Model Preparation: complete and verified.
 - Phase 17 - Email Delivery Governance: complete and verified through Phase
   17A-17B.
-- Phase 17.1 - Email Delivery Safety Follow-up: accepted but not implemented.
-  Confirmed scope includes environment-controlled real-email gating, read-only
-  runtime visibility, non-sending local/test behavior by default, explicit
-  real-mail validation support, trigger-source/effective-recipient
-  traceability, and preserving historical orphan email evidence by default.
-- Phase 17.2 - Report Email Template Governance: accepted but not implemented.
-  Confirmed scope includes effective template provenance in report snapshots and
-  delivery logs, required report-body guardrails, clearer preview semantics, and
-  moving future template management from unrestricted HTML editing to preset
-  styles with system-controlled report-body insertion.
+- Phase 17.1 - Email Delivery Safety Follow-up: partially complete and
+  verified locally. Phase 17.1A-B real SMTP safety gate and automated-test
+  tripwire are implemented. Phase 17.1C backend effective-recipient
+  traceability is implemented for report delivery and delivery logs. Remaining
+  Phase 17.1C operator-facing preflight/UI copy and Phase 17.1D historical
+  orphan evidence operations notes are still open.
+- Phase 17.2 - Report Email Template Governance: partially complete and
+  verified locally. Phase 17.2A backend effective-template provenance is
+  implemented for new report snapshots and email delivery logs. Phase 17.2B-C
+  report-body guardrails, preview semantics, and preset-style governance remain
+  accepted follow-up work.
 - Phase 18 - Report Center Task Grouping: complete and verified through Phase
   18A-18B.
 - Phase 19 - Run Center Realtime Progress And Requirement Intake Governance:
@@ -200,11 +231,14 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   Monitoring, Platform Accounts, Proxies, AI Access, AI Rules, Mail
   Configuration, Mail Templates, Runtime Strategy, Run Center, Report Center,
   System Diagnostics, Login, and cross-page verification.
-- Minimum Usable Pilot Acceptance Gate: accepted but not satisfied. This gate
-  requires CR-036/Phase 17.1A-B email side-effect safety,
-  CR-035/Phase 7.1A-C run lifecycle/AI fallback/partial-report safety, and a
-  minimum server-like real workflow before the system is described as ready for
-  first pilot use.
+- Minimum Usable Pilot Acceptance Gate: accepted but not satisfied. CR-036 /
+  Phase 17.1A-B email side-effect safety and CR-035/Phase 7.1A-C run
+  lifecycle/AI fallback/partial-report safety are implemented, locally
+  verified, and read-only externally reviewed. Automated server-like validation
+  passes without relying on the operator's local Chrome. The gate still
+  requires a real platform login/crawl path with a persistent server-side
+  account profile and explicit-opt-in real SMTP validation with operator
+  credentials before the system is described as ready for first pilot use.
 - Phase 5/6 - Account Environment and Server Login: profile key, timeout, and
   lock-storage decisions are accepted; Phase 5 account environment runtime and
   Phase 6 login-flow runtime are complete.
@@ -409,8 +443,9 @@ first usable pilot gate before that handoff can be described as ready.
 - Current system is closer to a single-team MVP than a production multi-user
   system.
 - Server-side QR/login capability and profile persistence now have automated
-  server-like validation, but real platform QR scanning and real platform
-  crawling still require a live server/account pilot.
+  server-like validation, but real platform QR scanning, real platform
+  crawling, and explicit-opt-in real SMTP delivery still require a live
+  server/account pilot with operator-controlled credentials.
 - The newly added product documents are initial versions and should be refined
   during implementation.
 - Profile migration strategy has been clarified: existing low-volume
@@ -432,18 +467,16 @@ first usable pilot gate before that handoff can be described as ready.
   on the current `crawl_runs.summary` update timing until Phase 19B-19D code
   work is completed. Operators may still need manual refresh or logs to
   understand long-running crawl progress in the current runtime.
-- CR-035 is accepted but not implemented yet. Until Phase 7.1 lands, a
-  background-task interruption may still leave a run in an unclear persisted
-  state, and repairing run `8317` still requires safe operational steps.
-- CR-036 is accepted but not implemented yet: tests and local diagnostics may
-  still reach real SMTP if they call the run/report path with a complete SMTP
-  configuration and do not mock delivery. Delivery logs may also show empty
-  recipients when the actual send used global default-recipient fallback. The
-  product direction is not "never send real mail"; real mail must be
-  intentional, visible, attributable validation or production delivery.
-  Until Phase 17.1 is implemented, avoid running automated report-delivery
-  paths against a database containing real SMTP credentials unless SMTP calls
-  are mocked or the operator explicitly intends a real-mail validation.
+- CR-035 Phase 7.1A-C is implemented and locally verified. Historical run
+  `8317` still must not be repaired automatically; Phase 7.1D requires safe
+  operational steps, backup, rollback, dry-run preview, and explicit operator
+  approval before changing historical AI rows, reports, or terminal status.
+- CR-036 Phase 17.1A-B and backend Phase 17.1C/17.2A are implemented and
+  locally verified. The product direction is not "never send real mail"; real
+  mail must be intentional, visible, attributable validation or production
+  delivery through `MONITOR_ALLOW_REAL_EMAIL_SEND=true`. Operator-facing
+  recipient-source UI/preflight explanation, orphan evidence operations notes,
+  and template guardrails remain follow-up work.
 - CR-037 is deferred: normal-user email send/resend quotas and administrator
   policy controls are not yet designed. Existing V1 role permissions remain in
   force until a future confirmed phase changes them.
@@ -530,30 +563,27 @@ first usable pilot gate before that handoff can be described as ready.
 
 Next allowed implementation order:
 
-1. implement CR-036/Phase 17.1A-B real SMTP safety gate and automated-test
-   SMTP tripwire so broad report-delivery tests cannot send hidden real mail;
-2. implement CR-036/Phase 17.1C effective-recipient traceability together with
-   CR-039/Phase 17.2A effective-template provenance when practical, so the
-   delivery-log/report metadata migration happens once;
-3. implement CR-035/Phase 7.1A-C run `job_id` integrity, idempotent
-   finalization, AI fallback, and partial-report generation;
-4. handle CR-035/Phase 7.1D historical run remediation only through the
+1. satisfy the remaining real-external portion of CR-041 Pilot Gate C with a
+   server-like workflow: server-side login/profile path, one real platform
+   crawl when credentials/session are available, AI fallback, explicit-opt-in
+   SMTP validation, and redaction checks;
+2. handle CR-035/Phase 7.1D historical run remediation only through the
    dry-run, backup, rollback, and explicit-operator-approval gate;
-5. implement Phase 21 formal console page-level UI/UX refinement as
+3. implement Phase 17.1C/17.2A remaining operator-facing recipient/template
+   explanations and Phase 17.2B-C template guardrails as follow-up if they
+   become the next accepted batch;
+4. implement Phase 21 formal console page-level UI/UX refinement as
    frontend-only workstreams with the Phase 21P cross-page layout-resilience
    gate;
-6. implement CR-031/Phase 19B-19D realtime run-progress work after Phase 7.1
+5. implement CR-031/Phase 19B-19D realtime run-progress work after Phase 7.1
    lifecycle fields are available, unless a deliberately small compatible
    provisional-progress batch is documented first;
-7. schedule CR-034/Phase 20 implementation after higher-priority safety and
+6. schedule CR-034/Phase 20 implementation after higher-priority safety and
    lifecycle work if run-detail traceability becomes the next execution batch;
-8. satisfy CR-041 Minimum Usable Pilot Acceptance Gate by completing the email
-   safety gate, run lifecycle/partial-result safety, and minimum server-like
-   real workflow validation;
-9. prepare production pilot handoff and deployment-specific validation after
+7. prepare production pilot handoff and deployment-specific validation after
    the safety and lifecycle regression fixes are verified;
-10. verify real platform QR scanning, real platform crawling, SMTP delivery,
-   and AI-provider behavior with production credentials.
+8. verify real platform QR scanning, real platform crawling, SMTP delivery,
+   and AI-provider behavior with production credentials;
 
 ## Latest Verification
 

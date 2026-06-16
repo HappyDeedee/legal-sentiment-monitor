@@ -1614,6 +1614,13 @@ def _customer_view_email_delivery_log(item: dict[str, Any]) -> dict[str, Any]:
         "status",
         "error_message",
         "recipients",
+        "trigger_source",
+        "effective_recipients",
+        "effective_recipient_source",
+        "email_template_id",
+        "email_template_name",
+        "email_template_source",
+        "email_subject_template",
         "created_at",
     }
     view = {key: _customer_safe_value(value) for key, value in item.items() if key in allowed}

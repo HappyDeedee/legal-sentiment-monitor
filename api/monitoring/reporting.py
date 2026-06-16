@@ -15,13 +15,14 @@ from .database import (
     get_report,
     get_conn,
     record_email_delivery_log,
+    effective_email_template_provenance,
     report_job_snapshot,
     report_job_snapshot_json,
     try_record_email_delivery_log,
     update_email_delivery_log_status,
     utc_now,
 )
-from .mailer import send_report
+from .mailer import REAL_EMAIL_BLOCKED_MESSAGE, resolve_report_recipients, send_report
 from .normalizer import PLATFORM_LABELS
 from .security import customer_safe_text, redact_sensitive
 
@@ -122,6 +123,7 @@ def resend_report_email(report_id: int, actor: dict[str, Any] | None = None) -> 
 
 def _send_report_auto(job: dict[str, Any], report: dict[str, Any], send_at: datetime) -> tuple[bool, str | None, dict[str, Any], dict[str, Any] | None]:
     window_key = email_send_window_key(int(job.get("id") or report.get("job_id") or 0), str(job.get("frequency") or "daily"), send_at)
+    delivery_meta = _delivery_metadata(job, trigger_source="scheduler_auto")
     pending = try_record_email_delivery_log(
         {
             "workspace_id": job.get("workspace_id") or report.get("workspace_id"),
@@ -131,7 +133,7 @@ def _send_report_auto(job: dict[str, Any], report: dict[str, Any], send_at: date
             "send_type": "auto",
             "sent_at": send_at.isoformat(),
             "status": "pending",
-            "recipients": _delivery_recipients(job),
+            **delivery_meta,
         }
     )
     if pending is None:
@@ -146,7 +148,7 @@ def _send_report_auto(job: dict[str, Any], report: dict[str, Any], send_at: date
                 "sent_at": send_at.isoformat(),
                 "status": "skipped",
                 "error_message": message,
-                "recipients": _delivery_recipients(job),
+                **delivery_meta,
             }
         )
         update_report_email_status(int(report["id"]), "skipped", message)
@@ -154,7 +156,7 @@ def _send_report_auto(job: dict[str, Any], report: dict[str, Any], send_at: date
         return False, message, refreshed, None
     ok, error = send_report(job, report)
     safe_error = redact_sensitive(error)
-    status = "sent" if ok else "failed"
+    status = "sent" if ok else _delivery_failure_status(error)
     log = update_email_delivery_log_status(int(pending["id"]), status, safe_error, send_at.isoformat())
     update_report_email_status(int(report["id"]), status, safe_error)
     refreshed = get_report(int(report["id"])) or report
@@ -167,9 +169,10 @@ def _send_report_manual_resend(
     actor: dict[str, Any] | None,
     send_at: datetime,
 ) -> tuple[bool, str | None, dict[str, Any], dict[str, Any]]:
+    delivery_meta = _delivery_metadata(job, trigger_source="manual_resend")
     ok, error = send_report(job, report)
     safe_error = redact_sensitive(error)
-    status = "sent" if ok else "failed"
+    status = "sent" if ok else _delivery_failure_status(error)
     log = record_email_delivery_log(
         {
             "workspace_id": job.get("workspace_id") or report.get("workspace_id"),
@@ -181,7 +184,7 @@ def _send_report_manual_resend(
             "sent_at": send_at.isoformat(),
             "status": status,
             "error_message": safe_error,
-            "recipients": _delivery_recipients(job),
+            **delivery_meta,
         }
     )
     update_report_email_status(int(report["id"]), status, safe_error)
@@ -194,6 +197,26 @@ def _delivery_recipients(job: dict[str, Any]) -> list[str]:
     if recipients:
         return [str(item).strip() for item in recipients if str(item).strip()]
     return []
+
+
+def _delivery_metadata(job: dict[str, Any], *, trigger_source: str) -> dict[str, Any]:
+    recipients = _delivery_recipients(job)
+    effective_recipients, effective_source = resolve_report_recipients(job)
+    template = effective_email_template_provenance(job)
+    return {
+        "recipients": recipients,
+        "trigger_source": trigger_source,
+        "effective_recipients": effective_recipients,
+        "effective_recipient_source": effective_source,
+        "email_template_id": template.get("id"),
+        "email_template_name": template.get("name") or "",
+        "email_template_source": template.get("source") or "",
+        "email_subject_template": template.get("subject_template") or "",
+    }
+
+
+def _delivery_failure_status(error: str | None) -> str:
+    return "skipped" if error == REAL_EMAIL_BLOCKED_MESSAGE else "failed"
 
 
 def render_html(job: dict[str, Any], summary: dict[str, Any], records: list[dict[str, Any]]) -> str:

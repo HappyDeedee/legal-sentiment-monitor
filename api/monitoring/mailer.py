@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import smtplib
+import os
 from email.message import EmailMessage
 from pathlib import Path
 from typing import Any
@@ -9,14 +10,35 @@ from .database import get_active_email_template, get_email_config, get_email_tem
 from .normalizer import PLATFORM_LABELS
 from .security import customer_safe_text
 
+REAL_EMAIL_BLOCKED_MESSAGE = "真实邮件发送未启用；本地/测试/诊断默认不发送外部邮件"
 
-def send_report(job: dict[str, Any], report: dict[str, Any]) -> tuple[bool, str | None]:
+
+def real_email_delivery_allowed() -> bool:
+    return str(os.environ.get("MONITOR_ALLOW_REAL_EMAIL_SEND") or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def resolve_report_recipients(job: dict[str, Any], cfg: dict[str, Any] | None = None) -> tuple[list[str], str]:
+    cfg = cfg or get_email_config(masked=False)
+    recipients = [str(item).strip() for item in (job.get("recipients") or []) if str(item).strip()]
+    if recipients:
+        return recipients, "task_recipients"
+    default_recipients = [str(item).strip() for item in (cfg.get("default_recipients") or []) if str(item).strip()]
+    if default_recipients:
+        return default_recipients, "global_default_fallback"
+    return [], "none"
+
+
+def send_report(job: dict[str, Any], report: dict[str, Any], *, allow_real_send: bool | None = None) -> tuple[bool, str | None]:
     cfg = get_email_config(masked=False)
-    recipients = job.get("recipients") or cfg.get("default_recipients") or []
+    recipients, _source = resolve_report_recipients(job, cfg)
     if not recipients:
         return False, "未配置收件人"
     if not cfg.get("smtp_host") or not cfg.get("sender"):
         return False, "SMTP 配置未完成"
+    if allow_real_send is None:
+        allow_real_send = real_email_delivery_allowed()
+    if not allow_real_send:
+        return False, REAL_EMAIL_BLOCKED_MESSAGE
     try:
         template = _job_email_template(job)
         subject_template = (template or {}).get("subject_template") or cfg.get("subject_template") or "【律所舆情日报】{law_firm_name} - {date}"
@@ -129,7 +151,7 @@ def _email_html_body(msg: EmailMessage) -> str:
     return ""
 
 
-def send_test_email(payload: dict[str, Any] | None = None) -> None:
+def send_test_email(payload: dict[str, Any] | None = None, *, allow_real_send: bool | None = None) -> None:
     cfg = _merge_test_config(payload or {})
     target = (payload or {}).get("target") or (cfg.get("default_recipients") or [None])[0]
     if not target:
@@ -137,6 +159,10 @@ def send_test_email(payload: dict[str, Any] | None = None) -> None:
     validate_recipients([str(target)])
     if not cfg.get("smtp_host") or not cfg.get("sender"):
         raise ValueError("SMTP 配置未完成")
+    if allow_real_send is None:
+        allow_real_send = real_email_delivery_allowed()
+    if not allow_real_send:
+        raise ValueError(REAL_EMAIL_BLOCKED_MESSAGE)
     msg = EmailMessage()
     msg["Subject"] = "律所舆情运营系统测试邮件"
     msg["From"] = cfg["sender"]

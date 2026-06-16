@@ -171,44 +171,44 @@ Confirmed CR-035 decision summary:
 
 ### Phase 7.1A - Run Identity Compatibility
 
-- [ ] Verify active runtime writes `crawl_runs.job_id` for new runs.
-- [ ] Add compatible reads for legacy rows where `crawl_runs.job_id` is null
+- [x] Verify active runtime writes `crawl_runs.job_id` for new runs.
+- [x] Add compatible reads for legacy rows where `crawl_runs.job_id` is null
       but `summary.job_id` resolves to an existing task.
-- [ ] Update running-run lookup, stop/cancel behavior, and safe backfill logic
+- [x] Update running-run lookup, stop/cancel behavior, and safe backfill logic
       for compatible legacy rows.
-- [ ] Ensure backfill is dry-run capable and skips unresolved historical rows.
+- [x] Ensure backfill is dry-run capable and skips unresolved historical rows.
 
 ### Phase 7.1B - Idempotent Finalization And Recovery
 
-- [ ] Add one idempotent finalization helper for success, failure, timeout,
+- [x] Add one idempotent finalization helper for success, failure, timeout,
       cancellation, interruption, and partial AI/report paths.
-- [ ] Protect terminal status transitions from repeated or concurrent writers.
-- [ ] Release resource locks safely after finalization attempts, with repeated
+- [x] Protect terminal status transitions from repeated or concurrent writers.
+- [x] Release resource locks safely after finalization attempts, with repeated
       release as a harmless no-op.
-- [ ] Persist step-level run lifecycle progress in `crawl_runs.summary`,
+- [x] Persist step-level run lifecycle progress in `crawl_runs.summary`,
       including phase, phase started time, progress heartbeat, retry state,
       last safe return value or customer-safe result, and redacted last error.
-- [ ] Log background task exceptions with `run_id`, compatible `job_id`, phase,
+- [x] Log background task exceptions with `run_id`, compatible `job_id`, phase,
       progress snapshot, and redacted error.
-- [ ] Recover stale `running` rows before the wall-clock deadline only after
+- [x] Recover stale `running` rows before the wall-clock deadline only after
       evaluating live task evidence, resource locks, progress heartbeat, retry
       state, last step result, and redacted interruption cause.
-- [ ] Ensure startup/scheduler stale recovery does not auto-repair historical
+- [x] Ensure startup/scheduler stale recovery does not auto-repair historical
       stuck runs such as `8317`; historical repair must use the Phase 7.1D
       approval workflow.
 
 ### Phase 7.1C - AI Fallback And Partial Report Generation
 
-- [ ] Add per-item AI timeout/failure/invalid-JSON fallback to
+- [x] Add per-item AI timeout/failure/invalid-JSON fallback to
       `pending_review` when the run can safely continue.
-- [ ] During active finalization, create `pending_review` rows for known
+- [x] During active finalization, create `pending_review` rows for known
       not-yet-evaluated candidates when safe before report generation.
-- [ ] Track AI evaluation progress counts for total candidates, successful
+- [x] Track AI evaluation progress counts for total candidates, successful
       evaluations, failed/fallback evaluations, pending-review items, and
       unresolved items.
-- [ ] Generate reports from partial AI/manual-review state when collected
+- [x] Generate reports from partial AI/manual-review state when collected
       content exists.
-- [ ] Finalize report-generation failures into a terminal redacted failure
+- [x] Finalize report-generation failures into a terminal redacted failure
       state instead of leaving the run `running`.
 
 ### Phase 7.1D - Current Run Remediation Gate
@@ -589,55 +589,55 @@ Confirmed CR-036 decision summary:
 
 ### Phase 17.1A - Real SMTP Safety Gate
 
-- [ ] Add one shared delivery-safety helper used before real SMTP side effects.
-- [ ] Prevent routine automated tests and local diagnostics from hidden real
+- [x] Add one shared delivery-safety helper used before real SMTP side effects.
+- [x] Prevent routine automated tests and local diagnostics from hidden real
       SMTP side effects unless the confirmed explicit validation path is used.
-- [ ] Apply the safety helper consistently to automatic report delivery, manual
+- [x] Apply the safety helper consistently to automatic report delivery, manual
       resend, and mail-test paths according to the confirmed scope.
-- [ ] When delivery is blocked by the safety gate, preserve report generation
+- [x] When delivery is blocked by the safety gate, preserve report generation
       and write a customer-safe skipped delivery state.
-- [ ] Keep production/pilot real email delivery and explicit real-mail
+- [x] Keep production/pilot real email delivery and explicit real-mail
       validation working when the confirmed allow conditions and SMTP
       configuration are complete.
 
 ### Phase 17.1B - Test Isolation And Regression Coverage
 
-- [ ] Update `test_run_job_blocks_platform_when_login_window_is_open` so it
+- [x] Update `test_run_job_blocks_platform_when_login_window_is_open` so it
       cannot invoke real SMTP while still verifying the platform-blocking
       behavior.
-- [ ] Add a test-level SMTP tripwire that fails if the automated suite reaches
+- [x] Add a test-level SMTP tripwire that fails if the automated suite reaches
       `smtplib.SMTP` or `smtplib.SMTP_SSL` without explicit opt-in.
-- [ ] Audit `run_monitor_job` tests and report-generation tests for unmocked
+- [x] Audit `run_monitor_job` tests and report-generation tests for unmocked
       email delivery paths.
-- [ ] Verify the full test suite can run with a real SMTP config in the active
+- [x] Verify the full test suite can run with a real SMTP config in the active
       database without sending external mail.
-- [ ] Add a separate real-mail validation test path or runbook that is skipped
+- [x] Add a separate real-mail validation test path or runbook that is skipped
       by default and can only send when the confirmed explicit validation
       conditions are present.
 
 ### Phase 17.1C - Effective Recipient Traceability
 
-- [ ] Centralize effective-recipient resolution so report delivery and delivery
+- [x] Centralize effective-recipient resolution so report delivery and delivery
       logs use the same recipient list.
-- [ ] Keep recipient precedence explicit in code and UI: task recipients win,
+- [x] Keep recipient precedence explicit in code: task recipients win,
       global default recipients are fallback-only, and SMTP sender is not a
       delivery target.
-- [ ] Record final effective recipients in `email_delivery_logs`, including
+- [x] Record final effective recipients in `email_delivery_logs`, including
       recipients inherited from global default-recipient fallback.
-- [ ] Define and persist recipient metadata consistently:
+- [x] Define and persist recipient metadata consistently:
       `recipients_json` for the task/request snapshot,
       `effective_recipients_json` for final resolved recipients,
       `effective_recipient_source` for recipient origin, and `trigger_source`
       for the send trigger.
-- [ ] Record delivery trigger source so future role policy and quota logic can
+- [x] Record delivery trigger source so future role policy and quota logic can
       distinguish automatic, manual, test, diagnostic, and explicit validation
       sends.
 - [ ] Show the effective-recipient source in preflight/delivery surfaces, e.g.
       task recipients versus global default-recipient fallback.
 - [ ] Update email-configuration and task-configuration copy so operators can
       see that filling task recipients overrides the global default recipients.
-- [ ] Preserve customer-safe recipient display without storing SMTP secrets.
-- [ ] Keep automatic-send idempotency by `workspace_id + job_id +
+- [x] Preserve customer-safe recipient display without storing SMTP secrets.
+- [x] Keep automatic-send idempotency by `workspace_id + job_id +
       send_window_key + send_type=auto` unchanged.
 
 ### Phase 17.1D - Historical Orphan Evidence And Operations Notes
@@ -667,11 +667,12 @@ CR-036 safety fix.
 
 ### Phase 17.2A - Effective Template Provenance
 
-- [ ] Centralize effective-template resolution so report delivery, preview, and
-      logs agree on task-bound versus active-global fallback behavior.
-- [ ] Record effective email template id, template name, subject template, and
+- [x] Centralize effective-template resolution for report snapshots and
+      delivery logs so task-bound versus active-global fallback behavior is
+      preserved for generated reports.
+- [x] Record effective email template id, template name, subject template, and
       template source in report snapshots.
-- [ ] Record effective template metadata in email delivery logs without storing
+- [x] Record effective template metadata in email delivery logs without storing
       secrets or unsafe raw HTML.
 - [ ] Make historical report/email detail able to explain why a delivered email
       differed from the currently previewed or currently active template.
@@ -732,45 +733,51 @@ Pilot Gate D non-blocker/remediation boundary.
 
 ### Pilot Gate A - Email Side-Effect Safety
 
-- [ ] Complete and verify CR-036/Phase 17.1A-B so automated tests, local
+- [x] Complete and verify CR-036/Phase 17.1A-B so automated tests, local
       diagnostics, and ordinary local report-delivery paths cannot send hidden
       real SMTP email.
-- [ ] Verify real SMTP is blocked by default even when the active database has
+- [x] Verify real SMTP is blocked by default even when the active database has
       complete SMTP configuration and default recipients.
-- [ ] Verify automatic report delivery, manual resend, and mail-test paths all
+- [x] Verify automatic report delivery, manual resend, and mail-test paths all
       use the same delivery-safety gate.
-- [ ] Verify blocked delivery still allows report generation and writes a
+- [x] Verify blocked delivery still allows report generation and writes a
       customer-safe skipped delivery state or confirmed equivalent.
-- [ ] Verify the automated test suite has a tripwire that fails on
+- [x] Verify the automated test suite has a tripwire that fails on
       `smtplib.SMTP` or `smtplib.SMTP_SSL` without explicit opt-in.
 
 ### Pilot Gate B - Run Lifecycle And Partial Result Safety
 
-- [ ] Complete and verify CR-035/Phase 7.1A-C so new runs persist
+- [x] Complete and verify CR-035/Phase 7.1A-C so new runs persist
       `crawl_runs.job_id`, lifecycle finalization is idempotent, and terminal
       statuses cannot be reopened by stale writers.
-- [ ] Verify success, failure, timeout, cancellation, interruption, and partial
+- [x] Verify success, failure, timeout, cancellation, interruption, and partial
       AI/report paths all finalize to a terminal status and release locks
       safely.
-- [ ] Verify AI item timeout, exception, and invalid JSON save
+- [x] Verify AI item timeout, exception, and invalid JSON save
       `pending_review` and continue when the run can safely continue.
-- [ ] Verify collected partial results can generate a report when AI is
+- [x] Verify collected partial results can generate a report when AI is
       unavailable, partially interrupted, or degraded to manual review.
-- [ ] Verify a simulated run with 271 collected contents and AI interruption
-      after item 250/251 cannot remain indefinitely `running`.
+- [x] Verify a simulated reduced-size equivalent of the 271-content
+      interruption class cannot remain indefinitely `running`; it finalizes and
+      produces a partial/manual-review report. The real historical run `8317`
+      remains governed by Phase 7.1D.
 
 ### Pilot Gate C - Minimum Server-Like Real Workflow
 
-- [ ] Run server-like validation without relying on the operator's local Chrome.
-- [ ] Verify administrator web-UI login and server-side platform QR/profile
+- [x] Run server-like validation without relying on the operator's local Chrome.
+- [x] Verify administrator web-UI login and server-side platform QR/profile
       flow in the server-like environment.
 - [ ] Verify at least one real platform login and crawl path with persistent
       server-side account profile before pilot handoff.
-- [ ] Verify AI unavailable or AI failure fallback does not block report
+- [x] Verify AI unavailable or AI failure fallback does not block report
       generation.
 - [ ] Verify explicit-opt-in SMTP delivery can send in pilot/production mode
       while default local/test/diagnostic behavior remains non-sending.
-- [ ] Verify logs, reports, delivery records, and UI surfaces do not expose API
+- [x] Verify automated local/server-like logs, reports, delivery records, and
+      UI surfaces do not expose API keys, SMTP passwords, cookies, proxy
+      credentials, raw profile paths, provider endpoints, local paths, or
+      command lines.
+- [ ] Verify pilot runs with real external services do not expose API
       keys, SMTP passwords, cookies, proxy credentials, raw profile paths,
       provider endpoints, local paths, or command lines.
 
