@@ -25,7 +25,8 @@ Data Layer is complete and verified. Phase 13B - Operations Home Desktop
 Visual Metrics is complete and verified. Phase 13C - Operations Home
 Responsive And Role Views is complete and verified. Phase 14 - Run Center
 Data Model Preparation is complete and verified. Phase 15A - Run Center API
-And Data Governance is the next allowed execution goal.
+And Data Governance is complete and verified. Phase 15B - Run Center Frontend
+Refinement is the next allowed execution goal.
 The active SQLite schema now provides the foundation tables and columns
 required before later implementation work, and the web/API layer now has
 session login, administrator/normal-user roles, menu visibility,
@@ -55,7 +56,10 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   home role views with detailed diagnostics moved to System Diagnostics, and
   Phase 14 run-center data-model fields for run visibility, run type,
   archived time, and archived user with visible/scheduled backfill and
-  recommended indexes.
+  recommended indexes, plus Phase 15A run-center API/query pagination,
+  filters, default visible-only listing, administrator-only archived access,
+  archive/restore APIs, and response metadata for pagination, filters,
+  visibility, and run type.
 
 ## Implementation Status
 
@@ -82,7 +86,9 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
 - Phase 13 - Overview Operations Home Redesign: complete and verified
   through Phase 13A-13C.
 - Phase 14 - Run Center Data Model Preparation: complete and verified.
-- Phase 15 - Run Center Governance And Frontend: planned, not implemented.
+- Phase 15 - Run Center Governance And Frontend: in progress through Phase
+  15A; Phase 15A is complete and verified, Phase 15B is planned and not
+  implemented.
 - Phase 16 - Email Delivery Data Model Preparation: planned, not implemented.
 - Phase 17 - Email Delivery Governance: planned as Phase 17A-17B, not
   implemented.
@@ -93,7 +99,7 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   Phase 6 login-flow runtime are complete.
 
 The documented V1 product roadmap is implemented through Phase 9 in this
-worktree, and the console optimization roadmap is verified through Phase 13C.
+worktree, and the console optimization roadmap is verified through Phase 15A.
 Production pilot handoff still requires live platform, SMTP, and AI-provider
 validation with real deployment credentials.
 
@@ -223,8 +229,8 @@ validation with real deployment credentials.
 
 ## In Progress
 
-- Phase 15A execution preparation. No Phase 15-18 implementation work is in
-  progress.
+- Phase 15B execution preparation. No Phase 15B frontend implementation work
+  is in progress yet.
 
 ## Known Risks
 
@@ -249,7 +255,7 @@ validation with real deployment credentials.
 - Phase 7 and Phase 8 automated checks do not prove real AI provider, SMTP,
   real platform QR scanning, or real platform crawling behavior; those remain
   deployment and pilot risks.
-- Phase 15-18 plans depend on future implementation and verification. The
+- Phase 15B-18 plans depend on future implementation and verification. The
   current frontend has the complete Phase 11-12 foundation and Phase 13A data
   contract: local static module
   boundary, base desktop shell/navigation/button/card/toolbar styling, shared
@@ -261,7 +267,8 @@ validation with real deployment credentials.
   visual metric cards and task-loop drilldowns, and Phase 13C tablet/mobile
   role views with concise administrator health and normal-user business-safe
   resource wording. The current schema also has Phase 14 run visibility and
-  run type fields available for the later Phase 15 run-center governance layer.
+  run type fields, and Phase 15A exposes the corresponding run-center
+  governance API layer for Phase 15B frontend work.
 - Phase 11 was completed as four verified batches: Phase 11A module boundary
   and tokens, Phase 11B base layout/navigation visual foundation, Phase 11C
   interaction components and floating menus, and Phase 11D responsive
@@ -288,29 +295,50 @@ validation with real deployment credentials.
   administrator health summary on the home page.
 - Email idempotency and report task grouping are accepted data-model directions
   but are not active schema features yet. Run visibility/noise-filtering data
-  fields are active schema features after Phase 14, but archive/restore APIs,
-  pagination, filters, and frontend governance remain Phase 15 work.
+  fields are active schema features after Phase 14, and archive/restore APIs,
+  pagination, and filters are active after Phase 15A. Frontend run-center
+  controls remain Phase 15B work.
 - The first global Phase 10-18 review found that Phase 13, Phase 17, and Phase
   18 were too coarse as single goals. The plan now splits them into data/API
   and frontend/responsive batches.
 - Phase 10.5 follow-up global review found no remaining P0/P1 blockers.
   Remaining review notes are P2 implementation refinements and do not block
-  Phase 15A.
+  Phase 15B.
 
 ## Next Step
 
 Next allowed implementation step:
 
-1. start Phase 15A only;
-2. add run-center API/query pagination and filters for task, law firm, status,
-   run type, visibility, date, and platform;
-3. add archive and restore APIs without physically deleting run records;
-4. preserve existing run-list fields, run logs, report links,
-   owner/workspace scope, and current status values;
-5. verify API tests for pagination, filters, archive, restore, and default
-   visible-record behavior before Phase 15B frontend work.
+1. start Phase 15B only;
+2. add run-center pagination, filter, archive, and restore controls in the
+   frontend using the Phase 15A API;
+3. keep run logs refreshable, copyable, and downloadable;
+4. preserve administrator and normal-user role visibility and owner/workspace
+   scope;
+5. verify desktop, tablet, and mobile run-center layouts before Phase 16.
 
 ## Latest Verification
+
+Phase 15A run center API and data governance verification on 2026-06-16:
+
+- Added run API/query pagination with `pagination` response metadata while
+  preserving existing `runs` and `running_job_ids` response fields.
+- Added filters for task ID, law firm, status, platform, run type, visibility,
+  and date range.
+- Added administrator-only archive and restore APIs that update run visibility
+  without physically deleting records.
+- Default run-list API behavior now hides archived records; administrators can
+  request archived or all records explicitly, while normal users cannot.
+- Preserved owner/workspace scope, existing status values, report links, and
+  run-log access for visible runs.
+- Did not add Phase 15B frontend pagination, filter controls, or row
+  archive/restore controls.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_15a or run_logs or list_runs"`
+- Result: 2 passed, 225 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 227 passed, 3 warnings.
 
 Phase 14 run center data model preparation verification on 2026-06-16:
 

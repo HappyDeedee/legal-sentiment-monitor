@@ -386,21 +386,22 @@ frontend governance.
 
 Planning status:
 
-Phase 15 is planned and depends on Phase 14. Execute it as Phase 15A-15B.
+Phase 15 depends on Phase 14. Phase 15A is complete and verified. Phase 15B
+remains the next implementation batch.
 
 ### Phase 15A - Run Center API And Data Governance
 
-- [ ] Add run pagination at the API/query layer.
-- [ ] Add filters for task, law firm, status, run type, visibility, date, and
+- [x] Add run pagination at the API/query layer.
+- [x] Add filters for task, law firm, status, run type, visibility, date, and
       platform.
-- [ ] Add archive and restore APIs.
-- [ ] Hide archived records from default API/list behavior while preserving
+- [x] Add archive and restore APIs.
+- [x] Hide archived records from default API/list behavior while preserving
       administrator access through explicit filters.
-- [ ] Preserve the existing run-list response fields while adding pagination,
+- [x] Preserve the existing run-list response fields while adding pagination,
       filter metadata, visibility, and run-type fields.
-- [ ] Preserve run logs, report links, owner/workspace scope, and existing
+- [x] Preserve run logs, report links, owner/workspace scope, and existing
       status values.
-- [ ] Verify API tests for pagination, filters, archive, restore, and default
+- [x] Verify API tests for pagination, filters, archive, restore, and default
       visibility behavior.
 
 ### Phase 15B - Run Center Frontend Refinement

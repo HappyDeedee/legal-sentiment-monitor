@@ -2349,28 +2349,177 @@ def get_run(run_id: int, actor: dict[str, Any] | None = None) -> dict[str, Any] 
     return _hydrate_run_row(row) if row else None
 
 
+def _run_actor_scope_clause(actor: dict[str, Any] | None) -> tuple[str, list[Any]]:
+    if not actor:
+        return "", []
+    return (
+        "r.workspace_id=? AND (?='administrator' OR COALESCE(j.created_by, r.created_by)=?)",
+        [
+            _safe_int(actor.get("workspace_id")) or DEFAULT_WORKSPACE_ID,
+            actor.get("role"),
+            _safe_int(actor.get("id")) or 0,
+        ],
+    )
+
+
+def _run_filter_clause(filters: dict[str, Any] | None, *, include_archived_default: bool = False) -> tuple[str, list[Any], dict[str, Any]]:
+    filters = dict(filters or {})
+    clauses: list[str] = []
+    params: list[Any] = []
+    applied: dict[str, Any] = {}
+
+    visibility = str(filters.get("visibility") or ("all" if include_archived_default else "visible")).strip()
+    if visibility not in {"visible", "archived", "all"}:
+        visibility = "visible"
+    if visibility != "all":
+        clauses.append("r.visibility=?")
+        params.append(visibility)
+    applied["visibility"] = visibility
+
+    run_type = str(filters.get("run_type") or "").strip()
+    if run_type in {"scheduled", "manual", "test"}:
+        clauses.append("r.run_type=?")
+        params.append(run_type)
+        applied["run_type"] = run_type
+
+    status = str(filters.get("status") or "").strip()
+    if status:
+        clauses.append("r.status=?")
+        params.append(status)
+        applied["status"] = status
+
+    job_id = _safe_int(filters.get("job_id") or filters.get("task_id"))
+    if job_id is not None:
+        clauses.append("r.job_id=?")
+        params.append(job_id)
+        applied["job_id"] = job_id
+
+    law_firm = str(filters.get("law_firm") or filters.get("task") or "").strip()
+    if law_firm:
+        clauses.append("(j.law_firm_name LIKE ? OR r.summary LIKE ?)")
+        like = f"%{law_firm}%"
+        params.extend([like, like])
+        applied["law_firm"] = law_firm
+
+    platform = str(filters.get("platform") or "").strip()
+    if platform:
+        clauses.append("r.summary LIKE ?")
+        params.append(f"%\"{platform}\"%")
+        applied["platform"] = platform
+
+    date_from = str(filters.get("date_from") or "").strip()
+    if date_from:
+        clauses.append("substr(r.started_at, 1, 10) >= ?")
+        params.append(date_from[:10])
+        applied["date_from"] = date_from[:10]
+
+    date_to = str(filters.get("date_to") or "").strip()
+    if date_to:
+        clauses.append("substr(r.started_at, 1, 10) <= ?")
+        params.append(date_to[:10])
+        applied["date_to"] = date_to[:10]
+
+    return " AND ".join(clauses), params, applied
+
+
 def list_runs(limit: int = 100, actor: dict[str, Any] | None = None) -> list[dict[str, Any]]:
-    sql = """
-        SELECT r.*, j.law_firm_name FROM crawl_runs r
+    page = list_runs_page(page=1, per_page=limit, actor=actor, include_archived_default=True)
+    return page["items"]
+
+
+def list_runs_page(
+    page: int = 1,
+    per_page: int = 100,
+    actor: dict[str, Any] | None = None,
+    filters: dict[str, Any] | None = None,
+    include_archived_default: bool = False,
+) -> dict[str, Any]:
+    page = max(1, _safe_int(page) or 1)
+    per_page = _coerce_limit(per_page, default=100)
+    filter_clause, filter_params, applied_filters = _run_filter_clause(
+        filters,
+        include_archived_default=include_archived_default,
+    )
+    scope_clause, scope_params = _run_actor_scope_clause(actor)
+    clauses = [clause for clause in (scope_clause, filter_clause) if clause]
+    where_sql = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+    params = [*scope_params, *filter_params]
+    base_sql = """
+        FROM crawl_runs r
         LEFT JOIN monitor_jobs j ON j.id = r.job_id
     """
-    params: list[Any] = []
-    if actor:
-        sql += " WHERE r.workspace_id=? AND (?='administrator' OR COALESCE(j.created_by, r.created_by)=?)"
-        params.extend(
-            [
-                _safe_int(actor.get("workspace_id")) or DEFAULT_WORKSPACE_ID,
-                actor.get("role"),
-                _safe_int(actor.get("id")) or 0,
-            ]
-        )
-    sql += " ORDER BY r.id DESC"
-    if limit > 0:
-        sql += " LIMIT ?"
-        params.append(limit)
     with get_conn() as conn:
-        rows = conn.execute(sql, params).fetchall()
-    return [_hydrate_run_row(row) for row in rows]
+        total = int(
+            conn.execute(
+                f"SELECT COUNT(*) AS n {base_sql}{where_sql}",
+                params,
+            ).fetchone()["n"]
+            or 0
+        )
+        sql = f"""
+            SELECT r.*, j.law_firm_name {base_sql}{where_sql}
+            ORDER BY r.id DESC
+        """
+        query_params = list(params)
+        if per_page > 0:
+            sql += " LIMIT ? OFFSET ?"
+            query_params.extend([per_page, (page - 1) * per_page])
+        rows = conn.execute(sql, query_params).fetchall()
+    items = [_hydrate_run_row(row) for row in rows]
+    total_pages = 1 if per_page <= 0 else max(1, (total + per_page - 1) // per_page)
+    return {
+        "items": items,
+        "total": total,
+        "page": page,
+        "per_page": per_page,
+        "total_pages": total_pages,
+        "filters": applied_filters,
+    }
+
+
+def set_run_visibility(run_id: int, visibility: str, actor: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    if visibility not in {"visible", "archived"}:
+        raise ValueError("invalid run visibility")
+    actor_scope, actor_params = _run_actor_scope_clause(actor)
+    where = "r.id=?"
+    params: list[Any] = [run_id]
+    if actor_scope:
+        where += f" AND {actor_scope}"
+        params.extend(actor_params)
+    with get_conn() as conn:
+        row = conn.execute(
+            f"""
+            SELECT r.id FROM crawl_runs r
+            LEFT JOIN monitor_jobs j ON j.id = r.job_id
+            WHERE {where}
+            """,
+            params,
+        ).fetchone()
+        if not row:
+            return None
+        if visibility == "archived":
+            archived_at = utc_now()
+            archived_by = _safe_int((actor or {}).get("id"))
+        else:
+            archived_at = None
+            archived_by = None
+        conn.execute(
+            """
+            UPDATE crawl_runs
+            SET visibility=?, archived_at=?, archived_by=?
+            WHERE id=?
+            """,
+            (visibility, archived_at, archived_by, run_id),
+        )
+    return get_run(run_id, actor=actor)
+
+
+def archive_run(run_id: int, actor: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    return set_run_visibility(run_id, "archived", actor=actor)
+
+
+def restore_run(run_id: int, actor: dict[str, Any] | None = None) -> dict[str, Any] | None:
+    return set_run_visibility(run_id, "visible", actor=actor)
 
 
 def _hydrate_run_row(row: sqlite3.Row) -> dict[str, Any]:

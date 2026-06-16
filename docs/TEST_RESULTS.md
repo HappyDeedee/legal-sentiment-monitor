@@ -11,6 +11,53 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
 `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-16 - Phase 15A Run Center API And Data Governance Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`.
+
+Result:
+
+- Added run API/query pagination while preserving the existing `runs` and
+  `running_job_ids` response fields.
+- Added `pagination` and `filters` response metadata for the run list API.
+- Added filters for task ID, law firm, status, platform, run type, visibility,
+  and date range.
+- Added administrator-only archive and restore APIs that update
+  `crawl_runs.visibility`, `archived_at`, and `archived_by` without physically
+  deleting run records.
+- Default run-list API behavior hides archived records. Administrators can
+  request archived or all records explicitly; normal users receive `403` for
+  archived/all visibility requests.
+- Preserved owner/workspace scope for paginated and filtered run results.
+- Preserved existing status values, report links, and run-log access for
+  visible records. Archived run logs and stop actions are hidden from normal
+  users.
+- Added
+  `tests/test_monitoring_mvp.py::test_phase_15a_run_center_api_pagination_filters_archive_and_scope`.
+- Did not implement Phase 15B frontend pagination, filter controls, or row
+  archive/restore actions.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before implementation and after verification.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k phase_15a`
+- Result: 1 passed, 226 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_15a or run_logs or list_runs"`
+- Result: 2 passed, 225 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 227 passed, 3 warnings.
+
+Limitations:
+
+- Phase 15A is API/data governance only. Run-center frontend pagination,
+  filter controls, archive/restore confirmations, and responsive run-center
+  layout remain Phase 15B work.
+- Phase 16 email delivery logs and Phase 18 report snapshots remain planned
+  and unimplemented.
+
 ## 2026-06-16 - Phase 14 Run Center Data Model Preparation Verified
 
 Environment: worktree

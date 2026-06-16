@@ -8001,6 +8001,159 @@ def test_phase_14_run_center_visibility_fields_migrate_and_backfill():
         _restore_monitor_jobs(jobs_snapshot)
 
 
+def test_phase_15a_run_center_api_pagination_filters_archive_and_scope():
+    from api import main as api_main
+
+    init_db()
+    snapshots = {
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "audit_logs": _snapshot_table("audit_logs"),
+        "user_sessions": _snapshot_table("user_sessions"),
+        "users": _snapshot_table("users"),
+    }
+    jobs_snapshot = _snapshot_monitor_jobs()
+    try:
+        with get_conn() as conn:
+            for table in ["reports", "crawl_runs", "audit_logs", "user_sessions", "users"]:
+                conn.execute(f"DELETE FROM {table}")
+        _clear_monitor_jobs()
+
+        admin = bootstrap_admin_from_env("phase15a-admin@example.com", "AdminPass123!", "Phase 15A Admin")
+        user1 = save_user(
+            {
+                "email": "phase15a-user1@example.com",
+                "display_name": "Phase 15A User One",
+                "password": "UserPass123!",
+                "role": "normal",
+            },
+            actor_id=int(admin["id"]),
+        )
+        user2 = save_user(
+            {
+                "email": "phase15a-user2@example.com",
+                "display_name": "Phase 15A User Two",
+                "password": "UserPass456!",
+                "role": "normal",
+            },
+            actor_id=int(admin["id"]),
+        )
+        job1 = save_job(
+            {
+                "law_firm_name": "海安律所",
+                "keywords": ["海安律所避雷"],
+                "platforms": ["dy"],
+                "recipients": [],
+            },
+            actor=user1,
+        )
+        job2 = save_job(
+            {
+                "law_firm_name": "恒泰律所",
+                "keywords": ["恒泰律所投诉"],
+                "platforms": ["ks"],
+                "recipients": [],
+            },
+            actor=user2,
+        )
+        run_visible = create_run(job1["id"], {"job_id": job1["id"], "law_firm_name": job1["law_firm_name"], "platforms": ["dy"], "keywords": job1["keywords"]})
+        finish_run(run_visible, "success", {"job_id": job1["id"], "law_firm_name": job1["law_firm_name"], "platforms": ["dy"], "keywords": job1["keywords"]})
+        run_archived = create_run(job1["id"], {"job_id": job1["id"], "law_firm_name": job1["law_firm_name"], "platforms": ["ks"], "keywords": job1["keywords"]})
+        finish_run(run_archived, "failed", {"job_id": job1["id"], "law_firm_name": job1["law_firm_name"], "platforms": ["ks"], "keywords": job1["keywords"]}, "登录态失效")
+        run_other_user = create_run(job2["id"], {"job_id": job2["id"], "law_firm_name": job2["law_firm_name"], "platforms": ["ks"], "keywords": job2["keywords"]})
+        finish_run(run_other_user, "success", {"job_id": job2["id"], "law_firm_name": job2["law_firm_name"], "platforms": ["ks"], "keywords": job2["keywords"]})
+        report = create_report(run_visible, job1, {"job_id": job1["id"], "law_firm_name": job1["law_firm_name"], "platforms": ["dy"]})
+        with get_conn() as conn:
+            conn.execute("UPDATE crawl_runs SET visibility='archived', archived_at=?, archived_by=? WHERE id=?", (datetime.now(timezone.utc).isoformat(), admin["id"], run_archived))
+            conn.execute("UPDATE crawl_runs SET run_type='manual' WHERE id=?", (run_visible,))
+            conn.execute("UPDATE crawl_runs SET run_type='test' WHERE id=?", (run_other_user,))
+
+        transport = httpx.ASGITransport(app=api_main.app)
+
+        async def exercise() -> None:
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as normal_client:
+                login = await normal_client.post(
+                    "/api/auth/login",
+                    json={"email": "phase15a-user1@example.com", "password": "UserPass123!"},
+                )
+                assert login.status_code == 200
+                default_runs = await normal_client.get("/api/monitor/runs")
+                assert default_runs.status_code == 200
+                default_payload = default_runs.json()
+                assert {item["id"] for item in default_payload["runs"]} == {run_visible}
+                assert default_payload["pagination"]["total"] == 1
+                assert default_payload["filters"]["visibility"] == "visible"
+                assert default_payload["runs"][0]["run_type"] == "manual"
+                assert "visibility" in default_payload["runs"][0]
+
+                archived_forbidden = await normal_client.get("/api/monitor/runs", params={"visibility": "archived"})
+                assert archived_forbidden.status_code == 403
+                archive_forbidden = await normal_client.post(f"/api/monitor/runs/{run_visible}/archive")
+                assert archive_forbidden.status_code == 403
+                archived_logs = await normal_client.get(f"/api/monitor/runs/{run_archived}/logs")
+                assert archived_logs.status_code == 404
+                other_logs = await normal_client.get(f"/api/monitor/runs/{run_other_user}/logs")
+                assert other_logs.status_code == 404
+
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as admin_client:
+                login = await admin_client.post(
+                    "/api/auth/login",
+                    json={"email": "phase15a-admin@example.com", "password": "AdminPass123!"},
+                )
+                assert login.status_code == 200
+                default_runs = await admin_client.get("/api/monitor/runs")
+                assert {item["id"] for item in default_runs.json()["runs"]} == {run_other_user, run_visible}
+                archived_runs = await admin_client.get("/api/monitor/runs", params={"visibility": "archived"})
+                assert archived_runs.status_code == 200
+                assert {item["id"] for item in archived_runs.json()["runs"]} == {run_archived}
+
+                filtered = await admin_client.get(
+                    "/api/monitor/runs",
+                    params={
+                        "visibility": "all",
+                        "law_firm": "海安",
+                        "status": "success",
+                        "platform": "dy",
+                        "run_type": "manual",
+                        "page": 1,
+                        "limit": 1,
+                    },
+                )
+                filtered_payload = filtered.json()
+                assert [item["id"] for item in filtered_payload["runs"]] == [run_visible]
+                assert filtered_payload["pagination"] == {"page": 1, "per_page": 1, "total": 1, "total_pages": 1}
+                assert filtered_payload["filters"]["visibility"] == "all"
+
+                archived = await admin_client.post(f"/api/monitor/runs/{run_visible}/archive")
+                assert archived.status_code == 200
+                assert archived.json()["run"]["visibility"] == "archived"
+                assert archived.json()["run"]["archived_at"]
+                assert archived.json()["run"]["archived_by"] == admin["id"]
+                default_after_archive = await admin_client.get("/api/monitor/runs")
+                assert run_visible not in {item["id"] for item in default_after_archive.json()["runs"]}
+
+                restored = await admin_client.post(f"/api/monitor/runs/{run_visible}/restore")
+                assert restored.status_code == 200
+                assert restored.json()["run"]["visibility"] == "visible"
+                assert restored.json()["run"]["archived_at"] is None
+                assert restored.json()["run"]["archived_by"] is None
+
+                logs = await admin_client.get(f"/api/monitor/runs/{run_visible}/logs")
+                assert logs.status_code == 200
+                report_detail = await admin_client.get(f"/api/monitor/reports/{report['id']}")
+                assert report_detail.status_code == 200
+                assert report_detail.json()["report"]["run_id"] == run_visible
+
+        asyncio.run(exercise())
+    finally:
+        _restore_table("reports", snapshots["reports"])
+        _restore_table("crawl_runs", snapshots["crawl_runs"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
+        _restore_table("user_sessions", snapshots["user_sessions"])
+        _restore_table("users", snapshots["users"])
+        _restore_monitor_jobs(jobs_snapshot)
+
+
 def test_cli_run_due_runs_only_due_enabled_jobs(monkeypatch):
     init_db()
     jobs_snapshot = _snapshot_monitor_jobs()

@@ -12,6 +12,7 @@ from ..monitoring.auth_context import is_administrator, require_authenticated_us
 from ..monitoring.prompts import AI_OUTPUT_SCHEMA, DEFAULT_PROMPT, DEFAULT_PROMPT_SECTIONS
 from ..monitoring.database import (
     MONITOR_DATA_DIR,
+    archive_run,
     cancel_run,
     cancel_running_runs_for_job,
     create_login_session,
@@ -52,6 +53,7 @@ from ..monitoring.database import (
     list_reports,
     list_runtime_settings,
     list_runs,
+    list_runs_page,
     list_social_accounts,
     record_audit_log,
     mark_ai_key_profile_test_result,
@@ -69,6 +71,7 @@ from ..monitoring.database import (
     save_proxy_profile,
     save_runtime_settings,
     save_social_account,
+    restore_run,
     set_active_ai_key_profile,
     set_active_ai_rule_profile,
     set_job_enabled,
@@ -1053,15 +1056,73 @@ async def remove_proxy(proxy_id: int, admin: dict[str, Any] = AdminUser):
 
 
 @router.get("/runs")
-async def runs(limit: int = Query(100, ge=0, le=1000), user: dict[str, Any] = CurrentUser):
+async def runs(
+    limit: int = Query(100, ge=0, le=1000),
+    page: int = Query(1, ge=1),
+    task_id: int | None = Query(None, ge=1),
+    law_firm: str = "",
+    status: str = "",
+    platform: str = "",
+    run_type: str = Query("", description="scheduled|manual|test"),
+    visibility: str = Query("", description="visible|archived|all"),
+    date_from: str = "",
+    date_to: str = "",
+    user: dict[str, Any] = CurrentUser,
+):
     init_db()
-    return {"runs": [_customer_view_run(item) for item in list_runs(limit, actor=_route_actor(user))], "running_job_ids": running_job_ids()}
+    actor = _route_actor(user)
+    requested_visibility = (visibility or "").strip()
+    if requested_visibility in {"archived", "all"} and not is_administrator(actor):
+        raise HTTPException(status_code=403, detail="只有管理员可以查看归档运行记录")
+    filters = {
+        "task_id": task_id,
+        "law_firm": law_firm,
+        "status": status,
+        "platform": platform,
+        "run_type": run_type,
+        "visibility": requested_visibility or "visible",
+        "date_from": date_from,
+        "date_to": date_to,
+    }
+    result = list_runs_page(page=page, per_page=limit, actor=actor, filters=filters)
+    return {
+        "runs": [_customer_view_run(item) for item in result["items"]],
+        "running_job_ids": running_job_ids(),
+        "pagination": {
+            "page": result["page"],
+            "per_page": result["per_page"],
+            "total": result["total"],
+            "total_pages": result["total_pages"],
+        },
+        "filters": result["filters"],
+    }
+
+
+@router.post("/runs/{run_id}/archive")
+async def archive_run_record(run_id: int, admin: dict[str, Any] = AdminUser):
+    run = archive_run(run_id, actor=_route_actor(admin))
+    if not run:
+        raise HTTPException(status_code=404, detail="run not found")
+    _audit_admin(admin, "archive_run", "crawl_run", run_id, {"visibility": "archived"})
+    return {"run": _customer_view_run(run)}
+
+
+@router.post("/runs/{run_id}/restore")
+async def restore_run_record(run_id: int, admin: dict[str, Any] = AdminUser):
+    run = restore_run(run_id, actor=_route_actor(admin))
+    if not run:
+        raise HTTPException(status_code=404, detail="run not found")
+    _audit_admin(admin, "restore_run", "crawl_run", run_id, {"visibility": "visible"})
+    return {"run": _customer_view_run(run)}
 
 
 @router.post("/runs/{run_id}/stop")
 async def stop_run_now(run_id: int, user: dict[str, Any] = CurrentUser):
-    run = get_run(run_id, actor=_route_actor(user))
+    actor = _route_actor(user)
+    run = get_run(run_id, actor=actor)
     if not run:
+        raise HTTPException(status_code=404, detail="run not found")
+    if run.get("visibility") == "archived" and not is_administrator(actor):
         raise HTTPException(status_code=404, detail="run not found")
     if run.get("status") != "running":
         raise HTTPException(status_code=400, detail="这条运行记录已经结束")
@@ -1080,7 +1141,9 @@ async def stop_run_now(run_id: int, user: dict[str, Any] = CurrentUser):
 
 @router.get("/runs/{run_id}/logs")
 async def run_logs(run_id: int, user: dict[str, Any] = CurrentUser):
-    if _route_actor(user) and not get_run(run_id, actor=_route_actor(user)):
+    actor = _route_actor(user)
+    run = get_run(run_id, actor=actor)
+    if not run or (run.get("visibility") == "archived" and not is_administrator(actor)):
         raise HTTPException(status_code=404, detail="run not found")
     run_root = MONITOR_DATA_DIR / "runs"
     logs = []
@@ -1453,6 +1516,10 @@ def _customer_view_run(item: dict[str, Any]) -> dict[str, Any]:
         "display_status",
         "display_error",
         "summary",
+        "visibility",
+        "run_type",
+        "archived_at",
+        "archived_by",
     }
     view = {key: _customer_safe_value(value) for key, value in item.items() if key in allowed}
     view["error_message"] = customer_safe_text(item.get("error_message"))
