@@ -8685,6 +8685,192 @@ def test_phase_17b_email_delivery_history_api_scope_and_safe_fields():
         _restore_monitor_jobs(jobs_snapshot)
 
 
+def test_phase_18a_report_job_snapshots_persist_backfill_and_limited_context():
+    init_db()
+    jobs_snapshot = _snapshot_monitor_jobs()
+    snapshots = {
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+    }
+    _clear_monitor_jobs()
+    try:
+        with get_conn() as conn:
+            for table in ["reports", "crawl_runs"]:
+                conn.execute(f"DELETE FROM {table}")
+        with get_conn() as conn:
+            assert "job_snapshot_json" in _table_columns(conn, "reports")
+
+        job = save_job(
+            {
+                "law_firm_name": "Phase18A快照律所",
+                "keywords": ["Phase18A快照律所投诉", "Phase18A快照律所退费"],
+                "platforms": ["dy", "xhs"],
+                "recipients": ["ops@example.com"],
+                "frequency": "daily",
+                "email_time": "09:00",
+            }
+        )
+        run_id = create_run(job["id"], {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        finish_run(run_id, "success", {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        report = create_report(
+            run_id,
+            job,
+            {"job_id": job["id"], "law_firm_name": job["law_firm_name"], "platforms": job["platforms"]},
+        )
+        stored = get_report(report["id"])
+
+        assert report["job_snapshot"]["job_id"] == job["id"]
+        assert stored["job_snapshot"] == {
+            "job_id": job["id"],
+            "law_firm_name": "Phase18A快照律所",
+            "platforms": ["dy", "xhs"],
+            "keywords": ["Phase18A快照律所投诉", "Phase18A快照律所退费"],
+            "frequency": "daily",
+            "deleted_at": None,
+        }
+        assert stored["job_deleted"] is False
+        assert stored["limited_context"] is False
+
+        with get_conn() as conn:
+            conn.execute("UPDATE reports SET job_snapshot_json=NULL WHERE id=?", (report["id"],))
+        init_db()
+        backfilled = get_report(report["id"])
+        assert backfilled["job_snapshot"]["law_firm_name"] == "Phase18A快照律所"
+        assert backfilled["job_snapshot"]["platforms"] == ["dy", "xhs"]
+        assert backfilled["job_snapshot"]["keywords"] == ["Phase18A快照律所投诉", "Phase18A快照律所退费"]
+
+        asyncio.run(monitor_router.remove_job(job["id"]))
+        after_delete = get_report(report["id"])
+        assert after_delete
+        assert after_delete["job_id"] == job["id"]
+        assert after_delete["job_deleted"] is True
+        assert after_delete["display_law_firm_name"] == "Phase18A快照律所"
+        assert after_delete["job_snapshot"]["deleted_at"]
+        assert after_delete["limited_context"] is False
+
+        now = datetime.now(timezone.utc).isoformat()
+        with get_conn() as conn:
+            cur = conn.execute(
+                """
+                INSERT INTO crawl_runs (workspace_id, job_id, status, started_at, finished_at, summary)
+                VALUES (1, NULL, 'success', ?, ?, '{}')
+                """,
+                (now, now),
+            )
+            orphan_run_id = int(cur.lastrowid)
+            cur = conn.execute(
+                """
+                INSERT INTO reports (
+                    workspace_id, run_id, job_id, html_path, markdown_path, excel_path,
+                    job_snapshot_json, summary, created_at
+                ) VALUES (1, ?, NULL, ?, ?, ?, NULL, '{}', ?)
+                """,
+                (
+                    orphan_run_id,
+                    str(Path("monitor_data/reports/orphan.html")),
+                    str(Path("monitor_data/reports/orphan.md")),
+                    str(Path("monitor_data/reports/orphan.xlsx")),
+                    now,
+                ),
+            )
+            orphan_report_id = int(cur.lastrowid)
+        orphan = get_report(orphan_report_id)
+        assert orphan
+        assert orphan["legacy_without_job_snapshot"] is True
+        assert orphan["limited_context"] is True
+        assert orphan["display_law_firm_name"] == "历史报告"
+
+        missing_context_job = save_job(
+            {
+                "law_firm_name": "Phase18A缺失上下文律所",
+                "keywords": ["Phase18A缺失上下文律所投诉"],
+                "platforms": ["dy"],
+                "recipients": [],
+            }
+        )
+        missing_run_id = create_run(missing_context_job["id"], {})
+        missing_report = create_report(missing_run_id, missing_context_job, {})
+        with get_conn() as conn:
+            conn.execute("UPDATE reports SET job_snapshot_json=NULL, summary='{}' WHERE id=?", (missing_report["id"],))
+            conn.execute("DELETE FROM monitor_jobs WHERE id=?", (missing_context_job["id"],))
+        missing = get_report(missing_report["id"])
+        assert missing
+        assert missing["job_deleted"] is True
+        assert missing["legacy_without_job_snapshot"] is True
+        assert missing["limited_context"] is True
+    finally:
+        _restore_table("reports", snapshots["reports"])
+        _restore_table("crawl_runs", snapshots["crawl_runs"])
+        _restore_monitor_jobs(jobs_snapshot)
+
+
+def test_phase_18a_report_snapshot_does_not_bypass_owner_scope():
+    init_db()
+    jobs_snapshot = _snapshot_monitor_jobs()
+    snapshots = {
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "user_sessions": _snapshot_table("user_sessions"),
+        "audit_logs": _snapshot_table("audit_logs"),
+        "users": _snapshot_table("users"),
+    }
+    _clear_monitor_jobs()
+    try:
+        with get_conn() as conn:
+            for table in ["reports", "crawl_runs", "user_sessions", "audit_logs", "users"]:
+                conn.execute(f"DELETE FROM {table}")
+        admin = bootstrap_admin_from_env("phase18a-admin@example.com", "AdminPass123!", "Admin")
+        user_one = save_user(
+            {
+                "email": "phase18a-user1@example.com",
+                "display_name": "User One",
+                "password": "UserPass123!",
+                "role": "normal",
+            },
+            actor_id=int(admin["id"]),
+        )
+        user_two = save_user(
+            {
+                "email": "phase18a-user2@example.com",
+                "display_name": "User Two",
+                "password": "UserPass123!",
+                "role": "normal",
+            },
+            actor_id=int(admin["id"]),
+        )
+        actor_one = {"id": user_one["id"], "role": "normal", "workspace_id": 1}
+        actor_two = {"id": user_two["id"], "role": "normal", "workspace_id": 1}
+        job = save_job(
+            {
+                "law_firm_name": "Phase18A权限律所",
+                "keywords": ["Phase18A权限律所投诉"],
+                "platforms": ["dy"],
+                "recipients": [],
+            },
+            actor=actor_one,
+        )
+        run_id = create_run(job["id"], {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        finish_run(run_id, "success", {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        report = create_report(run_id, job, {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+
+        assert get_report(report["id"], actor=actor_one)
+        assert get_report(report["id"], actor=actor_two) is None
+        assert any(item["id"] == report["id"] for item in list_reports(0, actor=actor_one))
+        assert all(item["id"] != report["id"] for item in list_reports(0, actor=actor_two))
+
+        asyncio.run(monitor_router.remove_job(job["id"], user=actor_one))
+        assert get_report(report["id"], actor=actor_one)
+        assert get_report(report["id"], actor=actor_two) is None
+        assert all(item["id"] != report["id"] for item in list_reports(0, actor=actor_two))
+    finally:
+        _restore_table("reports", snapshots["reports"])
+        _restore_table("crawl_runs", snapshots["crawl_runs"])
+        _restore_table("user_sessions", snapshots["user_sessions"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
+        _restore_table("users", snapshots["users"])
+        _restore_monitor_jobs(jobs_snapshot)
+
+
 def test_phase_17b_report_center_delivery_history_frontend_hooks():
     page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
     css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")

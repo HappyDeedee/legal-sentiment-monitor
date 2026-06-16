@@ -15,6 +15,8 @@ from .database import (
     get_report,
     get_conn,
     record_email_delivery_log,
+    report_job_snapshot,
+    report_job_snapshot_json,
     try_record_email_delivery_log,
     update_email_delivery_log_status,
     utc_now,
@@ -40,14 +42,15 @@ def create_report(run_id: int, job: dict[str, Any], summary: dict[str, Any]) -> 
     html_path.write_text(html_text, encoding="utf-8")
     md_path.write_text(md_text, encoding="utf-8")
     write_excel(xlsx_path, records)
+    snapshot_json = report_job_snapshot_json(job)
     with get_conn() as conn:
         cur = conn.execute(
             """
             INSERT INTO reports (
                 workspace_id, run_id, job_id, html_path, markdown_path, excel_path,
-                summary, created_by, updated_by, created_at
+                job_snapshot_json, summary, created_by, updated_by, created_at
             )
-            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 int(job.get("workspace_id") or 1),
@@ -56,6 +59,7 @@ def create_report(run_id: int, job: dict[str, Any], summary: dict[str, Any]) -> 
                 str(html_path),
                 str(md_path),
                 str(xlsx_path),
+                snapshot_json,
                 json.dumps(summary, ensure_ascii=False),
                 job.get("created_by"),
                 job.get("created_by"),
@@ -68,6 +72,8 @@ def create_report(run_id: int, job: dict[str, Any], summary: dict[str, Any]) -> 
         "run_id": run_id,
         "job_id": job["id"],
         "law_firm_name": job.get("law_firm_name", ""),
+        "job_snapshot": report_job_snapshot(job),
+        "job_snapshot_json": snapshot_json,
         "summary": summary,
         "html_path": str(html_path),
         "markdown_path": str(md_path),

@@ -430,6 +430,7 @@ def init_db() -> None:
                 workspace_id INTEGER NOT NULL DEFAULT 1,
                 run_id INTEGER NOT NULL REFERENCES crawl_runs(id) ON DELETE CASCADE,
                 job_id INTEGER,
+                job_snapshot_json TEXT,
                 html_path TEXT NOT NULL,
                 markdown_path TEXT NOT NULL,
                 excel_path TEXT NOT NULL,
@@ -565,6 +566,31 @@ def row_to_job(conn: sqlite3.Connection, row: sqlite3.Row) -> dict[str, Any]:
     result["enable_sub_comments"] = bool(result.get("enable_sub_comments", 0))
     result["is_internal"] = bool(result.get("is_internal", 0))
     return result
+
+
+def report_job_snapshot(job: dict[str, Any] | None) -> dict[str, Any] | None:
+    if not job:
+        return None
+    job_id = _safe_int(job.get("id") or job.get("job_id"))
+    if not job_id:
+        return None
+    platforms = [customer_safe_text(str(item)) for item in (job.get("platforms") or []) if str(item).strip()]
+    keywords = [customer_safe_text(str(item)) for item in (job.get("keywords") or []) if str(item).strip()]
+    return {
+        "job_id": job_id,
+        "law_firm_name": customer_safe_text(job.get("law_firm_name")),
+        "platforms": platforms,
+        "keywords": keywords,
+        "frequency": customer_safe_text(job.get("frequency") or ""),
+        "deleted_at": job.get("deleted_at") or None,
+    }
+
+
+def report_job_snapshot_json(job: dict[str, Any] | None) -> str | None:
+    snapshot = report_job_snapshot(job)
+    if not snapshot:
+        return None
+    return json.dumps(snapshot, ensure_ascii=False)
 
 
 def _actor_scope_clause(
@@ -829,6 +855,7 @@ def _ensure_phase_05_schema(conn: sqlite3.Connection) -> None:
     _ensure_column(conn, "crawl_runs", "timeout_reason", "TEXT")
     _ensure_phase_14_run_center_schema(conn)
     _ensure_phase_16_email_delivery_schema(conn)
+    _ensure_phase_18_report_snapshot_schema(conn)
     _backfill_social_account_profile_keys(conn)
     _backfill_login_session_profile_keys(conn)
 
@@ -927,6 +954,24 @@ def _ensure_phase_16_email_delivery_schema(conn: sqlite3.Connection) -> None:
             WHERE send_type='auto' AND status IN ('pending', 'sending', 'sent');
         """
     )
+
+
+def _ensure_phase_18_report_snapshot_schema(conn: sqlite3.Connection) -> None:
+    _ensure_column(conn, "reports", "job_snapshot_json", "TEXT")
+    rows = conn.execute(
+        """
+        SELECT reports.id AS report_id, monitor_jobs.*
+        FROM reports
+        JOIN monitor_jobs ON monitor_jobs.id = reports.job_id
+        WHERE COALESCE(reports.job_snapshot_json, '') = ''
+        """
+    ).fetchall()
+    for row in rows:
+        job = row_to_job(conn, row)
+        conn.execute(
+            "UPDATE reports SET job_snapshot_json=? WHERE id=?",
+            (report_job_snapshot_json(job), row["report_id"]),
+        )
 
 
 def _backfill_social_account_profile_keys(conn: sqlite3.Connection) -> None:
@@ -1524,7 +1569,22 @@ def _parse_date(value: Any) -> datetime | None:
 
 def delete_job(job_id: int) -> None:
     with get_conn() as conn:
+        _mark_report_snapshots_job_deleted(conn, job_id)
         conn.execute("DELETE FROM monitor_jobs WHERE id=?", (job_id,))
+
+
+def _mark_report_snapshots_job_deleted(conn: sqlite3.Connection, job_id: int) -> None:
+    row = conn.execute("SELECT * FROM monitor_jobs WHERE id=?", (job_id,)).fetchone()
+    if not row:
+        return
+    snapshot = report_job_snapshot(row_to_job(conn, row))
+    if not snapshot:
+        return
+    snapshot["deleted_at"] = utc_now()
+    conn.execute(
+        "UPDATE reports SET job_snapshot_json=? WHERE job_id=?",
+        (json.dumps(snapshot, ensure_ascii=False), job_id),
+    )
 
 
 def has_running_run_for_job(job_id: int) -> bool:
@@ -2905,16 +2965,39 @@ def _hydrate_report_item(item: dict[str, Any]) -> None:
     summary = item.get("summary") or {}
     if not isinstance(summary, dict):
         summary = {}
+    snapshot = _json_loads(item.get("job_snapshot_json"), {})
+    if not isinstance(snapshot, dict):
+        snapshot = {}
+    snapshot = _customer_safe_payload(snapshot)
     snapshot_job_id = _safe_int(summary.get("job_id"))
+    report_snapshot_job_id = _safe_int(snapshot.get("job_id"))
     report_job_id = _safe_int(item.get("job_id"))
     current_job_id = _safe_int(item.get("current_job_id"))
     item["summary"] = _customer_safe_payload(summary)
+    item["job_snapshot"] = snapshot
     if not item.get("law_firm_name"):
-        item["law_firm_name"] = summary.get("law_firm_name") or ""
+        item["law_firm_name"] = snapshot.get("law_firm_name") or summary.get("law_firm_name") or ""
     item["law_firm_name"] = customer_safe_text(item.get("law_firm_name"))
-    item["display_law_firm_name"] = customer_safe_text(item.get("law_firm_name") or summary.get("law_firm_name") or "")
+    item["display_law_firm_name"] = customer_safe_text(
+        item.get("law_firm_name")
+        or snapshot.get("law_firm_name")
+        or summary.get("law_firm_name")
+        or "历史报告"
+    )
     item["email_error"] = customer_safe_text(item.get("email_error"))
-    item["job_deleted"] = bool((snapshot_job_id or report_job_id) and not current_job_id)
+    item["job_deleted"] = bool((report_snapshot_job_id or snapshot_job_id or report_job_id) and not current_job_id)
+    has_recoverable_context = bool(
+        report_snapshot_job_id
+        or snapshot_job_id
+        or snapshot.get("law_firm_name")
+        or snapshot.get("platforms")
+        or snapshot.get("keywords")
+        or summary.get("law_firm_name")
+        or summary.get("platforms")
+        or summary.get("keywords")
+    )
+    item["legacy_without_job_snapshot"] = bool(not current_job_id and not has_recoverable_context)
+    item["limited_context"] = bool(item["legacy_without_job_snapshot"])
 
 
 def _attach_report_lead_counts(reports: list[dict[str, Any]]) -> None:

@@ -387,8 +387,8 @@ frontend governance.
 Planning status:
 
 Phase 15 depends on Phase 14. Phase 15A and Phase 15B are complete and
-verified. Phase 16, Phase 17A, and Phase 17B are also complete and verified;
-Phase 18A is the next implementation batch.
+verified. Phase 16, Phase 17A, Phase 17B, and Phase 18A are also complete and
+verified; Phase 18B is the next implementation batch.
 
 ### Phase 15A - Run Center API And Data Governance
 
@@ -478,24 +478,24 @@ grouping.
 
 Planning status:
 
-Phase 18 is planned and depends on Phase 10-11 and the accepted report snapshot
-data model. Execute it as Phase 18A-18B so snapshot persistence lands before
-frontend grouping consumes it. Phase 18A is the next allowed implementation
-batch after verified Phase 17B.
+Phase 18 depends on Phase 10-11 and the accepted report snapshot data model.
+Execute it as Phase 18A-18B so snapshot persistence lands before frontend
+grouping consumes it. Phase 18A is complete and verified; Phase 18B is the next
+allowed implementation batch.
 
 ### Phase 18A - Report Job Snapshot Data Model
 
-- [ ] Add `reports.job_snapshot_json`.
-- [ ] Save law firm, platforms, search keywords, frequency, task ID, and
+- [x] Add `reports.job_snapshot_json`.
+- [x] Save law firm, platforms, search keywords, frequency, task ID, and
       deleted-task context into the report snapshot for newly generated
       reports.
-- [ ] Backfill `job_snapshot_json` for existing reports whose `job_id` still
+- [x] Backfill `job_snapshot_json` for existing reports whose `job_id` still
       resolves to a monitoring task.
-- [ ] Leave unrecoverable old reports visible with a limited-context fallback
+- [x] Leave unrecoverable old reports visible with a limited-context fallback
       instead of blocking reads.
-- [ ] Preserve `job_id` for active task relations and never use snapshot
+- [x] Preserve `job_id` for active task relations and never use snapshot
       content to bypass owner/workspace permissions.
-- [ ] Verify new reports contain snapshots, backfilled reports remain readable,
+- [x] Verify new reports contain snapshots, backfilled reports remain readable,
       and reports still load after their task is deleted or missing.
 
 ### Phase 18B - Report Center Task Grouping Frontend

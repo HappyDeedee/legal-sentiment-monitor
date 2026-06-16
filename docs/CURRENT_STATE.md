@@ -30,7 +30,8 @@ Refinement is complete and verified. Phase 16 - Email Delivery Data Model
 Preparation is complete and verified. Phase 17A - Email Idempotency And
 Delivery Logic is complete and verified. Phase 17B - Email Delivery History
 Frontend is complete and verified. Phase 18A - Report Job Snapshot Data Model
-is the next allowed execution goal.
+is complete and verified. Phase 18B - Report Center Task Grouping Frontend is
+the next allowed execution goal.
 The active SQLite schema now provides the foundation tables and columns
 required before later implementation work, and the web/API layer now has
 session login, administrator/normal-user roles, menu visibility,
@@ -74,7 +75,9 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   records manual resend separately, keeps report latest-state fields readable,
   and Phase 17B report-center delivery-history UI/API surfaces latest delivery
   state, automatic/manual delivery history, recipient summaries, and
-  customer-safe delivery errors without exposing SMTP secrets.
+  customer-safe delivery errors without exposing SMTP secrets, plus Phase 18A
+  report snapshots store task context for new and backfilled reports while
+  keeping unrecoverable historical reports readable with limited context.
 
 ## Implementation Status
 
@@ -106,14 +109,14 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
 - Phase 16 - Email Delivery Data Model Preparation: complete and verified.
 - Phase 17 - Email Delivery Governance: complete and verified through Phase
   17A-17B.
-- Phase 18 - Report Center Task Grouping: planned as Phase 18A-18B, not
-  implemented.
+- Phase 18 - Report Center Task Grouping: Phase 18A data model is complete and
+  verified; Phase 18B frontend grouping remains planned.
 - Phase 5/6 - Account Environment and Server Login: profile key, timeout, and
   lock-storage decisions are accepted; Phase 5 account environment runtime and
   Phase 6 login-flow runtime are complete.
 
 The documented V1 product roadmap is implemented through Phase 9 in this
-worktree, and the console optimization roadmap is verified through Phase 17B.
+worktree, and the console optimization roadmap is verified through Phase 18A.
 Production pilot handoff still requires live platform, SMTP, and AI-provider
 validation with real deployment credentials.
 
@@ -243,9 +246,9 @@ validation with real deployment credentials.
 
 ## In Progress
 
-- No active implementation batch is currently in progress. Phase 17B
-  report-center delivery-history frontend is complete; Phase 18A report job
-  snapshot data model is the next allowed implementation batch.
+- No active implementation batch is currently in progress. Phase 18A report
+  job snapshot data model is complete; Phase 18B report-center task grouping
+  frontend is the next allowed implementation batch.
 
 ## Known Risks
 
@@ -270,7 +273,8 @@ validation with real deployment credentials.
 - Phase 7 and Phase 8 automated checks do not prove real AI provider, SMTP,
   real platform QR scanning, or real platform crawling behavior; those remain
   deployment and pilot risks.
-- Phase 18 plans depend on future implementation and verification. The
+- Phase 18B report-center task grouping depends on future implementation and
+  verification. The
   current frontend has the complete Phase 11-12 foundation and Phase 13A data
   contract: local static module
   boundary, base desktop shell/navigation/button/card/toolbar styling, shared
@@ -292,7 +296,11 @@ validation with real deployment credentials.
   failures are logged with customer-safe text, and manual resend is recorded
   separately. Phase 17B now surfaces this history in the report center with
   customer-safe delivery errors, confirmation for manual resend, and
-  desktop/tablet/mobile report-center validation.
+  desktop/tablet/mobile report-center validation. Phase 18A now adds
+  `reports.job_snapshot_json`, new-report snapshot persistence, compatible
+  backfill for reports whose `job_id` resolves, deleted-task snapshot context,
+  limited-context flags for unrecoverable old reports, and owner/workspace
+  filtering that does not trust snapshot content.
 - Phase 11 was completed as four verified batches: Phase 11A module boundary
   and tokens, Phase 11B base layout/navigation visual foundation, Phase 11C
   interaction components and floating menus, and Phase 11D responsive
@@ -323,30 +331,61 @@ validation with real deployment credentials.
   Phase 15A, frontend run-center controls are active after Phase 15B, and
   email delivery logs are active schema features after Phase 16. Automatic-send
   idempotency in the scheduler/report delivery workflow is active after Phase
-  17A; report-center delivery-history UI is active after Phase 17B. Report task
-  grouping and report snapshots remain Phase 18 work.
+  17A; report-center delivery-history UI is active after Phase 17B; report
+  snapshots are active after Phase 18A. Report task grouping remains Phase 18B
+  work.
 - The first global Phase 10-18 review found that Phase 13, Phase 17, and Phase
   18 were too coarse as single goals. The plan now splits them into data/API
   and frontend/responsive batches.
 - Phase 10.5 follow-up global review found no remaining P0/P1 blockers.
   Remaining review notes are P2 implementation refinements and do not block
-  Phase 18A.
+  Phase 18A. Phase 18B remains governed by the same accepted plan and must not
+  bypass Phase 18A snapshot/permission behavior.
 
 ## Next Step
 
 Next allowed implementation step:
 
-1. start Phase 18A only;
-2. add `reports.job_snapshot_json` following `DATA_MODEL.md` and
-   `SCHEMA_MIGRATION.md`;
-3. save law firm, platforms, search keywords, frequency, task ID, and
-   deleted-task context into report snapshots for newly generated reports;
-4. backfill snapshots where existing report `job_id` still resolves to a
-   monitoring task;
-5. keep unrecoverable old reports readable as limited-context historical
-   reports and do not implement Phase 18B frontend grouping yet.
+1. start Phase 18B only;
+2. group reports by active monitoring task when `job_id` resolves;
+3. group deleted or missing-task reports using `job_snapshot_json`;
+4. show deleted-task and limited-context labels where appropriate;
+5. preserve report preview, lead detail switching, downloads, delivery
+   history, row actions, and owner/workspace scope on desktop, tablet, and
+   mobile.
 
 ## Latest Verification
+
+Phase 18A report job snapshot data model verification on 2026-06-16:
+
+- Added `reports.job_snapshot_json` to new database creation and compatible
+  existing-database migration.
+- Added shared report job snapshot builders for law firm, platforms, search
+  keywords, frequency, task ID, and deleted-task context.
+- Persisted snapshots for newly generated reports.
+- Backfilled snapshots for existing reports whose `job_id` still resolves to
+  `monitor_jobs`.
+- Preserved `job_id` as the active or historical task relation while marking
+  deleted-task reports from the stored snapshot context.
+- Kept unrecoverable old reports readable as limited-context historical
+  reports.
+- Preserved owner/workspace filtering by resolving reports through the current
+  report/job/creator scope and never using snapshot content to grant access.
+- Exposed customer-safe `job_snapshot`, `job_deleted`,
+  `legacy_without_job_snapshot`, and `limited_context` fields through existing
+  report views for Phase 18B consumption.
+- Did not implement Phase 18B frontend report grouping or grouped report
+  layouts.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before documentation update.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k phase_18a`
+- Result: 2 passed, 233 deselected, 1 warning.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_18a or phase_17b or phase_17a or phase_16 or report_resend_email_updates_status or report_history_keeps_law_firm_snapshot_after_job_deleted or list_reports_limit_zero"`
+- Result: 10 passed, 225 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 235 passed, 3 warnings.
+- `python -m py_compile api\monitoring\database.py api\monitoring\reporting.py api\routers\monitor.py tests\test_monitoring_mvp.py`
+- Result: PASS.
 
 Phase 17B email delivery history frontend verification on 2026-06-16:
 

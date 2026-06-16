@@ -11,6 +11,59 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
 `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-16 - Phase 18A Report Job Snapshot Data Model Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`.
+
+Result:
+
+- Added `reports.job_snapshot_json` to new SQLite database creation and
+  compatible existing-database migration.
+- Added shared report job snapshot builders for task ID, law firm, platforms,
+  search keywords, frequency, and deleted-task context.
+- Persisted snapshots for newly generated reports.
+- Backfilled snapshots for existing reports whose `job_id` still resolves to a
+  monitoring task.
+- Updated task deletion to mark report snapshots with deleted-task context
+  before the task row is removed.
+- Kept unrecoverable old reports readable as limited-context historical
+  reports.
+- Preserved `job_id` for active and historical task relations.
+- Preserved owner/workspace filtering by resolving reports through current
+  report/job/creator scope; snapshot content is never used to grant access.
+- Exposed customer-safe `job_snapshot`, `job_deleted`,
+  `legacy_without_job_snapshot`, and `limited_context` fields for Phase 18B
+  consumption.
+- Did not implement Phase 18B frontend report grouping, grouped layouts, or
+  responsive grouped-report UI.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before documentation update.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k phase_18a`
+- Result: 2 passed, 233 deselected, 1 warning.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_18a or phase_17b or phase_17a or phase_16 or report_resend_email_updates_status or report_history_keeps_law_firm_snapshot_after_job_deleted or list_reports_limit_zero"`
+- Result: 10 passed, 225 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 235 passed, 3 warnings.
+- `python -m py_compile api\monitoring\database.py api\monitoring\reporting.py api\routers\monitor.py tests\test_monitoring_mvp.py`
+- Result: PASS.
+
+Limitations:
+
+- Phase 18A is data-model preparation only. Phase 18B must still implement
+  report-center grouping, deleted-task/limited-context labels, and desktop,
+  tablet, and mobile grouped-report verification.
+- Browser validation was not rerun because Phase 18A has no visual UI change.
+  Existing Phase 17B browser validation remains the latest report-center
+  frontend proof until Phase 18B.
+- Real platform crawling, real SMTP delivery, real AI provider behavior, and
+  production credentials remain production pilot risks inherited from earlier
+  phases.
+
 ## 2026-06-16 - Phase 17B Email Delivery History Frontend Verified
 
 Environment: worktree

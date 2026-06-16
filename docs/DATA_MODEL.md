@@ -25,18 +25,18 @@ Phase 0.5 added:
 Current code should still be checked before implementation work begins, but the
 Phase 0.5 foundation is now an active schema feature in this worktree.
 
-Phase 10-18 console optimization planning has been accepted. Phase 14 and
-Phase 16 have implemented and verified these data-model fields:
+Phase 10-18 console optimization planning has been accepted. Phase 14, Phase
+16, and Phase 18A have implemented and verified these data-model fields:
 
 - run visibility and run type fields on `crawl_runs`;
 - `crawl_runs.archived_at`;
 - `crawl_runs.archived_by`;
 - `email_delivery_logs` for email delivery history and automatic-send
-  idempotency foundation.
-
-Remaining planned additions include:
-
+  idempotency foundation;
 - `reports.job_snapshot_json` for deleted or missing task report grouping.
+
+Remaining planned additions include Phase 18B frontend grouping behavior, not a
+new schema field.
 
 ## Scope
 
@@ -311,9 +311,9 @@ send_status
 job_snapshot_json
 ```
 
-`job_id` may be nullable for old or orphaned report history. Phase 18 should
-add `job_snapshot_json` so report grouping does not depend only on the current
-task row.
+`job_id` may be nullable for old or orphaned report history. Phase 18A adds
+`job_snapshot_json` so report grouping does not depend only on the current task
+row.
 
 Recommended `job_snapshot_json` fields:
 
@@ -331,8 +331,12 @@ Recommended `job_snapshot_json` fields:
 Rules:
 
 - capture the snapshot when the report is created;
+- backfill the snapshot when an existing report's `job_id` still resolves to a
+  monitoring task;
 - if a task is later deleted or unavailable, keep the report grouped by the
   snapshot business context;
+- keep unrecoverable old reports readable as limited-context historical
+  reports;
 - do not use the snapshot to bypass owner/workspace permissions.
 
 ### email_delivery_logs

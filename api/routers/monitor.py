@@ -1548,6 +1548,9 @@ def _customer_view_report(item: dict[str, Any]) -> dict[str, Any]:
         "law_firm_name",
         "display_law_firm_name",
         "job_deleted",
+        "legacy_without_job_snapshot",
+        "limited_context",
+        "job_snapshot",
         "summary",
     }
     return {key: _customer_safe_value(value) for key, value in item.items() if key in allowed}

@@ -254,7 +254,7 @@ This phase is implemented and verified for the console optimization roadmap.
 It prepared the data model only; Phase 17A has connected scheduler/mailer
 delivery logic, automatic-send idempotency, and manual resend logging to this
 foundation. Phase 17B has surfaced scoped delivery history in the report
-center. Phase 18 report snapshots remain separate planned schema work.
+center. Phase 18A report snapshots are now separate implemented schema work.
 
 Create `email_delivery_logs`:
 
@@ -334,8 +334,8 @@ Implementation notes:
 
 ## Phase 18 - Report Job Snapshot
 
-This phase is planned for the console optimization roadmap and is not
-implemented yet.
+Phase 18A is implemented and verified for the console optimization roadmap. It
+prepares the data model for Phase 18B frontend task grouping.
 
 Add field to `reports`:
 
@@ -359,17 +359,34 @@ Recommended snapshot:
 Backfill strategy:
 
 1. For reports whose `job_id` still resolves to `monitor_jobs`, populate the
-   snapshot from the current task row.
+   snapshot from the current task row. This is implemented in compatible
+   schema initialization.
 2. For reports with missing or null `job_id`, leave `job_snapshot_json` null or
    populate only safely recoverable report context.
 3. Report center should label unrecoverable rows as historical reports with
-   limited context, not as current active tasks.
+   limited context, not as current active tasks. Phase 18A exposes the
+   limited-context data flags; Phase 18B must render the final grouped labels.
 
 Compatibility rules:
 
 - do not require `job_snapshot_json` for old reports at first read;
 - never use snapshot content to bypass workspace or owner filtering;
 - keep `job_id` for active task relations.
+- when a task is deleted through the monitor API, update the report snapshot's
+  `deleted_at` context before removing the task row.
+- keep Phase 18A data-model behavior separate from Phase 18B frontend grouping.
+
+Implementation notes:
+
+- new database creation includes `reports.job_snapshot_json`;
+- existing database migration ensures the column exists and backfills
+  resolvable reports;
+- report creation persists a snapshot immediately;
+- report reads expose customer-safe `job_snapshot`, `job_deleted`,
+  `legacy_without_job_snapshot`, and `limited_context` fields for later
+  grouping;
+- tests verify new-report persistence, backfill, deleted-task readability,
+  unrecoverable limited context, and owner/workspace scope.
 
 ## Blocking Decisions
 
