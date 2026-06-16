@@ -100,6 +100,11 @@ short `Superseded by` note rather than deleting history.
   retention cleanup jobs are not added in V1; operators should use the
   diagnostics and backup guidance during pilot operations until a later cleanup
   job is explicitly planned.
+- Completed phases are historical verification snapshots. When a new defect is
+  found in a completed phase's responsibility area, agents should create a
+  follow-up regression-fix CR and task block linked back to the original phase
+  instead of rewriting the old phase as incomplete or mixing the defect into an
+  unrelated later enhancement phase.
 
 ## 2026-06-15
 
@@ -149,3 +154,52 @@ short `Superseded by` note rather than deleting history.
   coverage, and cross-phase impact risks. A Phase 11A-only readiness review is
   not enough to approve execution of the roadmap or generate an execution
   goal.
+
+## 2026-06-16
+
+- Confirmed for CR-035: run interruption must use a first-class terminal
+  `interrupted` status rather than overloading `partial_failed`.
+- Confirmed for CR-035: stale recovery should use evidence first, not elapsed
+  time alone. The recovery check should inspect live task evidence, resource
+  locks, last heartbeat, last completed step, and redacted last error before
+  deciding that a run is interrupted.
+- Confirmed for CR-035: the default stale-heartbeat grace period is 10
+  minutes.
+- Confirmed for CR-035: retry policy should reuse existing crawler retry
+  controls for platform/browser/network failures and apply a separate AI item
+  retry budget; all retries must finish before the run deadline.
+- Confirmed for CR-035: `ai_item_timeout_seconds` should default to 120 seconds
+  and be capped by the remaining run deadline.
+- Confirmed for CR-035: active finalization may convert known unresolved AI
+  evaluation candidates to `pending_review` so report generation can continue.
+  Historical interrupted runs must not have AI rows rewritten unless an
+  operator explicitly approves a repair workflow.
+- Confirmed for CR-035: the run summary and frontend-visible progress should
+  include AI evaluation totals, including candidate count, successful
+  evaluations, failed/fallback evaluations, pending-review count, and
+  unresolved count where available.
+- Confirmed for CR-035: preventing new `crawl_runs.job_id` gaps is the primary
+  fix. Historical `job_id` backfill is only a compatibility fallback and must
+  remain dry-run first.
+- Confirmed for CR-036: historical unexpected email evidence should be
+  preserved by default. Existing `.eml` files, report artifacts, delivery-log
+  rows, and related evidence must not be deleted or mutated without database
+  backup and explicit operator approval.
+- Confirmed for CR-036: real email delivery must remain intentional and
+  attributable. Routine automated tests and local diagnostics must not create
+  hidden real SMTP side effects.
+- Confirmed for CR-036: the deployment gate should be environment-controlled
+  and surfaced read-only in runtime settings so operators can see whether real
+  mail is allowed.
+- Confirmed for CR-036: local manual resend may only send real mail when the
+  explicit real-mail validation policy allows it; otherwise it should remain a
+  non-sending validation path.
+- Deferred beyond CR-036: role-based email sending permissions, normal-user
+  send quotas, and administrator-managed resend limits are a later governance
+  requirement. They should not block the immediate test/local email safety
+  regression fix.
+- Confirmed for CR-039: report email templates should move away from
+  unrestricted free-form HTML editing. Future template management should use a
+  small set of administrator-selectable preset styles, while the generated
+  report body is inserted by the system and each delivered email records the
+  effective template used.

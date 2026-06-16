@@ -3757,6 +3757,129 @@ def test_login_session_route_falls_back_when_qrcode_unavailable(monkeypatch):
             _restore_table(table, snapshot)
 
 
+@pytest.mark.parametrize("platform", ["dy", "xhs", "ks"])
+def test_login_session_failure_reconciles_successful_same_account_check_for_supported_platforms(platform, monkeypatch):
+    init_db()
+    snapshots = {"login_sessions": _snapshot_table("login_sessions"), "social_accounts": _snapshot_table("social_accounts")}
+    try:
+        account = _login_test_account(platform)
+        session = create_login_session(
+            {
+                "platform": platform,
+                "account_id": account["id"],
+                "login_url": get_mediacrawler_login_capability(platform)["login_url"],
+                "profile_key": account["profile_key"],
+                "profile_path": account["profile_path"],
+                "qr_image": "data:image/png;base64,existing",
+            }
+        )
+        monitor_router.update_login_session_status(
+            int(session["id"]),
+            "waiting_scan",
+            "二维码已生成，请扫码登录。",
+            "data:image/png;base64,existing",
+        )
+
+        async def fake_poll_qrcode_login_session(session_id):
+            return {
+                "active": False,
+                "success": False,
+                "status": "qrcode_failed",
+                "message": "二维码浏览器会话不在运行，请重新生成二维码或打开登录窗口。",
+            }
+
+        async def fake_check_social_account_login(account_id, timeout_ms=15000, allow_draft=False):
+            return {
+                "ok": True,
+                "account": update_social_account_check_state(
+                    account_id,
+                    True,
+                    "登录态有效，可供采集任务使用。",
+                    identity={"nickname": "已验活账号"},
+                ),
+            }
+
+        monkeypatch.setattr(monitor_router, "poll_qrcode_login_session", fake_poll_qrcode_login_session)
+        monkeypatch.setattr(monitor_router, "check_social_account_login", fake_check_social_account_login)
+        monkeypatch.setattr(monitor_router, "list_platform_status", lambda: [])
+
+        polled = asyncio.run(monitor_router.login_session(int(session["id"])))
+        refreshed = get_social_account(int(account["id"]))
+    finally:
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+    assert polled["session"]["status"] == "success"
+    assert "通过验活" in polled["session"]["message"]
+    assert polled["account_status"]["status"] == "active"
+    assert refreshed["status"] == "active"
+    assert refreshed["last_error"] == ""
+
+
+def test_login_session_failure_reconciliation_keeps_failure_when_account_check_fails(monkeypatch):
+    init_db()
+    snapshots = {"login_sessions": _snapshot_table("login_sessions"), "social_accounts": _snapshot_table("social_accounts")}
+    try:
+        account = _login_test_account("xhs")
+        session = create_login_session(
+            {
+                "platform": "xhs",
+                "account_id": account["id"],
+                "login_url": "https://www.xiaohongshu.com",
+                "profile_key": account["profile_key"],
+                "profile_path": account["profile_path"],
+            }
+        )
+        monitor_router.update_login_session_status(int(session["id"]), "waiting_scan", "二维码已生成，请扫码登录。")
+
+        async def fake_poll_qrcode_login_session(session_id):
+            return {
+                "active": False,
+                "success": False,
+                "status": "qrcode_failed",
+                "message": "二维码浏览器会话不在运行，请重新生成二维码或打开登录窗口。",
+            }
+
+        async def fake_check_social_account_login(account_id, timeout_ms=15000, allow_draft=False):
+            return {
+                "ok": False,
+                "message": "登录态无效或已失效，请重新扫码登录。",
+                "account": update_social_account_check_state(account_id, False, "登录态无效或已失效，请重新扫码登录。"),
+            }
+
+        monkeypatch.setattr(monitor_router, "poll_qrcode_login_session", fake_poll_qrcode_login_session)
+        monkeypatch.setattr(monitor_router, "check_social_account_login", fake_check_social_account_login)
+        monkeypatch.setattr(monitor_router, "list_platform_status", lambda: [])
+
+        polled = asyncio.run(monitor_router.login_session(int(session["id"])))
+    finally:
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+    assert polled["session"]["status"] == "qrcode_failed"
+    assert "二维码浏览器会话不在运行" in polled["session"]["message"]
+    assert polled["account_status"]["status"] == "limited"
+
+
+def test_xhs_account_check_reports_legacy_profile_path_hint(tmp_path, monkeypatch):
+    init_db()
+    snapshot = _snapshot_table("social_accounts")
+    try:
+        legacy_path = tmp_path / "xhs_legacy_profile"
+        legacy_path.mkdir()
+        account = save_social_account({"name": "小红书采集号", "platform": "xhs", "login_type": "qrcode", "status": "standby"})
+        with get_conn() as conn:
+            conn.execute("UPDATE social_accounts SET profile_path=? WHERE id=?", (str(legacy_path), account["id"]))
+        checked = asyncio.run(account_check_module.check_social_account_login(int(account["id"])))
+    finally:
+        _restore_table("social_accounts", snapshot)
+
+    assert checked["ok"] is False
+    assert checked["status"] == "missing_profile"
+    assert "旧版网页登录态目录" in checked["message"]
+    assert "重新扫码登录" in checked["message"]
+
+
 def test_phase_6_production_mode_hides_local_login_window(monkeypatch):
     monkeypatch.setenv("MONITOR_ALLOW_LOCAL_LOGIN_WINDOW", "false")
 
@@ -7623,10 +7746,19 @@ def test_phase_11c_interaction_helpers_and_floating_menus():
         "data-job-menu-button",
         "data-ai-rule-menu-button",
         "data-report-menu-button",
+        'id="account_action_menu"',
+        'id="job_action_menu"',
+        'id="ai_rule_action_menu"',
+        "function renderAccountActionMenu()",
+        "function renderJobActionMenu()",
+        "function renderAIRuleActionMenu()",
         "positionFloatingMenu(anchor, menu",
     ]:
         assert marker in page
 
+    assert 'id="account_menu_${id}"' not in page
+    assert 'id="job_menu_${id}"' not in page
+    assert 'id="ai_rule_menu_${id}"' not in page
     assert "data-proxy-menu-button" not in page
     assert "data-ai-profile-menu-button" not in page
     assert "data-email-template-menu-button" not in page

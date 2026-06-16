@@ -896,12 +896,15 @@ async def create_platform_login_session(payload: dict[str, Any], admin: dict[str
             session, account_status = await _verify_successful_login_session(session)
         else:
             next_status = _login_state_from_qr_result(qr_result)
-            session = update_login_session_status(
-                int(session["id"]),
-                next_status,
-                str(qr_result.get("message") or _default_login_state_message(next_status)),
-                str(qr_result.get("qr_image") or ""),
-            )
+            if _should_reconcile_login_failure(LOGIN_STATE_PREPARING, next_status, qr_result):
+                session, account_status = await _reconcile_login_session_with_account_check(session, qr_result, next_status)
+            else:
+                session = update_login_session_status(
+                    int(session["id"]),
+                    next_status,
+                    str(qr_result.get("message") or _default_login_state_message(next_status)),
+                    str(qr_result.get("qr_image") or ""),
+                )
         if account_status is None:
             account_status = update_social_account_login_state(
                 int(account["id"]) if account else None,
@@ -945,24 +948,23 @@ async def login_session(session_id: int, admin: dict[str, Any] = AdminUser):
     if qr_poll.get("success"):
         session = update_login_session_status(session_id, LOGIN_STATE_SUCCESS, str(qr_poll.get("message") or "登录成功"))
         session, account_status = await _verify_successful_login_session(session)
-    elif qr_poll.get("expired"):
-        session = update_login_session_status(session_id, LOGIN_STATE_TIMEOUT, str(qr_poll.get("message") or "二维码已过期"))
-    elif qr_poll.get("platform_error"):
-        session = update_login_session_status(session_id, LOGIN_STATE_PLATFORM_ERROR, str(qr_poll.get("message") or "平台登录状态异常"))
     else:
         current_status = normalize_login_state(session.get("status"))
         next_status = _login_state_from_qr_poll(qr_poll, current_status)
-        if next_status != current_status or qr_poll.get("qr_image"):
-            session = update_login_session_status(
-                session_id,
-                next_status,
-                str(qr_poll.get("message") or _default_login_state_message(next_status)),
-                str(qr_poll.get("qr_image") or ""),
-            )
-        elif qr_poll.get("message") and current_status in PENDING_LOGIN_STATES:
-            session = {**session, "status": current_status, "message": qr_poll.get("message")}
+        if _should_reconcile_login_failure(current_status, next_status, qr_poll):
+            session, account_status = await _reconcile_login_session_with_account_check(session, qr_poll, next_status)
         else:
-            session = {**session, "status": current_status}
+            if next_status != current_status or qr_poll.get("qr_image"):
+                session = update_login_session_status(
+                    session_id,
+                    next_status,
+                    str(qr_poll.get("message") or _default_login_state_message(next_status)),
+                    str(qr_poll.get("qr_image") or ""),
+                )
+            elif qr_poll.get("message") and current_status in PENDING_LOGIN_STATES:
+                session = {**session, "status": current_status, "message": qr_poll.get("message")}
+            else:
+                session = {**session, "status": current_status}
     if account_status is None and normalize_login_state(original_status) in TERMINAL_LOGIN_STATES and not qr_poll.get("success"):
         account_status = get_social_account(int(session.get("account_id") or 0)) if session.get("account_id") else None
     elif account_status is None:
@@ -1013,6 +1015,50 @@ async def _verify_successful_login_session(session: dict[str, Any]) -> tuple[dic
     success_message = "登录成功，账号已通过验活。"
     verified_session = update_login_session_status(int(session["id"]), LOGIN_STATE_SUCCESS, success_message, str(session.get("qr_image") or ""))
     return verified_session, check.get("account")
+
+
+def _should_reconcile_login_failure(current_status: str, next_status: str, qr_poll: dict[str, Any]) -> bool:
+    if normalize_login_state(current_status) in TERMINAL_LOGIN_STATES:
+        return False
+    status = normalize_login_state(next_status)
+    if status not in {LOGIN_STATE_QRCODE_FAILED, LOGIN_STATE_TIMEOUT, LOGIN_STATE_PLATFORM_ERROR}:
+        return False
+    if qr_poll.get("needs_verification"):
+        return False
+    return True
+
+
+async def _reconcile_login_session_with_account_check(
+    session: dict[str, Any],
+    qr_poll: dict[str, Any],
+    fallback_status: str,
+) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    account_id = int(session.get("account_id") or 0)
+    message = str(qr_poll.get("message") or _default_login_state_message(fallback_status))
+    if not account_id:
+        return update_login_session_status(int(session["id"]), fallback_status, message, str(qr_poll.get("qr_image") or "")), None
+    try:
+        check = await check_social_account_login(account_id, allow_draft=True)
+    except Exception:
+        return (
+            update_login_session_status(int(session["id"]), fallback_status, message, str(qr_poll.get("qr_image") or "")),
+            update_social_account_login_state(account_id, fallback_status, message),
+        )
+    if check.get("ok"):
+        success_message = "登录成功，账号已通过验活。"
+        verified_session = update_login_session_status(
+            int(session["id"]),
+            LOGIN_STATE_SUCCESS,
+            success_message,
+            str(session.get("qr_image") or qr_poll.get("qr_image") or ""),
+        )
+        return verified_session, check.get("account") or get_social_account(account_id)
+    check_message = str(check.get("message") or "")
+    failure_message = customer_safe_text(check_message if not qr_poll.get("message") else message)
+    return (
+        update_login_session_status(int(session["id"]), fallback_status, failure_message, str(qr_poll.get("qr_image") or "")),
+        check.get("account") or update_social_account_login_state(account_id, fallback_status, failure_message),
+    )
 
 
 @router.delete("/login-sessions/{session_id}")

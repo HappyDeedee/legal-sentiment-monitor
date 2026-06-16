@@ -158,6 +158,18 @@ If the user raises a new requirement, first record it in:
 Then connect it to tasks and tests before or during implementation. Meaningful
 new requirements should not exist only in chat history.
 
+When recording a new requirement, classify it before implementation as a new
+capability, existing feature optimization, regression fix, or documentation
+governance change. Keep the short mandatory rule here and use
+`docs/AGENT_WORKFLOW.md` plus `docs/CHANGE_REQUESTS.md` for the detailed
+classification template, background, purpose, boundaries, non-goals, and
+acceptance criteria.
+
+If a newly found issue belongs to a phase that is already marked complete, do
+not rewrite that historical phase as incomplete. Record a new follow-up
+regression-fix CR and task block linked back to the original phase or
+requirement, then add the missing tests that would have caught the issue.
+
 If a requirement is ambiguous or requires a product, permission, security,
 deployment, account-environment, or data-model decision, ask the user for
 confirmation before treating it as accepted. Draft assumptions may be recorded,

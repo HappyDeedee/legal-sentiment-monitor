@@ -45,6 +45,41 @@ Status values:
 - CR-026: Run Visibility And Noise Filtering Data Model
 - CR-027: Frontend Technology Stack Decision
 - CR-028: Global Phase 10-18 Plan Review Gate
+- CR-029: Login Session Success Reconciliation
+- CR-030: Row Action Menu Clipping Regression Fix
+- CR-031: Run Center Realtime Progress Visibility
+- CR-032: Requirement Classification And Optimization Documentation Rules
+- CR-033: Formal Console Full-Coverage Positive UI Optimization
+- CR-034: Run Detail And AI Evaluation Traceability
+- CR-035: Run Lifecycle Finalization And AI Stuck Recovery Regression Fix
+- CR-036: Test And Local Email Delivery Safety Regression Fix
+- CR-037: Role-Based Email Delivery Governance And Quotas
+- CR-038: Sticky Close Controls For Scrollable Drawers
+- CR-039: Governed Report Email Template Presets And Template Provenance
+- CR-040: Formal Console Page-Level UI/UX Refinement
+
+## Entry Classification Rule
+
+For CR-031 and later, every meaningful change request should state its
+classification before implementation:
+
+- `New Capability`: adds a new user-visible capability, data surface, API,
+  integration, role behavior, or deployment behavior.
+- `Existing Feature Optimization`: improves an existing feature without
+  changing the product boundary. It must name the current feature, the observed
+  limitation, the behavior that must be preserved, and the regression tests
+  needed to keep the old workflow safe.
+- `Regression Fix`: restores intended behavior after a verified breakage. It
+  must describe the broken surface, expected baseline, and the minimal
+  acceptance check that prevents recurrence.
+- `Documentation Governance`: changes how requirements, tasks, decisions, or
+  tests are recorded.
+
+Each new CR should include background, purpose, scope boundary, non-goals when
+useful, related tasks, and acceptance criteria. If classification, scope,
+permission, security, deployment, account/profile, data-model, or customer
+wording impact is unclear, keep the CR as `Proposed` or `Needs Confirmation`
+until the user confirms it.
 
 ## CR-001 - Documentation Governance Bootstrap
 
@@ -1071,3 +1106,1042 @@ Acceptance:
 - `TEST_PLAN.md` includes a Phase 10.5 global plan review checklist;
 - no Phase 11A-only goal is generated until the global Phase 10-18 review has
   no P0/P1 blockers.
+
+## CR-029 - Login Session Success Reconciliation
+
+Date: 2026-06-16
+
+Source: user report during platform account login validation
+
+Module: server login flow and platform account UI
+
+Requirement:
+
+When a server-side QR login session reports QR failure, timeout, platform
+error, or a disappeared browser session, the system must reconcile the result
+against the same account/Profile using MediaCrawler login-state validation. If
+the account/Profile is collectable, the login session and modal must show
+login success instead of QR failure.
+
+Reason:
+
+During mobile QR login, the platform account can be genuinely logged in and
+usable while the monitor-side QR polling session is closed or lost. The UI
+currently trusts the QR session status first, so it can show failure even
+though account detection later verifies a valid login state.
+
+Status: Verified
+
+Related tasks:
+
+- Phase 6 in `TASKS.md`
+
+Acceptance:
+
+- QR-session failure does not override a successful same-account
+  MediaCrawler account/Profile check;
+- Douyin, Xiaohongshu, and Kuaishou use the same reconciliation behavior;
+- verification/captcha/SMS states are not bypassed;
+- frontend login modal displays success when the same account is already
+  collectable;
+- tests cover success reconciliation and non-success fallback behavior.
+
+## CR-030 - Row Action Menu Clipping Regression Fix
+
+Date: 2026-06-16
+
+Source: user screenshot feedback in the monitor console
+
+Module: frontend row action menus
+
+Requirement:
+
+The row "more" action menus in Platform Accounts, Monitoring Tasks, and AI
+Evaluation Rules must render as page-level fixed floating menus. They must not
+be clipped, hidden, or visually covered by table scroll containers, sticky
+columns, or card boundaries.
+
+Reason:
+
+The screenshots showed the "more" menu content being visually obstructed on
+multiple pages. These menus are repeated operational controls, so clipping
+creates an unreliable path for account maintenance, task maintenance, and AI
+rule maintenance.
+
+Status: Verified
+
+Related tasks:
+
+- Phase 11C in `TASKS.md`
+
+Acceptance:
+
+- account, monitoring-task, and AI-rule "more" menus are rendered through
+  page-level floating containers;
+- table rows keep only the trigger buttons, not the popup menu content;
+- menus remain positioned inside the viewport and close on outside click,
+  escape, page change, or successful action;
+- tests protect against reintroducing inline row menu containers.
+
+## CR-031 - Run Center Realtime Progress Visibility
+
+Date: 2026-06-16
+
+Source: user report during live run diagnosis
+
+Module: run center, crawler execution progress, AI evaluation progress
+
+Type: Existing Feature Optimization
+
+Background:
+
+The Run Center already has columns for collected count, new count, suspected
+negative count, high-risk count, and manual-review count. During long
+MediaCrawler runs, however, the table reads `crawl_runs.summary` and the
+summary is initialized to zero until the platform subprocess exits, output
+files are collected, and ingestion finishes. The frontend also stops its active
+run polling after a short fixed window. Operators can therefore see crawler
+logs and output files growing while the Run Center still appears to have no
+collected results.
+
+Purpose:
+
+Make active runs visibly progress in the Run Center without misrepresenting
+provisional crawler output as final ingested results. Operators should be able
+to tell whether a run is collecting, ingesting, evaluating with AI, waiting on
+report/email work, timed out with partial results, or complete.
+
+Requirement:
+
+- While a platform crawler subprocess is still running, the monitor should
+  periodically read safe MediaCrawler output files or equivalent progress
+  signals and update the running run summary with provisional collection
+  progress.
+- Provisional collection progress must be clearly distinguishable from final
+  ingested counts. In-flight, partially written, missing, or malformed output
+  files must not crash the run or produce a false final count.
+- Final collected, filtered, excluded, and new counts remain governed by the
+  existing collect-and-ingest step after the platform attempt exits, unless a
+  later data-model decision explicitly introduces safe partial ingestion.
+- During AI evaluation, the monitor should update progress in batches or time
+  intervals so suspected negative, high-risk, manual-review, and evaluated
+  counts no longer remain stale until the entire evaluation loop finishes.
+- The frontend Run Center should keep polling while visible runs remain active,
+  not only for a short fixed number of rounds, and should render active
+  progress states without clipping or responsive layout regressions.
+- Owner/workspace scope, run logs, stop action, archive/restore behavior,
+  timeout behavior, and customer-safe error wording must be preserved.
+
+Non-goals:
+
+- Do not modify MediaCrawler platform implementations unless a later task
+  proves an output/progress contract is missing.
+- Do not introduce high-concurrency worker orchestration, complex account
+  rotation, captcha/SMS bypass, or streaming web sockets for V1 unless
+  separately approved.
+- Do not expose raw output paths, crawler commands, cookies, profile paths, or
+  platform secrets in customer-facing UI.
+
+Status: Accepted
+
+Related tasks:
+
+- Phase 19 in `TASKS.md`
+
+Acceptance:
+
+- A simulated long platform crawl with growing output files updates Run Center
+  provisional collection progress before the subprocess exits.
+- Malformed or partially written output files are ignored or retried safely and
+  do not mark final counts.
+- After platform completion and ingestion, final collected/new counts match the
+  existing ingest semantics and do not duplicate content.
+- AI evaluation progress updates incrementally and final negative, high-risk,
+  and manual-review counts remain accurate.
+- Frontend polling continues while runs are active and stops after active runs
+  finish.
+- Desktop, tablet, and mobile Run Center layouts show active progress without
+  overlapping controls or hidden actions.
+
+## CR-032 - Requirement Classification And Optimization Documentation Rules
+
+Date: 2026-06-16
+
+Source: user request for future requirement-documentation planning
+
+Module: project governance and agent workflow
+
+Type: Documentation Governance
+
+Background:
+
+The project now receives both new product capabilities and refinements to
+existing features. Treating both as generic "new requirements" makes it harder
+to see whether a request expands product scope or optimizes an existing
+workflow that must preserve previous behavior.
+
+Purpose:
+
+Standardize future requirement documentation so agents first classify a request
+as a new capability, existing feature optimization, regression fix, or
+documentation-governance change, then record background, purpose, scope
+boundary, non-goals, related tasks, and acceptance criteria before coding.
+
+Requirement:
+
+- Future CR entries should include a `Type` field.
+- Existing feature optimizations must name the existing feature, current
+  limitation, preserved behavior, and regression-test boundary.
+- New capabilities must identify added product/API/data/UI/deployment surface,
+  confirmation needs, and non-goals.
+- Regression fixes must identify the broken behavior, expected baseline, and
+  recurrence-prevention test.
+- Documentation-governance changes must update the relevant workflow or check
+  documents and remain backward-compatible with historical CR entries.
+
+Status: Verified
+
+Related tasks:
+
+- Phase 19A in `TASKS.md`
+
+Acceptance:
+
+- `CHANGE_REQUESTS.md` documents the classification rule for CR-031 and later.
+- `AGENT_WORKFLOW.md` tells agents how to classify and bound new requirements
+  and optimization requests.
+- `TRACEABILITY.md` links this governance requirement to a documentation check
+  path.
+
+## CR-034 - Run Detail And AI Evaluation Traceability
+
+Date: 2026-06-16
+
+Source: user request after run-center and report-center workflow review
+
+Module: run center, AI evaluation, lead detail, report center navigation
+
+Type: Existing Feature Optimization
+
+Background:
+
+The Run Center currently shows run rows, counts, failure reasons, and crawler
+logs. AI evaluation records are saved in `ai_evaluations`, and `/leads` can be
+filtered by `run_id` or `report_id`, but the Run Center has no entry for
+per-item AI evaluation details. The Report Center shows final reports and line
+details, yet those line details are tied to report preview behavior and are not
+obvious to discover. During a running task, AI evaluations can already exist
+before a report is generated, so forcing operators to switch to the Report
+Center creates a split process: collection and crawler logs in one page,
+evaluation evidence and leads in another.
+
+Current feasibility finding:
+
+- The AI input business payload is constructed at evaluation time by
+  `build_evaluation_payload(job, content, comments)`.
+- OpenAI-compatible and Anthropic-compatible calls build request messages from
+  the prompt plus that payload.
+- `ai_evaluations` stores final structured fields and a redacted
+  `raw_response`, but it does not persist the exact prompt snapshot, request
+  message snapshot, input payload snapshot, provider/model metadata, duration,
+  or per-attempt error detail.
+- Therefore historical exact input/output traceability is not fully possible
+  for old evaluations; new evaluations need a trace snapshot model.
+
+Purpose:
+
+Give operators a unified per-run detail view where they can inspect the full
+run lifecycle and drill into every AI evaluation record, including business
+input, prompt/request snapshot, structured output, raw/redacted model response,
+and failure/fallback details where permitted.
+
+Requirement:
+
+- Add a Run Center "Run Detail" entry for each run. The detail surface should
+  be grouped by `run_id` and show collection, ingestion, AI evaluation, report
+  generation, and email delivery as one lifecycle.
+- Add an AI Evaluation tab or section inside the run detail surface. It should
+  list every evaluated or evaluation-pending content item for that run, with
+  platform, source keyword, title, evaluation status, related/negative flags,
+  risk level, reason, evidence quotes, recommended action, and evaluated time.
+- Each AI evaluation row should have a detail view showing:
+  - business input: target law firm, aliases, exclude words, platform,
+    keyword, title, description, author, URL, publish time, comment counts, and
+    sampled comments;
+  - prompt/request snapshot: prompt or prompt version, provider/model, and the
+    redacted request payload/messages used for the model call;
+  - output snapshot: structured result, raw/redacted model response, parsing
+    or validation error, fallback reason, duration, and timestamps.
+- For old evaluations without trace snapshots, show an explicit
+  "历史记录未保存完整入参/出参" state instead of reconstructing uncertain input
+  as exact truth.
+- Report Center should remain the final report and email-delivery surface, but
+  report rows should expose an explicit "view leads" path. It should link back
+  to the originating run detail when available.
+- Preserve owner/workspace scope. Normal users may inspect their own run's
+  business-safe evaluation results, while administrator-only debug fields
+  require a clear permission boundary.
+- Redact or omit API keys, authorization headers, cookies, proxy credentials,
+  profile paths, real server paths, and raw account/session data from all
+  customer-facing responses and stored trace views.
+
+Confirmed decisions:
+
+- Confirm whether normal users may see full prompt/request snapshots, or only
+  business-safe input/output summaries.
+- Confirm whether administrators may see raw model responses, or only redacted
+  raw responses.
+- Confirm trace retention policy and size limits for prompt, request, response,
+  and comments snapshots.
+- Confirm whether trace snapshots should be stored in a new table, extension
+  columns on `ai_evaluations`, or a report/run artifact file. The proposed
+  direction is a new database table with capped, redacted JSON fields.
+
+Non-goals:
+
+- Do not expose AI API keys, endpoint credentials, cookies, profile paths, or
+  proxy secrets.
+- Do not make Report Center the primary place to observe running AI evaluation
+  progress.
+- Do not claim old evaluations have exact input snapshots when they were not
+  persisted.
+- Do not introduce a new frontend framework or build pipeline.
+
+Status: Needs Confirmation
+
+Related tasks:
+
+- Phase 20 in `TASKS.md`
+
+Acceptance:
+
+- Run Center exposes a per-run detail surface grouped by run record.
+- The AI Evaluation tab lists all evaluation candidates/results for the run,
+  including records before a report exists.
+- New AI evaluations persist redacted trace snapshots sufficient to inspect
+  input, prompt/request, structured output, raw/redacted response, and failure
+  details.
+- Old evaluations without trace snapshots show an explicit limited-context
+  state.
+- Normal-user and administrator views respect the confirmed permission
+  boundary.
+- Report Center has a clear "view leads" path and can link back to run detail
+  when a report has `run_id`.
+
+## CR-035 - Run Lifecycle Finalization And AI Stuck Recovery Regression Fix
+
+Date: 2026-06-16
+
+Source: live task/run diagnosis and follow-up review of
+`docs/RUN_AI_STUCK_BUG_TODO.md`
+
+Module: run lifecycle, AI evaluation fallback, stale-run recovery, report
+generation, run center status safety
+
+Type: Regression Fix
+
+Background:
+
+Live task `9297` and run `8317` showed that platform collection had completed
+and AI evaluation had processed 250 of 271 collected contents, but
+`crawl_runs.status` remained `running`, `finished_at` stayed null, no report
+was generated, no resource locks remained, and `crawl_runs.job_id` was null
+while `summary.job_id` still pointed to `9297`.
+
+This exposes a gap in the completed Phase 7 run/report/AI behavior: AI failure
+or interruption should degrade to manual review and should not block report
+generation or leave a run indefinitely running. It also exposes missing
+coverage around job identity persistence, background-task finalization,
+stale-run recovery before deadline, and partial AI report generation.
+
+Completed phase handling:
+
+Phase 7 remains a historical verification snapshot. This CR does not rewrite
+Phase 7 as incomplete. It creates a follow-up regression-fix phase under the
+same responsibility area so the newly observed production-like failure can be
+fixed and tested without mixing it into the Phase 19 progress-visibility
+enhancement.
+
+Purpose:
+
+Restore the V1 guarantee that collection and reports survive AI failure. Runs
+must finalize into a terminal or clearly interrupted state, partial collected
+results must remain visible, and no disappeared background task should wait for
+a multi-hour timeout before the UI stops showing ordinary `running`.
+
+Requirement:
+
+- New runs must persist `crawl_runs.job_id`; preventing future `job_id` gaps is
+  the primary fix. Legacy reads must tolerate rows where only `summary.job_id`
+  is available, and historical backfill is only a dry-run-first compatibility
+  fallback.
+- Run finalization must be centralized, idempotent, and concurrency-safe across
+  success, failure, timeout, cancellation, interruption, and partial AI/report
+  paths.
+- Run lifecycle progress must capture step-level state and safe step return
+  values/errors so the frontend can explain whether the task is collecting,
+  ingesting, evaluating with AI, generating a report, sending email, retrying,
+  interrupted, timed out, or failed.
+- Interruption diagnosis must not rely only on a fixed elapsed-time rule. The
+  monitor should first inspect live task evidence, resource locks, last
+  progress heartbeat, last step, retry state, and redacted last error before it
+  marks a run interrupted.
+- Retry policy must be explicit before timeout/fallback behavior: retryable
+  platform/browser/network/AI failures should be retried within the run
+  deadline, while non-retryable failures or deadline exhaustion should finalize
+  into a customer-safe terminal state.
+- Per-item AI invalid JSON, timeout, or unexpected exception must save
+  `pending_review` and continue when the run deadline allows.
+- Active finalization may create `pending_review` fallback rows for known
+  not-yet-evaluated candidates before report generation.
+- Active finalization applies to runs handled by the fixed runtime path after
+  deployment. Historical stuck/interrupted runs, including run `8317`, must not
+  be auto-repaired by startup or scheduler recovery. They require a separate
+  dry-run repair workflow, explicit operator approval, database backup, and
+  rollback notes before AI rows, reports, or terminal status are changed.
+- Running and final summaries must include AI evaluation progress counts, such
+  as total candidates, successful evaluations, failed/fallback evaluations,
+  pending-review count, and unresolved count where available.
+- Stale `running` runs with no live task/lock/recent-progress evidence must be
+  recovered before the original wall-clock deadline.
+- Partial AI/manual-review state must still produce a report when collected
+  content exists.
+- Background exceptions, progress messages, finalization errors, and recovery
+  messages must be redacted before storage or display.
+- Historical run `8317` must not be modified without explicit operator
+  confirmation, backup, and rollback plan.
+
+Open confirmation items:
+
+- Confirmed: `interrupted` is a first-class terminal `crawl_runs.status`.
+- Confirmed: active finalization may auto-create `pending_review` rows for
+  unresolved AI candidates; historical interrupted runs must not rewrite AI
+  rows without explicit operator approval.
+- Confirmed: run summaries should include AI evaluation success/failure and
+  unresolved counts.
+- Confirmed: future `job_id` gaps must be prevented first; historical backfill
+  is fallback-only.
+- Confirmed: stale recovery uses lifecycle evidence before elapsed time:
+  live task evidence, resource locks, last heartbeat, last completed step, and
+  redacted last error.
+- Confirmed: default stale-heartbeat grace period is 10 minutes.
+- Confirmed: retry policy reuses existing crawler retry controls for
+  platform/browser/network failures and applies a separate AI item retry budget
+  within the run deadline.
+- Confirmed: `ai_item_timeout_seconds` defaults to 120 seconds and is capped by
+  the remaining run deadline.
+
+Non-goals:
+
+- Do not implement CR-034/Phase 20 raw AI prompt/request/response traceability.
+- Do not change MediaCrawler platform implementations unless no safe external
+  progress or finalization signal exists.
+- Do not introduce high-concurrency worker orchestration.
+- Do not bypass captcha, slider, SMS, or platform verification.
+- Do not expose API keys, cookies, profile paths, proxy credentials, provider
+  endpoints, local paths, crawler commands, or raw runtime data.
+
+Status: Accepted
+
+Related tasks:
+
+- Phase 7.1 in `TASKS.md`
+- Phase 19B-19D only for the separate progress-visibility enhancement
+
+Acceptance:
+
+- New runs persist `crawl_runs.job_id`; legacy rows with `summary.job_id` remain
+  readable, stoppable, and safely backfillable when resolvable.
+- A simulated run with 271 collected contents and AI interruption at item 251
+  does not remain `running`.
+- AI item failure, timeout, or invalid JSON creates `pending_review` and allows
+  the loop/report to continue when safe.
+- Repeated or concurrent finalization calls produce one terminal state and do
+  not re-open or corrupt a run.
+- Stale `running` rows before deadline recover as the confirmed terminal or
+  interrupted state without releasing unsafe secrets.
+- Partial AI/manual-review state can generate a report and preserve owner and
+  workspace scope.
+- Historical run repair requires explicit operator approval, database backup,
+  and rollback notes.
+
+## CR-036 - Test And Local Email Delivery Safety Regression Fix
+
+Date: 2026-06-16
+
+Source: user report after receiving two unexpected `日报 海安律所` emails while
+no operator-visible task was running
+
+Module: report email delivery, automated tests, local diagnostics, operations
+safety
+
+Type: Regression Fix
+
+Background:
+
+The user received two real emails with subject `日报 海安律所` after the console
+appeared to have no active task. Read-only inspection found that the emails
+were distinct messages, not duplicate mailbox downloads:
+
+- `C:/Users/Administrator/Desktop/日报 海安律所.eml` was sent at
+  `2026-06-16T07:27:11Z` with attachments
+  job_9686_run_8380_20260616_152702.xlsx and
+  job_9686_run_8380_20260616_152702.md;
+- `C:/Users/Administrator/Desktop/日报 海安律所.2eml.eml` was sent at
+  `2026-06-16T08:55:33Z` with attachments
+  job_9759_run_8447_20260616_165528.xlsx and
+  job_9759_run_8447_20260616_165528.md;
+- `email_delivery_logs` contains sent automatic rows for `job_id=9686` /
+  `report_id=3959` and `job_id=9759` / `report_id=3998`;
+- the corresponding report artifact files still exist under
+  `monitor_data/reports/`;
+- current `monitor_jobs`, `crawl_runs`, and `reports` rows for those
+  job/run/report IDs no longer exist, which explains why the operator could not
+  see a matching active task in the console.
+
+The strongest local trigger evidence is
+`tests/test_monitoring_mvp.py::test_run_job_blocks_platform_when_login_window_is_open`.
+That test creates a temporary `海安律所` Douyin job with empty task recipients,
+simulates `login_window_open=True`, blocks the MediaCrawler subprocess, and
+calls `run_monitor_job(job["id"])`. It does not mock the report email delivery
+path. `run_monitor_job` can still create a failed-platform report and call
+`send_report_with_delivery_log(..., send_type="auto")`.
+
+Root cause:
+
+The completed Phase 17 email delivery governance correctly added delivery logs
+and automatic-send idempotency for normal scheduler windows, but it did not add
+a cross-cutting test/local safety boundary for real SMTP side effects. Three
+gaps combined:
+
+- tests that invoke `run_monitor_job` can reach the real mailer unless each
+  test manually monkeypatches the delivery path;
+- task recipients can be empty while `send_report` falls back to global
+  `email_configs.default_recipients`, so a temporary test job can still send to
+  real configured recipients;
+- the UI labels do not make the precedence obvious: SMTP `sender` is the
+  from-address, task recipients are task-specific delivery targets, and global
+  default recipients are only the fallback when a task has no recipients;
+- `email_delivery_logs.recipients_json` currently records only explicit
+  `job.recipients`, not the final effective recipients after default-recipient
+  fallback, so the log can show `[]` even when a real email was delivered to
+  global defaults.
+
+Completed phase handling:
+
+Phase 17 remains a historical verification snapshot for automatic-send
+idempotency and delivery-history behavior. This CR creates a Phase 17.1
+follow-up regression fix under the same email-delivery responsibility area.
+It does not rewrite Phase 17 as incomplete and does not belong to Phase 19 run
+progress or Phase 20 AI traceability.
+
+Purpose:
+
+Prevent automated tests, local diagnostics, and accidental local execution from
+sending real external report emails silently. At the same time, preserve
+explicit real-email validation, production report email delivery, manual
+resend, delivery history, and the V1 guarantee that email failure does not
+block report generation.
+
+Requirement:
+
+- Add a single email-delivery safety gate used by automatic report sends,
+  manual resend, and test-mail paths where appropriate. Routine automated tests
+  and local diagnostics must not create hidden real SMTP side effects.
+- Keep an explicit real-email validation path for production and pilot
+  confidence. A real send is acceptable only when the operator intentionally
+  starts a real-mail validation or the deployment is configured for real
+  production/pilot sending.
+- The sender, trigger source, task/report/run context, effective recipients,
+  and delivery result must be visible enough that an operator can understand
+  why an email was sent even after the task/run record is no longer active.
+- Clarify recipient precedence in the product surface: task recipients override
+  global default recipients; global default recipients are a fallback only; the
+  SMTP sender is separate from all recipient fields.
+- Ensure the automated test suite cannot call `smtplib.SMTP`,
+  `smtplib.SMTP_SSL`, or `EmailMessage.send_message` through an unmocked path.
+  Tests that exercise report generation should use fake delivery outcomes.
+- Update `test_run_job_blocks_platform_when_login_window_is_open` and any other
+  `run_monitor_job` tests so they assert no real mailer call occurs unless the
+  test is explicitly about email delivery.
+- Record the final effective recipients in delivery logs, including recipients
+  derived from default-recipient fallback. If delivery is skipped by the safety
+  gate, record a customer-safe skipped status and reason without SMTP secrets.
+- Define recipient metadata explicitly: `recipients_json` is the task/request
+  recipient snapshot, `effective_recipients_json` is the final resolved
+  delivery target, `effective_recipient_source` identifies where that target
+  list came from, and `trigger_source` identifies why the send path ran.
+- Keep the existing duplicate automatic-send idempotency behavior for
+  scheduler windows.
+- Keep manual resend available in production/pilot mode, but ensure local/test
+  manual resend cannot silently send real mail unless the final confirmed
+  safety policy allows that explicit validation path.
+- Add a read-only remediation note for historical orphan email logs and report
+  artifacts. Do not delete or mutate historical files/logs without explicit
+  operator approval.
+
+Confirmed decisions:
+
+- Confirmed: real email delivery remains available only as intentional
+  production/pilot delivery or an explicit validation action; routine automated
+  tests and local diagnostics must not send hidden real mail.
+- Confirmed: the delivery safety gate is environment-controlled and surfaced as
+  a deployment-locked read-only runtime setting.
+- Confirmed: local manual resend may only send real mail when the explicit
+  real-mail validation policy allows it; otherwise it records a non-sending
+  validation/skipped outcome.
+- Confirmed: historical orphan delivery logs `60` and `81`, the two `.eml`
+  files, and related report artifacts are preserved as evidence by default and
+  must not be mutated without backup and explicit operator approval.
+
+Non-goals:
+
+- Do not remove production automatic report delivery.
+- Do not remove global default recipients; they remain valid production
+  configuration, but their use must be visible in effective-recipient logs.
+- Do not change report generation, report wording, scheduler frequency, or
+  MediaCrawler platform behavior.
+- Do not implement the deferred CR-037 normal-user quota or role-governance
+  layer as part of this safety fix.
+- Do not send any new real email while implementing or testing this fix unless
+  explicitly approved by the operator.
+- Do not delete the two existing `.eml` files, report artifacts, database rows,
+  or delivery logs without explicit operator approval.
+
+Status: Accepted
+
+Related tasks:
+
+- Phase 17.1 in `TASKS.md`
+
+Acceptance:
+
+- Running the full automated test suite with a real SMTP configuration present
+  cannot send external email unless the explicit real-email opt-in is enabled.
+- The `login_window_open` regression test completes without invoking the real
+  SMTP client and still verifies the failed-platform report behavior.
+- Automatic report delivery records the final effective recipients, including
+  default-recipient fallback, in `email_delivery_logs`.
+- When the safety gate blocks delivery, reports still generate and delivery
+  logs show `skipped` or a confirmed equivalent state with a customer-safe
+  reason.
+- Production/pilot mode with explicit opt-in still allows automatic delivery,
+  manual resend, and test mail.
+- Delivery logs distinguish original task/request recipients from final
+  effective recipients and the effective-recipient source.
+- Documentation and tests clearly distinguish production real SMTP validation
+  from local automated tests and diagnostics.
+
+## CR-037 - Role-Based Email Delivery Governance And Quotas
+
+Date: 2026-06-16
+
+Source: user decision discussion during CR-036 confirmation
+
+Module: users and permissions, email delivery, report center, runtime strategy
+
+Type: New Capability
+
+Background:
+
+CR-036 focuses on preventing hidden real-email side effects from tests, local
+diagnostics, and accidental execution. During confirmation, the user clarified
+a broader product direction: email sending should eventually be governed by
+role and administrator policy. Administrators should keep the highest authority
+to configure and use mail delivery, while normal users may be limited by
+administrator-defined rules such as whether they can send or resend reports and
+how many sends are allowed per day.
+
+Purpose:
+
+Add a future permission and quota layer for report email delivery without
+overloading the immediate CR-036 safety fix. This should make email sending
+auditable, role-aware, and controllable by administrators while keeping the V1
+task/report loop simple.
+
+Requirement:
+
+- Administrators should be able to configure whether normal users may send or
+  resend report emails.
+- Administrators may need per-user, per-day, or per-task send quotas for normal
+  users.
+- Manual resend should respect the user's role and the administrator policy.
+- Automatic report delivery should remain governed by task schedule and system
+  email configuration, with clear ownership and audit records.
+- The UI location is not confirmed. Candidate surfaces include a future Users
+  And Permissions page, Runtime Strategy, or a dedicated Email Governance
+  section.
+
+Non-goals:
+
+- Do not implement this in CR-036/Phase 17.1.
+- Do not block the immediate hidden-email safety fix on quota design.
+- Do not add a heavy multi-tenant permission model unless a later confirmed CR
+  expands the product boundary.
+
+Status: Deferred
+
+Related tasks:
+
+- Future phase to be created after user confirms the scope and UI location.
+
+Acceptance:
+
+- Administrator can define normal-user email send/resend policy.
+- Normal-user manual resend follows the configured policy and returns clear
+  messages when blocked.
+- Send attempts are counted and auditable without exposing SMTP secrets.
+- Existing administrator report delivery and manual resend remain available
+  according to confirmed administrator permissions.
+
+## CR-033 - Formal Console Full-Coverage Positive UI Optimization
+
+Date: 2026-06-16
+
+Source: user request to implement the full-coverage frontend positive
+optimization baseline on the latest `main` formal console.
+
+Module: formal monitor frontend
+
+Type: Existing Feature Optimization
+
+Background:
+
+The earlier static prototype improved visual direction but did not preserve
+every formal-console page, button, floating menu, drawer, and business
+interaction. The accepted implementation baseline requires applying only
+positive UI/UX improvements to the latest formal frontend while preserving the
+existing task, run, report, email, and administrator-governance workflows.
+
+Purpose:
+
+Improve the formal console's visual freshness, commercial polish, loading
+feedback, dashboard information priority, floating-menu reliability, and
+responsive behavior without deleting or weakening existing functions.
+
+Preserved behavior:
+
+- Login, operations home, monitoring tasks, platform accounts, proxies, AI
+  access, AI evaluation rules, mail configuration, mail templates, runtime
+  strategy, run center, report center, and system diagnostics remain separate
+  formal pages.
+- Platform-account QR login, browser login, Cookie login, login history,
+  account details, filters, batch actions, and row more menu remain available.
+- Task drawer fields, run log drawer, report preview drawer, delivery history,
+  download links, resend confirmation, resource forms, AI test modal, mail test
+  modal, and email-template iframe preview remain available.
+- Administrator-only resource/system pages remain hidden from normal users by
+  the existing permission logic.
+
+Scope boundary:
+
+- Frontend-only changes in `api/monitor_web/index.html`.
+- No backend API, database schema, permission model, crawler, AI provider,
+  SMTP, or production data changes.
+- No new framework or build step.
+
+Non-goals:
+
+- Do not merge Resource Management or System Configuration pages.
+- Do not replace existing floating menus with side business drawers.
+- Do not simplify platform-account login into a generic configuration dialog.
+- Do not introduce dashboard metrics that require new backend fields.
+
+Status: Verified
+
+Related tasks:
+
+- Formal Console Full-Coverage Positive UI Optimization in `TASKS.md`
+
+Acceptance:
+
+- Dashboard data appears before the 01-05 shortcut flow, and mobile dashboard
+  density is reduced.
+- Loading states use page-shaped skeletons or local loading notes.
+- Secondary drawers and modals keep their original controls while showing
+  button-level loading feedback for account login, resource saves, tests, and
+  template preview actions.
+- Account, task, AI rule, and report row menus render as unclipped floating
+  menus.
+- All formal pages are reachable on desktop and tablet/mobile navigation.
+- Core drawers/modals open and close through visible close, Escape, and
+  backdrop where supported by the existing modal contract.
+- Browser checks cover desktop 1440px, tablet 1024px, and mobile 390px without
+  horizontal page overflow.
+
+## CR-038 - Sticky Close Controls For Scrollable Drawers
+
+Date: 2026-06-16
+
+Source: user report that long scrollable task drawers move the top-right close
+button out of view, forcing the operator to scroll back to the top or click the
+backdrop.
+
+Module: formal monitor frontend drawers and modals
+
+Type: Existing Feature Optimization
+
+Background:
+
+Long configuration drawers, such as task editing, can scroll inside the modal
+body. The footer actions already remain reachable near the bottom, but the
+drawer header and top-right close button scroll away with the content. Backdrop
+click-to-close is useful and should stay available, but it should not be the
+only convenient close path after the operator scrolls down.
+
+Purpose:
+
+Keep dismiss controls reachable throughout long drawer workflows while
+preserving the existing drawer layout, backdrop-close behavior, and bottom
+action bars.
+
+Requirement:
+
+- Make drawer/modal close controls remain visible while long drawer content is
+  scrolled.
+- Preserve backdrop click-to-close where it already exists.
+- Preserve bottom action bars and existing save/close buttons.
+- Apply the behavior consistently to long formal-console drawers including task
+  edit, account, proxy, AI profile, mail config, mail template, run log, and
+  report preview surfaces where applicable.
+- Ensure sticky headers have a solid background, border/shadow separation, and
+  z-index high enough to avoid being covered by form content.
+- Verify desktop, tablet, and mobile viewports so the sticky close control does
+  not overlap content, scrollbars, or bottom action bars.
+
+Non-goals:
+
+- Do not redesign drawer information architecture.
+- Do not remove backdrop close.
+- Do not change backend APIs, permissions, data model, crawler behavior, AI
+  behavior, or SMTP behavior.
+
+Status: Accepted
+
+Related tasks:
+
+- Formal Console Drawer Close Accessibility Follow-up in `TASKS.md`
+
+Acceptance:
+
+- In a long task drawer, scrolling down keeps the top-right close button visible
+  and clickable.
+- The same pattern works for other long drawers/modals that use the shared
+  drawer structure.
+- Clicking the backdrop still closes drawers where that behavior already
+  existed.
+- Browser checks at desktop/tablet/mobile sizes show no severe overlap or
+  clipped close controls.
+
+## CR-039 - Governed Report Email Template Presets And Template Provenance
+
+Date: 2026-06-16
+
+Source: user review of mail template behavior after comparing template preview,
+active template state, and a received real report email.
+
+Module: report email templates, report snapshots, email delivery logs
+
+Type: Existing Feature Optimization
+
+Background:
+
+Current mail delivery resolves templates by task-bound template first and falls
+back to the currently active global template. Formal sending then injects the
+generated report HTML into the resolved template. The mail-template editor
+preview uses sample data, so it may not match a historical real send if the
+operator is looking at a different template or a later active-template state.
+
+Free-form HTML editing also makes it possible to omit required report fields
+such as `{report_html}` or `{report_body}`. In that case the email can be sent
+successfully but miss the actual generated report body. Report snapshots and
+delivery logs do not currently record the effective template id, template name,
+or whether the template came from a task binding or global active-template
+fallback, so historical diagnosis is difficult after templates change.
+
+Purpose:
+
+Make report emails predictable, traceable, and harder to misconfigure by
+recording the exact template used for each send and moving future template
+management toward controlled preset styles that always include the generated
+report body.
+
+Requirement:
+
+- Record the effective email template id, template name, subject template, and
+  template source for each report/email send, distinguishing task-bound template
+  from global active-template fallback.
+- When implemented in the same batch as CR-036, land this provenance metadata
+  with the Phase 17.1C delivery metadata migration to avoid repeated
+  `email_delivery_logs` schema churn. The preset-style product work may remain
+  in Phase 17.2.
+- Include template provenance in report snapshots and email delivery logs so an
+  operator can later explain why a received email differed from a currently
+  previewed template.
+- Make preview semantics explicit: template editor preview uses sample data,
+  while report sends use the generated report HTML for that run.
+- Add validation or guarded rendering so report emails cannot silently omit the
+  generated report body. At minimum, warn or block when a custom template has no
+  `{report_html}` or `{report_body}` placeholder before free-form editing is
+  removed.
+- Move the product direction away from arbitrary free-form HTML editing and
+  toward a small set of administrator-selectable preset styles. Preset styles
+  should control the visual wrapper, while the report body comes from the
+  system-generated report output.
+- Preserve subject template flexibility if it remains useful, but make required
+  body fields system-controlled.
+
+Non-goals:
+
+- Do not redesign the report generation algorithm in this follow-up.
+- Do not remove historical templates or rewrite old email bodies.
+- Do not expose SMTP secrets, API keys, local paths, cookies, proxy credentials,
+  or raw platform credentials in template provenance.
+- Do not make normal users edit template HTML.
+
+Status: Accepted
+
+Related tasks:
+
+- Phase 17.2 Report Email Template Governance in `TASKS.md`
+
+Acceptance:
+
+- A delivered email record shows which template was used and whether it was
+  task-bound or inherited from the active global template.
+- Report snapshots include enough template metadata to diagnose historical
+  sends after templates are edited later.
+- A template that would omit the generated report body is blocked or clearly
+  warned before use.
+- The mail-template UI direction is preset-style selection with
+  system-controlled report body insertion, not unrestricted HTML editing as the
+  long-term product model.
+
+## CR-040 - Formal Console Page-Level UI/UX Refinement
+
+Date: 2026-06-16
+
+Source: user request after comparing the static prototype with the latest
+formal `main` console and asking for a complete, executable documentation plan
+before any code changes.
+
+Module: formal monitor frontend
+
+Type: Existing Feature Optimization
+
+Background:
+
+CR-033 completed a verified frontend-only positive optimization pass and
+preserved the formal `/monitor` console's pages, buttons, drawers, floating
+menus, loading states, and responsive foundations. A later review compared the
+static prototype at `design-prototypes/console-review/` with the latest formal
+frontend and found that the prototype has useful visual ideas but cannot be
+used as a functional baseline because it omits or simplifies many formal
+business workflows.
+
+The latest formal frontend is functionally stronger than the prototype, but it
+still has design debt: the Operations Home can still feel like onboarding
+because of the `01-05` shortcut block, navigation hierarchy can be clearer,
+many pages use similar white-card surfaces, status labels are not yet a fully
+unified business language, and dense administrator workflows can be made more
+commercial, readable, and efficient without removing functionality.
+
+Purpose:
+
+Create a fine-grained, page-level UI/UX refinement roadmap for the formal
+console so later implementation can improve visual quality, commercial polish,
+information hierarchy, interaction efficiency, responsive behavior, and state
+feedback while preserving every existing business workflow.
+
+Requirement:
+
+- Use `docs/FORMAL_CONSOLE_UI_REFINEMENT_PLAN.md` as the execution planning
+  reference for this CR.
+- Treat the formal `/monitor` frontend as the only implementation baseline.
+- Treat the static prototype as visual reference only, not as a functional
+  baseline.
+- Preserve all formal pages, buttons, filters, batch actions, row actions,
+  floating menus, drawers, modals, loading feedback, confirmation flows, role
+  visibility rules, and task/run/report/email/account workflows.
+- Split implementation into small workstreams:
+  global shell/design tokens, navigation hierarchy, Operations Home,
+  Monitoring/Task Drawer, Platform Accounts, Proxies, AI Access, AI Rules,
+  Mail Configuration, Mail Templates, Runtime Strategy, Run Center, Report
+  Center, System Diagnostics, Login, and cross-viewport verification.
+- For each page, define what must be preserved, what may be visually refined,
+  what must not be changed, how it should be tested, and what acceptance means.
+- Prevent the prototype-observed layout failure from entering production: no
+  dashboard card, closed-loop track, dense status card, or operational summary
+  may squeeze Chinese text into one-character vertical columns, overlap
+  neighboring content, or hide required actions at the accepted desktop,
+  tablet, or mobile viewports.
+- Keep the work frontend-only unless a later accepted CR explicitly changes
+  backend/API/data-model scope.
+
+Preserved behavior:
+
+- Login, Operations Home, Monitoring Tasks, Platform Accounts, Proxies, AI
+  Access, AI Evaluation Rules, Mail Configuration, Mail Templates, Runtime
+  Strategy, Run Center, Report Center, and System Diagnostics remain separate
+  formal pages.
+- Platform-account QR login, local-window fallback where allowed, Cookie login,
+  login records, account identity/details, filters, batch actions, and row more
+  menu remain available.
+- Task drawer fields, administrator advanced task settings, sample-fill, clear,
+  save, and close remain available.
+- Run Center filters, pagination, log drawer, stop, archive, and restore remain
+  available.
+- Report Center grouping, preview, lead detail, delivery history, resend, and
+  HTML/Excel/Markdown downloads remain available.
+- AI connection test, AI rule test, mail test, mail-template iframe preview,
+  runtime strategy grouped tables, and system diagnosis actions remain
+  available.
+- Administrator-only pages remain hidden from normal users by existing
+  permission logic.
+
+Scope boundary:
+
+- Planning document and later frontend-only changes in:
+  `api/monitor_web/index.html`, `api/webui/monitor/monitor.css`, and
+  `api/webui/monitor/monitor.js`.
+- No backend API, database schema, permission model, crawler behavior,
+  AI-provider behavior, SMTP behavior, scheduler behavior, or deployment
+  behavior changes.
+- No new frontend framework, build step, or required external UI library.
+
+Non-goals:
+
+- Do not reopen or mark CR-033 incomplete.
+- Do not replace the formal frontend with the static prototype.
+- Do not merge Resource Management or System Configuration pages.
+- Do not simplify Platform Accounts into a generic configuration modal.
+- Do not delete QR login, Cookie login, login history, external account
+  identity details, filters, batch management, floating menus, report
+  downloads, or runtime grouped tables.
+- Do not add new metrics, charts, or progress fields that require new backend
+  data.
+- Do not implement the deferred `Users And Permissions` page in this CR; if the
+  user confirms that missing page should be implemented, record it as a
+  separate capability or follow-up CR.
+
+Status: Accepted
+
+Related tasks:
+
+- Phase 21 in `TASKS.md`
+
+Acceptance:
+
+- The execution plan identifies the implementation files, preserved behaviors,
+  allowed refinements, forbidden changes, test method, and acceptance standard
+  for every existing formal console page and major secondary surface.
+- The plan explicitly states that the static prototype is visual reference
+  only and cannot be used to remove formal-console functions.
+- The plan includes desktop `1440x900`, tablet `1024x768`, and mobile
+  `390x844` verification requirements.
+- Phase 21 verification treats one-character vertical text wrapping, content
+  overlap, hidden primary actions, and horizontal overflow as hard failures for
+  dashboard, run/report, resource, and secondary overlay layouts.
+- `TASKS.md`, `TEST_PLAN.md`, and `TRACEABILITY.md` link this CR to the
+  planning document and future verification areas.
+- No production frontend code is changed as part of this planning-only update.

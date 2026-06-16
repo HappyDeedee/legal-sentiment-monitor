@@ -88,6 +88,47 @@ lock_expires_at = crawl_runs.deadline_at + lock_cleanup_buffer_seconds
 Expired locks are recovery signals only. A new run must not directly reuse an
 expired lock before recovery verifies the owning run state.
 
+Confirmed for CR-035:
+
+- `ai_item_timeout_seconds` bounds one AI evaluation item, defaults to 120
+  seconds, and is additionally capped by the remaining run deadline;
+- `ai_item_retry_count` defaults to 1 and bounds per-item AI retry attempts.
+  It is per AI candidate, not a shared run-wide budget;
+- `stale_run_heartbeat_grace_seconds` defaults to 600 seconds, but stale
+  recovery must not rely on time alone. The recovery algorithm must first
+  inspect lifecycle phase, last progress heartbeat, live task evidence,
+  resource locks, retry state, last safe return value, and redacted last error;
+- add these settings to the editable runtime settings table,
+  `monitor.example.yaml`, and the runtime settings implementation in one
+  synchronized change;
+- `stale_run_heartbeat_grace_seconds` belongs to the Scheduler/Recovery runtime
+  settings group. It controls when recovery may consider a running row stale
+  after the last heartbeat, but it never overrides live-task evidence.
+
+Retry coordination:
+
+- existing crawler retry settings apply to platform subprocess, browser, and
+  network-level attempt failures;
+- `ai_item_retry_count` applies separately to each AI evaluation item for
+  provider errors, invalid responses, or per-item timeout;
+- both crawler retries and AI item retries must stop when the run reaches
+  `crawl_runs.deadline_at`;
+- if the deadline is reached during a retry wait or retry attempt, finalization
+  should stop further retries and use the confirmed timeout/interrupted/fallback
+  path instead of starting another attempt.
+
+Confirmed for CR-036:
+
+- `MONITOR_ALLOW_REAL_EMAIL_SEND` controls real SMTP side effects and defaults
+  to false;
+- when false, routine automated tests and local diagnostics should not send
+  hidden real mail, even when the active database contains complete SMTP
+  settings and default recipients;
+- the UI should show this setting as deployment-locked and read-only, and
+  should not let ordinary users enable real external email from the browser;
+- the safety gate must preserve report generation and delivery-log recording
+  when it skips external sending.
+
 ## Read-Only Or Deployment-Locked Settings
 
 | Setting | Reason |
@@ -98,6 +139,7 @@ expired lock before recovery verifies the owning run state.
 | encryption_key_path | security-sensitive |
 | browser_executable_path | deployment/runtime concern |
 | local_login_window_fallback | development-only login fallback |
+| real_email_delivery | prevents tests/local diagnostics from sending external mail |
 | service_port | process manager concern |
 | cors_origins | deployment/security concern |
 | worker_count | scheduler duplication risk |

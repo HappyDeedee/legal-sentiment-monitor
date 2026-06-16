@@ -108,6 +108,55 @@ Confirmed:
 
 - use the flexible key-value `system_settings` table for V1.
 
+### Proposed Phase 20 - Add AI Evaluation Trace Snapshots
+
+Status: Proposed for CR-034, pending confirmation. Do not implement until the
+role visibility, raw/redacted response visibility, retention, size limit, and
+storage-shape questions are confirmed.
+
+Proposed compatible migration:
+
+```text
+CREATE TABLE ai_evaluation_traces (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    workspace_id INTEGER NOT NULL,
+    run_id INTEGER NOT NULL,
+    raw_content_id INTEGER NOT NULL,
+    ai_evaluation_id INTEGER,
+    attempt_index INTEGER NOT NULL DEFAULT 1,
+    status TEXT NOT NULL,
+    provider TEXT NOT NULL DEFAULT '',
+    model TEXT NOT NULL DEFAULT '',
+    prompt_snapshot TEXT NOT NULL DEFAULT '',
+    input_payload_json TEXT NOT NULL DEFAULT '{}',
+    request_snapshot_json TEXT NOT NULL DEFAULT '{}',
+    response_snapshot TEXT NOT NULL DEFAULT '',
+    parsed_result_json TEXT NOT NULL DEFAULT '{}',
+    error_message TEXT NOT NULL DEFAULT '',
+    duration_ms INTEGER,
+    started_at TEXT,
+    finished_at TEXT,
+    created_at TEXT NOT NULL
+)
+```
+
+Recommended indexes after confirmation:
+
+```text
+workspace_id + run_id + raw_content_id
+workspace_id + ai_evaluation_id
+workspace_id + status + created_at
+```
+
+Compatibility:
+
+- do not backfill exact prompt/request snapshots for historical evaluations
+  because they were not persisted at evaluation time;
+- historical evaluations should stay readable through `ai_evaluations` and be
+  marked limited-context in the run-detail UI;
+- migration must be additive and must not rewrite or delete existing
+  `ai_evaluations`, `raw_contents`, or `raw_comments` rows.
+
 ### Step 5 - Add Run Timeout And Lock Fields
 
 Add run-level timeout tracking to `crawl_runs`:
@@ -127,6 +176,60 @@ Rules:
   `startup_recovery`, or another safe internal reason;
 - V1 should support `status = "timeout"` for runs that exceed the run-level
   wall-clock deadline.
+
+CR-035 confirmed compatibility:
+
+- support `status = "interrupted"` as a first-class terminal state for stale or
+  disappeared background tasks that cannot safely complete normal
+  finalization;
+- keep `partial_failed` for runs that complete with known partial failures;
+- treat new `crawl_runs.job_id` persistence as the primary fix and historical
+  backfill as fallback-only;
+- do not add dedicated progress columns in the first CR-035 fix unless needed;
+  store `phase`, `phase_started_at`, `progress_updated_at`, retry state, last
+  safe result or return value, redacted last error, and progress snapshots in
+  `crawl_runs.summary`;
+- add dry-run-first migration/backfill logic for historical rows where
+  `crawl_runs.job_id` is null and `summary.job_id` resolves to an existing
+  `monitor_jobs.id`;
+- skip unresolved rows and log a redacted summary instead of guessing.
+
+### Step 5A - Add Email Delivery Metadata Follow-Ups
+
+CR-036 and CR-039 should share one additive email-delivery metadata migration
+when implemented together. Add nullable or default-empty fields to
+`email_delivery_logs`:
+
+```text
+trigger_source TEXT NOT NULL DEFAULT ''
+effective_recipients_json TEXT NOT NULL DEFAULT '[]'
+effective_recipient_source TEXT NOT NULL DEFAULT ''
+email_template_id INTEGER
+email_template_name TEXT NOT NULL DEFAULT ''
+email_template_source TEXT NOT NULL DEFAULT ''
+email_subject_template TEXT NOT NULL DEFAULT ''
+```
+
+Compatibility:
+
+- existing `recipients_json` remains readable as the historical task/request
+  recipient snapshot;
+- for historical rows, `effective_recipients_json` may be backfilled from
+  `recipients_json` only when that value is non-empty and clearly represented
+  the final delivery target;
+- historical rows whose final recipient list is not recoverable should keep
+  `effective_recipients_json = []` and use a customer-safe limited-context
+  label rather than guessing;
+- template provenance for historical rows is best-effort only. If the exact
+  template cannot be proven from persisted data, leave the template fields empty
+  or mark the source as limited context;
+- the migration must not store raw SMTP secrets, raw template HTML, cookies,
+  proxy credentials, profile paths, API keys, or local report paths in delivery
+  metadata.
+
+CR-039 also extends new `reports.job_snapshot_json` payloads with
+customer-safe email-template provenance. Existing report snapshots should not
+be rewritten unless a dry-run backfill can prove the exact template used.
 
 Confirmed fields for account/profile locking:
 
@@ -270,6 +373,8 @@ sent_at TEXT NULL
 status TEXT NOT NULL
 error_message TEXT NULL
 recipients_json TEXT NULL
+trigger_source TEXT NULL
+effective_recipients_json TEXT NULL
 created_at TEXT NOT NULL
 ```
 
@@ -319,6 +424,10 @@ Compatibility rules:
 - keep existing report `email_status` and `email_error` as latest-state fields
   during migration;
 - backfill is optional for old reports because old attempts were not recorded;
+- CR-036 adds `trigger_source` and `effective_recipients_json` compatibly for
+  new and future delivery logs;
+- existing delivery rows can backfill `trigger_source` from known `send_type`
+  where clear, but should not guess unknown effective recipients;
 - do not store SMTP credentials or full secret configuration in delivery logs.
 
 Implementation notes:
@@ -329,6 +438,9 @@ Implementation notes:
 - invalid legacy `send_type` values are normalized to `auto`;
 - invalid legacy `status` values are normalized to `pending`;
 - missing `recipients_json` values are normalized to `[]`;
+- missing `trigger_source` values can be normalized from `send_type` where
+  possible;
+- missing `effective_recipients_json` values become `[]` unless safely known;
 - tests verify the fields, indexes, partial unique index behavior, window-key
   rules, old report email fields, and delivery-log secret redaction.
 

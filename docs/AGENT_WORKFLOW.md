@@ -72,19 +72,54 @@ is an execution gate, not a substitute for the global roadmap review.
 When the user gives a new requirement:
 
 1. Decide whether it is already covered by existing documents.
-2. If it is new or changes scope, add an entry to `CHANGE_REQUESTS.md`.
-3. Update the `CHANGE_REQUESTS.md` Quick Index when adding a new CR.
-4. If it is ambiguous, mark it as `Proposed` and ask the user to confirm.
-5. If it changes product behavior, update `PRODUCT_REQUIREMENTS.md` only after
+2. Classify it before implementation:
+   - `New Capability` for a new user-visible capability, API, data surface,
+     integration, role behavior, or deployment behavior;
+   - `Existing Feature Optimization` for improving an existing workflow while
+     preserving its current product boundary and old working behavior;
+   - `Regression Fix` for restoring intended behavior after a verified
+     breakage;
+   - `Documentation Governance` for changing requirement, task, decision, or
+     verification-document rules.
+3. If it is new, changes scope, or materially optimizes an existing feature,
+   add an entry to `CHANGE_REQUESTS.md`.
+4. Update the `CHANGE_REQUESTS.md` Quick Index when adding a new CR.
+5. Each CR should include background, purpose, requirement type, scope
+   boundary, non-goals when useful, related tasks, and acceptance criteria.
+6. For `Existing Feature Optimization`, name the current feature, observed
+   limitation, behavior that must be preserved, rollback boundary, and
+   regression tests.
+7. For `New Capability`, name the added product/API/data/UI/deployment surface,
+   dependencies, confirmation needs, and explicit non-goals.
+8. For `Regression Fix`, name the broken surface, expected baseline behavior,
+   minimal fix boundary, and recurrence-prevention test.
+9. If it is ambiguous, mark it as `Proposed` and ask the user to confirm.
+10. If it changes product behavior, update `PRODUCT_REQUIREMENTS.md` only after
    the decision is clear, or mark the section as proposed.
-6. If it changes UI rules, update `UI_UX_GUIDELINES.md` only after the decision
+11. If it changes UI rules, update `UI_UX_GUIDELINES.md` only after the decision
    is clear, or mark the section as proposed.
-7. If it changes a product or technical decision, append to `DECISIONS.md`
+12. If it changes a product or technical decision, append to `DECISIONS.md`
    after user confirmation.
-8. Add or update tasks in `TASKS.md`.
-9. Add or update rows in `TRACEABILITY.md`.
+13. Add or update tasks in `TASKS.md`.
+14. Add or update rows in `TRACEABILITY.md`.
 
 Do not implement meaningful new scope only from chat memory.
+
+## Completed Phase Follow-up
+
+When a new defect is found in a phase that is already marked complete:
+
+1. Do not rewrite the historical phase as incomplete or delete older
+   verification notes.
+2. Classify the new work as a `Regression Fix`.
+3. Add a new CR in `CHANGE_REQUESTS.md`.
+4. Add a follow-up task block under the original responsibility area, for
+   example `Phase 7.1` for a Phase 7 run/report/AI defect.
+5. Link the follow-up CR back to the original requirement in
+   `TRACEABILITY.md`.
+6. Add tests that would have caught the defect.
+7. Update `CURRENT_STATE.md` to explain that the old phase remains a historical
+   verification snapshot and the new work is a follow-up fix.
 
 ## Confirmation Gate
 

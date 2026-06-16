@@ -45,6 +45,10 @@ The command should be safe to run locally and in CI. It should not modify files.
     schema, auth, settings, profile, and deployment work.
 14. `monitor.yaml` is ignored by `.gitignore`, while `monitor.example.yaml`
     remains committed.
+15. For CR-031 and later, new change requests include a requirement
+    classification and enough background, purpose, boundary, task, and
+    acceptance context for future agents to distinguish new capabilities from
+    existing feature optimizations or regression fixes.
 
 ## Suggested Output
 

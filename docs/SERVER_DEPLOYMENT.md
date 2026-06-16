@@ -169,6 +169,35 @@ Restore validation must include:
 - System Diagnostics shows acceptable database, disk-space, backup-set,
   retention-setting, account-alert, and proxy-alert checks before pilot use.
 
+## Email Delivery Evidence Management
+
+Unexpected report emails, orphan delivery logs, and detached report artifacts
+must be treated as evidence first, not as cleanup candidates.
+
+Read-only review steps:
+
+1. identify the delivery-log row and note `job_id`, `report_id`, recipient
+   snapshot, send time, and delivery status;
+2. locate the matching report artifact files and any exported `.eml` message;
+3. check whether the original job, run, or report rows still exist;
+4. classify the case as orphaned only when the delivery record no longer has a
+   live job/report owner in the database;
+5. preserve the database row, report file, and message file together until an
+   operator explicitly approves any mutation.
+
+Default policy:
+
+- do not delete, annotate, or rewrite historical delivery evidence during
+  investigation;
+- back up the database and the relevant report/email artifacts before any
+  approved mutation;
+- record the approval reason, operator, backup location, and rollback plan
+  before taking action;
+- keep restored or archived reports readable for normal support review.
+
+If cleanup is ever approved, handle it as a separate operator-gated repair
+task. Evidence review itself should remain read-only.
+
 ## Encryption Key Management
 
 V1 behavior:

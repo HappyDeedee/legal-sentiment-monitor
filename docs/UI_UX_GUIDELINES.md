@@ -211,6 +211,35 @@ Run Center:
 - desktop: table with pagination and filters;
 - tablet: hide secondary columns and keep status/actions visible;
 - mobile: cards or summary rows with status, task, platform, time, and actions.
+- active runs should show compact progress states such as collecting,
+  ingesting, AI evaluating, report generating, email sending, timed out, or
+  complete without forcing operators to open logs.
+- interrupted runs should use a distinct terminal state label and business-safe
+  helper text. Do not display them as ordinary running rows.
+- provisional counts must be visually distinguishable from final counts using
+  a label, status tag, helper text, or equivalent non-color-only cue.
+- recommended active polling is every 5 seconds while visible rows contain an
+  active status. Polling should stop when visible rows are all terminal:
+  success, failed, partial failed, timeout, cancelled, or interrupted.
+- AI progress should be shown as evaluated over total while active, such as
+  `250 / 271`, and as a final evaluated count when complete.
+- progress refresh must not resize table rows or cards in a way that causes
+  controls to jump, overlap, or become hidden on desktop, tablet, or mobile.
+- stop and log actions remain reachable while progress values refresh.
+- status labels should use the following Chinese terms unless a later product
+  copy decision changes them: `interrupted` = "执行中断",
+  `partial_failed` = "部分失败", `timeout` = "运行超时",
+  `cancelled` = "已取消", `success` = "已完成".
+- a recommended provisional-progress pattern is "采集中 250（临时）" or an
+  equivalent spinner/tag treatment. Final counts should drop the temporary
+  indicator, for example "已采集 271".
+- proposed Phase 20 run detail should use a drawer or page-level detail surface
+  rather than adding a large nested table directly inside the run list.
+- AI evaluation detail should use a compact list plus a separate detail panel
+  for input/output snapshots so long prompt, request, response, and evidence
+  text do not overwhelm the run list.
+- debug-only fields must be visually separated from business-safe evaluation
+  fields and must not appear for roles that are not allowed to inspect them.
 
 Report Center:
 
@@ -218,12 +247,25 @@ Report Center:
 - tablet: grouped list with report detail panel;
 - mobile: task groups as expandable sections, report preview in a modal or
   separate detail view.
+- report lead details should have an explicit "view leads" entry, not only be
+  triggered as a side effect of report preview.
 
 Action menus:
 
 - render above scroll containers with fixed or portal-style positioning;
 - keep a minimum touch target;
 - never depend on the table row height changing after menu open.
+
+Scrollable drawers and modals:
+
+- long drawer headers should remain sticky within the drawer so the close
+  button stays reachable while content scrolls;
+- sticky headers need a solid background and border or shadow separation so
+  form content does not show through;
+- z-index layering inside a drawer should keep the sticky header above normal
+  form content but below in-drawer floating menus or dropdown overlays;
+- bottom action bars should remain reachable and must not overlap the sticky
+  header, form controls, or scrollbars.
 
 ## Runtime Strategy Page
 

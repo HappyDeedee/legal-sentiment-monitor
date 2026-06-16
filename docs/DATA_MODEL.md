@@ -258,7 +258,33 @@ archived_by
 ```
 
 Run status should include `timeout` for runs stopped by the run-level wall-clock
-deadline. Timeout runs may still have partial results.
+deadline. Timeout runs may still have partial results. CR-035 confirms
+`interrupted` as a first-class terminal status for runs whose execution path
+stopped or disappeared before normal finalization could complete.
+
+CR-035 confirmed:
+
+- add `interrupted` as a first-class terminal run status for cases where the
+  background task is no longer active before normal success/failure/timeout
+  finalization can complete;
+- keep `partial_failed` for runs that completed with known partial failures;
+- active finalization may create `pending_review` rows for known unresolved AI
+  candidates when safe, while historical interrupted runs must not rewrite AI
+  rows without an explicit repair workflow;
+- run summaries should include AI progress counts for total candidates,
+  successful evaluations, failed/fallback evaluations, pending-review items,
+  and unresolved items where available;
+- preventing future `crawl_runs.job_id` gaps is the primary fix; historical
+  backfill is compatibility fallback only.
+- store run phase, heartbeat, and progress snapshots in `crawl_runs.summary`
+  unless a later accepted migration adds dedicated columns;
+- read legacy rows compatibly when `crawl_runs.job_id` is null but
+  `summary.job_id` resolves to an existing `monitor_jobs.id`;
+- allow a dry-run-first backfill from `summary.job_id` into `crawl_runs.job_id`
+  only for resolvable historical rows;
+- represent lifecycle step result, retry state, and interruption cause in a
+  customer-safe way for frontend display;
+- do not use snapshot or summary fields to bypass workspace or owner scope.
 
 Phase 10-18 run-center governance fields:
 
@@ -297,6 +323,55 @@ Unique constraint:
 ```text
 workspace_id + platform + content_id
 ```
+
+### ai_evaluation_traces
+
+Status: Proposed for CR-034, pending confirmation. Do not implement until the
+permission, retention, and storage-shape confirmation items are resolved.
+
+Purpose:
+
+Persist exact AI evaluation trace snapshots for new evaluations so operators
+can inspect the input/output used for a specific run and content item without
+reconstructing historical requests from mutable rules or current content.
+
+Proposed fields:
+
+```text
+id
+workspace_id
+run_id
+raw_content_id
+ai_evaluation_id
+attempt_index
+status
+provider
+model
+prompt_snapshot
+input_payload_json
+request_snapshot_json
+response_snapshot
+parsed_result_json
+error_message
+duration_ms
+started_at
+finished_at
+created_at
+```
+
+Rules:
+
+- all prompt, request, response, and error fields must be redacted before
+  storage;
+- API keys, authorization headers, cookies, proxy credentials, profile paths,
+  account-session data, and server-local paths must never be stored in trace
+  snapshots;
+- prompt, request, response, and comment snapshots must follow the confirmed
+  size and retention limits;
+- normal-user APIs should return business-safe summaries unless CR-034
+  confirms broader visibility;
+- old evaluations without trace snapshots remain readable through
+  `ai_evaluations` and should display a limited-context message.
 
 ### reports
 
@@ -356,6 +431,13 @@ sent_at
 status
 error_message
 recipients_json
+trigger_source
+effective_recipients_json
+effective_recipient_source
+email_template_id
+email_template_name
+email_template_source
+email_subject_template
 created_at
 ```
 
@@ -389,11 +471,58 @@ Idempotency rules:
   key;
 - delivery attempts should preserve recipient summary and failure text without
   storing SMTP secrets;
+- CR-036 adds `trigger_source` so delivery history can distinguish
+  `scheduler_auto`, `manual_resend`, `test_mail`, `diagnostic`, or another
+  confirmed trigger source;
+- CR-036 keeps `recipients_json` as the task-specific recipients supplied by
+  `monitor_jobs` or the request context. It may be empty when a task relies on
+  global default recipients;
+- CR-036 adds `effective_recipients_json` as the final recipient list that the
+  delivery path attempted to use after task recipients, global
+  default-recipient fallback, or a test/diagnostic target is resolved;
+- CR-036 adds `effective_recipient_source` so operators can distinguish
+  `task_recipients`, `global_default_fallback`, `test_target`,
+  `manual_override`, or another confirmed source. `trigger_source` answers why
+  the send path ran; `effective_recipient_source` answers where the recipient
+  list came from;
+- CR-039/Phase 17.2A should land together with the CR-036 delivery metadata
+  migration when practical. It adds `email_template_id`,
+  `email_template_name`, `email_template_source`, and `email_subject_template`
+  to record the effective template used for the delivery without storing raw
+  template HTML;
 - Phase 17A connects scheduler/report delivery logic to this schema so
   automatic sends are idempotent by schedule window, duplicate automatic
   attempts are skipped, automatic failures are logged without blocking report
   generation, and manual resend uses separate `manual_resend` rows. Phase 17B
   still needs to expose this delivery history in the report center.
+
+Template provenance values:
+
+- `email_template_source = task_bound`: task has an explicit
+  `email_template_id`;
+- `email_template_source = active_global_fallback`: task has no explicit
+  template and delivery used the current active global template;
+- `email_template_source = default_renderer`: no persisted template was used
+  and the system default report email renderer produced the body.
+
+Report snapshots:
+
+`reports.job_snapshot_json` should remain a customer-safe historical snapshot.
+CR-039 adds template provenance to the snapshot for new reports:
+
+```json
+{
+  "email_template": {
+    "id": 123,
+    "name": "Standard report",
+    "source": "task_bound",
+    "subject_template": "..."
+  }
+}
+```
+
+Do not store raw HTML template bodies in `job_snapshot_json`; store only the
+metadata needed to explain which template was used.
 
 ## Migration Principles
 

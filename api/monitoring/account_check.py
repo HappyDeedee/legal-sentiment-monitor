@@ -14,7 +14,7 @@ from playwright.async_api import Page, async_playwright
 from tools import utils
 from tools.browser_launcher import BrowserLauncher
 
-from .database import get_social_account, update_social_account_check_state
+from .database import get_conn, get_social_account, update_social_account_check_state
 from .mediacrawler_login import call_mediacrawler_check_login_state, get_mediacrawler_login_capability
 from .normalizer import PLATFORM_LABELS
 from .security import customer_safe_text, redact_sensitive
@@ -71,6 +71,9 @@ async def _check_profile_account(account: dict[str, Any], timeout_ms: int) -> di
     platform = str(account.get("platform") or "")
     profile_path = Path(str(account_profile_environment(account).get("runtime_path") or ""))
     if not str(profile_path).strip() or not profile_path.exists():
+        legacy_hint = _legacy_profile_path_hint(account, profile_path)
+        if legacy_hint:
+            return _result(False, legacy_hint, "missing_profile")
         return _result(False, "未找到该账号的网页登录态，请重新扫码登录。", "missing_profile")
     browser_path = _browser_path()
     capability = get_mediacrawler_login_capability(platform)
@@ -332,6 +335,33 @@ def _friendly_error(exc: Exception) -> str:
     if "Target page, context or browser has been closed" in text:
         return "浏览器会话被关闭，请重新检测。"
     return customer_safe_text(f"{type(exc).__name__}: {first or '登录态检测失败'}")
+
+
+def _legacy_profile_path_hint(account: dict[str, Any], runtime_path: Path) -> str:
+    if str(account.get("platform") or "") != "xhs":
+        return ""
+    legacy_path_text = _raw_profile_path(int(account.get("id") or 0))
+    if not legacy_path_text:
+        return ""
+    try:
+        legacy_path = Path(legacy_path_text).resolve()
+        current_path = runtime_path.resolve()
+    except Exception:
+        return ""
+    if legacy_path == current_path or not legacy_path.exists():
+        return ""
+    return "该小红书账号存在旧版网页登录态目录，但当前账号环境需要使用新的 Profile，请重新扫码登录后再检测。"
+
+
+def _raw_profile_path(account_id: int) -> str:
+    if not account_id:
+        return ""
+    try:
+        with get_conn() as conn:
+            row = conn.execute("SELECT profile_path FROM social_accounts WHERE id=?", (account_id,)).fetchone()
+    except Exception:
+        return ""
+    return str(row["profile_path"] or "") if row else ""
 
 
 async def _extract_platform_identity(platform: str, page: Page) -> dict[str, str]:

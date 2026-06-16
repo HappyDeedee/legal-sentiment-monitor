@@ -229,6 +229,41 @@ Rules:
   noise;
 - skipped or preflight-blocked records should be grouped, filtered, or visually
   downplayed so they do not bury meaningful runs.
+- active runs should surface progress before final completion. During platform
+  collection, the UI may show provisional collected/discovered counts derived
+  from safe crawler output progress; after platform ingestion finishes, final
+  collected, filtered, excluded, and new counts replace provisional values.
+- provisional collection progress must be labeled or styled so operators do not
+  confuse it with final ingested counts. Missing or partially written crawler
+  output should show a waiting/progress state rather than a false zero or a
+  false final count.
+- while AI evaluation is running, the UI should show evaluation progress and
+  batch-updated suspected negative, high-risk, and manual-review counts where
+  available.
+- active run refresh should continue while visible runs remain running, and it
+  should stop only after active runs finish, fail, time out, are cancelled, or
+  are marked interrupted.
+- timeout runs may have partial provisional or final results. The UI should
+  preserve those results and explain that the task reached the system time
+  limit instead of implying that collection never started.
+- interrupted runs are distinct from completed-with-errors runs. They should
+  explain that execution was interrupted or no longer active, preserve any
+  collected/evaluated partial results, and offer safe next actions such as
+  viewing logs or viewing generated/partial results when available.
+- interruption labels must be based on lifecycle evidence, not elapsed time
+  alone. The product should prefer step-level causes such as crawler process
+  disappeared, browser/session closed, resource lock lost, AI evaluation
+  stopped, report generation failed, email delivery skipped/failed, or service
+  restart recovery when those causes are known.
+- retrying should be visible as part of the active run state when a retry is in
+  progress or has been exhausted. The user should be able to distinguish
+  "retrying a temporary issue" from "timed out" and "interrupted".
+- AI evaluation failure or interruption should degrade unresolved items to
+  manual review during active finalization when safe; it should not leave a run
+  indefinitely running or block report generation when collected data exists.
+- AI progress should show more than a single final count where available:
+  total candidates, successful evaluations, failed/fallback evaluations,
+  pending-review items, and unresolved items.
 
 Required controls:
 
@@ -244,10 +279,50 @@ Required controls:
 Acceptance:
 
 - status refresh works while a run is active;
+- provisional collection progress is visible for long active runs before the
+  platform subprocess exits;
+- AI evaluation progress updates during long evaluation batches;
+- interrupted runs are not shown as ordinary running records;
+- partial AI/manual-review reports can remain accessible when collected data
+  exists;
 - failure reasons are clear for administrators and business-friendly for normal
   users;
 - long run lists remain usable with pagination;
 - archived/noise records do not dominate the default operational view.
+
+### 3.1 Run Detail And AI Evaluation Traceability
+
+Status: Proposed, pending CR-034 confirmation.
+
+Purpose:
+
+- make one run record the primary place to inspect the full execution
+  lifecycle;
+- avoid forcing operators to switch from Run Center to Report Center to
+  understand AI evaluation progress or per-item evaluation evidence.
+
+Proposed rules:
+
+- Run Center should provide a per-run detail surface grouped by `run_id`.
+- Run detail should show collection, ingestion, AI evaluation, report
+  generation, and email delivery in one lifecycle view.
+- The AI Evaluation section should list every evaluation candidate/result for
+  the run, including items evaluated before a report exists.
+- Evaluation detail should distinguish business-safe input/output summaries
+  from administrator-only debug fields.
+- Exact AI request/response traceability requires new trace snapshots for new
+  evaluations. Old evaluations without snapshots should be labeled as
+  limited-context history.
+- Report Center should retain final report, report leads, downloads, and email
+  delivery history, but should expose explicit "view leads" actions and link
+  back to run detail where possible.
+
+Open confirmation:
+
+- normal-user visibility for prompt/request snapshots;
+- administrator visibility for raw or redacted model responses;
+- retention and size limits for trace snapshots;
+- final storage shape for trace snapshots.
 
 ## 4. Report Center
 
@@ -310,9 +385,25 @@ Rules:
 - manual resend is allowed and logged separately;
 - delivery history should show send type, status, time, recipient summary, and
   error message when failed;
+- real email sends must be understandable after the fact: delivery history
+  should show whether the send was automatic, manual resend, or an explicit
+  validation send, plus the related task/report/run context and effective
+  recipients where permitted.
+- routine automated tests and local diagnostics must not silently send real
+  external emails. `MONITOR_ALLOW_REAL_EMAIL_SEND=true` marks the environment as
+  explicitly allowed for real SMTP sending, and such sending should be visibly
+  intentional.
 - automatic delivery uses these schedule-window keys:
   - `daily`: `{job_id}_{YYYY-MM-DD}`;
   - `6h`, `12h`, and `cron`: `{job_id}_{YYYY-MM-DD}_{HH}`.
+
+Deferred role-governance direction:
+
+- administrators should eventually be able to control whether normal users can
+  send or resend report emails;
+- normal-user send/resend quotas may be added later;
+- this role/quota work is not part of the immediate CR-036 hidden-email safety
+  fix.
 
 Acceptance:
 
@@ -472,10 +563,21 @@ Purpose:
 Features:
 
 - subject template;
-- HTML body;
-- variable insertion;
+- governed preset styles for the email body;
+- system-controlled report body insertion;
+- variable insertion for supported subject and summary fields;
 - real-time preview;
 - active template marker.
+
+Product direction:
+
+- Long-term mail-template management should not depend on unrestricted
+  free-form HTML editing. Administrators should choose from a small set of
+  preset styles, and the generated report body should always be inserted by the
+  system.
+- Template preview must clearly indicate when it uses sample data. Historical
+  report/email records should show which template was actually used for a
+  delivered email.
 
 Variables:
 

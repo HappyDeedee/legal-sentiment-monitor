@@ -11,6 +11,361 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
 `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-16 - Phase 21 Formal Console UI Refinement Planning
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Added `docs/FORMAL_CONSOLE_UI_REFINEMENT_PLAN.md` as the page-level
+  frontend UI/UX refinement execution plan for the formal `/monitor` console.
+- Recorded CR-040 as an Accepted existing-feature optimization and Phase 21 as
+  the corresponding implementation phase.
+- Linked CR-040 to `TASKS.md`, `TEST_PLAN.md`, `TRACEABILITY.md`, and
+  `CURRENT_STATE.md`.
+- The plan defines what to do, where to do it, how to test it, how to verify
+  it, target experience, and acceptance criteria for every formal console
+  page and major secondary surface.
+- The plan also records the design confirmation model: the user confirms
+  design-system direction and workflow boundaries, not every individual color,
+  spacing, or layout value.
+- Added Phase 21 layout-resilience rules after prototype review exposed a
+  card/grid failure mode where Chinese labels can collapse into one-character
+  vertical columns. Future Phase 21 implementation must fail verification if
+  dashboard cards, closed-loop/status tracks, dense resource cards, run/report
+  cards, or secondary overlays show text collapse, overlaps, hidden actions, or
+  horizontal overflow at `1440x900`, `1024x768`, or `390x844`.
+- Phase 21A-21P implementation tasks remain unchecked; no UI code has been
+  implemented in this planning update.
+
+Verification:
+
+- Documentation-only planning update.
+- No production frontend code, backend API, database, permission model,
+  crawler, AI-provider, SMTP, scheduler, deployment, or runtime data was
+  changed.
+
+## 2026-06-16 - CR-035/CR-036 Decision Confirmation Closed
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- User confirmed CR-035 recovery/retry/timeout decisions:
+  evidence-based stale recovery, 10-minute heartbeat grace period, crawler
+  retry reuse for platform/browser/network failures, AI item retry budget, and
+  `ai_item_timeout_seconds=120`.
+- User confirmed CR-036 real-mail safety decisions:
+  `MONITOR_ALLOW_REAL_EMAIL_SEND` environment gate, read-only runtime
+  visibility, non-sending local/test behavior unless explicitly allowed,
+  manual resend safety behavior, `trigger_source`, and
+  `effective_recipients_json`.
+- CR-035 and CR-036 were moved from Needs Confirmation to Accepted in the
+  planning documents. CR-037 remains Deferred.
+
+Verification:
+
+- Documentation-only decision update.
+- No code, database, delivery-log, email, or runtime mutation was performed.
+
+## 2026-06-16 - CR-035/CR-036 Partial Decision Confirmation Update
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Recorded user-confirmed CR-035 decisions: `interrupted` is a first-class
+  terminal run status; active finalization may convert known unresolved AI
+  candidates to `pending_review`; AI evaluation progress counts should include
+  success, failure, fallback, pending-review, and unresolved totals; preventing
+  future `crawl_runs.job_id` gaps is primary and historical backfill is
+  fallback-only.
+- Kept CR-035 blocked for remaining decisions on stale-recovery evidence,
+  retry policy, and AI item timeout.
+- Recorded user-confirmed CR-036 decision that historical unexpected-email
+  evidence should be preserved by default and not mutated without backup and
+  explicit operator approval.
+- Kept CR-036 blocked for remaining decisions on explicit real-mail validation,
+  runtime/deployment setting surface, and local/manual resend behavior.
+- Recorded CR-037 as a deferred future capability for administrator-managed
+  normal-user email send/resend policy and quotas.
+
+Verification:
+
+- Documentation-only decision update.
+- No code, database, delivery-log, email, or runtime mutation was performed.
+
+## 2026-06-16 - CR-036 Test And Local Email Delivery Safety Planning
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Read-only inspection traced two unexpected real `日报 海安律所` emails to
+  temporary test/local report runs rather than to a visible active operator
+  task.
+- Confirmed the two `.eml` files are distinct messages with distinct
+  attachments and send times:
+  - `job_9686_run_8380_20260616_152702.*`
+  - `job_9759_run_8447_20260616_165528.*`
+- Confirmed matching automatic delivery-log rows exist for `job_id=9686` /
+  `report_id=3959` and `job_id=9759` / `report_id=3998`.
+- Confirmed the current `monitor_jobs`, `crawl_runs`, and `reports` rows for
+  those IDs no longer exist, which explains why the console no longer shows a
+  matching active task.
+- Identified the strongest local trigger evidence as
+  `tests/test_monitoring_mvp.py::test_run_job_blocks_platform_when_login_window_is_open`,
+  which reaches `run_monitor_job` without mocking the report email delivery
+  path.
+- Recorded CR-036 and Phase 17.1 follow-up tasks for real SMTP safety, test
+  isolation, effective-recipient traceability, and historical orphan evidence
+  handling.
+
+Verification:
+
+- Read-only inspection only.
+- No code, database, or delivery-log mutation was performed.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+
+## 2026-06-16 - CR-035 Run Lifecycle Stuck Recovery Planning
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Reworked `docs/RUN_AI_STUCK_BUG_TODO.md` so the live run `8317` stuck-running
+  issue is separated into CR-035/Phase 7.1 regression-fix scope and
+  CR-031/Phase 19 progress-visibility enhancement scope.
+- Recorded the completed-phase follow-up rule: historical completed phases
+  remain verification snapshots, while newly found defects get their own
+  regression-fix CR, task block, traceability row, and tests.
+- Added proposed Phase 7.1 tasks for run identity compatibility, idempotent
+  finalization, stale recovery before deadline, AI fallback, partial report
+  generation, and current-run remediation gating.
+- Added a comprehensive read-only review prompt to
+  `docs/RUN_AI_STUCK_BUG_TODO.md` for future agent review.
+
+Verification:
+
+- Documentation-only planning update; implementation remains blocked pending
+  CR-035 confirmation.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+
+## 2026-06-16 - CR-033 Secondary Overlay Loading Feedback Verified
+
+Environment: local worktree `E:\myproject\MediaCrawler`; formal console
+served at `http://127.0.0.1:8080/monitor`.
+
+Result:
+
+- Added stable button-level loading feedback for secondary drawers and modals,
+  including task save, account save, account QR login start, local login
+  window open, Cookie save/clear, login continuation confirmation, proxy save,
+  AI access save, AI model-list fetch, AI connection test, AI rule test/save,
+  mail config save, mail test, email template save, and email template preview.
+- Added local loading text inside the platform account login result area,
+  Cookie result area, login-session history area, AI model status, AI rule test
+  console, and email-template preview subject area.
+- Kept the existing QR login, Cookie login, local login fallback, login
+  records, resource forms, test modals, and business flows unchanged. No
+  backend API, database, permission, crawler, AI provider, or SMTP logic was
+  changed.
+
+Verification:
+
+- Inline monitor page script parse check.
+- Result: PASS.
+- `node --check api\webui\monitor\monitor.js`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "monitor_page_uses or phase_11c or phase_11d or phase_12b or phase_17b or phase_18b"`
+- Result: 8 passed, 233 deselected, 3 warnings.
+- `uv run python scripts\check_docs.py`
+- Result: PASS docs consistency.
+- Browser check on `http://127.0.0.1:8080/monitor` confirmed the Platform
+  Accounts modal opens, the added overlay action buttons are present with
+  dedicated feedback bindings, and browser console errors remain empty.
+
+Limitations:
+
+- Real platform QR scanning, real AI-provider calls, and real SMTP delivery
+  were not triggered in this verification to avoid creating live external
+  side effects.
+
+## 2026-06-16 - CR-034 Run Detail And AI Evaluation Traceability Planning
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Reviewed the current AI evaluation path and confirmed that
+  `build_evaluation_payload(job, content, comments)` can provide the business
+  input payload at evaluation time.
+- Confirmed current `ai_evaluations` stores final structured fields and a
+  redacted `raw_response`, but does not persist exact prompt/request/input
+  snapshots, provider/model metadata, duration, or per-attempt trace detail.
+- Added CR-034 as a Needs Confirmation requirement for Run Detail and AI
+  Evaluation Traceability.
+- Added proposed Phase 20 tasks for confirmation, data model, trace
+  persistence, run-detail API, frontend run detail, and explicit Report Center
+  lead entry.
+- Added proposed data-model and migration notes for `ai_evaluation_traces`
+  without marking them accepted or implemented.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+
+## 2026-06-16 - CR-033 Formal Console Full-Coverage Positive UI Optimization Verified
+
+Environment: local worktree `E:\myproject\MediaCrawler`; formal console
+served at `http://127.0.0.1:8080/monitor`.
+
+Result:
+
+- Applied a cleaner, lower-noise enterprise visual layer to the formal monitor
+  console without introducing a framework, build step, backend API, database,
+  crawler, AI, SMTP, or permission change.
+- Reprioritized the dashboard so operations metrics and closed-loop
+  task -> run -> report -> email status appear before the 01-05 shortcut flow.
+- Added page-shaped skeleton/loading states for dashboard, accounts, proxies,
+  AI access, AI rules, mail configuration, mail templates, runtime strategy,
+  run center, report center, and system diagnostics.
+- Kept formal navigation, filters, batch actions, account QR/Cookie/login
+  history flows, task drawer fields, resource forms, AI rule modal, mail
+  template iframe preview, run logs, report preview, delivery history, resend,
+  and download actions available.
+- Kept account, task, AI rule, and report row more menus as fixed floating
+  menus that are not clipped by table scroll containers.
+- Compressed the mobile dashboard metrics and closed-loop rail at 390px while
+  keeping the 01-05 shortcut flow available below the operational data.
+
+Verification:
+
+- Inline monitor page script parse check.
+- Result: PASS.
+- `node --check api\webui\monitor\monitor.js`
+- Result: PASS.
+- `uv run pytest tests/test_monitoring_mvp.py::test_monitor_page_uses_tob_information_architecture_without_customer_facing_engine_traces tests/test_monitoring_mvp.py::test_monitor_page_uses_consistent_buttons_tables_and_modal_actions tests/test_monitoring_mvp.py::test_phase_11a_monitor_static_boundary_and_tokens_are_available tests/test_monitoring_mvp.py::test_phase_11b_base_layout_styles_live_in_monitor_css tests/test_monitoring_mvp.py::test_phase_11c_interaction_helpers_and_floating_menus tests/test_monitoring_mvp.py::test_phase_11d_responsive_foundation_and_mobile_navigation tests/test_monitoring_mvp.py::test_phase_12a_navigation_groups_and_login_landing tests/test_monitoring_mvp.py::test_phase_12b_page_entry_and_role_flow_shortcuts tests/test_monitoring_mvp.py::test_phase_13b_operations_home_desktop_visual_metrics tests/test_monitoring_mvp.py::test_phase_13c_operations_home_responsive_role_views tests/test_monitoring_mvp.py::test_phase_15b_run_center_frontend_filters_pagination_archive_controls tests/test_monitoring_mvp.py::test_phase_17b_report_center_delivery_history_frontend_hooks tests/test_monitoring_mvp.py::test_phase_18b_report_center_task_grouping_frontend_hooks`
+- Result: 13 passed, 1 warning.
+- Browser desktop 1440px sweep:
+  dashboard, jobs, accounts, proxies, ai, ai_rules, email, email_templates,
+  runtime, runs, reports, and doctor all opened with zero app console errors
+  and no horizontal page overflow.
+- Browser secondary-surface checks:
+  account dialog, job drawer, proxy drawer, AI profile drawer, AI connection
+  test modal, AI rule modal, mail config modal, mail test modal, email template
+  drawer, run log drawer, report preview drawer, and report action menu opened
+  and retained their expected controls.
+- Browser responsive checks:
+  tablet 1024px page sweep passed with mobile navigation open/select/close;
+  mobile 390px full page sweep passed with no horizontal page overflow; account
+  dialog, run log drawer, and report preview drawer stayed within safe margins
+  and remained closable.
+
+Limitations:
+
+- This pass did not implement CR-031 realtime run-progress backend/product
+  behavior.
+- Real platform QR scanning, real AI provider calls, and real SMTP delivery
+  remain pilot-deployment validation items, not part of this frontend-only
+  visual optimization.
+
+## 2026-06-16 - Phase 19A Requirement Intake Classification And CR-031 Planning
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Added CR-031 for Run Center realtime progress visibility as an accepted
+  existing feature optimization. The product code remains not implemented.
+- Added CR-032 for requirement classification and optimization documentation
+  rules.
+- Added Phase 19A-19D task structure covering requirement documentation rules,
+  run-center progress data, AI evaluation progress, and frontend progress
+  polling/display.
+- Updated product, UI, frontend architecture, traceability, and test-plan
+  documents so future implementation has explicit boundaries and acceptance
+  tests.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+
+## 2026-06-16 - CR-030 Row Action Menu Clipping Regression Fix Verified
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Moved Platform Account, Monitoring Task, and AI Evaluation Rule row "more"
+  menu content out of table rows and into page-level fixed floating containers.
+- Kept table rows to trigger buttons only, so table scroll containers and
+  sticky action columns cannot clip or cover the menu content.
+- Preserved existing report-center floating menu behavior.
+- Menus still close on outside click, escape, page change, and successful
+  action.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_11c_interaction_helpers_and_floating_menus"`
+- Result: 1 passed, 240 deselected, 1 warning.
+- Inline monitor page script parse check.
+- Result: PASS.
+- `node --check api\webui\monitor\monitor.js`
+- Result: PASS.
+- Browser checks for Platform Accounts, Monitoring Tasks, and AI Evaluation
+  Rules row "more" menus on `http://127.0.0.1:8080/monitor`.
+- Result: PASS. Each menu rendered as a fixed `BODY` child, stayed inside the
+  viewport, and was not inside a `.table-wrap` scroll container.
+
+## 2026-06-16 - CR-029 Login Session Success Reconciliation Verified
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Added same-account login-state reconciliation for server-side QR login
+  sessions. When QR polling reports QR failure, timeout, platform error, or a
+  disappeared browser session, the monitor API now checks the same
+  account/Profile through MediaCrawler account validation before returning
+  failure.
+- If the account/Profile validates successfully, the login session is updated
+  to `success` with the message `登录成功，账号已通过验活。`.
+- If validation fails, the original QR/session failure state remains; captcha,
+  slider, SMS, and manual-verification states are not bypassed.
+- Updated the login modal so an active matching account status renders as
+  login success instead of `当前没有拿到二维码`.
+- Added a Xiaohongshu-specific customer-safe hint when a legacy profile-path
+  directory exists but the current profile-key runtime path does not, without
+  migrating or exposing the raw path.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "login_session or qrcode or account_check or mediacrawler_login_capability or platform_status_uses_active_account_profile or phase_6"`
+- Result: 41 passed, 200 deselected, 1 warning.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 241 passed, 3 warnings.
+- `python -m py_compile api\routers\monitor.py api\monitoring\account_check.py tests\test_monitoring_mvp.py`
+- Result: PASS.
+- `node --check api\webui\monitor\monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check.
+- Result: PASS.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- Browser smoke check for `http://127.0.0.1:8080/monitor`.
+- Result: PASS, monitor shell loaded with no browser console errors.
+
+Limitations:
+
+- Verification used mocked platform-login outcomes and local static/API tests.
+  Real platform QR scanning and crawling remain production pilot validation
+  items.
+
 ## 2026-06-16 - Phase 18B Report Center Task Grouping Frontend Verified
 
 Environment: worktree

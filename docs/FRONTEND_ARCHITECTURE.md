@@ -117,6 +117,27 @@ Allowed directions:
   surface if that reduces risk;
 - preserve the existing server route and deployment model.
 
+## Layering And Z-Index
+
+Use shared CSS custom properties for overlay layering instead of ad hoc
+numbers. Recommended relative order:
+
+```text
+page content < drawer backdrop < drawer surface < drawer sticky header < drawer floating menu/dropdown < modal/backdrop above drawer
+```
+
+Implementation guidance:
+
+- the drawer surface owns scrolling for long secondary workflows;
+- sticky drawer headers should remain above normal drawer content so close
+  controls stay reachable;
+- in-drawer floating menus, selects, and dropdown overlays should appear above
+  the sticky header when opened intentionally;
+- avoid assigning sticky drawer headers a global modal-level z-index that would
+  cover unrelated overlays;
+- browser checks for drawer changes should include a long task drawer plus at
+  least one in-drawer dropdown or floating action menu.
+
 Not allowed in this roadmap without a new accepted CR:
 
 - migrating to React, Vue, Angular, Svelte, or another SPA framework;
@@ -160,6 +181,17 @@ Required cross-phase checks:
 - Phase 18 report grouping must preserve selected-report preview, lead detail
   switching, owner/workspace scope, and deleted-task history through
   `job_snapshot_json`.
+- Phase 19 run-center realtime progress should keep the existing no-build
+  Vanilla JavaScript frontend path. Prefer extending the current run-list API
+  response and polling behavior before introducing a new transport. If a later
+  plan proposes WebSocket, SSE, or a progress-specific endpoint, record the
+  decision and rollback boundary before implementation.
+- Phase 20 run detail and AI evaluation traceability is proposed and depends on
+  CR-034 confirmation. Keep the no-build frontend path and prefer a run-detail
+  drawer/page with paginated AI evaluation reads. Do not place full prompt,
+  request, or response JSON directly in the run table. If the accepted plan
+  requires a new trace table, land the data-model migration before frontend
+  detail views depend on it.
 
 A plan review is not complete if it only says the next phase is safe. It must
 also state whether the overall phase order, granularity, verification plan,

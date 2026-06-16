@@ -32,7 +32,45 @@ Delivery Logic is complete and verified. Phase 17B - Email Delivery History
 Frontend is complete and verified. Phase 18A - Report Job Snapshot Data Model
 is complete and verified. Phase 18B - Report Center Task Grouping Frontend is
 complete and verified. Phase 10-18 console optimization is complete through
-the accepted roadmap.
+the accepted roadmap. Phase 19A - Requirement Intake Classification Rules is
+complete and verified as a documentation-governance update. CR-031 Run Center
+Realtime Progress Visibility is accepted as the next run-center optimization
+requirement, but its product code is not implemented yet. CR-033 Formal
+Console Full-Coverage Positive UI Optimization is complete and verified as a
+frontend-only pass on the latest formal `/monitor` console; it does not change
+backend APIs, database schema, permissions, crawler behavior, AI provider
+logic, SMTP delivery, or Phase 19B-19D product scope. The CR-033 pass now also
+includes stable secondary drawer/modal button-level loading feedback for
+account login, resource saves, AI/mail tests, and template preview actions.
+CR-034 Run Detail And AI Evaluation Traceability is recorded as a Needs
+Confirmation requirement and
+proposed Phase 20 work; it is not ready for implementation until role
+visibility, raw/redacted response visibility, trace retention, size limits, and
+storage shape are confirmed. CR-035 Run Lifecycle Finalization And AI Stuck
+Recovery Regression Fix is accepted as a follow-up for the completed Phase 7
+responsibility area; Phase 7 remains a historical verified snapshot, while
+Phase 7.1 is the accepted regression-fix task block for the newly observed
+stuck-run class. CR-036 Test And Local Email Delivery Safety Regression Fix is
+accepted as a follow-up for the completed
+Phase 17 email-delivery responsibility area after two unexpected real
+`日报 海安律所` emails were traced to temporary test/local run records and
+unmocked SMTP delivery. Phase 17 remains a historical verified snapshot, while
+Phase 17.1 is the proposed regression-fix task block for preventing tests and
+local diagnostics from sending hidden real external mail while preserving an
+explicit production/pilot real-mail validation path. Historical unexpected
+email evidence is confirmed to be preserved by default. CR-037 Role-Based
+Email Delivery Governance And Quotas is deferred as a future capability for
+administrator-managed normal-user send/resend policy and quotas. CR-040 Formal
+Console Page-Level UI/UX Refinement is accepted as Phase 21, a frontend-only
+implementation phase with `docs/FORMAL_CONSOLE_UI_REFINEMENT_PLAN.md` as the
+execution-plan reference; Phase 21 code work has not started yet and no
+production frontend code has been changed for CR-040 in the planning update.
+The Phase 21 plan now explicitly treats prototype-observed layout collapse as
+a hard production risk: dashboard cards, closed-loop tracks, dense status
+cards, resource cards, run/report cards, and secondary overlays must not
+squeeze text into one-character vertical columns, overlap content, hide
+primary actions, or create horizontal overflow at `1440x900`, `1024x768`, or
+`390x844`.
 The active SQLite schema now provides the foundation tables and columns
 required before later implementation work, and the web/API layer now has
 session login, administrator/normal-user roles, menu visibility,
@@ -59,7 +97,10 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   activity, report activity, email delivery latest state, suspected lead
   metrics, and role-safe resource health, Phase 13B desktop operations
   home visual metrics with drilldowns, and Phase 13C responsive operations
-  home role views with detailed diagnostics moved to System Diagnostics, and
+  home role views with detailed diagnostics moved to System Diagnostics,
+  CR-033 dashboard data-first visual polish, unclipped floating menus,
+  page-shaped loading states, secondary overlay loading feedback, and mobile
+  dashboard density reduction, and
   Phase 14 run-center data-model fields for run visibility, run type,
   archived time, and archived user with visible/scheduled backfill and
   recommended indexes, plus Phase 15A run-center API/query pagination,
@@ -94,6 +135,12 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
 - Phase 5 - Account Environment: complete and verified.
 - Phase 6 - Server Login Flow: complete and verified locally.
 - Phase 7 - Runs, Reports, And AI: complete and verified locally.
+- Phase 7.1 - Runs, Reports, And AI Stuck Recovery Follow-up: accepted but not
+  implemented. Confirmed scope includes `interrupted` status, evidence-based
+  stale recovery with a 10-minute heartbeat grace period, retry-before-timeout
+  behavior, `ai_item_timeout_seconds=120`, active unresolved-AI fallback to
+  `pending_review`, AI progress counts, and prevention-first `job_id`
+  persistence.
 - Phase 8 - Server-Like Validation: complete and verified through automated
   server-like validation.
 - Phase 9 - Security And Operations: complete and verified locally.
@@ -113,8 +160,31 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
 - Phase 16 - Email Delivery Data Model Preparation: complete and verified.
 - Phase 17 - Email Delivery Governance: complete and verified through Phase
   17A-17B.
+- Phase 17.1 - Email Delivery Safety Follow-up: accepted but not implemented.
+  Confirmed scope includes environment-controlled real-email gating, read-only
+  runtime visibility, non-sending local/test behavior by default, explicit
+  real-mail validation support, trigger-source/effective-recipient
+  traceability, and preserving historical orphan email evidence by default.
+- Phase 17.2 - Report Email Template Governance: accepted but not implemented.
+  Confirmed scope includes effective template provenance in report snapshots and
+  delivery logs, required report-body guardrails, clearer preview semantics, and
+  moving future template management from unrestricted HTML editing to preset
+  styles with system-controlled report-body insertion.
 - Phase 18 - Report Center Task Grouping: complete and verified through Phase
   18A-18B.
+- Phase 19 - Run Center Realtime Progress And Requirement Intake Governance:
+  Phase 19A documentation-governance rules are complete and verified; Phase
+  19B-19D run-center realtime progress implementation is accepted but not
+  started.
+- Phase 20 - Run Detail And AI Evaluation Traceability: proposed and blocked
+  pending CR-034 confirmation. Do not implement until permission, retention,
+  redaction, and storage-shape decisions are confirmed.
+- Phase 21 - Formal Console Page-Level UI/UX Refinement: accepted but not
+  implemented. This is a frontend-only formal console refinement phase covering
+  global shell/design tokens, navigation hierarchy, Operations Home,
+  Monitoring, Platform Accounts, Proxies, AI Access, AI Rules, Mail
+  Configuration, Mail Templates, Runtime Strategy, Run Center, Report Center,
+  System Diagnostics, Login, and cross-page verification.
 - Phase 5/6 - Account Environment and Server Login: profile key, timeout, and
   lock-storage decisions are accepted; Phase 5 account environment runtime and
   Phase 6 login-flow runtime are complete.
@@ -208,8 +278,10 @@ validation with real deployment credentials.
   `needs_verification`, `qrcode_failed`, `timeout`, and `platform_error`),
   legacy login states are normalized for compatibility, successful login is
   re-checked before the account is marked active, profile-key paths are reused
-  after the browser session closes, and `MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=false`
-  hides and blocks local-window login fallback for production mode.
+  after the browser session closes, QR-session failures are reconciled against
+  same-account MediaCrawler account/Profile validation before showing failure,
+  and `MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=false` hides and blocks local-window
+  login fallback for production mode.
 - Phase 7 runs, reports, and AI behavior has been verified:
   jobs can complete with AI disabled and email unavailable, new contents enter
   `pending_review` instead of blocking report generation, report wording keeps
@@ -247,11 +319,65 @@ validation with real deployment credentials.
     `job_snapshot_json` for orphan report history;
   - the frontend technology stack remains Vanilla JavaScript plus CSS custom
     properties for this redesign round.
+- Phase 19 requirement-documentation rules have been added:
+  future CRs must classify whether they are a new capability, existing feature
+  optimization, regression fix, or documentation-governance change, and must
+  include background, purpose, boundaries, related tasks, and acceptance
+  criteria.
+- CR-031 Run Center Realtime Progress Visibility has been accepted:
+  active runs should show provisional collection progress before platform
+  subprocess completion, AI progress should update during long evaluation
+  batches, and frontend polling should continue while visible runs remain
+  active. This is documented but not implemented.
+- CR-035 Run Lifecycle Finalization And AI Stuck Recovery Regression Fix has
+  been recorded as a follow-up regression fix after live task `9297` / run
+  `8317` showed collection and partial AI evaluation had progressed while the
+  persisted run remained `running`. The fix is documented as Phase 7.1 and
+  should precede or be explicitly separated from Phase 19B-19D progress-display
+  work. User confirmation on 2026-06-16 accepted `interrupted` as a distinct
+  terminal state, active pending-review fallback for unresolved AI candidates,
+  AI evaluation progress counts, and prevention-first `job_id` persistence.
+  A later confirmation accepted evidence-based stale recovery, a 10-minute
+  heartbeat grace period, retry-before-timeout behavior, and
+  `ai_item_timeout_seconds=120`.
+- CR-036 Test And Local Email Delivery Safety Regression Fix has been recorded
+  as a follow-up regression fix after two real emails were traced to temporary
+  `海安律所` test/local jobs: `job_id=9686/run_id=8380` and
+  `job_id=9759/run_id=8447`. The corresponding automatic delivery logs show
+  `status=sent`, while the current `monitor_jobs`, `crawl_runs`, and `reports`
+  rows no longer exist for those IDs. The strongest local trigger evidence is
+  `test_run_job_blocks_platform_when_login_window_is_open`, which calls
+  `run_monitor_job` without mocking report email delivery. The fix is
+  documented as Phase 17.1 and should be handled separately from Phase 19 run
+  progress and Phase 20 AI traceability. User confirmation on 2026-06-16
+  accepted preserving the historical unexpected-email evidence by default, then
+  accepted environment-controlled real-email gating, read-only runtime
+  visibility, non-sending local/test behavior by default, explicit real-mail
+  validation support, and trigger-source/effective-recipient traceability.
+- CR-037 Role-Based Email Delivery Governance And Quotas has been recorded as
+  a deferred future capability after the user clarified that administrator
+  authority, normal-user email send/resend restrictions, and possible daily
+  quotas may be needed later. It is not part of the immediate CR-036 safety
+  fix.
+- CR-040 Formal Console Page-Level UI/UX Refinement has been accepted as Phase
+  21. The standalone execution plan defines per-page preservation rules,
+  allowed visual changes, testing, verification, and acceptance criteria. The
+  planning update does not change code and does not reopen CR-033; Phase 21
+  implementation work remains not started.
+- CR-034 Run Detail And AI Evaluation Traceability has been recorded as a
+  proposed run-center optimization with data-model implications. The current
+  code can construct AI input payloads and stores final evaluation results, but
+  it does not persist exact prompt/request/input snapshots for historical
+  evaluations. Proposed Phase 20 remains blocked pending confirmation.
 
 ## In Progress
 
-- No active implementation batch is currently in progress. Phase 10-18 console
-  optimization is complete and verified through Phase 18B.
+- No active code implementation batch is currently in progress. Phase 10-18
+  console optimization is complete and verified through Phase 18B. Phase 19A
+  documentation governance is complete. Phase 19B-19D run-center realtime
+  progress code work is not started. Phase 7.1 and Phase 17.1 are accepted but
+  not implemented. Phase 20 is proposed and blocked pending CR-034
+  confirmation. Phase 21 is accepted but not implemented. CR-037 is deferred.
 
 ## Known Risks
 
@@ -276,6 +402,30 @@ validation with real deployment credentials.
 - Phase 7 and Phase 8 automated checks do not prove real AI provider, SMTP,
   real platform QR scanning, or real platform crawling behavior; those remain
   deployment and pilot risks.
+- CR-031 is accepted but not implemented: active Run Center rows still depend
+  on the current `crawl_runs.summary` update timing until Phase 19B-19D code
+  work is completed. Operators may still need manual refresh or logs to
+  understand long-running crawl progress in the current runtime.
+- CR-035 is accepted but not implemented yet. Until Phase 7.1 lands, a
+  background-task interruption may still leave a run in an unclear persisted
+  state, and repairing run `8317` still requires safe operational steps.
+- CR-036 is accepted but not implemented yet: tests and local diagnostics may
+  still reach real SMTP if they call the run/report path with a complete SMTP
+  configuration and do not mock delivery. Delivery logs may also show empty
+  recipients when the actual send used global default-recipient fallback. The
+  product direction is not "never send real mail"; real mail must be
+  intentional, visible, attributable validation or production delivery.
+  Until Phase 17.1 is implemented, avoid running automated report-delivery
+  paths against a database containing real SMTP credentials unless SMTP calls
+  are mocked or the operator explicitly intends a real-mail validation.
+- CR-037 is deferred: normal-user email send/resend quotas and administrator
+  policy controls are not yet designed. Existing V1 role permissions remain in
+  force until a future confirmed phase changes them.
+- CR-034 is not accepted for implementation yet: storing and exposing AI
+  prompt/request/response details requires confirmed role visibility,
+  retention, redaction, and storage limits. Historical AI evaluations cannot
+  be treated as having exact input snapshots because those snapshots were not
+  persisted at evaluation time.
 - Phase 18B report-center task grouping is implemented and verified. The
   current frontend has the complete Phase 11-12 foundation and Phase 13A data
   contract: local static module
@@ -310,7 +460,10 @@ validation with real deployment credentials.
 - Phase 11 was completed as four verified batches: Phase 11A module boundary
   and tokens, Phase 11B base layout/navigation visual foundation, Phase 11C
   interaction components and floating menus, and Phase 11D responsive
-  foundation.
+  foundation. A follow-up Phase 11C regression fix now renders Platform
+  Account, Monitoring Task, and AI Evaluation Rule row "more" menus from
+  page-level floating containers so table scroll areas and sticky action
+  columns cannot cover the popup content.
 - Phase 12A replaced detached Resource Management and System Configuration
   popover navigation with expandable groups, routed login/session restore to
   Operations Home, and grouped user identity/logout controls for desktop and
@@ -352,10 +505,14 @@ validation with real deployment credentials.
 
 Next allowed implementation step:
 
-1. prepare production pilot handoff and deployment-specific validation;
-2. verify real platform QR scanning, real platform crawling, SMTP delivery, and
-   AI-provider behavior with production credentials;
-3. keep Phase 10-18 console behavior under regression protection during any
+1. implement CR-036/Phase 17.1 first so broad automated report-delivery tests
+   cannot send hidden real mail;
+2. implement CR-035/Phase 7.1 run lifecycle, retry, AI fallback, and stuck-run
+   recovery fixes;
+3. prepare production pilot handoff and deployment-specific validation;
+4. verify real platform QR scanning, real platform crawling, SMTP delivery,
+   and AI-provider behavior with production credentials;
+5. keep Phase 10-18 console behavior under regression protection during any
    pilot hardening.
 
 ## Latest Verification

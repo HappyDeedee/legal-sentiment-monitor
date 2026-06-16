@@ -69,6 +69,15 @@ Confirmed V1 strategy:
 | Manage users | yes | no |
 | View system diagnostics | yes | no |
 
+Deferred email-delivery governance:
+
+- CR-037 proposes a later administrator policy layer for normal-user report
+  email sending and manual resend.
+- Future policy may limit whether normal users can send/resend and how many
+  sends they can trigger per day, per task, or per report.
+- This deferred quota/permission layer is separate from the immediate CR-036
+  safety fix for hidden real SMTP side effects in tests and local diagnostics.
+
 ## Data Scope
 
 Administrator:
