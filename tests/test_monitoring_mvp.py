@@ -7776,7 +7776,7 @@ def test_phase_12b_page_entry_and_role_flow_shortcuts():
         'data-shortcut-action="new-job"',
         'data-shortcut-target="email_delivery_status_entry"',
         'id="email_delivery_status_entry"',
-        "报告邮件状态与手动重发入口",
+        "报告邮件状态与交付历史",
         "报告列表展示最新邮件状态",
         "function refreshActiveSection()",
         "function navigateShortcut(tab, options={})",
@@ -8526,6 +8526,197 @@ def test_phase_17a_failed_auto_delivery_records_log_without_blocking_report(monk
         for table, snapshot in snapshots.items():
             _restore_table(table, snapshot)
         _restore_monitor_jobs(jobs_snapshot)
+
+
+def test_phase_17b_email_delivery_history_api_scope_and_safe_fields():
+    from api import main as api_main
+
+    init_db()
+    jobs_snapshot = _snapshot_monitor_jobs()
+    snapshots = {
+        "email_delivery_logs": _snapshot_table("email_delivery_logs"),
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "users": _snapshot_table("users"),
+        "user_sessions": _snapshot_table("user_sessions"),
+        "audit_logs": _snapshot_table("audit_logs"),
+    }
+    _clear_monitor_jobs()
+    try:
+        with get_conn() as conn:
+            for table in ["email_delivery_logs", "reports", "crawl_runs", "user_sessions", "audit_logs"]:
+                conn.execute(f"DELETE FROM {table}")
+        bootstrap_actor = bootstrap_admin_from_env("phase17b-bootstrap@example.com", "AdminPass123!", "Phase 17B Bootstrap")
+        assert bootstrap_actor
+        admin = save_user(
+            {
+                "email": "phase17b-admin@example.com",
+                "display_name": "Phase 17B Admin",
+                "password": "AdminPass123!",
+                "role": "administrator",
+            },
+            actor_id=int(bootstrap_actor["id"]),
+        )
+        user1 = save_user(
+            {
+                "email": "phase17b-user1@example.com",
+                "display_name": "Phase 17B User 1",
+                "password": "UserPass123!",
+                "role": "normal",
+            },
+            actor_id=int(admin["id"]),
+        )
+        user2 = save_user(
+            {
+                "email": "phase17b-user2@example.com",
+                "display_name": "Phase 17B User 2",
+                "password": "UserPass456!",
+                "role": "normal",
+            },
+            actor_id=int(admin["id"]),
+        )
+        job1 = save_job(
+            {
+                "law_firm_name": "Phase17B用户一律所",
+                "keywords": ["Phase17B用户一律所投诉"],
+                "platforms": ["dy"],
+                "recipients": ["user1@example.com"],
+                "frequency": "daily",
+            },
+            actor=user1,
+        )
+        job2 = save_job(
+            {
+                "law_firm_name": "Phase17B用户二律所",
+                "keywords": ["Phase17B用户二律所投诉"],
+                "platforms": ["dy"],
+                "recipients": ["user2@example.com"],
+                "frequency": "daily",
+            },
+            actor=user2,
+        )
+        run1 = create_run(job1["id"], {"job_id": job1["id"], "law_firm_name": job1["law_firm_name"]})
+        run2 = create_run(job2["id"], {"job_id": job2["id"], "law_firm_name": job2["law_firm_name"]})
+        finish_run(run1, "success", {"job_id": job1["id"], "law_firm_name": job1["law_firm_name"]})
+        finish_run(run2, "success", {"job_id": job2["id"], "law_firm_name": job2["law_firm_name"]})
+        report1 = create_report(run1, job1, {"job_id": job1["id"], "law_firm_name": job1["law_firm_name"]})
+        report2 = create_report(run2, job2, {"job_id": job2["id"], "law_firm_name": job2["law_firm_name"]})
+        record_email_delivery_log(
+            {
+                "workspace_id": job1["workspace_id"],
+                "job_id": job1["id"],
+                "report_id": report1["id"],
+                "send_window_key": f"{job1['id']}_2026-06-16",
+                "send_type": "auto",
+                "status": "failed",
+                "sent_at": "2026-06-16T09:00:00+00:00",
+                "error_message": "smtp_password=super-secret token=hidden",
+                "recipients": ["user1@example.com"],
+            }
+        )
+        record_email_delivery_log(
+            {
+                "workspace_id": job1["workspace_id"],
+                "job_id": job1["id"],
+                "report_id": report1["id"],
+                "send_window_key": f"{job1['id']}_2026-06-16",
+                "send_type": "manual_resend",
+                "sent_by": user1["id"],
+                "status": "sent",
+                "sent_at": "2026-06-16T09:30:00+00:00",
+                "recipients": ["user1@example.com"],
+            }
+        )
+        record_email_delivery_log(
+            {
+                "workspace_id": job2["workspace_id"],
+                "job_id": job2["id"],
+                "report_id": report2["id"],
+                "send_window_key": f"{job2['id']}_2026-06-16",
+                "send_type": "auto",
+                "status": "sent",
+                "sent_at": "2026-06-16T09:00:00+00:00",
+                "recipients": ["user2@example.com"],
+            }
+        )
+
+        transport = httpx.ASGITransport(app=api_main.app)
+
+        async def exercise() -> None:
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as user_client:
+                login = await user_client.post(
+                    "/api/auth/login",
+                    json={"email": "phase17b-user1@example.com", "password": "UserPass123!"},
+                )
+                assert login.status_code == 200
+                owned = await user_client.get(f"/api/monitor/reports/{report1['id']}/email-delivery-logs")
+                assert owned.status_code == 200
+                payload = owned.json()
+                logs = payload["delivery_logs"]
+                assert [item["send_type"] for item in logs] == ["manual_resend", "auto"]
+                assert logs[0]["sent_by"] == user1["id"]
+                assert logs[0]["recipients"] == ["user1@example.com"]
+                assert "super-secret" not in str(payload)
+                assert "hidden" not in str(payload)
+                assert "smtp_password" not in str(payload)
+                assert "recipients_json" not in str(payload)
+                assert "workspace_id" not in str(payload)
+                other = await user_client.get(f"/api/monitor/reports/{report2['id']}/email-delivery-logs")
+                assert other.status_code == 404
+
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as admin_client:
+                login = await admin_client.post(
+                    "/api/auth/login",
+                    json={"email": "phase17b-admin@example.com", "password": "AdminPass123!"},
+                )
+                assert login.status_code == 200
+                admin_view = await admin_client.get(f"/api/monitor/reports/{report2['id']}/email-delivery-logs")
+                assert admin_view.status_code == 200
+                assert admin_view.json()["delivery_logs"][0]["recipients"] == ["user2@example.com"]
+
+        asyncio.run(exercise())
+    finally:
+        _restore_table("email_delivery_logs", snapshots["email_delivery_logs"])
+        _restore_table("reports", snapshots["reports"])
+        _restore_table("crawl_runs", snapshots["crawl_runs"])
+        _restore_table("users", snapshots["users"])
+        _restore_table("user_sessions", snapshots["user_sessions"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
+        _restore_monitor_jobs(jobs_snapshot)
+
+
+def test_phase_17b_report_center_delivery_history_frontend_hooks():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    frontend_source = page + "\n" + css
+
+    reports_section = page[page.index('<section id="reports"') : page.index('<section id="doctor"')]
+    assert "邮件交付历史" in reports_section
+    assert "email_delivery_history" in reports_section
+    assert "email_delivery_history_scope" in reports_section
+    assert "查看交付历史" in page
+    assert "loadEmailDeliveryHistory" in page
+    assert "refreshSelectedEmailDeliveryHistory" in page
+    assert "renderEmailDeliveryHistory" in page
+    assert "renderEmailDeliveryLog" in page
+    assert "email-delivery-logs" in page
+    assert "confirm('确认手动重发这份报告邮件？系统会单独记录本次重发历史。')" in page
+    assert "await loadEmailDeliveryHistory(id, {silent:true})" in page
+    assert "reportEmailStatusCell" in page
+    assert "emailDeliveryStatusLabel" in page
+    assert "recipients_json" not in reports_section
+    assert "smtp_password" not in reports_section
+    for selector in [
+        ".email-delivery-history-panel",
+        ".email-status-button",
+        ".email-delivery-latest",
+        ".email-delivery-history-list",
+        ".email-delivery-history-item",
+        ".panel-title-row",
+    ]:
+        assert selector in frontend_source
+    assert "@media (max-width: 1279px)" in css
+    assert "@media (max-width: 767px)" in css
 
 
 def test_cli_run_due_runs_only_due_enabled_jobs(monkeypatch):

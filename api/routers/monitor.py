@@ -47,6 +47,7 @@ from ..monitoring.database import (
     list_ai_key_profiles,
     list_ai_rule_profiles,
     list_email_templates,
+    list_email_delivery_logs,
     list_login_sessions,
     list_platform_login_configs,
     list_proxy_profiles,
@@ -1288,6 +1289,16 @@ async def report_email_preview(report_id: int, user: dict[str, Any] = CurrentUse
         raise HTTPException(status_code=400, detail=redact_sensitive(f"{type(exc).__name__}: {exc}"))
 
 
+@router.get("/reports/{report_id}/email-delivery-logs")
+async def report_email_delivery_logs(report_id: int, limit: int = 20, user: dict[str, Any] = CurrentUser):
+    actor = _route_actor(user)
+    report = get_report(report_id, actor=actor)
+    if not report:
+        raise HTTPException(status_code=404, detail="report not found")
+    logs = list_email_delivery_logs(report_id=report_id, limit=_query_limit(limit, default=20, maximum=100), actor=actor)
+    return {"report": _customer_view_report(report), "delivery_logs": [_customer_view_email_delivery_log(item) for item in logs]}
+
+
 @router.post("/reports/{report_id}/resend-email")
 async def report_resend_email(report_id: int, user: dict[str, Any] = CurrentUser):
     try:
@@ -1540,6 +1551,49 @@ def _customer_view_report(item: dict[str, Any]) -> dict[str, Any]:
         "summary",
     }
     return {key: _customer_safe_value(value) for key, value in item.items() if key in allowed}
+
+
+def _customer_view_email_delivery_log(item: dict[str, Any]) -> dict[str, Any]:
+    allowed = {
+        "id",
+        "job_id",
+        "report_id",
+        "send_window_key",
+        "send_type",
+        "sent_by",
+        "sent_at",
+        "status",
+        "error_message",
+        "recipients",
+        "created_at",
+    }
+    view = {key: _customer_safe_value(value) for key, value in item.items() if key in allowed}
+    view["error_message"] = _customer_safe_delivery_error(item.get("error_message"))
+    return view
+
+
+def _customer_safe_delivery_error(value: Any) -> str:
+    text = customer_safe_text(value)
+    for label in [
+        "smtp_password",
+        "smtp-password",
+        "password",
+        "api_key",
+        "api-key",
+        "x-api-key",
+        "authorization",
+        "token",
+        "secret",
+        "proxy_url",
+        "proxy-url",
+        "cookie",
+        "cookies_encrypted",
+        "api_key_encrypted",
+        "password_encrypted",
+    ]:
+        text = text.replace(f"{label}=[REDACTED]", "敏感信息已隐藏")
+        text = text.replace(f"{label}: [REDACTED]", "敏感信息已隐藏")
+    return text
 
 
 def _customer_view_lead(item: dict[str, Any]) -> dict[str, Any]:

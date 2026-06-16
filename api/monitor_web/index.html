@@ -1167,8 +1167,8 @@
         <div id="email_delivery_status_entry" class="email-delivery-entry">
           <div>
             <span class="status">邮件交付</span>
-            <strong>报告邮件状态与手动重发入口</strong>
-            <p>报告列表展示最新邮件状态；需要再次发送时，可在报告操作中发起手动重发。</p>
+            <strong>报告邮件状态与交付历史</strong>
+            <p>报告列表展示最新邮件状态；选择报告后可查看自动发送和手动重发记录。</p>
           </div>
           <button class="secondary" type="button" onclick="loadReports()">刷新报告邮件状态</button>
         </div>
@@ -1186,6 +1186,16 @@
         <div class="panel">
           <h3>报告列表</h3>
           <div id="reports_table"></div>
+        </div>
+        <div class="panel email-delivery-history-panel">
+          <div class="panel-title-row">
+            <div>
+              <h3>邮件交付历史</h3>
+              <p id="email_delivery_history_scope" class="small">选择报告后查看自动发送和手动重发记录。</p>
+            </div>
+            <button class="secondary" type="button" onclick="refreshSelectedEmailDeliveryHistory()">刷新历史</button>
+          </div>
+          <div id="email_delivery_history"></div>
         </div>
         <div class="panel">
           <h3>线索明细</h3>
@@ -1344,6 +1354,7 @@
     let openJobMenuId = null;
     let openAIRuleMenuId = null;
     let currentReports = [];
+    let selectedEmailDeliveryReportId = null;
     let defaultAIPrompt = '';
     let currentRunLogId = null;
     let currentRunLogText = '';
@@ -4443,7 +4454,7 @@
         esc((r.summary||{}).negative_count||0),
         esc((r.summary||{}).high_count||0),
         esc((r.summary||{}).pending_review_count||0),
-        esc(emailStatusLabel(r.email_status)),
+        reportEmailStatusCell(r),
         esc(formatTime(r.created_at)),
         reportActions(r.id)
       ];
@@ -4457,6 +4468,7 @@
     }
     function reportFloatingMenu(id){
       return `
+        <button type="button" onclick="loadEmailDeliveryHistory(${Number(id)}); closeReportActionMenu();">查看交付历史</button>
         <button type="button" onclick="resendReportEmail(${Number(id)}); closeReportActionMenu();">重发邮件</button>
         <a href="/api/monitor/reports/${Number(id)}/download?type=html" target="_blank" onclick="closeReportActionMenu()">下载 HTML</a>
         <a href="/api/monitor/reports/${Number(id)}/download?type=excel" target="_blank" onclick="closeReportActionMenu()">下载 Excel</a>
@@ -4490,7 +4502,7 @@
       const menu=document.getElementById('report_action_menu');
       const anchor=(reportMenuAnchor && document.contains(reportMenuAnchor)) ? reportMenuAnchor : document.querySelector(`[data-report-menu-button="${openReportMenuId}"]`);
       if(!menu || !anchor) return;
-      positionFloatingMenu(anchor, menu, {width:188, height:160});
+      positionFloatingMenu(anchor, menu, {width:204, height:196});
     }
     async function createSystemCheckReport(){ const res=await api('/reports/system-check',{method:'POST'}); if(!res.ok){toast(await err(res));return;} toast('系统诊断报告已生成'); await Promise.all([loadReports(), loadRuns(), loadReadiness(), loadDoctor(), loadDashboard()]); }
     async function previewReport(id){
@@ -4498,6 +4510,7 @@
       document.getElementById('report_preview').srcdoc = '正在加载报告...';
       document.getElementById('leads_scope').textContent = '正在加载当前报告线索...';
       document.getElementById('report_email_subject').textContent = '';
+      loadEmailDeliveryHistory(id, {silent:true});
       const previewRes=await api('/reports/'+id+'/email-preview');
       if(!previewRes.ok){ document.getElementById('report_preview').srcdoc='邮件预览读取失败。'; toast(await err(previewRes)); return; }
       const preview=(await previewRes.json()).preview || {};
@@ -4526,7 +4539,76 @@
         esc(cleanCustomerText(x.law_firm_name||'')), esc(formatPlatforms([x.platform])), esc(formatLeadStatus(x)), esc(cleanCustomerText(x.title||'')), esc(cleanCustomerText(x.source_keyword||'')), esc(cleanCustomerText(x.reason||'')), esc(cleanCustomerText((x.evidence_quotes||[]).join(' / '))), leadLinks(x)
       ]));
     }
-    async function resendReportEmail(id){ const res=await api('/reports/'+id+'/resend-email',{method:'POST'}); if(!res.ok){toast(await err(res));return;} const data=await res.json(); toast(data.ok?'报告邮件已重新发送':'重发失败：'+(data.error||'请检查邮件配置')); loadReports(); }
+    function reportEmailStatusCell(report){
+      const status=report?.email_status || '';
+      const error=report?.email_error || '';
+      const tone=status==='sent' ? 'ok' : (status==='failed' ? 'warn' : '');
+      return `<button class="email-status-button ${tone}" type="button" onclick="loadEmailDeliveryHistory(${Number(report.id)})">
+        <span>${esc(emailStatusLabel(status))}</span>
+        ${error ? `<small>${esc(cleanCustomerText(error))}</small>` : ''}
+      </button>`;
+    }
+    async function loadEmailDeliveryHistory(id, options={}){
+      selectedEmailDeliveryReportId=Number(id);
+      const scope=document.getElementById('email_delivery_history_scope');
+      const target=document.getElementById('email_delivery_history');
+      const report=(currentReports||[]).find(item=>Number(item.id)===Number(id)) || {};
+      if(scope) scope.textContent=`报告 ID ${id} 的邮件交付历史`;
+      if(target) target.innerHTML='<div class="notice">正在读取邮件交付历史...</div>';
+      const res=await api('/reports/'+Number(id)+'/email-delivery-logs?limit=20');
+      if(!res.ok){
+        if(target) target.innerHTML='<div class="notice warn">邮件交付历史读取失败。</div>';
+        if(!options.silent) toast(await err(res));
+        return;
+      }
+      const data=await res.json();
+      renderEmailDeliveryHistory(data.delivery_logs||[], data.report || report);
+      if(!options.silent) document.getElementById('email_delivery_status_entry')?.scrollIntoView({behavior:'smooth', block:'start'});
+    }
+    function refreshSelectedEmailDeliveryHistory(){
+      if(!selectedEmailDeliveryReportId){ toast('请先选择一份报告'); return; }
+      loadEmailDeliveryHistory(selectedEmailDeliveryReportId);
+    }
+    function renderEmailDeliveryHistory(logs, report={}){
+      const target=document.getElementById('email_delivery_history');
+      if(!target) return;
+      const latest=report?.email_status ? `<div class="email-delivery-latest">
+        <span class="status ${report.email_status==='sent'?'ok':(report.email_status==='failed'?'warn':'')}">${esc(emailStatusLabel(report.email_status))}</span>
+        ${report.email_error ? `<strong>${esc(cleanCustomerText(report.email_error))}</strong>` : '<strong>暂无失败信息</strong>'}
+      </div>` : '';
+      if(!logs.length){
+        target.innerHTML=latest + '<div class="empty">暂无邮件交付历史。</div>';
+        return;
+      }
+      target.innerHTML=latest + `<div class="email-delivery-history-list">${logs.map(renderEmailDeliveryLog).join('')}</div>`;
+    }
+    function renderEmailDeliveryLog(log){
+      const recipients=(log.recipients||[]).filter(Boolean).join('、') || '未记录收件人';
+      const statusTone=log.status==='sent' ? 'ok' : (log.status==='failed' ? 'warn' : '');
+      const sendType=log.send_type==='manual_resend' ? '手动重发' : '自动发送';
+      const error=log.error_message ? `<p>${esc(cleanCustomerText(log.error_message))}</p>` : '';
+      return `<div class="email-delivery-history-item">
+        <div class="email-delivery-history-main">
+          <strong>${esc(sendType)}</strong>
+          <span>${esc(formatTime(log.sent_at || log.created_at))}</span>
+        </div>
+        <div class="email-delivery-history-meta">
+          <span class="status ${statusTone}">${esc(emailDeliveryStatusLabel(log.status))}</span>
+          <span>收件人：${esc(recipients)}</span>
+          <span>窗口：${esc(log.send_window_key||'-')}</span>
+        </div>
+        ${error}
+      </div>`;
+    }
+    async function resendReportEmail(id){
+      if(!confirm('确认手动重发这份报告邮件？系统会单独记录本次重发历史。')) return;
+      const res=await api('/reports/'+id+'/resend-email',{method:'POST'});
+      if(!res.ok){toast(await err(res));return;}
+      const data=await res.json();
+      toast(data.ok?'报告邮件已重新发送':'重发失败：'+(data.error||'请检查邮件配置'));
+      await loadReports();
+      await loadEmailDeliveryHistory(id, {silent:true});
+    }
     async function loadDoctor(){
       if(!canMenu('system_diagnostics')) return;
       const data=await (await api('/doctor')).json();
@@ -4662,7 +4744,8 @@
     function runVisibilityBadge(visibility){ const value=visibility||'visible'; return `<span class="status ${value==='archived'?'warn':'ok'}">${esc(formatRunVisibilityText(value))}</span>`; }
     function runDisplayError(run, summary){ if(run.display_error) return run.display_error; if(run.status==='skipped') return summary.skip_reason || run.error_message || '运行前检查未通过，已跳过本次调度'; return run.error_message || ''; }
     function formatFailures(summary){ const results=summary.platform_results||{}; const failed=summary.failed_platforms||[]; const cancelled=summary.cancelled_platforms||[]; const rows=[]; failed.forEach(p=>rows.push(`<div><strong>${esc(formatPlatforms([p]))}</strong>：${esc(cleanCustomerText((results[p]||{}).error||'失败'))}</div>`)); cancelled.forEach(p=>rows.push(`<div><strong>${esc(formatPlatforms([p]))}</strong>：已停止</div>`)); if(summary.cancel_reason) rows.push(`<div>${esc(cleanCustomerText(summary.cancel_reason))}</div>`); return rows.join(''); }
-    function emailStatusLabel(status){ return {pending:'待发送',sent:'已发送',failed:'发送失败',skipped:'未发送'}[status] || status || '-'; }
+    function emailStatusLabel(status){ return {pending:'待发送',sending:'发送中',sent:'已发送',failed:'发送失败',skipped:'未发送'}[status] || status || '-'; }
+    function emailDeliveryStatusLabel(status){ return {pending:'待发送',sending:'发送中',sent:'发送成功',failed:'发送失败',skipped:'已跳过'}[status] || status || '-'; }
     function formatLeadStatus(item){ if(item.eval_status==='pending_review') return '待人工复核'; if(item.is_related && item.is_negative) return item.risk_level==='high' ? '高风险' : '疑似负面'; return '无风险'; }
     function leadLinks(item){ const links=[]; if(item.content_url) links.push(`<a href="${esc(item.content_url)}" target="_blank">内容</a>`); if(item.cover_url) links.push(`<a href="${esc(item.cover_url)}" target="_blank">封面</a>`); return links.length ? `<div class="wide-actions">${links.join(' ')}</div>` : '-'; }
     function val(id){ return document.getElementById(id).value; } function set(id,v){ document.getElementById(id).value = v ?? ''; }

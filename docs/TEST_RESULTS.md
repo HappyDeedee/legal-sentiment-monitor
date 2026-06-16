@@ -11,6 +11,67 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
 `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-16 - Phase 17B Email Delivery History Frontend Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`.
+
+Result:
+
+- Added report delivery-history API access for
+  `/api/monitor/reports/{report_id}/email-delivery-logs`, scoped through the
+  current actor and report visibility.
+- Returned report latest-state fields and customer-safe delivery-log rows
+  without exposing SMTP passwords, tokens, cookies, proxy secrets, or internal
+  redaction labels.
+- Updated the report center with latest delivery status cells, a
+  delivery-history panel, refresh control, and report action-menu entry for
+  viewing history.
+- Displayed send type, status, time, recipient summary, send-window key, and
+  customer-safe error messages.
+- Required confirmation before manual resend and refreshed both the report list
+  and selected delivery history after resend.
+- Preserved report preview, lead detail switching, report downloads, run
+  center, task list, task-create entry, logout, and role-visible navigation.
+- Did not add Phase 18 report snapshots/grouping, schema changes, or frontend
+  dependencies.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before documentation update.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k phase_17b`
+- Result: 2 passed, 231 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_17b or phase_17a or phase_16 or report_resend_email_updates_status or phase_1_http_routes_enforce_sessions_roles_and_owner_scope or monitor_page_uses"`
+- Result: 9 passed, 224 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 233 passed, 3 warnings.
+- `python -m py_compile api\routers\monitor.py api\monitoring\database.py api\monitoring\reporting.py tests\test_monitoring_mvp.py`
+- Result: PASS.
+- `node --check api\webui\monitor\monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check
+- Result: PASS.
+- Isolated browser service on `127.0.0.1:19217`:
+  - `/monitor`, `/static/monitor/monitor.css`, and
+    `/static/monitor/monitor.js` returned HTTP 200;
+  - administrator login opened the console and Report Center;
+  - delivery history rendered automatic and manual-resend rows with
+    recipients, window key, status, time, and customer-safe error text;
+  - 1440px, 1024px, and 390px report-center checks kept the delivery-history
+    surface usable without page-level horizontal overflow;
+  - report preview drawer, report row menu, run center, task list,
+    task-create entry, logout, and normal-user role-visible navigation were
+    checked with no console errors.
+
+Limitations:
+
+- Browser validation used isolated temporary data and did not prove real SMTP
+  delivery, real platform crawling, or production credential behavior.
+- Phase 18 report snapshots and grouped report-center UI remain planned and
+  unimplemented.
+
 ## 2026-06-16 - Phase 17A Email Idempotency And Delivery Logic Verified
 
 Environment: worktree

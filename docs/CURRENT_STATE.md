@@ -29,7 +29,8 @@ And Data Governance is complete and verified. Phase 15B - Run Center Frontend
 Refinement is complete and verified. Phase 16 - Email Delivery Data Model
 Preparation is complete and verified. Phase 17A - Email Idempotency And
 Delivery Logic is complete and verified. Phase 17B - Email Delivery History
-Frontend is the next allowed execution goal.
+Frontend is complete and verified. Phase 18A - Report Job Snapshot Data Model
+is the next allowed execution goal.
 The active SQLite schema now provides the foundation tables and columns
 required before later implementation work, and the web/API layer now has
 session login, administrator/normal-user roles, menu visibility,
@@ -70,8 +71,10 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   unique automatic-send window protection, and Phase 17A scheduler/report
   delivery logic that records automatic attempts, skips duplicate automatic
   sends by schedule window, logs failures without blocking report generation,
-  records manual resend separately, and keeps report latest-state fields
-  readable for the later Phase 17B delivery-history frontend.
+  records manual resend separately, keeps report latest-state fields readable,
+  and Phase 17B report-center delivery-history UI/API surfaces latest delivery
+  state, automatic/manual delivery history, recipient summaries, and
+  customer-safe delivery errors without exposing SMTP secrets.
 
 ## Implementation Status
 
@@ -102,7 +105,7 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   Phase 15A-15B.
 - Phase 16 - Email Delivery Data Model Preparation: complete and verified.
 - Phase 17 - Email Delivery Governance: complete and verified through Phase
-  17A; Phase 17B remains planned.
+  17A-17B.
 - Phase 18 - Report Center Task Grouping: planned as Phase 18A-18B, not
   implemented.
 - Phase 5/6 - Account Environment and Server Login: profile key, timeout, and
@@ -110,7 +113,7 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   Phase 6 login-flow runtime are complete.
 
 The documented V1 product roadmap is implemented through Phase 9 in this
-worktree, and the console optimization roadmap is verified through Phase 17A.
+worktree, and the console optimization roadmap is verified through Phase 17B.
 Production pilot handoff still requires live platform, SMTP, and AI-provider
 validation with real deployment credentials.
 
@@ -240,9 +243,9 @@ validation with real deployment credentials.
 
 ## In Progress
 
-- No active implementation batch is currently in progress. Phase 17A backend
-  delivery governance is complete; Phase 17B report-center delivery-history
-  frontend is the next allowed implementation batch.
+- No active implementation batch is currently in progress. Phase 17B
+  report-center delivery-history frontend is complete; Phase 18A report job
+  snapshot data model is the next allowed implementation batch.
 
 ## Known Risks
 
@@ -267,7 +270,7 @@ validation with real deployment credentials.
 - Phase 7 and Phase 8 automated checks do not prove real AI provider, SMTP,
   real platform QR scanning, or real platform crawling behavior; those remain
   deployment and pilot risks.
-- Phase 17B-18 plans depend on future implementation and verification. The
+- Phase 18 plans depend on future implementation and verification. The
   current frontend has the complete Phase 11-12 foundation and Phase 13A data
   contract: local static module
   boundary, base desktop shell/navigation/button/card/toolbar styling, shared
@@ -287,7 +290,9 @@ validation with real deployment credentials.
   foundation. Phase 17A connects scheduler/report send logic to that foundation
   so duplicate automatic sends in the same window are skipped, automatic
   failures are logged with customer-safe text, and manual resend is recorded
-  separately. Phase 17B must still surface this history in the report center.
+  separately. Phase 17B now surfaces this history in the report center with
+  customer-safe delivery errors, confirmation for manual resend, and
+  desktop/tablet/mobile report-center validation.
 - Phase 11 was completed as four verified batches: Phase 11A module boundary
   and tokens, Phase 11B base layout/navigation visual foundation, Phase 11C
   interaction components and floating menus, and Phase 11D responsive
@@ -318,29 +323,75 @@ validation with real deployment credentials.
   Phase 15A, frontend run-center controls are active after Phase 15B, and
   email delivery logs are active schema features after Phase 16. Automatic-send
   idempotency in the scheduler/report delivery workflow is active after Phase
-  17A; report-center delivery-history UI remains Phase 17B work.
+  17A; report-center delivery-history UI is active after Phase 17B. Report task
+  grouping and report snapshots remain Phase 18 work.
 - The first global Phase 10-18 review found that Phase 13, Phase 17, and Phase
   18 were too coarse as single goals. The plan now splits them into data/API
   and frontend/responsive batches.
 - Phase 10.5 follow-up global review found no remaining P0/P1 blockers.
   Remaining review notes are P2 implementation refinements and do not block
-  Phase 17B.
+  Phase 18A.
 
 ## Next Step
 
 Next allowed implementation step:
 
-1. start Phase 17B only;
-2. surface latest delivery status and delivery history in the report center
-   without exposing SMTP secrets;
-3. add manual resend UI confirmation and success/failure feedback on top of
-   the Phase 17A backend logging path;
-4. show send type, status, time, recipient summary, and customer-safe error
-   messages;
-5. preserve report preview, lead detail switching, downloads, and
-   administrator/normal-user owner/workspace scope.
+1. start Phase 18A only;
+2. add `reports.job_snapshot_json` following `DATA_MODEL.md` and
+   `SCHEMA_MIGRATION.md`;
+3. save law firm, platforms, search keywords, frequency, task ID, and
+   deleted-task context into report snapshots for newly generated reports;
+4. backfill snapshots where existing report `job_id` still resolves to a
+   monitoring task;
+5. keep unrecoverable old reports readable as limited-context historical
+   reports and do not implement Phase 18B frontend grouping yet.
 
 ## Latest Verification
+
+Phase 17B email delivery history frontend verification on 2026-06-16:
+
+- Added a report delivery-history API endpoint scoped by the current
+  administrator/normal-user actor and backed by `email_delivery_logs`.
+- Kept report visibility and owner/workspace filtering by resolving the report
+  through `get_report(..., actor=actor)` before returning delivery logs.
+- Returned customer-safe delivery-log fields only and scrubbed sensitive labels
+  such as SMTP passwords, tokens, cookies, and proxy secrets from visible
+  delivery errors.
+- Updated the report center to show latest delivery status, clickable delivery
+  status cells, a delivery-history panel, send type, status, time, recipients,
+  send-window key, and customer-safe error messages.
+- Added a report action for viewing delivery history and required confirmation
+  before manual resend; after resend the report list and selected history
+  refresh.
+- Preserved report preview, lead detail switching, downloads, run-center
+  navigation, task-list and task-create entry behavior, logout, and
+  administrator/normal-user role visibility.
+- Did not add Phase 18 report snapshots, report grouping, schema changes, or
+  new frontend dependencies.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before documentation update.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k phase_17b`
+- Result: 2 passed, 231 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_17b or phase_17a or phase_16 or report_resend_email_updates_status or phase_1_http_routes_enforce_sessions_roles_and_owner_scope or monitor_page_uses"`
+- Result: 9 passed, 224 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 233 passed, 3 warnings.
+- `python -m py_compile api\routers\monitor.py api\monitoring\database.py api\monitoring\reporting.py tests\test_monitoring_mvp.py`
+- Result: PASS.
+- `node --check api\webui\monitor\monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check
+- Result: PASS.
+- Runtime browser validation on isolated service `127.0.0.1:19217`:
+  `/monitor`, `/static/monitor/monitor.css`, and
+  `/static/monitor/monitor.js` returned HTTP 200; administrator login opened
+  the console; report center loaded sample reports; delivery history displayed
+  automatic and manual-resend rows with recipients, window key, status, time,
+  and no secret-label leakage; 1440px, 1024px, and 390px report-center checks
+  kept the delivery-history surface usable without page-level horizontal
+  overflow; report preview drawer, report row menu, run center, task list,
+  task-create entry, logout, and normal-user role-visible navigation were
+  checked with no console errors.
 
 Phase 17A email idempotency and delivery logic verification on 2026-06-16:
 

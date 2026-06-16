@@ -16,8 +16,10 @@ home desktop visual metrics is complete and verified. Phase 13C operations
 home responsive and role views is complete and verified. Phase 14 run center
 data model preparation and Phase 15A run center API/data governance are
 complete and verified. Phase 15B run center frontend refinement is complete
-and verified. Phase 16 email delivery data model preparation is the next
-roadmap batch and is not a frontend implementation phase.
+and verified. Phase 16 email delivery data model preparation, Phase 17A email
+idempotency/delivery logic, and Phase 17B report-center delivery-history
+frontend are complete and verified. Phase 18A report job snapshot data model is
+the next roadmap batch and is not a frontend implementation phase.
 
 Agents must use this document together with:
 
@@ -151,7 +153,9 @@ Required cross-phase checks:
 - Phase 16 must land email delivery logs and idempotency keys before Phase 17
   displays delivery history or changes resend behavior.
 - Phase 17 must keep report generation tolerant of SMTP failure and must not
-  block Phase 18 report grouping or preview switching.
+  block Phase 18 report grouping or preview switching. Phase 17B is complete:
+  the report center now shows latest delivery state and scoped delivery history
+  without adding new frontend dependencies.
 - Phase 18 report grouping must preserve selected-report preview, lead detail
   switching, owner/workspace scope, and deleted-task history through
   `job_snapshot_json`.

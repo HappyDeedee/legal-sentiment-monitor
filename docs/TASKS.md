@@ -387,8 +387,8 @@ frontend governance.
 Planning status:
 
 Phase 15 depends on Phase 14. Phase 15A and Phase 15B are complete and
-verified. Phase 16 and Phase 17A are also complete and verified; Phase 17B is
-the next implementation batch.
+verified. Phase 16, Phase 17A, and Phase 17B are also complete and verified;
+Phase 18A is the next implementation batch.
 
 ### Phase 15A - Run Center API And Data Governance
 
@@ -439,9 +439,10 @@ resend logging to this foundation.
 
 Planning status:
 
-Phase 17 depends on Phase 16. Phase 17A is complete and verified; Phase 17B is
-the next implementation batch so report-center delivery-history UI remains
-separate from the backend delivery-governance work.
+Phase 17 depends on Phase 16. Phase 17A and Phase 17B are complete and
+verified. Phase 17B kept report-center delivery-history UI separate from the
+backend delivery-governance work and did not implement Phase 18 report
+grouping.
 
 ### Phase 17A - Email Idempotency And Delivery Logic
 
@@ -462,16 +463,16 @@ separate from the backend delivery-governance work.
 
 ### Phase 17B - Email Delivery History Frontend
 
-- [ ] Surface latest delivery status and delivery history in the report center
+- [x] Surface latest delivery status and delivery history in the report center
       without exposing SMTP secrets.
-- [ ] Add manual resend UI with confirmation and clear success/failure
+- [x] Add manual resend UI with confirmation and clear success/failure
       feedback.
-- [ ] Show send type, status, time, recipient summary, and customer-safe error
+- [x] Show send type, status, time, recipient summary, and customer-safe error
       message.
-- [ ] Preserve report preview, lead detail switching, and report downloads.
-- [ ] Verify administrator and normal-user owner/workspace scope for delivery
+- [x] Preserve report preview, lead detail switching, and report downloads.
+- [x] Verify administrator and normal-user owner/workspace scope for delivery
       history and manual resend.
-- [ ] Verify desktop, tablet, and mobile report-center delivery surfaces.
+- [x] Verify desktop, tablet, and mobile report-center delivery surfaces.
 
 ## Phase 18 - Report Center Task Grouping
 
@@ -479,7 +480,8 @@ Planning status:
 
 Phase 18 is planned and depends on Phase 10-11 and the accepted report snapshot
 data model. Execute it as Phase 18A-18B so snapshot persistence lands before
-frontend grouping consumes it.
+frontend grouping consumes it. Phase 18A is the next allowed implementation
+batch after verified Phase 17B.
 
 ### Phase 18A - Report Job Snapshot Data Model
 

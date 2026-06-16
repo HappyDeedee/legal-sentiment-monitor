@@ -251,9 +251,10 @@ Implementation notes:
 ## Phase 16 - Email Delivery Logs
 
 This phase is implemented and verified for the console optimization roadmap.
-It prepares the data model only; Phase 17A must still connect scheduler/mailer
+It prepared the data model only; Phase 17A has connected scheduler/mailer
 delivery logic, automatic-send idempotency, and manual resend logging to this
-foundation.
+foundation. Phase 17B has surfaced scoped delivery history in the report
+center. Phase 18 report snapshots remain separate planned schema work.
 
 Create `email_delivery_logs`:
 
