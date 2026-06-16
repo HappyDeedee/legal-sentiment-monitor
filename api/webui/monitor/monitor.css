@@ -553,6 +553,7 @@ button:disabled {
 }
 
 .operations-metric-card {
+  min-width: 0;
   min-height: 184px;
   display: grid;
   grid-template-rows: auto auto auto 1fr;
@@ -625,6 +626,7 @@ button:disabled {
 }
 
 .operations-metric-card strong {
+  min-width: 0;
   color: var(--color-neutral-900);
   font-size: 34px;
   line-height: 1;
@@ -632,6 +634,7 @@ button:disabled {
 
 .operations-metric-card p,
 .operations-resource-note {
+  min-width: 0;
   margin: 0;
   color: var(--color-neutral-600);
   font-size: var(--font-size-xs);
@@ -644,10 +647,16 @@ button:disabled {
 }
 
 .operations-metric-foot span {
+  flex: 1 1 auto;
   min-width: 0;
   color: var(--color-neutral-500);
   font-size: var(--font-size-xs);
   line-height: var(--line-height-base);
+}
+
+.operations-metric-foot button {
+  flex: 0 0 auto;
+  white-space: nowrap;
 }
 
 .operations-home-lower {
@@ -682,6 +691,7 @@ button:disabled {
 }
 
 .operations-drilldown {
+  min-width: 0;
   min-height: 86px;
   display: grid;
   align-content: start;
@@ -717,6 +727,7 @@ button:disabled {
 }
 
 .operations-resource-signal {
+  min-width: 0;
   min-height: 64px;
   padding: var(--space-3);
   border: 1px solid var(--color-neutral-200);
@@ -751,11 +762,11 @@ button:disabled {
   font-size: var(--font-size-lg);
 }
 
-.operations-diagnostics {
+.operations-admin-health {
   margin-top: var(--space-2);
 }
 
-.operations-diagnostics > summary {
+.operations-admin-health-card {
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -765,22 +776,44 @@ button:disabled {
   border-radius: var(--radius-card-medium);
   background: var(--color-neutral-0);
   box-shadow: var(--shadow-elevation-1);
-  cursor: pointer;
 }
 
-.operations-diagnostics > summary span {
-  color: var(--color-neutral-800);
-  font-weight: var(--font-weight-bold);
+.operations-admin-health-card > div {
+  min-width: 0;
 }
 
-.operations-diagnostics > summary em {
+.operations-admin-health-card strong {
+  display: block;
+  margin-top: var(--space-1);
+  color: var(--color-neutral-900);
+  font-size: var(--font-size-md);
+}
+
+.operations-admin-health-card p {
+  max-width: 760px;
+  margin: var(--space-1) 0 0;
+  color: var(--color-neutral-600);
+  font-size: var(--font-size-xs);
+  line-height: var(--line-height-relaxed);
+}
+
+.operations-admin-health-signals {
+  display: flex;
+  flex: 1 1 auto;
+  min-width: 220px;
+  justify-content: flex-end;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.operations-admin-health-signals span {
+  padding: 5px 9px;
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-control-small);
+  background: var(--color-neutral-25);
   color: var(--color-neutral-500);
   font-size: var(--font-size-xs);
-  font-style: normal;
-}
-
-.operations-diagnostics[open] > summary {
-  margin-bottom: var(--space-3);
+  white-space: nowrap;
 }
 
 .email-delivery-entry {
@@ -1147,9 +1180,45 @@ button:disabled {
     grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
   }
 
+  .operations-home {
+    width: 100%;
+    overflow: hidden;
+  }
+
+  .operations-metric-card {
+    min-height: 172px;
+  }
+
+  .operations-metric-card strong {
+    font-size: 30px;
+  }
+
+  .operations-metric-foot {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .operations-metric-foot button {
+    min-height: 34px;
+  }
+
   .operations-home-lower,
   .operations-drilldown-list {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .operations-resource-signals {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .operations-admin-health-card {
+    align-items: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .operations-admin-health-signals {
+    min-width: 0;
+    justify-content: flex-start;
   }
 
   .task-loop-shortcuts {
@@ -1328,6 +1397,61 @@ button:disabled {
   .rule-accordion,
   .sample-meta {
     grid-template-columns: minmax(0, 1fr) !important;
+  }
+
+  .operations-home-meta {
+    justify-content: flex-start;
+    flex-wrap: wrap;
+  }
+
+  .operations-metric-card {
+    min-height: 0;
+    padding: var(--space-3);
+  }
+
+  .operations-metric-card strong {
+    font-size: 28px;
+  }
+
+  .operations-metric-foot {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .operations-metric-foot button {
+    width: 100%;
+    justify-content: center;
+    white-space: normal;
+  }
+
+  .operations-drilldowns,
+  .operations-resource-panel,
+  .operations-admin-health-card {
+    padding: var(--space-3);
+  }
+
+  .operations-drilldown {
+    min-height: 76px;
+  }
+
+  .operations-admin-health-card {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .operations-admin-health-signals {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+    width: 100%;
+  }
+
+  .operations-admin-health-signals span {
+    white-space: normal;
+  }
+
+  .operations-admin-health-card button {
+    width: 100%;
+    justify-content: center;
   }
 
   .metric-value {

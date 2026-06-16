@@ -354,14 +354,14 @@ views in one goal.
 
 ### Phase 13C - Operations Home Responsive And Role Views
 
-- [ ] Adapt the operations home for 1024px tablet and 390px mobile layouts.
-- [ ] Ensure normal users see only own tasks, runs, reports, and business-safe
+- [x] Adapt the operations home for 1024px tablet and 390px mobile layouts.
+- [x] Ensure normal users see only own tasks, runs, reports, and business-safe
       health signals.
-- [ ] Ensure administrators see resource health as concise signals with
+- [x] Ensure administrators see resource health as concise signals with
       drilldowns to the correct resource pages.
-- [ ] Move detailed system diagnostics to System Diagnostics or keep only a
+- [x] Move detailed system diagnostics to System Diagnostics or keep only a
       compact health summary on the home page.
-- [ ] Verify no horizontal overflow, overlapping metric cards, hidden primary
+- [x] Verify no horizontal overflow, overlapping metric cards, hidden primary
       actions, or role leakage on tablet and mobile.
 
 ## Phase 14 - Run Center Data Model Preparation

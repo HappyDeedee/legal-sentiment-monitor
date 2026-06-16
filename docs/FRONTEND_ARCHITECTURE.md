@@ -13,7 +13,8 @@ and verified. Phase 12A navigation structure and login landing is complete and
 verified. Phase 12B page entry and role flow is complete and verified. Phase
 13A operations-home data layer is complete and verified. Phase 13B operations
 home desktop visual metrics is complete and verified. Phase 13C operations
-home responsive and role views is the next frontend batch.
+home responsive and role views is complete and verified. Phase 14 run center
+data model preparation is the next roadmap batch.
 
 Agents must use this document together with:
 

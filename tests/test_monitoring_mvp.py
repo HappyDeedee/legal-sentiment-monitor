@@ -7786,7 +7786,7 @@ def test_phase_12b_page_entry_and_role_flow_shortcuts():
         "loadReadiness();",
         "loadSchedulerStatus();",
         "loadPlatformStatus();",
-        "if(canMenu('system_diagnostics')) loadSystemChecklist();",
+        "addPermittedLoad(loads, '系统状态', 'system_diagnostics', loadSystemChecklist);",
     ]:
         assert marker in page
 
@@ -7829,12 +7829,13 @@ def test_phase_13b_operations_home_desktop_visual_metrics():
         'id="dashboard_metrics" class="operations-metric-grid"',
         'id="operations_home_drilldowns"',
         'id="operations_home_resource"',
-        'class="operations-diagnostics admin-entry" data-menu-key="system_diagnostics"',
+        'id="operations_home_admin_health" class="operations-admin-health admin-entry" data-menu-key="system_diagnostics"',
         "const home=data.operations_home || s.operations_home || legacyOperationsHome(s)",
         "function renderOperationsHome(home)",
         "function operationsMetricCard(card)",
         "function renderOperationsDrilldowns(home)",
         "function renderOperationsResourceHealth(resource)",
+        "function renderOperationsAdminHealth(home)",
         "bindShortcutButtons(document.getElementById('dashboard'))",
         "data-shortcut-target=\"email_delivery_status_entry\"",
         "data-shortcut-tab=\"accounts\" data-menu-key=\"platform_accounts\"",
@@ -7851,7 +7852,7 @@ def test_phase_13b_operations_home_desktop_visual_metrics():
         "疑似负面线索",
         "资源健康",
         "钻取入口",
-        "系统诊断摘要",
+        "系统健康摘要",
     ]:
         assert label in page
 
@@ -7865,10 +7866,65 @@ def test_phase_13b_operations_home_desktop_visual_metrics():
         ".operations-resource-panel",
         ".operations-drilldown-list",
         ".operations-resource-signals",
-        ".operations-diagnostics",
+        ".operations-admin-health",
     ]:
         assert selector in css
 
+    assert "new Chart(" not in page
+    assert "chart.js" not in page.lower()
+    assert "email_delivery_logs" not in page
+    assert "job_snapshot_json" not in page
+    assert "crawl_runs.visibility" not in page
+
+
+def test_phase_13c_operations_home_responsive_role_views():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+
+    dashboard_section = page.split('<section id="dashboard" class="active">', 1)[1].split('<section id="jobs">', 1)[0]
+    doctor_section = page.split('<section id="doctor">', 1)[1].split('<div id="toast"', 1)[0]
+    load_section = page.split("function loadSectionData(tab){", 1)[1].split("function canMenu", 1)[0]
+
+    assert 'id="operations_home_admin_health" class="operations-admin-health admin-entry" data-menu-key="system_diagnostics"' in dashboard_section
+    assert "renderOperationsAdminHealth(home)" in page
+    assert "function renderOperationsAdminHealth(home)" in page
+    assert 'data-shortcut-tab="doctor" data-menu-key="system_diagnostics">查看系统诊断' in page
+
+    for diagnostic_mount in [
+        'id="readiness_summary"',
+        'id="ops_checklist"',
+        'id="readiness_actions"',
+        'id="readiness_table"',
+        'id="scheduler_status"',
+        'id="platform_status_table"',
+    ]:
+        assert diagnostic_mount not in dashboard_section
+        assert diagnostic_mount in doctor_section
+
+    assert "if(tab==='dashboard') {\n        loadDashboard();\n      }" in load_section
+    assert "if(tab==='doctor') {\n        loadDoctor();\n        loadReadiness();\n        loadSchedulerStatus();\n        loadPlatformStatus();\n        loadSystemChecklist();\n      }" in load_section
+    assert "safeLoad('运行状态', loadReadiness)" not in page
+    assert "addPermittedLoad(loads, '运行状态', 'system_diagnostics', loadReadiness)" in page
+
+    for selector in [
+        ".operations-admin-health",
+        ".operations-admin-health-card",
+        ".operations-admin-health-signals",
+        ".operations-metric-foot button",
+    ]:
+        assert selector in css
+
+    tablet_block = css.split("@media (max-width: 1279px)", 1)[1].split("@media (max-width: 767px)", 1)[0]
+    mobile_block = css.split("@media (max-width: 767px)", 1)[1]
+    assert ".operations-home {\n    width: 100%;\n    overflow: hidden;\n  }" in tablet_block
+    assert ".operations-metric-grid" in tablet_block
+    assert ".operations-resource-signals {\n    grid-template-columns: repeat(4, minmax(0, 1fr));\n  }" in tablet_block
+    assert ".operations-admin-health-card {\n    align-items: flex-start;\n    flex-wrap: wrap;\n  }" in tablet_block
+    assert ".operations-metric-foot button {\n    width: 100%;\n    justify-content: center;\n    white-space: normal;\n  }" in mobile_block
+    assert ".operations-admin-health-signals {\n    display: grid;\n    grid-template-columns: minmax(0, 1fr);\n    width: 100%;\n  }" in mobile_block
+
+    assert "资源由管理员维护" in page
+    assert "social_accounts_total" not in dashboard_section.split("function renderOperationsAdminHealth", 1)[-1]
     assert "new Chart(" not in page
     assert "chart.js" not in page.lower()
     assert "email_delivery_logs" not in page

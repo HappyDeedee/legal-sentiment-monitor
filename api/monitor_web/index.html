@@ -409,29 +409,7 @@
             <div id="operations_home_resource" class="operations-resource-panel"></div>
           </div>
         </div>
-        <details class="operations-diagnostics admin-entry" data-menu-key="system_diagnostics">
-          <summary>
-            <span>系统诊断摘要</span>
-            <em>调度、平台和运行环境细节</em>
-          </summary>
-          <div class="grid">
-            <div class="panel">
-              <h3>系统运行状态</h3>
-              <div id="readiness_summary"></div>
-              <div id="ops_checklist"></div>
-              <div id="readiness_actions"></div>
-              <div id="readiness_table"></div>
-            </div>
-            <div class="panel">
-              <h3>调度器状态</h3>
-              <div id="scheduler_status"></div>
-            </div>
-          </div>
-          <div class="panel">
-            <h3>平台状态</h3>
-            <div id="platform_status_table"></div>
-          </div>
-        </details>
+        <div id="operations_home_admin_health" class="operations-admin-health admin-entry" data-menu-key="system_diagnostics"></div>
       </section>
 
       <section id="jobs">
@@ -1228,6 +1206,23 @@
             <div id="doctor_recommendations"></div>
           </div>
         </div>
+        <div class="grid">
+          <div class="panel">
+            <h3>系统运行状态</h3>
+            <div id="readiness_summary"></div>
+            <div id="ops_checklist"></div>
+            <div id="readiness_actions"></div>
+            <div id="readiness_table"></div>
+          </div>
+          <div class="panel">
+            <h3>调度器状态</h3>
+            <div id="scheduler_status"></div>
+          </div>
+        </div>
+        <div class="panel">
+          <h3>平台状态</h3>
+          <div id="platform_status_table"></div>
+        </div>
       </section>
     </div>
   </div>
@@ -1713,10 +1708,6 @@
       if(!canOpenTab(tab)) return;
       if(tab==='dashboard') {
         loadDashboard();
-        loadReadiness();
-        loadSchedulerStatus();
-        loadPlatformStatus();
-        if(canMenu('system_diagnostics')) loadSystemChecklist();
       }
       if(tab==='accounts') { loadProxyPool(); loadAccountsPool(); }
       if(tab==='proxies') loadProxyPool();
@@ -1727,7 +1718,13 @@
       if(tab==='runtime') loadRuntimeSettings();
       if(tab==='runs') loadRuns();
       if(tab==='reports') loadReports();
-      if(tab==='doctor') loadDoctor();
+      if(tab==='doctor') {
+        loadDoctor();
+        loadReadiness();
+        loadSchedulerStatus();
+        loadPlatformStatus();
+        loadSystemChecklist();
+      }
     }
 
     function canMenu(key){
@@ -1794,13 +1791,13 @@
       if(!authReady) return;
       const loads = [
         safeLoad('总览', loadDashboard),
-        safeLoad('运行状态', loadReadiness),
-        safeLoad('调度状态', loadSchedulerStatus),
-        safeLoad('平台状态', loadPlatformStatus),
         safeLoad('运行记录', loadRuns),
         safeLoad('报告中心', loadReports)
       ];
       addPermittedLoad(loads, '系统状态', 'system_diagnostics', loadSystemChecklist);
+      addPermittedLoad(loads, '运行状态', 'system_diagnostics', loadReadiness);
+      addPermittedLoad(loads, '调度状态', 'system_diagnostics', loadSchedulerStatus);
+      addPermittedLoad(loads, '平台状态', 'system_diagnostics', loadPlatformStatus);
       addPermittedLoad(loads, '登录能力', 'platform_accounts', loadPlatformLoginConfigs);
       addPermittedLoad(loads, '账号资源', 'platform_accounts', loadAccountsPool);
       addPermittedLoad(loads, '登录会话', 'platform_accounts', loadLoginSessions);
@@ -1903,6 +1900,8 @@
       if(drilldowns) drilldowns.innerHTML=renderOperationsDrilldowns(home);
       const resource=document.getElementById('operations_home_resource');
       if(resource) resource.innerHTML=renderOperationsResourceHealth(home.resource_health||{});
+      const adminHealth=document.getElementById('operations_home_admin_health');
+      if(adminHealth) adminHealth.innerHTML=renderOperationsAdminHealth(home);
       applyMenuPermissions();
       bindShortcutButtons(document.getElementById('dashboard'));
     }
@@ -1953,6 +1952,28 @@
         <div class="operations-resource-signals">${signals.map(signal=>`<div class="operations-resource-signal ${resourceSignalClass(signal.status)}">
           <span>${esc(signal.label)}</span><strong>${esc(signal.count ?? signal.note ?? resourceStatusText(signal.status))}</strong>
         </div>`).join('')}</div>`;
+    }
+    function renderOperationsAdminHealth(home){
+      const resource=home.resource_health||{};
+      if(resource.scope !== 'workspace') return '';
+      const status=resource.status || 'needs_attention';
+      const taskAttention=home.task_health?.needs_attention||0;
+      const runAttention=(home.run_activity?.failed_recent||0) + (home.run_activity?.skipped_recent||0);
+      const reportAttention=(home.report_activity?.manual_review||0) + (home.email_delivery?.failed||0);
+      const tone=status==='ready' || status==='available' ? 'ok' : 'warn';
+      return `<div class="operations-admin-health-card">
+        <div>
+          <span class="status ${tone}">${esc(resourceStatusText(status))}</span>
+          <strong>系统健康摘要</strong>
+          <p>首页仅保留精简运营健康信号，详细运行状态、调度器和平台诊断请进入系统诊断查看。</p>
+        </div>
+        <div class="operations-admin-health-signals" aria-label="系统健康摘要">
+          <span>任务待处理 ${esc(taskAttention)}</span>
+          <span>运行异常 ${esc(runAttention)}</span>
+          <span>报告/邮件关注 ${esc(reportAttention)}</span>
+        </div>
+        <button class="secondary" type="button" data-shortcut-tab="doctor" data-menu-key="system_diagnostics">查看系统诊断</button>
+      </div>`;
     }
     function resourceHealthSummary(resource){
       if(!resource || resource.scope !== 'workspace') return '资源由管理员维护';
