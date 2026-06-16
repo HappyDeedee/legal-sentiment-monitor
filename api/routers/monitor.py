@@ -1063,7 +1063,7 @@ async def runs(
     law_firm: str = "",
     status: str = "",
     platform: str = "",
-    run_type: str = Query("", description="scheduled|manual|test"),
+    run_type: str = Query("", description="operational|scheduled|manual|test"),
     visibility: str = Query("", description="visible|archived|all"),
     date_from: str = "",
     date_to: str = "",

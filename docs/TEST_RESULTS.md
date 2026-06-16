@@ -11,6 +11,66 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
 `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-16 - Phase 15B Run Center Frontend Refinement Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`.
+
+Result:
+
+- Added run-center pagination UI with summary and previous/next controls.
+- Added task/law-firm, status, platform, run type, visibility, date, and page
+  size filters.
+- Default run-center view now requests `run_type=operational`, which separates
+  scheduled/manual operational records from test/diagnostic noise.
+- Added administrator archive and restore row actions with confirmation while
+  keeping normal users scoped to visible records.
+- Preserved run-log drawer refresh, copy, and download controls.
+- Added frontend/CSS regression coverage for the Phase 15B controls and kept
+  Phase 16/18 terms out of this frontend batch.
+- Added the `operational` run-type API alias needed by the default frontend
+  view while preserving `scheduled`, `manual`, and `test` filters.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before documentation update.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_15b or phase_15a"`
+- Result: 2 passed, 226 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_15b or phase_15a or phase_14 or run_logs or list_runs"`
+- Result: 4 passed, 224 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 228 passed, 3 warnings.
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check
+- Result: PASS.
+- Isolated browser service on `127.0.0.1:19180`:
+  - `/monitor`, `/static/monitor/monitor.css`, and
+    `/static/monitor/monitor.js` returned HTTP 200;
+  - administrator login opened the operations home and Run Center;
+  - Run Center showed pagination, filters, default visible/operational
+    summary, row status, log, and archive actions;
+  - test/diagnostic records were hidden from the default operational view and
+    visible through the run-type filter;
+  - the run-log drawer opened with real `crawler.log` content and displayed
+    refresh, copy, and download controls;
+  - administrator archive/restore API behavior was verified against the
+    running service;
+  - normal-user API scope returned `403` for archived visibility and archive
+    action;
+  - desktop 1440px, tablet 1024px, and mobile 390px run-center layouts kept
+    filters, status, actions, summary, pagination, and list content reachable
+    without horizontal page overflow.
+
+Limitations:
+
+- Browser validation used isolated temporary data and did not prove real
+  platform crawling, SMTP delivery, or AI-provider behavior.
+- Phase 16 email delivery logs and Phase 18 report snapshots remain planned
+  and unimplemented.
+
 ## 2026-06-16 - Phase 15A Run Center API And Data Governance Verified
 
 Environment: worktree

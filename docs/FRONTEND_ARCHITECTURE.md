@@ -15,8 +15,9 @@ verified. Phase 12B page entry and role flow is complete and verified. Phase
 home desktop visual metrics is complete and verified. Phase 13C operations
 home responsive and role views is complete and verified. Phase 14 run center
 data model preparation and Phase 15A run center API/data governance are
-complete and verified. Phase 15B run center frontend refinement is the next
-frontend roadmap batch.
+complete and verified. Phase 15B run center frontend refinement is complete
+and verified. Phase 16 email delivery data model preparation is the next
+roadmap batch and is not a frontend implementation phase.
 
 Agents must use this document together with:
 

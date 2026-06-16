@@ -8103,6 +8103,10 @@ def test_phase_15a_run_center_api_pagination_filters_archive_and_scope():
                 assert login.status_code == 200
                 default_runs = await admin_client.get("/api/monitor/runs")
                 assert {item["id"] for item in default_runs.json()["runs"]} == {run_other_user, run_visible}
+                operational_runs = await admin_client.get("/api/monitor/runs", params={"run_type": "operational"})
+                assert operational_runs.status_code == 200
+                assert {item["id"] for item in operational_runs.json()["runs"]} == {run_visible}
+                assert operational_runs.json()["filters"]["run_type"] == "operational"
                 archived_runs = await admin_client.get("/api/monitor/runs", params={"visibility": "archived"})
                 assert archived_runs.status_code == 200
                 assert {item["id"] for item in archived_runs.json()["runs"]} == {run_archived}
@@ -8152,6 +8156,55 @@ def test_phase_15a_run_center_api_pagination_filters_archive_and_scope():
         _restore_table("user_sessions", snapshots["user_sessions"])
         _restore_table("users", snapshots["users"])
         _restore_monitor_jobs(jobs_snapshot)
+
+
+def test_phase_15b_run_center_frontend_filters_pagination_archive_controls():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+
+    assert 'id="run_task_filter"' in page
+    assert 'id="run_status_filter"' in page
+    assert 'id="run_platform_filter"' in page
+    assert 'id="run_type_filter"' in page
+    assert 'id="run_visibility_filter"' in page
+    assert 'id="run_date_from"' in page
+    assert 'id="run_date_to"' in page
+    assert 'id="run_pagination"' in page
+    assert 'id="run_filter_summary"' in page
+    assert "function runQueryParams()" in page
+    assert "qs.set('page', String(runListState.page || 1))" in page
+    assert "qs.set('visibility', visibility)" in page
+    assert "qs.set('task_id', query)" in page
+    assert "qs.set('law_firm', query)" in page
+    assert "qs.set('run_type', runType)" in page
+    assert '<option value="operational" selected>运营记录</option>' in page
+    assert "set('run_type_filter','operational')" in page
+    assert "function renderRunPagination(pagination)" in page
+    assert "function applyRunFilters()" in page
+    assert "function clearRunFilters()" in page
+    assert "function archiveRun(id)" in page
+    assert "function restoreRun(id)" in page
+    assert "confirm('确认归档这条运行记录？归档后默认列表将不再显示它。')" in page
+    assert "confirm('确认恢复这条运行记录？恢复后它会回到默认可见列表。')" in page
+    assert "applyRunCenterRoleMode()" in page
+    assert "document.querySelectorAll('.run-admin-control')" in page
+    assert "if(!admin)" in page and "visibility.value='visible'" in page
+    assert "runTypeBadge(r.run_type)" in page
+    assert "runVisibilityBadge(r.visibility)" in page
+    assert "测试/诊断" in page
+    assert "默认可见" in page
+    assert "已归档" in page
+    assert "全部记录" in page
+    assert "loadRunLogs" in page
+    assert "copyCurrentRunLogs" in page
+    assert "downloadCurrentRunLogs" in page
+    assert "/runs/'+id+'/archive" in page
+    assert "/runs/'+id+'/restore" in page
+    assert ".run-center-meta" in css
+    assert ".run-pagination" in css
+    assert ".run-actions" in css
+    assert "email_delivery_logs" not in page
+    assert "job_snapshot_json" not in page
 
 
 def test_cli_run_due_runs_only_due_enabled_jobs(monkeypatch):

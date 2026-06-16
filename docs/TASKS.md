@@ -386,8 +386,8 @@ frontend governance.
 
 Planning status:
 
-Phase 15 depends on Phase 14. Phase 15A is complete and verified. Phase 15B
-remains the next implementation batch.
+Phase 15 depends on Phase 14. Phase 15A and Phase 15B are complete and
+verified. Phase 16 is the next implementation batch.
 
 ### Phase 15A - Run Center API And Data Governance
 
@@ -406,13 +406,13 @@ remains the next implementation batch.
 
 ### Phase 15B - Run Center Frontend Refinement
 
-- [ ] Add pagination UI.
-- [ ] Add task/law-firm, status, platform, run type, visibility, and date
+- [x] Add pagination UI.
+- [x] Add task/law-firm, status, platform, run type, visibility, and date
       filters.
-- [ ] Add archive and restore row actions with confirmation.
-- [ ] Separate operational records from test/noise records in the default view.
-- [ ] Keep run logs refreshable, copyable, and downloadable.
-- [ ] Verify desktop, tablet, and mobile run-center layouts.
+- [x] Add archive and restore row actions with confirmation.
+- [x] Separate operational records from test/noise records in the default view.
+- [x] Keep run logs refreshable, copyable, and downloadable.
+- [x] Verify desktop, tablet, and mobile run-center layouts.
 
 ## Phase 16 - Email Delivery Data Model Preparation
 

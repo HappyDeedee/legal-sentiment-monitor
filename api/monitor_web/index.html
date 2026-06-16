@@ -1129,17 +1129,30 @@
         <div class="panel">
           <div class="page-toolbar page-filter-region" data-filter-region="runs">
             <div>
-              <label>显示范围</label>
-              <select id="run_limit" onchange="loadRuns()">
-                <option value="50">最近 50 条</option>
+              <label>任务 / 律所</label>
+              <input id="run_task_filter" placeholder="任务 ID 或律所名称" onkeydown="if(event.key==='Enter') applyRunFilters()">
+            </div>
+            <div><label>状态</label><select id="run_status_filter" onchange="applyRunFilters()"><option value="">全部状态</option><option value="running">运行中</option><option value="success">成功</option><option value="partial_failed">部分失败</option><option value="failed">失败</option><option value="timeout">超时</option><option value="cancelled">已停止</option><option value="skipped">已跳过</option><option value="diagnostic">诊断记录</option></select></div>
+            <div><label>平台</label><select id="run_platform_filter" onchange="applyRunFilters()"><option value="">全部平台</option><option value="dy">抖音</option><option value="ks">快手</option><option value="xhs">小红书</option></select></div>
+            <div><label>运行类型</label><select id="run_type_filter" onchange="applyRunFilters()"><option value="operational" selected>运营记录</option><option value="">全部类型</option><option value="scheduled">自动调度</option><option value="manual">手动运行</option><option value="test">测试/诊断</option></select></div>
+            <div class="run-admin-control"><label>可见性</label><select id="run_visibility_filter" onchange="applyRunFilters()"><option value="visible">默认可见</option><option value="archived">已归档</option><option value="all">全部记录</option></select></div>
+            <div><label>开始日期</label><input id="run_date_from" type="date" onchange="applyRunFilters()"></div>
+            <div><label>结束日期</label><input id="run_date_to" type="date" onchange="applyRunFilters()"></div>
+            <div>
+              <label>每页数量</label>
+              <select id="run_limit" onchange="applyRunFilters()">
+                <option value="20">每页 20 条</option>
+                <option value="50">每页 50 条</option>
                 <option value="100" selected>最近 100 条</option>
                 <option value="200">最近 200 条</option>
                 <option value="0">全部运行记录</option>
               </select>
             </div>
-            <div class="toolbar-actions"><button class="secondary" onclick="loadRuns()">刷新</button></div>
+            <div class="toolbar-actions"><button class="secondary" onclick="applyRunFilters()">筛选</button><button class="secondary" onclick="clearRunFilters()">清空</button><button class="secondary" onclick="loadRuns()">刷新</button></div>
           </div>
+          <div id="run_filter_summary" class="run-center-meta"></div>
           <div id="runs_table"></div>
+          <div id="run_pagination" class="run-pagination"></div>
         </div>
       </section>
       <section id="reports">
@@ -1336,6 +1349,7 @@
     let currentRunLogText = '';
     let accountAttentionOnly = false;
     let openAccountMenuId = null;
+    const runListState = {page: 1, totalPages: 1};
     const NAV_GROUPS = {
       resources: ['accounts', 'proxies', 'ai'],
       settings: ['ai_rules', 'email', 'email_templates', 'runtime', 'doctor']
@@ -1487,6 +1501,7 @@
       renderCurrentUser();
       applyMenuPermissions();
       applyJobFormRoleMode();
+      applyRunCenterRoleMode();
       renderJobAccountOptions([...socialAccountCache.values()].filter(a=>!a.is_draft));
       renderProxySelectOptions();
       renderJobAIProfileOptions();
@@ -1504,6 +1519,14 @@
       });
     }
     function isAdminUser(){ return currentSession && currentSession.role === 'administrator'; }
+    function applyRunCenterRoleMode(){
+      const admin=isAdminUser();
+      document.querySelectorAll('.run-admin-control').forEach(el=>{ el.style.display=admin ? '' : 'none'; });
+      if(!admin){
+        const visibility=document.getElementById('run_visibility_filter');
+        if(visibility) visibility.value='visible';
+      }
+    }
     function applyJobFormRoleMode(){
       const admin=isAdminUser();
       document.querySelectorAll('.admin-only-job-field').forEach(el=>{ el.style.display=admin ? '' : 'none'; });
@@ -1540,6 +1563,7 @@
         renderCurrentUser();
         applyMenuPermissions();
         applyJobFormRoleMode();
+        applyRunCenterRoleMode();
         routeToOperationsHome();
         await loadAll();
       } finally {
@@ -4229,20 +4253,94 @@
     }
 
     async function loadRuns(){
-      const limit=val('run_limit') || '100';
-      const data=await (await api('/runs?limit='+encodeURIComponent(limit))).json();
+      const qs=runQueryParams();
+      const res=await api('/runs?'+qs.toString());
+      if(!res.ok){ toast(await err(res)); return false; }
+      const data=await res.json();
       const running=data.running_job_ids||[];
       runningJobIds.clear();
       running.forEach(id=>runningJobIds.add(Number(id)));
       document.getElementById('running_summary').innerHTML = running.length ? `<div class="notice">正在运行的任务 ID：${esc(running.join(', '))}<div class="small">运行 ID 是单次执行记录，任务 ID 是任务管理里的配置编号。</div></div>` : '';
-      document.getElementById('runs_table').innerHTML=table(['运行 ID','任务 ID','任务名称 / 律所','平台','关键词摘要','状态','开始时间','耗时','采集数','新增数','疑似负面数','高风险数','待复核数','失败原因','操作'], data.runs.map(runRow));
+      const runs=data.runs||[];
+      const pagination=data.pagination||{page:runListState.page,per_page:Number(val('run_limit')||100),total:runs.length,total_pages:1};
+      runListState.page=Number(pagination.page||1);
+      runListState.totalPages=Number(pagination.total_pages||1);
+      renderRunFilterSummary(data.filters||{}, pagination);
+      document.getElementById('runs_table').innerHTML=runs.length
+        ? table(['运行 ID','任务 ID','任务名称 / 律所','平台','关键词摘要','类型','可见性','状态','开始时间','耗时','采集数','新增数','疑似负面数','高风险数','待复核数','失败原因','操作'], runs.map(runRow))
+        : '<div class="empty run-empty-state"><strong>暂无运行记录</strong><span>请调整筛选条件，或从监控任务发起一次运行。</span></div>';
+      renderRunPagination(pagination);
       return running.length > 0;
+    }
+    function runQueryParams(){
+      const qs=new URLSearchParams();
+      qs.set('limit', val('run_limit') || '100');
+      qs.set('page', String(runListState.page || 1));
+      const query=String(val('run_task_filter')||'').trim();
+      if(query){
+        if(/^\d+$/.test(query)) qs.set('task_id', query);
+        else qs.set('law_firm', query);
+      }
+      const status=val('run_status_filter');
+      const platform=val('run_platform_filter');
+      const runType=val('run_type_filter');
+      const dateFrom=val('run_date_from');
+      const dateTo=val('run_date_to');
+      if(status) qs.set('status', status==='diagnostic'?'self'+'test':status);
+      if(platform) qs.set('platform', platform);
+      if(runType) qs.set('run_type', runType);
+      if(dateFrom) qs.set('date_from', dateFrom);
+      if(dateTo) qs.set('date_to', dateTo);
+      const visibility=isAdminUser() ? (val('run_visibility_filter') || 'visible') : 'visible';
+      qs.set('visibility', visibility);
+      return qs;
+    }
+    function applyRunFilters(){
+      runListState.page=1;
+      return loadRuns();
+    }
+    function clearRunFilters(){
+      ['run_task_filter','run_status_filter','run_platform_filter','run_date_from','run_date_to'].forEach(id=>set(id,''));
+      set('run_type_filter','operational');
+      set('run_limit','100');
+      if(isAdminUser()) set('run_visibility_filter','visible');
+      runListState.page=1;
+      return loadRuns();
+    }
+    function changeRunPage(page){
+      runListState.page=Math.max(1, Math.min(Number(page)||1, runListState.totalPages||1));
+      return loadRuns();
+    }
+    function renderRunFilterSummary(filters, pagination){
+      const parts=[];
+      const visibility=filters.visibility || (isAdminUser()?val('run_visibility_filter'):'visible');
+      parts.push(`可见性：${formatRunVisibilityText(visibility)}`);
+      if(filters.run_type) parts.push(`类型：${formatRunTypeText(filters.run_type)}`);
+      if(filters.status) parts.push(`状态：${formatRunStatus(filters.status)}`);
+      if(filters.platform) parts.push(`平台：${formatPlatforms([filters.platform])}`);
+      if(filters.law_firm) parts.push(`律所：${filters.law_firm}`);
+      if(filters.job_id) parts.push(`任务 ID：${filters.job_id}`);
+      if(filters.date_from || filters.date_to) parts.push(`日期：${filters.date_from||'不限'} 至 ${filters.date_to||'不限'}`);
+      const total=Number(pagination.total||0);
+      document.getElementById('run_filter_summary').innerHTML=`<span class="status ${visibility==='archived'?'warn':'ok'}">${esc(total)} 条</span><span>${esc(parts.join(' / '))}</span><span class="small">默认展示可见记录；测试/诊断记录可通过运行类型单独查看。</span>`;
+    }
+    function renderRunPagination(pagination){
+      const page=Number(pagination.page||1);
+      const totalPages=Number(pagination.total_pages||1);
+      const total=Number(pagination.total||0);
+      const perPage=Number(pagination.per_page||0);
+      const label=perPage>0 ? `第 ${page} / ${totalPages} 页，共 ${total} 条` : `共 ${total} 条`;
+      document.getElementById('run_pagination').innerHTML=`<div class="small">${esc(label)}</div><div class="toolbar-actions"><button class="secondary" ${page<=1?'disabled':''} onclick="changeRunPage(${page-1})">上一页</button><button class="secondary" ${page>=totalPages?'disabled':''} onclick="changeRunPage(${page+1})">下一页</button></div>`;
     }
     function runRow(r){
       const s=r.summary||{};
       const jobLabel=`${r.law_firm_name||r.display_law_firm_name||'原任务已删除'}${r.job_deleted?'（原任务已删除）':''}`;
       const actions=[`<button class="secondary" onclick="loadRunLogs(${Number(r.id)})">查看日志</button>`];
       if(r.status==='running') actions.push(`<button class="danger" onclick="stopRun(${Number(r.id)})">停止</button>`);
+      if(isAdminUser()){
+        if(r.visibility==='archived') actions.push(`<button class="secondary" onclick="restoreRun(${Number(r.id)})">恢复</button>`);
+        else actions.push(`<button class="secondary" onclick="archiveRun(${Number(r.id)})">归档</button>`);
+      }
       const failureText=runDisplayError(r, s);
       const keywords=(s.keywords||[]).join(' / ');
       return [
@@ -4251,6 +4349,8 @@
         esc(jobLabel),
         esc(formatPlatforms(s.platforms)),
         `<div class="truncate" title="${esc(keywords)}">${esc(keywords||'-')}</div>`,
+        runTypeBadge(r.run_type),
+        runVisibilityBadge(r.visibility),
         runStatusBadge(r),
         esc(formatTime(r.started_at)),
         esc(formatDuration(s.duration_seconds)),
@@ -4260,8 +4360,20 @@
         esc(s.high_count||0),
         esc(s.pending_review_count||0),
         failureText ? esc(cleanCustomerText(failureText)) : formatFailures(s),
-        `<div class="wide-actions">${actions.join(' ')}</div>`
+        `<div class="wide-actions run-actions">${actions.join(' ')}</div>`
       ];
+    }
+    async function archiveRun(id){
+      if(!confirm('确认归档这条运行记录？归档后默认列表将不再显示它。')) return;
+      const res=await api('/runs/'+id+'/archive',{method:'POST'});
+      toast(res.ok?'运行记录已归档':await err(res));
+      await Promise.all([loadRuns(), loadDashboard()]);
+    }
+    async function restoreRun(id){
+      if(!confirm('确认恢复这条运行记录？恢复后它会回到默认可见列表。')) return;
+      const res=await api('/runs/'+id+'/restore',{method:'POST'});
+      toast(res.ok?'运行记录已恢复':await err(res));
+      await Promise.all([loadRuns(), loadDashboard()]);
     }
     async function stopRun(id){
       if(!confirm('确认停止这条运行记录对应的任务？')) return;
@@ -4542,8 +4654,12 @@
   </div>
 </div>`; }
     function formatDuration(seconds){ const n=Number(seconds||0); if(n<60) return `${n}s`; return `${Math.floor(n/60)}m ${n%60}s`; }
-    function formatRunStatus(status){ const labels={running:'运行中',success:'成功',partial_failed:'部分失败',failed:'失败',cancelled:'已停止',skipped:'已跳过'}; return labels[status]||status||''; }
+    function formatRunStatus(status){ const diagnostic='self'+'test'; const labels={running:'运行中',success:'成功',partial_failed:'部分失败',failed:'失败',timeout:'超时',cancelled:'已停止',skipped:'已跳过',[diagnostic]:'诊断记录'}; return labels[status]||status||''; }
     function runStatusBadge(run){ const status=run.status||''; const cls=status==='success'?'ok':(status==='failed'||status==='partial_failed'?'bad':(status==='running'?'warn':(status==='skipped'?'warn':''))); return `<span class="status ${cls}">${esc(run.display_status || formatRunStatus(status))}</span>`; }
+    function formatRunTypeText(type){ return {operational:'运营记录',scheduled:'自动调度',manual:'手动运行',test:'测试/诊断'}[type] || type || '全部类型'; }
+    function runTypeBadge(type){ const value=type||'scheduled'; return `<span class="status ${value==='test'?'warn':''}">${esc(formatRunTypeText(value))}</span>`; }
+    function formatRunVisibilityText(visibility){ return visibility==='archived'?'已归档':(visibility==='all'?'全部记录':'默认可见'); }
+    function runVisibilityBadge(visibility){ const value=visibility||'visible'; return `<span class="status ${value==='archived'?'warn':'ok'}">${esc(formatRunVisibilityText(value))}</span>`; }
     function runDisplayError(run, summary){ if(run.display_error) return run.display_error; if(run.status==='skipped') return summary.skip_reason || run.error_message || '运行前检查未通过，已跳过本次调度'; return run.error_message || ''; }
     function formatFailures(summary){ const results=summary.platform_results||{}; const failed=summary.failed_platforms||[]; const cancelled=summary.cancelled_platforms||[]; const rows=[]; failed.forEach(p=>rows.push(`<div><strong>${esc(formatPlatforms([p]))}</strong>：${esc(cleanCustomerText((results[p]||{}).error||'失败'))}</div>`)); cancelled.forEach(p=>rows.push(`<div><strong>${esc(formatPlatforms([p]))}</strong>：已停止</div>`)); if(summary.cancel_reason) rows.push(`<div>${esc(cleanCustomerText(summary.cancel_reason))}</div>`); return rows.join(''); }
     function emailStatusLabel(status){ return {pending:'待发送',sent:'已发送',failed:'发送失败',skipped:'未发送'}[status] || status || '-'; }

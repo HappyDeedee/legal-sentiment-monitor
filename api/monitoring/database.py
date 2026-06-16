@@ -2377,7 +2377,10 @@ def _run_filter_clause(filters: dict[str, Any] | None, *, include_archived_defau
     applied["visibility"] = visibility
 
     run_type = str(filters.get("run_type") or "").strip()
-    if run_type in {"scheduled", "manual", "test"}:
+    if run_type == "operational":
+        clauses.append("COALESCE(r.run_type, 'scheduled') IN ('scheduled', 'manual')")
+        applied["run_type"] = run_type
+    elif run_type in {"scheduled", "manual", "test"}:
         clauses.append("r.run_type=?")
         params.append(run_type)
         applied["run_type"] = run_type
