@@ -11,6 +11,52 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
 `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-16 - Phase 17A Email Idempotency And Delivery Logic Verified
+
+Environment: worktree
+`E:\myproject\MediaCrawler-worktrees\console-optimization-10-18`, branch
+`codex/console-optimization-10-18`.
+
+Result:
+
+- Connected automatic report email delivery to `email_delivery_logs`.
+- Used the accepted `send_window_key` helper for `daily`, `6h`, `12h`, and
+  `cron` schedule windows.
+- Added automatic-send idempotency for
+  `workspace_id + job_id + send_window_key + send_type=auto`; repeated
+  automatic delivery in the same window is recorded as `skipped` and does not
+  call the mailer again.
+- Recorded automatic pending/sent/failed/skipped delivery rows with recipient
+  summaries and customer-safe error messages.
+- Recorded explicit manual resend as a separate `manual_resend` delivery row
+  with `sent_by` while leaving automatic idempotency independent.
+- Preserved report generation when SMTP fails and kept
+  `reports.email_status` / `reports.email_error` as latest-state
+  compatibility fields until Phase 17B delivery-history UI is implemented.
+- Carried run-source labels through CLI and scheduler paths so automatic and
+  manual run summaries remain distinguishable.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before documentation update.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k phase_17a`
+- Result: 2 passed, 229 deselected, 1 warning.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_17a or phase_16 or phase_15b or phase_15a or phase_14 or report_resend_email_updates_status or phase_7_run_job_generates_report_without_ai_or_email or cli_run_due or scheduler"`
+- Result: 20 passed, 211 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 231 passed, 3 warnings.
+- `python -m py_compile api\monitoring\database.py api\monitoring\reporting.py api\monitoring\runner.py api\monitoring\scheduler.py api\monitoring\cli.py api\routers\monitor.py tests\test_monitoring_mvp.py`
+- Result: PASS.
+
+Limitations:
+
+- Phase 17A is backend delivery-governance work only. It does not add the
+  Phase 17B report-center delivery-history frontend and does not implement
+  Phase 18 report grouping or report snapshots.
+- Real SMTP delivery, real platform crawling, and production credential
+  behavior remain production pilot risks inherited from earlier phases.
+
 ## 2026-06-16 - Phase 16 Email Delivery Data Model Preparation Verified
 
 Environment: worktree

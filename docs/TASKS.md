@@ -387,8 +387,8 @@ frontend governance.
 Planning status:
 
 Phase 15 depends on Phase 14. Phase 15A and Phase 15B are complete and
-verified. Phase 16 is also complete and verified; Phase 17A is the next
-implementation batch.
+verified. Phase 16 and Phase 17A are also complete and verified; Phase 17B is
+the next implementation batch.
 
 ### Phase 15A - Run Center API And Data Governance
 
@@ -419,9 +419,9 @@ implementation batch.
 
 Planning status:
 
-Phase 16 is complete and verified. It only prepares the email delivery data
-model; Phase 17A must still connect delivery logic, scheduler idempotency, and
-manual resend logging to this foundation.
+Phase 16 is complete and verified. It only prepared the email delivery data
+model; Phase 17A connected delivery logic, scheduler idempotency, and manual
+resend logging to this foundation.
 
 - [x] Add `email_delivery_logs`.
 - [x] Store `workspace_id`, `job_id`, `report_id`, `send_window_key`,
@@ -439,24 +439,25 @@ manual resend logging to this foundation.
 
 Planning status:
 
-Phase 17 is planned and depends on Phase 16. Execute it as Phase 17A-17B so
-delivery logic and report-center UI are verified separately.
+Phase 17 depends on Phase 16. Phase 17A is complete and verified; Phase 17B is
+the next implementation batch so report-center delivery-history UI remains
+separate from the backend delivery-governance work.
 
 ### Phase 17A - Email Idempotency And Delivery Logic
 
-- [ ] Implement `send_window_key` generation for `daily`, `6h`, `12h`, and
+- [x] Implement `send_window_key` generation for `daily`, `6h`, `12h`, and
       `cron` using the accepted rules in `DATA_MODEL.md` and
       `SCHEMA_MIGRATION.md`.
-- [ ] Add automatic-send idempotency by `workspace_id + job_id +
+- [x] Add automatic-send idempotency by `workspace_id + job_id +
       send_window_key + send_type=auto`.
-- [ ] Record automatic delivery attempts, successes, failures, recipient
+- [x] Record automatic delivery attempts, successes, failures, recipient
       summaries, and customer-safe error messages in `email_delivery_logs`.
-- [ ] Allow manual resend while recording a separate
+- [x] Allow manual resend while recording a separate
       `send_type = manual_resend` delivery log.
-- [ ] Preserve report generation when SMTP is unavailable.
-- [ ] Keep existing latest-state report fields readable until the frontend is
+- [x] Preserve report generation when SMTP is unavailable.
+- [x] Keep existing latest-state report fields readable until the frontend is
       migrated to delivery history.
-- [ ] Verify repeated scheduler triggers do not send duplicate automatic
+- [x] Verify repeated scheduler triggers do not send duplicate automatic
       emails and manual resend creates a separate delivery record.
 
 ### Phase 17B - Email Delivery History Frontend

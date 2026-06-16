@@ -1293,7 +1293,7 @@ async def report_resend_email(report_id: int, user: dict[str, Any] = CurrentUser
     try:
         if _route_actor(user) and not get_report(report_id, actor=_route_actor(user)):
             raise ValueError("report not found")
-        ok, error, report = resend_report_email(report_id)
+        ok, error, report = resend_report_email(report_id, actor=_route_actor(user))
         if is_administrator(user):
             _audit_admin(user, "resend_report_email", "report", report_id, {"status": "sent" if ok else "failed", "error": error or ""})
         return {"ok": ok, "error": customer_safe_text(error), "report": report}

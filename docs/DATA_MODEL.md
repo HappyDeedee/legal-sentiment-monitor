@@ -384,9 +384,12 @@ Idempotency rules:
 - manual resend may repeat and should not consume the automatic-send idempotency
   key;
 - delivery attempts should preserve recipient summary and failure text without
-  storing SMTP secrets.
-- Phase 17A must still connect scheduler/mailer logic to this schema before
-  duplicate automatic sends are prevented end to end.
+  storing SMTP secrets;
+- Phase 17A connects scheduler/report delivery logic to this schema so
+  automatic sends are idempotent by schedule window, duplicate automatic
+  attempts are skipped, automatic failures are logged without blocking report
+  generation, and manual resend uses separate `manual_resend` rows. Phase 17B
+  still needs to expose this delivery history in the report center.
 
 ## Migration Principles
 

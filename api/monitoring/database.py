@@ -5,6 +5,7 @@ import sqlite3
 import re
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from sqlite3 import IntegrityError
 from typing import Any
 
 from .account_environment import (
@@ -2809,6 +2810,34 @@ def record_email_delivery_log(payload: dict[str, Any]) -> dict[str, Any]:
     return _hydrate_email_delivery_log(dict(row))
 
 
+def try_record_email_delivery_log(payload: dict[str, Any]) -> dict[str, Any] | None:
+    try:
+        return record_email_delivery_log(payload)
+    except IntegrityError:
+        return None
+
+
+def update_email_delivery_log_status(
+    log_id: int,
+    status: str,
+    error_message: str | None = None,
+    sent_at: str | None = None,
+) -> dict[str, Any] | None:
+    if status not in EMAIL_DELIVERY_STATUSES:
+        raise ValueError("invalid email delivery status")
+    with get_conn() as conn:
+        conn.execute(
+            """
+            UPDATE email_delivery_logs
+            SET status=?, error_message=?, sent_at=COALESCE(?, sent_at)
+            WHERE id=?
+            """,
+            (status, customer_safe_text(error_message), sent_at, log_id),
+        )
+        row = conn.execute("SELECT * FROM email_delivery_logs WHERE id=?", (log_id,)).fetchone()
+    return _hydrate_email_delivery_log(dict(row)) if row else None
+
+
 def list_email_delivery_logs(
     job_id: int | None = None,
     report_id: int | None = None,
@@ -3204,7 +3233,7 @@ def get_dashboard_summary(actor: dict[str, Any] | None = None) -> dict[str, Any]
             "failed": email_failed,
             "unsent": email_unsent,
             "history_available": False,
-            "history_note": "邮件交付历史将在后续阶段记录",
+            "history_note": "邮件交付历史将在报告中心交付历史阶段展示",
             "status_counts": email_status_counts,
         },
         "lead_metrics": {

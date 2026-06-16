@@ -30,7 +30,6 @@ from .database import (
     update_run_summary,
     utc_now,
 )
-from .mailer import send_report
 from .normalizer import (
     collect_platform_outputs,
     douyin_publish_time_type,
@@ -39,7 +38,7 @@ from .normalizer import (
     normalize_content,
 )
 from .platform_status import list_platform_status
-from .reporting import create_report, update_report_email_status
+from .reporting import create_report, send_report_with_delivery_log
 from .security import MONITOR_DATA_DIR, redact_sensitive
 
 
@@ -125,18 +124,18 @@ def _platform_crawl_semaphore(platform: str) -> asyncio.Semaphore:
     return PLATFORM_SEMAPHORES[cache_key]
 
 
-async def run_job(job_id: int) -> dict[str, Any]:
+async def run_job(job_id: int, source: str = "manual") -> dict[str, Any]:
     lock_path = _acquire_job_lock(job_id)
     if lock_path is None:
         return {"run_id": None, "status": "already_running", "summary": {"job_id": job_id}, "report": None}
     try:
-        return await _run_job_locked(job_id)
+        return await _run_job_locked(job_id, source=source)
     finally:
         _release_job_lock(lock_path)
         clear_stop_request(job_id)
 
 
-async def _run_job_locked(job_id: int) -> dict[str, Any]:
+async def _run_job_locked(job_id: int, source: str = "manual") -> dict[str, Any]:
     job = get_job(job_id)
     if not job:
         raise ValueError("job not found")
@@ -156,6 +155,7 @@ async def _run_job_locked(job_id: int) -> dict[str, Any]:
         "failed_platforms": [],
         "cancelled_platforms": [],
         "platform_results": {},
+        "source": source,
     }
     timeout_seconds = _runtime_setting_int("crawler_timeout_seconds", 900)
     started_at = datetime.now(timezone.utc)
@@ -218,10 +218,13 @@ async def _run_job_locked(job_id: int) -> dict[str, Any]:
         _raise_if_stop_requested(job_id)
         _raise_if_deadline_passed(run_id)
         report = create_report(run_id, job, summary)
-        ok, error = send_report(job, report)
+        ok, error, refreshed_report, delivery_log = send_report_with_delivery_log(job, report, send_type="auto")
         error = redact_sensitive(error)
-        update_report_email_status(report["id"], "sent" if ok else "failed", error)
-        summary["email_status"] = "sent" if ok else "failed"
+        report = refreshed_report
+        summary["email_status"] = report.get("email_status") or ("sent" if ok else "failed")
+        if delivery_log:
+            summary["email_delivery_log_id"] = delivery_log.get("id")
+            summary["email_send_window_key"] = delivery_log.get("send_window_key")
         if error:
             summary["email_error"] = error
         final_status = "partial_failed" if summary["failed_platforms"] else "success"
@@ -242,10 +245,13 @@ async def _run_job_locked(job_id: int) -> dict[str, Any]:
         report = None
         try:
             report = create_report(run_id, job, summary)
-            ok, error = send_report(job, report)
+            ok, error, refreshed_report, delivery_log = send_report_with_delivery_log(job, report, send_type="auto")
             error = redact_sensitive(error)
-            update_report_email_status(report["id"], "sent" if ok else "failed", error)
-            summary["email_status"] = "sent" if ok else "failed"
+            report = refreshed_report
+            summary["email_status"] = report.get("email_status") or ("sent" if ok else "failed")
+            if delivery_log:
+                summary["email_delivery_log_id"] = delivery_log.get("id")
+                summary["email_send_window_key"] = delivery_log.get("send_window_key")
             if error:
                 summary["email_error"] = error
         except Exception as report_exc:
