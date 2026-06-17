@@ -11,6 +11,49 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
 `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-17 - CR-038 Sticky Drawer Close Accessibility
+
+Environment: isolated worktree
+`E:\myproject\MediaCrawler-worktrees\cr038-sticky-drawer-close`, branch
+`codex/cr038-sticky-drawer-close`.
+
+Result:
+
+- Implemented CR-038 as a frontend-only accessibility follow-up before Phase
+  21, without changing backend APIs, database schema, permissions, crawler,
+  AI, SMTP, scheduler, deployment behavior, navigation, page density, or
+  workflows.
+- Shared drawer/modal headers are sticky inside scrollable drawers, with solid
+  white background, border/shadow separation, and stable close-button sizing so
+  content does not bleed through while scrolling.
+- After manual acceptance review found that scrolled content could still peek
+  through the drawer's top padding above the sticky header, the drawer top
+  padding was moved into the header itself so the sticky header fully covers the
+  top edge while content scrolls underneath.
+- Existing backdrop click-to-close, Escape close through the shared overlay
+  handler, and bottom save/close action bars are preserved.
+- Added targeted frontend hook coverage for the required drawer surfaces and
+  sticky-header/sticky-footer layering rules.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`: PASS.
+- `node --check api/webui/monitor/monitor.js`: PASS.
+- Inline script parse check for `api/monitor_web/index.html`: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "cr038 or phase_11c or phase_11d"`:
+  3 passed, 277 deselected, 1 warning.
+- Browser sweep on the local CR-038 service checked task edit, account, proxy,
+  AI profile, mail config, mail template, run log, and report preview drawers
+  at 1440x900, 1024x768, and 390x844. For each viewport, sticky close controls
+  stayed visible/clickable after scrolling, visible footer controls remained
+  reachable, backdrop close and Escape close still worked, page horizontal
+  overflow stayed at 0, and app-side console error logs were empty.
+- Follow-up geometry check for task edit and account drawers at 1440x900,
+  1024x768, and 390x844 confirmed the sticky header reaches the drawer top
+  edge after scrolling, the top probe hits the header rather than scrolled
+  content, close controls remain visible, and horizontal page overflow remains
+  0.
+
 ## 2026-06-17 - Current TODO Cross-Validation And Queue Refinement
 
 Environment: `E:\myproject\MediaCrawler`, branch `main`.

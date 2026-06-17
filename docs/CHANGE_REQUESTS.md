@@ -1933,11 +1933,24 @@ Non-goals:
 - Do not change backend APIs, permissions, data model, crawler behavior, AI
   behavior, or SMTP behavior.
 
-Status: Accepted
+Status: Verified
 
 Related tasks:
 
 - Formal Console Drawer Close Accessibility Follow-up in `TASKS.md`
+
+Verification:
+
+- Implemented in `api/webui/monitor/monitor.css` with shared sticky
+  drawer/modal headers, solid background, border/shadow separation, fixed close
+  button sizing, and adjusted in-drawer sticky action-bar boundaries.
+- Covered by `tests/test_monitoring_mvp.py` through CR-038 frontend hook checks
+  for the required drawers, close handlers, backdrop handlers, sticky header
+  CSS, floating-menu layering, sticky footer hooks, and Escape close support.
+- Browser checked at desktop, tablet, and mobile sizes for task edit, account,
+  proxy, AI profile, mail config, mail template, run log, and report preview
+  drawers, including close-button reachability after scrolling, footer
+  reachability, backdrop close, Escape close, and no horizontal page overflow.
 
 Acceptance:
 

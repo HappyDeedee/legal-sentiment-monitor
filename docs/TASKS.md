@@ -1223,26 +1223,24 @@ functions and does not implement Phase 19B-19D run-progress product changes.
 
 Planning status:
 
-CR-038 is an accepted frontend-only follow-up to the verified formal console
-optimization pass. It fixes scrollable drawer close accessibility without
-reopening CR-033 or changing backend behavior.
+CR-038 is implemented and verified as a frontend-only follow-up to the verified
+formal console optimization pass. It fixes scrollable drawer close
+accessibility without reopening CR-033 or changing backend behavior.
 
 Queue note:
 
-CR-038 may be handled as a small frontend quick fix before Phase 21, or merged
-into the first Phase 21 frontend workstream if Phase 21 is the next UI batch.
-It is not a pilot blocker, but it should not remain unplaced in the active
-follow-up queue.
+CR-038 was handled as a small frontend quick fix before Phase 21. It is closed
+without starting Phase 21 page-level UI refinement.
 
-- [ ] Make shared drawer/modal headers sticky within scrollable drawers so the
+- [x] Make shared drawer/modal headers sticky within scrollable drawers so the
       top-right close button remains visible while content scrolls.
-- [ ] Preserve backdrop click-to-close, Escape close where supported, and
+- [x] Preserve backdrop click-to-close, Escape close where supported, and
       existing bottom save/close action bars.
-- [ ] Add visual separation for sticky headers using solid background and
+- [x] Add visual separation for sticky headers using solid background and
       border/shadow treatment so form content cannot bleed through.
-- [ ] Verify task edit, account, proxy, AI profile, mail config, mail template,
+- [x] Verify task edit, account, proxy, AI profile, mail config, mail template,
       run log, and report preview drawers for reachable close controls.
-- [ ] Verify desktop, tablet, and mobile layouts avoid overlapping sticky
+- [x] Verify desktop, tablet, and mobile layouts avoid overlapping sticky
       header controls with content, scrollbars, or footer action bars.
 
 ## CR-044 - Mail Test Recipient Coverage And SMTP Acceptance Clarity

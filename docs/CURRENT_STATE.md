@@ -106,10 +106,13 @@ rejected and superseded by CR-043: one administrator Mail Configuration switch
 backed by the default-off `real_email_delivery` runtime setting. A `sent`
 delivery-log status still means SMTP submission acceptance only; recipient
 receipt remains a separate evidence item. CR-041 is not blocked by Phase 21
-visual refinement,
-CR-038 drawer accessibility, Phase 19 realtime progress, Phase 20 AI
-traceability, or CR-037 role/quota governance unless a later accepted P0
-regression changes that boundary.
+visual refinement, Phase 19 realtime progress, Phase 20 AI traceability, or
+CR-037 role/quota governance unless a later accepted P0 regression changes that
+boundary. CR-038 Sticky Drawer Close accessibility is now implemented and
+verified as a small frontend-only follow-up before Phase 21: shared
+drawer/modal headers remain sticky inside scrollable drawers, close buttons stay
+reachable, sticky headers have solid visual separation, existing backdrop and
+Escape close paths are preserved, and bottom action bars remain reachable.
 CR-044 Mail Test Recipient Coverage And SMTP Acceptance Clarity is implemented
 and verified: the Mail Configuration test-mail path submits one message to all
 configured global default recipients when no explicit target is supplied,
@@ -530,9 +533,10 @@ separate follow-up work.
   deployment and pilot risks.
 - CR-041 tightens the first usable pilot boundary: Phase 17.1A-B, Phase
   7.1A-C, and a minimum server-like real workflow are required before first
-  pilot use. Phase 21, CR-038, Phase 19B-D, Phase 20, and CR-037 are not first
-  pilot blockers unless a later accepted P0 safety, security, or core-flow
-  regression changes the boundary.
+  pilot use. Phase 21, Phase 19B-D, Phase 20, and CR-037 are not first pilot
+  blockers unless a later accepted P0 safety, security, or core-flow regression
+  changes the boundary. CR-038 is already implemented and verified as a
+  frontend-only accessibility follow-up.
 - CR-041 Pilot Gate C now has a default-safe evidence template/checker:
   `scripts/pilot_gate_c_evidence.py` can write
   `docs/pilot_gate_c_evidence.example.json` and validate a separate
@@ -648,28 +652,25 @@ Next allowed implementation order:
 
 1. implement CR-045/Phase 7.2 AI evaluation accuracy and unevaluated-lead
    status safety before operators rely on broad-keyword AI risk labels;
-2. handle CR-038 sticky drawer close accessibility as a small frontend quick
-   fix, or merge it into the first Phase 21 UI workstream if Phase 21 is the
-   next frontend batch;
-3. implement Phase 21 formal console page-level UI/UX refinement as
+2. implement Phase 21 formal console page-level UI/UX refinement as
    frontend-only workstreams with the Phase 21P cross-page layout-resilience
    gate;
-4. implement CR-047/Phase 5.1 account browser-environment consistency only
+3. implement CR-047/Phase 5.1 account browser-environment consistency only
    after the fixed-environment proxy override policy is confirmed and
    recorded; do this before adopting any optional CloakBrowser-style
    CDP/noVNC provider or expanding platform account environment controls;
-5. implement Phase 17.1C/17.2A remaining operator-facing recipient/template
+4. implement Phase 17.1C/17.2A remaining operator-facing recipient/template
    explanations and Phase 17.2B-C template guardrails as a consolidated
    email/template follow-up batch if it becomes the next accepted batch;
-6. implement CR-031/Phase 19B-19D realtime run-progress work after Phase 7.1
+5. implement CR-031/Phase 19B-19D realtime run-progress work after Phase 7.1
    lifecycle fields are available, unless a deliberately small compatible
    provisional-progress batch is documented first;
-7. schedule CR-034/Phase 20 implementation after higher-priority safety and
+6. schedule CR-034/Phase 20 implementation after higher-priority safety and
    lifecycle work if run-detail traceability becomes the next execution batch;
-8. handle CR-035/Phase 7.1D historical run remediation only when the operator
+7. handle CR-035/Phase 7.1D historical run remediation only when the operator
    explicitly approves the dry-run, backup, rollback, and repair path; it is a
    conditional operations task, not a normal feature batch;
-9. prepare broader production pilot handoff and deployment-specific validation
+8. prepare broader production pilot handoff and deployment-specific validation
    for additional live credentials after the first usable pilot baseline.
 
 ## Latest Verification

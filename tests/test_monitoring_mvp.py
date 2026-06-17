@@ -8675,6 +8675,90 @@ def test_phase_11d_responsive_foundation_and_mobile_navigation():
     assert "min-width: 760px !important;" in css
 
 
+def test_cr038_sticky_drawer_close_controls_are_shared_and_preserved():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    frontend_source = page + "\n" + css
+
+    for drawer_id in [
+        "job_drawer",
+        "account_dialog",
+        "proxy_drawer",
+        "ai_profile_drawer",
+        "mail_config_modal",
+        "email_template_drawer",
+        "run_log_drawer",
+        "report_preview_drawer",
+    ]:
+        assert f'id="{drawer_id}"' in page
+
+    for close_handler in [
+        "closeJobDrawer()",
+        "closeSocialAccountModal()",
+        "closeProxyDrawer()",
+        "closeAIProfileDrawer()",
+        "closeMailConfigModal()",
+        "closeEmailTemplateDrawer()",
+        "closeRunLogDrawer()",
+        "closeReportPreviewDrawer()",
+    ]:
+        assert f'onclick="{close_handler}" title="关闭"' in page
+
+    for backdrop_id, close_handler in [
+        ("job_drawer_backdrop", "closeJobDrawer()"),
+        ("account_modal", "closeSocialAccountModal(event)"),
+        ("proxy_drawer_backdrop", "closeProxyDrawer()"),
+        ("ai_profile_drawer_backdrop", "closeAIProfileDrawer()"),
+        ("mail_config_backdrop", "closeMailConfigModal()"),
+        ("email_template_drawer_backdrop", "closeEmailTemplateDrawer()"),
+        ("run_log_backdrop", "closeRunLogDrawer()"),
+        ("report_preview_backdrop", "closeReportPreviewDrawer()"),
+    ]:
+        assert f'id="{backdrop_id}" class="drawer-backdrop" onclick="{close_handler}"' in page
+
+    assert ".modal-head,\n.drawer-head {" in css
+    sticky_header_block = css[css.index(".modal-head,\n.drawer-head {") : css.index(".modal-head h3,")]
+    for marker in [
+        "position: sticky;",
+        "top: 0;",
+        "z-index: 30;",
+        "background: var(--color-neutral-0);",
+        "border-bottom: 1px solid var(--color-neutral-200);",
+        "box-shadow: 0 8px 18px rgba(15, 23, 42, 0.07);",
+        "margin: 0 calc(var(--drawer-padding-x) * -1) var(--space-4);",
+        "padding: var(--drawer-padding-y) var(--drawer-padding-x) var(--space-3);",
+        "border-radius: calc(var(--radius-modal-medium) - 1px) calc(var(--radius-modal-medium) - 1px) 0 0;",
+    ]:
+        assert marker in sticky_header_block
+
+    assert "--drawer-padding-x: 18px;" in css
+    assert "--drawer-padding-y: 18px;" in css
+    assert "--drawer-padding-x: 14px;" in css
+    assert "--drawer-padding-y: 14px;" in css
+    assert "padding: 0 var(--drawer-padding-x) var(--drawer-padding-y);" in css
+    assert ".modal-head > div,\n.drawer-head > div {\n  min-width: 0;" in css
+    assert "flex: 0 0 34px;" in css
+    assert "--z-floating-menu: 55;" in css
+    assert "z-index: var(--z-floating-menu);" in css
+    assert "z-index:45;" in page
+
+    for sticky_footer in [
+        ".form-actions { position:sticky;",
+        ".account-flow-actions { position:sticky;",
+        ".ai-test-actions { position:sticky;",
+        ".rule-modal-actions { position:sticky;",
+        ".resource-modal-actions { position:sticky;",
+    ]:
+        assert sticky_footer in frontend_source
+
+    assert ".drawer .form-actions,\n.drawer .resource-modal-actions,\n.drawer .account-flow-actions,\n.drawer .ai-test-actions,\n.drawer .rule-modal-actions {" in css
+    assert "top: calc(var(--drawer-padding-y) + 80px);" in css
+
+    assert "document.addEventListener('keydown', event => {" in page
+    assert "if(event.key === 'Escape'){" in page
+    assert "closeAllOverlays();" in page
+
+
 def test_phase_12a_navigation_groups_and_login_landing():
     page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
     css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
