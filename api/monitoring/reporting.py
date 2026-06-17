@@ -91,6 +91,7 @@ def _record_lead_count_summary(records: list[dict[str, Any]]) -> dict[str, int]:
         "lead_total_count": len(records),
         "pending_review_count": sum(1 for item in records if item.get("lead_status") == "pending_review"),
         "negative_count": sum(1 for item in records if item.get("lead_status") in {"high_risk", "suspected_negative"}),
+        "suspected_negative_count": sum(1 for item in records if item.get("lead_status") == "suspected_negative"),
         "high_count": sum(1 for item in records if item.get("lead_status") == "high_risk"),
         "unrelated_count": sum(1 for item in records if item.get("lead_status") == "unrelated"),
         "no_risk_count": sum(1 for item in records if item.get("lead_status") == "no_risk"),

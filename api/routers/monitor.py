@@ -1341,7 +1341,7 @@ async def reports(
     if risk == "high":
         items = [r for r in items if int((r.get("summary") or {}).get("high_count") or 0) > 0]
     elif risk == "negative":
-        items = [r for r in items if int((r.get("summary") or {}).get("negative_count") or 0) > 0]
+        items = [r for r in items if int((r.get("summary") or {}).get("suspected_negative_count") or 0) > 0]
     elif risk == "pending":
         items = [r for r in items if int((r.get("summary") or {}).get("pending_review_count") or 0) > 0]
     elif risk == "unrelated":
@@ -1394,7 +1394,7 @@ async def leads(
     if risk == "high":
         items = [item for item in items if item.get("lead_status") == "high_risk"]
     elif risk == "negative":
-        items = [item for item in items if item.get("lead_status") in {"high_risk", "suspected_negative"}]
+        items = [item for item in items if item.get("lead_status") == "suspected_negative"]
     elif risk == "pending":
         items = [item for item in items if item.get("lead_status") == "pending_review"]
     elif risk == "unrelated":

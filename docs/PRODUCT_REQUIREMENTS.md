@@ -373,6 +373,9 @@ Rules:
 - Lead status should distinguish unrelated, evaluated no-risk, suspected
   negative, high-risk, pending manual review, and unevaluated/limited-context
   history.
+- Report Center status filters should be exact: `高风险` shows only high-risk
+  rows/reports, while `疑似负面` shows only suspected-negative rows/reports and
+  must not include high-risk rows just because high risk is also negative.
 - AI output remains lead screening, not factual determination.
 
 Acceptance:

@@ -329,6 +329,18 @@ verification records.
   existing fields unless a documented schema extension is accepted.
 - Documentation consistency passes after CR-045 task and traceability updates.
 
+### CR-050 Report Center Lead Status Filter Precision Tests
+
+- `/api/monitor/leads?risk=high` returns only exact high-risk rows.
+- `/api/monitor/leads?risk=negative` returns only exact suspected-negative
+  rows and does not include high-risk rows.
+- `/api/monitor/reports?risk=negative` uses exact suspected-negative summary
+  count rather than total negative count.
+- A high-risk-only report is not returned by the suspected-negative filter.
+- A suspected-negative-only report is not returned by the high-risk filter.
+- Unrelated, evaluated no-risk, pending-review, and unevaluated filters remain
+  split and continue to exclude each other.
+
 ## Crawl Range Tests
 
 - Normal users can set `max_items`, `start_page`, `max_pages`, and time window

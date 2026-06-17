@@ -130,8 +130,11 @@ Run Center, leads API, report generation, and filters split unrelated,
 evaluated no-risk, suspected negative, high-risk, pending manual review, and
 unevaluated/limited-context states; active timeout/partial finalization creates
 `pending_review` fallback rows for known unresolved candidate IDs when safe and
-records customer-safe fallback evidence. Phase 7.2C-D relevance hardening and
-calibration fixtures remain open, including the stricter `source_keyword`
+records customer-safe fallback evidence. CR-050 is now implemented and
+verified as a focused CR-045 follow-up: Report Center and leads API risk
+filters keep `高风险` and `疑似负面` exact, so the `疑似负面` filter no longer
+includes high-risk rows. Phase 7.2C-D relevance hardening and calibration
+fixtures remain open, including the stricter `source_keyword`
 recall-provenance-only rule.
 CR-047 Account Browser Environment Consistency is accepted as Phase 5.1, a
 future account-environment optimization that extends the existing
@@ -250,8 +253,10 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   pending-review, unrelated, evaluated no-risk, suspected negative, high-risk,
   and unevaluated buckets; timeout/partial finalization creates
   `pending_review` fallback rows for known unresolved AI candidate IDs when
-  safe and records customer-safe fallback evidence. Phase 7.2C-D relevance
-  hardening and calibration fixtures remain open.
+  safe and records customer-safe fallback evidence. CR-050 has corrected the
+  Report Center risk-filter precision gap so suspected-negative and high-risk
+  filters do not include each other. Phase 7.2C-D relevance hardening and
+  calibration fixtures remain open.
 - Phase 8 - Server-Like Validation: complete and verified through automated
   server-like validation.
 - Phase 9 - Security And Operations: complete and verified locally.
@@ -327,6 +332,10 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   context status safety and active-finalization fallback are implemented;
   relevance prompt hardening and calibration fixtures remain open under Phase
   7.2C-D before the full CR is closed.
+- CR-050 - Report Center Lead Status Filter Precision Regression Fix:
+  complete and verified. Report Center and leads API filters now treat
+  `高风险` and `疑似负面` as exact status filters; suspected-negative filtering
+  no longer includes high-risk rows.
 - CR-046 - Platform Account Avatar Safe Cache Display Regression Fix:
   complete and verified. Platform-account identity rows now expose only a
   same-origin avatar URL; signed platform image URLs remain server-side

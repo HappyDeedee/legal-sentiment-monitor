@@ -370,6 +370,29 @@ pending-review fallback rows for known unresolved candidates when safe. Phase
 - [x] Run docs consistency and targeted monitoring tests before marking the
       Phase 7.2A-B safety batch implemented.
 
+## CR-050 - Report Center Lead Status Filter Precision Regression Fix
+
+Planning status:
+
+CR-050 is a verified follow-up regression fix for the completed CR-045/Phase
+7.2A-B filter-safety work. It does not reopen Phase 7, Phase 7.1, or Phase
+7.2A-B historical completion records. It corrects the Report Center risk
+filter semantics after manual acceptance found that the `疑似负面` filter could
+still include `高风险` lead rows.
+
+- [x] Keep `/api/monitor/leads?risk=high` exact to `lead_status=high_risk`.
+- [x] Change `/api/monitor/leads?risk=negative` to exact
+      `lead_status=suspected_negative` instead of all negative rows.
+- [x] Add a derived exact `suspected_negative_count` summary field so
+      `/api/monitor/reports?risk=negative` does not use total negative count
+      that includes high-risk rows.
+- [x] Preserve existing total negative summary/report-template compatibility
+      while preventing it from driving exact status filters.
+- [x] Add regression coverage proving high-risk and suspected-negative filters
+      do not include each other.
+- [x] Verify docs, targeted monitoring tests, Python compile, and frontend
+      syntax after the fix.
+
 ## Phase 8 - Server-Like Validation
 
 - [x] Add a container or server-like deployment path.

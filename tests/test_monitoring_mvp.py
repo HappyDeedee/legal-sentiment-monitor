@@ -6645,6 +6645,115 @@ def test_phase_7_2_lead_filters_split_unrelated_no_risk_pending_and_unevaluated(
     assert report_view["summary"]["unevaluated_count"] == 1
 
 
+def test_cr050_report_center_risk_filters_do_not_mix_high_and_suspected_negative():
+    init_db()
+    snapshots = {
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "raw_contents": _snapshot_table("raw_contents"),
+        "raw_comments": _snapshot_table("raw_comments"),
+        "ai_evaluations": _snapshot_table("ai_evaluations"),
+    }
+    jobs_snapshot = _snapshot_monitor_jobs()
+
+    def create_risk_report(job: dict[str, Any], content_id: str, risk_level: str) -> dict[str, Any]:
+        run_id = create_run(job["id"], {"job_id": job["id"]})
+        ingested = ingest_outputs(
+            job,
+            run_id,
+            "dy",
+            [
+                {
+                    "aweme_id": content_id,
+                    "title": f"{job['law_firm_name']} {content_id}",
+                    "desc": "服务争议",
+                    "create_time": int(datetime.now(timezone.utc).timestamp()),
+                }
+            ],
+            [],
+        )
+        with get_conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO ai_evaluations (
+                    workspace_id, raw_content_id, run_id, status, is_related, is_negative,
+                    risk_level, reason, evidence_quotes, recommended_action, raw_response, created_at
+                )
+                VALUES (?, ?, ?, 'ok', 1, 1, ?, ?, ?, '人工复核', '{}', ?)
+                """,
+                (
+                    job.get("workspace_id") or 1,
+                    ingested["content_db_ids"][0],
+                    run_id,
+                    risk_level,
+                    f"{risk_level} 风险线索",
+                    json.dumps(["服务争议"], ensure_ascii=False),
+                    datetime.now(timezone.utc).isoformat(),
+                ),
+            )
+        finish_run(run_id, "success", {"job_id": job["id"], **ingested})
+        return create_report(
+            run_id,
+            job,
+            {
+                "job_id": job["id"],
+                "law_firm_name": job["law_firm_name"],
+                "platforms": ["dy"],
+                "failed_platforms": [],
+                **ingested,
+            },
+        )
+
+    try:
+        _clear_monitor_jobs()
+        with get_conn() as conn:
+            for table in ["reports", "crawl_runs", "raw_contents", "raw_comments", "ai_evaluations"]:
+                conn.execute(f"DELETE FROM {table}")
+        job = save_job(
+            {
+                "law_firm_name": "CR050筛选律所",
+                "keywords": ["CR050筛选律所投诉"],
+                "platforms": ["dy"],
+                "recipients": [],
+                "enable_comments": False,
+                "time_window_type": "recent_1d",
+                "enabled": True,
+            }
+        )
+        high_report = create_risk_report(job, "pytest_cr050_high", "high")
+        suspected_report = create_risk_report(job, "pytest_cr050_suspected", "medium")
+
+        high_leads = asyncio.run(monitor_router.leads(report_id=high_report["id"], risk="high", limit=0))["leads"]
+        high_as_negative = asyncio.run(monitor_router.leads(report_id=high_report["id"], risk="negative", limit=0))["leads"]
+        suspected_leads = asyncio.run(monitor_router.leads(report_id=suspected_report["id"], risk="negative", limit=0))["leads"]
+        suspected_as_high = asyncio.run(monitor_router.leads(report_id=suspected_report["id"], risk="high", limit=0))["leads"]
+        high_reports = asyncio.run(monitor_router.reports(risk="high", limit=0))["reports"]
+        negative_reports = asyncio.run(monitor_router.reports(risk="negative", limit=0))["reports"]
+        hydrated_high = get_report(high_report["id"])
+        hydrated_suspected = get_report(suspected_report["id"])
+    finally:
+        _restore_monitor_jobs(jobs_snapshot)
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+    assert [item["content_id"] for item in high_leads] == ["pytest_cr050_high"]
+    assert high_leads[0]["lead_status"] == "high_risk"
+    assert high_as_negative == []
+    assert [item["content_id"] for item in suspected_leads] == ["pytest_cr050_suspected"]
+    assert suspected_leads[0]["lead_status"] == "suspected_negative"
+    assert suspected_as_high == []
+    assert high_report["id"] in {item["id"] for item in high_reports}
+    assert suspected_report["id"] not in {item["id"] for item in high_reports}
+    assert suspected_report["id"] in {item["id"] for item in negative_reports}
+    assert high_report["id"] not in {item["id"] for item in negative_reports}
+    assert hydrated_high["summary"]["negative_count"] == 1
+    assert hydrated_high["summary"]["suspected_negative_count"] == 0
+    assert hydrated_high["summary"]["high_count"] == 1
+    assert hydrated_suspected["summary"]["negative_count"] == 1
+    assert hydrated_suspected["summary"]["suspected_negative_count"] == 1
+    assert hydrated_suspected["summary"]["high_count"] == 0
+
+
 def test_phase_7_2_timeout_finalization_creates_pending_review_fallback_rows(monkeypatch):
     init_db()
     snapshots = {

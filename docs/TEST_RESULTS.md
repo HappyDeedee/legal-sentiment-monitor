@@ -62,6 +62,38 @@ Verification:
 - `uv run python scripts/check_docs.py`
 - Result: PASS docs consistency.
 
+## 2026-06-17 - CR-050 Report Center Lead Status Filter Precision
+
+Environment: local worktree
+`E:\myproject\MediaCrawler-worktrees\cr045-phase-7-2-ab`.
+
+Result:
+
+- Fixed the Report Center/leads API risk filter semantics so `高风险` and
+  `疑似负面` are exact filters instead of overlapping negative buckets.
+- Added exact `suspected_negative_count` as a derived summary field for report
+  filtering while preserving the existing `negative_count` total-negative
+  summary for report/template compatibility.
+- Preserved pending-review, unrelated, evaluated no-risk, and
+  unevaluated/limited-context filter separation.
+- Did not change crawler behavior, AI relevance calibration, SMTP delivery,
+  permissions, or historical runtime data.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "cr050 or phase_7_2_lead_filters"`
+- Result: 2 passed, 282 deselected, 1 warning.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_7_2 or cr050 or ai or leads or report"`
+- Result: 110 passed, 174 deselected, 3 warnings.
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS.
+- `uv run python -m py_compile api/monitoring/database.py api/monitoring/reporting.py api/routers/monitor.py tests/test_monitoring_mvp.py`
+- Result: PASS.
+
 ## 2026-06-17 - CR-045/Phase 7.2A-B Unevaluated Lead Safety
 
 Environment: local worktree

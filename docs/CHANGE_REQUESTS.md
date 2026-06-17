@@ -66,6 +66,7 @@ Status values:
 - CR-047: Account Browser Environment Consistency
 - CR-048: Report Center Lead Detail Information Architecture
 - CR-049: Mail Configuration And Delivery History Action Hierarchy
+- CR-050: Report Center Lead Status Filter Precision Regression Fix
 
 ## Entry Classification Rule
 
@@ -3186,3 +3187,81 @@ Acceptance:
 - Report Center delivery history is opened from a scoped report action/status
   and does not dominate the initial report page layout.
 - Existing CR-043/CR-044 safety behavior and wording remain intact.
+## CR-050 - Report Center Lead Status Filter Precision Regression Fix
+
+Date: 2026-06-17
+
+Source: user manual acceptance found that after filtering Report Center lead
+details by `高风险`, switching to `疑似负面` still showed both `疑似负面` and
+`高风险` rows.
+
+Module: Report Center, leads API, report risk filters
+
+Type: Regression Fix
+
+Background:
+
+CR-045/Phase 7.2A-B split lead states into unrelated, evaluated no-risk,
+suspected negative, high-risk, pending manual review, and
+unevaluated/limited-context. The Report Center filter implementation still
+treated `risk=negative` as a broad "all negative" bucket for lead details,
+including both `high_risk` and `suspected_negative` rows. Report-list filtering
+also used `negative_count`, which is a total negative summary count and can
+include high-risk rows.
+
+Purpose:
+
+Make Report Center status filters match their labels. `高风险` must mean exact
+high-risk rows, while `疑似负面` must mean exact suspected-negative rows.
+
+Requirement:
+
+- `/api/monitor/leads?risk=high` must return only `lead_status=high_risk`.
+- `/api/monitor/leads?risk=negative` must return only
+  `lead_status=suspected_negative`.
+- Report-list `risk=negative` filtering must use an exact suspected-negative
+  count, not the total negative count that includes high-risk rows.
+- Existing total negative report summary and report template placeholders may
+  remain compatible, but they must not drive exact status filtering.
+- Pending review, unrelated, evaluated no-risk, and unevaluated/limited-context
+  filters must remain separate.
+
+Scope boundary:
+
+- In scope: Report Center risk filter semantics, leads API filter semantics,
+  derived report lead-count summary fields, targeted regression tests, and
+  documentation.
+- Out of scope: Phase 7.2C-D relevance hardening, AI calibration fixtures,
+  Phase 19 realtime progress, Phase 20 AI traceability, report visual redesign,
+  or historical data repair.
+
+Non-goals:
+
+- Do not change crawler behavior, AI provider behavior, SMTP delivery, role
+  scope, or production/runtime data.
+- Do not rewrite historical report artifacts just to backfill display-only
+  summary fields.
+
+Status: Verified
+
+Related tasks:
+
+- CR-050 Report Center Lead Status Filter Precision Regression Fix in
+  `TASKS.md`
+- CR-045/Phase 7.2A-B in `TASKS.md`
+- PR-RUNREPORT-001 in `TRACEABILITY.md`
+
+Acceptance:
+
+- A high-risk-only report or lead is not returned by the `疑似负面` filter.
+- A suspected-negative-only report or lead is not returned by the `高风险`
+  filter.
+- A mixed report can still appear when filtering by suspected negative, but its
+  lead details show only suspected-negative rows under that filter.
+- No-risk, unrelated, pending-review, and unevaluated filters remain unchanged.
+
+Verification:
+
+- Verified on 2026-06-17 with targeted regression coverage proving
+  high-risk and suspected-negative report/lead filters do not include each
+  other.
