@@ -64,6 +64,8 @@ Status values:
 - CR-045: AI Evaluation Accuracy And Unevaluated Lead Status Clarity
 - CR-046: Platform Account Avatar Safe Cache Display Regression Fix
 - CR-047: Account Browser Environment Consistency
+- CR-048: Report Center Lead Detail Information Architecture
+- CR-049: Mail Configuration And Delivery History Action Hierarchy
 
 ## Entry Classification Rule
 
@@ -2955,3 +2957,232 @@ Acceptance:
 - If an optional CloakBrowser-style provider is enabled, CDP/noVNC access is
   administrator-scoped, authenticated, and does not bypass the existing
   account/profile/proxy locks or sensitive-data redaction rules.
+
+## CR-048 - Report Center Lead Detail Information Architecture
+
+Date: 2026-06-17
+
+Source: user observation during Report Center review: the lead detail area is
+flattened directly on the page, and it is unclear whether it shows all leads,
+leads under current filters, or leads for a selected report. The user also
+questioned whether Report Center is carrying both report aggregation and lead
+aggregation responsibilities.
+
+Module: Report Center, report leads, Run Detail navigation, UI information
+architecture
+
+Type: Existing Feature Optimization
+
+Background:
+
+Phase 18B grouped Report Center history by monitoring task while preserving
+preview, lead detail switching, downloads, delivery history, and row actions.
+CR-034 / Phase 20 already accepted that Report Center should expose an
+explicit "view leads" path and link report leads back to Run Detail where
+possible.
+
+The remaining product ambiguity is the default lead-detail presentation. A
+flat lead detail area inside Report Center can look like a global lead list or
+lead workbench even when the intended relationship is "leads for the selected
+report" or "leads under the current report filters." This makes operators ask
+whether they are seeing every accessible lead, a filtered aggregate, or one
+report's leads.
+
+Purpose:
+
+Clarify Report Center as a report-first surface. Lead detail may exist there,
+but it must be an explicit, scoped secondary view tied to a selected report,
+selected report group, or visibly labeled filter state. The full per-run and
+per-AI-evaluation inspection surface remains Phase 20 Run Detail.
+
+Placement rule:
+
+- Run Center / Run Detail is the primary operational home for run-generated
+  leads and AI evaluation inspection because leads are produced by a specific
+  crawl/evaluation run and can exist before a report is generated.
+- Report Center provides report-scoped "view leads" shortcuts after report
+  generation. These shortcuts answer "what leads are included in this report,"
+  not "what happened during the whole run."
+- A standalone top-level Lead Center or global lead workbench is out of scope
+  for CR-048 and requires a separate confirmed capability CR if needed later.
+
+Requirements:
+
+- Report Center lead details must always show their scope: selected report,
+  selected report group, originating run, or current report filters.
+- The page must not silently display all accessible leads, or all filtered
+  leads, as an unlabeled flat "line detail" table.
+- Add an explicit "view leads" action for report rows or report groups,
+  separate from report preview. Preview may still update lead context, but it
+  must not be the only discoverable path.
+- Lead detail scope should include a count and applied filter summary such as
+  risk, platform, date range, law firm, report ID, group, or run ID when
+  available.
+- Empty states must distinguish "no report selected," "this selected report
+  has no leads," and "current filters have no matching leads."
+- If a current-filter aggregate lead list is kept, it must be visually and
+  textually labeled as a filtered aggregate, not as selected-report detail.
+- Report Center remains responsible for final reports, report-scoped leads,
+  previews, downloads, resend actions, and email delivery history.
+- Run Center should expose or preserve a run-detail entry for run-scoped leads
+  and AI evaluation records, including items that exist before report
+  generation or after partial/failed runs.
+- Run lifecycle, collection logs, every AI evaluation record, trace snapshots,
+  and debug fields belong to CR-034 / Phase 20 Run Detail, not to the Report
+  Center lead table.
+
+Preserved behavior:
+
+- Preserve report grouping by monitoring task and deleted-task snapshots.
+- Preserve report filters, report preview, HTML/Excel/Markdown downloads,
+  delivery history, resend, and customer-safe report wording.
+- Preserve owner/workspace scope for report and lead reads.
+- Preserve the existing no-build frontend architecture.
+
+Scope boundary:
+
+- This CR optimizes the existing Report Center information architecture. It
+  does not create a standalone global lead workbench.
+- A future global lead workbench would require a separate confirmed capability
+  CR with its own filters, ownership rules, actions, and tests.
+- This CR does not implement AI trace persistence, raw prompt/request/response
+  views, or per-evaluation debug detail; those remain Phase 20 work.
+
+Non-goals:
+
+- Do not remove report preview, downloads, delivery history, or resend.
+- Do not make Report Center the primary place for observing running AI
+  evaluation progress.
+- Do not change AI relatedness or risk-classification semantics.
+- Do not expose administrator-only AI debug fields or raw model responses in
+  Report Center.
+
+Status: Accepted
+
+Related tasks:
+
+- Phase 20E Report Center Lead Detail Clarity in `TASKS.md`
+- Phase 21M Report Center in `TASKS.md`
+- CR-048 Report Center Lead Detail Information Architecture in
+  `TRACEABILITY.md`
+
+Acceptance:
+
+- Operators can tell whether the visible lead list belongs to a selected
+  report, selected report group, originating run, or current filters.
+- Opening "view leads" on a report or group visibly changes the lead-detail
+  scope and count.
+- Report preview is not the only way to inspect report leads.
+- The default Report Center page no longer looks like an unlabeled global lead
+  workbench.
+- Run Center remains the primary entry for run-scoped lead/evaluation
+  inspection, while Report Center exposes report-scoped shortcuts.
+- Empty states explain whether no report is selected, the selected report has
+  no leads, or the current filters have no matches.
+- Report Center keeps a report-first hierarchy while Phase 20 Run Detail
+  remains the place for per-run lifecycle and per-AI-evaluation evidence.
+
+## CR-049 - Mail Configuration And Delivery History Action Hierarchy
+
+Date: 2026-06-17
+
+Source: user review of the Mail Configuration page and Report Center delivery
+history. The Mail Configuration page already has top-level "edit mail
+configuration" and "send test mail" actions, but the "SMTP and sending
+defaults" block repeats "edit configuration" and "test mail." The real email
+send switch is visually heavy and takes a full row even though it is a compact
+safety state/action. The user also raised the same hierarchy concern for
+Report Center email delivery history.
+
+Module: Mail Configuration, Report Center email delivery history, formal
+console UI action hierarchy
+
+Type: Existing Feature Optimization
+
+Background:
+
+CR-043 intentionally introduced one administrator-controlled real-email send
+switch on Mail Configuration, backed by the default-off `real_email_delivery`
+runtime setting. CR-044 clarified test-mail recipient coverage and SMTP
+acceptance wording. Phase 17B added Report Center delivery history and manual
+resend visibility. These safety and audit functions are correct, but the
+current page hierarchy can make the mail configuration surface feel heavier
+than needed and can duplicate the same actions in multiple places.
+
+Purpose:
+
+Keep mail and delivery controls operationally clear without letting secondary
+safety/status panels dominate the page. Primary mail actions should live in the
+page-level action bar; content sections should show status, configuration
+summaries, and lightweight explanations instead of repeating the same controls.
+
+Requirements:
+
+- Mail Configuration should have one primary action group in the page header:
+  edit configuration, send test mail, refresh/read status, view delivery
+  status, and a compact real-email send state/action where permitted.
+- The "SMTP and sending defaults" section should not repeat "edit
+  configuration" or "test mail" if those actions already exist in the page
+  header. It should focus on sender, recipient source/count, title/template
+  summary, latest test state, and safe status text.
+- The real-email send control remains the single CR-043 administrator switch,
+  but its visual treatment should be compact: a labeled toolbar toggle/button
+  plus concise state text or tooltip. It should not occupy a large full-width
+  card unless the state is exceptional and needs attention.
+- Turning real email on still requires explicit confirmation and must preserve
+  the warning that SMTP acceptance is not inbox proof.
+- When real email is off, the UI should still make the state visible, but as a
+  compact safe default rather than a dominant warning block.
+- Report Center delivery history should be reachable from a report row/status
+  action and displayed as scoped secondary detail. It should not visually
+  compete with the grouped report list, report preview, or report-scoped lead
+  detail by default.
+- Delivery history scope should show the selected report and latest delivery
+  status, then reveal detailed attempts on demand.
+
+Preserved behavior:
+
+- Preserve CR-043 one-switch real-email safety behavior and default-off state.
+- Preserve CR-044 test-mail recipient count/source and SMTP acceptance
+  warning.
+- Preserve report generation when email fails or real SMTP is disabled.
+- Preserve delivery history, manual resend, automatic/manual send type,
+  recipient summaries, and customer-safe delivery errors.
+- Preserve administrator-only real-email control and role-safe visibility.
+
+Scope boundary:
+
+- This CR changes frontend information architecture and action placement. It
+  should not change SMTP delivery logic, delivery-log schema, recipient
+  precedence, permission rules, or real-email safety semantics.
+- This CR does not add role quotas, normal-user resend policy, or new mail
+  provider troubleshooting.
+
+Non-goals:
+
+- Do not remove the real-email safety switch.
+- Do not hide safety status or SMTP acceptance warnings entirely.
+- Do not create a second real-email send toggle.
+- Do not treat SMTP `sent` as proof of recipient inbox delivery.
+- Do not send real SMTP during automated verification.
+
+Status: Accepted
+
+Related tasks:
+
+- Phase 21I Mail Configuration in `TASKS.md`
+- Phase 21M Report Center in `TASKS.md`
+- CR-049 Mail Configuration And Delivery History Action Hierarchy in
+  `TRACEABILITY.md`
+
+Acceptance:
+
+- Mail Configuration has one page-level primary action bar for edit, test,
+  refresh/status, delivery-status navigation, and compact real-email state.
+- The SMTP/defaults section no longer repeats primary edit/test actions and
+  reads as status/configuration summary.
+- The real-email send state is visible but compact when off, and still uses an
+  explicit confirmation before turning on.
+- Report Center delivery history is opened from a scoped report action/status
+  and does not dominate the initial report page layout.
+- Existing CR-043/CR-044 safety behavior and wording remain intact.

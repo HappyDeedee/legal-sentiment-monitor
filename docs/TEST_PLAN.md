@@ -1053,6 +1053,9 @@ implementation gate when Phase 20 becomes the active execution batch.
 ### Phase 20D Run Detail Frontend Tests
 
 - Run Center row has a clear "details" entry for the selected run.
+- Run Detail is the primary operational entry for run-scoped leads and AI
+  evaluation records, including records that exist before a report is
+  generated.
 - Run detail view groups Overview, Collection Logs, Collected Contents, AI
   Evaluation, Report, and Email Delivery in one surface.
 - AI Evaluation tab lists every evaluation candidate/result for the run before
@@ -1066,8 +1069,20 @@ implementation gate when Phase 20 becomes the active execution batch.
 
 - Report rows or report groups expose an explicit "view leads" action separate
   from report preview.
+- Report Center "view leads" behaves as a report-scoped shortcut and does not
+  replace the Run Center / Run Detail entry for run-scoped lead and AI
+  evaluation inspection.
 - Report lead detail can link back to the originating run detail when `run_id`
   is available.
+- Lead detail shows a visible scope label, count, and applied filter summary
+  for selected report, selected group, originating run, or current filters.
+- Default Report Center loading does not present an unlabeled flat lead table
+  that could be mistaken for all leads.
+- If a current-filter aggregate lead list is supported, it is labeled as a
+  filtered aggregate and remains visually distinct from selected-report lead
+  detail.
+- Empty states distinguish no selected report, selected report has no leads,
+  and current filters have no matching leads.
 - Report Center remains focused on final report artifacts, downloads, email
   delivery history, and report-scoped leads.
 
@@ -1151,6 +1166,13 @@ smoke checks, then finalized through Phase 21P cross-page verification.
   and close.
 - Mail Configuration preserves edit, test, refresh, delivery shortcut, masked
   password, save, cancel, and close.
+- Mail Configuration keeps edit configuration, send test mail, refresh/status,
+  delivery-status navigation, and compact real-email state in one page-level
+  action bar without duplicating edit/test actions inside the SMTP/defaults
+  summary.
+- The real-email send state is visible as the single CR-043 switch, remains
+  compact when off, and still requires explicit confirmation before enabling
+  real SMTP.
 - Mail Templates preserve list filters, edit, set current where available,
   delete, variables, HTML editor, iframe preview, save, refresh preview, clear,
   and close.
@@ -1161,6 +1183,9 @@ smoke checks, then finalized through Phase 21P cross-page verification.
 - Report Center preserves filters, grouping, preview, lead detail, delivery
   history, resend, HTML/Excel/Markdown downloads, refresh status, refresh
   history, and report preview drawer.
+- Report Center delivery history opens as scoped secondary detail from the
+  selected report row/status action and does not dominate the initial report
+  archive layout.
 - System Diagnostics preserves rerun diagnosis, run system diagnosis, handle
   account resources, readiness/action cards, runtime state, scheduler state,
   and platform state.

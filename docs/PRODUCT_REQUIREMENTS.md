@@ -300,6 +300,9 @@ Purpose:
   lifecycle;
 - avoid forcing operators to switch from Run Center to Report Center to
   understand AI evaluation progress or per-item evaluation evidence.
+- make Run Center / Run Detail the primary operational home for run-scoped
+  leads and AI evaluation records, including records that exist before report
+  generation.
 
 Proposed rules:
 
@@ -316,6 +319,11 @@ Proposed rules:
 - Report Center should retain final report, report leads, downloads, and email
   delivery history, but should expose explicit "view leads" actions and link
   back to run detail where possible.
+- Report Center lead detail must show whether the visible list is scoped to a
+  selected report, selected report group, originating run, or current filters;
+  it must not appear as an unlabeled global lead workbench.
+- Report Center "view leads" is a report-scoped shortcut, not the primary
+  lead/evaluation workbench.
 
 Confirmed:
 
@@ -395,7 +403,9 @@ Features:
 - group reports by monitoring task by default;
 - filter by law firm, platform, risk level, and date;
 - preview HTML report;
-- switch lead details when a different report is selected;
+- explicitly view lead details for a selected report or group;
+- switch lead details when a different report is selected, with visible scope
+  and count;
 - download Markdown/Excel when available;
 - view email send status.
 
@@ -412,10 +422,20 @@ Rules:
   platforms, keywords, frequency, and deleted-task status when available;
 - email delivery status should distinguish automatic delivery from manual
   resend.
+- lead detail must not silently display all accessible leads or all filtered
+  leads without a scope label.
+- if a current-filter aggregate lead list is kept, label it as a filtered
+  aggregate and keep it visually distinct from selected-report lead detail.
+- Report Center is not the primary surface for every AI evaluation record;
+  per-run lifecycle and per-evaluation evidence belong to Run Detail.
+- if operators need to inspect lead/evaluation evidence before a report exists
+  or after a partial/failed run, the entry point is Run Center / Run Detail.
 
 Acceptance:
 
 - selecting different reports changes preview and lead details immediately;
+- users can tell whether visible leads belong to a selected report, selected
+  group, originating run, or current filters;
 - no-risk reports can still be generated and sent;
 - orphan reports remain understandable after their task is deleted or missing.
 
@@ -439,6 +459,9 @@ Rules:
 - manual resend is allowed and logged separately;
 - delivery history should show send type, status, time, recipient summary, and
   error message when failed;
+- delivery history should be opened as scoped secondary detail from a selected
+  report row/status action and should not dominate the initial Report Center
+  archive layout.
 - real email sends must be understandable after the fact: delivery history
   should show whether the send was automatic, manual resend, or an explicit
   validation send, plus the related task/report/run context and effective
@@ -453,6 +476,13 @@ Rules:
 - when the administrator switch is on and SMTP configuration is complete, mail
   test, manual resend, and automatic delivery may submit real SMTP.
 - the frontend should warn that SMTP acceptance is not recipient inbox proof.
+- Mail Configuration should use one page-level primary action group for edit
+  configuration, send test mail, refresh/status, delivery-status navigation,
+  and the compact real-email state. Inner SMTP/defaults summaries should not
+  repeat the same edit/test actions.
+- The real-email send switch remains one administrator-only safety control,
+  but its normal off/on state should be compact and label-based; enabling real
+  SMTP still requires explicit confirmation.
 - automatic delivery uses these schedule-window keys:
   - `daily`: `{job_id}_{YYYY-MM-DD}`;
   - `6h`, `12h`, and `cron`: `{job_id}_{YYYY-MM-DD}_{HH}`.

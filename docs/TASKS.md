@@ -1174,6 +1174,9 @@ visibility.
 
 - [ ] Add a Run Center "详情" action that opens a per-run detail drawer or
       page grouped by `run_id`.
+- [ ] Treat Run Detail as the primary operational entry for run-scoped leads
+      and AI evaluation records, including records that exist before report
+      generation.
 - [ ] Show tabs or sections for Overview, Collection Logs, Collected Contents,
       AI Evaluation, Report, and Email Delivery.
 - [ ] In the AI Evaluation tab, list every evaluation candidate/result for the
@@ -1185,10 +1188,26 @@ visibility.
 
 ### Phase 20E - Report Center Lead Detail Clarity
 
+Planning note:
+
+CR-048 refines this phase by making Report Center lead detail scope explicit.
+Report Center may show report-scoped leads or a clearly labeled current-filter
+aggregate, but it must not present an unlabeled flat list that looks like a
+global lead workbench. Run Center / Run Detail remains the primary home for
+run-scoped lead and AI evaluation inspection; Report Center provides
+report-scoped shortcuts.
+
 - [ ] Add an explicit "view leads" action to report rows or report groups so
       line details are not hidden behind the report preview action.
 - [ ] Link report leads back to the originating run detail when `run_id` is
       available.
+- [ ] Show a visible lead-detail scope label, count, and applied filter summary
+      for selected report, selected group, originating run, or current filters.
+- [ ] Avoid default flat "all leads" presentation unless the operator
+      explicitly selects a current-filter aggregate and the UI labels it as
+      filtered aggregate leads.
+- [ ] Add empty states that distinguish no selected report, selected report has
+      no leads, and current filters have no matching leads.
 - [ ] Keep Report Center focused on final reports, report leads, downloads, and
       email delivery history rather than running-process observability.
 
@@ -1390,6 +1409,14 @@ implementation baseline is the latest formal `/monitor` console.
 
 - [ ] Refine SMTP form layout, sender/recipient wording, default-recipient
       explanation, masked password display, and mail-test feedback.
+- [ ] Apply CR-049 action hierarchy: keep edit configuration, send test mail,
+      refresh/status, delivery-status navigation, and compact real-email state
+      in one page-level action bar.
+- [ ] Remove or demote duplicated edit/test controls from the SMTP/defaults
+      summary section so that section reads as configuration/status summary.
+- [ ] Render the real-email send state as a compact labeled toolbar
+      toggle/button with concise state text while preserving explicit
+      confirmation before enabling real SMTP.
 - [ ] Preserve edit config, send test mail, refresh config, view delivery
       status, save, cancel, close, and test-console behavior.
 
@@ -1423,6 +1450,14 @@ implementation baseline is the latest formal `/monitor` console.
 
 - [ ] Refine grouped report archive, selected report relationship, lead detail,
       delivery history, preview drawer, and row more menu visual hierarchy.
+- [ ] Apply CR-048 scope clarity so lead detail reads as selected-report or
+      clearly labeled filtered-aggregate detail, not an unlabeled global lead
+      table.
+- [ ] Make "view leads" visually discoverable separately from report preview
+      while preserving preview-driven context switching.
+- [ ] Apply CR-049 delivery-history hierarchy so delivery history is opened as
+      scoped secondary detail from a report row/status action and does not
+      dominate the initial report archive layout.
 - [ ] Preserve report filters, refresh report, refresh email status, refresh
       history, preview, more menu, delivery history, resend, HTML/Excel/
       Markdown downloads, lead detail, and preview iframe.

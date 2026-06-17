@@ -11,6 +11,57 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
 `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-17 - CR-048 Report Center Lead Detail IA Documentation
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Recorded CR-048 as an accepted Report Center information-architecture
+  optimization.
+- Clarified that Report Center remains report-first: lead detail must be
+  explicitly scoped to selected report, selected report group, originating run,
+  or visibly labeled current-filter aggregate.
+- Clarified placement: Run Center / Run Detail is the primary operational home
+  for run-scoped leads and AI evaluation records, while Report Center keeps
+  report-scoped "view leads" shortcuts.
+- Added task, product, UI, formal-console plan, test-plan, decision, and
+  traceability coverage for explicit "view leads", scope/count/filter labels,
+  filtered-aggregate labeling, and empty-state clarity.
+- Kept global lead workbench and per-AI-evaluation trace/debug detail outside
+  CR-048; those remain separate future capability or CR-034 / Phase 20 scope.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency after the additional Run Center versus Report
+  Center placement clarification.
+
+## 2026-06-17 - CR-049 Mail Configuration And Delivery History IA Documentation
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Recorded CR-049 as an accepted frontend information-architecture
+  optimization for Mail Configuration and Report Center delivery history.
+- Clarified that Mail Configuration should use one page-level action bar for
+  edit configuration, send test mail, refresh/status, delivery-status
+  navigation, and compact real-email state.
+- Clarified that SMTP/defaults summaries should not repeat edit/test buttons,
+  and that the CR-043 real-email switch remains a single compact
+  administrator safety control with explicit confirmation before enabling.
+- Clarified that Report Center delivery history is scoped secondary detail
+  opened from a report row/status action and should not dominate the initial
+  report archive layout.
+- Preserved CR-043/CR-044 safety behavior, SMTP acceptance wording, delivery
+  history, resend, and no-real-SMTP automated verification boundaries.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+
 ## 2026-06-17 - CR-045/Phase 7.2A-B Unevaluated Lead Safety
 
 Environment: local worktree

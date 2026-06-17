@@ -269,3 +269,29 @@ short `Superseded by` note rather than deleting history.
   edited after successful login validation. Changing a locked environment
   requires an explicit administrator reset/re-login flow with audit logging and
   clear consequences.
+- Confirmed for CR-048: Report Center remains a report-first artifact surface.
+  Lead detail may appear there only as an explicit scoped secondary view tied
+  to a selected report, selected report group, originating run, or visibly
+  labeled current-filter aggregate.
+- Confirmed for CR-048: an unlabeled flat lead list in Report Center is not an
+  acceptable long-term information architecture because it makes users wonder
+  whether they are seeing all leads, filtered leads, or one report's leads.
+- Confirmed for CR-048: a standalone global lead workbench is out of scope for
+  this optimization and would require a separate capability CR. Per-run
+  lifecycle, every AI evaluation record, and trace/debug evidence remain
+  CR-034 / Phase 20 Run Detail responsibilities.
+- Confirmed for CR-048: if the UI needs a primary home for "lead center"
+  behavior, it belongs under Run Center / Run Detail because leads are produced
+  by a run and may exist before a report is generated. Report Center should
+  provide report-scoped "view leads" shortcuts only.
+- Confirmed for CR-049: Mail Configuration should use one page-level action
+  bar for edit configuration, test mail, refresh/status, delivery-status
+  navigation, and the compact real-email send state. Inner SMTP/defaults
+  panels should not repeat the same primary edit/test actions.
+- Confirmed for CR-049: the CR-043 real-email send switch remains the single
+  administrator safety control, but its normal/off presentation should be a
+  compact labeled toolbar control with concise state text rather than a large
+  full-width block. Turning it on still requires explicit confirmation.
+- Confirmed for CR-049: Report Center delivery history is scoped secondary
+  detail opened from a report row/status action; it should not dominate the
+  initial report archive layout.

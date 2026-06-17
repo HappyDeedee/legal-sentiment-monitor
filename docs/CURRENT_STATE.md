@@ -143,6 +143,24 @@ the fixed-environment proxy override policy must be confirmed and recorded:
 task-level proxy overrides must either be blocked for locked account
 environments or treated as explicit visible exceptions with audit and
 customer-safe explanation.
+CR-048 Report Center Lead Detail Information Architecture is accepted as a
+Report Center information-architecture optimization linked to Phase 20E and
+Phase 21M. It clarifies that Report Center remains a report-first surface:
+lead detail must be explicit and scoped to a selected report, selected group,
+originating run, or visibly labeled current-filter aggregate. It must not look
+like an unlabeled global lead workbench, and per-run lifecycle plus every AI
+evaluation record remain CR-034 / Phase 20 Run Detail responsibilities. The
+primary home for run-scoped lead/evaluation inspection is Run Center / Run
+Detail; Report Center provides report-scoped "view leads" shortcuts after
+report generation.
+CR-049 Mail Configuration And Delivery History Action Hierarchy is accepted as
+a frontend information-architecture optimization linked to Phase 21I and
+Phase 21M. It keeps CR-043/CR-044 safety behavior intact while moving mail
+configuration primary actions into one page-level action bar, avoiding
+duplicated edit/test actions inside SMTP/default summaries, rendering the
+real-email state as one compact administrator control, and keeping Report
+Center delivery history as scoped secondary detail rather than a dominant
+default panel.
 The active SQLite schema now provides the foundation tables and columns
 required before later implementation work, and the web/API layer now has
 session login, administrator/normal-user roles, menu visibility,
@@ -323,6 +341,17 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   reuse of the same profile/user-agent/browser-platform/timezone/locale/screen
   and proxy policy, explicit reset/re-login for locked changes, and optional
   CloakBrowser-style provider evaluation without making it a hard dependency.
+- CR-048 - Report Center Lead Detail Information Architecture: accepted but
+  not implemented. Confirmed scope is an explicit "view leads" path, visible
+  lead-detail scope/count/filter summary, no unlabeled flat all-leads table in
+  Report Center, filtered-aggregate labeling if retained, Run Center / Run
+  Detail as the primary run-scoped lead/evaluation entry, and preservation of
+  report preview, downloads, resend, and delivery history.
+- CR-049 - Mail Configuration And Delivery History Action Hierarchy: accepted
+  but not implemented. Confirmed scope is one Mail Configuration page-level
+  action bar, no duplicated edit/test buttons inside the SMTP/defaults
+  summary, compact single real-email switch state with explicit enable
+  confirmation, and Report Center delivery history as scoped secondary detail.
 
 The documented V1 product roadmap is implemented through Phase 9 in this
 worktree, and the console optimization roadmap is verified through Phase 18B.
@@ -583,6 +612,16 @@ separate follow-up work.
   prompt/request/response details will add new trace persistence and role-safe
   APIs. Historical AI evaluations cannot be treated as having exact input
   snapshots because those snapshots were not persisted at evaluation time.
+- CR-048 is accepted but not implemented: the current Report Center can still
+  make lead details feel like a flat list. Until the scope-clarity UI is
+  implemented, operators may need to distinguish current-filter aggregate
+  leads from selected-report leads by the action path rather than by a strong
+  visual hierarchy.
+- CR-049 is accepted but not implemented: the current Mail Configuration page
+  may still show duplicate edit/test actions and a visually heavy real-email
+  section. Until Phase 21I or a small mail-UI batch implements the new action
+  hierarchy, operators should treat the page-header actions as the primary
+  controls and the lower SMTP block as status/context.
 - Phase 18B report-center task grouping is implemented and verified. The
   current frontend has the complete Phase 11-12 foundation and Phase 13A data
   contract: local static module
@@ -670,22 +709,29 @@ Next allowed implementation order:
 3. implement Phase 21 formal console page-level UI/UX refinement as
    frontend-only workstreams with the Phase 21P cross-page layout-resilience
    gate;
-4. implement CR-047/Phase 5.1 account browser-environment consistency only
+4. include CR-048 Report Center lead-detail scope clarity when Phase 20E,
+   Phase 21M, or a deliberately small Report Center UI batch becomes active;
+   keep it report-first and do not implement Phase 20 AI trace/debug fields in
+   the Report Center;
+5. include CR-049 Mail Configuration and delivery-history action hierarchy
+   when Phase 21I/21M or a deliberately small mail/report UI batch becomes
+   active; keep CR-043/CR-044 safety behavior unchanged;
+6. implement CR-047/Phase 5.1 account browser-environment consistency only
    after the fixed-environment proxy override policy is confirmed and
    recorded; do this before adopting any optional CloakBrowser-style
    CDP/noVNC provider or expanding platform account environment controls;
-5. implement Phase 17.1C/17.2A remaining operator-facing recipient/template
+7. implement Phase 17.1C/17.2A remaining operator-facing recipient/template
    explanations and Phase 17.2B-C template guardrails as a consolidated
    email/template follow-up batch if it becomes the next accepted batch;
-6. implement CR-031/Phase 19B-19D realtime run-progress work after Phase 7.1
+8. implement CR-031/Phase 19B-19D realtime run-progress work after Phase 7.1
    lifecycle fields are available, unless a deliberately small compatible
    provisional-progress batch is documented first;
-7. schedule CR-034/Phase 20 implementation after higher-priority safety and
+9. schedule CR-034/Phase 20 implementation after higher-priority safety and
    lifecycle work if run-detail traceability becomes the next execution batch;
-8. handle CR-035/Phase 7.1D historical run remediation only when the operator
+10. handle CR-035/Phase 7.1D historical run remediation only when the operator
    explicitly approves the dry-run, backup, rollback, and repair path; it is a
    conditional operations task, not a normal feature batch;
-9. prepare broader production pilot handoff and deployment-specific validation
+11. prepare broader production pilot handoff and deployment-specific validation
    for additional live credentials after the first usable pilot baseline.
 
 ## Latest Verification

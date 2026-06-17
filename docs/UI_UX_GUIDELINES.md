@@ -235,6 +235,8 @@ Run Center:
   indicator, for example "已采集 271".
 - proposed Phase 20 run detail should use a drawer or page-level detail surface
   rather than adding a large nested table directly inside the run list.
+- Run Detail should be the primary place for run-scoped leads and AI
+  evaluation records; a Run Center row can open the detail as a drawer or page.
 - AI evaluation detail should use a compact list plus a separate detail panel
   for input/output snapshots so long prompt, request, response, and evidence
   text do not overwhelm the run list.
@@ -249,6 +251,30 @@ Report Center:
   separate detail view.
 - report lead details should have an explicit "view leads" entry, not only be
   triggered as a side effect of report preview.
+- the Report Center "view leads" entry is a report-scoped shortcut; it should
+  not be presented as the main lead/evaluation center.
+- lead detail needs a visible scope label and count, such as selected report,
+  selected report group, originating run, or current filters.
+- do not present an unlabeled flat lead table in Report Center; if filtered
+  aggregate leads are shown, label them as filtered aggregate rather than
+  selected-report detail.
+- empty states should say whether no report is selected, the selected report
+  has no leads, or the current filters have no matches.
+- email delivery history should open as scoped secondary detail from a report
+  row/status action and should not visually dominate the initial report list,
+  preview, or lead-detail hierarchy.
+
+Mail Configuration:
+
+- put edit configuration, send test mail, refresh/status, delivery-status
+  navigation, and the real-email state in one page-level action bar.
+- do not repeat edit/test buttons inside the SMTP/defaults summary when those
+  actions already exist in the page header.
+- show the real-email send state as one compact labeled toolbar toggle/button;
+  use confirmation for enabling and concise helper text or tooltip for the
+  SMTP acceptance warning.
+- the SMTP/defaults section should read as a status and configuration summary,
+  not as a second command center.
 
 Action menus:
 

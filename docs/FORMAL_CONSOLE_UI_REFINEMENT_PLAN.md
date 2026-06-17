@@ -530,7 +530,8 @@ Files:
 Must preserve:
 
 - edit mail config, send test mail, refresh config, view delivery status;
-- page inner edit/test entries;
+- edit/test functionality, while CR-049 may move duplicate inner entries into
+  the page-level action bar;
 - mail config modal fields:
   SMTP host, port, encryption, sender, username, password, default recipients,
   subject template;
@@ -539,6 +540,13 @@ Must preserve:
 
 Do:
 
+- apply CR-049 by consolidating edit configuration, send test mail,
+  refresh/status, delivery-status navigation, and the real-email state into
+  one page-level action bar;
+- remove or demote duplicated edit/test controls from the SMTP/defaults
+  summary when the same actions are already present in the page header;
+- render the real-email state as a compact labeled toolbar control with
+  concise helper text rather than a full-width normal-state panel;
 - make sender versus recipients clearer;
 - explain default recipients as fallback only without changing delivery logic;
 - make password mask and test status easier to read;
@@ -548,6 +556,8 @@ Acceptance:
 
 - SMTP password remains masked;
 - testing and saving have visible loading/success/failure states;
+- SMTP/defaults summary does not duplicate page-header edit/test actions;
+- the real-email switch state is visible, compact, and intentional;
 - email delivery shortcut still routes to reports.
 
 ### J. Mail Templates
@@ -638,6 +648,8 @@ Do:
 - make filters easier to scan and collapse/wrap cleanly;
 - make status, failure reason, and action columns easier to compare;
 - keep stop/log actions stable during refresh;
+- keep Run Center / Run Detail as the primary operational entry for
+  run-scoped leads and AI evaluation records when Phase 20 is implemented;
 - align visual language with Phase 19 future progress states without adding
   new progress data in this pass.
 
@@ -673,6 +685,7 @@ Must preserve:
   Markdown;
 - delivery history area;
 - lead detail area;
+- explicit report/group "view leads" entry when CR-048 is implemented;
 - report preview drawer with source link/cover hint, mail-title notice, iframe,
   and standard close behavior.
 
@@ -680,6 +693,12 @@ Do:
 
 - make the page read as report archive plus delivery history;
 - make selected report, lead detail, and delivery history relationship clear;
+- show lead-detail scope, count, and filters so the area cannot be mistaken for
+  an unlabeled global lead list;
+- present "view leads" as a report-scoped shortcut, not as the main
+  run/evaluation workbench;
+- keep delivery history as scoped secondary detail opened from a report
+  row/status action instead of a dominant default panel;
 - make download actions visible but not dominant;
 - make resend feel like an external-impact action with confirmation and clear
   result.
@@ -688,11 +707,14 @@ Do not:
 
 - hide downloads inside inaccessible UI;
 - make preview the only way to inspect leads;
+- present Report Center as a global lead workbench unless a separate future CR
+  explicitly adds that capability;
 - remove delivery history.
 
 Acceptance:
 
-- selecting a report updates preview context and lead detail;
+- selecting a report or choosing "view leads" updates preview context or lead
+  detail with an explicit scope label;
 - delivery status button loads and scrolls or reveals history;
 - resend confirmation and result feedback remain clear.
 
