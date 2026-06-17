@@ -9,7 +9,7 @@ from pathlib import Path
 from typing import Any
 
 
-SCHEMA_VERSION = "pilot_gate_c_v1"
+SCHEMA_VERSION = "pilot_gate_c_v3"
 
 REQUIRED_TRUE_FIELDS = [
     ("server_like_environment", "service_started"),
@@ -24,10 +24,11 @@ REQUIRED_TRUE_FIELDS = [
     ("ai_fallback", "ai_unavailable_or_failure_exercised"),
     ("ai_fallback", "pending_review_or_manual_review_recorded"),
     ("ai_fallback", "report_generated"),
-    ("smtp_validation", "explicit_opt_in_enabled_for_validation"),
+    ("smtp_validation", "admin_toggle_enabled_for_validation"),
     ("smtp_validation", "real_smtp_send_succeeded"),
     ("smtp_validation", "delivery_recorded"),
-    ("smtp_validation", "opt_in_disabled_after_validation"),
+    ("smtp_validation", "recipient_receipt_confirmed"),
+    ("smtp_validation", "admin_toggle_disabled_after_validation"),
     ("smtp_validation", "default_paths_non_sending_confirmed"),
     ("redaction", "no_sensitive_values_found"),
     ("non_blocker_boundary", "non_blockers_confirmed"),
@@ -35,9 +36,9 @@ REQUIRED_TRUE_FIELDS = [
 ]
 
 REQUIRED_TEXT_FIELDS = [
-    ("validation_window", "operator"),
-    ("validation_window", "started_at"),
-    ("validation_window", "ended_at"),
+    ("real_email_toggle", "operator"),
+    ("real_email_toggle", "started_at"),
+    ("real_email_toggle", "ended_at"),
     ("server_like_environment", "environment_reference"),
     ("real_platform_workflow", "platform"),
     ("real_platform_workflow", "account_reference"),
@@ -47,6 +48,7 @@ REQUIRED_TEXT_FIELDS = [
     ("ai_fallback", "evidence_reference"),
     ("smtp_validation", "recipient_reference"),
     ("smtp_validation", "delivery_log_reference"),
+    ("smtp_validation", "recipient_receipt_reference"),
     ("redaction", "evidence_reference"),
 ]
 
@@ -106,7 +108,7 @@ def build_template() -> dict[str, Any]:
     return {
         "schema_version": SCHEMA_VERSION,
         "status": "incomplete",
-        "validation_window": {
+        "real_email_toggle": {
             "operator": "",
             "started_at": "",
             "ended_at": "",
@@ -140,10 +142,12 @@ def build_template() -> dict[str, Any]:
         "smtp_validation": {
             "recipient_reference": "",
             "delivery_log_reference": "",
-            "explicit_opt_in_enabled_for_validation": False,
+            "recipient_receipt_reference": "",
+            "admin_toggle_enabled_for_validation": False,
             "real_smtp_send_succeeded": False,
             "delivery_recorded": False,
-            "opt_in_disabled_after_validation": False,
+            "recipient_receipt_confirmed": False,
+            "admin_toggle_disabled_after_validation": False,
             "default_paths_non_sending_confirmed": False,
         },
         "redaction": {

@@ -31,7 +31,7 @@ from .login_status import (
     normalize_login_state,
 )
 from .prompts import DEFAULT_PROMPT
-from .security import MONITOR_DATA_DIR, customer_safe_text, decrypt_secret, encrypt_secret, mask_secret, redact_sensitive
+from .security import MONITOR_DATA_DIR, customer_safe_text, customer_safe_url, decrypt_secret, encrypt_secret, mask_secret, redact_sensitive
 from .settings import (
     DEFINITIONS_BY_KEY,
     effective_runtime_settings,
@@ -1285,6 +1285,184 @@ def get_runtime_setting_value(key: str) -> Any:
     if key not in settings:
         raise ValueError(f"unknown runtime setting: {key}")
     return settings[key]["value"]
+
+
+EMAIL_VALIDATION_WINDOW_KEY = "__email_validation_window__"
+EMAIL_VALIDATION_MAX_TTL_SECONDS = 15 * 60
+
+
+def get_email_validation_window_state() -> dict[str, Any]:
+    payload: dict[str, Any] = {}
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT value_json FROM system_settings WHERE workspace_id=? AND key=?",
+            (DEFAULT_WORKSPACE_ID, EMAIL_VALIDATION_WINDOW_KEY),
+        ).fetchone()
+        if row:
+            payload = _json_loads(row["value_json"], {})
+            if not isinstance(payload, dict):
+                payload = {}
+    return _email_validation_window_state_from_payload(payload)
+
+
+def open_email_validation_window(
+    *,
+    actor_id: int,
+    ttl_seconds: int = 300,
+    single_use: bool = True,
+    reason: str = "",
+) -> dict[str, Any]:
+    ttl = max(60, min(int(ttl_seconds or 300), EMAIL_VALIDATION_MAX_TTL_SECONDS))
+    now_dt = datetime.now(timezone.utc)
+    payload = {
+        "opened": True,
+        "opened_by": int(actor_id),
+        "opened_at": now_dt.isoformat(),
+        "expires_at": (now_dt + timedelta(seconds=ttl)).isoformat(),
+        "ttl_seconds": ttl,
+        "single_use": bool(single_use),
+        "used": False,
+        "last_delivery_log_id": None,
+        "disable_reason": "",
+        "reason": customer_safe_text(reason),
+    }
+    with get_conn() as conn:
+        _upsert_email_validation_window(conn, payload, actor_id)
+        _record_audit_log(
+            conn,
+            DEFAULT_WORKSPACE_ID,
+            actor_id,
+            "open_email_validation_window",
+            "email_validation_window",
+            "current",
+            {
+                "status": "open",
+                "ttl_seconds": ttl,
+                "single_use": bool(single_use),
+                "reason": reason,
+            },
+        )
+    return _email_validation_window_state_from_payload(payload)
+
+
+def close_email_validation_window(*, actor_id: int | None = None, reason: str = "manual_close") -> dict[str, Any]:
+    state = get_email_validation_window_state()
+    payload = dict(state.get("raw") or {})
+    if not payload:
+        payload = {
+            "opened": False,
+            "opened_by": actor_id,
+            "opened_at": "",
+            "expires_at": "",
+            "ttl_seconds": 0,
+            "single_use": True,
+            "used": False,
+            "last_delivery_log_id": None,
+        }
+    payload["opened"] = False
+    payload["disable_reason"] = customer_safe_text(reason)
+    payload["disabled_at"] = utc_now()
+    if actor_id is not None:
+        payload["disabled_by"] = int(actor_id)
+    with get_conn() as conn:
+        _upsert_email_validation_window(conn, payload, actor_id)
+        _record_audit_log(
+            conn,
+            DEFAULT_WORKSPACE_ID,
+            actor_id,
+            "close_email_validation_window",
+            "email_validation_window",
+            "current",
+            {"status": "closed", "disable_reason": reason},
+        )
+    return _email_validation_window_state_from_payload(payload)
+
+
+def mark_email_validation_window_used(*, delivery_log_id: int | None = None, actor_id: int | None = None) -> dict[str, Any]:
+    state = get_email_validation_window_state()
+    payload = dict(state.get("raw") or {})
+    if not payload:
+        return state
+    payload["used"] = True
+    payload["used_at"] = utc_now()
+    if delivery_log_id is not None:
+        payload["last_delivery_log_id"] = int(delivery_log_id)
+    if payload.get("single_use", True):
+        payload["opened"] = False
+        payload["disable_reason"] = "used_single_delivery"
+        payload["disabled_at"] = utc_now()
+    with get_conn() as conn:
+        _upsert_email_validation_window(conn, payload, actor_id)
+        _record_audit_log(
+            conn,
+            DEFAULT_WORKSPACE_ID,
+            actor_id,
+            "use_email_validation_window",
+            "email_validation_window",
+            "current",
+            {
+                "status": "used",
+                "delivery_log_id": delivery_log_id,
+                "disable_reason": payload.get("disable_reason") or "",
+            },
+        )
+    return _email_validation_window_state_from_payload(payload)
+
+
+def _upsert_email_validation_window(conn: sqlite3.Connection, payload: dict[str, Any], actor_id: int | None) -> None:
+    conn.execute(
+        """
+        INSERT INTO system_settings (
+            workspace_id, key, value_json, value_type, is_locked, source,
+            updated_by, updated_at
+        ) VALUES (?, ?, ?, 'json', 0, 'database', ?, ?)
+        ON CONFLICT(workspace_id, key) DO UPDATE SET
+            value_json=excluded.value_json,
+            value_type='json',
+            is_locked=0,
+            source='database',
+            updated_by=excluded.updated_by,
+            updated_at=excluded.updated_at
+        """,
+        (
+            DEFAULT_WORKSPACE_ID,
+            EMAIL_VALIDATION_WINDOW_KEY,
+            json.dumps(_redact_json(payload), ensure_ascii=False),
+            actor_id,
+            utc_now(),
+        ),
+    )
+
+
+def _email_validation_window_state_from_payload(payload: dict[str, Any]) -> dict[str, Any]:
+    payload = dict(payload or {})
+    now_dt = datetime.now(timezone.utc)
+    expires_at = _parse_iso_datetime(payload.get("expires_at"))
+    opened = bool(payload.get("opened"))
+    expired = bool(opened and expires_at and expires_at <= now_dt)
+    used = bool(payload.get("used"))
+    if opened and expired:
+        payload["opened"] = False
+        payload["disable_reason"] = payload.get("disable_reason") or "expired"
+    open_now = bool(payload.get("opened")) and not expired and not used
+    remaining_seconds = 0
+    if open_now and expires_at:
+        remaining_seconds = max(0, int((expires_at - now_dt).total_seconds()))
+    disable_reason = customer_safe_text(payload.get("disable_reason") or ("expired" if expired else ""))
+    return {
+        "is_open": open_now,
+        "opened_by": _safe_int(payload.get("opened_by")),
+        "opened_at": customer_safe_text(payload.get("opened_at")),
+        "expires_at": customer_safe_text(payload.get("expires_at")),
+        "ttl_seconds": _safe_int(payload.get("ttl_seconds")) or 0,
+        "remaining_seconds": remaining_seconds,
+        "single_use": bool(payload.get("single_use", True)),
+        "used": used,
+        "last_delivery_log_id": _safe_int(payload.get("last_delivery_log_id")),
+        "disable_reason": disable_reason,
+        "reason": customer_safe_text(payload.get("reason")),
+        "raw": payload,
+    }
 
 
 def save_runtime_settings(payload: dict[str, Any], actor_id: int | None = None) -> dict[str, dict[str, Any]]:
@@ -4331,6 +4509,9 @@ def _row_to_pool_item(row: dict[str, Any], masked: bool = True) -> dict[str, Any
     row["profile_configured"] = bool(profile_env.get("profile_configured"))
     row["profile_runtime_path"] = "" if masked else str(profile_env.get("runtime_path") or "")
     row["profile_path"] = "" if masked else str(profile_env.get("profile_path") or "")
+    if masked:
+        row["platform_avatar_url"] = customer_safe_url(row.get("platform_avatar_url"))
+        row["platform_home_url"] = customer_safe_url(row.get("platform_home_url"))
     platform = row.get("platform")
     if platform in SUPPORTED_MONITOR_PLATFORMS:
         capability = get_mediacrawler_login_capability(str(platform))

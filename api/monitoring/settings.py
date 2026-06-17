@@ -44,7 +44,7 @@ RUNTIME_SETTING_DEFINITIONS: tuple[RuntimeSettingDefinition, ...] = (
     RuntimeSettingDefinition("scheduler_tick_seconds", "Scheduler", "调度检查间隔", "integer", 60, 10, 600, "scheduler reload or restart", "scheduler.tick_seconds", "MONITOR_SCHEDULER_TICK_SECONDS"),
     RuntimeSettingDefinition("scheduler_disabled", "Scheduler", "暂停自动调度", "boolean", False, None, None, "scheduler reload or restart", "scheduler.disabled", "MONITOR_DISABLE_SCHEDULER"),
     RuntimeSettingDefinition("stale_run_heartbeat_grace_seconds", "Scheduler", "运行心跳宽限", "integer", 600, 60, 3600, "scheduler recovery", "scheduler.stale_run_heartbeat_grace_seconds", "MONITOR_STALE_RUN_HEARTBEAT_GRACE_SECONDS"),
-    RuntimeSettingDefinition("real_email_delivery", "Email", "真实邮件发送", "boolean", False, None, None, "deployment only", "email.real_email_delivery", "MONITOR_ALLOW_REAL_EMAIL_SEND", True),
+    RuntimeSettingDefinition("real_email_delivery", "Email", "真实邮件发送", "boolean", False, None, None, "immediate", "", ""),
     RuntimeSettingDefinition("run_log_retention_days", "Retention", "运行日志保留天数", "integer", 90, 1, 3650, "cleanup job", "retention.run_log_days", "MONITOR_RUN_LOG_RETENTION_DAYS"),
     RuntimeSettingDefinition("report_retention_days", "Retention", "报告保留天数", "integer", 180, 1, 3650, "cleanup job", "retention.report_days", "MONITOR_REPORT_RETENTION_DAYS"),
 )
@@ -81,7 +81,7 @@ def effective_runtime_settings(db_values: dict[str, Any] | None = None, yaml_val
         if definition.key in db_values:
             value = db_values[definition.key]
             source = "database"
-        env_value = os.environ.get(definition.env_lock)
+        env_value = os.environ.get(definition.env_lock) if definition.env_lock else None
         locked = definition.always_locked or env_value not in (None, "")
         if locked:
             if env_value not in (None, ""):

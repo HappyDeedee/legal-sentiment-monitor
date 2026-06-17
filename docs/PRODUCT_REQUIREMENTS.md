@@ -332,6 +332,52 @@ Confirmed:
   snapshot up to 16KB, request snapshot up to 24KB, response snapshot up to
   24KB, and sampled comments up to 20 comments with per-comment truncation.
 
+### 3.2 AI Evaluation Accuracy And Lead Status
+
+Status: Accepted for CR-045 / Phase 7.2, not implemented yet.
+
+Purpose:
+
+- prevent unevaluated content from being mistaken as safe;
+- make target-law-firm relevance stricter before an item is counted as a
+  suspected negative lead;
+- reduce broad-keyword noise without blocking report generation.
+
+Rules:
+
+- `source_keyword` is recall provenance only. It can explain why a platform
+  item was collected, but it must not by itself prove that the item is related
+  to the target law firm.
+- AI relatedness should require evidence in the collected content itself:
+  title, description/body, author, or sampled comments should contain the
+  target law firm name, an accepted alias, or a clearly equivalent contextual
+  reference.
+- Homonyms, geography, generic legal/refund wording, and unrelated law-firm
+  names should be treated as not related unless the content also points to the
+  target law firm or an accepted alias.
+- Comments may support relatedness, negative-signal, and evidence extraction
+  only when comments were actually collected and included in the evaluation
+  payload.
+- Missing AI evaluation rows, AI timeout leftovers, or interrupted evaluation
+  candidates must not be displayed or filtered as no-risk content. They should
+  become pending manual review during safe finalization, or show an explicit
+  unevaluated/limited-context state when mutation is not safe.
+- Lead status should distinguish unrelated, evaluated no-risk, suspected
+  negative, high-risk, pending manual review, and unevaluated/limited-context
+  history.
+- AI output remains lead screening, not factual determination.
+
+Acceptance:
+
+- broad refund/legal posts collected by a target-bearing keyword are not marked
+  as target-related negative leads when the actual content lacks target-law-firm
+  evidence;
+- target-law-firm or alias mentions in title, description, author, or comments
+  can still produce suspected-negative/high-risk leads when negative signals
+  are present;
+- Report Center and future Run Detail views never label missing AI evaluation
+  records as no-risk.
+
 ## 4. Report Center
 
 Roles:
@@ -398,9 +444,15 @@ Rules:
   validation send, plus the related task/report/run context and effective
   recipients where permitted.
 - routine automated tests and local diagnostics must not silently send real
-  external emails. `MONITOR_ALLOW_REAL_EMAIL_SEND=true` marks the environment as
-  explicitly allowed for real SMTP sending, and such sending should be visibly
-  intentional.
+  external emails. Product operation uses one administrator-controlled Mail
+  Configuration switch for real email delivery, defaulting off.
+- when the administrator switch is off, mail test, manual resend, and
+  automatic delivery do not submit real SMTP; report generation still
+  completes and delivery history records a customer-safe skipped or failed
+  state where applicable.
+- when the administrator switch is on and SMTP configuration is complete, mail
+  test, manual resend, and automatic delivery may submit real SMTP.
+- the frontend should warn that SMTP acceptance is not recipient inbox proof.
 - automatic delivery uses these schedule-window keys:
   - `daily`: `{job_id}_{YYYY-MM-DD}`;
   - `6h`, `12h`, and `cron`: `{job_id}_{YYYY-MM-DD}_{HH}`.
@@ -439,6 +491,8 @@ Fields:
 - notes;
 - latest check time;
 - latest error.
+- recognized platform identity, including display name and avatar when
+  available.
 
 Rules:
 
@@ -448,12 +502,17 @@ Rules:
 - login sessions are scoped to the current account;
 - no phone-login UI is shown unless a complete supported chain exists;
 - verification/captcha/SMS states are returned, not bypassed.
+- platform avatar display must not expose signed external image URLs or query
+  parameters to the frontend; use a same-origin server-side cache endpoint and
+  fall back to the placeholder when the avatar cannot be fetched safely.
 
 Acceptance:
 
 - adding an account does not show platform-global status tables;
 - login succeeds through web UI in a server-like environment;
-- adding a second same-platform account does not reuse the first profile.
+- adding a second same-platform account does not reuse the first profile;
+- recognized account avatars render from a customer-safe same-origin URL and
+  do not expose platform signatures, cookies, profile paths, or proxy secrets.
 
 ### 5.2 Proxy Resources
 
@@ -555,12 +614,17 @@ Rules:
 Purpose:
 
 - configure SMTP connection and sender identity.
+- control whether the system may submit real emails.
 
 Rules:
 
 - SMTP password is encrypted and masked;
 - SMTP test verifies connection/send ability;
 - report generation does not depend on SMTP availability.
+- the page includes one administrator-only real email send switch backed by
+  the persisted `real_email_delivery` runtime setting;
+- the switch defaults off and must not be duplicated as a second Email group
+  in Runtime Strategy.
 
 ### 6.4 Mail Templates
 

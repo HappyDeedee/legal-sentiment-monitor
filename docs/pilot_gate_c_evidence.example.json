@@ -1,7 +1,7 @@
 {
-  "schema_version": "pilot_gate_c_v1",
+  "schema_version": "pilot_gate_c_v3",
   "status": "incomplete",
-  "validation_window": {
+  "real_email_toggle": {
     "operator": "",
     "started_at": "",
     "ended_at": "",
@@ -35,10 +35,12 @@
   "smtp_validation": {
     "recipient_reference": "",
     "delivery_log_reference": "",
-    "explicit_opt_in_enabled_for_validation": false,
+    "recipient_receipt_reference": "",
+    "admin_toggle_enabled_for_validation": false,
     "real_smtp_send_succeeded": false,
     "delivery_recorded": false,
-    "opt_in_disabled_after_validation": false,
+    "recipient_receipt_confirmed": false,
+    "admin_toggle_disabled_after_validation": false,
     "default_paths_non_sending_confirmed": false
   },
   "redaction": {

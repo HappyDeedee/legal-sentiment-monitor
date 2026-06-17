@@ -1,12 +1,11 @@
 from __future__ import annotations
 
 import smtplib
-import os
 from email.message import EmailMessage
 from pathlib import Path
 from typing import Any
 
-from .database import get_active_email_template, get_email_config, get_email_template, validate_port, validate_recipients
+from .database import get_active_email_template, get_email_config, get_email_template, get_runtime_setting_value, validate_port, validate_recipients
 from .normalizer import PLATFORM_LABELS
 from .security import customer_safe_text
 
@@ -14,7 +13,7 @@ REAL_EMAIL_BLOCKED_MESSAGE = "真实邮件发送未启用；本地/测试/诊断
 
 
 def real_email_delivery_allowed() -> bool:
-    return str(os.environ.get("MONITOR_ALLOW_REAL_EMAIL_SEND") or "").strip().lower() in {"1", "true", "yes", "on"}
+    return bool(get_runtime_setting_value("real_email_delivery"))
 
 
 def resolve_report_recipients(job: dict[str, Any], cfg: dict[str, Any] | None = None) -> tuple[list[str], str]:
@@ -151,12 +150,12 @@ def _email_html_body(msg: EmailMessage) -> str:
     return ""
 
 
-def send_test_email(payload: dict[str, Any] | None = None, *, allow_real_send: bool | None = None) -> None:
+def send_test_email(payload: dict[str, Any] | None = None, *, allow_real_send: bool | None = None) -> dict[str, Any]:
     cfg = _merge_test_config(payload or {})
-    target = (payload or {}).get("target") or (cfg.get("default_recipients") or [None])[0]
-    if not target:
+    recipients, recipient_source = _resolve_test_recipients(payload or {}, cfg)
+    if not recipients:
         raise ValueError("未配置测试收件人")
-    validate_recipients([str(target)])
+    validate_recipients(recipients)
     if not cfg.get("smtp_host") or not cfg.get("sender"):
         raise ValueError("SMTP 配置未完成")
     if allow_real_send is None:
@@ -166,9 +165,23 @@ def send_test_email(payload: dict[str, Any] | None = None, *, allow_real_send: b
     msg = EmailMessage()
     msg["Subject"] = "律所舆情运营系统测试邮件"
     msg["From"] = cfg["sender"]
-    msg["To"] = target
-    msg.set_content("测试邮件发送成功。")
+    msg["To"] = ", ".join(recipients)
+    msg.set_content(f"测试邮件发送成功。本次测试提交给 {len(recipients)} 个测试收件人。")
     _smtp_send(cfg, msg)
+    return {
+        "recipient_count": len(recipients),
+        "recipient_source": recipient_source,
+        "smtp_acceptance_note": "SMTP 已接受仅代表服务器提交成功，仍需人工确认收件箱或垃圾箱。",
+    }
+
+
+def _resolve_test_recipients(payload: dict[str, Any], cfg: dict[str, Any]) -> tuple[list[str], str]:
+    target = payload.get("target")
+    if target not in (None, ""):
+        values = target if isinstance(target, list) else [target]
+        return [str(item).strip() for item in values if str(item).strip()], "explicit_target"
+    recipients = [str(item).strip() for item in (cfg.get("default_recipients") or []) if str(item).strip()]
+    return recipients, "global_default_recipients"
 
 
 def _smtp_send(cfg: dict[str, Any], msg: EmailMessage) -> None:
@@ -183,9 +196,22 @@ def _smtp_send(cfg: dict[str, Any], msg: EmailMessage) -> None:
             client.starttls()
         if cfg.get("username"):
             client.login(cfg["username"], cfg.get("password") or "")
-        client.send_message(msg)
+        refused = client.send_message(msg)
+        if refused:
+            raise RuntimeError(_smtp_refusal_message(refused))
     finally:
         client.quit()
+
+
+def _smtp_refusal_message(refused: Any) -> str:
+    if not isinstance(refused, dict):
+        return "SMTP 服务器拒收了部分收件人"
+    count = len(refused)
+    if count <= 0:
+        return "SMTP 服务器拒收了部分收件人"
+    codes = sorted({str(value[0]) for value in refused.values() if isinstance(value, tuple) and value})
+    code_text = f"，错误码 {'/'.join(codes)}" if codes else ""
+    return f"SMTP 服务器拒收了 {count} 个收件人{code_text}"
 
 
 def _merge_test_config(payload: dict[str, Any]) -> dict[str, Any]:

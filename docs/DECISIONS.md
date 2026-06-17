@@ -234,3 +234,16 @@ short `Superseded by` note rather than deleting history.
   `ai_evaluation_traces` table linked to `run_id`, `raw_content_id`, and
   `ai_evaluations.id`, rather than being added to `ai_evaluations` or stored
   as run/report artifact files.
+- Confirmed for CR-043: real email delivery should use one administrator
+  frontend switch on Mail Configuration, backed by the default-off persisted
+  `real_email_delivery` runtime setting. The rejected CR-042 multi-layer
+  validation-window design must not be reintroduced for daily operation:
+  no deployment frontend gate, scheduler-exclusion gate, expiry window, or
+  single-use validation window is required for the administrator switch.
+- Confirmed for CR-045: platform `source_keyword` is recall provenance only
+  and must not by itself prove that a collected item is related to the target
+  law firm. Relatedness and negative-risk classification should be grounded in
+  title, description/body, author, or sampled comments that identify the
+  target law firm, accepted aliases, or a clearly equivalent reference.
+  Missing AI evaluation records, timeout leftovers, and interrupted evaluation
+  candidates must not be displayed as no-risk content.

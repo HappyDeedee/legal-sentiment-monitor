@@ -133,15 +133,29 @@ Retry coordination:
 
 Confirmed for CR-036:
 
-- `MONITOR_ALLOW_REAL_EMAIL_SEND` controls real SMTP side effects and defaults
-  to false;
-- when false, routine automated tests and local diagnostics should not send
-  hidden real mail, even when the active database contains complete SMTP
-  settings and default recipients;
-- the UI should show this setting as deployment-locked and read-only, and
-  should not let ordinary users enable real external email from the browser;
+- routine automated tests and local diagnostics must not send hidden real
+  email;
 - the safety gate must preserve report generation and delivery-log recording
-  when it skips external sending.
+  when it skips external sending;
+- automated tests keep a separate suite-level SMTP tripwire and mocked-SMTP
+  explicit validation path so verification does not send real external mail.
+
+Confirmed for CR-043:
+
+- `real_email_delivery` is the single product switch for real SMTP side
+  effects;
+- it defaults to false and is persisted in the database-backed
+  `system_settings` table;
+- administrators control it from Mail Configuration, not from a separate
+  Runtime Strategy Email group;
+- normal users cannot edit it;
+- when false, mail test, manual resend, and automatic report delivery do not
+  submit real SMTP;
+- when true and SMTP configuration is complete, those paths may submit real
+  SMTP;
+- no deployment frontend gate, scheduler-exclusion gate, expiry, or single-use
+  validation window is required for daily operation;
+- SMTP acceptance is still not recipient inbox proof.
 
 ## Read-Only Or Deployment-Locked Settings
 
@@ -153,7 +167,6 @@ Confirmed for CR-036:
 | encryption_key_path | security-sensitive |
 | browser_executable_path | deployment/runtime concern |
 | local_login_window_fallback | development-only login fallback |
-| real_email_delivery | prevents tests/local diagnostics from sending external mail |
 | service_port | process manager concern |
 | cors_origins | deployment/security concern |
 | worker_count | scheduler duplication risk |

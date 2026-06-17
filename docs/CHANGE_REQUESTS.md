@@ -58,6 +58,11 @@ Status values:
 - CR-039: Governed Report Email Template Presets And Template Provenance
 - CR-040: Formal Console Page-Level UI/UX Refinement
 - CR-041: Minimum Usable Pilot Acceptance Gate
+- CR-042: Frontend-Controlled Real Email Validation Window
+- CR-043: Administrator Frontend Real Email Send Toggle
+- CR-044: Mail Test Recipient Coverage And SMTP Acceptance Clarity
+- CR-045: AI Evaluation Accuracy And Unevaluated Lead Status Clarity
+- CR-046: Platform Account Avatar Safe Cache Display Regression Fix
 
 ## Entry Classification Rule
 
@@ -2229,7 +2234,7 @@ Non-goals:
 - Do not mark historical run `8317` or orphan delivery evidence repaired
   without the existing explicit remediation gate.
 
-Status: Accepted
+Status: Verified
 
 Related tasks:
 
@@ -2258,7 +2263,534 @@ Acceptance:
   250/251" cannot leave the run indefinitely `running`.
 - A minimum server-like pilot validation proves web-UI login through
   server-side browser/profile, one real platform crawl, AI unavailable/failure
-  fallback, explicit-opt-in SMTP delivery, and sensitive-value redaction.
+  fallback, explicit-opt-in SMTP submission, recipient-side receipt
+  confirmation, and sensitive-value redaction. SMTP `sent` records prove server
+  acceptance only; they do not prove recipient inbox delivery by themselves.
 - Phase 21, CR-038, Phase 19B-D, Phase 20, and CR-037 remain outside the first
   usable pilot blocker set unless a new accepted P0 regression changes the
   boundary.
+
+Verification:
+
+- Verified on 2026-06-17 with the CR-041 Pilot Gate C evidence chain:
+  CR-036/Phase 17.1A-B safety gate and SMTP tripwire, CR-036/Phase
+  17.1C/CR-039 Phase 17.2A delivery metadata, CR-035/Phase 7.1A-C lifecycle
+  and AI fallback safeguards, automated server-like validation, real Douyin
+  server-side crawl/report evidence for `run_id=3` / `report_id=3`, controlled
+  frontend-enabled real SMTP submission recorded as `delivery_log_id=6`, operator
+  confirmation that both approved recipients received the report email, and a
+  passing redacted `pilot_gate_c_v2` evidence JSON check.
+
+## CR-042 - Frontend-Controlled Real Email Validation Window
+
+Date: 2026-06-17
+
+Source: user asked whether the real-email switch should be operable from the
+frontend after a manual resend showed frontend success while the recipient did
+not actually receive the email.
+
+Module: email delivery safety, runtime settings, administrator operations
+
+Type: Existing Feature Optimization
+
+Background:
+
+CR-036 intentionally made real SMTP delivery a deployment-controlled safety
+gate so tests, diagnostics, and ordinary local runs cannot accidentally send
+external email. During Pilot Gate C validation, the operator needs a practical
+way to temporarily enable real SMTP delivery from the console. The current
+environment-only switch is safe but operationally awkward, while a simple
+always-editable frontend boolean would reintroduce accidental real-email risk.
+
+Purpose:
+
+Allow administrator-controlled real-email validation from the frontend without
+weakening the hidden-real-email safety guarantees that CR-036 added.
+
+Requirement:
+
+- Provide an administrator-only frontend action for a temporary real-email
+  validation window, not a permanent ordinary settings toggle.
+- Keep a deployment-level allow switch as the first gate. Recommended shape:
+  frontend validation windows can only be opened when deployment configuration
+  explicitly allows frontend-controlled real-email validation.
+- Require strong confirmation text before enabling the window, including the
+  effective recipients, trigger scope, and warning that SMTP acceptance does
+  not prove recipient inbox delivery.
+- Limit the validation window by time and/or single-use delivery count, and
+  auto-disable it after expiry or after the approved validation send.
+- Require automatic scheduler delivery to remain disabled or otherwise
+  explicitly excluded while the validation window is open.
+- Record audit logs with actor, trigger source, enabled time, expiry, effective
+  recipients summary, delivery-log IDs, and disable reason.
+- Show runtime state clearly in the frontend: default non-sending, validation
+  window open, expired, disabled after validation, or deployment gate closed.
+- Preserve the existing test tripwire and default non-sending behavior for
+  automated tests, local diagnostics, and ordinary report delivery.
+- Pilot Gate C must remain incomplete until both SMTP submission and
+  recipient-side receipt confirmation are recorded in redacted evidence. This
+  was satisfied for CR-041 on 2026-06-17 with `delivery_log_id=6` and a
+  passing redacted evidence check.
+
+Scope boundary:
+
+- This CR may add frontend controls, API endpoints, runtime settings, audit
+  records, and tests for temporary validation-window behavior after the user
+  confirms the design.
+- It must not expose SMTP passwords, API keys, raw recipients beyond
+  customer-safe summaries, cookies, proxy credentials, profile paths, local
+  paths, or raw command lines.
+
+Non-goals:
+
+- Do not create a permanent always-on frontend real-email toggle.
+- Do not allow normal users to enable real SMTP delivery.
+- Do not allow scheduler-driven bulk email to run merely because a manual
+  validation window is opened.
+- Do not treat SMTP `sent` as proof of recipient inbox delivery.
+
+Status: Rejected
+
+Superseded by:
+
+- CR-043 - Administrator Frontend Real Email Send Toggle
+
+Supersession note:
+
+On 2026-06-17, after using the validation-window flow, the user explicitly
+rejected the multi-layer design as too complex and confirmed that the product
+should use one administrator-controlled frontend switch only. Future
+implementation must not reintroduce deployment gates, scheduler-exclusion
+gates, expiry windows, or single-use validation-window behavior for daily
+operation.
+
+Historical recommended option:
+
+Implement a deployment-gated, administrator-only, time-limited validation
+window with audit logging and automatic disable after validation.
+
+Historical confirmation:
+
+On 2026-06-17 the user initially confirmed that the real-email switch should
+be operable from the frontend. A validation window was implemented, then later
+rejected by the user as too complex and superseded by CR-043.
+
+Alternative:
+
+Keep real email fully environment-only and operate it through service restart
+runbooks. This is safer but harder to use during repeated pilot validation.
+
+Related tasks:
+
+- Frontend-Controlled Real Email Validation Window in `TASKS.md`
+- Pilot Gate C in `TASKS.md`
+- CR-036/Phase 17.1A-B in `TASKS.md`
+
+Acceptance:
+
+- The frontend cannot enable real email unless the deployment-level frontend
+  validation gate is already allowed.
+- A validation window requires administrator confirmation and shows effective
+  recipient source/count before any real external send can happen.
+- The window auto-disables after expiry or approved validation send, and the
+  frontend shows the final disabled state.
+- Automatic scheduled delivery cannot silently send during the validation
+  window unless explicitly confirmed by a later accepted requirement.
+- Audit and delivery logs show actor, trigger source, environment/gate state,
+  effective recipient summary, result, and disable reason without secrets.
+- Automated tests prove default paths remain non-sending and the SMTP tripwire
+  still blocks accidental real SMTP.
+
+Historical implementation:
+
+- Added deployment-locked runtime visibility for
+  `frontend_real_email_validation` /
+  `MONITOR_ALLOW_FRONTEND_REAL_EMAIL_VALIDATION`.
+- Added administrator-only API endpoints to read, open, and close a
+  time-limited single-use real-email validation window.
+- Opening the window requires both real-email deployment gates and scheduler
+  exclusion (`scheduler_disabled=true`) so automatic scheduled delivery cannot
+  silently send during the manual validation window.
+- Mail-test and administrator manual-resend API paths require the validation
+  window before real SMTP is allowed. Normal-user resend remains non-sending
+  through the default safety gate.
+- Successful validation use marks the window used and closes it automatically.
+  Audit logs record open, use, close, gate state, recipient source/count, and
+  delivery-log reference without secrets.
+
+## CR-043 - Administrator Frontend Real Email Send Toggle
+
+Date: 2026-06-17
+
+Source: user explicitly said "一个开关即可" and rejected the multi-layer
+real-email validation-window UI as too complex.
+
+Module: email delivery safety, mail configuration frontend, runtime settings
+
+Type: Existing Feature Optimization
+
+Background:
+
+CR-036 fixed hidden real-email side effects after unexpected report emails were
+observed. CR-042 then tried to keep real SMTP validation safe through a
+deployment-gated, scheduler-excluded, single-use validation window. The user
+found this too hard to operate. The product need is simpler: an administrator
+should be able to decide in the frontend whether the system is allowed to send
+real report emails.
+
+Purpose:
+
+Replace the validation-window workflow with one persisted administrator switch
+on the Mail Configuration page.
+
+Requirement:
+
+- Show exactly one user-facing control for real email delivery: an
+  administrator-only "real email send" switch on Mail Configuration.
+- Persist the switch as the `real_email_delivery` runtime setting, with default
+  `false`.
+- When the switch is off, mail test, manual resend, and automatic report
+  delivery must not submit real SMTP; report generation must still continue and
+  blocked delivery should be recorded with customer-safe wording.
+- When the switch is on and SMTP configuration is complete, mail test,
+  administrator/manual resend, and automatic report delivery may submit real
+  SMTP.
+- Normal users must not be able to edit the switch.
+- The UI may show a confirmation before turning the switch on, effective
+  recipient source/count, and the warning that SMTP acceptance is not recipient
+  inbox proof.
+- Do not require a deployment-level frontend gate, scheduler exclusion,
+  expiry, or single-use validation window for daily operation.
+- Automated tests must still be protected from accidental real SMTP by the
+  test-level tripwire and mocked SMTP paths.
+- Do not commit SMTP passwords, real recipients, local databases, browser
+  profiles, cookies, or runtime-only configuration.
+
+Scope boundary:
+
+- In scope: mail configuration frontend, runtime setting persistence, mailer
+  gate, API response compatibility, tests, and documentation.
+- Compatibility endpoints may remain for older frontend/API callers if they
+  simply map to the same `real_email_delivery` switch.
+- Out of scope: role/quota governance for normal-user sending, scheduler bulk
+  policy redesign, additional provider-specific SMTP troubleshooting, and
+  historical evidence mutation.
+
+Non-goals:
+
+- Do not add a second real-email setting in Runtime Strategy.
+- Do not expose SMTP secrets or raw recipient lists beyond customer-safe
+  summaries.
+- Do not treat SMTP `sent` as proof of recipient inbox delivery.
+
+Status: Verified
+
+Related tasks:
+
+- Administrator Frontend Real Email Send Toggle in `TASKS.md`
+- CR-036/Phase 17.1A-B in `TASKS.md`
+- Phase 17 email delivery governance in `TASKS.md`
+
+Acceptance:
+
+- Mail Configuration shows one real-email send switch and no open/close
+  validation-window buttons.
+- `real_email_delivery` is admin-editable, persisted, default-off, and not
+  environment-locked in normal product operation.
+- Runtime Strategy does not expose a second Email settings group for the same
+  switch.
+- Mail test and manual resend are blocked while the switch is off and can use
+  mocked SMTP while the switch is on in tests.
+- The administrator API can update the switch; normal users cannot.
+- Scheduler exclusion, deployment frontend gate, expiry, and single-use
+  behavior are not required for the switch to work.
+- Tests and docs confirm that no real external email is sent during automated
+  verification.
+
+## CR-044 - Mail Test Recipient Coverage And SMTP Acceptance Clarity
+
+Date: 2026-06-17
+
+Source: user reported that the Mail Configuration test mail showed
+"submitted to SMTP and recorded as passed" but no recipient-side message was
+found.
+
+Module: mail configuration, SMTP validation, administrator operations
+
+Type: Regression Fix
+
+Background:
+
+The administrator Mail Configuration page can contain multiple global default
+recipients, and report delivery uses the full effective recipient list. The
+test-mail path, however, only selected the first default recipient when no
+explicit test target was supplied. The frontend also displayed a generic
+success message that did not show how many recipients were submitted. This made
+operator validation confusing when the configured default recipient list had
+more than one address.
+
+Purpose:
+
+Make the Mail Configuration test action match administrator expectations:
+when no explicit target is supplied, submit the test message to all configured
+default recipients and show the submitted recipient count while still stating
+that SMTP acceptance is not inbox proof.
+
+Requirement:
+
+- The test-mail path must continue to require the administrator
+  `real_email_delivery` switch before submitting real SMTP.
+- With no explicit test target, test mail must submit one message addressed to
+  all configured global default recipients.
+- With an explicit test target, test mail may still use only the explicit
+  target or targets.
+- The API response must include the test recipient count and source without
+  exposing raw SMTP passwords.
+- The frontend success message must show how many test recipients were
+  submitted and must keep the warning that SMTP acceptance does not prove
+  recipient inbox delivery.
+- Automated tests must mock SMTP and continue to protect against accidental
+  real external mail.
+
+Scope boundary:
+
+- In scope: test-mail recipient resolution, API response metadata, frontend
+  success text, tests, and documentation.
+- Out of scope: provider-specific QQ Mail deliverability diagnosis, bounce
+  mailbox monitoring, recipient-side read receipts, normal-user quotas, and
+  changing report-delivery recipient precedence.
+
+Non-goals:
+
+- Do not treat SMTP `sent` or test-mail success as recipient inbox proof.
+- Do not expose raw recipient lists in public/customer-safe surfaces beyond
+  existing administrator configuration views.
+- Do not send real SMTP during automated verification.
+
+Status: Verified
+
+Related tasks:
+
+- CR-044 Mail Test Recipient Coverage And SMTP Acceptance Clarity in
+  `TASKS.md`
+- CR-043 Administrator Frontend Real Email Send Toggle in `TASKS.md`
+- CR-036/Phase 17.1A-B in `TASKS.md`
+
+Acceptance:
+
+- A configured two-recipient default list results in a test email addressed to
+  both recipients when the administrator switch is on.
+- The test-mail API returns `test_result.recipient_count` and
+  `test_result.recipient_source`.
+- The Mail Configuration test console reports the submitted recipient count
+  and warns that SMTP acceptance still requires manual inbox/spam confirmation.
+- When the administrator switch is off, test mail remains blocked and no SMTP
+  client is instantiated.
+- Targeted mocked-SMTP tests cover the multi-recipient path without sending
+  external email.
+
+Verification:
+
+- Verified on 2026-06-17 with targeted mocked-SMTP tests for blocked-off
+  behavior, mocked real-email send behavior, SMTP refused-recipient handling,
+  and the CR-044 two-default-recipient test-mail path. No real external SMTP
+  was used during automated verification.
+
+## CR-045 - AI Evaluation Accuracy And Unevaluated Lead Status Clarity
+
+Date: 2026-06-17
+
+Source: user observed in the Report Center that some rows had empty AI
+reason/evidence and that the current AI evaluation felt inaccurate during a
+real Douyin pilot run.
+
+Module: AI evaluation, run finalization, report leads, Run Center, Report
+Center
+
+Type: Regression Fix
+
+Background:
+
+During live pilot inspection, run `4` had 102 newly ingested contents. The
+system had AI evaluation rows for 91 contents and no AI evaluation rows for 11
+remaining contents after the run reached the 900-second wall-clock timeout.
+The current lead-status rendering could treat rows with no evaluation record as
+"no risk", and broad search terms such as "北京海安律所退费" recalled many
+unrelated platform posts about education refunds, medical refunds, clothing
+refund fraud, generic lawyer refund advice, and other law firms.
+
+This exposed two related defects in the completed Phase 7 responsibility area:
+unevaluated content can be confused with no-risk content, and the AI relevance
+rules allow `source_keyword` to influence relatedness too strongly even when
+the actual title, description, author, and comments do not identify the target
+law firm or aliases.
+
+Purpose:
+
+Make AI evaluation results safer to operate in a pilot: unreviewed content must
+not be presented as safe, target-law-firm relevance must be stricter, and
+operators must be able to distinguish unrelated content, evaluated no-risk
+content, pending-review fallback, and truly unevaluated content.
+
+Requirement:
+
+- Do not display missing AI evaluation records as "no risk". Missing,
+  interrupted, or timeout-leftover evaluations must be surfaced as
+  "unevaluated" or converted to `pending_review` during safe finalization.
+- Ensure timeout and partial-failure finalization attempts to create
+  `pending_review` fallback rows for known unresolved AI candidates before
+  report generation when the candidate IDs are known and mutation is safe.
+- Keep `source_keyword` as recall provenance only. It may explain why the item
+  was collected, but it must not by itself prove that the content is related to
+  the target law firm.
+- Add or enforce a target-evidence gate: title, description, author, or sampled
+  comments should contain the target law firm name, accepted aliases, or a
+  clearly equivalent reference before AI can mark the item as related or
+  negative. Homonyms and geography such as "海安" as a place name must not be
+  treated as the target law firm by default.
+- Use comments as evaluation evidence only when comments were actually
+  collected and passed into the evaluation payload.
+- Preserve the existing guarantee that AI provider failures do not block
+  collection, report generation, or email delivery.
+- Distinguish at least these lead states in API/frontend behavior: unrelated,
+  evaluated no-risk, suspected negative, high-risk, pending manual review, and
+  unevaluated/limited-context history.
+- If new structured AI output fields such as target-match level, negative
+  signal level, confidence, or review reason are added, document the schema and
+  role-safe display boundary before implementation.
+- Add a small real-sample calibration set from pilot data or fixtures so broad
+  refund/legal keywords and target-law-firm mentions can be regression-tested.
+
+Scope boundary:
+
+- In scope: AI prompt/rule hardening, deterministic pre-AI relevance gating if
+  needed, timeout/failure fallback finalization for unresolved candidates,
+  lead-status API/frontend wording, report counts, and regression tests.
+- In scope: linking this work to Phase 20 traceability where detailed per-item
+  input/output viewing is needed for diagnosis.
+- Out of scope: changing crawler platform implementations, bypassing platform
+  anti-abuse checks, adding high-concurrency AI workers, storing unredacted raw
+  AI responses, or completing all Phase 20 trace snapshot/debug surfaces.
+
+Non-goals:
+
+- Do not claim AI output is a factual determination.
+- Do not rely on `source_keyword` alone as legal or reputational evidence.
+- Do not expose API keys, raw provider headers, cookies, profile paths, local
+  paths, proxy credentials, or unredacted model responses while improving
+  evaluation transparency.
+- Do not rewrite historical completed Phase 7 or Phase 7.1 status; record this
+  as a follow-up fix.
+
+Status: Accepted
+
+Related tasks:
+
+- Phase 7.2 - AI Evaluation Accuracy And Lead Status Clarity Follow-up in
+  `TASKS.md`
+- Phase 20 - Run Detail And AI Evaluation Traceability in `TASKS.md`
+- PR-RUNREPORT-001 in `TRACEABILITY.md`
+
+Acceptance:
+
+- A content row with no AI evaluation record is never shown as "no risk" in
+  Report Center or Run Detail; it is shown as unevaluated/limited-context or
+  becomes `pending_review` through safe finalization.
+- A timeout run with known candidate IDs creates pending-review fallback rows
+  for unresolved candidates before report generation, or records an explicit
+  limited-context state if safe mutation is not possible.
+- Reports and lead filters count `pending_review`, unrelated, and no-risk
+  rows separately.
+- AI prompt/rule behavior states that `source_keyword` is recall provenance,
+  not relatedness proof.
+- Fixture coverage proves generic refund/legal posts without target-law-firm
+  evidence are not marked as target-related negative leads even if they were
+  collected by a broad target-bearing search keyword.
+- Fixture coverage proves title/description/comment evidence that clearly
+  names the target law firm or alias can still be marked related and negative
+  when the negative signal is present.
+- Normal-user output remains business-safe; administrator-only debug detail
+  remains governed by Phase 20.
+
+## CR-046 - Platform Account Avatar Safe Cache Display Regression Fix
+
+Date: 2026-06-17
+
+Source: user observed that the Platform Accounts page no longer showed the
+recognized account avatar after the Douyin account identity had been detected.
+
+Module: Platform Accounts, account identity display, customer-safe URL
+redaction
+
+Type: Regression Fix
+
+Background:
+
+The account identity check can capture `platform_account_name` and
+`platform_avatar_url`. The customer-facing account-list API redacts URL query
+parameters before sending URLs to the frontend so signed platform URLs and
+tracking-like parameters are not exposed. Douyin avatar images can depend on
+those signed query parameters, so the sanitized external avatar URL can fail to
+load even though the account identity and raw avatar URL are present in the
+server-side database.
+
+Purpose:
+
+Restore platform-account avatar display without exposing signed platform image
+URLs, cookies, profile paths, proxy credentials, or other runtime data to the
+frontend.
+
+Requirement:
+
+- Do not expose the original signed platform avatar URL to the frontend.
+- The social-account list API should return a same-origin avatar URL when an
+  account has a platform avatar source, not the external platform URL.
+- The same-origin avatar endpoint must be administrator-only, must reject path
+  traversal, and must serve only cached account-avatar files.
+- The server may lazily fetch and cache the remote platform avatar when the
+  administrator opens the same-origin avatar URL.
+- If the remote avatar cannot be fetched or validated as an image, the frontend
+  should fall back to the existing placeholder avatar.
+- Avatar cache files are runtime data and must stay out of Git.
+
+Scope boundary:
+
+- In scope: platform-account identity API output, safe avatar cache helper,
+  administrator-only avatar read endpoint, and regression tests.
+- Out of scope: changing login-state detection semantics, crawler behavior,
+  normal-user access to platform accounts, exposing raw signed URLs, or adding
+  long-term media-retention management.
+
+Non-goals:
+
+- Do not proxy arbitrary user-provided URLs beyond stored account-avatar
+  sources.
+- Do not make account avatars available to normal users.
+- Do not treat missing avatars as account-login failure.
+
+Status: Verified
+
+Related tasks:
+
+- CR-046 Platform Account Avatar Safe Cache Display Regression Fix in
+  `TASKS.md`
+- PR-RESOURCE-001 in `TRACEABILITY.md`
+
+Acceptance:
+
+- A stored signed Douyin avatar source results in a same-origin
+  `/api/monitor/social-accounts/{account_id}/avatar` URL in the administrator
+  account-list response.
+- The account-list response does not include the external platform avatar host
+  or signed query parameters.
+- The avatar endpoint fetches and caches the remote image server-side, returns
+  image bytes for administrators, rejects normal users, and rejects traversal
+  paths.
+- If avatar fetching fails, the frontend keeps the placeholder and the account
+  row remains usable.
+
+Verification:
+
+- Verified on 2026-06-17 with targeted avatar-cache tests covering signed URL
+  redaction, same-origin avatar URL output, administrator-only avatar serving,
+  path traversal rejection, and profile/cookie path hiding.

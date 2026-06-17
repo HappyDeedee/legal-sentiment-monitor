@@ -91,20 +91,39 @@ squeeze text into one-character vertical columns, overlap content, hide
 primary actions, or create horizontal overflow at `1440x900`, `1024x768`, or
 `390x844`. Phase 21 also explicitly excludes the currently unrendered
 `Users And Permissions` page; implementing that page would require a separate
-new-capability CR. CR-041 Minimum Usable Pilot Acceptance Gate is accepted as
-the current "system can be used first" readiness standard: first pilot use is
-blocked by the remaining real-external portion of the minimum server-like
-workflow; hidden-real-email safety and stuck-run lifecycle safety have both
-been implemented, locally verified, and externally reviewed. Automated
-server-like validation also passes, and a default-safe Pilot Gate C evidence
-template/checker is available for operator-filled real-workflow proof. The
-evidence checker is not a substitute for live credentials: pilot validation
-with a real platform account/session, one real crawl, explicit-opt-in real SMTP
-credentials, and real-run redaction evidence is still required before the
-whole gate can be closed. CR-041 is not blocked by Phase 21 visual refinement,
+new-capability CR. CR-041 Minimum Usable Pilot Acceptance Gate is now satisfied
+for the current "system can be used first" readiness standard:
+hidden-real-email safety and stuck-run lifecycle safety have both been
+implemented, locally verified, and externally reviewed; automated server-like
+validation passes; the real Douyin pilot run verified server-side login/profile
+reuse, crawl, AI fallback, report generation, and redaction; and the
+frontend-enabled real SMTP validation recorded `delivery_log_id=6` for
+`report_id=3`. The operator confirmed both approved recipients received the
+report email, and the redacted `pilot_gate_c_v2` operator evidence JSON passed
+the checker. CR-042's earlier multi-layer validation-window design is now
+rejected and superseded by CR-043: one administrator Mail Configuration switch
+backed by the default-off `real_email_delivery` runtime setting. A `sent`
+delivery-log status still means SMTP submission acceptance only; recipient
+receipt remains a separate evidence item. CR-041 is not blocked by Phase 21
+visual refinement,
 CR-038 drawer accessibility, Phase 19 realtime progress, Phase 20 AI
 traceability, or CR-037 role/quota governance unless a later accepted P0
 regression changes that boundary.
+CR-044 Mail Test Recipient Coverage And SMTP Acceptance Clarity is implemented
+and verified: the Mail Configuration test-mail path submits one message to all
+configured global default recipients when no explicit target is supplied,
+returns recipient count/source metadata, and shows that count/source in the
+frontend while preserving the warning that SMTP acceptance is not recipient
+inbox proof.
+CR-045 AI Evaluation Accuracy And Unevaluated Lead Status Clarity is accepted
+as a new Phase 7.2 follow-up regression fix after live pilot inspection found
+that timeout-leftover content without `ai_evaluations` rows could be displayed
+as "no risk" and broad target-bearing keywords could recall many unrelated
+refund/legal posts. Phase 7 and Phase 7.1 remain historical snapshots; Phase
+7.2 must ensure missing AI evaluation rows are never treated as no-risk,
+timeout/partial-finalization creates pending-review fallback rows when safe,
+and `source_keyword` is treated as recall provenance rather than target-law-
+firm relatedness proof.
 The active SQLite schema now provides the foundation tables and columns
 required before later implementation work, and the web/API layer now has
 session login, administrator/normal-user roles, menu visibility,
@@ -186,6 +205,12 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   generated. Phase 7.1D historical run `8317` remediation remains open and
   still requires backup, rollback, dry-run preview, and explicit operator
   approval.
+- Phase 7.2 - AI Evaluation Accuracy And Lead Status Clarity Follow-up:
+  accepted but not implemented. It must prevent missing AI evaluation rows
+  from being shown as no-risk, tighten timeout/partial-finalization fallback
+  for unresolved candidates, treat `source_keyword` as recall provenance only,
+  and add calibration/regression fixtures for broad-keyword noise versus true
+  target-law-firm evidence.
 - Phase 8 - Server-Like Validation: complete and verified through automated
   server-like validation.
 - Phase 9 - Security And Operations: complete and verified locally.
@@ -234,26 +259,46 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   Monitoring, Platform Accounts, Proxies, AI Access, AI Rules, Mail
   Configuration, Mail Templates, Runtime Strategy, Run Center, Report Center,
   System Diagnostics, Login, and cross-page verification.
-- Minimum Usable Pilot Acceptance Gate: accepted but not satisfied. CR-036 /
+- Minimum Usable Pilot Acceptance Gate: satisfied for first usable pilot. CR-036 /
   Phase 17.1A-B email side-effect safety and CR-035/Phase 7.1A-C run
   lifecycle/AI fallback/partial-report safety are implemented, locally
   verified, and read-only externally reviewed. Automated server-like validation
   passes without relying on the operator's local Chrome. A no-side-effect
   Pilot Gate C evidence checker now provides a structured way to validate
-  redacted operator proof for the remaining real workflow. The gate still
-  requires a real platform login/crawl path with a persistent server-side
-  account profile, explicit-opt-in real SMTP validation with operator
-  credentials, real-run redaction proof, and a passing operator evidence JSON
-  check before the system is described as ready for first pilot use.
+  redacted operator proof for the remaining real workflow. The real platform
+  login/crawl, AI-fallback, and redaction portions are verified for the
+  recorded Douyin pilot run. A controlled frontend-enabled manual resend
+  recorded `delivery_log_id=6` with SMTP `sent` acceptance. The operator
+  confirmed both approved recipients received the report email, and the
+  redacted local operator evidence JSON passed
+  `scripts/pilot_gate_c_evidence.py --check`. CR-043 now replaces the rejected
+  CR-042 validation-window design with one administrator Mail Configuration
+  switch for real email delivery. A `sent` delivery-log status means the SMTP
+  server accepted the message submission; it is not recipient inbox proof by
+  itself.
+- CR-044 - Mail Test Recipient Coverage And SMTP Acceptance Clarity: complete
+  and verified. Mail Configuration test mail submits to all configured global
+  default recipients when no explicit target is supplied, reports submitted
+  recipient count/source in the API and frontend, and keeps automated
+  verification on mocked SMTP so tests do not send real external mail.
+- CR-045 - AI Evaluation Accuracy And Unevaluated Lead Status Clarity:
+  accepted but not implemented. It is linked to Phase 7.2 and should be treated
+  as a safety/accuracy follow-up before operators rely on AI risk labels from
+  broad keyword runs.
+- CR-046 - Platform Account Avatar Safe Cache Display Regression Fix:
+  complete and verified. Platform-account identity rows now expose only a
+  same-origin avatar URL; signed platform image URLs remain server-side
+  runtime data and are lazily cached before serving to administrators.
 - Phase 5/6 - Account Environment and Server Login: profile key, timeout, and
   lock-storage decisions are accepted; Phase 5 account environment runtime and
   Phase 6 login-flow runtime are complete.
 
 The documented V1 product roadmap is implemented through Phase 9 in this
 worktree, and the console optimization roadmap is verified through Phase 18B.
-Production pilot handoff still requires live platform, SMTP, and AI-provider
-validation with real deployment credentials. CR-041 now defines the narrower
-first usable pilot gate before that handoff can be described as ready.
+CR-041 is now the completed narrower first usable pilot gate. Broader
+production handoff can still add deployment-specific validation for additional
+platform accounts, SMTP providers, AI providers, and operational runbooks as
+separate follow-up work.
 
 ## Completed
 
@@ -436,8 +481,9 @@ first usable pilot gate before that handoff can be described as ready.
 - No active code implementation batch is currently in progress. Phase 10-18
   console optimization is complete and verified through Phase 18B. Phase 19A
   documentation governance is complete. Phase 19B-19D run-center realtime
-  progress code work is not started. Phase 7.1 and Phase 17.1 are accepted but
-  not implemented. Phase 20 is accepted but not implemented. Phase 21 is
+  progress code work is not started. Phase 7.1A-C and CR-043/CR-044 are
+  implemented and verified; Phase 7.1D remains gated. Phase 7.2 is accepted
+  but not implemented. Phase 20 is accepted but not implemented. Phase 21 is
   accepted but not implemented. CR-037 is deferred.
 
 ## Known Risks
@@ -487,10 +533,15 @@ first usable pilot gate before that handoff can be described as ready.
   approval before changing historical AI rows, reports, or terminal status.
 - CR-036 Phase 17.1A-B and backend Phase 17.1C/17.2A are implemented and
   locally verified. The product direction is not "never send real mail"; real
-  mail must be intentional, visible, attributable validation or production
-  delivery through `MONITOR_ALLOW_REAL_EMAIL_SEND=true`. Operator-facing
-  recipient-source UI/preflight explanation, orphan evidence operations notes,
-  and template guardrails remain follow-up work.
+  mail must be intentional, visible, and attributable through the
+  administrator Mail Configuration "真实邮件发送" switch introduced by CR-043.
+  Operator-facing recipient-source UI/preflight explanation, orphan evidence
+  operations notes, and template guardrails remain follow-up work.
+- CR-045 is now a live pilot safety risk: current broad-keyword runs can
+  produce many unrelated items, and any missing `ai_evaluations` row must be
+  treated as unevaluated or pending review rather than no-risk. Until Phase
+  7.2 is implemented, operators should manually inspect rows with empty AI
+  reason/evidence and should not rely on broad keyword AI labels as final.
 - CR-037 is deferred: normal-user email send/resend quotas and administrator
   policy controls are not yet designed. Existing V1 role permissions remain in
   force until a future confirmed phase changes them.
@@ -577,11 +628,8 @@ first usable pilot gate before that handoff can be described as ready.
 
 Next allowed implementation order:
 
-1. satisfy the remaining real-external portion of CR-041 Pilot Gate C with a
-   server-like workflow: server-side login/profile path, one real platform
-   crawl when credentials/session are available, AI fallback, explicit-opt-in
-   SMTP validation, redaction checks, and a passing
-   `scripts/pilot_gate_c_evidence.py --check <operator-evidence.json>` result;
+1. implement CR-045/Phase 7.2 AI evaluation accuracy and unevaluated-lead
+   status safety before operators rely on broad-keyword AI risk labels;
 2. handle CR-035/Phase 7.1D historical run remediation only through the
    dry-run, backup, rollback, and explicit-operator-approval gate;
 3. implement Phase 17.1C/17.2A remaining operator-facing recipient/template
@@ -595,10 +643,8 @@ Next allowed implementation order:
    provisional-progress batch is documented first;
 6. schedule CR-034/Phase 20 implementation after higher-priority safety and
    lifecycle work if run-detail traceability becomes the next execution batch;
-7. prepare production pilot handoff and deployment-specific validation after
-   the safety and lifecycle regression fixes are verified;
-8. verify real platform QR scanning, real platform crawling, SMTP delivery,
-   and AI-provider behavior with production credentials;
+7. prepare broader production pilot handoff and deployment-specific validation
+   for additional live credentials after the first usable pilot baseline.
 
 ## Latest Verification
 

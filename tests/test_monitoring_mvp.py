@@ -12,12 +12,75 @@ from pathlib import Path
 import httpx
 import pytest
 from fastapi import HTTPException
+from openpyxl import load_workbook
 
 from api.monitoring.ai import _build_endpoint, _parse_json, _validate_ai_output, build_evaluation_payload, test_ai as run_ai_config_test
 from api.monitoring.ai import DEFAULT_PROMPT
 from api.monitoring.auth import SESSION_COOKIE_NAME
 from api.monitoring.account_environment import resolve_account_profile_path
-from api.monitoring.database import acquire_account_lock, acquire_proxy_lock, authenticate_user, bootstrap_admin_from_env, create_login_session, create_run, email_send_window_key, expire_login_sessions_for_account, finish_run, get_active_ai_key_profile, get_ai_config, get_conn, get_dashboard_summary, get_email_config, get_job, get_login_session, get_platform_login_config, get_report, get_run, get_runtime_setting_value, get_social_account, get_user_by_email, has_running_run_for_job, init_db, list_ai_key_profiles, list_ai_rule_profiles, list_email_delivery_logs, list_email_templates, list_jobs, list_leads, list_login_sessions, list_platform_login_configs, list_proxy_profiles, list_reports, list_runtime_settings, list_runs, list_social_accounts, list_users, mark_selftest_jobs_internal, preview_crawl_run_job_id_backfill, record_email_delivery_log, record_skipped_run, recover_stale_runs_and_locks, release_account_lock, release_proxy_locks, release_run_resource_locks, render_email_template_preview, save_ai_config, save_ai_key_profile, save_ai_rule_profile, save_email_config, save_email_template, save_job, save_platform_login_config, save_proxy_profile, save_runtime_settings, save_social_account, save_user, set_active_ai_key_profile, set_active_ai_rule_profile, update_social_account_check_state
+from api.monitoring.database import (
+    acquire_account_lock,
+    acquire_proxy_lock,
+    authenticate_user,
+    bootstrap_admin_from_env,
+    create_login_session,
+    create_run,
+    email_send_window_key,
+    expire_login_sessions_for_account,
+    finish_run,
+    get_active_ai_key_profile,
+    get_ai_config,
+    get_conn,
+    get_dashboard_summary,
+    get_email_config,
+    get_job,
+    get_login_session,
+    get_platform_login_config,
+    get_report,
+    get_run,
+    get_runtime_setting_value,
+    get_social_account,
+    get_user_by_email,
+    has_running_run_for_job,
+    init_db,
+    list_ai_key_profiles,
+    list_ai_rule_profiles,
+    list_email_delivery_logs,
+    list_email_templates,
+    list_jobs,
+    list_leads,
+    list_login_sessions,
+    list_platform_login_configs,
+    list_proxy_profiles,
+    list_reports,
+    list_runtime_settings,
+    list_runs,
+    list_social_accounts,
+    list_users,
+    mark_selftest_jobs_internal,
+    preview_crawl_run_job_id_backfill,
+    record_email_delivery_log,
+    record_skipped_run,
+    recover_stale_runs_and_locks,
+    release_account_lock,
+    release_proxy_locks,
+    release_run_resource_locks,
+    render_email_template_preview,
+    save_ai_config,
+    save_ai_key_profile,
+    save_ai_rule_profile,
+    save_email_config,
+    save_email_template,
+    save_job,
+    save_platform_login_config,
+    save_proxy_profile,
+    save_runtime_settings,
+    save_social_account,
+    save_user,
+    set_active_ai_key_profile,
+    set_active_ai_rule_profile,
+    update_social_account_check_state,
+)
 from api.monitoring.mediacrawler_login import get_mediacrawler_login_capability
 from api.monitoring.login_browser import build_login_browser_command, open_login_browser, open_login_browser_with_command
 import api.monitoring.account_check as account_check_module
@@ -31,6 +94,7 @@ from api.monitoring.preflight import build_job_preflight
 from api.monitoring.readiness import get_readiness_status
 from api.monitoring.reporting import create_report, resend_report_email, send_report_with_delivery_log
 from api.monitoring.security import redact_sensitive
+from api.monitoring.avatar_cache import AVATAR_CACHE_DIR
 from api.monitoring.selftest import create_sample_report
 from api.monitoring.smoke import run_smoke_check
 from api.monitoring.cli import run_due_jobs
@@ -86,7 +150,7 @@ def test_environment_check_returns_customer_safe_text(monkeypatch):
 def _complete_pilot_gate_c_evidence():
     payload = build_template()
     payload["status"] = "passed"
-    payload["validation_window"].update(
+    payload["real_email_toggle"].update(
         {
             "operator": "pilot operator",
             "started_at": "2026-06-17T10:00:00+08:00",
@@ -128,10 +192,12 @@ def _complete_pilot_gate_c_evidence():
         {
             "recipient_reference": "operator-approved pilot recipient",
             "delivery_log_reference": "email delivery log id 901",
-            "explicit_opt_in_enabled_for_validation": True,
+            "recipient_receipt_reference": "operator confirmed recipient inbox or spam folder receipt",
+            "admin_toggle_enabled_for_validation": True,
             "real_smtp_send_succeeded": True,
             "delivery_recorded": True,
-            "opt_in_disabled_after_validation": True,
+            "recipient_receipt_confirmed": True,
+            "admin_toggle_disabled_after_validation": True,
             "default_paths_non_sending_confirmed": True,
         }
     )
@@ -159,8 +225,10 @@ def test_pilot_gate_c_evidence_template_is_incomplete_and_side_effect_free(tmp_p
     payload = json.loads(target.read_text(encoding="utf-8"))
     issues = validate_evidence(payload)
 
-    assert payload["schema_version"] == "pilot_gate_c_v1"
+    assert payload["schema_version"] == "pilot_gate_c_v3"
     assert payload["status"] == "incomplete"
+    assert payload["smtp_validation"]["recipient_receipt_confirmed"] is False
+    assert payload["smtp_validation"]["recipient_receipt_reference"] == ""
     assert issues
     issue_text = json.dumps([issue.as_dict() for issue in issues], ensure_ascii=False)
     assert "status" in issue_text
@@ -177,12 +245,16 @@ def test_pilot_gate_c_evidence_rejects_missing_required_real_workflow_evidence()
     payload = _complete_pilot_gate_c_evidence()
     payload["real_platform_workflow"]["crawl_completed_with_server_profile"] = False
     payload["smtp_validation"]["delivery_log_reference"] = ""
+    payload["smtp_validation"]["recipient_receipt_confirmed"] = False
+    payload["smtp_validation"]["recipient_receipt_reference"] = ""
 
     issues = validate_evidence(payload)
     issue_paths = {issue.path for issue in issues}
 
     assert "real_platform_workflow.crawl_completed_with_server_profile" in issue_paths
     assert "smtp_validation.delivery_log_reference" in issue_paths
+    assert "smtp_validation.recipient_receipt_confirmed" in issue_paths
+    assert "smtp_validation.recipient_receipt_reference" in issue_paths
 
 
 def test_pilot_gate_c_evidence_rejects_secret_like_values():
@@ -3419,6 +3491,9 @@ def test_ai_rule_test_uses_global_evaluation_prompt_with_active_profile(monkeypa
     ai_snapshot = _snapshot_singleton_table("ai_configs")
     profile_snapshot = _snapshot_table("ai_key_profiles")
     email_snapshot = _snapshot_singleton_table("email_configs")
+    settings_snapshot = _snapshot_table("system_settings")
+    settings_snapshot = _snapshot_table("system_settings")
+    settings_snapshot = _snapshot_table("system_settings")
     seen: dict[str, Any] = {}
 
     async def fake_call_openai(cfg, prompt, payload):
@@ -4034,6 +4109,196 @@ def test_email_templates_preview_and_pool_configs_are_persisted():
     finally:
         for table, snapshot in snapshots.items():
             _restore_table(table, snapshot)
+
+
+def test_social_account_pool_redacts_signed_avatar_urls():
+    init_db()
+    snapshot = _snapshot_table("social_accounts")
+    try:
+        account = save_social_account({"name": "签名头像账号", "platform": "dy", "login_type": "qrcode", "status": "active"})
+        update_social_account_check_state(
+            int(account["id"]),
+            True,
+            "登录态有效",
+            identity={
+                "platform_account_name": "签名头像账号",
+                "platform_avatar_url": "https://p3-pc-sign.douyinpic.com/avatar.jpeg?x-expires=1799999999&x-signature=secretSig&lk3s=abc",
+                "platform_home_url": "https://www.douyin.com/user/self?from_nav=1",
+            },
+        )
+
+        listed = list_social_accounts(masked=True)
+        visible = json.dumps(listed, ensure_ascii=False)
+        target = next(item for item in listed if item["id"] == account["id"])
+    finally:
+        _restore_table("social_accounts", snapshot)
+
+    assert target["platform_avatar_url"] == "https://p3-pc-sign.douyinpic.com/avatar.jpeg"
+    assert target["platform_home_url"] == "https://www.douyin.com/user/self"
+    for forbidden in ["x-signature", "x-expires", "lk3s", "secretSig", "from_nav"]:
+        assert forbidden not in visible
+
+
+def test_social_account_api_uses_local_avatar_endpoint_without_exposing_source(monkeypatch, tmp_path):
+    import api.routers.monitor as monitor_router
+
+    init_db()
+    snapshot = _snapshot_table("social_accounts")
+    avatar_root = tmp_path / "avatars"
+    monkeypatch.setattr(monitor_router, "AVATAR_CACHE_DIR", avatar_root)
+    try:
+        account = save_social_account({"name": "签名头像账号", "platform": "dy", "login_type": "qrcode", "status": "active"})
+        update_social_account_check_state(
+            int(account["id"]),
+            True,
+            "登录态有效",
+            identity={
+                "platform_account_name": "签名头像账号",
+                "platform_avatar_url": "https://p3-pc-sign.douyinpic.com/avatar.jpeg?x-expires=1799999999&x-signature=secretSig&lk3s=abc",
+                "platform_home_url": "https://www.douyin.com/user/self?from_nav=1",
+            },
+        )
+
+        account_view = monitor_router._customer_view_social_account(list_social_accounts(masked=False)[0])
+        visible = json.dumps(account_view, ensure_ascii=False)
+        avatar_url = account_view["platform_avatar_url"]
+    finally:
+        _restore_table("social_accounts", snapshot)
+
+    assert avatar_url == f"/api/monitor/social-accounts/{account['id']}/avatar"
+    assert "douyinpic.com" not in avatar_url
+    assert "x-signature" not in visible
+    assert "secretSig" not in visible
+    assert "from_nav" not in visible
+    assert not list(avatar_root.glob("account_*"))
+
+
+def test_social_account_avatar_endpoint_is_admin_only_and_caches_signed_source(monkeypatch, tmp_path):
+    import api.main as api_main
+    import api.monitoring.avatar_cache as avatar_cache_module
+    import api.routers.monitor as monitor_router
+
+    init_db()
+    snapshots = {
+        "users": _snapshot_table("users"),
+        "user_sessions": _snapshot_table("user_sessions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    avatar_root = tmp_path / "avatars"
+    monkeypatch.setattr(avatar_cache_module, "AVATAR_CACHE_DIR", avatar_root)
+    monkeypatch.setattr(monitor_router, "AVATAR_CACHE_DIR", avatar_root)
+
+    class FakeResponse:
+        headers = {"Content-Type": "image/jpeg"}
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+        def read(self, _size):
+            return b"\xff\xd8\xffcached-avatar"
+
+    def fake_urlopen(request, timeout=10.0):
+        assert "x-signature=secretSig" in request.full_url
+        return FakeResponse()
+
+    monkeypatch.setattr(avatar_cache_module.urllib.request, "urlopen", fake_urlopen)
+    try:
+        account = save_social_account({"name": "签名头像账号", "platform": "dy", "login_type": "qrcode", "status": "active"})
+        update_social_account_check_state(
+            int(account["id"]),
+            True,
+            "登录态有效",
+            identity={
+                "platform_account_name": "签名头像账号",
+                "platform_avatar_url": "https://p3-pc-sign.douyinpic.com/avatar.jpeg?x-expires=1799999999&x-signature=secretSig&lk3s=abc",
+            },
+        )
+        save_user(
+            {
+                "email": "avatar-admin@example.com",
+                "display_name": "Avatar Admin",
+                "password": "AdminPass123!",
+                "role": "administrator",
+                "status": "active",
+            },
+            actor_id=1,
+        )
+        save_user(
+            {
+                "email": "avatar-user@example.com",
+                "display_name": "Avatar User",
+                "password": "UserPass123!",
+                "role": "normal",
+                "status": "active",
+            },
+            actor_id=1,
+        )
+        transport = httpx.ASGITransport(app=api_main.app)
+
+        async def exercise() -> None:
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                normal_login = await client.post("/api/auth/login", json={"email": "avatar-user@example.com", "password": "UserPass123!"})
+                assert normal_login.status_code == 200
+                assert (await client.get(f"/api/monitor/social-accounts/{account['id']}/avatar")).status_code == 403
+
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                admin_login = await client.post("/api/auth/login", json={"email": "avatar-admin@example.com", "password": "AdminPass123!"})
+                assert admin_login.status_code == 200
+                accounts_response = await client.get("/api/monitor/social-accounts")
+                assert accounts_response.status_code == 200
+                accounts_visible = json.dumps(accounts_response.json(), ensure_ascii=False)
+                assert f"/api/monitor/social-accounts/{account['id']}/avatar" in accounts_visible
+                assert "douyinpic.com" not in accounts_visible
+                assert "secretSig" not in accounts_visible
+
+                response = await client.get(f"/api/monitor/social-accounts/{account['id']}/avatar")
+                assert response.status_code == 200
+                assert response.content == b"\xff\xd8\xffcached-avatar"
+                traversal = await client.get("/api/monitor/social-accounts/avatar/..%2Fsecret.key")
+                assert traversal.status_code == 404
+
+        asyncio.run(exercise())
+        cached_files = list(avatar_root.glob("account_*"))
+        assert len(cached_files) == 1
+        assert cached_files[0].read_bytes() == b"\xff\xd8\xffcached-avatar"
+    finally:
+        for table, snapshot_rows in snapshots.items():
+            _restore_table(table, snapshot_rows)
+
+
+def test_social_account_api_view_hides_profile_paths_and_cookie_values():
+    raw = {
+        "id": 1,
+        "name": "安全账号",
+        "platform": "dy",
+        "login_type": "qrcode",
+        "status": "active",
+        "profile_key": "1/dy/acc_1",
+        "profile_path": r"E:\server\profiles\dy\acc_1",
+        "profile_runtime_path": r"E:\server\profiles\dy\acc_1",
+        "profile_configured": True,
+        "cookies": "sessionid=secret",
+        "has_cookies": True,
+        "platform_avatar_url": "https://p3.example.com/avatar.jpeg?x-signature=secret&x-expires=1799999999",
+        "platform_home_url": "https://www.douyin.com/user/self?from_nav=1",
+    }
+
+    view = monitor_router._customer_view_social_account(raw)
+    visible = json.dumps(view, ensure_ascii=False)
+
+    assert view["profile_configured"] is True
+    assert view["has_cookies"] is True
+    assert "profile_path" not in view
+    assert "profile_runtime_path" not in view
+    assert "cookies" not in view
+    assert "E:\\" not in visible
+    assert "sessionid" not in visible
+    assert "x-signature" not in visible
+    assert "x-expires" not in visible
+    assert "from_nav" not in visible
 
 
 def test_init_db_creates_default_email_template_when_empty():
@@ -5660,6 +5925,7 @@ def test_ai_email_test_results_are_persisted_for_readiness(monkeypatch):
     ai_snapshot = _snapshot_singleton_table("ai_configs")
     profile_snapshot = _snapshot_table("ai_key_profiles")
     email_snapshot = _snapshot_singleton_table("email_configs")
+    settings_snapshot = _snapshot_table("system_settings")
 
     async def fake_ai_test(payload):
         return {
@@ -5671,7 +5937,7 @@ def test_ai_email_test_results_are_persisted_for_readiness(monkeypatch):
             "recommended_action": "继续",
         }
 
-    def fake_send_test_email(payload):
+    def fake_send_test_email(payload, allow_real_send=None):
         return None
 
     try:
@@ -5713,6 +5979,7 @@ def test_ai_email_test_results_are_persisted_for_readiness(monkeypatch):
         assert ai_check["ok"] is False
 
         monkeypatch.setattr(monitor_router, "send_test_email", fake_send_test_email)
+        save_runtime_settings({"real_email_delivery": True}, actor_id=1)
         result = asyncio.run(
             monitor_router.test_email(
                 {
@@ -5723,7 +5990,8 @@ def test_ai_email_test_results_are_persisted_for_readiness(monkeypatch):
                     "username": "sender@example.com",
                     "password": "smtp-password",
                     "default_recipients": ["target@example.com"],
-                }
+                },
+                admin={"id": 1, "workspace_id": 1, "role": "administrator"},
             )
         )
         assert result["config"]["last_test_status"] == "success"
@@ -5750,6 +6018,7 @@ def test_ai_email_test_results_are_persisted_for_readiness(monkeypatch):
         email_check = next(check for check in get_readiness_status()["checks"] if check["key"] == "email_config")
         assert email_check["ok"] is False
     finally:
+        _restore_table("system_settings", settings_snapshot)
         _restore_table("ai_key_profiles", profile_snapshot)
         _restore_singleton_table("ai_configs", ai_snapshot)
         _restore_singleton_table("email_configs", email_snapshot)
@@ -6075,6 +6344,123 @@ def test_report_includes_platform_status_and_failure_reason():
     assert "平台采集状态" in markdown
     assert "代理：华东采集代理 / manual #8" in markdown
     assert "快手：失败" in markdown
+
+
+def test_cr041_report_outputs_redact_signed_media_urls_and_run_view_paths():
+    init_db()
+    snapshots = {
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "raw_contents": _snapshot_table("raw_contents"),
+        "raw_comments": _snapshot_table("raw_comments"),
+        "ai_evaluations": _snapshot_table("ai_evaluations"),
+    }
+    jobs_snapshot = _snapshot_monitor_jobs()
+    try:
+        _clear_monitor_jobs()
+        with get_conn() as conn:
+            for table in ["reports", "crawl_runs", "raw_contents", "raw_comments", "ai_evaluations"]:
+                conn.execute(f"DELETE FROM {table}")
+        job = save_job(
+            {
+                "law_firm_name": "CR041脱敏律所",
+                "aliases": [],
+                "exclude_words": [],
+                "keywords": ["CR041脱敏律所投诉"],
+                "platforms": ["dy"],
+                "recipients": [],
+                "enable_comments": False,
+                "time_window_type": "recent_1d",
+                "frequency": "daily",
+                "email_time": "09:00",
+                "enabled": False,
+            }
+        )
+        run_id = create_run(
+            job["id"],
+            {
+                "job_id": job["id"],
+                "run_dir": r"E:\myproject\MediaCrawler-worktrees\cr041-pilot-evidence\data_server_like\runs\job_1\run_1_real",
+                "platform_results": {
+                    "dy": {
+                        "status": "success",
+                        "raw_contents": 1,
+                        "new_contents": 1,
+                        "debug_path": r"C:\Users\Administrator\AppData\Local\profile",
+                    }
+                },
+            },
+        )
+        ingested = ingest_outputs(
+            job,
+            run_id,
+            "dy",
+            [
+                {
+                    "aweme_id": "pytest_cr041_signed_media",
+                    "title": "CR041脱敏律所投诉",
+                    "desc": "收费争议需要复核",
+                    "aweme_url": "https://www.douyin.com/video/7356421?modal_id=7356421&previous_page=app_code_link",
+                    "cover_url": "https://p3-sign.douyinpic.com/tos-cn-i-0813/cover.jpeg?x-expires=1799999999&x-signature=secretSig&lk3s=abc",
+                    "create_time": int(datetime.now(timezone.utc).timestamp()),
+                }
+            ],
+            [],
+        )
+        with get_conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO ai_evaluations (
+                    workspace_id, raw_content_id, run_id, status,
+                    is_related, is_negative, risk_level, reason,
+                    evidence_quotes, recommended_action, raw_response, created_at
+                )
+                VALUES (?, ?, ?, 'pending_review', 1, 1, 'medium', ?, ?, ?, '', ?)
+                """,
+                (
+                    job.get("workspace_id") or 1,
+                    ingested["content_db_ids"][0],
+                    run_id,
+                    "AI 未配置，进入人工复核",
+                    json.dumps(["收费争议需要复核"], ensure_ascii=False),
+                    "人工复核",
+                    datetime.now(timezone.utc).isoformat(),
+                ),
+            )
+        report = create_report(
+            run_id,
+            job,
+            {
+                "platforms": ["dy"],
+                "failed_platforms": [],
+                "new_contents": ingested["new_contents"],
+                "negative_count": 1,
+                "high_count": 0,
+            },
+        )
+        html = Path(report["html_path"]).read_text(encoding="utf-8")
+        markdown = Path(report["markdown_path"]).read_text(encoding="utf-8")
+        workbook = load_workbook(report["excel_path"])
+        excel_text = "\n".join(
+            str(cell.value or "")
+            for row in workbook.active.iter_rows()
+            for cell in row
+        )
+        run_view = monitor_router._customer_view_run(get_run(run_id) or {})
+        visible = json.dumps(run_view, ensure_ascii=False)
+    finally:
+        _restore_monitor_jobs(jobs_snapshot)
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+    combined_report = "\n".join([html, markdown, excel_text])
+    for forbidden in ["x-signature", "x-expires", "lk3s", "secretSig", "modal_id", "previous_page"]:
+        assert forbidden not in combined_report
+    assert "https://www.douyin.com/video/7356421" in combined_report
+    assert "媒体链接已脱敏" in combined_report
+    assert "E:\\" not in visible
+    assert "C:\\" not in visible
+    assert "run_dir" not in visible
 
 
 def test_leads_api_lists_pending_review_items():
@@ -7949,6 +8335,18 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "mail_test_console" in page
     assert "mail_test_start_btn" in page
     assert "email_subject_summary" in page
+    assert "真实邮件发送" in page
+    assert "管理员打开后，测试邮件、手动重发和自动交付才会提交 SMTP；默认关闭。" in page
+    assert "email_validation_status" in page
+    assert "email_validation_summary" not in page
+    assert "real_email_delivery_toggle" in page
+    assert "real_email_delivery_toggle_label" in page
+    assert "setRealEmailDelivery(this.checked)" in page
+    assert "email_validation_open_btn" not in page
+    assert "email_validation_close_btn" not in page
+    assert "SMTP 已接受不代表收件箱已收到" in page
+    assert "renderEmailValidationWindow" in page
+    assert "emailRecipientSourceLabel" in page
     assert "配置和测试都通过弹窗完成；密码保存后不会在页面回显。" in page
     assert "测试失败不会阻断报告生成；系统仍会保留报告供下载和预览。" in page
     assert "smtp_password_status" in page
@@ -9002,7 +9400,7 @@ def test_phase_17a_auto_delivery_is_idempotent_and_manual_resend_is_separate(mon
         report = create_report(run_id, job, {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
         send_at = datetime(2026, 6, 16, 9, 30, tzinfo=timezone.utc)
 
-        def fake_send_report(job_arg, report_arg):
+        def fake_send_report(job_arg, report_arg, allow_real_send=None):
             send_calls.append(int(report_arg["id"]))
             return True, None
 
@@ -9067,12 +9465,14 @@ def test_phase_17_1_real_smtp_gate_skips_auto_delivery_with_default_recipients(m
         "reports": _snapshot_table("reports"),
         "crawl_runs": _snapshot_table("crawl_runs"),
         "email_configs": _snapshot_singleton_table("email_configs"),
+        "system_settings": _snapshot_table("system_settings"),
     }
     _clear_monitor_jobs()
     try:
         with get_conn() as conn:
             for table in ["email_delivery_logs", "reports", "crawl_runs"]:
                 conn.execute(f"DELETE FROM {table}")
+        save_runtime_settings({"real_email_delivery": False}, actor_id=1)
         monkeypatch.delenv("MONITOR_ALLOW_REAL_EMAIL_SEND", raising=False)
         save_email_config(
             {
@@ -9113,6 +9513,7 @@ def test_phase_17_1_real_smtp_gate_skips_auto_delivery_with_default_recipients(m
         _restore_table("email_delivery_logs", snapshots["email_delivery_logs"])
         _restore_table("reports", snapshots["reports"])
         _restore_table("crawl_runs", snapshots["crawl_runs"])
+        _restore_table("system_settings", snapshots["system_settings"])
         _restore_singleton_table("email_configs", snapshots["email_configs"])
         _restore_monitor_jobs(jobs_snapshot)
 
@@ -9125,12 +9526,14 @@ def test_phase_17_1_manual_resend_and_mail_test_are_blocked_without_opt_in(monke
         "reports": _snapshot_table("reports"),
         "crawl_runs": _snapshot_table("crawl_runs"),
         "email_configs": _snapshot_singleton_table("email_configs"),
+        "system_settings": _snapshot_table("system_settings"),
     }
     _clear_monitor_jobs()
     try:
         with get_conn() as conn:
             for table in ["email_delivery_logs", "reports", "crawl_runs"]:
                 conn.execute(f"DELETE FROM {table}")
+        save_runtime_settings({"real_email_delivery": False}, actor_id=1)
         monkeypatch.delenv("MONITOR_ALLOW_REAL_EMAIL_SEND", raising=False)
         save_email_config(
             {
@@ -9172,13 +9575,15 @@ def test_phase_17_1_manual_resend_and_mail_test_are_blocked_without_opt_in(monke
         _restore_table("email_delivery_logs", snapshots["email_delivery_logs"])
         _restore_table("reports", snapshots["reports"])
         _restore_table("crawl_runs", snapshots["crawl_runs"])
+        _restore_table("system_settings", snapshots["system_settings"])
         _restore_singleton_table("email_configs", snapshots["email_configs"])
         _restore_monitor_jobs(jobs_snapshot)
 
 
-def test_phase_17_1_explicit_real_email_opt_in_reaches_mocked_smtp(monkeypatch, tmp_path):
+def test_phase_17_1_admin_real_email_toggle_reaches_mocked_smtp(monkeypatch, tmp_path):
     init_db()
     email_snapshot = _snapshot_singleton_table("email_configs")
+    settings_snapshot = _snapshot_table("system_settings")
     sent_messages = []
 
     class FakeSMTP:
@@ -9198,8 +9603,8 @@ def test_phase_17_1_explicit_real_email_opt_in_reaches_mocked_smtp(monkeypatch, 
             return None
 
     try:
-        monkeypatch.setenv("MONITOR_ALLOW_REAL_EMAIL_SEND", "true")
         monkeypatch.setattr(smtplib, "SMTP_SSL", FakeSMTP)
+        save_runtime_settings({"real_email_delivery": True}, actor_id=1)
         save_email_config(
             {
                 "smtp_host": "smtp.real-looking.example",
@@ -9235,7 +9640,474 @@ def test_phase_17_1_explicit_real_email_opt_in_reaches_mocked_smtp(monkeypatch, 
         assert sent_messages[0]["To"] == "ops@example.com"
         assert sent_messages[1]["To"] == "report@example.com"
     finally:
+        _restore_table("system_settings", settings_snapshot)
         _restore_singleton_table("email_configs", email_snapshot)
+
+
+def test_phase_17_1_smtp_refused_recipients_fail_delivery(monkeypatch, tmp_path):
+    init_db()
+    email_snapshot = _snapshot_singleton_table("email_configs")
+    settings_snapshot = _snapshot_table("system_settings")
+
+    class RefusingSMTP:
+        def __init__(self, host, port, timeout=30):
+            self.host = host
+            self.port = port
+            self.timeout = timeout
+
+        def login(self, username, password):
+            self.username = username
+            self.password = password
+
+        def send_message(self, msg):
+            return {"ops@example.com": (550, b"mailbox unavailable")}
+
+        def quit(self):
+            return None
+
+    try:
+        monkeypatch.setattr(smtplib, "SMTP_SSL", RefusingSMTP)
+        save_runtime_settings({"real_email_delivery": True}, actor_id=1)
+        save_email_config(
+            {
+                "smtp_host": "smtp.real-looking.example",
+                "smtp_port": 465,
+                "encryption": "ssl",
+                "sender": "sender@example.com",
+                "username": "sender@example.com",
+                "password": "super-secret",
+                "default_recipients": ["ops@example.com"],
+            }
+        )
+        html_path = tmp_path / "report.html"
+        md_path = tmp_path / "report.md"
+        xlsx_path = tmp_path / "report.xlsx"
+        html_path.write_text("<article>拒收测试报告</article>", encoding="utf-8")
+        md_path.write_text("# 拒收测试报告", encoding="utf-8")
+        xlsx_path.write_bytes(b"placeholder")
+
+        ok, error = send_report(
+            {"law_firm_name": "Phase17.1拒收律所", "recipients": ["ops@example.com"], "platforms": ["dy"]},
+            {
+                "html_path": str(html_path),
+                "markdown_path": str(md_path),
+                "excel_path": str(xlsx_path),
+                "summary": {"job_id": 1, "law_firm_name": "Phase17.1拒收律所", "platforms": ["dy"]},
+            },
+        )
+
+        assert ok is False
+        assert error and "SMTP 服务器拒收了 1 个收件人" in error
+        assert "550" in error
+        assert "ops@example.com" not in error
+    finally:
+        _restore_table("system_settings", settings_snapshot)
+        _restore_singleton_table("email_configs", email_snapshot)
+
+
+def test_cr043_admin_frontend_real_email_toggle_controls_mail_test(monkeypatch):
+    from api import main as api_main
+
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "system_settings": _snapshot_table("system_settings"),
+        "user_sessions": _snapshot_table("user_sessions"),
+        "users": _snapshot_table("users"),
+        "email_configs": _snapshot_singleton_table("email_configs"),
+    }
+    sent_messages = []
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout=30):
+            self.host = host
+            self.port = port
+            self.timeout = timeout
+
+        def login(self, username, password):
+            self.username = username
+            self.password = password
+
+        def send_message(self, msg):
+            sent_messages.append(msg)
+            return {}
+
+        def quit(self):
+            return None
+
+    try:
+        with get_conn() as conn:
+            for table in ["audit_logs", "system_settings", "user_sessions", "users"]:
+                conn.execute(f"DELETE FROM {table}")
+        monkeypatch.setattr(smtplib, "SMTP_SSL", FakeSMTP)
+        admin = bootstrap_admin_from_env("cr043-admin@example.com", "AdminPass123!", "CR043 Admin")
+        save_email_config(
+            {
+                "smtp_host": "smtp.real-looking.example",
+                "smtp_port": 465,
+                "encryption": "ssl",
+                "sender": "sender@example.com",
+                "username": "sender@example.com",
+                "password": "super-secret",
+                "default_recipients": ["ops@example.com"],
+            }
+        )
+        transport = httpx.ASGITransport(app=api_main.app)
+
+        async def exercise() -> None:
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                login = await client.post("/api/auth/login", json={"email": "cr043-admin@example.com", "password": "AdminPass123!"})
+                assert login.status_code == 200
+
+                closed_send = await client.post("/api/monitor/email-config/test", json={})
+                assert closed_send.status_code == 400
+                assert "真实邮件发送未启用" in closed_send.text
+                assert sent_messages == []
+
+                state = (await client.get("/api/monitor/email-validation-window")).json()["validation_window"]
+                assert state["real_email_delivery"] is False
+                assert state["real_email_admin_enabled"] is False
+                assert state["recipient_summary"]["source"] == "global_default_fallback"
+                assert state["recipient_summary"]["count"] == 1
+
+                opened = await client.put("/api/monitor/runtime-settings", json={"real_email_delivery": True})
+                assert opened.status_code == 200
+                assert opened.json()["settings"]["real_email_delivery"]["value"] is True
+
+                sent = await client.post("/api/monitor/email-config/test", json={})
+                assert sent.status_code == 200
+                assert sent.json()["validation_window"]["real_email_delivery"] is True
+                assert len(sent_messages) == 1
+                assert sent_messages[0]["To"] == "ops@example.com"
+
+                second_send = await client.post("/api/monitor/email-config/test", json={})
+                assert second_send.status_code == 200
+                assert len(sent_messages) == 2
+
+                closed = await client.put("/api/monitor/runtime-settings", json={"real_email_delivery": False})
+                assert closed.status_code == 200
+                blocked_again = await client.post("/api/monitor/email-config/test", json={})
+                assert blocked_again.status_code == 400
+                assert len(sent_messages) == 2
+
+        asyncio.run(exercise())
+
+        assert get_runtime_setting_value("real_email_delivery") is False
+        with get_conn() as conn:
+            actions = [row["action_type"] for row in conn.execute("SELECT action_type FROM audit_logs ORDER BY id").fetchall()]
+            audit_payload = [dict(row) for row in conn.execute("SELECT * FROM audit_logs").fetchall()]
+        assert "update_runtime_settings" in actions
+        assert "test_email_config" in actions
+        assert "super-secret" not in json.dumps(audit_payload, ensure_ascii=False)
+    finally:
+        _restore_table("users", snapshots["users"])
+        _restore_table("user_sessions", snapshots["user_sessions"])
+        _restore_table("system_settings", snapshots["system_settings"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
+        _restore_singleton_table("email_configs", snapshots["email_configs"])
+
+
+def test_cr044_mail_test_submits_all_default_recipients(monkeypatch):
+    init_db()
+    email_snapshot = _snapshot_singleton_table("email_configs")
+    settings_snapshot = _snapshot_table("system_settings")
+    sent_messages = []
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout=30):
+            self.host = host
+            self.port = port
+            self.timeout = timeout
+
+        def login(self, username, password):
+            self.username = username
+            self.password = password
+
+        def send_message(self, msg):
+            sent_messages.append(msg)
+            return {}
+
+        def quit(self):
+            return None
+
+    try:
+        monkeypatch.setattr(smtplib, "SMTP_SSL", FakeSMTP)
+        save_runtime_settings({"real_email_delivery": True}, actor_id=1)
+        save_email_config(
+            {
+                "smtp_host": "smtp.real-looking.example",
+                "smtp_port": 465,
+                "encryption": "ssl",
+                "sender": "sender@example.com",
+                "username": "sender@example.com",
+                "password": "super-secret",
+                "default_recipients": ["ops@example.com", "owner@example.com"],
+            }
+        )
+
+        result = send_test_email({})
+
+        assert result["recipient_count"] == 2
+        assert result["recipient_source"] == "global_default_recipients"
+        assert len(sent_messages) == 1
+        assert sent_messages[0]["To"] == "ops@example.com, owner@example.com"
+    finally:
+        _restore_table("system_settings", settings_snapshot)
+        _restore_singleton_table("email_configs", email_snapshot)
+
+
+def test_cr043_admin_real_email_toggle_does_not_require_scheduler_exclusion(monkeypatch):
+    init_db()
+    snapshot = _snapshot_table("system_settings")
+    try:
+        with get_conn() as conn:
+            conn.execute("DELETE FROM system_settings")
+        save_runtime_settings({"real_email_delivery": True, "scheduler_disabled": False}, actor_id=1)
+        state = monitor_router._email_validation_window_view()
+
+        assert state["real_email_delivery"] is True
+        assert state["real_email_admin_enabled"] is True
+        assert state["scheduler_excluded"] is False
+    finally:
+        _restore_table("system_settings", snapshot)
+
+
+def test_cr043_real_email_runtime_setting_is_admin_editable(monkeypatch):
+    from api import main as api_main
+
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "system_settings": _snapshot_table("system_settings"),
+        "user_sessions": _snapshot_table("user_sessions"),
+        "users": _snapshot_table("users"),
+    }
+    try:
+        with get_conn() as conn:
+            for table in ["audit_logs", "system_settings", "user_sessions", "users"]:
+                conn.execute(f"DELETE FROM {table}")
+        bootstrap_admin_from_env("cr043-gates-admin@example.com", "AdminPass123!", "CR043 Gates Admin")
+        transport = httpx.ASGITransport(app=api_main.app)
+
+        async def exercise() -> None:
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                login = await client.post("/api/auth/login", json={"email": "cr043-gates-admin@example.com", "password": "AdminPass123!"})
+                assert login.status_code == 200
+
+                opened = await client.put("/api/monitor/runtime-settings", json={"real_email_delivery": True})
+                assert opened.status_code == 200
+                assert opened.json()["settings"]["real_email_delivery"]["value"] is True
+                assert opened.json()["settings"]["real_email_delivery"]["is_locked"] is False
+
+                closed = await client.put("/api/monitor/runtime-settings", json={"real_email_delivery": False})
+                assert closed.status_code == 200
+                assert closed.json()["settings"]["real_email_delivery"]["value"] is False
+
+        asyncio.run(exercise())
+    finally:
+        _restore_table("users", snapshots["users"])
+        _restore_table("user_sessions", snapshots["user_sessions"])
+        _restore_table("system_settings", snapshots["system_settings"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
+
+
+def test_cr043_real_email_toggle_ignores_superseded_deployment_locks(monkeypatch):
+    init_db()
+    snapshot = _snapshot_table("system_settings")
+    try:
+        monkeypatch.setenv("MONITOR_ALLOW_REAL_EMAIL_SEND", "true")
+        monkeypatch.setenv("MONITOR_ALLOW_FRONTEND_REAL_EMAIL_VALIDATION", "true")
+        with get_conn() as conn:
+            conn.execute("DELETE FROM system_settings")
+            conn.execute(
+                """
+                INSERT INTO system_settings (
+                    workspace_id, key, value_json, value_type, is_locked, source,
+                    updated_by, updated_at
+                ) VALUES (1, 'real_email_delivery', 'false', 'boolean', 1, 'environment', 1, ?)
+                """,
+                (datetime.now(timezone.utc).isoformat(),),
+            )
+
+        stale = list_runtime_settings()["real_email_delivery"]
+        assert stale["value"] is False
+        assert stale["is_locked"] is False
+        assert stale["source"] == "database"
+        assert stale["apply_scope"] == "immediate"
+        assert stale["yaml_path"] == ""
+
+        updated = save_runtime_settings({"real_email_delivery": True}, actor_id=1)
+
+        assert updated["real_email_delivery"]["value"] is True
+        assert updated["real_email_delivery"]["is_locked"] is False
+        with get_conn() as conn:
+            row = conn.execute(
+                "SELECT value_json, is_locked, source FROM system_settings WHERE workspace_id=1 AND key='real_email_delivery'"
+            ).fetchone()
+        assert dict(row) == {"value_json": "true", "is_locked": 0, "source": "database"}
+    finally:
+        _restore_table("system_settings", snapshot)
+
+
+def test_cr043_real_email_toggle_api_is_admin_only(monkeypatch):
+    from api import main as api_main
+
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "system_settings": _snapshot_table("system_settings"),
+        "user_sessions": _snapshot_table("user_sessions"),
+        "users": _snapshot_table("users"),
+    }
+    try:
+        with get_conn() as conn:
+            for table in ["audit_logs", "system_settings", "user_sessions", "users"]:
+                conn.execute(f"DELETE FROM {table}")
+        admin = bootstrap_admin_from_env("cr043-admin-only@example.com", "AdminPass123!", "CR043 Admin")
+        save_user(
+            {
+                "email": "cr043-normal@example.com",
+                "display_name": "CR043 Normal",
+                "password": "UserPass123!",
+                "role": "normal",
+            },
+            actor_id=int(admin["id"]),
+        )
+        transport = httpx.ASGITransport(app=api_main.app)
+
+        async def exercise() -> None:
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as client:
+                login = await client.post("/api/auth/login", json={"email": "cr043-normal@example.com", "password": "UserPass123!"})
+                assert login.status_code == 200
+                assert (await client.get("/api/monitor/email-validation-window")).status_code == 403
+                assert (await client.put("/api/monitor/runtime-settings", json={"real_email_delivery": True})).status_code == 403
+
+        asyncio.run(exercise())
+    finally:
+        _restore_table("users", snapshots["users"])
+        _restore_table("user_sessions", snapshots["user_sessions"])
+        _restore_table("system_settings", snapshots["system_settings"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
+
+
+def test_cr043_report_resend_api_follows_admin_real_email_toggle(monkeypatch, tmp_path):
+    from api import main as api_main
+
+    init_db()
+    jobs_snapshot = _snapshot_monitor_jobs()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "system_settings": _snapshot_table("system_settings"),
+        "user_sessions": _snapshot_table("user_sessions"),
+        "users": _snapshot_table("users"),
+        "email_delivery_logs": _snapshot_table("email_delivery_logs"),
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "email_configs": _snapshot_singleton_table("email_configs"),
+    }
+    sent_messages = []
+
+    class FakeSMTP:
+        def __init__(self, host, port, timeout=30):
+            self.host = host
+
+        def login(self, username, password):
+            self.username = username
+
+        def send_message(self, msg):
+            sent_messages.append(msg)
+            return {}
+
+        def quit(self):
+            return None
+
+    try:
+        with get_conn() as conn:
+            for table in ["audit_logs", "system_settings", "user_sessions", "users", "email_delivery_logs", "reports", "crawl_runs"]:
+                conn.execute(f"DELETE FROM {table}")
+        _clear_monitor_jobs()
+        monkeypatch.setattr(smtplib, "SMTP_SSL", FakeSMTP)
+        admin = bootstrap_admin_from_env("cr043-resend-admin@example.com", "AdminPass123!", "CR043 Admin")
+        user = save_user(
+            {
+                "email": "cr043-resend-user@example.com",
+                "display_name": "CR043 User",
+                "password": "UserPass123!",
+                "role": "normal",
+            },
+            actor_id=int(admin["id"]),
+        )
+        save_email_config(
+            {
+                "smtp_host": "smtp.real-looking.example",
+                "smtp_port": 465,
+                "encryption": "ssl",
+                "sender": "sender@example.com",
+                "username": "sender@example.com",
+                "password": "super-secret",
+                "default_recipients": ["fallback@example.com"],
+            }
+        )
+        job = save_job(
+            {
+                "law_firm_name": "CR043重发律所",
+                "keywords": ["CR043重发律所投诉"],
+                "platforms": ["dy"],
+                "recipients": ["report@example.com"],
+                "frequency": "daily",
+            },
+            actor=user,
+        )
+        run_id = create_run(job["id"], {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        finish_run(run_id, "success", {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        report = create_report(run_id, job, {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        transport = httpx.ASGITransport(app=api_main.app)
+
+        async def exercise() -> None:
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as normal_client:
+                login = await normal_client.post("/api/auth/login", json={"email": "cr043-resend-user@example.com", "password": "UserPass123!"})
+                assert login.status_code == 200
+                normal_resend = await normal_client.post(f"/api/monitor/reports/{report['id']}/resend-email")
+                assert normal_resend.status_code == 200
+                assert normal_resend.json()["ok"] is False
+                assert sent_messages == []
+
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as admin_client:
+                login = await admin_client.post("/api/auth/login", json={"email": "cr043-resend-admin@example.com", "password": "AdminPass123!"})
+                assert login.status_code == 200
+                blocked = await admin_client.post(f"/api/monitor/reports/{report['id']}/resend-email")
+                assert blocked.status_code == 200
+                assert blocked.json()["ok"] is False
+                assert "真实邮件发送未启用" in blocked.json()["error"]
+                assert sent_messages == []
+
+                opened = await admin_client.put("/api/monitor/runtime-settings", json={"real_email_delivery": True})
+                assert opened.status_code == 200
+                resend = await admin_client.post(f"/api/monitor/reports/{report['id']}/resend-email")
+                assert resend.status_code == 200
+                payload = resend.json()
+                assert payload["ok"] is True
+                assert payload["validation_window"]["status"] == "enabled"
+                assert payload["validation_window"]["real_email_delivery"] is True
+                assert len(sent_messages) == 1
+
+        asyncio.run(exercise())
+
+        logs = list_email_delivery_logs(report_id=report["id"], limit=10)
+        assert logs[0]["status"] == "sent"
+        assert logs[0]["trigger_source"] == "manual_resend"
+        assert logs[0]["effective_recipients"] == ["report@example.com"]
+        assert any(item["status"] == "skipped" for item in logs)
+    finally:
+        _restore_singleton_table("email_configs", snapshots["email_configs"])
+        _restore_table("crawl_runs", snapshots["crawl_runs"])
+        _restore_table("reports", snapshots["reports"])
+        _restore_table("email_delivery_logs", snapshots["email_delivery_logs"])
+        _restore_table("users", snapshots["users"])
+        _restore_table("user_sessions", snapshots["user_sessions"])
+        _restore_table("system_settings", snapshots["system_settings"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
+        _restore_monitor_jobs(jobs_snapshot)
 
 
 def test_phase_17a_failed_auto_delivery_records_log_without_blocking_report(monkeypatch):
@@ -9675,6 +10547,11 @@ def test_phase_17b_report_center_delivery_history_frontend_hooks():
     assert "await loadEmailDeliveryHistory(id, {silent:true})" in page
     assert "reportEmailStatusCell" in page
     assert "emailDeliveryStatusLabel" in page
+    assert "邮件已提交 SMTP，请人工确认收件箱或垃圾箱" in page
+    assert "sent:'SMTP已接受'" in page
+    assert "sent:'SMTP已接受，待收件确认'" in page
+    assert "报告邮件已重新发送" not in page
+    assert "sent:'发送成功'" not in page
     assert "recipients_json" not in reports_section
     assert "smtp_password" not in reports_section
     for selector in [
@@ -9936,7 +10813,7 @@ def test_report_resend_email_updates_status(monkeypatch):
         {"platforms": ["dy"], "failed_platforms": [], "new_contents": 0, "negative_count": 0, "high_count": 0},
     )
 
-    def fake_send_report(job, report):
+    def fake_send_report(job, report, allow_real_send=None):
         return False, "SMTP 配置未完成"
 
     try:

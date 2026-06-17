@@ -24,10 +24,11 @@ from .database import (
 )
 from .mailer import REAL_EMAIL_BLOCKED_MESSAGE, resolve_report_recipients, send_report
 from .normalizer import PLATFORM_LABELS
-from .security import customer_safe_text, redact_sensitive
+from .security import customer_safe_text, customer_safe_url, redact_sensitive
 
 
 REPORT_DIR = MONITOR_DATA_DIR / "reports"
+MEDIA_LINK_REDACTED_LABEL = "媒体链接已脱敏"
 
 
 def create_report(run_id: int, job: dict[str, Any], summary: dict[str, Any]) -> dict[str, Any]:
@@ -98,16 +99,17 @@ def send_report_with_delivery_log(
     send_type: str = "auto",
     actor: dict[str, Any] | None = None,
     sent_at: datetime | None = None,
+    allow_real_send: bool | None = None,
 ) -> tuple[bool, str | None, dict[str, Any], dict[str, Any] | None]:
     send_at = sent_at or datetime.now(timezone.utc)
     if send_type == "manual_resend":
-        return _send_report_manual_resend(job, report, actor, send_at)
+        return _send_report_manual_resend(job, report, actor, send_at, allow_real_send=allow_real_send)
     if send_type != "auto":
         raise ValueError("invalid email send type")
     return _send_report_auto(job, report, send_at)
 
 
-def resend_report_email(report_id: int, actor: dict[str, Any] | None = None) -> tuple[bool, str | None, dict[str, Any]]:
+def resend_report_email(report_id: int, actor: dict[str, Any] | None = None, *, allow_real_send: bool | None = None) -> tuple[bool, str | None, dict[str, Any]]:
     report = get_report(report_id)
     if not report:
         raise ValueError("report not found")
@@ -116,7 +118,7 @@ def resend_report_email(report_id: int, actor: dict[str, Any] | None = None) -> 
         "law_firm_name": report.get("law_firm_name") or "",
         "recipients": [],
     }
-    ok, error, _refreshed_report, _log = send_report_with_delivery_log(job, report, send_type="manual_resend", actor=actor)
+    ok, error, _refreshed_report, _log = send_report_with_delivery_log(job, report, send_type="manual_resend", actor=actor, allow_real_send=allow_real_send)
     refreshed = get_report(report_id) or report
     return ok, error, refreshed
 
@@ -168,9 +170,11 @@ def _send_report_manual_resend(
     report: dict[str, Any],
     actor: dict[str, Any] | None,
     send_at: datetime,
+    *,
+    allow_real_send: bool | None = None,
 ) -> tuple[bool, str | None, dict[str, Any], dict[str, Any]]:
     delivery_meta = _delivery_metadata(job, trigger_source="manual_resend")
-    ok, error = send_report(job, report)
+    ok, error = send_report(job, report, allow_real_send=allow_real_send)
     safe_error = redact_sensitive(error)
     status = "sent" if ok else _delivery_failure_status(error)
     log = record_email_delivery_log(
@@ -289,14 +293,16 @@ def render_markdown(job: dict[str, Any], summary: dict[str, Any], records: list[
     if not risks and not reviews:
         lines.append("本次未发现新增疑似负面线索。")
     for rec in risks + reviews:
+        content_url = _safe_report_content_url(rec.get("content_url"))
+        cover_label = _safe_report_media_url(rec.get("cover_url"))
         lines.extend(
             [
-                f"## {customer_safe_text(rec['title'] or rec['content_url'])}",
+                f"## {customer_safe_text(rec['title'] or content_url)}",
                 f"- 平台：{PLATFORM_LABELS.get(rec['platform'], rec['platform'])}",
                 f"- 风险：{rec['risk_level']}",
                 f"- 状态：{'待人工复核' if rec.get('eval_status') == 'pending_review' else 'AI 已判断'}",
-                f"- 链接：{rec['content_url']}",
-                f"- 封面：{rec['cover_url'] or ''}",
+                f"- 链接：{content_url}",
+                f"- 封面：{cover_label}",
                 f"- 理由：{customer_safe_text(rec['reason'])}",
                 f"- 证据：{customer_safe_text('；'.join(rec['evidence_quotes']))}",
                 "",
@@ -321,8 +327,8 @@ def write_excel(path: Path, records: list[dict[str, Any]]) -> None:
                 "待人工复核" if rec.get("eval_status") == "pending_review" else "AI 已判断",
                 rec["risk_level"],
                 customer_safe_text(rec["title"]),
-                rec["content_url"],
-                rec["cover_url"],
+                _safe_report_content_url(rec["content_url"]),
+                _safe_report_media_url(rec["cover_url"]),
                 rec["author_name"],
                 rec["source_keyword"],
                 customer_safe_text(rec["reason"]),
@@ -435,11 +441,13 @@ def _load_report_records(run_id: int) -> list[dict[str, Any]]:
 def _render_record(item: dict[str, Any]) -> str:
     risk = html.escape(item.get("risk_level") or "low")
     evidence = "".join(f"<div class='evidence'>{html.escape(customer_safe_text(str(q)))}</div>" for q in item.get("evidence_quotes", []))
-    title = html.escape(customer_safe_text(item.get("title") or item.get("content_url") or "无标题"))
-    url = html.escape(item.get("content_url") or "")
-    cover_url = html.escape(item.get("cover_url") or "")
+    safe_content_url = _safe_report_content_url(item.get("content_url"))
+    safe_cover = _safe_report_media_url(item.get("cover_url"))
+    title = html.escape(customer_safe_text(item.get("title") or safe_content_url or "无标题"))
+    url = html.escape(safe_content_url)
+    cover_label = html.escape(safe_cover)
     review_badge = " | 状态：待人工复核" if item.get("eval_status") == "pending_review" else ""
-    cover = f'<p class="meta">封面：<a href="{cover_url}">{cover_url}</a></p>' if cover_url else ""
+    cover = f'<p class="meta">封面：{cover_label}</p>' if cover_label else ""
     return f"""<div class="item risk-{risk}">
 <h3>{title}</h3>
 <div class="meta">风险：{risk}{review_badge} | 作者：{html.escape(customer_safe_text(item.get('author_name') or ''))} | 关键词：{html.escape(customer_safe_text(item.get('source_keyword') or ''))}</div>
@@ -448,3 +456,11 @@ def _render_record(item: dict[str, Any]) -> str:
 <p>{html.escape(customer_safe_text(item.get('reason') or ''))}</p>
 {evidence}
 </div>"""
+
+
+def _safe_report_content_url(value: Any) -> str:
+    return customer_safe_url(value, redact_query=True)
+
+
+def _safe_report_media_url(value: Any) -> str:
+    return customer_safe_url(value, redact_query=True, redacted_label=MEDIA_LINK_REDACTED_LABEL)
