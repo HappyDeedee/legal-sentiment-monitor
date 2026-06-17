@@ -82,6 +82,8 @@ Use the standard permission test data:
 ## Administrator Resource Tests
 
 - Administrator can create, edit, disable, and delete platform accounts.
+- Platform account identity display can show a recognized avatar through a
+  same-origin cached URL without exposing signed platform image URLs.
 - Administrator can create, edit, disable, and delete proxies.
 - Administrator can create and test AI access without exposing raw API keys.
 - Administrator can configure SMTP and templates without exposing passwords.
@@ -133,6 +135,19 @@ Use the standard permission test data:
   restart.
 - Scheduler recovery marks stale running runs as `timeout` or `interrupted`
   before releasing locks.
+
+### Platform Account Avatar Safety Tests
+
+- A signed platform avatar URL stored after account identity detection is not
+  exposed in the social-account API response.
+- The social-account API returns a same-origin avatar endpoint for
+  administrators when a platform avatar source exists.
+- The avatar endpoint lazily fetches, validates, caches, and serves image bytes
+  from runtime storage.
+- Normal users cannot access platform-account avatars.
+- Traversal attempts against the cached-avatar endpoint are rejected.
+- If avatar fetching fails, the frontend can keep the placeholder and the
+  account row remains usable.
 
 ## Runtime Strategy Settings Tests
 
@@ -235,6 +250,55 @@ run class.
 - Repair mode can create pending-review rows for the remaining 21 contents and
   generate a partial report only after code safety is verified.
 
+## Phase 7.2 AI Evaluation Accuracy And Lead Status Tests
+
+CR-045 is a follow-up regression-fix test set for AI evaluation safety and
+lead-status clarity. It does not reopen the historical Phase 7 or Phase 7.1
+verification records.
+
+### Phase 7.2A Unevaluated Lead Status Tests
+
+- Leads with no matching `ai_evaluations` row are returned as unevaluated or
+  limited-context, not as no-risk.
+- Report Center status rendering distinguishes unrelated, evaluated no-risk,
+  suspected negative, high-risk, pending manual review, and unevaluated rows.
+- Risk filters do not include unevaluated rows in the no-risk bucket.
+- Normal-user and administrator scopes remain unchanged for unevaluated rows.
+
+### Phase 7.2B Timeout And Partial-Finalization Fallback Tests
+
+- A timeout run with known unresolved AI candidate IDs creates
+  `pending_review` fallback rows before report generation when safe.
+- Repeated timeout/partial finalization remains idempotent and does not
+  duplicate `ai_evaluations` rows.
+- If safe mutation is not possible, the run/report API exposes an explicit
+  limited-context or unevaluated state instead of implying no risk.
+- Existing AI provider failure and invalid-output fallback tests still pass.
+
+### Phase 7.2C AI Relevance And Prompt Hardening Tests
+
+- `source_keyword` alone cannot make a content item related. A fixture whose
+  keyword is `北京海安律所退费` but whose title/body/comments only discuss
+  unrelated education, medical, clothing, or generic lawyer refund topics must
+  not become a target-related negative lead.
+- Homonym or geography-only mentions such as `海安` must not be treated as the
+  target law firm unless the content includes the law firm name, accepted alias,
+  or clear contextual reference.
+- A fixture with the target law firm or alias in title, description, author, or
+  sampled comments plus a complaint/refund/avoidance signal remains eligible
+  for suspected-negative or high-risk classification.
+- Comment evidence is considered only when comments are collected and passed to
+  the AI payload; empty comments do not invent relatedness or evidence.
+
+### Phase 7.2D Calibration And Regression Tests
+
+- Add a small pilot-derived or fixture-based calibration set covering broad
+  refund/legal noise, unrelated law firms, homonym geography, true target
+  mentions, and comment-only target references.
+- Tests assert structured AI output normalization remains compatible with the
+  existing fields unless a documented schema extension is accepted.
+- Documentation consistency passes after CR-045 task and traceability updates.
+
 ## Crawl Range Tests
 
 - Normal users can set `max_items`, `start_page`, `max_pages`, and time window
@@ -315,17 +379,35 @@ changes that boundary.
 - A server-like environment starts the service, web UI, server-side browser,
   database, report root, and account profile root without relying on the
   operator's local Chrome.
+- `uv run python scripts/pilot_gate_c_evidence.py --write-template
+  docs/pilot_gate_c_evidence.example.json` creates a redacted operator
+  evidence template and does not start services, crawl platforms, call AI,
+  mutate databases, or send email.
+- The generated template is intentionally incomplete and
+  `uv run python scripts/pilot_gate_c_evidence.py --check
+  docs/pilot_gate_c_evidence.example.json` must fail until real operator
+  evidence is filled.
 - Administrator web login works through the web UI.
 - At least one real platform account completes QR/status login through the web
   UI and persists a server-side profile.
 - At least one real monitoring task completes a platform crawl using the
   server-side profile.
 - AI unavailable or provider failure does not block report generation.
-- Explicit-opt-in SMTP delivery succeeds in pilot/production validation, while
-  local/test/diagnostic defaults remain non-sending.
+- Explicit-opt-in SMTP submission succeeds in pilot/production validation,
+  while local/test/diagnostic defaults remain non-sending.
+- A successful SMTP `sent` delivery-log record is treated as SMTP server
+  acceptance only. Pilot Gate C is not complete until an approved recipient
+  manually confirms the report email arrived in inbox or spam/quarantine.
 - Logs, reports, delivery records, and UI surfaces do not expose API keys,
   SMTP passwords, cookies, proxy credentials, raw profile paths, provider
   endpoints, local paths, or command lines.
+- A completed redacted Pilot Gate C evidence JSON must pass
+  `uv run python scripts/pilot_gate_c_evidence.py --check <evidence.json>`
+  before CR-041 is closed. The checker must reject missing real-workflow
+  evidence, missing recipient receipt confirmation, unchecked redaction
+  surfaces, placeholder fields, secret-looking values, raw local paths, proxy
+  credentials, cookies, provider endpoints, and sensitive evidence keys such as
+  password, token, API key, proxy URL, or profile path.
 
 ### Pilot Gate D Non-Blocker Boundary Tests
 
@@ -334,6 +416,47 @@ changes that boundary.
   core-flow regression changes the boundary.
 - Historical run `8317` remediation and orphan delivery evidence cleanup remain
   dry-run, backup, rollback, and explicit-operator-approval gated.
+
+## Administrator Frontend Real Email Send Toggle Tests
+
+CR-043 supersedes the rejected CR-042 validation-window design. The accepted
+implementation is one persisted administrator switch on Mail Configuration.
+
+- Mail Configuration shows one "真实邮件发送" switch and does not show separate
+  open/close validation-window buttons.
+- The switch writes the `real_email_delivery` runtime setting, defaults off,
+  and remains persisted across refreshes/service reads.
+- Normal users cannot read the Mail Configuration state or update
+  `real_email_delivery`.
+- Runtime Strategy does not show a second Email group for the same switch.
+- Mail test is blocked with customer-safe wording when the switch is off.
+- Manual resend records a non-sending skipped/failure result when the switch is
+  off and may submit mocked SMTP when the administrator switch is on.
+- Automatic report delivery follows the same switch: no real SMTP while off,
+  real SMTP allowed while on and SMTP configuration is complete.
+- The switch does not require deployment frontend gates, scheduler exclusion,
+  expiry, or single-use validation-window state.
+- The SMTP tripwire still fails the automated suite if real `smtplib.SMTP` or
+  `smtplib.SMTP_SSL` is reached outside the explicit mocked/allowed test path.
+- Frontend and delivery-history wording must say SMTP acceptance is not
+  recipient inbox proof.
+
+## Mail Test Recipient Coverage And SMTP Acceptance Tests
+
+CR-044 fixes the Mail Configuration test-mail path so administrator validation
+matches the configured default-recipient list.
+
+- With `real_email_delivery` off, test mail remains blocked and no SMTP client
+  is instantiated.
+- With `real_email_delivery` on and two global default recipients configured,
+  the test-mail path submits one message addressed to both recipients when no
+  explicit test target is supplied.
+- The test-mail API returns the submitted recipient count and recipient source
+  without exposing SMTP passwords.
+- The Mail Configuration frontend success message shows the submitted
+  recipient count and states that SMTP acceptance is not inbox proof.
+- Mocked-SMTP automated tests cover the multi-recipient path without sending
+  external email.
 
 ## Phase 10 Frontend Architecture Tests
 
@@ -624,12 +747,12 @@ delivery.
 
 - Routine automated tests and local diagnostics cannot create hidden real SMTP
   side effects.
-- With a complete real SMTP configuration in the active database but no
-  `MONITOR_ALLOW_REAL_EMAIL_SEND=true`, automatic report delivery is skipped
-  with a customer-safe reason and report generation still succeeds.
-- With `MONITOR_ALLOW_REAL_EMAIL_SEND=true`, production/pilot automatic
-  delivery or a dedicated real-mail validation action can call the real mailer
-  when SMTP configuration is complete.
+- With a complete real SMTP configuration in the active database but
+  `real_email_delivery=false`, automatic report delivery is skipped with a
+  customer-safe reason and report generation still succeeds.
+- With `real_email_delivery=true`, production/pilot automatic delivery or a
+  dedicated real-mail validation action can call the real mailer when SMTP
+  configuration is complete.
 - Manual resend follows the confirmed safety-gate behavior for local/test and
   production/pilot modes.
 - Mail test follows the confirmed safety-gate behavior and never exposes SMTP

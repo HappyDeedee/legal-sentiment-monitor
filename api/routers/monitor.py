@@ -80,7 +80,7 @@ from ..monitoring.database import (
     update_login_session_status,
     update_social_account_login_state,
 )
-from ..monitoring.mailer import render_report_email_preview, send_test_email
+from ..monitoring.mailer import real_email_delivery_allowed, render_report_email_preview, resolve_report_recipients, send_test_email
 from ..monitoring.doctor import run_doctor
 from ..monitoring.login_browser import build_login_browser_command, open_login_browser_with_command
 from ..monitoring.login_qrcode import (
@@ -103,6 +103,7 @@ from ..monitoring.login_status import (
     normalize_login_state,
 )
 from ..monitoring.account_check import check_social_account_login
+from ..monitoring.avatar_cache import AVATAR_CACHE_DIR, avatar_media_type, cache_account_avatar, has_cacheable_avatar_url
 from ..monitoring.mediacrawler_login import get_mediacrawler_login_capability, list_mediacrawler_login_capabilities
 from ..monitoring.normalizer import PLATFORM_LABELS
 from ..monitoring.platform_status import list_platform_status
@@ -110,7 +111,7 @@ from ..monitoring.preflight import build_job_preflight
 from ..monitoring.readiness import get_acceptance_checklist, get_readiness_status
 from ..monitoring.reporting import resend_report_email
 from ..monitoring.scheduler import launch_job, next_run_at, running_job_ids, scheduler_status, stop_job
-from ..monitoring.security import customer_safe_text, redact_sensitive
+from ..monitoring.security import customer_safe_text, customer_safe_url, redact_sensitive
 from ..monitoring.selftest import create_sample_report
 from ..monitoring.smoke import run_smoke_check
 
@@ -156,6 +157,58 @@ def _audit_admin(
         )
     except Exception:
         return
+
+
+def _email_validation_window_view(state: dict[str, Any] | None = None) -> dict[str, Any]:
+    settings = list_runtime_settings()
+    real_gate = settings.get("real_email_delivery", {})
+    scheduler_disabled = settings.get("scheduler_disabled", {})
+    recipient_summary = _email_validation_recipient_summary()
+    scheduler_excluded = bool(scheduler_disabled.get("value"))
+    enabled = bool(real_gate.get("value"))
+    return {
+        "status": "enabled" if enabled else "disabled",
+        "is_open": enabled,
+        "deployment_gate_open": enabled,
+        "real_email_admin_enabled": enabled,
+        "real_email_delivery": enabled,
+        "frontend_validation_allowed": True,
+        "scheduler_excluded": scheduler_excluded,
+        "real_email_source": customer_safe_text(real_gate.get("source") or ""),
+        "frontend_gate_source": "runtime_setting",
+        "scheduler_source": customer_safe_text(scheduler_disabled.get("source") or ""),
+        "expires_at": "",
+        "remaining_seconds": 0,
+        "single_use": False,
+        "used": False,
+        "last_delivery_log_id": None,
+        "disable_reason": "",
+        "recipient_summary": recipient_summary,
+        "smtp_acceptance_note": "SMTP已接受仅代表服务器提交成功，仍需人工确认收件箱或垃圾箱。",
+    }
+
+
+def _email_validation_recipient_summary() -> dict[str, Any]:
+    cfg = get_email_config(masked=True)
+    recipients, source = resolve_report_recipients({"recipients": []}, get_email_config(masked=False))
+    return {
+        "source": source,
+        "count": len(recipients),
+        "sender_configured": bool(cfg.get("sender") or cfg.get("username")),
+        "smtp_configured": bool(cfg.get("smtp_host") and (cfg.get("sender") or cfg.get("username"))),
+    }
+
+
+def _validation_audit_state(state: dict[str, Any] | None) -> dict[str, Any]:
+    state = state or {}
+    recipient_summary = state.get("recipient_summary") if isinstance(state.get("recipient_summary"), dict) else {}
+    return {
+        "status": state.get("status") or ("open" if state.get("is_open") else "closed"),
+        "real_email_enabled": bool(state.get("real_email_delivery")),
+        "scheduler_excluded": bool(state.get("scheduler_excluded")),
+        "recipient_source": recipient_summary.get("source") or "",
+        "recipient_count": recipient_summary.get("count") or 0,
+    }
 
 
 def _task_payload_for_role(payload: dict[str, Any], user: dict[str, Any] | None) -> dict[str, Any]:
@@ -672,7 +725,7 @@ async def remove_ai_profile(profile_id: int, admin: dict[str, Any] = AdminUser):
 @router.get("/email-config")
 async def email_config(admin: dict[str, Any] = AdminUser):
     init_db()
-    return {"config": get_email_config(masked=True)}
+    return {"config": get_email_config(masked=True), "validation_window": _email_validation_window_view()}
 
 
 @router.put("/email-config")
@@ -689,12 +742,25 @@ async def update_email_config(payload: dict[str, Any], admin: dict[str, Any] = A
 async def test_email(payload: dict[str, Any] | None = None, admin: dict[str, Any] = AdminUser):
     config_saved = False
     try:
-        save_email_config(payload or {})
-        config_saved = True
-        send_test_email({})
+        if payload:
+            save_email_config(payload)
+            config_saved = True
+        test_result = send_test_email({}) or {}
         config = mark_email_test_result(True)
-        _audit_admin(admin, "test_email_config", "email_config", "default", {"status": "success", "smtp_host": config.get("smtp_host")})
-        return {"ok": True, "config": config}
+        _audit_admin(
+            admin,
+            "test_email_config",
+            "email_config",
+            "default",
+            {
+                "status": "success",
+                "smtp_host": config.get("smtp_host"),
+                "real_email_enabled": real_email_delivery_allowed(),
+                "recipient_source": test_result.get("recipient_source"),
+                "recipient_count": test_result.get("recipient_count"),
+            },
+        )
+        return {"ok": True, "config": config, "test_result": test_result, "validation_window": _email_validation_window_view()}
     except ValueError as exc:
         if config_saved:
             mark_email_test_result(False, str(exc))
@@ -706,6 +772,27 @@ async def test_email(payload: dict[str, Any] | None = None, admin: dict[str, Any
             mark_email_test_result(False, message)
             _audit_admin(admin, "test_email_config", "email_config", "default", {"status": "failed", "error": message})
         raise HTTPException(status_code=400, detail=message)
+
+
+@router.get("/email-validation-window")
+async def email_validation_window(admin: dict[str, Any] = AdminUser):
+    return {"validation_window": _email_validation_window_view()}
+
+
+@router.post("/email-validation-window/open")
+async def open_email_validation_window_route(payload: dict[str, Any] | None = None, admin: dict[str, Any] = AdminUser):
+    settings = save_runtime_settings({"real_email_delivery": True}, actor_id=int(admin["id"]))
+    state = _email_validation_window_view()
+    _audit_admin(admin, "update_real_email_delivery", "system_settings", "real_email_delivery", _validation_audit_state(state))
+    return {"validation_window": state, "settings": settings}
+
+
+@router.post("/email-validation-window/close")
+async def close_email_validation_window_route(payload: dict[str, Any] | None = None, admin: dict[str, Any] = AdminUser):
+    settings = save_runtime_settings({"real_email_delivery": False}, actor_id=int(admin["id"]))
+    state = _email_validation_window_view()
+    _audit_admin(admin, "update_real_email_delivery", "system_settings", "real_email_delivery", _validation_audit_state(state))
+    return {"validation_window": state, "settings": settings}
 
 
 @router.get("/email-templates")
@@ -762,7 +849,32 @@ async def update_runtime_settings(payload: dict[str, Any], admin: dict[str, Any]
 @router.get("/social-accounts")
 async def social_accounts(admin: dict[str, Any] = AdminUser):
     init_db()
-    return {"accounts": list_social_accounts()}
+    return {"accounts": [_customer_view_social_account(item) for item in list_social_accounts(masked=False)]}
+
+
+@router.get("/social-accounts/avatar/{filename}")
+async def social_account_avatar(filename: str, admin: dict[str, Any] = AdminUser):
+    if "/" in filename or "\\" in filename or ".." in filename:
+        raise HTTPException(status_code=404, detail="avatar not found")
+    path = (AVATAR_CACHE_DIR / filename).resolve()
+    try:
+        path.relative_to(AVATAR_CACHE_DIR.resolve())
+    except ValueError:
+        raise HTTPException(status_code=404, detail="avatar not found")
+    if not path.exists() or not path.is_file():
+        raise HTTPException(status_code=404, detail="avatar not found")
+    return FileResponse(path, media_type=avatar_media_type(path))
+
+
+@router.get("/social-accounts/{account_id}/avatar")
+async def social_account_avatar_for_account(account_id: int, admin: dict[str, Any] = AdminUser):
+    account = get_social_account(account_id, masked=False)
+    if not account:
+        raise HTTPException(status_code=404, detail="avatar not found")
+    path = cache_account_avatar(account_id, account.get("platform_avatar_url"))
+    if not path:
+        raise HTTPException(status_code=404, detail="avatar not found")
+    return FileResponse(path, media_type=avatar_media_type(path))
 
 
 @router.post("/social-accounts")
@@ -770,7 +882,7 @@ async def create_social_account(payload: dict[str, Any], admin: dict[str, Any] =
     try:
         account = save_social_account(payload)
         _audit_admin(admin, "create_social_account", "social_account", account.get("id"), {"platform": account.get("platform"), "login_type": account.get("login_type")})
-        return {"account": account}
+        return {"account": _customer_view_social_account(account)}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -780,7 +892,7 @@ async def update_social_account(account_id: int, payload: dict[str, Any], admin:
     try:
         account = save_social_account(payload, account_id)
         _audit_admin(admin, "update_social_account", "social_account", account_id, {"platform": account.get("platform"), "status": account.get("status")})
-        return {"account": account}
+        return {"account": _customer_view_social_account(account)}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -790,7 +902,7 @@ async def confirm_account(account_id: int, payload: dict[str, Any] | None = None
     try:
         account = confirm_social_account(account_id, payload or {})
         _audit_admin(admin, "confirm_social_account", "social_account", account_id, {"platform": account.get("platform"), "status": account.get("status")})
-        return {"account": account}
+        return {"account": _customer_view_social_account(account)}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -807,6 +919,8 @@ async def check_social_account(account_id: int, admin: dict[str, Any] = AdminUse
     try:
         result = await check_social_account_login(account_id)
         _audit_admin(admin, "check_social_account_login", "social_account", account_id, {"status": result.get("status"), "ok": result.get("ok")})
+        if isinstance(result.get("account"), dict):
+            result = {**result, "account": _customer_view_social_account(result["account"])}
         return {"result": result}
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=redact_sensitive(str(exc)))
@@ -825,7 +939,10 @@ async def check_social_accounts(payload: dict[str, Any] | None = None, admin: di
             results.append({"account_id": raw_id, "ok": False, "status": "invalid", "message": "账号 ID 无效"})
             continue
         try:
-            results.append(await check_social_account_login(account_id))
+            result = await check_social_account_login(account_id)
+            if isinstance(result.get("account"), dict):
+                result = {**result, "account": _customer_view_social_account(result["account"])}
+            results.append(result)
         except ValueError as exc:
             results.append(
                 {
@@ -913,7 +1030,7 @@ async def create_platform_login_session(payload: dict[str, Any], admin: dict[str
             )
         return {
             "session": _customer_view_login_session(session),
-            "account_status": account_status,
+            "account_status": _customer_view_social_account(account_status) if account_status else None,
             "capabilities": {
                 **_login_capability_response(str(platform), qr_result),
                 "qr_image_supported": bool(session.get("qr_image")),
@@ -979,7 +1096,7 @@ async def login_session(session_id: int, admin: dict[str, Any] = AdminUser):
     return {
         "session": _customer_view_login_session({**session, "status": status}),
         "platform_status": _customer_view_platform_status(platform_status) if platform_status else {},
-        "account_status": account_status,
+        "account_status": _customer_view_social_account(account_status) if account_status else None,
         "capabilities": {
             **_login_capability_response(str(platform), qr_poll),
             "qr_image_supported": bool(session.get("qr_image")),
@@ -1352,8 +1469,21 @@ async def report_resend_email(report_id: int, user: dict[str, Any] = CurrentUser
             raise ValueError("report not found")
         ok, error, report = resend_report_email(report_id, actor=_route_actor(user))
         if is_administrator(user):
-            _audit_admin(user, "resend_report_email", "report", report_id, {"status": "sent" if ok else "failed", "error": error or ""})
-        return {"ok": ok, "error": customer_safe_text(error), "report": report}
+            logs = list_email_delivery_logs(report_id=report_id, limit=1, actor=_route_actor(user))
+            log_id = int(logs[0]["id"]) if logs else None
+            _audit_admin(
+                user,
+                "resend_report_email",
+                "report",
+                report_id,
+                {
+                    "status": "sent" if ok else "failed",
+                    "error": error or "",
+                    "delivery_log_id": log_id,
+                    "real_email_enabled": real_email_delivery_allowed(),
+                },
+            )
+        return {"ok": ok, "error": customer_safe_text(error), "report": report, "validation_window": _email_validation_window_view()}
     except ValueError as exc:
         raise HTTPException(status_code=404, detail=str(exc))
     except Exception as exc:
@@ -1614,6 +1744,13 @@ def _customer_view_email_delivery_log(item: dict[str, Any]) -> dict[str, Any]:
         "status",
         "error_message",
         "recipients",
+        "trigger_source",
+        "effective_recipients",
+        "effective_recipient_source",
+        "email_template_id",
+        "email_template_name",
+        "email_template_source",
+        "email_subject_template",
         "created_at",
     }
     view = {key: _customer_safe_value(value) for key, value in item.items() if key in allowed}
@@ -1681,6 +1818,49 @@ def _customer_view_lead(item: dict[str, Any]) -> dict[str, Any]:
     if "self" + "test" in content_id.lower():
         view["content_id"] = f"system-check-{item.get('run_id') or item.get('id') or ''}".rstrip("-")
     return view
+
+
+def _customer_view_social_account(item: dict[str, Any] | None) -> dict[str, Any]:
+    if not item:
+        return {}
+    forbidden = {
+        "cookies",
+        "cookies_encrypted",
+        "profile_path",
+        "profile_runtime_path",
+        "proxy_url",
+        "proxy_url_encrypted",
+        "platform_avatar_url",
+    }
+    view = {
+        key: _customer_safe_value(value)
+        for key, value in item.items()
+        if key not in forbidden
+    }
+    view["has_cookies"] = bool(item.get("has_cookies"))
+    view["profile_configured"] = bool(
+        item.get("profile_configured")
+        or item.get("profile_path_configured")
+        or item.get("profile_key")
+        or item.get("profile_path")
+    )
+    view["platform_avatar_url"] = _customer_safe_account_avatar_url(item)
+    view["platform_home_url"] = customer_safe_url(item.get("platform_home_url") or "")
+    view["last_error"] = customer_safe_text(item.get("last_error"))
+    view["proxy_last_error"] = customer_safe_text(item.get("proxy_last_error"))
+    return view
+
+
+def _customer_safe_account_avatar_url(item: dict[str, Any]) -> str:
+    account_id = item.get("id")
+    raw_url = item.get("platform_avatar_url") or ""
+    try:
+        account_id_int = int(account_id)
+    except (TypeError, ValueError):
+        return ""
+    if has_cacheable_avatar_url(raw_url):
+        return f"/api/monitor/social-accounts/{account_id_int}/avatar"
+    return ""
 
 
 def _customer_view_platform_status(item: dict[str, Any]) -> dict[str, Any]:

@@ -25,6 +25,7 @@ class RuntimeSettingDefinition:
     apply_scope: str
     yaml_path: str
     env_lock: str
+    always_locked: bool = False
 
 
 RUNTIME_SETTING_DEFINITIONS: tuple[RuntimeSettingDefinition, ...] = (
@@ -36,10 +37,14 @@ RUNTIME_SETTING_DEFINITIONS: tuple[RuntimeSettingDefinition, ...] = (
     RuntimeSettingDefinition("lock_cleanup_buffer_seconds", "Crawling", "锁清理缓冲", "integer", 300, 60, 3600, "next run", "runtime.lock_cleanup_buffer_seconds", "MONITOR_LOCK_CLEANUP_BUFFER_SECONDS"),
     RuntimeSettingDefinition("crawler_retry_count", "Crawling", "采集重试次数", "integer", 1, 0, 5, "next run", "runtime.crawler_retry_count", "MONITOR_CRAWLER_MAX_RETRIES"),
     RuntimeSettingDefinition("crawler_retry_delay_seconds", "Crawling", "采集重试间隔", "integer", 3, 0, 300, "next run", "runtime.crawler_retry_delay_seconds", "MONITOR_CRAWLER_RETRY_DELAY_SECONDS"),
+    RuntimeSettingDefinition("ai_item_timeout_seconds", "AI", "单条 AI 评估超时", "integer", 120, 5, 600, "next run", "ai.item_timeout_seconds", "MONITOR_AI_ITEM_TIMEOUT_SECONDS"),
+    RuntimeSettingDefinition("ai_item_retry_count", "AI", "单条 AI 评估重试次数", "integer", 1, 0, 5, "next run", "ai.item_retry_count", "MONITOR_AI_ITEM_RETRY_COUNT"),
     RuntimeSettingDefinition("login_qr_timeout_seconds", "Login", "二维码等待超时", "integer", 20, 5, 300, "next session", "login.qr_timeout_seconds", "MONITOR_LOGIN_QR_TIMEOUT_SECONDS"),
     RuntimeSettingDefinition("login_session_ttl_seconds", "Login", "登录会话有效期", "integer", 600, 60, 3600, "next session", "login.session_ttl_seconds", "MONITOR_LOGIN_QR_TTL_SECONDS"),
     RuntimeSettingDefinition("scheduler_tick_seconds", "Scheduler", "调度检查间隔", "integer", 60, 10, 600, "scheduler reload or restart", "scheduler.tick_seconds", "MONITOR_SCHEDULER_TICK_SECONDS"),
     RuntimeSettingDefinition("scheduler_disabled", "Scheduler", "暂停自动调度", "boolean", False, None, None, "scheduler reload or restart", "scheduler.disabled", "MONITOR_DISABLE_SCHEDULER"),
+    RuntimeSettingDefinition("stale_run_heartbeat_grace_seconds", "Scheduler", "运行心跳宽限", "integer", 600, 60, 3600, "scheduler recovery", "scheduler.stale_run_heartbeat_grace_seconds", "MONITOR_STALE_RUN_HEARTBEAT_GRACE_SECONDS"),
+    RuntimeSettingDefinition("real_email_delivery", "Email", "真实邮件发送", "boolean", False, None, None, "immediate", "", ""),
     RuntimeSettingDefinition("run_log_retention_days", "Retention", "运行日志保留天数", "integer", 90, 1, 3650, "cleanup job", "retention.run_log_days", "MONITOR_RUN_LOG_RETENTION_DAYS"),
     RuntimeSettingDefinition("report_retention_days", "Retention", "报告保留天数", "integer", 180, 1, 3650, "cleanup job", "retention.report_days", "MONITOR_REPORT_RETENTION_DAYS"),
 )
@@ -76,11 +81,15 @@ def effective_runtime_settings(db_values: dict[str, Any] | None = None, yaml_val
         if definition.key in db_values:
             value = db_values[definition.key]
             source = "database"
-        env_value = os.environ.get(definition.env_lock)
-        locked = env_value not in (None, "")
+        env_value = os.environ.get(definition.env_lock) if definition.env_lock else None
+        locked = definition.always_locked or env_value not in (None, "")
         if locked:
-            value = env_value
-            source = "environment"
+            if env_value not in (None, ""):
+                value = env_value
+                source = "environment"
+            elif definition.always_locked:
+                value = definition.default
+                source = "deployment"
         coerced = validate_runtime_setting(definition.key, value)
         result[definition.key] = {
             "key": definition.key,

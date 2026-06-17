@@ -168,6 +168,9 @@ cython_debug/
 /browser_data/
 /data/
 /monitor_data/
+/data_server_like/
+/browser_data_server_like/
+/logs_server_like/
 /account_profiles/
 /runs/
 /reports/

@@ -171,44 +171,44 @@ Confirmed CR-035 decision summary:
 
 ### Phase 7.1A - Run Identity Compatibility
 
-- [ ] Verify active runtime writes `crawl_runs.job_id` for new runs.
-- [ ] Add compatible reads for legacy rows where `crawl_runs.job_id` is null
+- [x] Verify active runtime writes `crawl_runs.job_id` for new runs.
+- [x] Add compatible reads for legacy rows where `crawl_runs.job_id` is null
       but `summary.job_id` resolves to an existing task.
-- [ ] Update running-run lookup, stop/cancel behavior, and safe backfill logic
+- [x] Update running-run lookup, stop/cancel behavior, and safe backfill logic
       for compatible legacy rows.
-- [ ] Ensure backfill is dry-run capable and skips unresolved historical rows.
+- [x] Ensure backfill is dry-run capable and skips unresolved historical rows.
 
 ### Phase 7.1B - Idempotent Finalization And Recovery
 
-- [ ] Add one idempotent finalization helper for success, failure, timeout,
+- [x] Add one idempotent finalization helper for success, failure, timeout,
       cancellation, interruption, and partial AI/report paths.
-- [ ] Protect terminal status transitions from repeated or concurrent writers.
-- [ ] Release resource locks safely after finalization attempts, with repeated
+- [x] Protect terminal status transitions from repeated or concurrent writers.
+- [x] Release resource locks safely after finalization attempts, with repeated
       release as a harmless no-op.
-- [ ] Persist step-level run lifecycle progress in `crawl_runs.summary`,
+- [x] Persist step-level run lifecycle progress in `crawl_runs.summary`,
       including phase, phase started time, progress heartbeat, retry state,
       last safe return value or customer-safe result, and redacted last error.
-- [ ] Log background task exceptions with `run_id`, compatible `job_id`, phase,
+- [x] Log background task exceptions with `run_id`, compatible `job_id`, phase,
       progress snapshot, and redacted error.
-- [ ] Recover stale `running` rows before the wall-clock deadline only after
+- [x] Recover stale `running` rows before the wall-clock deadline only after
       evaluating live task evidence, resource locks, progress heartbeat, retry
       state, last step result, and redacted interruption cause.
-- [ ] Ensure startup/scheduler stale recovery does not auto-repair historical
+- [x] Ensure startup/scheduler stale recovery does not auto-repair historical
       stuck runs such as `8317`; historical repair must use the Phase 7.1D
       approval workflow.
 
 ### Phase 7.1C - AI Fallback And Partial Report Generation
 
-- [ ] Add per-item AI timeout/failure/invalid-JSON fallback to
+- [x] Add per-item AI timeout/failure/invalid-JSON fallback to
       `pending_review` when the run can safely continue.
-- [ ] During active finalization, create `pending_review` rows for known
+- [x] During active finalization, create `pending_review` rows for known
       not-yet-evaluated candidates when safe before report generation.
-- [ ] Track AI evaluation progress counts for total candidates, successful
+- [x] Track AI evaluation progress counts for total candidates, successful
       evaluations, failed/fallback evaluations, pending-review items, and
       unresolved items.
-- [ ] Generate reports from partial AI/manual-review state when collected
+- [x] Generate reports from partial AI/manual-review state when collected
       content exists.
-- [ ] Finalize report-generation failures into a terminal redacted failure
+- [x] Finalize report-generation failures into a terminal redacted failure
       state instead of leaving the run `running`.
 
 ### Phase 7.1D - Current Run Remediation Gate
@@ -223,6 +223,69 @@ Confirmed CR-035 decision summary:
 - [ ] After code safety is verified, choose either preserving run `8317` as
       `interrupted` or repairing it into a partial report with the remaining
       21 contents marked for manual review.
+
+## Phase 7.2 - AI Evaluation Accuracy And Lead Status Clarity Follow-up
+
+Planning status:
+
+Phase 7.2 is an accepted follow-up regression fix for CR-045. It does not
+rewrite Phase 7 or Phase 7.1 historical completion records. It tightens the
+AI evaluation and report-lead safety contract after live pilot inspection found
+that missing AI evaluation rows could be displayed as "no risk" and broad
+target-bearing keywords could recall many unrelated refund/legal posts.
+
+### Phase 7.2A - Unevaluated Lead Status Safety
+
+- [ ] Audit Report Center, Run Center, leads API, report generation, and lead
+      filters for any path that treats missing `ai_evaluations` rows as
+      no-risk content.
+- [ ] Add an explicit unevaluated or limited-context lead state for missing AI
+      evaluation records where safe mutation is not possible.
+- [ ] Ensure frontend status rendering distinguishes unrelated, evaluated
+      no-risk, suspected negative, high-risk, pending manual review, and
+      unevaluated/limited-context history.
+- [ ] Update report counts and filters so pending-review, unrelated, no-risk,
+      and unevaluated rows are not collapsed into one "no risk" bucket.
+
+### Phase 7.2B - Timeout And Partial-Finalization AI Fallback
+
+- [ ] Ensure timeout and partial-failure finalization attempt to create
+      `pending_review` fallback rows for known unresolved AI candidate IDs
+      before report generation when mutation is safe.
+- [ ] Preserve idempotent finalization and do not rewrite terminal historical
+      rows outside an explicit repair workflow.
+- [ ] Record customer-safe summary evidence for unresolved AI candidates,
+      fallback rows created, and limited-context rows left unchanged.
+
+### Phase 7.2C - AI Relevance And Prompt Hardening
+
+- [ ] Update AI evaluation rules so `source_keyword` is recall provenance only
+      and cannot by itself prove target-law-firm relatedness.
+- [ ] Add or enforce a target-evidence gate using title, description, author,
+      or sampled comments before marking content as target-related or negative.
+- [ ] Treat homonyms and geography such as "海安" as insufficient for target
+      law-firm relatedness unless the content also points to the law firm or an
+      accepted alias.
+- [ ] Preserve support for sampled comments as evidence when comments are
+      actually collected and passed into the AI payload.
+- [ ] If additional structured fields are added, such as target-match level,
+      negative signal level, confidence, or review reason, document schema and
+      role-safe display before implementation.
+
+### Phase 7.2D - Calibration Fixtures And Regression Tests
+
+- [ ] Add fixture coverage for broad refund/legal posts collected by
+      target-bearing keywords but lacking target-law-firm evidence; they must
+      not become target-related negative leads.
+- [ ] Add fixture coverage for title, description, or comment evidence that
+      clearly names the target law firm or alias and contains a negative
+      signal; it must remain eligible for suspected-negative classification.
+- [ ] Add regression coverage proving missing AI evaluation rows are never
+      rendered or filtered as no-risk.
+- [ ] Add regression coverage for timeout/partial-finalization fallback from
+      unresolved candidates to pending review.
+- [ ] Run docs consistency and targeted monitoring tests before marking this
+      follow-up implemented.
 
 ## Phase 8 - Server-Like Validation
 
@@ -589,55 +652,55 @@ Confirmed CR-036 decision summary:
 
 ### Phase 17.1A - Real SMTP Safety Gate
 
-- [ ] Add one shared delivery-safety helper used before real SMTP side effects.
-- [ ] Prevent routine automated tests and local diagnostics from hidden real
+- [x] Add one shared delivery-safety helper used before real SMTP side effects.
+- [x] Prevent routine automated tests and local diagnostics from hidden real
       SMTP side effects unless the confirmed explicit validation path is used.
-- [ ] Apply the safety helper consistently to automatic report delivery, manual
+- [x] Apply the safety helper consistently to automatic report delivery, manual
       resend, and mail-test paths according to the confirmed scope.
-- [ ] When delivery is blocked by the safety gate, preserve report generation
+- [x] When delivery is blocked by the safety gate, preserve report generation
       and write a customer-safe skipped delivery state.
-- [ ] Keep production/pilot real email delivery and explicit real-mail
+- [x] Keep production/pilot real email delivery and explicit real-mail
       validation working when the confirmed allow conditions and SMTP
       configuration are complete.
 
 ### Phase 17.1B - Test Isolation And Regression Coverage
 
-- [ ] Update `test_run_job_blocks_platform_when_login_window_is_open` so it
+- [x] Update `test_run_job_blocks_platform_when_login_window_is_open` so it
       cannot invoke real SMTP while still verifying the platform-blocking
       behavior.
-- [ ] Add a test-level SMTP tripwire that fails if the automated suite reaches
+- [x] Add a test-level SMTP tripwire that fails if the automated suite reaches
       `smtplib.SMTP` or `smtplib.SMTP_SSL` without explicit opt-in.
-- [ ] Audit `run_monitor_job` tests and report-generation tests for unmocked
+- [x] Audit `run_monitor_job` tests and report-generation tests for unmocked
       email delivery paths.
-- [ ] Verify the full test suite can run with a real SMTP config in the active
+- [x] Verify the full test suite can run with a real SMTP config in the active
       database without sending external mail.
-- [ ] Add a separate real-mail validation test path or runbook that is skipped
+- [x] Add a separate real-mail validation test path or runbook that is skipped
       by default and can only send when the confirmed explicit validation
       conditions are present.
 
 ### Phase 17.1C - Effective Recipient Traceability
 
-- [ ] Centralize effective-recipient resolution so report delivery and delivery
+- [x] Centralize effective-recipient resolution so report delivery and delivery
       logs use the same recipient list.
-- [ ] Keep recipient precedence explicit in code and UI: task recipients win,
+- [x] Keep recipient precedence explicit in code: task recipients win,
       global default recipients are fallback-only, and SMTP sender is not a
       delivery target.
-- [ ] Record final effective recipients in `email_delivery_logs`, including
+- [x] Record final effective recipients in `email_delivery_logs`, including
       recipients inherited from global default-recipient fallback.
-- [ ] Define and persist recipient metadata consistently:
+- [x] Define and persist recipient metadata consistently:
       `recipients_json` for the task/request snapshot,
       `effective_recipients_json` for final resolved recipients,
       `effective_recipient_source` for recipient origin, and `trigger_source`
       for the send trigger.
-- [ ] Record delivery trigger source so future role policy and quota logic can
+- [x] Record delivery trigger source so future role policy and quota logic can
       distinguish automatic, manual, test, diagnostic, and explicit validation
       sends.
 - [ ] Show the effective-recipient source in preflight/delivery surfaces, e.g.
       task recipients versus global default-recipient fallback.
 - [ ] Update email-configuration and task-configuration copy so operators can
       see that filling task recipients overrides the global default recipients.
-- [ ] Preserve customer-safe recipient display without storing SMTP secrets.
-- [ ] Keep automatic-send idempotency by `workspace_id + job_id +
+- [x] Preserve customer-safe recipient display without storing SMTP secrets.
+- [x] Keep automatic-send idempotency by `workspace_id + job_id +
       send_window_key + send_type=auto` unchanged.
 
 ### Phase 17.1D - Historical Orphan Evidence And Operations Notes
@@ -667,11 +730,12 @@ CR-036 safety fix.
 
 ### Phase 17.2A - Effective Template Provenance
 
-- [ ] Centralize effective-template resolution so report delivery, preview, and
-      logs agree on task-bound versus active-global fallback behavior.
-- [ ] Record effective email template id, template name, subject template, and
+- [x] Centralize effective-template resolution for report snapshots and
+      delivery logs so task-bound versus active-global fallback behavior is
+      preserved for generated reports.
+- [x] Record effective email template id, template name, subject template, and
       template source in report snapshots.
-- [ ] Record effective template metadata in email delivery logs without storing
+- [x] Record effective template metadata in email delivery logs without storing
       secrets or unsafe raw HTML.
 - [ ] Make historical report/email detail able to explain why a delivered email
       differed from the currently previewed or currently active template.
@@ -722,66 +786,139 @@ minimum safety and lifecycle conditions without making Phase 21 UI refinement,
 Phase 19 realtime progress, Phase 20 AI traceability, CR-038 drawer
 accessibility, or CR-037 quota governance blockers for the first usable pilot.
 
-This gate is complete only after the referenced implementation phases are
-implemented, verified, and recorded in `TEST_RESULTS.md`.
+This gate is complete after the referenced implementation phases and the real
+SMTP validation are implemented, verified, and recorded in `TEST_RESULTS.md`.
+For SMTP, a `sent` delivery-log status means the configured SMTP server
+accepted the message submission; Pilot Gate C also requires operator
+confirmation that an approved recipient actually received the message in inbox
+or spam/quarantine.
 
 Implementation order for satisfying this gate follows `CURRENT_STATE.md`:
-complete Phase 17.1A-B first, complete Phase 17.1C with Phase 17.2A when
-practical, complete Phase 7.1A-C, then verify Pilot Gates A-C and preserve the
-Pilot Gate D non-blocker/remediation boundary.
+Phase 17.1A-B, Phase 17.1C/17.2A, Phase 7.1A-C, automated server-like
+validation, one real Douyin server-side login/crawl, explicit-opt-in real SMTP
+submission, recipient-side receipt confirmation, and a passing redacted
+operator evidence JSON are verified. Preserve the Pilot Gate D
+non-blocker/remediation boundary throughout.
 
 ### Pilot Gate A - Email Side-Effect Safety
 
-- [ ] Complete and verify CR-036/Phase 17.1A-B so automated tests, local
+- [x] Complete and verify CR-036/Phase 17.1A-B so automated tests, local
       diagnostics, and ordinary local report-delivery paths cannot send hidden
       real SMTP email.
-- [ ] Verify real SMTP is blocked by default even when the active database has
+- [x] Verify real SMTP is blocked by default even when the active database has
       complete SMTP configuration and default recipients.
-- [ ] Verify automatic report delivery, manual resend, and mail-test paths all
+- [x] Verify automatic report delivery, manual resend, and mail-test paths all
       use the same delivery-safety gate.
-- [ ] Verify blocked delivery still allows report generation and writes a
+- [x] Verify blocked delivery still allows report generation and writes a
       customer-safe skipped delivery state or confirmed equivalent.
-- [ ] Verify the automated test suite has a tripwire that fails on
+- [x] Verify the automated test suite has a tripwire that fails on
       `smtplib.SMTP` or `smtplib.SMTP_SSL` without explicit opt-in.
 
 ### Pilot Gate B - Run Lifecycle And Partial Result Safety
 
-- [ ] Complete and verify CR-035/Phase 7.1A-C so new runs persist
+- [x] Complete and verify CR-035/Phase 7.1A-C so new runs persist
       `crawl_runs.job_id`, lifecycle finalization is idempotent, and terminal
       statuses cannot be reopened by stale writers.
-- [ ] Verify success, failure, timeout, cancellation, interruption, and partial
+- [x] Verify success, failure, timeout, cancellation, interruption, and partial
       AI/report paths all finalize to a terminal status and release locks
       safely.
-- [ ] Verify AI item timeout, exception, and invalid JSON save
+- [x] Verify AI item timeout, exception, and invalid JSON save
       `pending_review` and continue when the run can safely continue.
-- [ ] Verify collected partial results can generate a report when AI is
+- [x] Verify collected partial results can generate a report when AI is
       unavailable, partially interrupted, or degraded to manual review.
-- [ ] Verify a simulated run with 271 collected contents and AI interruption
-      after item 250/251 cannot remain indefinitely `running`.
+- [x] Verify a simulated reduced-size equivalent of the 271-content
+      interruption class cannot remain indefinitely `running`; it finalizes and
+      produces a partial/manual-review report. The real historical run `8317`
+      remains governed by Phase 7.1D.
 
 ### Pilot Gate C - Minimum Server-Like Real Workflow
 
-- [ ] Run server-like validation without relying on the operator's local Chrome.
-- [ ] Verify administrator web-UI login and server-side platform QR/profile
+- [x] Run server-like validation without relying on the operator's local Chrome.
+- [x] Verify administrator web-UI login and server-side platform QR/profile
       flow in the server-like environment.
-- [ ] Verify at least one real platform login and crawl path with persistent
+- [x] Add a default-safe Pilot Gate C evidence template and checker that can
+      validate operator-filled real-workflow evidence without starting
+      services, crawling platforms, calling AI, mutating databases, or sending
+      email.
+- [x] Verify at least one real platform login and crawl path with persistent
       server-side account profile before pilot handoff.
-- [ ] Verify AI unavailable or AI failure fallback does not block report
-      generation.
-- [ ] Verify explicit-opt-in SMTP delivery can send in pilot/production mode
-      while default local/test/diagnostic behavior remains non-sending.
-- [ ] Verify logs, reports, delivery records, and UI surfaces do not expose API
-      keys, SMTP passwords, cookies, proxy credentials, raw profile paths,
-      provider endpoints, local paths, or command lines.
+      Verified on 2026-06-17 in the `cr041-pilot-evidence` server-like
+      worktree with Douyin run `run_id=3`, report `report_id=3`, 14 raw/new
+      contents, and profile key `1/dy/acc_1`.
+- [x] Verify AI unavailable or AI failure fallback does not block report
+      generation. The same real run produced 14 `pending_review` items with
+      `ai_failed_fallback_evaluations=14` and still generated a report.
+- [x] Verify explicit-opt-in SMTP delivery can submit through the configured
+      SMTP server in pilot/production mode while default local/test/diagnostic
+      behavior remains non-sending. On 2026-06-17, a controlled
+      frontend-enabled real SMTP manual resend for `report_id=3` produced
+      delivery-log row `id=6` with `status=sent`,
+      `trigger_source=manual_resend`, and two effective default recipients.
+      This proves SMTP acceptance only, not
+      pilot receipt; recipient-side confirmation is tracked by the next task.
+- [x] Verify at least one approved recipient confirms receipt of the pilot
+      report email in inbox or spam/quarantine before closing Pilot Gate C.
+      On 2026-06-17, the operator confirmed both approved recipients received
+      the report email for delivery-log row `id=6`; mailbox addresses and
+      message content are not stored in docs.
+- [x] Verify automated local/server-like logs, reports, delivery records, and
+      UI surfaces do not expose API keys, SMTP passwords, cookies, proxy
+      credentials, raw profile paths, provider endpoints, local paths, or
+      command lines.
+- [x] Verify the real-platform pilot run's customer-facing outputs do not
+      expose API keys, SMTP passwords, cookies, proxy credentials, signed URL
+      query parameters, raw profile paths, provider endpoints, local paths, or
+      command lines. This covers the external report downloads, run/report
+      APIs, delivery-log API, run-log API, and social-account API for
+      `run_id=3` / `report_id=3`; internal raw crawler artifacts are not
+      customer-facing acceptance artifacts.
+- [x] After real external validation, fill a redacted operator evidence JSON
+      based on `docs/pilot_gate_c_evidence.example.json` and pass
+      `uv run python scripts/pilot_gate_c_evidence.py --check <evidence.json>`
+      before closing Pilot Gate C. The evidence must include both the delivery
+      log reference and a redacted recipient receipt confirmation reference.
+      Verified with ignored local evidence file
+      `data_server_like\pilot_gate_c_evidence.pending.json`; checker result:
+      PASS.
 
 ### Pilot Gate D - Non-Blocker Boundary
 
-- [ ] Confirm Phase 21, CR-038, Phase 19B-D, Phase 20, and CR-037 are not
+- [x] Confirm Phase 21, CR-038, Phase 19B-D, Phase 20, and CR-037 are not
       required for first usable pilot readiness unless a later accepted P0
       safety, security, or core-flow regression changes the boundary.
-- [ ] Confirm historical run `8317` remediation and orphan delivery evidence
+- [x] Confirm historical run `8317` remediation and orphan delivery evidence
       cleanup remain dry-run, backup, rollback, and explicit-operator-approval
       gated and are not performed automatically as part of pilot readiness.
+
+## Administrator Frontend Real Email Send Toggle
+
+Planning status:
+
+CR-043 supersedes the rejected CR-042 validation-window design. The accepted
+product shape is one administrator-controlled Mail Configuration switch backed
+by the persisted `real_email_delivery` runtime setting. The switch defaults
+off. There is no deployment frontend gate, scheduler-exclusion gate, expiry
+window, or single-use validation-window workflow for daily operation.
+
+- [x] Confirm the user-facing design is one administrator frontend switch only.
+- [x] Keep `real_email_delivery` default-off and persisted as a runtime
+      setting.
+- [x] Make `real_email_delivery` admin-editable and normal-user inaccessible.
+- [x] Put the switch on Mail Configuration and remove the old open/close
+      validation-window buttons from the UI.
+- [x] Keep Runtime Strategy focused on Crawling, Login, Scheduler, and
+      Retention so the same email switch is not exposed in a second place.
+- [x] Make mail test, manual resend, and automatic report delivery follow the
+      same switch: blocked when off, allowed when on and SMTP config is
+      complete.
+- [x] Preserve report generation and customer-safe skipped/failed delivery
+      records when the switch is off or SMTP fails.
+- [x] Keep SMTP acceptance wording explicit: `sent` means SMTP accepted the
+      submission, not recipient inbox proof.
+- [x] Keep the automated SMTP tripwire and mocked-SMTP tests so verification
+      does not send real external mail.
+- [x] Verify CR-043 with targeted pytest, docs check, and frontend syntax
+      checks after the documentation and UI cleanup.
 
 ## Phase 18 - Report Center Task Grouping
 
@@ -1020,6 +1157,50 @@ reopening CR-033 or changing backend behavior.
       run log, and report preview drawers for reachable close controls.
 - [ ] Verify desktop, tablet, and mobile layouts avoid overlapping sticky
       header controls with content, scrollbars, or footer action bars.
+
+## CR-044 - Mail Test Recipient Coverage And SMTP Acceptance Clarity
+
+Planning status:
+
+CR-044 is an accepted regression fix for the administrator Mail Configuration
+test-mail path. It does not reopen CR-043's one-switch design and does not
+change report-delivery recipient precedence.
+
+- [x] Diagnose why a successful test-mail message could be perceived as not
+      received when multiple default recipients were configured.
+- [x] Change test-mail recipient resolution so, without an explicit target, it
+      submits the test message to all configured global default recipients
+      instead of only the first default recipient.
+- [x] Return test-mail recipient count and recipient source from the API
+      without exposing SMTP secrets.
+- [x] Update Mail Configuration test-console success text to show submitted
+      recipient count and preserve the warning that SMTP acceptance is not
+      inbox proof.
+- [x] Add mocked-SMTP regression coverage proving the multi-recipient default
+      list is submitted in one test message and automated verification does not
+      send external mail.
+
+## CR-046 - Platform Account Avatar Safe Cache Display Regression Fix
+
+Planning status:
+
+CR-046 is a verified regression fix for the administrator Platform Accounts
+identity display. It does not reopen Phase 5/6 login-state behavior or Phase 21
+visual refinement.
+
+- [x] Diagnose why the recognized Douyin account avatar disappeared even
+      though `platform_avatar_url` was stored.
+- [x] Preserve signed external avatar URLs as server-side runtime data only and
+      stop sending those external URLs to the frontend.
+- [x] Return a same-origin account-avatar URL from the social-account API when
+      a platform avatar source exists.
+- [x] Add an administrator-only avatar endpoint that lazily fetches, validates,
+      caches, and serves account-avatar images from runtime storage.
+- [x] Reject normal-user avatar access and path traversal attempts.
+- [x] Keep avatar cache files as runtime data outside Git.
+- [x] Add regression tests for signed-avatar redaction, same-origin avatar
+      output, avatar serving, normal-user denial, traversal rejection, and
+      existing profile/cookie hiding behavior.
 
 ## Phase 21 - Formal Console Page-Level UI/UX Refinement
 

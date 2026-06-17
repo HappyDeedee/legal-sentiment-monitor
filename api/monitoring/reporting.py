@@ -15,18 +15,20 @@ from .database import (
     get_report,
     get_conn,
     record_email_delivery_log,
+    effective_email_template_provenance,
     report_job_snapshot,
     report_job_snapshot_json,
     try_record_email_delivery_log,
     update_email_delivery_log_status,
     utc_now,
 )
-from .mailer import send_report
+from .mailer import REAL_EMAIL_BLOCKED_MESSAGE, resolve_report_recipients, send_report
 from .normalizer import PLATFORM_LABELS
-from .security import customer_safe_text, redact_sensitive
+from .security import customer_safe_text, customer_safe_url, redact_sensitive
 
 
 REPORT_DIR = MONITOR_DATA_DIR / "reports"
+MEDIA_LINK_REDACTED_LABEL = "媒体链接已脱敏"
 
 
 def create_report(run_id: int, job: dict[str, Any], summary: dict[str, Any]) -> dict[str, Any]:
@@ -97,16 +99,17 @@ def send_report_with_delivery_log(
     send_type: str = "auto",
     actor: dict[str, Any] | None = None,
     sent_at: datetime | None = None,
+    allow_real_send: bool | None = None,
 ) -> tuple[bool, str | None, dict[str, Any], dict[str, Any] | None]:
     send_at = sent_at or datetime.now(timezone.utc)
     if send_type == "manual_resend":
-        return _send_report_manual_resend(job, report, actor, send_at)
+        return _send_report_manual_resend(job, report, actor, send_at, allow_real_send=allow_real_send)
     if send_type != "auto":
         raise ValueError("invalid email send type")
     return _send_report_auto(job, report, send_at)
 
 
-def resend_report_email(report_id: int, actor: dict[str, Any] | None = None) -> tuple[bool, str | None, dict[str, Any]]:
+def resend_report_email(report_id: int, actor: dict[str, Any] | None = None, *, allow_real_send: bool | None = None) -> tuple[bool, str | None, dict[str, Any]]:
     report = get_report(report_id)
     if not report:
         raise ValueError("report not found")
@@ -115,13 +118,14 @@ def resend_report_email(report_id: int, actor: dict[str, Any] | None = None) -> 
         "law_firm_name": report.get("law_firm_name") or "",
         "recipients": [],
     }
-    ok, error, _refreshed_report, _log = send_report_with_delivery_log(job, report, send_type="manual_resend", actor=actor)
+    ok, error, _refreshed_report, _log = send_report_with_delivery_log(job, report, send_type="manual_resend", actor=actor, allow_real_send=allow_real_send)
     refreshed = get_report(report_id) or report
     return ok, error, refreshed
 
 
 def _send_report_auto(job: dict[str, Any], report: dict[str, Any], send_at: datetime) -> tuple[bool, str | None, dict[str, Any], dict[str, Any] | None]:
     window_key = email_send_window_key(int(job.get("id") or report.get("job_id") or 0), str(job.get("frequency") or "daily"), send_at)
+    delivery_meta = _delivery_metadata(job, trigger_source="scheduler_auto")
     pending = try_record_email_delivery_log(
         {
             "workspace_id": job.get("workspace_id") or report.get("workspace_id"),
@@ -131,7 +135,7 @@ def _send_report_auto(job: dict[str, Any], report: dict[str, Any], send_at: date
             "send_type": "auto",
             "sent_at": send_at.isoformat(),
             "status": "pending",
-            "recipients": _delivery_recipients(job),
+            **delivery_meta,
         }
     )
     if pending is None:
@@ -146,7 +150,7 @@ def _send_report_auto(job: dict[str, Any], report: dict[str, Any], send_at: date
                 "sent_at": send_at.isoformat(),
                 "status": "skipped",
                 "error_message": message,
-                "recipients": _delivery_recipients(job),
+                **delivery_meta,
             }
         )
         update_report_email_status(int(report["id"]), "skipped", message)
@@ -154,7 +158,7 @@ def _send_report_auto(job: dict[str, Any], report: dict[str, Any], send_at: date
         return False, message, refreshed, None
     ok, error = send_report(job, report)
     safe_error = redact_sensitive(error)
-    status = "sent" if ok else "failed"
+    status = "sent" if ok else _delivery_failure_status(error)
     log = update_email_delivery_log_status(int(pending["id"]), status, safe_error, send_at.isoformat())
     update_report_email_status(int(report["id"]), status, safe_error)
     refreshed = get_report(int(report["id"])) or report
@@ -166,10 +170,13 @@ def _send_report_manual_resend(
     report: dict[str, Any],
     actor: dict[str, Any] | None,
     send_at: datetime,
+    *,
+    allow_real_send: bool | None = None,
 ) -> tuple[bool, str | None, dict[str, Any], dict[str, Any]]:
-    ok, error = send_report(job, report)
+    delivery_meta = _delivery_metadata(job, trigger_source="manual_resend")
+    ok, error = send_report(job, report, allow_real_send=allow_real_send)
     safe_error = redact_sensitive(error)
-    status = "sent" if ok else "failed"
+    status = "sent" if ok else _delivery_failure_status(error)
     log = record_email_delivery_log(
         {
             "workspace_id": job.get("workspace_id") or report.get("workspace_id"),
@@ -181,7 +188,7 @@ def _send_report_manual_resend(
             "sent_at": send_at.isoformat(),
             "status": status,
             "error_message": safe_error,
-            "recipients": _delivery_recipients(job),
+            **delivery_meta,
         }
     )
     update_report_email_status(int(report["id"]), status, safe_error)
@@ -194,6 +201,26 @@ def _delivery_recipients(job: dict[str, Any]) -> list[str]:
     if recipients:
         return [str(item).strip() for item in recipients if str(item).strip()]
     return []
+
+
+def _delivery_metadata(job: dict[str, Any], *, trigger_source: str) -> dict[str, Any]:
+    recipients = _delivery_recipients(job)
+    effective_recipients, effective_source = resolve_report_recipients(job)
+    template = effective_email_template_provenance(job)
+    return {
+        "recipients": recipients,
+        "trigger_source": trigger_source,
+        "effective_recipients": effective_recipients,
+        "effective_recipient_source": effective_source,
+        "email_template_id": template.get("id"),
+        "email_template_name": template.get("name") or "",
+        "email_template_source": template.get("source") or "",
+        "email_subject_template": template.get("subject_template") or "",
+    }
+
+
+def _delivery_failure_status(error: str | None) -> str:
+    return "skipped" if error == REAL_EMAIL_BLOCKED_MESSAGE else "failed"
 
 
 def render_html(job: dict[str, Any], summary: dict[str, Any], records: list[dict[str, Any]]) -> str:
@@ -266,14 +293,16 @@ def render_markdown(job: dict[str, Any], summary: dict[str, Any], records: list[
     if not risks and not reviews:
         lines.append("本次未发现新增疑似负面线索。")
     for rec in risks + reviews:
+        content_url = _safe_report_content_url(rec.get("content_url"))
+        cover_label = _safe_report_media_url(rec.get("cover_url"))
         lines.extend(
             [
-                f"## {customer_safe_text(rec['title'] or rec['content_url'])}",
+                f"## {customer_safe_text(rec['title'] or content_url)}",
                 f"- 平台：{PLATFORM_LABELS.get(rec['platform'], rec['platform'])}",
                 f"- 风险：{rec['risk_level']}",
                 f"- 状态：{'待人工复核' if rec.get('eval_status') == 'pending_review' else 'AI 已判断'}",
-                f"- 链接：{rec['content_url']}",
-                f"- 封面：{rec['cover_url'] or ''}",
+                f"- 链接：{content_url}",
+                f"- 封面：{cover_label}",
                 f"- 理由：{customer_safe_text(rec['reason'])}",
                 f"- 证据：{customer_safe_text('；'.join(rec['evidence_quotes']))}",
                 "",
@@ -298,8 +327,8 @@ def write_excel(path: Path, records: list[dict[str, Any]]) -> None:
                 "待人工复核" if rec.get("eval_status") == "pending_review" else "AI 已判断",
                 rec["risk_level"],
                 customer_safe_text(rec["title"]),
-                rec["content_url"],
-                rec["cover_url"],
+                _safe_report_content_url(rec["content_url"]),
+                _safe_report_media_url(rec["cover_url"]),
                 rec["author_name"],
                 rec["source_keyword"],
                 customer_safe_text(rec["reason"]),
@@ -412,11 +441,13 @@ def _load_report_records(run_id: int) -> list[dict[str, Any]]:
 def _render_record(item: dict[str, Any]) -> str:
     risk = html.escape(item.get("risk_level") or "low")
     evidence = "".join(f"<div class='evidence'>{html.escape(customer_safe_text(str(q)))}</div>" for q in item.get("evidence_quotes", []))
-    title = html.escape(customer_safe_text(item.get("title") or item.get("content_url") or "无标题"))
-    url = html.escape(item.get("content_url") or "")
-    cover_url = html.escape(item.get("cover_url") or "")
+    safe_content_url = _safe_report_content_url(item.get("content_url"))
+    safe_cover = _safe_report_media_url(item.get("cover_url"))
+    title = html.escape(customer_safe_text(item.get("title") or safe_content_url or "无标题"))
+    url = html.escape(safe_content_url)
+    cover_label = html.escape(safe_cover)
     review_badge = " | 状态：待人工复核" if item.get("eval_status") == "pending_review" else ""
-    cover = f'<p class="meta">封面：<a href="{cover_url}">{cover_url}</a></p>' if cover_url else ""
+    cover = f'<p class="meta">封面：{cover_label}</p>' if cover_label else ""
     return f"""<div class="item risk-{risk}">
 <h3>{title}</h3>
 <div class="meta">风险：{risk}{review_badge} | 作者：{html.escape(customer_safe_text(item.get('author_name') or ''))} | 关键词：{html.escape(customer_safe_text(item.get('source_keyword') or ''))}</div>
@@ -425,3 +456,11 @@ def _render_record(item: dict[str, Any]) -> str:
 <p>{html.escape(customer_safe_text(item.get('reason') or ''))}</p>
 {evidence}
 </div>"""
+
+
+def _safe_report_content_url(value: Any) -> str:
+    return customer_safe_url(value, redact_query=True)
+
+
+def _safe_report_media_url(value: Any) -> str:
+    return customer_safe_url(value, redact_query=True, redacted_label=MEDIA_LINK_REDACTED_LABEL)

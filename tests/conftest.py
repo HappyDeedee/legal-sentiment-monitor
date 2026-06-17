@@ -21,6 +21,8 @@ Pytest configuration and shared fixtures
 """
 
 import pytest
+import os
+import smtplib
 import sys
 from pathlib import Path
 
@@ -60,6 +62,21 @@ def sample_xhs_note():
         "source_keyword": "test keyword",
         "xsec_token": "test_token_123"
     }
+
+
+@pytest.fixture(autouse=True)
+def smtp_tripwire(monkeypatch):
+    if str(os.environ.get("MONITOR_ALLOW_REAL_EMAIL_SEND") or "").strip().lower() in {"1", "true", "yes", "on"}:
+        return
+
+    class BlockedSMTP:
+        def __init__(self, *args, **kwargs):
+            raise AssertionError(
+                "Automated tests must not reach real smtplib.SMTP/SMTP_SSL without MONITOR_ALLOW_REAL_EMAIL_SEND=true"
+            )
+
+    monkeypatch.setattr(smtplib, "SMTP", BlockedSMTP)
+    monkeypatch.setattr(smtplib, "SMTP_SSL", BlockedSMTP)
 
 
 @pytest.fixture

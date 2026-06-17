@@ -2,6 +2,8 @@ import base64
 import os
 import re
 from pathlib import Path
+from typing import Any
+from urllib.parse import urlsplit, urlunsplit
 
 from cryptography.fernet import Fernet, InvalidToken
 
@@ -126,3 +128,18 @@ def customer_safe_text(text: str | None) -> str:
     if "AI 服务未启用" in result and ("待人工复核模式" in result or "规则检查" in result):
         return "AI 服务未启用；采集不受影响，内容会进入待人工复核。"
     return result.strip()
+
+
+def customer_safe_url(value: Any, *, redact_query: bool = True, redacted_label: str = "") -> str:
+    text = customer_safe_text(str(value or "").strip())
+    if not text:
+        return ""
+    try:
+        parts = urlsplit(text)
+    except ValueError:
+        return customer_safe_text(text)
+    if not parts.scheme or not parts.netloc:
+        return customer_safe_text(text)
+    if redact_query and (parts.query or parts.fragment):
+        return redacted_label or urlunsplit((parts.scheme, parts.netloc, parts.path, "", ""))
+    return customer_safe_text(urlunsplit((parts.scheme, parts.netloc, parts.path, "", "")))

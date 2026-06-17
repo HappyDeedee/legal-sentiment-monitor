@@ -11,6 +11,546 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
 `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-17 - CR-046 Platform Account Avatar Safe Cache Display
+
+Environment: isolated worktree
+`E:\myproject\MediaCrawler-worktrees\cr041-pilot-evidence`, branch
+`codex/cr041-pilot-evidence`.
+
+Result:
+
+- Added server-side account-avatar cache helper and administrator-only avatar
+  endpoint.
+- The social-account API now returns same-origin avatar URLs instead of signed
+  external platform image URLs.
+- Signed avatar query parameters remain out of frontend API responses.
+- Normal users cannot access platform-account avatar images.
+- Traversal attempts against cached-avatar paths are rejected.
+- Existing profile path and cookie hiding behavior remains covered.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "avatar or social_account_pool_redacts_signed_avatar_urls or social_account_api_view_hides_profile_paths"`
+- Result: 4 passed, 275 deselected, 3 warnings.
+- `python -m py_compile api/monitoring/avatar_cache.py api/monitoring/database.py api/routers/monitor.py tests/test_monitoring_mvp.py`
+- Result: PASS.
+- Browser verification on `http://localhost:8080/monitor`: the Platform
+  Accounts avatar loaded from
+  `/api/monitor/social-accounts/1/avatar` with `naturalWidth=100` and
+  `naturalHeight=100`.
+- Full monitoring regression suite:
+  `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 279 passed, 3 warnings.
+
+## 2026-06-17 - CR-044 Mail Test Recipient Coverage And SMTP Acceptance Clarity
+
+Environment: isolated worktree
+`E:\myproject\MediaCrawler-worktrees\cr041-pilot-evidence`, branch
+`codex/cr041-pilot-evidence`.
+
+Result:
+
+- Investigated the operator report that Mail Configuration test mail showed
+  SMTP submission success but recipient-side mail was not found.
+- Confirmed the previous test-mail path used only the first configured global
+  default recipient when no explicit test target was supplied.
+- Updated test-mail recipient resolution so one test message is addressed to
+  all configured global default recipients.
+- Updated the API response and frontend test console to show submitted
+  recipient count/source while preserving the warning that SMTP acceptance is
+  not recipient inbox proof.
+- Kept automated verification on mocked SMTP only; no real external email was
+  sent by the test run.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "cr044 or
+  cr043_mail_test_submits_all_default_recipients or
+  cr043_admin_frontend_real_email_toggle_controls_mail_test or
+  phase_17_1_smtp_refused_recipients_fail_delivery or
+  phase_17_1_manual_resend_and_mail_test_are_blocked_without_opt_in"`: 4
+  passed, 273 deselected, 3 warnings.
+
+## 2026-06-17 - CR-043 Runtime Restart And Superseded Lock Regression Check
+
+Environment: isolated worktree
+`E:\myproject\MediaCrawler-worktrees\cr041-pilot-evidence`, branch
+`codex/cr041-pilot-evidence`, local service
+`http://127.0.0.1:8080/monitor`.
+
+Result:
+
+- Investigated an operator-visible error where clicking the Mail Configuration
+  real-email switch returned
+  `real_email_delivery is locked by deployment configuration`.
+- Confirmed the running 8080 service was still serving the superseded CR-042
+  deployment-gated validation-window code even though the current worktree code
+  already implemented CR-043.
+- Restarted the local 8080 service from the current worktree while preserving
+  the active server-like data/profile directories:
+  `data_server_like` and `browser_data_server_like`.
+- Verified the live API now reports `real_email_delivery` as source
+  `database`, `is_locked=false`, `apply_scope=immediate`, and no YAML path or
+  deployment lock reason.
+- Verified administrator API updates can turn the switch off and back on
+  successfully. No mail-test, manual resend, automatic delivery, platform
+  crawl, or AI provider call was triggered during this verification.
+- Added a regression test proving superseded CR-042 environment variables and
+  stale `system_settings.is_locked=1/source=environment` rows do not lock the
+  CR-043 `real_email_delivery` switch.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k
+  "cr043_real_email_toggle_ignores_superseded_deployment_locks or
+  cr043_real_email_runtime_setting_is_admin_editable"`: 2 passed, 274
+  deselected, 3 warnings.
+- Live 8080 API check after restart: administrator login succeeded;
+  `/api/monitor/runtime-settings` returned `real_email_delivery.is_locked=false`;
+  `PUT /api/monitor/runtime-settings` succeeded for both `false` and `true`;
+  `/api/monitor/email-validation-window` mapped to the same one-switch state
+  and showed two configured fallback recipients.
+- Browser refresh on `/monitor` showed the Mail Configuration switch as
+  enabled and editable, with no locked-state response.
+
+## 2026-06-17 - CR-043 Administrator Frontend Real Email Send Toggle
+
+Environment: isolated worktree
+`E:\myproject\MediaCrawler-worktrees\cr041-pilot-evidence`, branch
+`codex/cr041-pilot-evidence`.
+
+Result:
+
+- Replaced the rejected CR-042 validation-window product direction with the
+  user-confirmed CR-043 one-switch model.
+- Mail Configuration exposes one administrator real email send switch backed
+  by the persisted `real_email_delivery` runtime setting.
+- Removed the user-facing deployment frontend gate, scheduler-exclusion gate,
+  expiry, and single-use validation-window workflow from the accepted daily
+  operation model.
+- Kept compatibility responses for older internal names, but they now report
+  the same single switch state.
+- Runtime Strategy omits the Email group so the same real-email control is not
+  presented in two places.
+- Real SMTP remains default-off. Mail test, manual resend, and automatic
+  report delivery follow the same switch, and automated verification must use
+  mocked SMTP/tripwire protection rather than sending real external mail.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "cr043 or
+  phase_17_1 or email_test_results or runtime_settings"`: 14 passed, 261
+  deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`: 275 passed, 3
+  warnings.
+- `uv run python scripts/check_docs.py`: PASS.
+- `python -m py_compile api\monitoring\settings.py api\monitoring\mailer.py
+  api\routers\monitor.py tests\test_monitoring_mvp.py`: PASS.
+- `node --check api\webui\monitor\monitor.js`: PASS.
+- Inline script parse check for `api\monitor_web\index.html`: PASS.
+- `git diff --check`: no whitespace errors; Git reported expected
+  LF-to-CRLF working-copy warnings on Windows.
+
+## 2026-06-17 - CR-041 Minimum Usable Pilot Gate Closure
+
+Environment: isolated worktree
+`E:\myproject\MediaCrawler-worktrees\cr041-pilot-evidence`, branch
+`codex/cr041-pilot-evidence`.
+
+Result:
+
+- Closed CR-041 Pilot Gate C for the current first-usable-pilot standard.
+- Verified the real Douyin server-like workflow evidence for `run_id=3` /
+  `report_id=3`: server-side account/profile path, 14 raw/new contents,
+  report generation, and 14 AI fallback `pending_review` items.
+- Verified controlled real SMTP submission through a frontend-enabled
+  administrator real-email path with `delivery_log_id=6`, `report_id=3`,
+  `send_type=manual_resend`, `trigger_source=manual_resend`, `status=sent`,
+  and two effective recipients from `global_default_fallback`.
+- The operator confirmed both approved recipients received the report email.
+  This is recorded only as a redacted receipt reference; mailbox addresses,
+  message content, SMTP secrets, and runtime paths are not stored in docs.
+- The ignored local operator evidence file
+  `data_server_like\pilot_gate_c_evidence.pending.json` was finalized to
+  `schema_version=pilot_gate_c_v2`, `status=passed`, and
+  `recipient_receipt_confirmed=true`.
+
+Verification:
+
+- `uv run python scripts/pilot_gate_c_evidence.py --check
+  data_server_like\pilot_gate_c_evidence.pending.json`: PASS.
+- `uv run python scripts/check_docs.py`: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`: 275 passed, 3
+  warnings.
+- Read-only Claude Code documentation-focused review inspected
+  `docs/CURRENT_STATE.md`, `docs/TASKS.md`, `docs/TRACEABILITY.md`,
+  `docs/CHANGE_REQUESTS.md`, and `docs/TEST_RESULTS.md` only. It reported no
+  Blocking findings and no CR-041 Material findings, and confirmed the current
+  documents consistently support CR-041 being Verified when the operator
+  receipt-confirmation fact is accepted.
+
+Remaining:
+
+- CR-041 no longer blocks first usable pilot readiness. Phase 21, CR-038,
+  Phase 19B-D, Phase 20, CR-037, Phase 7.1D historical run `8317`
+  remediation, and Phase 17.1D orphan evidence operations remain separate
+  follow-up work under their existing gates.
+
+## 2026-06-17 - CR-042 Frontend Real Email Validation Window
+
+Environment: isolated worktree
+`E:\myproject\MediaCrawler-worktrees\cr041-pilot-evidence`, branch
+`codex/cr041-pilot-evidence`.
+
+Result:
+
+- Implemented the user-confirmed frontend-operable real-email validation
+  window as a Pilot Gate C usability bridge, not as a permanent ordinary
+  toggle.
+- Added read-only runtime visibility for `frontend_real_email_validation` /
+  `MONITOR_ALLOW_FRONTEND_REAL_EMAIL_VALIDATION`.
+- Added administrator-only API state/open/close endpoints for a time-limited
+  single-use validation window.
+- Opening the window now requires both deployment gates
+  (`MONITOR_ALLOW_REAL_EMAIL_SEND=true` and
+  `MONITOR_ALLOW_FRONTEND_REAL_EMAIL_VALIDATION=true`) and scheduler
+  exclusion (`scheduler_disabled=true` / `MONITOR_DISABLE_SCHEDULER=true`).
+- Mail-test and administrator manual-resend API paths require an open
+  validation window before real SMTP is allowed. Normal-user resend remains
+  non-sending through the default safety gate.
+- A successful validation send marks the window used and closes it
+  automatically; the frontend shows deployment-gate state, effective recipient
+  source/count, expiry/single-use state, and the warning that SMTP acceptance
+  is not recipient receipt.
+- Delivery history now displays effective recipients and effective-recipient
+  source, so global default-recipient fallback is visible to operators.
+
+Verification:
+
+- `python -m py_compile api\monitoring\settings.py api\monitoring\database.py api\monitoring\mailer.py api\monitoring\reporting.py api\routers\monitor.py`:
+  PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "cr042"`:
+  5 passed, 270 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "cr042 or phase_17_1 or phase_17b_report_center_delivery_history_frontend_hooks or monitor_page_uses_resource_modals_and_page_sections"`:
+  10 passed, 265 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`: 275 passed, 3
+  warnings.
+- `uv run python scripts/check_docs.py`: PASS.
+- `git diff --check`: no whitespace errors; Git reported expected LF-to-CRLF
+  working-copy warnings on Windows.
+- `uv run python scripts/pilot_gate_c_evidence.py --check
+  data_server_like\pilot_gate_c_evidence.pending.json`: expected FAIL for the
+  ignored local pending evidence draft, with only `status` not yet `passed` and
+  `smtp_validation.recipient_receipt_confirmed` not yet true. This confirms the
+  draft is ready for finalization after recipient-side receipt is confirmed,
+  but cannot close CR-041 prematurely.
+- Read-only Claude Code review found one real CR-042 safety issue: the open
+  endpoint depended on frontend state for scheduler exclusion and did not
+  independently reject direct API calls while scheduler delivery was active.
+  The endpoint now checks the same deployment gate state as the frontend, and
+  tests cover missing real-email gate, missing frontend gate, scheduler-active
+  rejection, administrator-only access, normal-user non-sending resend, and
+  single-use auto-disable.
+- A second read-only Claude Code review after the fix reported no Blocking
+  issues and no CR-041/CR-042-relevant Material issues. It confirmed direct API
+  open now rejects missing real-email gate, missing frontend gate, or active
+  scheduler; validation-window APIs are administrator-only; normal-user resend
+  remains non-sending; administrator mail-test/manual-resend require an open
+  window; successful validation use auto-disables the window; and CR-041
+  remains incomplete until recipient receipt proof and passing evidence JSON.
+
+Remaining:
+
+- CR-041 Pilot Gate C still cannot close until at least one approved recipient
+  confirms inbox/spam/quarantine receipt for the latest real SMTP validation
+  attempt and the redacted `pilot_gate_c_v2` evidence JSON passes. The latest
+  controlled validation-window attempt recorded `delivery_log_id=6`,
+  `report_id=3`, `send_type=manual_resend`, `status=sent`, and two effective
+  recipients from `global_default_fallback`; this proves SMTP submission was
+  accepted, not recipient inbox delivery.
+
+## 2026-06-17 - CR-041 SMTP Receipt Gate Tightening
+
+Environment: isolated worktree
+`E:\myproject\MediaCrawler-worktrees\cr041-pilot-evidence`, branch
+`codex/cr041-pilot-evidence`.
+
+Result:
+
+- Real SMTP was enabled only for the validation window and disabled again
+  afterward through deployment environment state.
+- Manual resend for `report_id=3` produced delivery-log rows `id=3` and
+  `id=4` with `send_type=manual_resend`, `trigger_source=manual_resend`,
+  `effective_recipient_source=global_default_fallback`, two effective
+  recipients, and `status=sent`.
+- The operator reported that the email was not actually received. Therefore,
+  the `sent` rows are treated as SMTP server acceptance evidence only and do
+  not satisfy Pilot Gate C recipient-side receipt proof.
+- Tightened Pilot Gate C evidence schema to `pilot_gate_c_v2` by requiring
+  `smtp_validation.recipient_receipt_confirmed=true` and a redacted
+  `recipient_receipt_reference`.
+- Updated report-center frontend wording so `sent` displays as SMTP accepted
+  and manual resend toast asks the operator to confirm inbox or spam receipt,
+  instead of implying final delivery.
+- Hardened SMTP result handling so `smtplib.send_message()` recipient-refusal
+  results are treated as failed delivery instead of being recorded as `sent`.
+  This distinguishes SMTP acceptance from explicit SMTP refusal, while still
+  requiring separate recipient-side receipt confirmation for Pilot Gate C.
+- Recorded CR-042 as `Needs Confirmation` for a future frontend-controlled,
+  deployment-gated, administrator-only, time-limited real-email validation
+  window. No CR-042 implementation was started.
+
+Verification:
+
+- `python -m py_compile scripts\pilot_gate_c_evidence.py tests\test_monitoring_mvp.py`:
+  PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "pilot_gate_c_evidence or phase_17b_report_center_delivery_history_frontend_hooks"`:
+  18 passed, 251 deselected, 1 warning.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_17_1_smtp_refused_recipients_fail_delivery or phase_17_1_explicit_real_email_opt_in_reaches_mocked_smtp or phase_17_1_manual_resend_and_mail_test_are_blocked_without_opt_in"`:
+  3 passed, 267 deselected, 1 warning.
+- `uv run python scripts/pilot_gate_c_evidence.py --check docs/pilot_gate_c_evidence.example.json`:
+  expected FAIL because the committed example is intentionally incomplete; it
+  now also rejects missing recipient receipt confirmation.
+- `uv run python scripts/check_docs.py`: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`: 270 passed, 3
+  warnings.
+- Runtime state after validation was rechecked through the API:
+  `real_email_delivery=false`, `scheduler_disabled=true`, both locked by
+  environment configuration.
+- Read-only Claude Code external review was run with a read-only prompt and no
+  edit/write/database/email/crawler/AI/service permissions. It reported no
+  Blocking findings and no CR-041-relevant Material findings. It confirmed
+  CR-041 cannot close yet because recipient-side receipt confirmation and a
+  passing `pilot_gate_c_v2` operator evidence JSON are still required.
+
+Remaining:
+
+- CR-041 Pilot Gate C still cannot close until an approved recipient confirms
+  actual receipt and the redacted operator evidence JSON passes the checker.
+
+## 2026-06-17 - CR-041 Pilot Gate C Evidence Checker
+
+Environment: isolated worktree
+`E:\myproject\MediaCrawler-worktrees\cr041-pilot-evidence`, branch
+`codex/cr041-pilot-evidence`.
+
+Result:
+
+- Added `scripts/pilot_gate_c_evidence.py`, a default-safe checker for
+  operator-filled Pilot Gate C real-workflow evidence.
+- Added `docs/pilot_gate_c_evidence.example.json` as an incomplete redacted
+  evidence template. The template is expected to fail validation until a real
+  operator validation run fills it with redacted references.
+- The checker only reads or writes the requested JSON file. It does not start
+  services, crawl platforms, call AI providers, mutate databases, inspect or
+  repair historical run `8317`, touch orphan email evidence, or send email.
+- The checker rejects missing real-platform/SMTP/AI-fallback evidence,
+  unchecked redaction surfaces, placeholders, secret-looking values, raw local
+  paths, provider endpoints, proxy credentials, cookies, and sensitive evidence
+  keys.
+- Pilot Gate D boundary was rechecked from current docs: Phase 21, CR-038,
+  Phase 19B-D, Phase 20, and CR-037 remain outside the first-pilot blocker set
+  unless a later accepted P0 regression changes the boundary; historical run
+  remediation and orphan evidence cleanup remain dry-run, backup, rollback,
+  and explicit-operator-approval gated.
+- CR-041 remains incomplete until real external platform login/crawl,
+  explicit-opt-in real SMTP validation, real-run redaction evidence, and a
+  passing operator-filled evidence JSON are available.
+
+Verification:
+
+- `python -m py_compile scripts\pilot_gate_c_evidence.py tests\test_monitoring_mvp.py`: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "pilot_gate_c_evidence"`:
+  17 passed, 249 deselected, 1 warning.
+- `uv run python scripts\pilot_gate_c_evidence.py --write-template docs\pilot_gate_c_evidence.example.json`: PASS.
+- `uv run python scripts\pilot_gate_c_evidence.py --check docs\pilot_gate_c_evidence.example.json`: expected FAIL because the committed template is intentionally incomplete.
+- `uv run python scripts/check_docs.py`: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`: 266 passed, 3
+  warnings.
+- `uv run python scripts/server_like_validation.py`: PASS. All 11 automated
+  server-like checks returned `ok: true`.
+
+External validation:
+
+- Read-only Claude Code review was run with Read/Grep/Glob-only tool access
+  and no edit/write/Bash/database/email/crawler/AI/service permissions.
+- Initial review found no Blocking issues and one Material test-coverage
+  finding for schema-version, placeholder, redaction-surface, and additional
+  secret-pattern branches.
+- Added the missing automated tests. Focused read-only recheck reported the
+  Material finding resolved and no remaining Blocking, Material, or Polish
+  findings for CR-041 evidence-checker coverage.
+
+## 2026-06-17 - CR-041 Pre-Commit Verification Refresh
+
+Environment: local worktree `E:\myproject\MediaCrawler`, branch
+`codex/cr041-pilot-gate`.
+
+Result:
+
+- Refreshed the CR-041 automated evidence before committing the safety and
+  lifecycle gate work.
+- No real SMTP delivery, real platform crawl, real AI-provider call, runtime
+  database mutation outside isolated tests, or historical run/evidence repair
+  was performed.
+- CR-041 remains incomplete only because the real external pilot checks still
+  require operator credentials/session and explicit opt-in.
+
+Verification:
+
+- `python -m py_compile api\monitoring\settings.py api\monitoring\database.py api\monitoring\mailer.py api\monitoring\reporting.py api\monitoring\runner.py api\routers\monitor.py tests\conftest.py tests\test_monitoring_mvp.py`: PASS.
+- `uv run python scripts/check_docs.py`: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`: 249 passed, 3
+  warnings.
+- `uv run python scripts/server_like_validation.py`: PASS. All 11 automated
+  server-like checks returned `ok: true`.
+
+## 2026-06-16 - CR-041 Pilot Gate C Automated Server-Like Validation
+
+Environment: local worktree `E:\myproject\MediaCrawler`, branch
+`codex/cr041-pilot-gate`.
+
+Result:
+
+- Ran the automated server-like validation script with isolated temporary data,
+  production local-login fallback disabled, scheduler disabled, AI skipped, and
+  server-side profile roots.
+- The script verified service web UI reachability, administrator HTTP login,
+  server QR/status login capability as the primary flow, local-window login
+  blocked in production mode, same-platform accounts using separate
+  `profile_key` paths, profile metadata survival across service restart,
+  account/profile/proxy lock enforcement, no local Chrome dependency, and
+  headless Chromium availability.
+- This satisfies the automated/non-external portion of Pilot Gate C. It does
+  not prove real platform QR scanning, real platform crawling, real AI-provider
+  behavior, or real SMTP delivery with operator credentials.
+
+Verification:
+
+- `uv run python scripts/server_like_validation.py`: PASS. All 11 checks
+  returned `ok: true`.
+
+Remaining:
+
+- CR-041 still cannot be marked complete until an operator provides or confirms
+  a usable real platform account/session for at least one platform crawl and an
+  explicit real SMTP validation window with `MONITOR_ALLOW_REAL_EMAIL_SEND=true`.
+- Real external validation must record redaction evidence and must not expose
+  API keys, SMTP passwords, cookies, proxy credentials, raw profile paths,
+  provider endpoints, local paths, or command lines.
+
+## 2026-06-16 - CR-035/Phase 7.1A-C Run Lifecycle And AI Fallback Implementation
+
+Environment: local worktree `E:\myproject\MediaCrawler`, branch
+`codex/cr041-pilot-gate`.
+
+Result:
+
+- Implemented Phase 7.1A compatibility for run identity: new runs persist
+  `crawl_runs.job_id`, running-run lookup can resolve legacy rows through
+  `summary.job_id`, and a dry-run-capable backfill helper lists resolvable
+  rows while skipping unresolved historical rows.
+- Implemented Phase 7.1B idempotent terminal finalization: repeated terminal
+  writes cannot reopen or corrupt a terminal run, repeated resource-lock
+  release is harmless, lifecycle summaries persist phase, heartbeat, retry
+  state, last safe result, and redacted last error, and Phase 7.1-marked stale
+  running rows can recover as `interrupted` only after evidence checks.
+- Implemented Phase 7.1C AI fallback: per-item timeout, exception, invalid
+  result, and non-task-cancelling interruption fall back to `pending_review`;
+  AI progress counts track total, successful, fallback, pending-review, and
+  unresolved items; partial/manual-review state can still produce a report.
+- Historical run `8317` was not modified. Phase 7.1D remains the required
+  dry-run, backup, rollback, and explicit-operator-approval gate for any
+  historical remediation.
+
+Verification:
+
+- `python -m py_compile api\monitoring\settings.py api\monitoring\database.py api\monitoring\runner.py tests\test_monitoring_mvp.py`
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_7_1 or phase_5_recovery_marks_expired_running_run_before_releasing_locks or phase_2_run_job_marks_run_timeout_with_partial_results or ingest_dedupes_and_report_keeps_pending_review"`:
+  8 passed.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`: 249 passed, 3
+  warnings.
+- `uv run python scripts/check_docs.py`: PASS.
+
+Remaining:
+
+- CR-041 is not complete yet. Pilot Gate C server-like real workflow validation
+  still remains.
+- Phase 7.1D historical run remediation remains open and must not run without
+  explicit operator approval.
+
+External validation:
+
+- Read-only Claude Code review was run with Read/Grep/Glob-only tool access
+  and no edit/write/Bash/database/email/crawler/AI/service permissions.
+- The reviewer reported no Blocking findings and no Material findings that
+  affect CR-041 pilot readiness for Phase 7.1A-C.
+- The reviewer classified historical run `8317` remediation as correctly
+  remaining in Phase 7.1D and Pilot Gate C real workflow validation as the
+  remaining external gate.
+- Minor polish notes did not require code changes before continuing.
+
+## 2026-06-16 - CR-036/Phase 17.1A-B Email Safety Implementation
+
+Environment: local worktree `E:\myproject\MediaCrawler`, branch
+`codex/cr041-pilot-gate`.
+
+Result:
+
+- Implemented the Phase 17.1A shared real SMTP safety gate. Automatic report
+  delivery, manual resend, and mail-test paths default to non-sending behavior
+  unless `MONITOR_ALLOW_REAL_EMAIL_SEND` is explicitly enabled.
+- Added read-only/deployment-locked runtime visibility for
+  `real_email_delivery` / `MONITOR_ALLOW_REAL_EMAIL_SEND`; browser runtime
+  settings cannot enable it.
+- Blocked default report delivery records a customer-safe `skipped` delivery
+  state while preserving report generation and delivery-log evidence.
+- Added a suite-level SMTP tripwire that fails automated tests if
+  `smtplib.SMTP` or `smtplib.SMTP_SSL` is reached without explicit opt-in.
+- Implemented Phase 17.1C backend effective-recipient traceability:
+  `recipients_json` remains the task/request snapshot, while
+  `effective_recipients_json`, `effective_recipient_source`, and
+  `trigger_source` record the final delivery target and send trigger.
+- Implemented the Phase 17.2A backend portion that overlaps with CR-036:
+  report snapshots and delivery logs now persist customer-safe effective
+  template provenance without storing raw template HTML or SMTP secrets.
+- No real SMTP email was sent. The explicit real-mail path was validated only
+  through mocked SMTP under `MONITOR_ALLOW_REAL_EMAIL_SEND=true`.
+
+Verification:
+
+- `python -m py_compile api\monitoring\settings.py api\monitoring\database.py api\monitoring\mailer.py api\monitoring\reporting.py api\routers\monitor.py tests\conftest.py tests\test_monitoring_mvp.py`
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "login_window_open or phase_17_1 or phase_17a or phase_16_email_delivery or report_resend_email_updates_status or ai_and_email_test_paths"`:
+  8 passed.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_17_1 or phase_17a or phase_16_email_delivery or phase_18a_report_job_snapshots"`:
+  7 passed.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`: 244 passed, 3
+  warnings.
+- `uv run python scripts/check_docs.py`: PASS.
+
+Remaining:
+
+- CR-041 is not complete yet. Phase 7.1A-C run lifecycle/AI fallback/partial
+  report work, read-only external validation, and the minimum server-like real
+  workflow gate still remain.
+- Phase 17.1C operator-facing preflight/UI recipient-source explanation,
+  Phase 17.1D orphan-evidence operations notes, and Phase 17.2B-C template
+  guardrails/preset governance remain open follow-up tasks.
+
+External validation:
+
+- Read-only Claude Code review was run with Read/Grep/Glob-only tool access
+  and no edit/write/Bash/database/email/crawler/AI permissions.
+- The reviewer reported no Blocking findings for Phase 17.1A-B.
+- Material findings were classified as follow-up or later-gate work: real SMTP
+  delivery with operator credentials still belongs to Pilot Gate C; recipient
+  source UI/preflight explanation remains Phase 17.1C follow-up; orphan
+  evidence operations notes remain Phase 17.1D; template body guardrails and
+  preset governance remain Phase 17.2B-C.
+- The reviewer noted a possible mail-test coverage gap, but the current local
+  suite already asserts default `send_test_email` blocking in
+  `test_phase_17_1_manual_resend_and_mail_test_are_blocked_without_opt_in`.
+
 ## 2026-06-16 - CR-034 Decision Confirmation Closed
 
 Environment: local worktree `E:\myproject\MediaCrawler`.
