@@ -6483,6 +6483,249 @@ def test_leads_api_lists_pending_review_items():
     assert all(item["id"] != result["report"]["id"] for item in no_risk_reports)
 
 
+def test_phase_7_2_missing_ai_evaluation_is_limited_context_not_no_risk():
+    init_db()
+    snapshots = {
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "raw_contents": _snapshot_table("raw_contents"),
+        "raw_comments": _snapshot_table("raw_comments"),
+        "ai_evaluations": _snapshot_table("ai_evaluations"),
+    }
+    jobs_snapshot = _snapshot_monitor_jobs()
+    content_id = "pytest_phase_7_2_missing_eval"
+    try:
+        _clear_monitor_jobs()
+        with get_conn() as conn:
+            for table in ["reports", "crawl_runs", "raw_contents", "raw_comments", "ai_evaluations"]:
+                conn.execute(f"DELETE FROM {table}")
+        job = save_job(
+            {
+                "law_firm_name": "Phase72缺评律所",
+                "keywords": ["Phase72缺评律所退费"],
+                "platforms": ["dy"],
+                "recipients": [],
+                "enable_comments": False,
+                "time_window_type": "recent_1d",
+                "enabled": True,
+            }
+        )
+        run_id = create_run(job["id"], {"job_id": job["id"]})
+        ingested = ingest_outputs(
+            job,
+            run_id,
+            "dy",
+            [{"aweme_id": content_id, "title": "Phase72缺评律所退费", "desc": "AI 未完成", "create_time": int(datetime.now(timezone.utc).timestamp())}],
+            [],
+        )
+        finish_run(run_id, "timeout", {"job_id": job["id"], **ingested}, "任务达到系统运行时间上限")
+        report = create_report(run_id, job, {"job_id": job["id"], "law_firm_name": job["law_firm_name"], "platforms": ["dy"], **ingested})
+
+        leads_all = asyncio.run(monitor_router.leads(report_id=report["id"], limit=0))["leads"]
+        leads_none = asyncio.run(monitor_router.leads(report_id=report["id"], risk="none", limit=0))["leads"]
+        leads_unevaluated = asyncio.run(monitor_router.leads(report_id=report["id"], risk="unevaluated", limit=0))["leads"]
+        no_risk_reports = asyncio.run(monitor_router.reports(risk="none", limit=0))["reports"]
+        unevaluated_reports = asyncio.run(monitor_router.reports(risk="unevaluated", limit=0))["reports"]
+        hydrated_report = get_report(report["id"])
+        hydrated_run = get_run(run_id)
+    finally:
+        _restore_monitor_jobs(jobs_snapshot)
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+    assert leads_all[0]["content_id"] == content_id
+    assert leads_all[0]["evaluation_missing"] is True
+    assert leads_all[0]["lead_status"] == "limited_context"
+    assert leads_all[0]["eval_status"] == "limited_context"
+    assert not leads_none
+    assert [item["content_id"] for item in leads_unevaluated] == [content_id]
+    assert all(item["id"] != report["id"] for item in no_risk_reports)
+    assert any(item["id"] == report["id"] for item in unevaluated_reports)
+    assert hydrated_report["summary"]["unevaluated_count"] == 1
+    assert hydrated_report["summary"]["no_risk_count"] == 0
+    assert hydrated_run["summary"]["unevaluated_count"] == 1
+
+
+def test_phase_7_2_lead_filters_split_unrelated_no_risk_pending_and_unevaluated():
+    init_db()
+    snapshots = {
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "raw_contents": _snapshot_table("raw_contents"),
+        "raw_comments": _snapshot_table("raw_comments"),
+        "ai_evaluations": _snapshot_table("ai_evaluations"),
+    }
+    jobs_snapshot = _snapshot_monitor_jobs()
+    content_ids = [
+        "pytest_phase_7_2_unrelated",
+        "pytest_phase_7_2_no_risk",
+        "pytest_phase_7_2_pending",
+        "pytest_phase_7_2_unevaluated",
+    ]
+    try:
+        _clear_monitor_jobs()
+        with get_conn() as conn:
+            for table in ["reports", "crawl_runs", "raw_contents", "raw_comments", "ai_evaluations"]:
+                conn.execute(f"DELETE FROM {table}")
+        job = save_job(
+            {
+                "law_firm_name": "Phase72分桶律所",
+                "keywords": ["Phase72分桶律所"],
+                "platforms": ["dy"],
+                "recipients": [],
+                "enable_comments": False,
+                "time_window_type": "recent_1d",
+                "enabled": True,
+            }
+        )
+        run_id = create_run(job["id"], {"job_id": job["id"]})
+        now_ts = int(datetime.now(timezone.utc).timestamp())
+        ingested = ingest_outputs(
+            job,
+            run_id,
+            "dy",
+            [{"aweme_id": content_id, "title": content_id, "create_time": now_ts} for content_id in content_ids],
+            [],
+        )
+        with get_conn() as conn:
+            rows = conn.execute(
+                "SELECT id, content_id FROM raw_contents WHERE run_id=? ORDER BY id",
+                (run_id,),
+            ).fetchall()
+            now = datetime.now(timezone.utc).isoformat()
+            payloads = {
+                "pytest_phase_7_2_unrelated": ("ok", 0, 1, "high", "其他机构负面", "不处理"),
+                "pytest_phase_7_2_no_risk": ("ok", 1, 0, "low", "相关但未见风险", "无需处理"),
+                "pytest_phase_7_2_pending": ("pending_review", 1, 1, "high", "AI 未完成", "人工复核"),
+            }
+            for row in rows:
+                if row["content_id"] not in payloads:
+                    continue
+                status, is_related, is_negative, risk_level, reason, action = payloads[row["content_id"]]
+                conn.execute(
+                    """
+                    INSERT INTO ai_evaluations (
+                        workspace_id, raw_content_id, run_id, status, is_related, is_negative,
+                        risk_level, reason, evidence_quotes, recommended_action, raw_response, created_at
+                    )
+                    VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, '', ?)
+                    """,
+                    (job.get("workspace_id") or 1, row["id"], run_id, status, is_related, is_negative, risk_level, reason, "[]", action, now),
+                )
+        finish_run(run_id, "success", {"job_id": job["id"], **ingested})
+        report = create_report(run_id, job, {"job_id": job["id"], "law_firm_name": job["law_firm_name"], "platforms": ["dy"], **ingested})
+
+        unrelated = asyncio.run(monitor_router.leads(report_id=report["id"], risk="unrelated", limit=0))["leads"]
+        no_risk = asyncio.run(monitor_router.leads(report_id=report["id"], risk="none", limit=0))["leads"]
+        pending = asyncio.run(monitor_router.leads(report_id=report["id"], risk="pending", limit=0))["leads"]
+        unevaluated = asyncio.run(monitor_router.leads(report_id=report["id"], risk="unevaluated", limit=0))["leads"]
+        negative = asyncio.run(monitor_router.leads(report_id=report["id"], risk="negative", limit=0))["leads"]
+        high = asyncio.run(monitor_router.leads(report_id=report["id"], risk="high", limit=0))["leads"]
+        report_view = get_report(report["id"])
+    finally:
+        _restore_monitor_jobs(jobs_snapshot)
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+    assert [item["content_id"] for item in unrelated] == ["pytest_phase_7_2_unrelated"]
+    assert unrelated[0]["lead_status"] == "unrelated"
+    assert [item["content_id"] for item in no_risk] == ["pytest_phase_7_2_no_risk"]
+    assert no_risk[0]["lead_status"] == "no_risk"
+    assert [item["content_id"] for item in pending] == ["pytest_phase_7_2_pending"]
+    assert pending[0]["lead_status"] == "pending_review"
+    assert [item["content_id"] for item in unevaluated] == ["pytest_phase_7_2_unevaluated"]
+    assert unevaluated[0]["lead_status"] == "limited_context"
+    assert negative == []
+    assert high == []
+    assert report_view["summary"]["negative_count"] == 0
+    assert report_view["summary"]["high_count"] == 0
+    assert report_view["summary"]["unrelated_count"] == 1
+    assert report_view["summary"]["no_risk_count"] == 1
+    assert report_view["summary"]["pending_review_count"] == 1
+    assert report_view["summary"]["unevaluated_count"] == 1
+
+
+def test_phase_7_2_timeout_finalization_creates_pending_review_fallback_rows(monkeypatch):
+    init_db()
+    snapshots = {
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "raw_contents": _snapshot_table("raw_contents"),
+        "raw_comments": _snapshot_table("raw_comments"),
+        "ai_evaluations": _snapshot_table("ai_evaluations"),
+        "email_delivery_logs": _snapshot_table("email_delivery_logs"),
+    }
+    jobs_snapshot = _snapshot_monitor_jobs()
+    content_ids = ["pytest_phase_7_2_timeout_a", "pytest_phase_7_2_timeout_b"]
+    try:
+        _clear_monitor_jobs()
+        with get_conn() as conn:
+            for table in ["reports", "crawl_runs", "raw_contents", "raw_comments", "ai_evaluations", "email_delivery_logs"]:
+                conn.execute(f"DELETE FROM {table}")
+        job = save_job(
+            {
+                "law_firm_name": "Phase72超时律所",
+                "keywords": ["Phase72超时律所投诉"],
+                "platforms": ["dy"],
+                "recipients": [],
+                "enable_comments": False,
+                "time_window_type": "recent_1d",
+                "enabled": True,
+            }
+        )
+
+        async def fake_run_platform(job_arg, run_id, platform, run_dir):
+            ingested = ingest_outputs(
+                job_arg,
+                run_id,
+                platform,
+                [
+                    {"aweme_id": content_ids[0], "title": "Phase72超时律所投诉 A", "create_time": int(datetime.now(timezone.utc).timestamp())},
+                    {"aweme_id": content_ids[1], "title": "Phase72超时律所投诉 B", "create_time": int(datetime.now(timezone.utc).timestamp())},
+                ],
+                [],
+            )
+            return {**ingested, "status": "success"}
+
+        async def fake_evaluate_new_contents(job_arg, run_id, candidate_ids):
+            raise runner_module.CrawlerTimedOut("AI 评估达到系统运行时间上限")
+
+        monkeypatch.setattr(runner_module, "run_platform", fake_run_platform)
+        monkeypatch.setattr(runner_module, "evaluate_new_contents", fake_evaluate_new_contents)
+        monkeypatch.setattr(
+            runner_module,
+            "send_report_with_delivery_log",
+            lambda job, report, send_type="auto": (False, "未配置收件人", report, None),
+        )
+
+        first = asyncio.run(run_monitor_job(job["id"]))
+        summary = first["summary"]
+        with get_conn() as conn:
+            rows = conn.execute(
+                "SELECT raw_content_id, status, reason FROM ai_evaluations WHERE run_id=? ORDER BY raw_content_id",
+                (first["run_id"],),
+            ).fetchall()
+        second_created = runner_module._mark_unresolved_candidates_pending_review(
+            first["run_id"],
+            [int(row["raw_content_id"]) for row in rows],
+        )
+    finally:
+        _restore_monitor_jobs(jobs_snapshot)
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+    assert first["status"] == "timeout"
+    assert len(rows) == 2
+    assert {row["status"] for row in rows} == {"pending_review"}
+    assert summary["pending_review_count"] == 2
+    assert summary["ai_unresolved_items"] == 0
+    assert summary["ai_finalization_fallback"]["known_unresolved_candidate_ids"] == 2
+    assert summary["ai_finalization_fallback"]["pending_review_rows_created"] == 2
+    assert summary["ai_finalization_fallback"]["limited_context_rows_left_unchanged"] == 0
+    assert first["report"]["summary"]["pending_review_count"] == 2
+    assert second_created == 0
+
+
 def test_phase_7_run_job_generates_report_without_ai_or_email(monkeypatch):
     init_db()
     monkeypatch.setenv("MONITOR_SKIP_AI_API", "true")

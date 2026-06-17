@@ -123,11 +123,16 @@ CR-045 AI Evaluation Accuracy And Unevaluated Lead Status Clarity is accepted
 as a new Phase 7.2 follow-up regression fix after live pilot inspection found
 that timeout-leftover content without `ai_evaluations` rows could be displayed
 as "no risk" and broad target-bearing keywords could recall many unrelated
-refund/legal posts. Phase 7 and Phase 7.1 remain historical snapshots; Phase
-7.2 must ensure missing AI evaluation rows are never treated as no-risk,
-timeout/partial-finalization creates pending-review fallback rows when safe,
-and `source_keyword` is treated as recall provenance rather than target-law-
-firm relatedness proof.
+refund/legal posts. Phase 7 and Phase 7.1 remain historical snapshots. Phase
+7.2A-B is now implemented and verified locally: missing AI evaluation rows are
+returned as unevaluated or limited-context instead of no-risk; Report Center,
+Run Center, leads API, report generation, and filters split unrelated,
+evaluated no-risk, suspected negative, high-risk, pending manual review, and
+unevaluated/limited-context states; active timeout/partial finalization creates
+`pending_review` fallback rows for known unresolved candidate IDs when safe and
+records customer-safe fallback evidence. Phase 7.2C-D relevance hardening and
+calibration fixtures remain open, including the stricter `source_keyword`
+recall-provenance-only rule.
 CR-047 Account Browser Environment Consistency is accepted as Phase 5.1, a
 future account-environment optimization that extends the existing
 `profile_key` model with fixed browser-environment settings. It uses
@@ -220,11 +225,15 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   still requires backup, rollback, dry-run preview, and explicit operator
   approval.
 - Phase 7.2 - AI Evaluation Accuracy And Lead Status Clarity Follow-up:
-  accepted but not implemented. It must prevent missing AI evaluation rows
-  from being shown as no-risk, tighten timeout/partial-finalization fallback
-  for unresolved candidates, treat `source_keyword` as recall provenance only,
-  and add calibration/regression fixtures for broad-keyword noise versus true
-  target-law-firm evidence.
+  partially complete and verified locally. Phase 7.2A-B is implemented:
+  missing AI evaluation rows are never returned, counted, filtered, or rendered
+  as no-risk; missing rows surface as unevaluated/limited-context where safe
+  mutation is not possible; report/run summaries and risk filters split
+  pending-review, unrelated, evaluated no-risk, suspected negative, high-risk,
+  and unevaluated buckets; timeout/partial finalization creates
+  `pending_review` fallback rows for known unresolved AI candidate IDs when
+  safe and records customer-safe fallback evidence. Phase 7.2C-D relevance
+  hardening and calibration fixtures remain open.
 - Phase 8 - Server-Like Validation: complete and verified through automated
   server-like validation.
 - Phase 9 - Security And Operations: complete and verified locally.
@@ -296,9 +305,10 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   recipient count/source in the API and frontend, and keeps automated
   verification on mocked SMTP so tests do not send real external mail.
 - CR-045 - AI Evaluation Accuracy And Unevaluated Lead Status Clarity:
-  accepted but not implemented. It is linked to Phase 7.2 and should be treated
-  as a safety/accuracy follow-up before operators rely on AI risk labels from
-  broad keyword runs.
+  partially implemented and verified for Phase 7.2A-B. Unevaluated/limited-
+  context status safety and active-finalization fallback are implemented;
+  relevance prompt hardening and calibration fixtures remain open under Phase
+  7.2C-D before the full CR is closed.
 - CR-046 - Platform Account Avatar Safe Cache Display Regression Fix:
   complete and verified. Platform-account identity rows now expose only a
   same-origin avatar URL; signed platform image URLs remain server-side
@@ -502,10 +512,10 @@ separate follow-up work.
 - No active code implementation batch is currently in progress. Phase 10-18
   console optimization is complete and verified through Phase 18B. Phase 19A
   documentation governance is complete. Phase 19B-19D run-center realtime
-  progress code work is not started. Phase 7.1A-C and CR-043/CR-044 are
-  implemented and verified; Phase 7.1D remains gated. Phase 7.2 is accepted
-  but not implemented. Phase 20 is accepted but not implemented. Phase 21 is
-  accepted but not implemented. CR-037 is deferred.
+  progress code work is not started. Phase 7.1A-C, Phase 7.2A-B, and
+  CR-043/CR-044 are implemented and verified; Phase 7.1D remains gated and
+  Phase 7.2C-D remain open. Phase 20 is accepted but not implemented. Phase 21
+  is accepted but not implemented. CR-037 is deferred.
 
 ## Known Risks
 
@@ -559,10 +569,12 @@ separate follow-up work.
   administrator Mail Configuration "真实邮件发送" switch introduced by CR-043.
   Operator-facing recipient-source UI/preflight explanation, orphan evidence
   operations notes, and template guardrails remain follow-up work.
-- CR-045 is now a live pilot safety risk: current broad-keyword runs can
-  produce many unrelated items, and any missing `ai_evaluations` row must be
-  treated as unevaluated or pending review rather than no-risk. Until Phase
-  7.2 is implemented, operators should manually inspect rows with empty AI
+- CR-045 Phase 7.2A-B reduces the live pilot safety risk for missing
+  `ai_evaluations` rows: missing rows now surface as unevaluated or limited-
+  context rather than no-risk, and active finalization creates pending-review
+  fallback rows for known unresolved candidates when safe. Broad-keyword
+  relevance hardening remains open in Phase 7.2C-D, so operators should still
+  manually inspect broad-keyword recall noise and rows with empty AI
   reason/evidence and should not rely on broad keyword AI labels as final.
 - CR-037 is deferred: normal-user email send/resend quotas and administrator
   policy controls are not yet designed. Existing V1 role permissions remain in
@@ -650,27 +662,30 @@ separate follow-up work.
 
 Next allowed implementation order:
 
-1. implement CR-045/Phase 7.2 AI evaluation accuracy and unevaluated-lead
-   status safety before operators rely on broad-keyword AI risk labels;
-2. implement Phase 21 formal console page-level UI/UX refinement as
+1. implement CR-045/Phase 7.2C-D AI relevance hardening and calibration
+   fixtures before operators rely on broad-keyword AI risk labels;
+2. handle CR-038 sticky drawer close accessibility as a small frontend quick
+   fix, or merge it into the first Phase 21 UI workstream if Phase 21 is the
+   next frontend batch;
+3. implement Phase 21 formal console page-level UI/UX refinement as
    frontend-only workstreams with the Phase 21P cross-page layout-resilience
    gate;
-3. implement CR-047/Phase 5.1 account browser-environment consistency only
+4. implement CR-047/Phase 5.1 account browser-environment consistency only
    after the fixed-environment proxy override policy is confirmed and
    recorded; do this before adopting any optional CloakBrowser-style
    CDP/noVNC provider or expanding platform account environment controls;
-4. implement Phase 17.1C/17.2A remaining operator-facing recipient/template
+5. implement Phase 17.1C/17.2A remaining operator-facing recipient/template
    explanations and Phase 17.2B-C template guardrails as a consolidated
    email/template follow-up batch if it becomes the next accepted batch;
-5. implement CR-031/Phase 19B-19D realtime run-progress work after Phase 7.1
+6. implement CR-031/Phase 19B-19D realtime run-progress work after Phase 7.1
    lifecycle fields are available, unless a deliberately small compatible
    provisional-progress batch is documented first;
-6. schedule CR-034/Phase 20 implementation after higher-priority safety and
+7. schedule CR-034/Phase 20 implementation after higher-priority safety and
    lifecycle work if run-detail traceability becomes the next execution batch;
-7. handle CR-035/Phase 7.1D historical run remediation only when the operator
+8. handle CR-035/Phase 7.1D historical run remediation only when the operator
    explicitly approves the dry-run, backup, rollback, and repair path; it is a
    conditional operations task, not a normal feature batch;
-8. prepare broader production pilot handoff and deployment-specific validation
+9. prepare broader production pilot handoff and deployment-specific validation
    for additional live credentials after the first usable pilot baseline.
 
 ## Latest Verification

@@ -310,31 +310,34 @@ target-bearing keywords could recall many unrelated refund/legal posts.
 Safety priority:
 
 Phase 7.2 is the first ordinary implementation priority before operators rely
-on broad-keyword AI risk labels in pilot use. Until it is implemented, missing
-AI evaluation records must be treated as unevaluated or pending review, not as
-no-risk content.
+on broad-keyword AI risk labels in pilot use. Phase 7.2A-B is implemented and
+verified locally: missing AI evaluation records are treated as unevaluated or
+limited-context instead of no-risk, report/run counts and filters split the
+major lead states, and active timeout/partial finalization creates
+pending-review fallback rows for known unresolved candidates when safe. Phase
+7.2C-D relevance hardening and calibration fixtures remain open.
 
 ### Phase 7.2A - Unevaluated Lead Status Safety
 
-- [ ] Audit Report Center, Run Center, leads API, report generation, and lead
+- [x] Audit Report Center, Run Center, leads API, report generation, and lead
       filters for any path that treats missing `ai_evaluations` rows as
       no-risk content.
-- [ ] Add an explicit unevaluated or limited-context lead state for missing AI
+- [x] Add an explicit unevaluated or limited-context lead state for missing AI
       evaluation records where safe mutation is not possible.
-- [ ] Ensure frontend status rendering distinguishes unrelated, evaluated
+- [x] Ensure frontend status rendering distinguishes unrelated, evaluated
       no-risk, suspected negative, high-risk, pending manual review, and
       unevaluated/limited-context history.
-- [ ] Update report counts and filters so pending-review, unrelated, no-risk,
+- [x] Update report counts and filters so pending-review, unrelated, no-risk,
       and unevaluated rows are not collapsed into one "no risk" bucket.
 
 ### Phase 7.2B - Timeout And Partial-Finalization AI Fallback
 
-- [ ] Ensure timeout and partial-failure finalization attempt to create
+- [x] Ensure timeout and partial-failure finalization attempt to create
       `pending_review` fallback rows for known unresolved AI candidate IDs
       before report generation when mutation is safe.
-- [ ] Preserve idempotent finalization and do not rewrite terminal historical
+- [x] Preserve idempotent finalization and do not rewrite terminal historical
       rows outside an explicit repair workflow.
-- [ ] Record customer-safe summary evidence for unresolved AI candidates,
+- [x] Record customer-safe summary evidence for unresolved AI candidates,
       fallback rows created, and limited-context rows left unchanged.
 
 ### Phase 7.2C - AI Relevance And Prompt Hardening
@@ -360,12 +363,12 @@ no-risk content.
 - [ ] Add fixture coverage for title, description, or comment evidence that
       clearly names the target law firm or alias and contains a negative
       signal; it must remain eligible for suspected-negative classification.
-- [ ] Add regression coverage proving missing AI evaluation rows are never
-      rendered or filtered as no-risk.
-- [ ] Add regression coverage for timeout/partial-finalization fallback from
-      unresolved candidates to pending review.
-- [ ] Run docs consistency and targeted monitoring tests before marking this
-      follow-up implemented.
+- [x] Add regression coverage proving missing AI evaluation rows are never
+      rendered or filtered as no-risk for Phase 7.2A.
+- [x] Add regression coverage for timeout/partial-finalization fallback from
+      unresolved candidates to pending review for Phase 7.2B.
+- [x] Run docs consistency and targeted monitoring tests before marking the
+      Phase 7.2A-B safety batch implemented.
 
 ## Phase 8 - Server-Like Validation
 

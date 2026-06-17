@@ -1724,7 +1724,7 @@
           <div class="page-toolbar page-filter-region" data-filter-region="reports">
             <div><label>律所</label><input id="report_law_firm" placeholder="输入律所名称"></div>
             <div><label>平台</label><select id="report_platform"><option value="">全部</option><option value="dy">抖音</option><option value="ks">快手</option><option value="xhs">小红书</option></select></div>
-            <div><label>风险</label><select id="report_risk"><option value="">全部</option><option value="high">高风险</option><option value="negative">疑似负面</option><option value="pending">待人工复核</option><option value="none">无风险</option></select></div>
+            <div><label>风险</label><select id="report_risk"><option value="">全部</option><option value="high">高风险</option><option value="negative">疑似负面</option><option value="pending">待人工复核</option><option value="unrelated">不相关</option><option value="none">已评估无风险</option><option value="unevaluated">未评估/上下文有限</option></select></div>
             <div><label>开始日期</label><input id="report_date_from" type="date"></div>
             <div><label>结束日期</label><input id="report_date_to" type="date"></div>
             <div><label>显示范围</label><select id="report_limit"><option value="100" selected>最近 100 条</option><option value="200">最近 200 条</option><option value="500">最近 500 条</option><option value="0">全部报告和线索</option></select></div>
@@ -5173,7 +5173,7 @@
       runListState.totalPages=Number(pagination.total_pages||1);
       renderRunFilterSummary(data.filters||{}, pagination);
       document.getElementById('runs_table').innerHTML=runs.length
-        ? table(['运行 ID','任务 ID','任务名称 / 律所','平台','关键词摘要','类型','可见性','状态','开始时间','耗时','采集数','新增数','疑似负面数','高风险数','待复核数','失败原因','操作'], runs.map(runRow))
+        ? table(['运行 ID','任务 ID','任务名称 / 律所','平台','关键词摘要','类型','可见性','状态','开始时间','耗时','采集数','新增数','疑似负面数','高风险数','待复核数','未评估数','失败原因','操作'], runs.map(runRow))
         : '<div class="empty run-empty-state"><strong>暂无运行记录</strong><span>请调整筛选条件，或从监控任务发起一次运行。</span></div>';
       renderRunPagination(pagination);
       return running.length > 0;
@@ -5265,6 +5265,7 @@
         esc(s.negative_count||0),
         esc(s.high_count||0),
         esc(s.pending_review_count||0),
+        esc(s.unevaluated_count||0),
         failureText ? esc(cleanCustomerText(failureText)) : formatFailures(s),
         `<div class="wide-actions run-actions">${actions.join(' ')}</div>`
       ];
@@ -5356,7 +5357,7 @@
         const context=reportGroupingContext(report);
         const key=reportGroupKey(context, report);
         if(!byKey.has(key)){
-          const group={key, context, reports:[], order:index, totals:{newContents:0, negative:0, high:0, pending:0}, flags:{active:false, deleted:false, limited:false, historical:false}};
+          const group={key, context, reports:[], order:index, totals:{newContents:0, negative:0, high:0, pending:0, unevaluated:0, unrelated:0, noRisk:0}, flags:{active:false, deleted:false, limited:false, historical:false}};
           byKey.set(key, group);
           groups.push(group);
         }
@@ -5367,6 +5368,9 @@
         group.totals.negative += Number(summary.negative_count||0);
         group.totals.high += Number(summary.high_count||0);
         group.totals.pending += Number(summary.pending_review_count||0);
+        group.totals.unevaluated += Number(summary.unevaluated_count||0);
+        group.totals.unrelated += Number(summary.unrelated_count||0);
+        group.totals.noRisk += Number(summary.no_risk_count||0);
         group.flags.active = group.flags.active || (!report.job_deleted && !report.limited_context && !!context.jobId);
         group.flags.deleted = group.flags.deleted || !!report.job_deleted;
         group.flags.limited = group.flags.limited || !!report.limited_context;
@@ -5439,7 +5443,7 @@
     }
     function reportGroupSummaryText(group){
       const totals=group.totals;
-      const base=`新增 ${totals.newContents} / 疑似负面 ${totals.negative} / 高风险 ${totals.high} / 待复核 ${totals.pending}`;
+      const base=`新增 ${totals.newContents} / 疑似负面 ${totals.negative} / 高风险 ${totals.high} / 待复核 ${totals.pending} / 未评估 ${totals.unevaluated}`;
       if(group.flags.limited) return `${base}；旧报告缺少任务快照，仍可逐份预览、下载和查看线索。`;
       if(group.flags.deleted) return `${base}；使用报告保存的任务快照展示历史上下文。`;
       return `${base}；按监控任务汇总报告记录。`;
@@ -5786,7 +5790,17 @@
     function formatFailures(summary){ const results=summary.platform_results||{}; const failed=summary.failed_platforms||[]; const cancelled=summary.cancelled_platforms||[]; const rows=[]; failed.forEach(p=>rows.push(`<div><strong>${esc(formatPlatforms([p]))}</strong>：${esc(cleanCustomerText((results[p]||{}).error||'失败'))}</div>`)); cancelled.forEach(p=>rows.push(`<div><strong>${esc(formatPlatforms([p]))}</strong>：已停止</div>`)); if(summary.cancel_reason) rows.push(`<div>${esc(cleanCustomerText(summary.cancel_reason))}</div>`); return rows.join(''); }
     function emailStatusLabel(status){ return {pending:'待发送',sending:'发送中',sent:'SMTP已接受',failed:'发送失败',skipped:'未外发'}[status] || status || '-'; }
     function emailDeliveryStatusLabel(status){ return {pending:'待发送',sending:'发送中',sent:'SMTP已接受，待收件确认',failed:'发送失败',skipped:'已跳过'}[status] || status || '-'; }
-    function formatLeadStatus(item){ if(item.eval_status==='pending_review') return '待人工复核'; if(item.is_related && item.is_negative) return item.risk_level==='high' ? '高风险' : '疑似负面'; return '无风险'; }
+    function formatLeadStatus(item){
+      if(item.lead_status_label) return item.lead_status_label;
+      const status=item.lead_status || item.eval_status;
+      const labels={high_risk:'高风险',suspected_negative:'疑似负面',pending_review:'待人工复核',unrelated:'不相关',no_risk:'已评估无风险',unevaluated:'未评估',limited_context:'上下文有限'};
+      if(labels[status]) return labels[status];
+      if(item.eval_status==='pending_review') return '待人工复核';
+      if(item.evaluation_missing) return item.limited_context ? '上下文有限' : '未评估';
+      if(item.is_related && item.is_negative) return item.risk_level==='high' ? '高风险' : '疑似负面';
+      if(item.is_related) return '已评估无风险';
+      return '不相关';
+    }
     function leadLinks(item){ const links=[]; if(item.content_url) links.push(`<a href="${esc(item.content_url)}" target="_blank">内容</a>`); if(item.cover_url) links.push(`<a href="${esc(item.cover_url)}" target="_blank">封面</a>`); return links.length ? `<div class="wide-actions">${links.join(' ')}</div>` : '-'; }
     function val(id){ return document.getElementById(id).value; } function set(id,v){ document.getElementById(id).value = v ?? ''; }
     function esc(s){ return String(s??'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import sqlite3
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
@@ -96,7 +97,13 @@ def list_platform_status(project_root: Path | None = None, recent_runs: list[dic
 
 def _active_accounts_by_platform(scope_root: Path | None = None) -> dict[str, dict[str, Any]]:
     result: dict[str, dict[str, Any]] = {}
-    for account in list_social_accounts(masked=False):
+    try:
+        accounts = list_social_accounts(masked=False)
+    except sqlite3.OperationalError as exc:
+        if "no such table" not in str(exc).lower():
+            raise
+        accounts = []
+    for account in accounts:
         platform = account.get("platform")
         if platform in result:
             continue

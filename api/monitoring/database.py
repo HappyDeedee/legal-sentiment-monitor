@@ -55,6 +55,15 @@ EMAIL_DELIVERY_SEND_TYPES = {"auto", "manual_resend"}
 EMAIL_DELIVERY_STATUSES = {"pending", "sending", "sent", "failed", "skipped"}
 SESSION_TTL_SECONDS = 8 * 60 * 60
 RUN_TERMINAL_STATUSES = {"success", "partial_failed", "failed", "timeout", "cancelled", "interrupted", "skipped", "selftest"}
+LEAD_STATUS_LABELS = {
+    "unrelated": "不相关",
+    "no_risk": "已评估无风险",
+    "suspected_negative": "疑似负面",
+    "high_risk": "高风险",
+    "pending_review": "待人工复核",
+    "unevaluated": "未评估",
+    "limited_context": "上下文有限",
+}
 
 
 def utc_now() -> str:
@@ -81,6 +90,55 @@ def _json_loads(value: str | None, default: Any = None) -> Any:
         return json.loads(value)
     except json.JSONDecodeError:
         return [] if default is None else default
+
+
+def lead_status_from_evaluation(
+    *,
+    eval_status: Any,
+    is_related: Any,
+    is_negative: Any,
+    risk_level: Any,
+    evaluation_missing: bool = False,
+    run_status: Any = "",
+) -> str:
+    if evaluation_missing:
+        return "limited_context" if str(run_status or "") in RUN_TERMINAL_STATUSES else "unevaluated"
+    if str(eval_status or "") == "pending_review":
+        return "pending_review"
+    related = bool(is_related)
+    negative = bool(is_negative)
+    if related and negative and str(risk_level or "") == "high":
+        return "high_risk"
+    if related and negative:
+        return "suspected_negative"
+    if not related:
+        return "unrelated"
+    return "no_risk"
+
+
+def apply_lead_status_fields(item: dict[str, Any]) -> dict[str, Any]:
+    evaluation_missing = item.get("evaluation_id") in (None, "")
+    run_status = str(item.get("run_status") or "")
+    lead_status = lead_status_from_evaluation(
+        eval_status=item.get("eval_status"),
+        is_related=item.get("is_related"),
+        is_negative=item.get("is_negative"),
+        risk_level=item.get("risk_level"),
+        evaluation_missing=evaluation_missing,
+        run_status=run_status,
+    )
+    item["evaluation_missing"] = bool(evaluation_missing)
+    item["limited_context"] = lead_status == "limited_context"
+    item["lead_status"] = lead_status
+    item["lead_status_label"] = LEAD_STATUS_LABELS.get(lead_status, lead_status)
+    if evaluation_missing:
+        item["eval_status"] = lead_status
+        item["risk_level"] = "unevaluated"
+        item["is_related"] = False
+        item["is_negative"] = False
+        item["reason"] = "AI 评估记录缺失；该内容未被判定为无风险。"
+        item["recommended_action"] = "请人工复核或在安全流程中补建待复核记录。"
+    return item
 
 
 def init_db() -> None:
@@ -2825,7 +2883,11 @@ def get_run(run_id: int, actor: dict[str, Any] | None = None) -> dict[str, Any] 
             """,
             params,
         ).fetchone()
-    return _hydrate_run_row(row) if row else None
+    if not row:
+        return None
+    item = _hydrate_run_row(row)
+    _attach_run_lead_counts([item])
+    return item
 
 
 def _run_actor_scope_clause(actor: dict[str, Any] | None) -> tuple[str, list[Any]]:
@@ -2948,6 +3010,7 @@ def list_runs_page(
             query_params.extend([per_page, (page - 1) * per_page])
         rows = conn.execute(sql, query_params).fetchall()
     items = [_hydrate_run_row(row) for row in rows]
+    _attach_run_lead_counts(items)
     total_pages = 1 if per_page <= 0 else max(1, (total + per_page - 1) // per_page)
     return {
         "items": items,
@@ -3029,6 +3092,21 @@ def _hydrate_run_row(row: sqlite3.Row) -> dict[str, Any]:
     item["display_error"] = customer_safe_text(_run_display_error(item, summary))
     item["error_message"] = customer_safe_text(item.get("error_message"))
     return item
+
+
+def _attach_run_lead_counts(runs: list[dict[str, Any]]) -> None:
+    run_ids = [int(run["id"]) for run in runs if run.get("id")]
+    if not run_ids:
+        return
+    counts = _lead_counts_by_run(run_ids)
+    for run in runs:
+        summary = run.get("summary") if isinstance(run.get("summary"), dict) else {}
+        row = counts.get(int(run.get("id") or 0))
+        if row:
+            summary.update(_lead_count_summary(row))
+        else:
+            _setdefault_lead_count_summary(summary)
+        run["summary"] = summary
 
 
 def _run_display_status(status: str, summary: dict[str, Any]) -> str:
@@ -3399,15 +3477,33 @@ def _attach_report_lead_counts(reports: list[dict[str, Any]]) -> None:
     run_ids = [int(report["run_id"]) for report in reports if report.get("run_id")]
     if not run_ids:
         return
+    counts = _lead_counts_by_run(run_ids)
+    for report in reports:
+        summary = report.get("summary") or {}
+        row = counts.get(int(report.get("run_id") or 0))
+        if row:
+            summary.update(_lead_count_summary(row))
+        else:
+            _setdefault_lead_count_summary(summary)
+        report["summary"] = summary
+
+
+def _lead_counts_by_run(run_ids: list[int]) -> dict[int, dict[str, int]]:
+    if not run_ids:
+        return {}
     placeholders = ",".join("?" for _ in run_ids)
     with get_conn() as conn:
         rows = conn.execute(
             f"""
             SELECT
                 c.run_id,
+                COUNT(*) AS total_count,
                 SUM(CASE WHEN e.status='pending_review' THEN 1 ELSE 0 END) AS pending_review_count,
-                SUM(CASE WHEN e.is_related=1 AND e.is_negative=1 THEN 1 ELSE 0 END) AS negative_count,
-                SUM(CASE WHEN e.is_related=1 AND e.is_negative=1 AND e.risk_level='high' THEN 1 ELSE 0 END) AS high_count
+                SUM(CASE WHEN e.status!='pending_review' AND e.is_related=1 AND e.is_negative=1 THEN 1 ELSE 0 END) AS negative_count,
+                SUM(CASE WHEN e.status!='pending_review' AND e.is_related=1 AND e.is_negative=1 AND e.risk_level='high' THEN 1 ELSE 0 END) AS high_count,
+                SUM(CASE WHEN e.id IS NOT NULL AND e.status!='pending_review' AND e.is_related=0 THEN 1 ELSE 0 END) AS unrelated_count,
+                SUM(CASE WHEN e.id IS NOT NULL AND e.status!='pending_review' AND e.is_related=1 AND e.is_negative=0 THEN 1 ELSE 0 END) AS no_risk_count,
+                SUM(CASE WHEN e.id IS NULL THEN 1 ELSE 0 END) AS unevaluated_count
             FROM raw_contents c
             LEFT JOIN ai_evaluations e ON e.raw_content_id = c.id
             WHERE c.run_id IN ({placeholders})
@@ -3415,17 +3511,34 @@ def _attach_report_lead_counts(reports: list[dict[str, Any]]) -> None:
             """,
             run_ids,
         ).fetchall()
-    counts = {int(row["run_id"]): dict(row) for row in rows}
-    for report in reports:
-        summary = report.get("summary") or {}
-        row = counts.get(int(report.get("run_id") or 0), {})
-        if row:
-            summary["pending_review_count"] = int(row.get("pending_review_count") or 0)
-            summary["negative_count"] = int(row.get("negative_count") or summary.get("negative_count") or 0)
-            summary["high_count"] = int(row.get("high_count") or summary.get("high_count") or 0)
-        else:
-            summary.setdefault("pending_review_count", 0)
-        report["summary"] = summary
+    return {int(row["run_id"]): {key: int(row[key] or 0) for key in row.keys()} for row in rows}
+
+
+def _lead_count_summary(row: dict[str, int]) -> dict[str, int]:
+    return {
+        "lead_total_count": int(row.get("total_count") or 0),
+        "pending_review_count": int(row.get("pending_review_count") or 0),
+        "negative_count": int(row.get("negative_count") or 0),
+        "high_count": int(row.get("high_count") or 0),
+        "unrelated_count": int(row.get("unrelated_count") or 0),
+        "no_risk_count": int(row.get("no_risk_count") or 0),
+        "unevaluated_count": int(row.get("unevaluated_count") or 0),
+        "limited_context_count": int(row.get("unevaluated_count") or 0),
+    }
+
+
+def _setdefault_lead_count_summary(summary: dict[str, Any]) -> None:
+    for key in (
+        "lead_total_count",
+        "pending_review_count",
+        "negative_count",
+        "high_count",
+        "unrelated_count",
+        "no_risk_count",
+        "unevaluated_count",
+        "limited_context_count",
+    ):
+        summary.setdefault(key, 0)
 
 
 def list_leads(limit: int = 100, actor: dict[str, Any] | None = None) -> list[dict[str, Any]]:
@@ -3437,10 +3550,13 @@ def list_leads(limit: int = 100, actor: dict[str, Any] | None = None) -> list[di
             c.source_keyword, c.title, c.description, c.author_name,
             c.content_url, c.cover_url, c.publish_time, c.comment_count,
             c.first_seen_at, c.last_seen_at,
+            r.status AS run_status,
+            e.id AS evaluation_id,
             e.status AS eval_status, e.is_related, e.is_negative, e.risk_level,
             e.reason, e.evidence_quotes, e.recommended_action, e.created_at AS evaluated_at
         FROM raw_contents c
         LEFT JOIN monitor_jobs j ON j.id = c.job_id
+        LEFT JOIN crawl_runs r ON r.id = c.run_id
         LEFT JOIN ai_evaluations e ON e.raw_content_id = c.id
     """
     params: list[Any] = []
@@ -3467,6 +3583,7 @@ def list_leads(limit: int = 100, actor: dict[str, Any] | None = None) -> list[di
         item["evidence_quotes"] = [customer_safe_text(str(q)) for q in _json_loads(item.get("evidence_quotes"))]
         for key in ("law_firm_name", "source_keyword", "title", "description", "author_name", "reason", "recommended_action"):
             item[key] = customer_safe_text(item.get(key))
+        apply_lead_status_fields(item)
         result.append(item)
     return result
 

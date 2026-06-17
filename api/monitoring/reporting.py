@@ -10,6 +10,7 @@ from openpyxl import Workbook
 
 from .database import (
     MONITOR_DATA_DIR,
+    apply_lead_status_fields,
     email_send_window_key,
     get_job,
     get_report,
@@ -36,6 +37,7 @@ def create_report(run_id: int, job: dict[str, Any], summary: dict[str, Any]) -> 
     stamp = datetime.now().strftime("%Y%m%d_%H%M%S")
     base = REPORT_DIR / f"job_{job['id']}_run_{run_id}_{stamp}"
     records = _load_report_records(run_id)
+    summary.update(_record_lead_count_summary(records))
     html_text = render_html(job, summary, records)
     md_text = render_markdown(job, summary, records)
     html_path = base.with_suffix(".html")
@@ -81,6 +83,19 @@ def create_report(run_id: int, job: dict[str, Any], summary: dict[str, Any]) -> 
         "markdown_path": str(md_path),
         "excel_path": str(xlsx_path),
         "records": records,
+    }
+
+
+def _record_lead_count_summary(records: list[dict[str, Any]]) -> dict[str, int]:
+    return {
+        "lead_total_count": len(records),
+        "pending_review_count": sum(1 for item in records if item.get("lead_status") == "pending_review"),
+        "negative_count": sum(1 for item in records if item.get("lead_status") in {"high_risk", "suspected_negative"}),
+        "high_count": sum(1 for item in records if item.get("lead_status") == "high_risk"),
+        "unrelated_count": sum(1 for item in records if item.get("lead_status") == "unrelated"),
+        "no_risk_count": sum(1 for item in records if item.get("lead_status") == "no_risk"),
+        "unevaluated_count": sum(1 for item in records if item.get("lead_status") in {"unevaluated", "limited_context"}),
+        "limited_context_count": sum(1 for item in records if item.get("lead_status") == "limited_context"),
     }
 
 
@@ -227,9 +242,10 @@ def render_html(job: dict[str, Any], summary: dict[str, Any], records: list[dict
     risk_records = [
         r
         for r in records
-        if r["risk_level"] in {"high", "medium", "low"} and r["is_related"] and r["is_negative"]
+        if r.get("lead_status") in {"high_risk", "suspected_negative"}
     ]
-    review_records = [r for r in records if r.get("eval_status") == "pending_review"]
+    review_records = [r for r in records if r.get("lead_status") == "pending_review"]
+    unevaluated_records = [r for r in records if r.get("lead_status") in {"unevaluated", "limited_context"}]
     high_count = sum(1 for r in risk_records if r["risk_level"] == "high")
     law_firm_name = customer_safe_text(job["law_firm_name"])
     title = f"【律所舆情日报】{law_firm_name} - {datetime.now().date()}"
@@ -240,15 +256,16 @@ def render_html(job: dict[str, Any], summary: dict[str, Any], records: list[dict
             ("疑似负面", len(risk_records)),
             ("高风险", high_count),
             ("待人工复核", len(review_records)),
+            ("未评估/上下文有限", len(unevaluated_records)),
             ("失败平台", len(summary.get("failed_platforms", []))),
         ]
     )
     platform_summary = _render_platform_summary_html(summary)
     grouped: dict[str, list[dict[str, Any]]] = {}
-    for rec in risk_records + review_records:
+    for rec in risk_records + review_records + unevaluated_records:
         grouped.setdefault(rec["platform"], []).append(rec)
     sections = ""
-    if not risk_records and not review_records:
+    if not risk_records and not review_records and not unevaluated_records:
         sections = "<p class='empty'>本次未发现新增疑似负面线索。</p>"
     else:
         for platform, items in grouped.items():
@@ -275,8 +292,9 @@ h1{{font-size:22px;margin:0 0 16px}}h2{{font-size:18px;border-bottom:1px solid #
 
 
 def render_markdown(job: dict[str, Any], summary: dict[str, Any], records: list[dict[str, Any]]) -> str:
-    risks = [r for r in records if r["is_related"] and r["is_negative"]]
-    reviews = [r for r in records if r.get("eval_status") == "pending_review"]
+    risks = [r for r in records if r.get("lead_status") in {"high_risk", "suspected_negative"}]
+    reviews = [r for r in records if r.get("lead_status") == "pending_review"]
+    unevaluated = [r for r in records if r.get("lead_status") in {"unevaluated", "limited_context"}]
     lines = [
         f"# 【律所舆情日报】{customer_safe_text(job['law_firm_name'])} - {datetime.now().date()}",
         "",
@@ -284,15 +302,16 @@ def render_markdown(job: dict[str, Any], summary: dict[str, Any], records: list[
         f"- 疑似负面：{summary.get('negative_count', 0)}",
         f"- 高风险：{summary.get('high_count', 0)}",
         f"- 待人工复核：{len(reviews)}",
+        f"- 未评估/上下文有限：{len(unevaluated)}",
         "",
         "## 平台采集状态",
         "",
         *_platform_summary_markdown_lines(summary),
         "",
     ]
-    if not risks and not reviews:
+    if not risks and not reviews and not unevaluated:
         lines.append("本次未发现新增疑似负面线索。")
-    for rec in risks + reviews:
+    for rec in risks + reviews + unevaluated:
         content_url = _safe_report_content_url(rec.get("content_url"))
         cover_label = _safe_report_media_url(rec.get("cover_url"))
         lines.extend(
@@ -300,7 +319,7 @@ def render_markdown(job: dict[str, Any], summary: dict[str, Any], records: list[
                 f"## {customer_safe_text(rec['title'] or content_url)}",
                 f"- 平台：{PLATFORM_LABELS.get(rec['platform'], rec['platform'])}",
                 f"- 风险：{rec['risk_level']}",
-                f"- 状态：{'待人工复核' if rec.get('eval_status') == 'pending_review' else 'AI 已判断'}",
+                f"- 状态：{rec.get('lead_status_label') or ('待人工复核' if rec.get('eval_status') == 'pending_review' else 'AI 已判断')}",
                 f"- 链接：{content_url}",
                 f"- 封面：{cover_label}",
                 f"- 理由：{customer_safe_text(rec['reason'])}",
@@ -319,12 +338,12 @@ def write_excel(path: Path, records: list[dict[str, Any]]) -> None:
     headers = ["平台", "状态", "风险等级", "标题", "链接", "封面链接", "作者", "关键词", "AI理由", "证据原文"]
     ws.append(headers)
     for rec in records:
-        if not (rec["is_related"] and rec["is_negative"]) and rec.get("eval_status") != "pending_review":
+        if rec.get("lead_status") not in {"high_risk", "suspected_negative", "pending_review", "unevaluated", "limited_context"}:
             continue
         ws.append(
             [
                 PLATFORM_LABELS.get(rec["platform"], rec["platform"]),
-                "待人工复核" if rec.get("eval_status") == "pending_review" else "AI 已判断",
+                rec.get("lead_status_label") or ("待人工复核" if rec.get("eval_status") == "pending_review" else "AI 已判断"),
                 rec["risk_level"],
                 customer_safe_text(rec["title"]),
                 _safe_report_content_url(rec["content_url"]),
@@ -412,8 +431,10 @@ def _load_report_records(run_id: int) -> list[dict[str, Any]]:
         rows = conn.execute(
             """
             SELECT c.*, e.status AS eval_status, e.is_related, e.is_negative, e.risk_level,
-                   e.reason, e.evidence_quotes, e.recommended_action
+                   e.id AS evaluation_id, e.reason, e.evidence_quotes, e.recommended_action,
+                   r.status AS run_status
             FROM raw_contents c
+            LEFT JOIN crawl_runs r ON r.id = c.run_id
             LEFT JOIN ai_evaluations e ON e.raw_content_id = c.id
             WHERE c.run_id=?
             ORDER BY
@@ -434,6 +455,7 @@ def _load_report_records(run_id: int) -> list[dict[str, Any]]:
         for key in ("title", "description", "author_name", "source_keyword", "reason", "recommended_action"):
             item[key] = customer_safe_text(item.get(key))
         item["evidence_quotes"] = [customer_safe_text(str(q)) for q in item.get("evidence_quotes", [])]
+        apply_lead_status_fields(item)
         result.append(item)
     return result
 
@@ -446,7 +468,7 @@ def _render_record(item: dict[str, Any]) -> str:
     title = html.escape(customer_safe_text(item.get("title") or safe_content_url or "无标题"))
     url = html.escape(safe_content_url)
     cover_label = html.escape(safe_cover)
-    review_badge = " | 状态：待人工复核" if item.get("eval_status") == "pending_review" else ""
+    review_badge = f" | 状态：{html.escape(customer_safe_text(item.get('lead_status_label') or 'AI 已判断'))}"
     cover = f'<p class="meta">封面：{cover_label}</p>' if cover_label else ""
     return f"""<div class="item risk-{risk}">
 <h3>{title}</h3>

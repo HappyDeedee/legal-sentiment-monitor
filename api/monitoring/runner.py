@@ -256,6 +256,7 @@ async def _run_job_locked(job_id: int, source: str = "manual") -> dict[str, Any]
         summary["duration_seconds"] = _run_duration_seconds(run_id)
         report = None
         try:
+            _apply_unresolved_ai_fallback_summary(run_id, summary, content_ids_for_eval, "timeout")
             _mark_phase(run_id, summary, "report_generating_after_timeout", last_safe_result={"new_contents": summary.get("new_contents", 0)})
             report = create_report(run_id, job, summary)
             _mark_phase(run_id, summary, "email_sending_after_timeout", last_safe_result={"report_id": report.get("id")})
@@ -289,20 +290,7 @@ async def _run_job_locked(job_id: int, source: str = "manual") -> dict[str, Any]
         report = None
         if _safe_int(summary.get("new_contents")):
             try:
-                unresolved = _mark_unresolved_candidates_pending_review(run_id, content_ids_for_eval)
-                if unresolved:
-                    summary["pending_review_count"] = int(summary.get("pending_review_count") or 0) + unresolved
-                    summary["ai_failed_fallback_evaluations"] = int(summary.get("ai_failed_fallback_evaluations") or 0) + unresolved
-                    summary["ai_pending_review_items"] = int(summary.get("ai_pending_review_items") or 0) + unresolved
-                    summary["ai_unresolved_items"] = 0
-                    summary["ai_progress"] = {
-                        "total_candidates": len(content_ids_for_eval),
-                        "successful_evaluations": int(summary.get("ai_successful_evaluations") or 0),
-                        "failed_fallback_evaluations": int(summary.get("ai_failed_fallback_evaluations") or 0),
-                        "pending_review_items": int(summary.get("pending_review_count") or 0),
-                        "unresolved_items": 0,
-                        "evaluated_items": len(content_ids_for_eval),
-                    }
+                _apply_unresolved_ai_fallback_summary(run_id, summary, content_ids_for_eval, "partial_failure")
                 _mark_phase(run_id, summary, "report_generating_after_failure", last_error=f"{type(exc).__name__}: {exc}")
                 report = create_report(run_id, job, summary)
                 _mark_phase(run_id, summary, "email_sending_after_failure", last_safe_result={"report_id": report.get("id")})
@@ -777,6 +765,53 @@ def _pending_review_evaluation(reason: str, content: dict[str, Any]) -> dict[str
     }
 
 
+def _apply_unresolved_ai_fallback_summary(run_id: int, summary: dict[str, Any], content_ids: list[int], cause: str) -> int:
+    unique_content_ids = [int(content_id) for content_id in dict.fromkeys(content_ids or []) if _safe_int(content_id)]
+    known_candidates = len(unique_content_ids)
+    fallback_created = _mark_unresolved_candidates_pending_review(run_id, unique_content_ids)
+    unresolved_after = max(0, known_candidates - _count_ai_evaluations_for_run(run_id, unique_content_ids))
+    limited_context_left = 0
+    if not known_candidates and _safe_int(summary.get("new_contents")):
+        limited_context_left = _safe_int(summary.get("new_contents")) or 0
+    if fallback_created:
+        summary["pending_review_count"] = int(summary.get("pending_review_count") or 0) + fallback_created
+        summary["ai_failed_fallback_evaluations"] = int(summary.get("ai_failed_fallback_evaluations") or 0) + fallback_created
+        summary["ai_pending_review_items"] = int(summary.get("ai_pending_review_items") or 0) + fallback_created
+    summary["ai_unresolved_items"] = unresolved_after
+    summary["ai_limited_context_items"] = limited_context_left
+    summary["ai_finalization_fallback"] = {
+        "cause": cause,
+        "known_unresolved_candidate_ids": known_candidates,
+        "pending_review_rows_created": fallback_created,
+        "unresolved_candidates_remaining": unresolved_after,
+        "limited_context_rows_left_unchanged": limited_context_left,
+    }
+    summary["ai_progress"] = {
+        "total_candidates": known_candidates,
+        "successful_evaluations": int(summary.get("ai_successful_evaluations") or 0),
+        "failed_fallback_evaluations": int(summary.get("ai_failed_fallback_evaluations") or 0),
+        "pending_review_items": int(summary.get("pending_review_count") or 0),
+        "unresolved_items": unresolved_after,
+        "limited_context_items": limited_context_left,
+        "evaluated_items": max(0, known_candidates - unresolved_after),
+    }
+    _merge_run_summary(
+        run_id,
+        {
+            "phase_7_2_lifecycle": True,
+            "ai_progress": summary["ai_progress"],
+            "ai_finalization_fallback": summary["ai_finalization_fallback"],
+            "pending_review_count": summary.get("pending_review_count"),
+            "ai_failed_fallback_evaluations": summary.get("ai_failed_fallback_evaluations", 0),
+            "ai_pending_review_items": summary.get("ai_pending_review_items", 0),
+            "ai_unresolved_items": unresolved_after,
+            "ai_limited_context_items": limited_context_left,
+            "progress_updated_at": utc_now(),
+        },
+    )
+    return fallback_created
+
+
 def _mark_unresolved_candidates_pending_review(run_id: int, content_ids: list[int]) -> int:
     if not content_ids:
         return 0
@@ -802,6 +837,23 @@ def _mark_unresolved_candidates_pending_review(run_id: int, content_ids: list[in
             _pending_review_evaluation("AI 评估未完成，已在运行收尾时转人工复核", row),
         )
     return len(rows)
+
+
+def _count_ai_evaluations_for_run(run_id: int, content_ids: list[int]) -> int:
+    if not content_ids:
+        return 0
+    placeholders = ",".join("?" for _ in content_ids)
+    with get_conn() as conn:
+        row = conn.execute(
+            f"""
+            SELECT COUNT(*) AS n
+            FROM ai_evaluations
+            WHERE raw_content_id IN ({placeholders})
+              AND (run_id=? OR run_id IS NULL)
+            """,
+            [*content_ids, run_id],
+        ).fetchone()
+    return int(row["n"] or 0) if row else 0
 
 
 def _merge_run_summary(run_id: int, updates: dict[str, Any]) -> dict[str, Any]:

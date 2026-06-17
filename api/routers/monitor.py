@@ -1322,7 +1322,7 @@ async def reports(
     limit: int = 100,
     law_firm: str = "",
     platform: str = "",
-    risk: str = Query("", description="high|negative|none"),
+    risk: str = Query("", description="high|negative|pending|unrelated|none|unevaluated"),
     date_from: str = "",
     date_to: str = "",
     user: dict[str, Any] = CurrentUser,
@@ -1344,12 +1344,18 @@ async def reports(
         items = [r for r in items if int((r.get("summary") or {}).get("negative_count") or 0) > 0]
     elif risk == "pending":
         items = [r for r in items if int((r.get("summary") or {}).get("pending_review_count") or 0) > 0]
+    elif risk == "unrelated":
+        items = [r for r in items if int((r.get("summary") or {}).get("unrelated_count") or 0) > 0]
+    elif risk in {"unevaluated", "limited_context"}:
+        items = [r for r in items if int((r.get("summary") or {}).get("unevaluated_count") or 0) > 0]
     elif risk == "none":
         items = [
             r
             for r in items
-            if int((r.get("summary") or {}).get("negative_count") or 0) == 0
+            if int((r.get("summary") or {}).get("no_risk_count") or 0) > 0
+            and int((r.get("summary") or {}).get("negative_count") or 0) == 0
             and int((r.get("summary") or {}).get("pending_review_count") or 0) == 0
+            and int((r.get("summary") or {}).get("unevaluated_count") or 0) == 0
         ]
     if date_from:
         items = [r for r in items if (r.get("created_at") or "")[:10] >= date_from]
@@ -1363,7 +1369,7 @@ async def leads(
     limit: int = 100,
     law_firm: str = "",
     platform: str = "",
-    risk: str = Query("", description="high|negative|pending|none"),
+    risk: str = Query("", description="high|negative|pending|unrelated|none|unevaluated"),
     date_from: str = "",
     date_to: str = "",
     run_id: int | None = None,
@@ -1386,18 +1392,17 @@ async def leads(
     if platform:
         items = [item for item in items if item.get("platform") == platform]
     if risk == "high":
-        items = [item for item in items if item.get("is_related") and item.get("is_negative") and item.get("risk_level") == "high"]
+        items = [item for item in items if item.get("lead_status") == "high_risk"]
     elif risk == "negative":
-        items = [item for item in items if item.get("is_related") and item.get("is_negative")]
+        items = [item for item in items if item.get("lead_status") in {"high_risk", "suspected_negative"}]
     elif risk == "pending":
-        items = [item for item in items if item.get("eval_status") == "pending_review"]
+        items = [item for item in items if item.get("lead_status") == "pending_review"]
+    elif risk == "unrelated":
+        items = [item for item in items if item.get("lead_status") == "unrelated"]
+    elif risk in {"unevaluated", "limited_context"}:
+        items = [item for item in items if item.get("lead_status") in {"unevaluated", "limited_context"}]
     elif risk == "none":
-        items = [
-            item
-            for item in items
-            if item.get("eval_status") != "pending_review"
-            and not (item.get("is_related") and item.get("is_negative"))
-        ]
+        items = [item for item in items if item.get("lead_status") == "no_risk"]
     if date_from:
         items = [item for item in items if (item.get("first_seen_at") or "")[:10] >= date_from]
     if date_to:
@@ -1800,6 +1805,12 @@ def _customer_view_lead(item: dict[str, Any]) -> dict[str, Any]:
         "comment_count",
         "first_seen_at",
         "last_seen_at",
+        "run_status",
+        "evaluation_id",
+        "evaluation_missing",
+        "lead_status",
+        "lead_status_label",
+        "limited_context",
         "eval_status",
         "is_related",
         "is_negative",

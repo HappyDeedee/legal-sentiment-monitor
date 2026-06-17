@@ -11,6 +11,60 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
 `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-17 - CR-045/Phase 7.2A-B Unevaluated Lead Safety
+
+Environment: local worktree
+`E:\myproject\MediaCrawler-worktrees\cr045-phase-7-2-ab`.
+
+Result:
+
+- Implemented explicit lead states for missing AI evaluation rows so they are
+  exposed as unevaluated or limited-context instead of no-risk.
+- Updated report/run summary counts, report filters, leads API filters, report
+  generation, Report Center status rendering, and Run Center count display so
+  pending review, unrelated, evaluated no-risk, suspected negative, high-risk,
+  and unevaluated/limited-context states are not collapsed together.
+- Kept `pending_review` as a separate bucket even when fallback or historical
+  rows carry related/negative flags, so pending-review rows do not inflate
+  suspected-negative or high-risk counts.
+- Updated active timeout and partial-failure finalization to create
+  `pending_review` fallback rows for known unresolved AI candidate IDs before
+  report generation when safe.
+- Preserved idempotent fallback behavior and did not add any historical repair
+  workflow or mutate historical run `8317`.
+- Added customer-safe `ai_finalization_fallback` summary evidence for known
+  unresolved candidates, fallback rows created, remaining unresolved items, and
+  limited-context rows left unchanged.
+- Added a small platform-status robustness fallback for uninitialized monitor
+  database reads in filesystem-only tests; initialized runtime behavior still
+  uses active social-account profiles.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_7_2 or ai or leads or report"`
+- Result: 109 passed, 173 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 282 passed, 3 warnings.
+- Rebase refresh on latest `origin/main` after CR-038:
+  `uv run python scripts/check_docs.py` passed,
+  `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_7_2 or ai or leads or report"`
+  passed with 109 passed, 174 deselected, 3 warnings, and
+  `uv run python -m pytest tests/test_monitoring_mvp.py` passed with 283
+  passed, 3 warnings.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS.
+- `python -m py_compile api/monitoring/database.py api/monitoring/reporting.py api/monitoring/runner.py api/monitoring/platform_status.py api/routers/monitor.py tests/test_monitoring_mvp.py`
+- Result: PASS.
+
+Remaining:
+
+- Phase 7.2C-D relevance hardening and calibration fixtures remain open.
+- Phase 20 AI traceability remains accepted but not implemented.
+
 ## 2026-06-17 - CR-038 Sticky Drawer Close Accessibility
 
 Environment: isolated worktree
