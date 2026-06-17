@@ -11,6 +11,290 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
 `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-18 - Phase 17.1C And Phase 17.2B-C Email Explanation And Guardrails
+
+Environment: local worktree `E:\myproject\MediaCrawler`, browser acceptance
+against the running `/monitor` console at `http://127.0.0.1:8765/monitor`.
+
+Result:
+
+- Completed the Phase 17.1C operator-facing recipient explanation surfaces:
+  task report settings, Mail Configuration, preflight output, and delivery
+  history now explain that task recipients win, global default recipients are
+  fallback-only, and the SMTP sender is not a recipient.
+- Completed Phase 17.2B template-body guardrails: new custom HTML templates
+  cannot be saved unless they contain `{report_html}` or `{report_body}`, and
+  preview metadata reports whether the required generated-report placeholder is
+  present.
+- Completed Phase 17.2C preset-style direction: the mail-template drawer offers
+  administrator style presets (`standard`, `compact`, `formal`, and
+  `custom/history`) that preserve the system-generated report body while
+  keeping historical free-form templates readable.
+- Preserved legacy-template compatibility: old templates that lack the body
+  placeholder remain readable, and report-email rendering appends the generated
+  report body during preview/send so a historical custom wrapper cannot
+  silently drop the report content.
+- Delivery history now exposes send-time template provenance, including whether
+  the delivery used a task-bound template, the active template at send time, the
+  system default body, or historical limited-context metadata.
+- Rechecked the CR-048 Report Center information architecture after the user's
+  risk-filter placement feedback: the first-level Report Center toolbar shows
+  only `律所`, `平台`, `开始日期`, `结束日期`, and `报告范围`; `线索状态` / risk
+  filtering is inside the scoped lead drawer and filters only the selected
+  report or selected run lead scope.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_17_1c_17_2bc or phase_17_2_email_template_body_guardrails or job_preflight_uses_bound_ai_profile_and_email_template or email_template_preview or active_email_template or report_email_preview_reuses_active_email_template or job_bound_email_template or phase_17b_report_center_delivery_history_frontend_hooks or cr049"`
+- Result: 11 passed, 283 deselected, 1 warning.
+- `node --check api\webui\monitor\monitor.js`
+- Result: PASS.
+- `uv run python -m py_compile api\monitoring\database.py api\monitoring\mailer.py api\monitoring\preflight.py tests\test_monitoring_mvp.py`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 2 inline/module script blocks parsed in the final check.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "cr048 or cr049 or phase_15b or phase_17b_report_center_delivery_history_frontend_hooks or phase_18b_report_center_task_grouping_frontend_hooks or monitor_page_uses_tob_information_architecture"`
+- Result: 6 passed, 288 deselected, 1 warning after restoring the report-step
+  helper text that says email misconfiguration does not block collection and
+  report generation.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency after the final documentation update.
+- Browser acceptance:
+  - Report Center first-level filters were `律所`, `平台`, `开始日期`, `结束日期`,
+    and `报告范围`; there was no first-level `风险` / `线索状态` filter and no
+    first-level lead-detail or delivery-history panel.
+  - The `report_leads_drawer` existed and contained the drawer-local
+    `线索状态` filter with `高风险`, `疑似负面`, `待人工复核`, `不相关`,
+    `已评估无风险`, and `未评估/上下文有限` options.
+  - Mail Configuration and task report settings showed recipient-precedence
+    wording; Mail Templates showed the sample-data preview note and
+    body-placeholder guardrail.
+  - The new-template drawer defaulted to the standard preset, retained
+    `{report_html}` in the generated HTML, and exposed the preset options
+    `标准日报`, `紧凑摘要`, `正式简报`, and `自定义 / 历史模板`.
+  - Report delivery-history drawer opened from the report email-status action;
+    the current browser data set had no delivery attempts for the selected
+    report, so send-time template row rendering was covered by automated static
+    and unit tests rather than a live row in that browser check.
+
+Limitations:
+
+- No real SMTP send was performed. The verification stayed within mocked or
+  local non-sending paths.
+- Full CR-034 / Phase 20 run detail, AI trace persistence, and per-evaluation
+  debug evidence remain outside this goal.
+
+## 2026-06-18 - Phase 17.1D Orphan Email Evidence Dry-Run
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Added `scripts/review_orphan_email_evidence.py` as a read-only dry-run
+  helper for historical email delivery evidence. It supports `--database`,
+  `--delivery-log-id`, `--job-id`, `--report-id`, `--artifact-root`, and
+  `--json`.
+- The helper reports delivery-log id, `job_id`, `report_id`, send type/status,
+  sent/created time, job/report/run existence, artifact existence,
+  classification, `mode=dry_run`, `mutations_attempted=0`, and the required
+  backup/approval/rollback gates before any future mutation.
+- Documented the observed CR-036 historical evidence for delivery-log rows `60`
+  and `81`: `job_id=9686` / `run_id=8380` / `report_id=3959` and
+  `job_id=9759` / `run_id=8447` / `report_id=3998`, including exported `.eml`
+  references, attachment names, missing job/run/report rows, and the default
+  preserve policy.
+- Updated the deployment docs/runbook so orphan evidence review remains
+  read-only and any later delete, annotation, repair, or migration requires a
+  database backup, artifact/email backup, explicit operator approval, and a
+  rollback plan.
+
+Verification:
+
+- `uv run python scripts\review_orphan_email_evidence.py --job-id 9686`
+- Result: PASS dry-run. It found `delivery_log_id=60`, `job_id=9686`,
+  `report_id=3959`, `classification=orphan_delivery_log`,
+  `secondary=detached_report_artifacts, limited_context`,
+  `artifacts_existing=3/3`, and `mutations_attempted=0`.
+- `uv run python scripts\review_orphan_email_evidence.py --job-id 9759`
+- Result: PASS dry-run. It found `delivery_log_id=81`, `job_id=9759`,
+  `report_id=3998`, `classification=orphan_delivery_log`,
+  `secondary=detached_report_artifacts, limited_context`,
+  `artifacts_existing=3/3`, and `mutations_attempted=0`.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_17_1d or phase_17b_email_delivery_history_api_scope_and_safe_fields or phase_17b_report_center_delivery_history_frontend_hooks or phase_18b_report_center_task_grouping_frontend_hooks"`
+- Result: 4 passed, 288 deselected, 3 warnings.
+- `uv run python -m py_compile scripts\review_orphan_email_evidence.py tests\test_monitoring_mvp.py`
+- Result: PASS.
+- `uv run python scripts\check_docs.py`
+- Result: PASS docs consistency.
+
+Limitations:
+
+- No historical database row or artifact mutation was performed. Any future
+  cleanup/annotation remains a separate operator-approved repair task.
+- Phase 17.1C operator-facing recipient-source explanation and Phase 17.2B-C
+  template guardrails remain open for the next email/template batch.
+
+## 2026-06-17 - CR-048/CR-049 Report And Mail Information Architecture
+
+Environment: local worktree `E:\myproject\MediaCrawler`, browser acceptance
+against the running `/monitor` console at `http://127.0.0.1:8765/monitor`.
+
+Follow-up acceptance tuning:
+
+- User review found the first-level Report Center `风险/线索状态` style filter
+  still made the page read like a lead workbench after lead detail moved into a
+  drawer.
+- Adjusted the information architecture so the first-level Report Center
+  toolbar contains only report dimensions: `律所`, `平台`, date range, and
+  `报告范围`.
+- Moved `线索状态` into the lead drawer as drawer-local filtering. It now
+  filters only the selected report or selected run lead scope and no longer
+  appears as a first-level Report Center filter.
+- Browser acceptance after reload and visible navigation through the Operations
+  Home `查看报告` shortcut showed Report Center active with labels `律所`,
+  `平台`, `开始日期`, `结束日期`, `报告范围`; no first-level `report_risk`,
+  `lead_status_filter`, `leads_table`, or `email_delivery_history`; 3 report
+  row `查看线索` buttons; and the lead drawer for report `#3772` containing
+  drawer-local `线索状态` plus `筛选线索` with a selected-report scope hint.
+- Browser console error log remained empty after the follow-up checks.
+- Follow-up checks passed:
+  `uv run python -m pytest tests/test_monitoring_mvp.py -k "cr048 or cr049 or phase_15b or phase_17b_report_center_delivery_history_frontend_hooks or phase_18b_report_center_task_grouping_frontend_hooks or monitor_page_uses_tob_information_architecture"`
+  returned 6 passed, 285 deselected, 1 warning; `node --check
+  api/webui/monitor/monitor.js` passed; inline monitor page script parse passed
+  with 1 script block.
+
+Result:
+
+- Implemented the focused CR-048/CR-049 frontend information-architecture
+  batch without changing backend APIs, database schema, SMTP delivery logic,
+  permissions, crawler behavior, or AI trace storage.
+- Report Center is now report-first: the first-level lead detail panel and
+  `leads_table` are removed, the process-draft preview hint card is removed,
+  and report rows expose an explicit `查看线索` action separate from preview.
+- Report lead details open in a drawer with selected-report title, scope,
+  count, applied filter summary, and empty states. The drawer says the content
+  is limited to the selected report and is not a global lead workbench.
+- Run Center rows now expose `查看线索`; clicking a run row opens the same
+  drawer with run-scoped title/scope/hint so run-generated leads have a Run
+  Center entry before any future full Run Detail implementation.
+- Report Center first-level filter wording now stays on report dimensions. The
+  limit field is `报告范围`; the former `全部报告和线索` wording is removed because
+  lead details are no longer first-level page content, and lead status
+  filtering is drawer-local.
+- Report Center delivery history is no longer a first-level panel. Clicking a
+  report email-status button or `更多 > 查看交付历史` opens a scoped drawer with
+  report scope, record count, refresh action, latest status, and SMTP
+  acceptance wording.
+- Mail Configuration no longer shows the large first-level
+  `SMTP 与发送默认值` or full-width real-email status panels. Edit, test,
+  refresh/status, delivery-status navigation, and the single real-email switch
+  are in the page-level action bar, with compact summary metrics underneath.
+- Preserved report preview, downloads, resend, report grouping, delivery
+  history, CR-043 real-email confirmation behavior, and CR-044 SMTP
+  acceptance wording.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "leads_api_can_scope_items_to_selected_run or leads_api_can_scope_items_to_selected_report or cr048 or cr049 or phase_15b or phase_17b_report_center_delivery_history_frontend_hooks or monitor_page_uses_tob_information_architecture"`
+- Result: 7 passed, 284 deselected, 1 warning.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "leads_api_can_scope_items_to_selected_run or leads_api_can_scope_items_to_selected_report or cr048 or cr049 or phase_15b or phase_17b_report_center_delivery_history_frontend_hooks or monitor_page_uses_tob_information_architecture or phase_18b"`
+- Result: 8 passed, 283 deselected, 1 warning.
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script block parsed.
+- Browser acceptance:
+  - refreshed `/monitor` and confirmed Report Center first-level filters
+    contain `报告范围` and do not contain a first-level `线索状态`/`风险` filter,
+    `leads_table`, `email_delivery_history`, `data-report-delivery-panel`, or
+    `report-hint`;
+  - after loading reports, Report Center showed 3 `查看线索` buttons and 3
+    email-status buttons;
+  - clicking report `查看线索` opened `报告线索明细 #3772`; the drawer scope was
+    `报告 #3772 的线索明细` and the hint said the list is limited to the current
+    report;
+  - clicking report email status opened `邮件交付历史 #3772`; the drawer scope
+    was `报告 ID 3772 的邮件交付历史` and the page did not render delivery
+    history in the first-level Report Center section;
+  - Run Center showed 100 visible `查看线索` row actions in the current view;
+    clicking the first opened `运行 #9047 线索明细` with a run-scoped hint;
+  - mobile navigation at `390x844` opened Report Center and Mail
+    Configuration; both had no horizontal overflow, no first-level lead or
+    delivery-history panel, and no old SMTP/defaults or real-email status
+    panel;
+  - browser console error log was empty after the checks.
+
+Limitations:
+
+- Full Phase 20 Run Detail, AI trace persistence, per-evaluation debug detail,
+  and run-detail deep links remain future CR-034 / Phase 20 work.
+- Full Phase 21 page-level visual refinement remains open outside this focused
+  CR-048/CR-049 batch.
+
+## 2026-06-17 - CR-045/Phase 7.2C-D AI Relevance Hardening
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Implemented the Phase 7.2C-D relevance hardening without adding database
+  schema fields or role-visible debug fields.
+- Updated the default AI prompt so `source_keyword` is explicitly recall
+  provenance only and cannot by itself prove target-law-firm relatedness.
+- Added post-provider AI normalization that forces model output back to
+  unrelated/irrelevant when title, description, author, and actually collected
+  comments do not contain the target law firm or accepted aliases.
+- Preserved comment evidence support only when comments are collected and
+  passed into the AI payload.
+- Added calibration coverage for noisy-positive keyword-only output, broad
+  refund/legal noise, homonym/geography-only `海安` mentions, title-based
+  target evidence, and comment-only target evidence.
+- Verified the report/lead filtering path: keyword-only and geography-only
+  fixtures stay out of suspected-negative/high-risk buckets, while true title
+  and collected-comment target evidence remains eligible for suspected-negative
+  or high-risk classification.
+
+Verification:
+
+- `uv run python -m py_compile api/monitoring/ai.py tests/test_monitoring_mvp.py`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_7_2 or cr050 or ai_evaluation_payload_includes_content_and_comment_context"`
+- Result: 9 passed, 279 deselected, 1 warning.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_7 or cr050 or ai_config or ai_rule or evaluate_content or report_center_risk_filters"`
+- Result: 19 passed, 269 deselected, 1 warning.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+
+## 2026-06-17 - Open TODO Test Gate Hardening
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Hardened planned verification gates for the current open TODO queue without
+  implementing product code.
+- Added negative-test expectations for CR-045/Phase 7.2C-D so
+  `source_keyword`-only evidence cannot become a target-related negative lead
+  even when a mocked model emits a noisy positive.
+- Added CR-047/Phase 5.1 account-environment tripwires for confirmed proxy
+  override policy, hidden process-default fallback, and fail-closed incomplete
+  browser-environment values.
+- Added Phase 17.1D dry-run/no-op evidence requirements so orphan email review
+  cannot mutate delivery logs, report artifacts, or historical rows without
+  backup and explicit operator approval.
+- Added Phase 19 lifecycle-progress tests for disappeared crawler subprocesses,
+  repeated finalization, and late progress writes after terminal state.
+- Added Phase 20 traceability tests proving trace write failure and retention
+  cleanup cannot block finalization or mutate `ai_evaluations`, reports, or
+  delivery logs.
+- Added CR-048/CR-049 frontend tripwires for unlabeled Report Center lead
+  tables and duplicated Mail Configuration edit/test controls.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+
 ## 2026-06-17 - CR-048 Report Center Lead Detail IA Documentation
 
 Environment: local worktree `E:\myproject\MediaCrawler`.

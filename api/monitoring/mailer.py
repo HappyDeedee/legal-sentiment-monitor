@@ -5,7 +5,15 @@ from email.message import EmailMessage
 from pathlib import Path
 from typing import Any
 
-from .database import get_active_email_template, get_email_config, get_email_template, get_runtime_setting_value, validate_port, validate_recipients
+from .database import (
+    email_template_has_report_body_placeholder,
+    get_active_email_template,
+    get_email_config,
+    get_email_template,
+    get_runtime_setting_value,
+    validate_port,
+    validate_recipients,
+)
 from .normalizer import PLATFORM_LABELS
 from .security import customer_safe_text
 
@@ -60,7 +68,10 @@ def build_report_email(
     html_body = customer_safe_text(Path(report["html_path"]).read_text(encoding="utf-8"))
     template = _job_email_template(job or {})
     if template and template.get("html_template"):
-        html_body = customer_safe_text(_safe_format(template["html_template"], _template_values(job or {}, report, html_body)))
+        template_html = str(template["html_template"] or "")
+        if not email_template_has_report_body_placeholder(template_html):
+            template_html = template_html + "\n{report_html}"
+        html_body = customer_safe_text(_safe_format(template_html, _template_values(job or {}, report, html_body)))
     msg = EmailMessage()
     msg["Subject"] = subject
     msg["From"] = cfg["sender"]

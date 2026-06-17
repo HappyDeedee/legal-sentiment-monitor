@@ -171,8 +171,6 @@
     .template-variable-row { display:flex; gap:6px; flex-wrap:wrap; margin:8px 0 10px; }
     .template-variable-row code { border:1px solid var(--line); border-radius:999px; padding:3px 7px; background:#fbfdff; color:#334155; font-size:12px; }
     .diagnostic-layout { display:grid; grid-template-columns:minmax(0,1.2fr) minmax(320px,.8fr); gap:14px; align-items:start; }
-    .report-hint { display:flex; align-items:flex-start; gap:10px; border:1px solid var(--line); border-radius:var(--radius); background:#fbfdff; padding:12px; color:var(--muted); line-height:1.6; }
-    .report-hint strong { display:block; color:var(--text); margin-bottom:3px; }
     .inline-status { display:flex; gap:8px; align-items:center; flex-wrap:wrap; color:var(--muted); font-size:12px; }
     .diagnostic-grid { display:grid; grid-template-columns:repeat(2,minmax(0,1fr)); gap:8px; }
     .diagnostic-item { border:1px solid var(--line); border-radius:8px; background:#fff; padding:10px; min-height:82px; }
@@ -430,7 +428,6 @@
     .account-section,
     .report-task-group,
     .email-delivery-entry,
-    .report-hint,
     .ai-test-card,
     .ops-item,
     .diagnostic-item,
@@ -1085,8 +1082,9 @@
 
           <div class="config-section wizard-section" data-wizard-step="report">
             <h3>4. 报告</h3>
-            <p class="section-note">设置报告收件人和本任务使用的邮件模板。未配置邮件也可以采集和生成报告，只是不发送邮件。</p>
+            <p class="section-note">设置报告收件人和本任务使用的邮件模板。任务收件人优先；留空才使用邮件配置里的全局默认收件人。发件人只代表 SMTP 身份，不会自动成为收件人。</p>
             <label>收件邮箱（多行）</label><textarea id="recipients" placeholder="a@example.com&#10;b@example.com"></textarea>
+            <div class="field-hint">未填写任务收件人时，系统会尝试使用全局默认收件人；两者都为空时只生成报告，不发送邮件。未配置邮件也可以采集和生成报告，只是不发送邮件。</div>
             <div class="grid admin-only-job-field">
               <div><label>邮件模板</label><select id="job_email_template_id"><option value="">使用当前启用模板</option></select></div>
             </div>
@@ -1520,12 +1518,17 @@
 
       <section id="email">
         <div class="page-head page-entry" data-page-entry="email">
-          <div class="page-title-block"><span class="page-kicker">邮件交付</span><h2>邮件配置</h2><p>配置 SMTP、发件人和默认收件人。HTML 邮件样式在“邮件模板”中维护。</p></div>
+          <div class="page-title-block"><span class="page-kicker">邮件交付</span><h2>邮件配置</h2><p>配置 SMTP、发件人和全局默认收件人。任务填写收件人时优先发送给任务收件人；默认收件人只在任务收件人为空时兜底。</p></div>
           <div class="page-actions">
             <button class="primary" onclick="openMailConfigModal()">编辑邮件配置</button>
             <button class="secondary" onclick="openMailTestModal()">发送测试邮件</button>
             <button class="secondary" onclick="loadEmail()">刷新配置</button>
             <button class="secondary" data-shortcut-tab="reports" data-shortcut-target="email_delivery_status_entry" data-menu-key="report_center">查看交付状态</button>
+            <label class="setting-switch email-toolbar-switch" title="开启后测试邮件、手动重发和自动交付会真实提交 SMTP">
+              <input id="real_email_delivery_toggle" type="checkbox" onchange="setRealEmailDelivery(this.checked)">
+              <span class="setting-switch-track" aria-hidden="true"><span></span></span>
+              <span id="real_email_delivery_toggle_label">真实邮件：已关闭</span>
+            </label>
           </div>
         </div>
         <div class="resource-summary-grid">
@@ -1533,33 +1536,6 @@
             <div class="settings-stat"><strong>发件身份</strong><span id="email_sender_summary">-</span></div>
             <div class="settings-stat"><strong>默认收件人</strong><span id="email_recipient_summary">0 个</span></div>
             <div class="settings-stat"><strong>标题模板</strong><span id="email_subject_summary">-</span></div>
-        </div>
-        <div class="panel">
-          <div class="account-ledger-head">
-            <div>
-              <h3>SMTP 与发送默认值</h3>
-              <p class="small">配置和测试都通过弹窗完成；密码保存后不会在页面回显。</p>
-            </div>
-            <div class="wide-actions">
-              <button class="secondary" onclick="openMailConfigModal()">编辑配置</button>
-              <button class="secondary" onclick="openMailTestModal()">测试邮件</button>
-            </div>
-          </div>
-          <div id="email_status" class="notice">邮件配置尚未读取。</div>
-        </div>
-        <div class="panel">
-          <div class="account-ledger-head">
-            <div>
-              <h3>真实邮件发送</h3>
-              <p class="small">管理员打开后，测试邮件、手动重发和自动交付才会提交 SMTP；默认关闭。</p>
-            </div>
-            <label class="setting-switch email-send-switch">
-              <input id="real_email_delivery_toggle" type="checkbox" onchange="setRealEmailDelivery(this.checked)">
-              <span class="setting-switch-track" aria-hidden="true"><span></span></span>
-              <span id="real_email_delivery_toggle_label">已关闭</span>
-            </label>
-          </div>
-          <div id="email_validation_status" class="notice">真实邮件发送状态尚未读取。</div>
         </div>
       </section>
 
@@ -1588,6 +1564,7 @@
             <div class="settings-card">
               <h3>发送默认值</h3>
               <label>默认收件人</label><textarea id="default_recipients" style="min-height:136px"></textarea>
+              <div class="field-hint">全局默认收件人只在任务没有填写收件邮箱时使用；SMTP 发件人不会自动加入收件人。</div>
               <label>标题模板</label><input id="subject_template" value="【律所舆情日报】{law_firm_name} - {date}">
             </div>
           </div>
@@ -1622,7 +1599,7 @@
 
       <section id="email_templates">
         <div class="page-head page-entry" data-page-entry="email_templates">
-          <div class="page-title-block"><span class="page-kicker">邮件交付</span><h2>邮件模板</h2><p>管理报告邮件的标题模板和 HTML 正文，支持变量和实时预览。</p></div>
+          <div class="page-title-block"><span class="page-kicker">邮件交付</span><h2>邮件模板</h2><p>管理报告邮件标题和样式。HTML 模板必须保留 {report_html} 或 {report_body}，真实发送时由系统插入本次运行生成的报告正文。</p></div>
           <div class="page-actions">
             <button class="primary" onclick="openEmailTemplateDrawer()">新增邮件模板</button>
             <button class="secondary" onclick="loadEmailTemplates()">刷新模板</button>
@@ -1634,7 +1611,7 @@
           <div class="account-ledger-head">
             <div>
               <h3>HTML 邮件模板</h3>
-              <p class="small">报告发送时优先使用当前启用模板；点击编辑可查看实时预览。</p>
+              <p class="small">报告发送时优先使用任务绑定模板，再使用当前启用模板；预览使用样例数据，不代表某次历史发送的实际正文。</p>
             </div>
             <div class="inline-status"><span id="email_template_summary">-</span></div>
           </div>
@@ -1716,7 +1693,7 @@
           <div>
             <span class="status">邮件交付</span>
             <strong>报告邮件状态与交付历史</strong>
-            <p>报告列表展示最新邮件状态；选择报告后可查看自动发送和手动重发记录。</p>
+            <p>报告列表展示最新邮件状态；点击报告行的邮件状态或“更多 > 查看交付历史”会打开悬浮窗。</p>
           </div>
           <button class="secondary" type="button" onclick="loadReports()">刷新报告邮件状态</button>
         </div>
@@ -1724,37 +1701,15 @@
           <div class="page-toolbar page-filter-region" data-filter-region="reports">
             <div><label>律所</label><input id="report_law_firm" placeholder="输入律所名称"></div>
             <div><label>平台</label><select id="report_platform"><option value="">全部</option><option value="dy">抖音</option><option value="ks">快手</option><option value="xhs">小红书</option></select></div>
-            <div><label>风险</label><select id="report_risk"><option value="">全部</option><option value="high">高风险</option><option value="negative">疑似负面</option><option value="pending">待人工复核</option><option value="unrelated">不相关</option><option value="none">已评估无风险</option><option value="unevaluated">未评估/上下文有限</option></select></div>
             <div><label>开始日期</label><input id="report_date_from" type="date"></div>
             <div><label>结束日期</label><input id="report_date_to" type="date"></div>
-            <div><label>显示范围</label><select id="report_limit"><option value="100" selected>最近 100 条</option><option value="200">最近 200 条</option><option value="500">最近 500 条</option><option value="0">全部报告和线索</option></select></div>
+            <div><label>报告范围</label><select id="report_limit"><option value="100" selected>最近 100 条</option><option value="200">最近 200 条</option><option value="500">最近 500 条</option><option value="0">全部报告</option></select></div>
             <div class="toolbar-actions"><button class="secondary" onclick="loadReports()">筛选</button></div>
           </div>
         </div>
         <div class="panel">
           <h3>报告列表</h3>
           <div id="reports_table"></div>
-        </div>
-        <div class="panel email-delivery-history-panel">
-          <div class="panel-title-row">
-            <div>
-              <h3>邮件交付历史</h3>
-              <p id="email_delivery_history_scope" class="small">选择报告后查看自动发送和手动重发记录。</p>
-            </div>
-            <button class="secondary" type="button" onclick="refreshSelectedEmailDeliveryHistory()">刷新历史</button>
-          </div>
-          <div id="email_delivery_history"></div>
-        </div>
-        <div class="panel">
-          <h3>线索明细</h3>
-          <div id="leads_scope" class="small"></div>
-          <div id="leads_table"></div>
-        </div>
-        <div class="panel">
-          <div class="report-hint">
-            <span class="status">预览</span>
-            <div><strong>选择报告后查看正文</strong><span>点击报告列表中的“预览”，悬浮窗会展示对应报告邮件。</span></div>
-          </div>
         </div>
       </section>
       <section id="doctor">
@@ -1802,12 +1757,49 @@
   <div id="job_action_menu" class="action-menu"></div>
   <div id="ai_rule_action_menu" class="action-menu"></div>
   <div id="report_action_menu" class="report-action-menu"></div>
+  <div id="report_leads_backdrop" class="drawer-backdrop" onclick="closeReportLeadsDrawer()"></div>
+  <div id="report_leads_drawer" class="drawer template-modal report-leads-drawer" role="dialog" aria-modal="true" aria-label="线索明细" data-report-lead-panel>
+    <div class="drawer-head">
+      <div>
+        <h3 id="report_leads_title">线索明细</h3>
+        <div id="leads_scope" class="small">从报告中心或运行中心点击“查看线索”后，在这里展示对应范围内的线索和筛选条件。</div>
+      </div>
+      <button class="modal-close" onclick="closeReportLeadsDrawer()" title="关闭">×</button>
+    </div>
+    <div class="report-leads-toolbar">
+      <span id="leads_scope_count" class="status">未选择范围</span>
+      <span id="leads_scope_hint" class="small">请选择一份报告或一条运行记录后查看。</span>
+    </div>
+    <div class="page-toolbar page-filter-region report-leads-filter" data-filter-region="report-leads">
+      <div><label>线索状态</label><select id="lead_status_filter" title="只筛选当前悬浮窗范围内的线索"><option value="">全部线索</option><option value="high">高风险</option><option value="negative">疑似负面</option><option value="pending">待人工复核</option><option value="unrelated">不相关</option><option value="none">已评估无风险</option><option value="unevaluated">未评估/上下文有限</option></select></div>
+      <div class="toolbar-actions"><button class="secondary" type="button" onclick="reloadCurrentLeadDrawer()">筛选线索</button></div>
+    </div>
+    <div id="leads_table" class="report-leads-content"></div>
+  </div>
+  <div id="email_delivery_history_backdrop" class="drawer-backdrop" onclick="closeEmailDeliveryHistoryDrawer()"></div>
+  <div id="email_delivery_history_drawer" class="drawer template-modal email-delivery-history-drawer" role="dialog" aria-modal="true" aria-label="邮件交付历史" data-report-delivery-panel>
+    <div class="drawer-head">
+      <div>
+        <h3 id="email_delivery_history_title">邮件交付历史</h3>
+        <div id="email_delivery_history_scope" class="small">从报告列表点击邮件状态或“更多 > 查看交付历史”后，在这里展示对应记录。</div>
+      </div>
+      <button class="modal-close" onclick="closeEmailDeliveryHistoryDrawer()" title="关闭">×</button>
+    </div>
+    <div class="report-leads-toolbar">
+      <span id="email_delivery_history_count" class="status">未选择报告</span>
+      <span class="small">交付历史限定在当前报告，SMTP 接受不代表收件箱已收到。</span>
+    </div>
+    <div class="drawer-actions">
+      <button class="secondary" type="button" onclick="refreshSelectedEmailDeliveryHistory()">刷新历史</button>
+    </div>
+    <div id="email_delivery_history" class="email-delivery-history-content"></div>
+  </div>
   <div id="email_template_drawer_backdrop" class="drawer-backdrop" onclick="closeEmailTemplateDrawer()"></div>
   <div id="email_template_drawer" class="drawer template-modal email-template-modal" role="dialog" aria-modal="true" aria-label="邮件模板">
     <div class="drawer-head">
       <div>
         <h3 id="email_template_drawer_title">新增邮件模板</h3>
-        <div class="small">编辑标题和 HTML 内容，右侧实时预览海安律所日报效果。</div>
+        <div class="small">编辑标题和 HTML 样式；预览使用样例数据，真实发送会替换为对应运行生成的报告 HTML。</div>
       </div>
       <button class="modal-close" onclick="closeEmailTemplateDrawer()" title="关闭">×</button>
     </div>
@@ -1818,8 +1810,21 @@
           <div><label>模板名称</label><input id="email_template_name" placeholder="例如：企业日报模板"></div>
           <div><label>邮件标题模板</label><input id="email_template_subject" value="【律所舆情日报】{law_firm_name} - {date}"></div>
         </div>
+        <div class="grid">
+          <div>
+            <label>样式预设</label>
+            <select id="email_template_preset" onchange="applyEmailTemplatePreset(this.value)">
+              <option value="standard">标准日报</option>
+              <option value="compact">紧凑摘要</option>
+              <option value="formal">正式简报</option>
+              <option value="custom">自定义 / 历史模板</option>
+            </select>
+            <div class="field-hint">选择预设会生成包含 {report_body} 的包装样式；旧模板仍可作为自定义模板读取和编辑。</div>
+          </div>
+        </div>
         <label>HTML 模板</label>
         <textarea id="email_html_template" placeholder="<main>{report_body}</main>"></textarea>
+        <div id="email_template_guardrail" class="notice">HTML 模板必须包含 {report_html} 或 {report_body}，否则无法保存。</div>
         <div class="template-variable-row">
           <code>{law_firm_name}</code><code>{date}</code><code>{new_contents}</code><code>{negative_count}</code><code>{high_count}</code><code>{pending_review_count}</code><code>{platforms}</code><code>{report_body}</code><code>{report_html}</code>
         </div>
@@ -1833,6 +1838,7 @@
       <div class="template-preview-panel">
         <h3>实时预览</h3>
         <div id="email_preview_subject" class="notice"></div>
+        <div id="email_preview_note" class="small">预览使用样例数据；真实发送会使用对应运行生成的报告 HTML。</div>
         <iframe id="email_template_preview" class="preview-frame"></iframe>
       </div>
     </div>
@@ -1906,6 +1912,9 @@
     let openAIRuleMenuId = null;
     let currentReports = [];
     let selectedEmailDeliveryReportId = null;
+    let selectedLeadReportId = null;
+    let selectedLeadRunId = null;
+    let selectedLeadSource = '';
     let emailValidationWindowState = null;
     let defaultAIPrompt = '';
     let currentRunLogId = null;
@@ -1934,7 +1943,7 @@
     let runtimeSettingsCache = {};
     let defaultPromptSections = {
       role:'你是律所舆情线索初筛助手，只负责发现疑似风险线索，不做事实认定。',
-      relevance:'优先判断内容是否明确指向目标律所、律所别名、平台搜索词或评论中的相关称呼。同名无关、泛泛法律咨询、普通法律科普和无明显指向的内容应判为不相关。',
+      relevance:'优先判断标题、正文、作者或已采集评论是否明确指向目标律所、律所别名或清晰等价称呼。平台搜索词/source_keyword 只说明召回来源，不能单独证明内容与目标律所相关；同名地名、同名人物、泛泛法律咨询、普通法律科普和无明显指向的内容应判为不相关。',
       negative:'疑似负面包括投诉、避雷、退费、收费争议、服务差、欺诈质疑、维权、曝光、失联、承诺未兑现等。普通咨询、广告、招聘、合作推广、无明确负面体验的内容不要标为疑似负面。',
       risk:'high：出现明确投诉、退费纠纷、欺诈质疑、多人附和或可能扩散的高风险线索；medium：出现明显不满、服务争议、收费争议但证据有限；low：相关但负面较弱或需要人工确认；irrelevant：不相关或无法判断为目标律所相关。',
       evidence:'证据摘录必须来自输入内容本身，优先选择标题、正文和评论中的原话短句。不要编造证据，不要把模型推断当成证据。',
@@ -2009,6 +2018,8 @@
       closeEmailTemplateDrawer();
       closeRunLogDrawer();
       closeReportPreviewDrawer();
+      closeReportLeadsDrawer();
+      closeEmailDeliveryHistoryDrawer();
     }
     function positionAccountActionMenu(){
       if(openAccountMenuId===null) return;
@@ -4755,7 +4766,6 @@
 
     async function loadEmail(){
       if(!canMenu('mail_config')) return;
-      setLoadingText('email_status', '正在读取邮件配置...');
       const emailStatusLabel=document.getElementById('email_status_label');
       if(emailStatusLabel) emailStatusLabel.textContent='读取中';
       ['email_sender_summary','email_recipient_summary','email_subject_summary'].forEach(id=>{
@@ -4770,9 +4780,8 @@
       set('subject_template',c.subject_template||'');
       set('default_recipients',(c.default_recipients||[]).join('\n'));
       const statusText=formatTestStatus(c, '邮件');
-      document.getElementById('email_status').textContent = statusText;
       const statusLabel=document.getElementById('email_status_label');
-      if(statusLabel) statusLabel.textContent = c.last_test_status==='success' ? '最近测试通过' : (c.last_test_status==='failed' ? '最近测试失败' : '尚未测试');
+      if(statusLabel) statusLabel.textContent = c.last_test_status==='success' ? '最近测试通过' : (c.last_test_status==='failed' ? `最近测试失败：${statusText}` : '尚未测试');
       const passwordStatus=document.getElementById('smtp_password_status');
       if(passwordStatus) passwordStatus.textContent = c.password ? `已保存密码：${c.password}；如需更换请重新输入。` : '未保存密码；发送测试邮件前请填写。';
       const senderSummary=document.getElementById('email_sender_summary');
@@ -4798,23 +4807,18 @@
       });
     }
     function renderEmailValidationWindow(state){
-      const target=document.getElementById('email_validation_status');
       const toggle=document.getElementById('real_email_delivery_toggle');
       const toggleLabel=document.getElementById('real_email_delivery_toggle_label');
-      if(!target) return;
       state=state||{};
       const recipient=state.recipient_summary||{};
-      const recipientSource=emailRecipientSourceLabel(recipient.source);
       const enabled=!!state.real_email_delivery;
       const status=enabled ? '已开启' : '已关闭';
-      const statusTone=enabled ? 'ok' : 'warn';
       if(toggle) toggle.checked=enabled;
-      if(toggleLabel) toggleLabel.textContent=status;
-      target.innerHTML=`<div class="email-delivery-latest">
-        <span class="status ${statusTone}">${esc(status)}</span>
-        <strong>${esc(enabled ? '真实邮件会提交 SMTP' : '不会提交真实 SMTP')}</strong>
-      </div>
-      <div class="small">有效收件人：${esc(recipientSource)}，${Number(recipient.count||0)} 个。${esc(state.smtp_acceptance_note||'SMTP已接受不等于收件箱已收到。')}</div>`;
+      if(toggleLabel) toggleLabel.textContent=`真实邮件：${status}`;
+      if(toggle){
+        const recipientSource=emailRecipientSourceLabel(recipient.source);
+        toggle.title = `${enabled ? '真实邮件会提交 SMTP' : '不会提交真实 SMTP'}。有效收件人：${recipientSource}，${Number(recipient.count||0)} 个。${state.smtp_acceptance_note||'SMTP已接受不等于收件箱已收到。'}`;
+      }
     }
     async function refreshEmailValidationWindow(){
       const res=await api('/email-validation-window');
@@ -4954,7 +4958,8 @@
         summary.textContent=`共 ${(data.templates||[]).length} 个模板${active ? '，当前使用：' + active.name : ''}`;
       }
       renderEmailTemplatesTable();
-      if(!val('email_template_id') && data.active){
+      const templateDrawerActive=document.getElementById('email_template_drawer')?.classList.contains('active');
+      if(!templateDrawerActive && !val('email_template_id') && data.active){
         loadEmailTemplateIntoForm(Number(data.active.id));
       }
       await previewEmailTemplate(false);
@@ -4963,13 +4968,14 @@
       const total=(templates||[]).length;
       const active=(templates||[]).find(t=>t.is_active);
       const withHtml=(templates||[]).filter(t=>String(t.html_template||'').trim()).length;
+      const bodySafe=(templates||[]).filter(t=>!String(t.html_template||'').trim() || t.has_report_body_placeholder).length;
       const target=document.getElementById('email_template_resource_summary');
       if(target){
         target.innerHTML=[
           resourceStat('模板总数', total || '0'),
           resourceStat('当前模板', active ? active.name : '未设置'),
           resourceStat('已填 HTML', withHtml || '0'),
-          resourceStat('变量预览', '可用')
+          resourceStat('正文保护', `${bodySafe}/${total || 0}`)
         ].join('');
       }
     }
@@ -5084,6 +5090,11 @@
         html_template:val('email_html_template'),
         is_active:document.getElementById('email_template_active').checked
       };
+      if(String(payload.html_template||'').trim() && !emailTemplateHasReportBodyPlaceholder(payload.html_template)){
+        updateEmailTemplateGuardrail();
+        toast('HTML 模板必须包含 {report_html} 或 {report_body}，否则真实邮件会缺少报告正文');
+        return;
+      }
       await withActionButtonLoading('email_template_save_button', '保存中...', async ()=>{
         const res=await api(id?'/email-templates/'+id:'/email-templates',{method:id?'PUT':'POST',body:JSON.stringify(payload)});
         if(!res.ok){ toast(await err(res)); return; }
@@ -5104,6 +5115,8 @@
       if(!t) return false;
       set('email_template_id', t.id); set('email_template_name', t.name); set('email_template_subject', t.subject_template||'');
       set('email_html_template', t.html_template||''); document.getElementById('email_template_active').checked=!!t.is_active;
+      set('email_template_preset', 'custom');
+      updateEmailTemplateGuardrail();
       return true;
     }
     async function deleteEmailTemplate(id){
@@ -5116,10 +5129,12 @@
     function resetEmailTemplateForm(){
       ['email_template_id','email_template_name'].forEach(id=>set(id,''));
       set('email_template_subject','【律所舆情日报】{law_firm_name} - {date}');
-      set('email_html_template', defaultEmailTemplateHtml());
+      set('email_template_preset', 'standard');
+      set('email_html_template', emailTemplatePresetHtml('standard'));
       document.getElementById('email_template_active').checked=false;
       const title=document.getElementById('email_template_drawer_title');
       if(title) title.textContent='新增邮件模板';
+      updateEmailTemplateGuardrail();
       scheduleEmailPreview();
     }
     function openEmailTemplateDrawer(title='新增邮件模板', keepForm=false){
@@ -5137,6 +5152,7 @@
     }
     function scheduleEmailPreview(){
       if(!canMenu('mail_templates')) return;
+      updateEmailTemplateGuardrail();
       if(emailPreviewTimer) clearTimeout(emailPreviewTimer);
       emailPreviewTimer=setTimeout(()=>previewEmailTemplate(false), 350);
     }
@@ -5151,8 +5167,67 @@
         const preview=(await res.json()).preview||{};
         document.getElementById('email_preview_subject').textContent = preview.subject || '';
         document.getElementById('email_template_preview').srcdoc = preview.html || '';
+        const note=document.getElementById('email_preview_note');
+        if(note){
+          const sampleNote = preview.sample_data_note || '预览使用样例数据；真实发送会使用对应运行生成的报告 HTML。';
+          const guardrailNote = preview.body_guardrail || (emailTemplateHasReportBodyPlaceholder(payload.html_template)
+            ? '正文占位符已保留，真实发送会插入系统生成的报告正文。'
+            : 'HTML 模板缺少 {report_html} 或 {report_body}，保存会被阻止。');
+          note.textContent = [sampleNote, guardrailNote].filter(Boolean).join(' ');
+        }
         if(showToast) toast('邮件模板预览已刷新');
       });
+    }
+
+    function emailTemplateHasReportBodyPlaceholder(template){
+      const html=String(template||'');
+      return html.includes('{report_html}') || html.includes('{report_body}');
+    }
+    function updateEmailTemplateGuardrail(){
+      const target=document.getElementById('email_template_guardrail');
+      if(!target) return;
+      const html=val('email_html_template');
+      if(!String(html||'').trim()){
+        target.className='notice';
+        target.textContent='不填写 HTML 时会使用系统默认报告正文；填写自定义 HTML 时必须包含 {report_html} 或 {report_body}。';
+        return;
+      }
+      if(emailTemplateHasReportBodyPlaceholder(html)){
+        target.className='notice ok';
+        target.textContent='正文占位符已保留，真实发送会插入系统生成的报告正文。';
+      } else {
+        target.className='notice warn';
+        target.textContent='缺少 {report_html} 或 {report_body}，保存会被阻止，避免真实邮件缺少报告正文。';
+      }
+    }
+    function applyEmailTemplatePreset(preset){
+      if(!preset || preset==='custom') return;
+      set('email_html_template', emailTemplatePresetHtml(preset));
+      updateEmailTemplateGuardrail();
+      scheduleEmailPreview();
+    }
+    function emailTemplatePresetHtml(preset){
+      if(preset==='compact') return `<div style="font-family:Arial,'Microsoft YaHei',sans-serif;color:#1f2937;background:#ffffff;padding:18px">
+  <h1 style="font-size:18px;margin:0 0 8px">【律所舆情日报】{law_firm_name}</h1>
+  <p style="margin:0 0 12px;color:#64748b">{date} · {platforms} · 新增 {new_contents} / 疑似负面 {negative_count} / 高风险 {high_count} / 待复核 {pending_review_count}</p>
+  {report_body}
+  <p style="margin-top:18px;color:#64748b;font-size:12px">AI 仅作线索筛查，不代表事实认定。</p>
+</div>`;
+      if(preset==='formal') return `<div style="font-family:Arial,'Microsoft YaHei',sans-serif;background:#eef2f7;padding:28px;color:#111827">
+  <div style="max-width:820px;margin:0 auto;background:#fff;border:1px solid #d8dee8">
+    <div style="padding:22px 28px;border-bottom:1px solid #d8dee8">
+      <p style="margin:0 0 6px;color:#64748b;font-size:12px;letter-spacing:0">律所舆情监测日报</p>
+      <h1 style="margin:0;font-size:22px">【律所舆情日报】{law_firm_name}</h1>
+      <p style="margin:8px 0 0;color:#64748b">{date} · 覆盖平台：{platforms}</p>
+    </div>
+    <div style="padding:22px 28px">
+      <p style="margin:0 0 16px">新增 {new_contents} 条，疑似负面 {negative_count} 条，高风险 {high_count} 条，待复核 {pending_review_count} 条。</p>
+      {report_body}
+      <p style="margin-top:22px;color:#64748b;font-size:12px">AI 仅作线索筛查，不代表事实认定。</p>
+    </div>
+  </div>
+</div>`;
+      return defaultEmailTemplateHtml();
     }
 
     async function loadRuns(){
@@ -5241,7 +5316,10 @@
     function runRow(r){
       const s=r.summary||{};
       const jobLabel=`${r.law_firm_name||r.display_law_firm_name||'原任务已删除'}${r.job_deleted?'（原任务已删除）':''}`;
-      const actions=[`<button class="secondary" onclick="loadRunLogs(${Number(r.id)})">查看日志</button>`];
+      const actions=[
+        `<button class="secondary" onclick="loadRunLogs(${Number(r.id)})">查看日志</button>`,
+        `<button class="secondary" onclick="viewRunLeads(${Number(r.id)})">查看线索</button>`
+      ];
       if(r.status==='running') actions.push(`<button class="danger" onclick="stopRun(${Number(r.id)})">停止</button>`);
       if(isAdminUser()){
         if(r.visibility==='archived') actions.push(`<button class="secondary" onclick="restoreRun(${Number(r.id)})">恢复</button>`);
@@ -5329,15 +5407,23 @@
       setTimeout(()=>URL.revokeObjectURL(a.href), 500);
     }
     async function loadReports(){
-      const qs = new URLSearchParams({law_firm:val('report_law_firm'), platform:val('report_platform'), risk:val('report_risk'), date_from:val('report_date_from'), date_to:val('report_date_to'), limit:val('report_limit') || '100'});
+      const qs = new URLSearchParams({law_firm:val('report_law_firm'), platform:val('report_platform'), date_from:val('report_date_from'), date_to:val('report_date_to'), limit:val('report_limit') || '100'});
       setLoadingMarkup('reports_table', listSkeleton(4));
-      setLoadingText('leads_scope', '正在读取线索明细...');
-      setLoadingMarkup('leads_table', tableSkeleton(4, 6));
-      const [reportData, leadData]=await Promise.all([(await api('/reports?'+qs.toString())).json(), (await api('/leads?'+qs.toString())).json()]);
-      const data=reportData;
+      selectedLeadReportId=null;
+      selectedLeadRunId=null;
+      selectedLeadSource='';
+      selectedEmailDeliveryReportId=null;
+      closeReportLeadsDrawer();
+      closeEmailDeliveryHistoryDrawer();
+      renderLeads([], {
+        type: 'none_selected',
+        label: '未选择范围',
+        detail: '从报告中心或运行中心点击“查看线索”后，在悬浮窗中展示对应范围内的线索和筛选条件。',
+        count: 0
+      });
+      const data=await (await api('/reports?'+qs.toString())).json();
       currentReports=data.reports||[];
       renderReportsTable();
-      renderLeads(leadData.leads||[], '当前筛选条件下的线索');
     }
     function renderReportsTable(){
       const target=document.getElementById('reports_table');
@@ -5482,11 +5568,13 @@
       const reportId=Number(id);
       return `<div class="wide-actions">
         <button class="secondary" onclick="previewReport(${reportId})">预览</button>
+        <button class="secondary" onclick="viewReportLeads(${reportId})">查看线索</button>
         <button class="secondary" data-report-menu-button="${reportId}" onclick="toggleReportActionMenu(${reportId}, this)">更多</button>
       </div>`;
     }
     function reportFloatingMenu(id){
       return `
+        <button type="button" onclick="viewReportLeads(${Number(id)}); closeReportActionMenu();">查看线索</button>
         <button type="button" onclick="loadEmailDeliveryHistory(${Number(id)}); closeReportActionMenu();">查看交付历史</button>
         <button type="button" onclick="resendReportEmail(${Number(id)}); closeReportActionMenu();">重发邮件</button>
         <a href="/api/monitor/reports/${Number(id)}/download?type=html" target="_blank" onclick="closeReportActionMenu()">下载 HTML</a>
@@ -5527,19 +5615,12 @@
     async function previewReport(id){
       openReportPreviewDrawer(id);
       document.getElementById('report_preview').srcdoc = '正在加载报告...';
-      document.getElementById('leads_scope').textContent = '正在加载当前报告线索...';
       document.getElementById('report_email_subject').textContent = '';
-      loadEmailDeliveryHistory(id, {silent:true});
       const previewRes=await api('/reports/'+id+'/email-preview');
       if(!previewRes.ok){ document.getElementById('report_preview').srcdoc='邮件预览读取失败。'; toast(await err(previewRes)); return; }
       const preview=(await previewRes.json()).preview || {};
       document.getElementById('report_email_subject').textContent = preview.subject ? '邮件标题：' + preview.subject : '';
       document.getElementById('report_preview').srcdoc = preview.html || '无 HTML';
-      const qs = new URLSearchParams({report_id:String(id), limit:'0', risk:val('report_risk'), platform:val('report_platform'), date_from:val('report_date_from'), date_to:val('report_date_to')});
-      const leadsRes=await api('/leads?'+qs.toString());
-      if(!leadsRes.ok){ toast(await err(leadsRes)); return; }
-      const leadsData=await leadsRes.json();
-      renderLeads(leadsData.leads||[], `报告 ID ${id} 的线索明细`);
     }
     function openReportPreviewDrawer(id){
       document.getElementById('report_preview_title').textContent = `报告预览 #${id}`;
@@ -5552,9 +5633,100 @@
       document.getElementById('report_preview_drawer').classList.remove('active');
       document.body.style.overflow='';
     }
+    async function viewReportLeads(id){
+      selectedLeadReportId=Number(id);
+      selectedLeadRunId=null;
+      selectedLeadSource='report';
+      openReportLeadsDrawer(id);
+      renderLeads([], {type:'selected_report', label:`报告 #${Number(id)} 的线索明细`, detail:'正在读取该报告范围内的线索...', count:0, loading:true});
+      const qs = new URLSearchParams({report_id:String(id), limit:'0', risk:val('lead_status_filter'), platform:val('report_platform'), date_from:val('report_date_from'), date_to:val('report_date_to')});
+      const leadsRes=await api('/leads?'+qs.toString());
+      if(!leadsRes.ok){ toast(await err(leadsRes)); renderLeads([], {type:'selected_report', label:`报告 #${Number(id)} 的线索明细`, detail:'线索读取失败，请稍后重试。', count:0, error:true}); return; }
+      const leadsData=await leadsRes.json();
+      renderLeads(leadsData.leads||[], leadScopeForReport(id, leadsData.leads||[]));
+    }
+    async function viewRunLeads(id){
+      selectedLeadReportId=null;
+      selectedLeadRunId=Number(id);
+      selectedLeadSource='run';
+      openReportLeadsDrawer(id, {source:'run'});
+      renderLeads([], {type:'selected_run', label:`运行 #${Number(id)} 的线索明细`, detail:'正在读取该运行范围内的线索...', count:0, loading:true});
+      const qs = new URLSearchParams({run_id:String(id), limit:'0', risk:val('lead_status_filter')});
+      const leadsRes=await api('/leads?'+qs.toString());
+      if(!leadsRes.ok){ toast(await err(leadsRes)); renderLeads([], {type:'selected_run', label:`运行 #${Number(id)} 的线索明细`, detail:'线索读取失败，请稍后重试。', count:0, error:true}); return; }
+      const leadsData=await leadsRes.json();
+      renderLeads(leadsData.leads||[], leadScopeForRun(id, leadsData.leads||[]));
+    }
+    function reloadCurrentLeadDrawer(){
+      if(selectedLeadSource==='report' && selectedLeadReportId) return viewReportLeads(selectedLeadReportId);
+      if(selectedLeadSource==='run' && selectedLeadRunId) return viewRunLeads(selectedLeadRunId);
+      renderLeads([], {type:'none_selected', label:'未选择线索范围', detail:'请先从报告列表或运行列表点击“查看线索”。', count:0});
+    }
+    function openReportLeadsDrawer(id, options={}){
+      closeEmailDeliveryHistoryDrawer();
+      const title=document.getElementById('report_leads_title');
+      if(title) title.textContent=options.source==='run' ? `运行 #${Number(id)} 线索明细` : `报告线索明细 #${Number(id)}`;
+      document.getElementById('report_leads_backdrop').classList.add('active');
+      document.getElementById('report_leads_drawer').classList.add('active');
+      document.body.style.overflow='hidden';
+    }
+    function closeReportLeadsDrawer(){
+      document.getElementById('report_leads_backdrop').classList.remove('active');
+      document.getElementById('report_leads_drawer').classList.remove('active');
+      document.body.style.overflow='';
+    }
+    function leadScopeForReport(id, leads){
+      const filters=activeReportFilterSummary();
+      const detail=filters.length
+        ? `报告 #${Number(id)} 范围，已应用筛选：${filters.join(' / ')}。`
+        : `报告 #${Number(id)} 范围。`;
+      return {type:'selected_report', label:`报告 #${Number(id)} 的线索明细`, detail, count:(leads||[]).length};
+    }
+    function leadScopeForRun(id, leads){
+      return {type:'selected_run', label:`运行 #${Number(id)} 的线索明细`, detail:`运行 #${Number(id)} 范围。运行级入口用于查看该次执行产生的线索；完整 AI 评估详情仍属于后续运行详情。`, count:(leads||[]).length};
+    }
+    function activeReportFilterSummary(){
+      const filters=[];
+      const risk=val('lead_status_filter');
+      const platform=val('report_platform');
+      const dateFrom=val('report_date_from');
+      const dateTo=val('report_date_to');
+      if(risk) filters.push('线索状态：' + ({high:'高风险', negative:'疑似负面', pending:'待人工复核', unrelated:'不相关', none:'已评估无风险', unevaluated:'未评估/上下文有限'}[risk] || risk));
+      if(platform) filters.push('平台：' + formatPlatforms([platform]));
+      if(dateFrom || dateTo) filters.push(`日期：${dateFrom || '不限'} 至 ${dateTo || '不限'}`);
+      return filters;
+    }
     function renderLeads(leads, scope){
-      document.getElementById('leads_scope').textContent = scope || '';
-      document.getElementById('leads_table').innerHTML=table(['律所','平台','状态','标题','关键词','AI 理由','证据','链接 / 封面'], leads.map(x=>[
+      const scopeInfo = typeof scope === 'string' ? {type:'selected_report', label:scope, detail:'', count:(leads||[]).length} : (scope || {});
+      const scopeEl=document.getElementById('leads_scope');
+      const countEl=document.getElementById('leads_scope_count');
+      const hintEl=document.getElementById('leads_scope_hint');
+      const tableEl=document.getElementById('leads_table');
+      if(scopeEl) scopeEl.textContent = [scopeInfo.label, scopeInfo.detail].filter(Boolean).join('：');
+      if(countEl){
+        countEl.textContent = scopeInfo.type==='none_selected' ? '未选择范围' : `${Number(scopeInfo.count || (leads||[]).length || 0)} 条线索`;
+        countEl.className = 'status ' + (scopeInfo.error ? 'warn' : (scopeInfo.type==='none_selected' ? '' : 'ok'));
+      }
+      if(hintEl){
+        hintEl.textContent = scopeInfo.type==='selected_run'
+          ? '线索限定在当前运行，不作为全局线索工作台。'
+          : (scopeInfo.type==='selected_report' ? '线索限定在当前报告，不作为全局线索工作台。' : '请选择一份报告或一条运行记录后查看。');
+      }
+      if(!tableEl) return;
+      if(scopeInfo.loading){
+        tableEl.innerHTML=tableSkeleton(4, 6);
+        return;
+      }
+      if(scopeInfo.type==='none_selected'){
+        tableEl.innerHTML='<div class="empty">未选择范围。请从报告中心或运行中心点击“查看线索”。</div>';
+        return;
+      }
+      if(!leads.length){
+        const emptyText=scopeInfo.type==='selected_run' ? '当前运行没有线索。' : '当前报告在所选筛选条件下没有线索。';
+        tableEl.innerHTML=`<div class="empty">${esc(emptyText)}</div>`;
+        return;
+      }
+      tableEl.innerHTML=table(['律所','平台','状态','标题','关键词','AI 理由','证据','链接 / 封面'], leads.map(x=>[
         esc(cleanCustomerText(x.law_firm_name||'')), esc(formatPlatforms([x.platform])), esc(formatLeadStatus(x)), esc(cleanCustomerText(x.title||'')), esc(cleanCustomerText(x.source_keyword||'')), esc(cleanCustomerText(x.reason||'')), esc(cleanCustomerText((x.evidence_quotes||[]).join(' / '))), leadLinks(x)
       ]));
     }
@@ -5569,20 +5741,38 @@
     }
     async function loadEmailDeliveryHistory(id, options={}){
       selectedEmailDeliveryReportId=Number(id);
+      openEmailDeliveryHistoryDrawer(id);
       const scope=document.getElementById('email_delivery_history_scope');
       const target=document.getElementById('email_delivery_history');
+      const count=document.getElementById('email_delivery_history_count');
       const report=(currentReports||[]).find(item=>Number(item.id)===Number(id)) || {};
+      const title=document.getElementById('email_delivery_history_title');
+      if(title) title.textContent=`邮件交付历史 #${Number(id)}`;
       if(scope) scope.textContent=`报告 ID ${id} 的邮件交付历史`;
+      if(count) count.textContent='读取中';
       if(target) target.innerHTML='<div class="notice">正在读取邮件交付历史...</div>';
       const res=await api('/reports/'+Number(id)+'/email-delivery-logs?limit=20');
       if(!res.ok){
         if(target) target.innerHTML='<div class="notice warn">邮件交付历史读取失败。</div>';
+        if(count) count.textContent='读取失败';
         if(!options.silent) toast(await err(res));
         return;
       }
       const data=await res.json();
       renderEmailDeliveryHistory(data.delivery_logs||[], data.report || report);
-      if(!options.silent) document.getElementById('email_delivery_status_entry')?.scrollIntoView({behavior:'smooth', block:'start'});
+    }
+    function openEmailDeliveryHistoryDrawer(id){
+      closeReportLeadsDrawer();
+      const title=document.getElementById('email_delivery_history_title');
+      if(title) title.textContent=`邮件交付历史 #${Number(id)}`;
+      document.getElementById('email_delivery_history_backdrop').classList.add('active');
+      document.getElementById('email_delivery_history_drawer').classList.add('active');
+      document.body.style.overflow='hidden';
+    }
+    function closeEmailDeliveryHistoryDrawer(){
+      document.getElementById('email_delivery_history_backdrop').classList.remove('active');
+      document.getElementById('email_delivery_history_drawer').classList.remove('active');
+      document.body.style.overflow='';
     }
     function refreshSelectedEmailDeliveryHistory(){
       if(!selectedEmailDeliveryReportId){ toast('请先选择一份报告'); return; }
@@ -5590,7 +5780,14 @@
     }
     function renderEmailDeliveryHistory(logs, report={}){
       const target=document.getElementById('email_delivery_history');
+      const count=document.getElementById('email_delivery_history_count');
       if(!target) return;
+      if(!report){
+        if(count) count.textContent='未选择报告';
+        target.innerHTML='<div class="empty">未选择报告。请从报告列表的邮件状态或“更多 > 查看交付历史”打开。</div>';
+        return;
+      }
+      if(count) count.textContent=`${Number((logs||[]).length)} 条记录`;
       const latest=report?.email_status ? `<div class="email-delivery-latest">
         <span class="status ${report.email_status==='sent'?'ok':(report.email_status==='failed'?'warn':'')}">${esc(emailStatusLabel(report.email_status))}</span>
         ${report.email_error ? `<strong>${esc(cleanCustomerText(report.email_error))}</strong>` : '<strong>暂无失败信息</strong>'}
@@ -5604,6 +5801,8 @@
     function renderEmailDeliveryLog(log){
       const recipients=(log.effective_recipients||log.recipients||[]).filter(Boolean).join('、') || '未记录收件人';
       const recipientSource=emailRecipientSourceLabel(log.effective_recipient_source);
+      const templateName=log.email_template_name || (log.email_template_source==='default_renderer' ? '系统默认报告正文' : '未记录模板');
+      const templateSource=emailTemplateSourceLabel(log.email_template_source);
       const statusTone=log.status==='sent' ? 'ok' : (log.status==='failed' ? 'warn' : '');
       const sendType=log.send_type==='manual_resend' ? '手动重发' : '自动发送';
       const error=log.error_message ? `<p>${esc(cleanCustomerText(log.error_message))}</p>` : '';
@@ -5616,6 +5815,7 @@
           <span class="status ${statusTone}">${esc(emailDeliveryStatusLabel(log.status))}</span>
           <span>收件人：${esc(recipients)}</span>
           <span>来源：${esc(recipientSource)}</span>
+          <span>发送时模板：${esc(templateName)}（${esc(templateSource)}）</span>
           <span>窗口：${esc(log.send_window_key||'-')}</span>
         </div>
         ${error}
@@ -5733,6 +5933,7 @@
     function formatTestStatus(config, label){ const status=config.last_test_status||'untested'; if(status==='success') return `${label} 最近测试通过：${(config.last_test_at||'').replace('T',' ').slice(0,19)}`; if(status==='failed') return `${label} 最近测试失败：${cleanCustomerText(config.last_test_error)||'请检查配置'}`; return `${label} 尚未测试，配置更新后需要重新测试。`; }
     function emailValidationStatusLabel(status){ return {enabled:'已开启',disabled:'已关闭'}[status] || status || '未读取'; }
     function emailRecipientSourceLabel(source){ return {task_recipients:'任务收件人',global_default_fallback:'全局默认收件人',global_default_recipients:'全局默认收件人',explicit_target:'指定测试收件人',none:'未配置收件人',limited_context:'历史记录'}[source] || source || '-'; }
+    function emailTemplateSourceLabel(source){ return {task_bound:'任务绑定模板',active_global_fallback:'发送时启用模板',default_renderer:'系统默认正文',limited_context:'历史记录'}[source] || source || '-'; }
     function providerLabel(provider){ return provider==='anthropic'?'Anthropic-compatible':'OpenAI-compatible'; }
     function loginTypeLabel(loginType){ return {qrcode:'扫码登录',cookie:'Cookie'}[loginType]||loginType||'-'; }
     function poolStatusText(status){ return {active:'可用',standby:'待机',limited:'受限',disabled:'停用'}[status]||status||'-'; }

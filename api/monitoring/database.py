@@ -45,6 +45,7 @@ DEFAULT_WORKSPACE_ID = 1
 DEFAULT_WORKSPACE_NAME = "Default Workspace"
 DEFAULT_EMAIL_SUBJECT_TEMPLATE = "【律所舆情日报】{law_firm_name} - {date}"
 DEFAULT_EMAIL_TEMPLATE_NAME = "标准舆情日报模板"
+REPORT_BODY_PLACEHOLDERS = ("{report_html}", "{report_body}")
 JOB_TEMPLATE_PLACEHOLDERS = ("请改成", "目标律所", "律所简称", "律师事务所简称")
 JOB_TARGET_TYPES = {"search", "detail", "creator"}
 JOB_OUTPUT_MODES = {"internal", "json", "excel"}
@@ -4017,6 +4018,7 @@ def save_email_template(payload: dict[str, Any], template_id: int | None = None)
         raise ValueError("template name is required")
     subject_template = payload.get("subject_template") or DEFAULT_EMAIL_SUBJECT_TEMPLATE
     html_template = payload.get("html_template") or ""
+    validate_email_template_report_body(html_template)
     is_active = bool(payload.get("is_active"))
     now = utc_now()
     with get_conn() as conn:
@@ -4054,9 +4056,10 @@ def delete_email_template(template_id: int) -> None:
         conn.execute("DELETE FROM email_templates WHERE id=?", (template_id,))
 
 
-def render_email_template_preview(payload: dict[str, Any]) -> dict[str, str]:
+def render_email_template_preview(payload: dict[str, Any]) -> dict[str, Any]:
     subject = payload.get("subject_template") or DEFAULT_EMAIL_SUBJECT_TEMPLATE
     html_template = payload.get("html_template") or ""
+    has_body_placeholder = email_template_has_report_body_placeholder(html_template)
     sample = {
         "law_firm_name": payload.get("law_firm_name") or "海安律所",
         "date": datetime.now().date().isoformat(),
@@ -4069,15 +4072,37 @@ def render_email_template_preview(payload: dict[str, Any]) -> dict[str, str]:
         "report_body": _sample_report_html(),
         "report_url": "https://example.com/report-preview",
     }
+    preview_template = html_template or _default_email_preview_html()
+    if html_template.strip() and not has_body_placeholder:
+        preview_template = html_template + "\n{report_html}"
     return {
         "subject": _safe_format(subject, sample),
-        "html": _safe_format(html_template or _default_email_preview_html(), sample),
+        "html": _safe_format(preview_template, sample),
+        "sample_data_note": "预览使用样例数据；真实发送会使用对应运行生成的报告 HTML。",
+        "body_guardrail": (
+            "正文占位符已存在，真实发送会插入系统生成的报告正文。"
+            if has_body_placeholder or not html_template.strip()
+            else "HTML 模板缺少 {report_html} 或 {report_body}，保存会被阻止；预览已临时追加样例报告正文。"
+        ),
+        "has_report_body_placeholder": has_body_placeholder or not html_template.strip(),
     }
 
 
 def _row_to_email_template(row: dict[str, Any]) -> dict[str, Any]:
     row["is_active"] = bool(row.get("is_active"))
+    row["has_report_body_placeholder"] = email_template_has_report_body_placeholder(row.get("html_template"))
     return row
+
+
+def email_template_has_report_body_placeholder(html_template: Any) -> bool:
+    value = str(html_template or "")
+    return any(placeholder in value for placeholder in REPORT_BODY_PLACEHOLDERS)
+
+
+def validate_email_template_report_body(html_template: Any) -> None:
+    value = str(html_template or "")
+    if value.strip() and not email_template_has_report_body_placeholder(value):
+        raise ValueError("HTML 模板必须包含 {report_html} 或 {report_body}，否则真实邮件会缺少报告正文")
 
 
 def _safe_format(template: str, values: dict[str, Any]) -> str:

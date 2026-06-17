@@ -254,12 +254,15 @@ Report Center:
 - the Report Center "view leads" entry is a report-scoped shortcut; it should
   not be presented as the main lead/evaluation center.
 - lead detail needs a visible scope label and count, such as selected report,
-  selected report group, originating run, or current filters.
+  selected report group, originating run, or drawer-local filters.
+- lead-status filtering belongs inside the scoped lead drawer, not in the
+  first-level Report Center toolbar; the first-level report toolbar should stay
+  on report dimensions such as law firm, platform, date, and report range.
 - do not present an unlabeled flat lead table in Report Center; if filtered
   aggregate leads are shown, label them as filtered aggregate rather than
   selected-report detail.
 - empty states should say whether no report is selected, the selected report
-  has no leads, or the current filters have no matches.
+  has no leads, or the drawer-local filters have no matches.
 - email delivery history should open as scoped secondary detail from a report
   row/status action and should not visually dominate the initial report list,
   preview, or lead-detail hierarchy.
@@ -275,6 +278,20 @@ Mail Configuration:
   SMTP acceptance warning.
 - the SMTP/defaults section should read as a status and configuration summary,
   not as a second command center.
+- explain recipient precedence near task report settings, Mail Configuration,
+  and preflight output: task recipients override global defaults, global
+  defaults are fallback-only, and the SMTP sender is not a recipient.
+
+Mail Templates:
+
+- steer new report-email templates through governed preset styles that wrap the
+  system-generated report body.
+- custom HTML editing must show a body-placeholder guardrail and should not
+  save a new template that omits `{report_html}` or `{report_body}`.
+- preview surfaces should clearly say when they use sample data rather than a
+  selected report/run's generated HTML.
+- delivery history should identify the send-time template/source so operators
+  do not compare a historical email against a later active template by mistake.
 
 Action menus:
 

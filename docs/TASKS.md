@@ -147,6 +147,9 @@ deployment shape into this project without a separate provider decision.
 - [ ] Keep `proxy_id` as the account-bound stable proxy policy field and
       document how it interacts with any task-level proxy override before
       implementation.
+- [ ] Add negative tests proving locked environments reject hidden proxy or
+      process-default fallback, or surface the override as an explicit audited
+      exception under the confirmed policy.
 - [ ] Backfill existing active accounts with a customer-safe default or mark
       them as needing environment confirmation/re-login without moving old
       profile directories.
@@ -315,7 +318,8 @@ verified locally: missing AI evaluation records are treated as unevaluated or
 limited-context instead of no-risk, report/run counts and filters split the
 major lead states, and active timeout/partial finalization creates
 pending-review fallback rows for known unresolved candidates when safe. Phase
-7.2C-D relevance hardening and calibration fixtures remain open.
+7.2C-D relevance hardening and calibration fixtures are implemented and
+verified locally with a target-evidence gate.
 
 ### Phase 7.2A - Unevaluated Lead Status Safety
 
@@ -342,25 +346,28 @@ pending-review fallback rows for known unresolved candidates when safe. Phase
 
 ### Phase 7.2C - AI Relevance And Prompt Hardening
 
-- [ ] Update AI evaluation rules so `source_keyword` is recall provenance only
+- [x] Update AI evaluation rules so `source_keyword` is recall provenance only
       and cannot by itself prove target-law-firm relatedness.
-- [ ] Add or enforce a target-evidence gate using title, description, author,
+- [x] Add or enforce a target-evidence gate using title, description, author,
       or sampled comments before marking content as target-related or negative.
-- [ ] Treat homonyms and geography such as "海安" as insufficient for target
+- [x] Treat homonyms and geography such as "海安" as insufficient for target
       law-firm relatedness unless the content also points to the law firm or an
       accepted alias.
-- [ ] Preserve support for sampled comments as evidence when comments are
+- [x] Preserve support for sampled comments as evidence when comments are
       actually collected and passed into the AI payload.
-- [ ] If additional structured fields are added, such as target-match level,
+- [x] If additional structured fields are added, such as target-match level,
       negative signal level, confidence, or review reason, document schema and
       role-safe display before implementation.
+- [x] Add a regression fixture proving a noisy positive model output still
+      cannot turn a `source_keyword`-only fixture into a target-related negative
+      lead without target evidence.
 
 ### Phase 7.2D - Calibration Fixtures And Regression Tests
 
-- [ ] Add fixture coverage for broad refund/legal posts collected by
+- [x] Add fixture coverage for broad refund/legal posts collected by
       target-bearing keywords but lacking target-law-firm evidence; they must
       not become target-related negative leads.
-- [ ] Add fixture coverage for title, description, or comment evidence that
+- [x] Add fixture coverage for title, description, or comment evidence that
       clearly names the target law firm or alias and contains a negative
       signal; it must remain eligible for suspected-negative classification.
 - [x] Add regression coverage proving missing AI evaluation rows are never
@@ -368,7 +375,7 @@ pending-review fallback rows for known unresolved candidates when safe. Phase
 - [x] Add regression coverage for timeout/partial-finalization fallback from
       unresolved candidates to pending review for Phase 7.2B.
 - [x] Run docs consistency and targeted monitoring tests before marking the
-      Phase 7.2A-B safety batch implemented.
+      Phase 7.2A-D safety batch implemented.
 
 ## CR-050 - Report Center Lead Status Filter Precision Regression Fix
 
@@ -801,9 +808,9 @@ Confirmed CR-036 decision summary:
 - [x] Record delivery trigger source so future role policy and quota logic can
       distinguish automatic, manual, test, diagnostic, and explicit validation
       sends.
-- [ ] Show the effective-recipient source in preflight/delivery surfaces, e.g.
+- [x] Show the effective-recipient source in preflight/delivery surfaces, e.g.
       task recipients versus global default-recipient fallback.
-- [ ] Update email-configuration and task-configuration copy so operators can
+- [x] Update email-configuration and task-configuration copy so operators can
       see that filling task recipients overrides the global default recipients.
 - [x] Preserve customer-safe recipient display without storing SMTP secrets.
 - [x] Keep automatic-send idempotency by `workspace_id + job_id +
@@ -811,16 +818,18 @@ Confirmed CR-036 decision summary:
 
 ### Phase 17.1D - Historical Orphan Evidence And Operations Notes
 
-- [ ] Document the observed orphan evidence from `job_id` 9686 and 9759:
+- [x] Document the observed orphan evidence from `job_id` 9686 and 9759:
       sent delivery-log rows, existing report artifacts, and missing
       job/run/report rows.
-- [ ] Provide a dry-run-first helper or operator checklist for reviewing
+- [x] Provide a dry-run-first helper or operator checklist for reviewing
       orphan delivery logs and report artifacts.
-- [ ] Add or link an operator runbook for orphan email evidence review,
+- [x] Add or link an operator runbook for orphan email evidence review,
       backup-before-mutation, approval, and rollback.
-- [ ] Require database backup and explicit operator approval before deleting,
+- [x] Require database backup and explicit operator approval before deleting,
       annotating, or otherwise mutating historical delivery evidence.
-- [ ] Ensure report-center delivery-history and run/report grouping remain
+- [x] Ensure preview or dry-run mode performs no mutation and shows the
+      proposed effect plus rollback path before any write is allowed.
+- [x] Ensure report-center delivery-history and run/report grouping remain
       readable for existing non-orphan reports.
 
 ## Phase 17.2 - Report Email Template Governance
@@ -831,8 +840,10 @@ CR-039 is an accepted existing-feature optimization for report email template
 predictability and historical diagnosis. Phase 17.2A overlaps with CR-036's
 delivery-log metadata work and should be implemented with Phase 17.1C when
 practical to avoid repeated `email_delivery_logs` schema churn. Phase 17.2B-C
-remain follow-up product governance work and should not block the immediate
-CR-036 safety fix.
+is now implemented as the focused guardrail/preset-direction batch: new custom
+HTML templates cannot be saved without `{report_html}` or `{report_body}`,
+legacy templates remain readable, and the UI steers administrators toward
+system-body-preserving style presets.
 
 ### Phase 17.2A - Effective Template Provenance
 
@@ -843,26 +854,26 @@ CR-036 safety fix.
       template source in report snapshots.
 - [x] Record effective template metadata in email delivery logs without storing
       secrets or unsafe raw HTML.
-- [ ] Make historical report/email detail able to explain why a delivered email
+- [x] Make historical report/email detail able to explain why a delivered email
       differed from the currently previewed or currently active template.
 
 ### Phase 17.2B - Template Body Guardrails
 
-- [ ] Validate or warn/block custom templates that omit `{report_html}` and
+- [x] Validate or warn/block custom templates that omit `{report_html}` and
       `{report_body}` so delivered emails cannot silently drop the generated
       report body.
-- [ ] Clarify in the mail-template UI that editor preview uses sample data and
+- [x] Clarify in the mail-template UI that editor preview uses sample data and
       real sends use the generated report HTML for the actual run.
-- [ ] Preserve subject-template flexibility while keeping required body content
+- [x] Preserve subject-template flexibility while keeping required body content
       system-controlled.
 
 ### Phase 17.2C - Preset Style Direction
 
-- [ ] Replace the long-term product direction of unrestricted HTML editing with
+- [x] Replace the long-term product direction of unrestricted HTML editing with
       administrator-selectable preset report-email styles.
-- [ ] Ensure preset styles wrap the system-generated report body instead of
+- [x] Ensure preset styles wrap the system-generated report body instead of
       letting users remove required report sections.
-- [ ] Keep old templates readable for compatibility, but do not require normal
+- [x] Keep old templates readable for compatibility, but do not require normal
       users to edit HTML.
 
 ## Deferred Backlog - Email Delivery Role Governance
@@ -1107,6 +1118,9 @@ heartbeat, terminal `interrupted` state, and AI progress fallback behavior.
       `new_contents`.
 - [ ] Preserve owner/workspace scope, logs, stop action, archive/restore,
       timeout handling, and customer-safe wording.
+- [ ] Prove that a disappearing crawler subprocess or repeated finalization
+      still converges to one terminal run state and never leaves a run stuck in
+      a provisional-progress state.
 
 ### Phase 19C - AI Evaluation Progress Updates
 
@@ -1117,6 +1131,8 @@ heartbeat, terminal `interrupted` state, and AI progress fallback behavior.
       full AI batch to finish.
 - [ ] Preserve AI-failure fallback to manual review and report generation.
 - [ ] Ensure final AI counts remain exact after the evaluation loop completes.
+- [ ] Prove late or repeated progress writes cannot regress a terminal run or
+      alter final counts after completion.
 
 ### Phase 19D - Run Center Frontend Progress Display And Polling
 
@@ -1192,6 +1208,8 @@ visibility.
       with role-safe field filtering.
 - [ ] Preserve owner/workspace scope and administrator-only access to confirmed
       debug fields.
+- [ ] Ensure trace-write failure or retention cleanup cannot block report
+      generation or mutate `ai_evaluations`, reports, or delivery logs.
 
 ### Phase 20D - Run Detail Frontend
 
@@ -1214,25 +1232,27 @@ visibility.
 Planning note:
 
 CR-048 refines this phase by making Report Center lead detail scope explicit.
-Report Center may show report-scoped leads or a clearly labeled current-filter
-aggregate, but it must not present an unlabeled flat list that looks like a
-global lead workbench. Run Center / Run Detail remains the primary home for
-run-scoped lead and AI evaluation inspection; Report Center provides
-report-scoped shortcuts.
+Report Center may show report-scoped leads or drawer-local filtered leads after
+the operator opens a selected report/run lead drawer, but it must not present an
+unlabeled flat list that looks like a global lead workbench. Run Center / Run
+Detail remains the primary home for run-scoped lead and AI evaluation
+inspection; Report Center provides report-scoped shortcuts.
 
-- [ ] Add an explicit "view leads" action to report rows or report groups so
+- [x] Add an explicit "view leads" action to report rows or report groups so
       line details are not hidden behind the report preview action.
 - [ ] Link report leads back to the originating run detail when `run_id` is
       available.
-- [ ] Show a visible lead-detail scope label, count, and applied filter summary
-      for selected report, selected group, originating run, or current filters.
-- [ ] Avoid default flat "all leads" presentation unless the operator
-      explicitly selects a current-filter aggregate and the UI labels it as
-      filtered aggregate leads.
-- [ ] Add empty states that distinguish no selected report, selected report has
-      no leads, and current filters have no matching leads.
-- [ ] Keep Report Center focused on final reports, report leads, downloads, and
+- [x] Show a visible lead-detail scope label, count, and applied filter summary
+      for selected report, selected group, originating run, or drawer-local
+      filters.
+- [x] Avoid default flat "all leads" presentation; lead-state filtering is
+      drawer-local after a report or run scope is selected.
+- [x] Add empty states that distinguish no selected report, selected report has
+      no leads, and drawer-local filters have no matching leads.
+- [x] Keep Report Center focused on final reports, report leads, downloads, and
       email delivery history rather than running-process observability.
+- [x] Add a UI regression test that fails if the lead table renders without a
+      visible scope label and count.
 
 ## Formal Console Full-Coverage Positive UI Optimization
 
@@ -1432,16 +1452,18 @@ implementation baseline is the latest formal `/monitor` console.
 
 - [ ] Refine SMTP form layout, sender/recipient wording, default-recipient
       explanation, masked password display, and mail-test feedback.
-- [ ] Apply CR-049 action hierarchy: keep edit configuration, send test mail,
+- [x] Apply CR-049 action hierarchy: keep edit configuration, send test mail,
       refresh/status, delivery-status navigation, and compact real-email state
       in one page-level action bar.
-- [ ] Remove or demote duplicated edit/test controls from the SMTP/defaults
+- [x] Remove or demote duplicated edit/test controls from the SMTP/defaults
       summary section so that section reads as configuration/status summary.
-- [ ] Render the real-email send state as a compact labeled toolbar
+- [x] Render the real-email send state as a compact labeled toolbar
       toggle/button with concise state text while preserving explicit
       confirmation before enabling real SMTP.
-- [ ] Preserve edit config, send test mail, refresh config, view delivery
+- [x] Preserve edit config, send test mail, refresh config, view delivery
       status, save, cancel, close, and test-console behavior.
+- [x] Add a DOM regression test that fails if the SMTP/defaults summary repeats
+      the primary edit/test actions already present in the header.
 
 ### Phase 21J - Mail Templates
 
@@ -1473,17 +1495,20 @@ implementation baseline is the latest formal `/monitor` console.
 
 - [ ] Refine grouped report archive, selected report relationship, lead detail,
       delivery history, preview drawer, and row more menu visual hierarchy.
-- [ ] Apply CR-048 scope clarity so lead detail reads as selected-report or
+- [x] Apply CR-048 scope clarity so lead detail reads as selected-report or
       clearly labeled filtered-aggregate detail, not an unlabeled global lead
       table.
-- [ ] Make "view leads" visually discoverable separately from report preview
+- [x] Make "view leads" visually discoverable separately from report preview
       while preserving preview-driven context switching.
-- [ ] Apply CR-049 delivery-history hierarchy so delivery history is opened as
+- [x] Apply CR-049 delivery-history hierarchy so delivery history is opened as
       scoped secondary detail from a report row/status action and does not
       dominate the initial report archive layout.
-- [ ] Preserve report filters, refresh report, refresh email status, refresh
+- [x] Preserve report filters, refresh report, refresh email status, refresh
       history, preview, more menu, delivery history, resend, HTML/Excel/
       Markdown downloads, lead detail, and preview iframe.
+- [x] Add a browser/layout regression test that fails if lead detail or
+      delivery history renders as an unlabeled global table or default-dominant
+      panel.
 
 ### Phase 21N - System Diagnostics
 

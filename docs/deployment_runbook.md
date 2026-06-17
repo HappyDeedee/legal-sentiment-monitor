@@ -293,6 +293,30 @@ uv run python scripts/pilot_gate_c_evidence.py --check <operator-evidence.json>
 4. 检查对应任务、运行记录和报告记录是否仍然存在。
 5. 如果发送记录存在，但任务/运行/报告主记录已经不存在，先标记为“孤儿发送证据”，不要自动清理。
 
+可使用只读 dry-run 工具做证据视图：
+
+```powershell
+uv run python scripts/review_orphan_email_evidence.py --job-id 9686 --json
+uv run python scripts/review_orphan_email_evidence.py --job-id 9759 --json
+```
+
+该工具只读打开数据库，检查发送记录、任务/运行/报告是否仍存在，以及报告产物文件是否存在；输出中必须看到
+`mode=dry_run` 或 `"mode": "dry_run"`、`mutations_attempted: 0`。它不删除、不标注、不修复、不重写数据库记录或报告文件。
+
+当前已记录的历史证据：
+
+- 发送记录 `60`：`job_id=9686`、`run_id=8380`、`report_id=3959`，对应
+  `C:/Users/Administrator/Desktop/日报 海安律所.eml`，发送时间
+  `2026-06-16T07:27:11Z`，附件
+  job_9686_run_8380_20260616_152702.xlsx 和
+  job_9686_run_8380_20260616_152702.md。
+- 发送记录 `81`：`job_id=9759`、`run_id=8447`、`report_id=3998`，对应
+  `C:/Users/Administrator/Desktop/日报 海安律所.2eml.eml`，发送时间
+  `2026-06-16T08:55:33Z`，附件
+  job_9759_run_8447_20260616_165528.xlsx 和
+  job_9759_run_8447_20260616_165528.md。
+- 只读检查时，对应 `monitor_jobs`、`crawl_runs` 和 `reports` 主记录已不存在；这些证据默认保留，不作为自动清理对象。
+
 处理原则：
 
 - 默认保留历史发送记录、报告产物和 `.eml` 证据。
@@ -300,6 +324,14 @@ uv run python scripts/pilot_gate_c_evidence.py --check <operator-evidence.json>
 - 删除、标注或修复历史发送记录前，必须先备份数据库和相关报告/邮件文件。
 - 任何历史数据变更都需要操作者明确确认，并记录原因、备份位置和回滚方式。
 - 如果只是为了确认“为什么发出”，优先补充诊断说明和发送来源字段，不修改历史证据。
+
+历史证据变更审批门槛：
+
+1. 先备份数据库。
+2. 再备份相关报告产物和 `.eml` 文件。
+3. 明确写下拟变更效果，例如删除、标注、迁移或修复哪一条记录。
+4. 明确写下回滚方式和备份位置。
+5. 获得操作者明确审批后，才能另开修复任务执行；本 runbook 的 dry-run 检查本身不执行任何写入。
 
 ### 平台显示需重新登录
 

@@ -111,6 +111,7 @@ from api.monitoring.runner import run_job as run_monitor_job
 from api.monitoring.scheduler import _is_due, next_run_at, scheduler_disabled_reason, scheduler_status
 from tools.cdp_browser import resolve_cdp_user_data_dir
 from scripts.pilot_gate_c_evidence import build_template, validate_evidence, write_template
+from scripts.review_orphan_email_evidence import build_orphan_email_evidence_review, main as review_orphan_email_main
 
 
 @pytest.fixture(autouse=True)
@@ -2652,6 +2653,67 @@ def test_active_email_template_supports_report_body_alias(tmp_path):
     assert "海安律所|<article>报告正文别名</article>" in html_body
 
 
+def test_phase_17_2_email_template_body_guardrails_block_missing_report_body(tmp_path):
+    init_db()
+    snapshot = _snapshot_table("email_templates")
+    html_path = tmp_path / "report.html"
+    xlsx_path = tmp_path / "report.xlsx"
+    md_path = tmp_path / "report.md"
+    html_path.write_text("<article>真实报告正文</article>", encoding="utf-8")
+    xlsx_path.write_bytes(b"fake-xlsx")
+    md_path.write_text("# 日报", encoding="utf-8")
+    try:
+        with pytest.raises(ValueError, match=r"\{report_html\}"):
+            save_email_template(
+                {
+                    "name": "缺正文模板",
+                    "subject_template": "日报 {law_firm_name}",
+                    "html_template": "<main>只有外壳</main>",
+                    "is_active": True,
+                }
+            )
+
+        preview = render_email_template_preview(
+            {
+                "subject_template": "日报 {law_firm_name}",
+                "html_template": "<main>只有外壳</main>",
+                "law_firm_name": "海安律所",
+            }
+        )
+        assert preview["has_report_body_placeholder"] is False
+        assert "保存会被阻止" in preview["body_guardrail"]
+        assert "预览使用样例数据" in preview["sample_data_note"]
+        assert "高风险线索" in preview["html"]
+
+        with get_conn() as conn:
+            conn.execute("UPDATE email_templates SET is_active=0")
+            conn.execute(
+                """
+                INSERT INTO email_templates (name, subject_template, html_template, is_active, created_at, updated_at)
+                VALUES ('历史缺正文模板', '日报 {law_firm_name}', '<main>历史模板外壳</main>', 1, ?, ?)
+                """,
+                (datetime.now(timezone.utc).isoformat(), datetime.now(timezone.utc).isoformat()),
+            )
+        msg = build_report_email(
+            {"sender": "sender@example.com"},
+            ["target@example.com"],
+            "测试日报",
+            {
+                "summary": {"platforms": ["dy"]},
+                "html_path": str(html_path),
+                "excel_path": str(xlsx_path),
+                "markdown_path": str(md_path),
+            },
+            {"law_firm_name": "海安律所"},
+        )
+        html_body = _email_html_body(msg)
+    finally:
+        _restore_table("email_templates", snapshot)
+
+    assert "历史模板外壳" in html_body
+    assert "真实报告正文" in html_body
+
+
 def test_report_email_preview_reuses_active_email_template(tmp_path):
     init_db()
     snapshot = _snapshot_table("email_templates")
@@ -2701,7 +2763,7 @@ def test_job_bound_email_template_takes_precedence_for_email_and_preview(tmp_pat
             {
                 "name": "默认邮件模板",
                 "subject_template": "默认 {law_firm_name}",
-                "html_template": "<main>默认模板|{law_firm_name}</main>",
+                "html_template": "<main>默认模板|{law_firm_name}|{report_html}</main>",
                 "is_active": True,
             }
         )
@@ -3384,6 +3446,195 @@ def test_ai_evaluation_payload_includes_content_and_comment_context():
     assert payload["comment_summary"]["declared_count"] == 12
     assert payload["comment_summary"]["observed_count"] == 2
     assert "退费" in payload["comment_summary"]["sample_text"]
+
+
+def test_phase_7_2_source_keyword_only_noisy_positive_is_forced_unrelated(monkeypatch):
+    init_db()
+    profile_snapshot = _snapshot_table("ai_key_profiles")
+    raw_response = {
+        "is_related": True,
+        "is_negative": True,
+        "risk_level": "high",
+        "reason": "模型误把搜索词当作目标证据",
+        "evidence_quotes": ["北京海安律所退费"],
+        "recommended_action": "人工复核",
+    }
+
+    async def fake_call_openai(cfg, prompt, payload):
+        assert payload["source_keyword"] == "北京海安律所退费"
+        assert "海安律所" not in payload["title"]
+        assert "海安律所" not in payload["description"]
+        assert payload["comments"] == []
+        return json.dumps(raw_response, ensure_ascii=False)
+
+    try:
+        save_ai_key_profile(
+            {
+                "name": "CR045 校准 AI",
+                "provider": "openai",
+                "base_url": "https://ai.example.com",
+                "api_key": "sk-profile",
+                "model": "profile-model",
+                "temperature": 0,
+                "prompt": DEFAULT_PROMPT,
+                "is_active": True,
+            }
+        )
+        monkeypatch.setattr("api.monitoring.ai._call_openai", fake_call_openai)
+
+        result = asyncio.run(
+            ai_module.evaluate_content(
+                {"law_firm_name": "海安律所", "aliases": ["海安律师事务所"], "exclude_words": []},
+                {
+                    "platform": "dy",
+                    "platform_label": "抖音",
+                    "source_keyword": "北京海安律所退费",
+                    "title": "考研课程退费维权记录",
+                    "description": "报名课程后想退费，沟通很久没有解决。",
+                    "author_name": "教育消费者",
+                    "comment_count": 0,
+                },
+                [],
+            )
+        )
+    finally:
+        _restore_table("ai_key_profiles", profile_snapshot)
+
+    assert result["status"] == "ok"
+    assert result["is_related"] is False
+    assert result["is_negative"] is False
+    assert result["risk_level"] == "irrelevant"
+    assert result["evidence_quotes"] == []
+    assert "搜索词仅作为召回来源" in result["reason"]
+
+
+def test_phase_7_2_target_evidence_in_title_or_comments_remains_negative(monkeypatch):
+    init_db()
+    profile_snapshot = _snapshot_table("ai_key_profiles")
+
+    async def fake_call_openai(cfg, prompt, payload):
+        return json.dumps(
+            {
+                "is_related": True,
+                "is_negative": True,
+                "risk_level": "medium",
+                "reason": "标题或评论明确提到目标律所并有退费投诉",
+                "evidence_quotes": [payload["title"]] if "海安律所" in payload["title"] else [payload["comments"][0]],
+                "recommended_action": "人工复核",
+            },
+            ensure_ascii=False,
+        )
+
+    try:
+        save_ai_key_profile(
+            {
+                "name": "CR045 真阳性 AI",
+                "provider": "openai",
+                "base_url": "https://ai.example.com",
+                "api_key": "sk-profile",
+                "model": "profile-model",
+                "temperature": 0,
+                "prompt": DEFAULT_PROMPT,
+                "is_active": True,
+            }
+        )
+        monkeypatch.setattr("api.monitoring.ai._call_openai", fake_call_openai)
+
+        title_result = asyncio.run(
+            ai_module.evaluate_content(
+                {"law_firm_name": "海安律所", "aliases": ["海安律师事务所"], "exclude_words": []},
+                {
+                    "platform": "dy",
+                    "platform_label": "抖音",
+                    "source_keyword": "海安律所退费",
+                    "title": "海安律所退费投诉记录",
+                    "description": "沟通迟迟没有明确答复。",
+                    "author_name": "当事人",
+                    "comment_count": 0,
+                },
+                [],
+            )
+        )
+        comment_result = asyncio.run(
+            ai_module.evaluate_content(
+                {"law_firm_name": "海安律所", "aliases": ["海安律师事务所"], "exclude_words": []},
+                {
+                    "platform": "dy",
+                    "platform_label": "抖音",
+                    "source_keyword": "海安律所退费",
+                    "title": "退费投诉记录",
+                    "description": "正文没有点名目标。",
+                    "author_name": "当事人",
+                    "comment_count": 1,
+                },
+                [{"content": "评论补充：海安律所一直没处理退费。", "author_name": "评论用户"}],
+            )
+        )
+    finally:
+        _restore_table("ai_key_profiles", profile_snapshot)
+
+    assert title_result["is_related"] is True
+    assert title_result["is_negative"] is True
+    assert title_result["risk_level"] == "medium"
+    assert comment_result["is_related"] is True
+    assert comment_result["is_negative"] is True
+    assert comment_result["evidence_quotes"] == ["评论补充：海安律所一直没处理退费。"]
+
+
+def test_phase_7_2_homonym_geography_only_is_not_target_evidence(monkeypatch):
+    init_db()
+    profile_snapshot = _snapshot_table("ai_key_profiles")
+
+    async def fake_call_openai(cfg, prompt, payload):
+        return json.dumps(
+            {
+                "is_related": True,
+                "is_negative": True,
+                "risk_level": "high",
+                "reason": "模型误把地名海安当作目标律所",
+                "evidence_quotes": ["海安本地退费纠纷"],
+                "recommended_action": "人工复核",
+            },
+            ensure_ascii=False,
+        )
+
+    try:
+        save_ai_key_profile(
+            {
+                "name": "CR045 同名地名 AI",
+                "provider": "openai",
+                "base_url": "https://ai.example.com",
+                "api_key": "sk-profile",
+                "model": "profile-model",
+                "temperature": 0,
+                "prompt": DEFAULT_PROMPT,
+                "is_active": True,
+            }
+        )
+        monkeypatch.setattr("api.monitoring.ai._call_openai", fake_call_openai)
+
+        result = asyncio.run(
+            ai_module.evaluate_content(
+                {"law_firm_name": "海安律所", "aliases": ["海安律师事务所"], "exclude_words": []},
+                {
+                    "platform": "xhs",
+                    "platform_label": "小红书",
+                    "source_keyword": "海安律所退费",
+                    "title": "海安本地培训机构退费经历",
+                    "description": "江苏海安一家培训机构退费慢，准备咨询律师。",
+                    "author_name": "海安生活",
+                    "comment_count": 0,
+                },
+                [],
+            )
+        )
+    finally:
+        _restore_table("ai_key_profiles", profile_snapshot)
+
+    assert result["is_related"] is False
+    assert result["is_negative"] is False
+    assert result["risk_level"] == "irrelevant"
+    assert "搜索词仅作为召回来源" in result["reason"]
 
 
 def test_ai_offline_check_does_not_call_provider_or_update_test_status(monkeypatch):
@@ -6645,6 +6896,161 @@ def test_phase_7_2_lead_filters_split_unrelated_no_risk_pending_and_unevaluated(
     assert report_view["summary"]["unevaluated_count"] == 1
 
 
+def test_phase_7_2_calibration_fixtures_apply_target_evidence_gate(monkeypatch):
+    init_db()
+    snapshots = {
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "raw_contents": _snapshot_table("raw_contents"),
+        "raw_comments": _snapshot_table("raw_comments"),
+        "ai_evaluations": _snapshot_table("ai_evaluations"),
+        "ai_key_profiles": _snapshot_table("ai_key_profiles"),
+    }
+    jobs_snapshot = _snapshot_monitor_jobs()
+
+    async def noisy_positive_model(cfg, prompt, payload):
+        if payload["content_url"].endswith("comment-only"):
+            quote = payload["comments"][0]
+            risk = "high"
+        elif "海安律所" in payload["title"]:
+            quote = payload["title"]
+            risk = "medium"
+        else:
+            quote = payload["source_keyword"]
+            risk = "high"
+        return json.dumps(
+            {
+                "is_related": True,
+                "is_negative": True,
+                "risk_level": risk,
+                "reason": "模拟模型正向输出",
+                "evidence_quotes": [quote],
+                "recommended_action": "人工复核",
+            },
+            ensure_ascii=False,
+        )
+
+    try:
+        _clear_monitor_jobs()
+        with get_conn() as conn:
+            for table in ["reports", "crawl_runs", "raw_contents", "raw_comments", "ai_evaluations"]:
+                conn.execute(f"DELETE FROM {table}")
+        save_ai_key_profile(
+            {
+                "name": "CR045 校准模型",
+                "provider": "openai",
+                "base_url": "https://ai.example.com",
+                "api_key": "sk-profile",
+                "model": "profile-model",
+                "temperature": 0,
+                "prompt": DEFAULT_PROMPT,
+                "is_active": True,
+            }
+        )
+        monkeypatch.setattr("api.monitoring.ai._call_openai", noisy_positive_model)
+        job = save_job(
+            {
+                "law_firm_name": "海安律所",
+                "aliases": ["海安律师事务所"],
+                "keywords": ["北京海安律所退费"],
+                "platforms": ["dy"],
+                "recipients": [],
+                "enable_comments": True,
+                "time_window_type": "recent_1d",
+                "enabled": True,
+            }
+        )
+        run_id = create_run(job["id"], {"job_id": job["id"]})
+        now_ts = int(datetime.now(timezone.utc).timestamp())
+        ingested = ingest_outputs(
+            job,
+            run_id,
+            "dy",
+            [
+                {
+                    "aweme_id": "pytest_cr045_keyword_only",
+                    "source_keyword": "北京海安律所退费",
+                    "title": "教育课程退款避坑记录",
+                    "desc": "报名后沟通退费，没有提到任何目标律所。",
+                    "aweme_url": "https://example.com/keyword-only",
+                    "create_time": now_ts,
+                },
+                {
+                    "aweme_id": "pytest_cr045_title_target",
+                    "source_keyword": "北京海安律所退费",
+                    "title": "海安律所退费沟通记录",
+                    "desc": "收费争议需要复核。",
+                    "aweme_url": "https://example.com/title-target",
+                    "create_time": now_ts,
+                },
+                {
+                    "aweme_id": "pytest_cr045_comment_only",
+                    "source_keyword": "北京海安律所退费",
+                    "title": "律师服务退费讨论",
+                    "desc": "正文没有点名目标。",
+                    "aweme_url": "https://example.com/comment-only",
+                    "comment_count": 1,
+                    "create_time": now_ts,
+                },
+                {
+                    "aweme_id": "pytest_cr045_geography_only",
+                    "source_keyword": "北京海安律所退费",
+                    "title": "海安本地培训退费投诉",
+                    "desc": "江苏海安一家培训机构退款慢。",
+                    "aweme_url": "https://example.com/geography-only",
+                    "create_time": now_ts,
+                },
+            ],
+            [
+                {
+                    "comment_id": "pytest_cr045_comment_only_c1",
+                    "aweme_id": "pytest_cr045_comment_only",
+                    "content": "补充一下：海安律所一直没处理退款。",
+                    "nickname": "评论用户",
+                    "create_time": now_ts,
+                }
+            ],
+        )
+        eval_summary = asyncio.run(evaluate_new_contents(job, run_id, ingested["content_db_ids"]))
+        finish_run(run_id, "success", {"job_id": job["id"], **ingested, **eval_summary})
+        report = create_report(run_id, job, {"job_id": job["id"], "platforms": ["dy"], **ingested, **eval_summary})
+        high = asyncio.run(monitor_router.leads(report_id=report["id"], risk="high", limit=0))["leads"]
+        suspected = asyncio.run(monitor_router.leads(report_id=report["id"], risk="negative", limit=0))["leads"]
+        unrelated = asyncio.run(monitor_router.leads(report_id=report["id"], risk="unrelated", limit=0))["leads"]
+        report_view = get_report(report["id"])
+        with get_conn() as conn:
+            rows = {
+                row["content_id"]: row
+                for row in conn.execute(
+                    """
+                    SELECT c.content_id, e.is_related, e.is_negative, e.risk_level, e.reason, e.evidence_quotes
+                    FROM raw_contents c
+                    JOIN ai_evaluations e ON e.raw_content_id=c.id
+                    WHERE c.run_id=?
+                    """,
+                    (run_id,),
+                ).fetchall()
+            }
+    finally:
+        _restore_monitor_jobs(jobs_snapshot)
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+    assert eval_summary["negative_count"] == 2
+    assert eval_summary["high_count"] == 1
+    assert report_view["summary"]["negative_count"] == 2
+    assert report_view["summary"]["suspected_negative_count"] == 1
+    assert report_view["summary"]["high_count"] == 1
+    assert {item["content_id"] for item in high} == {"pytest_cr045_comment_only"}
+    assert {item["content_id"] for item in suspected} == {"pytest_cr045_title_target"}
+    assert {item["content_id"] for item in unrelated} == {"pytest_cr045_keyword_only", "pytest_cr045_geography_only"}
+    assert rows["pytest_cr045_keyword_only"]["is_related"] == 0
+    assert rows["pytest_cr045_keyword_only"]["risk_level"] == "irrelevant"
+    assert rows["pytest_cr045_geography_only"]["is_related"] == 0
+    assert "搜索词仅作为召回来源" in rows["pytest_cr045_keyword_only"]["reason"]
+    assert json.loads(rows["pytest_cr045_keyword_only"]["evidence_quotes"]) == []
+
+
 def test_cr050_report_center_risk_filters_do_not_mix_high_and_suspected_negative():
     init_db()
     snapshots = {
@@ -7987,8 +8393,11 @@ def test_job_preflight_uses_bound_ai_profile_and_email_template(monkeypatch):
         assert "任务绑定 AI 接入" in ai_check["message"]
         assert "未测试通过" in ai_check["message"]
         assert "邮件配置未测试通过" in email_check["message"]
+        assert "任务收件人优先" in email_check["message"]
+        assert "发件人不会自动成为收件人" in email_check["message"]
         assert template_check["severity"] == "ok"
         assert "任务绑定邮件模板可用" in template_check["message"]
+        assert "系统会插入本次运行生成的报告正文" in template_check["message"]
     finally:
         _restore_monitor_jobs(snapshots["monitor_jobs"])
         _restore_table("ai_key_profiles", snapshots["ai_key_profiles"])
@@ -8687,9 +9096,11 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "mail_test_console" in page
     assert "mail_test_start_btn" in page
     assert "email_subject_summary" in page
-    assert "真实邮件发送" in page
-    assert "管理员打开后，测试邮件、手动重发和自动交付才会提交 SMTP；默认关闭。" in page
-    assert "email_validation_status" in page
+    assert "真实邮件：已关闭" in page
+    assert "开启后测试邮件、手动重发和自动交付会真实提交 SMTP" in page
+    assert "email_validation_status" not in page
+    assert "email-validation-compact" not in page
+    assert "email-toolbar-switch" in page
     assert "email_validation_summary" not in page
     assert "real_email_delivery_toggle" in page
     assert "real_email_delivery_toggle_label" in page
@@ -8699,7 +9110,11 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "SMTP 已接受不代表收件箱已收到" in page
     assert "renderEmailValidationWindow" in page
     assert "emailRecipientSourceLabel" in page
-    assert "配置和测试都通过弹窗完成；密码保存后不会在页面回显。" in page
+    email_section = page[page.index('<section id="email"') : page.index('<div id="mail_config_backdrop"')]
+    assert email_section.count("openMailConfigModal()") == 1
+    assert email_section.count("openMailTestModal()") == 1
+    assert "SMTP 与发送默认值" not in email_section
+    assert "真实邮件发送状态尚未读取" not in email_section
     assert "测试失败不会阻断报告生成；系统仍会保留报告供下载和预览。" in page
     assert "smtp_password_status" in page
     assert "已保存密码" in page
@@ -8709,7 +9124,42 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "scheduleEmailPreview" in page
     assert "线索明细" in page
     reports_section = page[page.index('<section id="reports"') : page.index('<section id="doctor"')]
-    assert reports_section.index("<h3>报告列表</h3>") < reports_section.index("<h3>线索明细</h3>") < reports_section.index("选择报告后查看正文")
+    delivery_drawer = page[page.index('id="email_delivery_history_drawer"') : page.index('id="email_template_drawer_backdrop"')]
+    lead_drawer = page[page.index('id="report_leads_drawer"') : page.index('id="email_template_drawer_backdrop"')]
+    assert "<label>线索状态</label>" not in reports_section
+    assert 'id="report_risk"' not in reports_section
+    assert '<label>线索状态</label>' in lead_drawer
+    assert 'id="lead_status_filter"' in lead_drawer
+    assert "筛选线索" in lead_drawer
+    assert "<label>风险</label>" not in reports_section
+    assert "<label>报告范围</label>" in reports_section
+    assert "全部报告和线索" not in reports_section
+    assert "线索状态：" in page
+    assert "data-report-lead-panel" not in reports_section
+    assert "leads_table" not in reports_section
+    assert "report-hint" not in reports_section
+    assert "选择报告后查看正文" not in reports_section
+    assert "点击报告列表中的“预览”" not in reports_section
+    assert "点击报告行的邮件状态或“更多 > 查看交付历史”会打开悬浮窗" in reports_section
+    assert 'id="email_delivery_history"' not in reports_section
+    assert "data-report-delivery-panel" not in reports_section
+    assert "data-report-delivery-panel" in delivery_drawer
+    assert 'id="email_delivery_history"' in delivery_drawer
+    assert 'id="email_delivery_history_scope"' in delivery_drawer
+    assert 'id="email_delivery_history_count"' in delivery_drawer
+    assert "report_leads_drawer" in page
+    assert "report_leads_backdrop" in page
+    assert "closeReportLeadsDrawer" in page
+    assert "leads_scope_hint" in page
+    assert "线索限定在当前报告，不作为全局线索工作台。" in page
+    assert "线索限定在当前运行，不作为全局线索工作台。" in page
+    assert "viewRunLeads" in page
+    assert "leadScopeForRun" in page
+    assert "run_id:String(id)" in page
+    assert "reloadCurrentLeadDrawer" in page
+    assert "risk:val('lead_status_filter')" in page
+    assert "risk:val('report_risk')" not in page
+    assert "viewRunLeads(${Number(r.id)})" in page
     assert "report-workspace" not in page
     assert "reportActions" in page
     assert "renderReportsTable" in page
@@ -8721,7 +9171,12 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "下载 Markdown" in page
     assert "api('/leads?" in page
     assert "report_id:String(id)" in page
-    assert "报告 ID ${id} 的线索明细" in page
+    assert "run_id:String(id)" in page
+    assert "viewReportLeads" in page
+    assert "leadScopeForReport" in page
+    assert "activeReportFilterSummary" in page
+    assert "报告 #${Number(id)} 的线索明细" in page
+    assert "当前筛选条件下的线索" not in page
     assert "待人工复核" in page
     assert "待复核" in page
     assert "运行系统诊断" in page
@@ -9622,6 +10077,11 @@ def test_phase_15b_run_center_frontend_filters_pagination_archive_controls():
     assert "已归档" in page
     assert "全部记录" in page
     assert "loadRunLogs" in page
+    assert "viewRunLeads" in page
+    assert "viewRunLeads(${Number(r.id)})" in page
+    assert "function viewRunLeads(id)" in page
+    assert "new URLSearchParams({run_id:String(id), limit:'0', risk:val('lead_status_filter')})" in page
+    assert "function leadScopeForRun(id, leads)" in page
     assert "copyCurrentRunLogs" in page
     assert "downloadCurrentRunLogs" in page
     assert "/runs/'+id+'/archive" in page
@@ -10970,11 +11430,19 @@ def test_phase_17b_report_center_delivery_history_frontend_hooks():
     frontend_source = page + "\n" + css
 
     reports_section = page[page.index('<section id="reports"') : page.index('<section id="doctor"')]
-    assert "邮件交付历史" in reports_section
-    assert "email_delivery_history" in reports_section
-    assert "email_delivery_history_scope" in reports_section
+    delivery_drawer = page[page.index('id="email_delivery_history_drawer"') : page.index('id="email_template_drawer_backdrop"')]
+    assert "邮件交付历史" in delivery_drawer
+    assert "email_delivery_history" not in reports_section
+    assert "email_delivery_history_scope" not in reports_section
+    assert "email_delivery_history" in delivery_drawer
+    assert "email_delivery_history_scope" in delivery_drawer
+    assert "email_delivery_history_count" in delivery_drawer
+    assert "data-report-delivery-panel" not in reports_section
+    assert "data-report-delivery-panel" in delivery_drawer
     assert "查看交付历史" in page
     assert "loadEmailDeliveryHistory" in page
+    assert "openEmailDeliveryHistoryDrawer" in page
+    assert "closeEmailDeliveryHistoryDrawer" in page
     assert "refreshSelectedEmailDeliveryHistory" in page
     assert "renderEmailDeliveryHistory" in page
     assert "renderEmailDeliveryLog" in page
@@ -10991,16 +11459,254 @@ def test_phase_17b_report_center_delivery_history_frontend_hooks():
     assert "recipients_json" not in reports_section
     assert "smtp_password" not in reports_section
     for selector in [
-        ".email-delivery-history-panel",
+        ".email-delivery-history-drawer",
+        ".email-delivery-history-content",
         ".email-status-button",
         ".email-delivery-latest",
         ".email-delivery-history-list",
         ".email-delivery-history-item",
-        ".panel-title-row",
     ]:
         assert selector in frontend_source
     assert "@media (max-width: 1279px)" in css
     assert "@media (max-width: 767px)" in css
+
+
+def test_phase_17_1d_orphan_email_evidence_dry_run_helper_is_noop(tmp_path, capsys):
+    init_db()
+    jobs_snapshot = _snapshot_monitor_jobs()
+    snapshots = {
+        "email_delivery_logs": _snapshot_table("email_delivery_logs"),
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+    }
+    _clear_monitor_jobs()
+    artifact_root = tmp_path / "reports"
+    artifact_root.mkdir()
+    try:
+        with get_conn() as conn:
+            for table in ["email_delivery_logs", "reports", "crawl_runs"]:
+                conn.execute(f"DELETE FROM {table}")
+        job = save_job(
+            {
+                "law_firm_name": "Phase171D正常律所",
+                "keywords": ["Phase171D正常律所投诉"],
+                "platforms": ["dy"],
+                "recipients": ["ops@example.com"],
+                "frequency": "daily",
+            }
+        )
+        run_id = create_run(job["id"], {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        finish_run(run_id, "success", {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        report = create_report(run_id, job, {"job_id": job["id"], "law_firm_name": job["law_firm_name"]})
+        normal_log = record_email_delivery_log(
+            {
+                "workspace_id": job["workspace_id"],
+                "job_id": job["id"],
+                "report_id": report["id"],
+                "send_window_key": f"{job['id']}_2026-06-18",
+                "send_type": "auto",
+                "status": "sent",
+                "sent_at": "2026-06-18T01:00:00+00:00",
+                "recipients": ["ops@example.com"],
+            }
+        )
+
+        orphan_job_id = 9686
+        orphan_run_id = 8380
+        orphan_report_id = 3959
+        for suffix in ("html", "md", "xlsx"):
+            (artifact_root / f"job_{orphan_job_id}_run_{orphan_run_id}_20260616_152702.{suffix}").write_text(
+                f"orphan {suffix}",
+                encoding="utf-8",
+            )
+        with get_conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO email_delivery_logs (
+                    workspace_id, job_id, report_id, send_window_key, send_type,
+                    sent_by, sent_at, status, error_message, recipients_json,
+                    trigger_source, effective_recipients_json, effective_recipient_source,
+                    email_template_id, email_template_name, email_template_source,
+                    email_subject_template, created_at
+                ) VALUES (1, ?, ?, ?, 'auto', NULL, ?, 'sent', '', '["ops@example.com"]',
+                    'scheduler_auto', '["ops@example.com"]', 'task_recipients',
+                    NULL, '历史模板', 'task_bound', '日报 {law_firm_name}', ?)
+                """,
+                (
+                    orphan_job_id,
+                    orphan_report_id,
+                    f"{orphan_job_id}_2026-06-16",
+                    "2026-06-16T07:27:11+00:00",
+                    "2026-06-16T07:27:11+00:00",
+                ),
+            )
+            orphan_log_id = int(conn.execute("SELECT last_insert_rowid()").fetchone()[0])
+        before = {
+            "email_delivery_logs": _snapshot_table("email_delivery_logs"),
+            "reports": _snapshot_table("reports"),
+            "crawl_runs": _snapshot_table("crawl_runs"),
+            "artifacts": {path.name: path.read_text(encoding="utf-8") for path in artifact_root.iterdir()},
+        }
+
+        orphan_review = build_orphan_email_evidence_review(
+            delivery_log_id=orphan_log_id,
+            artifact_root=artifact_root,
+        )
+        normal_review = build_orphan_email_evidence_review(
+            delivery_log_id=normal_log["id"],
+            artifact_root=artifact_root,
+        )
+        assert orphan_review["mode"] == "dry_run"
+        assert orphan_review["mutations_attempted"] == 0
+        assert orphan_review["items"][0]["classification"] == "orphan_delivery_log"
+        assert "detached_report_artifacts" in orphan_review["items"][0]["secondary_classifications"]
+        assert orphan_review["items"][0]["exists"] == {"job": False, "report": False, "run": False}
+        assert orphan_review["items"][0]["artifacts"]["existing_count"] == 3
+        assert {
+            "database_backup_required",
+            "artifact_email_backup_required",
+            "explicit_operator_approval_required",
+            "rollback_plan_required",
+        } <= set(orphan_review["items"][0]["required_before_any_mutation"])
+        assert orphan_review["items"][0]["dry_run"]["proposed_effect"] == "review_only_no_changes"
+        assert normal_review["items"][0]["classification"] == "normal"
+        assert normal_review["items"][0]["exists"]["job"] is True
+        assert normal_review["items"][0]["exists"]["report"] is True
+        assert normal_review["items"][0]["exists"]["run"] is True
+
+        exit_code = review_orphan_email_main(
+            [
+                "--delivery-log-id",
+                str(orphan_log_id),
+                "--artifact-root",
+                str(artifact_root),
+                "--json",
+            ]
+        )
+        cli_payload = json.loads(capsys.readouterr().out)
+        assert exit_code == 0
+        assert cli_payload["items"][0]["classification"] == "orphan_delivery_log"
+        assert cli_payload["mutations_attempted"] == 0
+
+        after = {
+            "email_delivery_logs": _snapshot_table("email_delivery_logs"),
+            "reports": _snapshot_table("reports"),
+            "crawl_runs": _snapshot_table("crawl_runs"),
+            "artifacts": {path.name: path.read_text(encoding="utf-8") for path in artifact_root.iterdir()},
+        }
+        assert after == before
+        assert list_email_delivery_logs(report_id=report["id"], limit=10)[0]["id"] == normal_log["id"]
+        assert get_report(report["id"])["id"] == report["id"]
+    finally:
+        _restore_table("email_delivery_logs", snapshots["email_delivery_logs"])
+        _restore_table("reports", snapshots["reports"])
+        _restore_table("crawl_runs", snapshots["crawl_runs"])
+        _restore_monitor_jobs(jobs_snapshot)
+
+
+def test_cr048_report_center_lead_detail_requires_visible_scope_and_report_action():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    reports_section = page[page.index('<section id="reports"') : page.index('<section id="doctor"')]
+    lead_drawer = page[page.index('id="report_leads_drawer"') : page.index('id="email_template_drawer_backdrop"')]
+
+    assert 'data-report-lead-panel' not in reports_section
+    assert 'id="leads_scope"' not in reports_section
+    assert 'id="leads_scope_count"' not in reports_section
+    assert 'id="leads_table"' not in reports_section
+    assert 'id="lead_status_filter"' not in reports_section
+    assert '<label>线索状态</label>' not in reports_section
+    assert 'id="report_leads_backdrop"' in page
+    assert 'id="report_leads_drawer"' in page
+    assert 'data-report-lead-panel' in lead_drawer
+    assert 'id="leads_scope"' in lead_drawer
+    assert 'id="leads_scope_count"' in lead_drawer
+    assert 'id="leads_table"' in lead_drawer
+    assert 'id="leads_scope_hint"' in lead_drawer
+    assert 'id="lead_status_filter"' in lead_drawer
+    assert 'onclick="reloadCurrentLeadDrawer()"' in lead_drawer
+    assert '从报告中心或运行中心点击“查看线索”' in lead_drawer
+    assert 'function viewReportLeads(id)' in page
+    assert 'function viewRunLeads(id)' in page
+    assert 'function openReportLeadsDrawer(id, options={})' in page
+    assert 'function closeReportLeadsDrawer()' in page
+    assert "openReportLeadsDrawer(id);" in page
+    assert "openReportLeadsDrawer(id, {source:'run'});" in page
+    assert "new URLSearchParams({run_id:String(id), limit:'0', risk:val('lead_status_filter')})" in page
+    assert "function leadScopeForRun(id, leads)" in page
+    assert "function reloadCurrentLeadDrawer()" in page
+    assert "运行 #${Number(id)} 的线索明细" in page
+    assert "完整 AI 评估详情仍属于后续运行详情" in page
+    assert '<button class="secondary" onclick="viewReportLeads(${reportId})">查看线索</button>' in page
+    assert 'renderLeads([], {' in page
+    assert "type: 'none_selected'" in page
+    assert "当前筛选条件下的线索" not in page
+    assert "document.getElementById('leads_scope').textContent = '正在加载当前报告线索...';" not in page
+    assert ".report-leads-drawer" in css
+    assert ".report-leads-toolbar" in css
+    assert ".report-leads-content" in css
+    assert ".lead-detail-panel" not in css
+
+
+def test_cr049_mail_and_delivery_history_action_hierarchy_frontend_hooks():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    email_section = page[page.index('<section id="email"') : page.index('<div id="mail_config_backdrop"')]
+    reports_section = page[page.index('<section id="reports"') : page.index('<section id="doctor"')]
+
+    assert "email-toolbar-switch" in email_section
+    assert "真实邮件：已关闭" in email_section
+    assert email_section.count("openMailConfigModal()") == 1
+    assert email_section.count("openMailTestModal()") == 1
+    assert "SMTP 与发送默认值" not in email_section
+    assert "email_validation_status" not in email_section
+    delivery_drawer = page[page.index('id="email_delivery_history_drawer"') : page.index('id="email_template_drawer_backdrop"')]
+    assert 'data-report-delivery-panel' not in reports_section
+    assert 'id="email_delivery_history"' not in reports_section
+    assert 'data-report-delivery-panel' in delivery_drawer
+    assert 'id="email_delivery_history"' in delivery_drawer
+    assert 'id="email_delivery_history_scope"' in delivery_drawer
+    assert 'id="email_delivery_history_count"' in delivery_drawer
+    assert 'is-secondary-detail' not in reports_section
+    assert '点击报告行的邮件状态或“更多 > 查看交付历史”会打开悬浮窗' in reports_section
+    assert "document.querySelector('[data-report-delivery-panel]')?.scrollIntoView" not in page
+    assert ".email-toolbar-switch" in css
+    assert ".email-delivery-history-drawer" in css
+    assert ".email-delivery-history-content" in css
+    assert ".email-delivery-history-panel" not in css
+
+
+def test_phase_17_1c_17_2bc_email_recipient_and_template_explanations():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+
+    assert "任务收件人优先；留空才使用邮件配置里的全局默认收件人" in page
+    assert "发件人只代表 SMTP 身份，不会自动成为收件人" in page
+    assert "全局默认收件人只在任务没有填写收件邮箱时使用" in page
+    assert "HTML 模板必须保留 {report_html} 或 {report_body}" in page
+    assert 'id="email_template_preset"' in page
+    assert "标准日报" in page
+    assert "紧凑摘要" in page
+    assert "正式简报" in page
+    assert "自定义 / 历史模板" in page
+    assert "选择预设会生成包含 {report_body} 的包装样式" in page
+    assert 'id="email_template_guardrail"' in page
+    assert 'id="email_preview_note"' in page
+    assert "function emailTemplateHasReportBodyPlaceholder(template)" in page
+    assert "function updateEmailTemplateGuardrail()" in page
+    assert "function applyEmailTemplatePreset(preset)" in page
+    assert "function emailTemplatePresetHtml(preset)" in page
+    assert "templateDrawerActive" in page
+    assert "set('email_template_preset', 'custom')" in page
+    assert "set('email_template_preset', 'standard')" in page
+    assert "HTML 模板必须包含 {report_html} 或 {report_body}，否则真实邮件会缺少报告正文" in page
+    assert "preview.sample_data_note" in page
+    assert "preview.body_guardrail" in page
+    assert "resourceStat('正文保护'" in page
+    assert "发送时模板：" in page
+    assert "function emailTemplateSourceLabel(source)" in page
+    assert "task_bound:'任务绑定模板'" in page
+    assert "active_global_fallback:'发送时启用模板'" in page
+    assert "default_renderer:'系统默认正文'" in page
 
 
 def test_phase_18b_report_center_task_grouping_frontend_hooks():
@@ -11558,6 +12264,40 @@ def test_leads_api_can_scope_items_to_selected_report():
         create_report(run2, job, {"job_id": job["id"], "law_firm_name": job["law_firm_name"], "platforms": ["dy"], "failed_platforms": []})
 
         scoped = asyncio.run(monitor_router.leads(report_id=report1["id"], limit=0))["leads"]
+    finally:
+        _cleanup_test_records(job["id"], first_id)
+        _cleanup_test_records(job["id"], second_id)
+
+    assert [item["content_id"] for item in scoped] == [first_id]
+
+
+def test_leads_api_can_scope_items_to_selected_run():
+    init_db()
+    job = save_job(
+        {
+            "law_firm_name": "海安律所",
+            "aliases": [],
+            "exclude_words": [],
+            "keywords": ["海安律所避雷", "海安律所退费"],
+            "platforms": ["dy"],
+            "recipients": [],
+            "enable_comments": False,
+            "time_window_type": "recent_1d",
+            "frequency": "daily",
+            "email_time": "09:00",
+            "enabled": True,
+        }
+    )
+    now_ts = int(datetime.now(timezone.utc).timestamp())
+    first_id = "pytest_run_scope_001"
+    second_id = "pytest_run_scope_002"
+    try:
+        run1 = create_run(job["id"])
+        ingest_outputs(job, run1, "dy", [{"aweme_id": first_id, "title": "海安律所避雷", "create_time": now_ts}], [])
+        run2 = create_run(job["id"])
+        ingest_outputs(job, run2, "dy", [{"aweme_id": second_id, "title": "海安律所退费", "create_time": now_ts}], [])
+
+        scoped = asyncio.run(monitor_router.leads(run_id=run1, limit=0))["leads"]
     finally:
         _cleanup_test_records(job["id"], first_id)
         _cleanup_test_records(job["id"], second_id)

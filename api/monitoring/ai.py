@@ -37,6 +37,7 @@ async def evaluate_content(job: dict[str, Any], content: dict[str, Any], comment
         else:
             raw = await _call_openai(cfg, prompt, user_payload)
         data = _validate_ai_output(_parse_json(raw))
+        data = _apply_target_evidence_gate(data, job, content, comments)
         return {
             "status": "ok",
             "is_related": data["is_related"],
@@ -413,6 +414,95 @@ def _validate_ai_output(data: dict[str, Any]) -> dict[str, Any]:
         "evidence_quotes": _coerce_quotes(data.get("evidence_quotes")),
         "recommended_action": str(data.get("recommended_action") or ""),
     }
+
+
+def _apply_target_evidence_gate(
+    data: dict[str, Any],
+    job: dict[str, Any],
+    content: dict[str, Any],
+    comments: list[dict[str, Any]],
+) -> dict[str, Any]:
+    if not data.get("is_related") and not data.get("is_negative"):
+        return data
+    if _has_target_evidence(job, content, comments):
+        return data
+    adjusted = dict(data)
+    adjusted["is_related"] = False
+    adjusted["is_negative"] = False
+    adjusted["risk_level"] = "irrelevant"
+    reason = str(adjusted.get("reason") or "").strip()
+    guardrail = "未在标题、正文、作者或已采集评论中找到目标律所/别名证据；搜索词仅作为召回来源。"
+    adjusted["reason"] = f"{guardrail} 原模型理由：{reason}" if reason else guardrail
+    adjusted["recommended_action"] = "作为召回噪声处理；如原文另有目标律所证据，请人工复核。"
+    adjusted["evidence_quotes"] = _filter_target_evidence_quotes(adjusted.get("evidence_quotes"), job, content, comments)
+    return adjusted
+
+
+def _has_target_evidence(job: dict[str, Any], content: dict[str, Any], comments: list[dict[str, Any]]) -> bool:
+    terms = _target_terms(job)
+    if not terms:
+        return False
+    evidence_text = "\n".join(
+        [
+            str(content.get("title") or ""),
+            str(content.get("description") or ""),
+            str(content.get("author_name") or ""),
+            *[str(comment.get("content") or "") for comment in comments if str(comment.get("content") or "").strip()],
+            *[str(comment.get("author_name") or "") for comment in comments if str(comment.get("author_name") or "").strip()],
+        ]
+    )
+    normalized_text = _normalize_evidence_text(evidence_text)
+    if not normalized_text:
+        return False
+    return any(term in normalized_text for term in terms)
+
+
+def _target_terms(job: dict[str, Any]) -> list[str]:
+    raw_terms: list[Any] = [job.get("law_firm_name")]
+    aliases = job.get("aliases") or []
+    if isinstance(aliases, str):
+        raw_terms.extend(re.split(r"[,，;；\s]+", aliases))
+    elif isinstance(aliases, list):
+        raw_terms.extend(aliases)
+    terms: list[str] = []
+    for raw in raw_terms:
+        normalized = _normalize_evidence_text(str(raw or ""))
+        if len(normalized) >= 2 and normalized not in terms:
+            terms.append(normalized)
+    return terms
+
+
+def _normalize_evidence_text(value: str) -> str:
+    return re.sub(r"\s+", "", str(value or "")).lower()
+
+
+def _filter_target_evidence_quotes(
+    value: Any,
+    job: dict[str, Any],
+    content: dict[str, Any],
+    comments: list[dict[str, Any]],
+) -> list[str]:
+    quotes = _coerce_quotes(value)
+    terms = _target_terms(job)
+    if not terms:
+        return []
+    allowed_text = _normalize_evidence_text(
+        "\n".join(
+            [
+                str(content.get("title") or ""),
+                str(content.get("description") or ""),
+                str(content.get("author_name") or ""),
+                *[str(comment.get("content") or "") for comment in comments if str(comment.get("content") or "").strip()],
+                *[str(comment.get("author_name") or "") for comment in comments if str(comment.get("author_name") or "").strip()],
+            ]
+        )
+    )
+    filtered = []
+    for quote in quotes:
+        normalized = _normalize_evidence_text(quote)
+        if normalized and normalized in allowed_text and any(term in normalized for term in terms):
+            filtered.append(quote)
+    return filtered
 
 
 def _extract_json_object(text: str) -> str:

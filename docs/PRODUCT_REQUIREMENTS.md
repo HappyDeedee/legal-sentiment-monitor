@@ -373,9 +373,10 @@ Rules:
 - Lead status should distinguish unrelated, evaluated no-risk, suspected
   negative, high-risk, pending manual review, and unevaluated/limited-context
   history.
-- Report Center status filters should be exact: `高风险` shows only high-risk
-  rows/reports, while `疑似负面` shows only suspected-negative rows/reports and
-  must not include high-risk rows just because high risk is also negative.
+- Lead status filters should be exact wherever they are shown: `高风险` shows
+  only high-risk rows/reports, while `疑似负面` shows only suspected-negative
+  rows/reports and must not include high-risk rows just because high risk is
+  also negative.
 - AI output remains lead screening, not factual determination.
 
 Acceptance:
@@ -404,7 +405,8 @@ Purpose:
 Features:
 
 - group reports by monitoring task by default;
-- filter by law firm, platform, risk level, and date;
+- filter the first-level report list by report dimensions such as law firm,
+  platform, date, and report range;
 - preview HTML report;
 - explicitly view lead details for a selected report or group;
 - switch lead details when a different report is selected, with visible scope
@@ -433,10 +435,15 @@ Rules:
   per-run lifecycle and per-evaluation evidence belong to Run Detail.
 - if operators need to inspect lead/evaluation evidence before a report exists
   or after a partial/failed run, the entry point is Run Center / Run Detail.
+- Lead-state filtering should live inside the scoped lead drawer, not as a
+  first-level Report Center filter. It filters only the currently selected
+  report or run lead scope and should not make the Report Center read like a
+  global lead workbench.
 
 Acceptance:
 
-- selecting different reports changes preview and lead details immediately;
+- selecting different reports changes preview, and choosing "view leads" opens
+  scoped lead details immediately;
 - users can tell whether visible leads belong to a selected report, selected
   group, originating run, or current filters;
 - no-risk reports can still be generated and sent;
@@ -469,6 +476,9 @@ Rules:
   should show whether the send was automatic, manual resend, or an explicit
   validation send, plus the related task/report/run context and effective
   recipients where permitted.
+- recipient precedence must be understandable before and after sending: task
+  recipients are the delivery targets when present, global default recipients
+  are fallback-only, and the SMTP sender is only the from-address.
 - routine automated tests and local diagnostics must not silently send real
   external emails. Product operation uses one administrator-controlled Mail
   Configuration switch for real email delivery, defaulting off.
@@ -694,6 +704,9 @@ Product direction:
 - Template preview must clearly indicate when it uses sample data. Historical
   report/email records should show which template was actually used for a
   delivered email.
+- New custom HTML templates must preserve the generated report body through
+  `{report_html}` or `{report_body}`. Historical templates remain readable, but
+  delivery/preview must not silently drop the generated report body.
 
 Variables:
 

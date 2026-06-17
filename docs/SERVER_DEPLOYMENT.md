@@ -185,6 +185,36 @@ Read-only review steps:
 5. preserve the database row, report file, and message file together until an
    operator explicitly approves any mutation.
 
+Dry-run helper:
+
+```bash
+uv run python scripts/review_orphan_email_evidence.py --job-id 9686 --json
+uv run python scripts/review_orphan_email_evidence.py --job-id 9759 --json
+```
+
+The helper opens the SQLite database read-only, inspects delivery-log rows,
+checks whether related job/report/run records and report artifacts exist, and
+prints `mutations_attempted: 0`. It does not delete, annotate, repair, or
+rewrite database rows or artifact files. Use `--delivery-log-id`, `--job-id`,
+or `--report-id` to narrow the review; use `--database` and `--artifact-root`
+when inspecting a copied backup outside the default data directory.
+
+Recorded CR-036 evidence:
+
+- delivery-log row `60`, `job_id=9686`, `run_id=8380`, `report_id=3959`,
+  sent automatic email at `2026-06-16T07:27:11Z`, attachments
+  job_9686_run_8380_20260616_152702.xlsx and
+  job_9686_run_8380_20260616_152702.md, exported message
+  `C:/Users/Administrator/Desktop/日报 海安律所.eml`;
+- delivery-log row `81`, `job_id=9759`, `run_id=8447`, `report_id=3998`,
+  sent automatic email at `2026-06-16T08:55:33Z`, attachments
+  job_9759_run_8447_20260616_165528.xlsx and
+  job_9759_run_8447_20260616_165528.md, exported message
+  `C:/Users/Administrator/Desktop/日报 海安律所.2eml.eml`;
+- the corresponding `monitor_jobs`, `crawl_runs`, and `reports` rows were no
+  longer present during read-only inspection, so these rows are preserved as
+  historical orphan email evidence by default.
+
 Default policy:
 
 - do not delete, annotate, or rewrite historical delivery evidence during

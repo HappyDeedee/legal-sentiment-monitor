@@ -124,7 +124,8 @@ Use the standard permission test data:
   profile.
 - Same account cannot run two tasks at the same time.
 - Same profile cannot run two tasks at the same time.
-- Task-bound proxy overrides account proxy.
+- Before CR-047 locked browser-environment rules are active, task-bound proxy
+  overrides account proxy according to the Phase 5 baseline.
 - Account proxy is used when task proxy is absent.
 - Proxy concurrency limit is respected.
 - Account/profile locks are acquired through inline `social_accounts` fields.
@@ -156,6 +157,13 @@ stable browser environment instead of relying on changing process defaults.
 - Attempts to silently edit a locked browser environment are rejected; the
   explicit reset/re-login path records an audit log and makes consequences
   visible to the administrator.
+- Task-level proxy override handling follows the confirmed policy exactly:
+  locked environments either reject the override or surface it as an explicit
+  audited exception; the test fails if a hidden process-default fallback or
+  silent proxy swap is used.
+- Empty or partially configured persisted browser-environment values fail
+  closed before login/crawl launch instead of being auto-filled from process
+  defaults.
 - Service restart, scheduler run, and manual run paths do not change the stored
   account browser environment.
 - Platform Accounts UI/API show only customer-safe browser environment
@@ -325,6 +333,9 @@ verification records.
 - Add a small pilot-derived or fixture-based calibration set covering broad
   refund/legal noise, unrelated law firms, homonym geography, true target
   mentions, and comment-only target references.
+- A `source_keyword`-only fixture must stay out of suspected-negative/high-risk
+  buckets even if the model emits a noisy positive; the filter state stays
+  anchored to the target-evidence gate rather than the recall keyword alone.
 - Tests assert structured AI output normalization remains compatible with the
   existing fields unless a documented schema extension is accepted.
 - Documentation consistency passes after CR-045 task and traceability updates.
@@ -832,11 +843,20 @@ delivery.
 
 ### Phase 17.1D Historical Orphan Evidence Tests
 
-- A read-only orphan-review helper or checklist can identify delivery logs
+- `scripts/review_orphan_email_evidence.py` can identify delivery logs
   whose `job_id` or `report_id` no longer resolves to active rows.
+- The dry-run helper is no-op only: preview mode may inspect orphan evidence,
+  but it must not delete, annotate, or rewrite delivery logs, report artifacts,
+  or historical rows.
+- The helper output includes `mode=dry_run`, `mutations_attempted=0`,
+  classification, artifact existence, and the required database-backup,
+  artifact/email-backup, explicit-approval, and rollback gates.
 - `docs/SERVER_DEPLOYMENT.md` and `docs/deployment_runbook.md` describe the
   operator path for preserving unexpected-email evidence, backing up before
   mutation, obtaining approval, and recording rollback steps.
+- Mutation helpers refuse to run without backup plus explicit operator
+  approval, and the preview output must show the proposed terminal effect and
+  rollback path before any write is allowed.
 - Historical orphan evidence is preserved by default. Any remediation requires
   database backup and explicit operator approval before mutation.
 - Existing non-orphan report-center delivery history remains readable after the
@@ -862,6 +882,11 @@ delivery.
 
 - A template with neither `{report_html}` nor `{report_body}` is blocked or
   produces a clear warning before it can be used for real report delivery.
+- Saving a new custom HTML template without `{report_html}` or `{report_body}`
+  is rejected with a customer-safe validation message.
+- Historical templates that already lack the placeholder remain readable, and
+  preview/send rendering appends the generated report body instead of silently
+  sending a wrapper-only email.
 - Template editor preview clearly uses sample data, while report-email preview
   or real delivery uses the generated report HTML for the selected run.
 - Subject templates continue to interpolate supported fields such as law firm
@@ -979,6 +1004,9 @@ CR-037 is deferred and should not block CR-036/Phase 17.1.
 - Final ingestion does not duplicate existing `raw_contents` rows and still
   respects deduplication, exclusion words, and time-window filtering.
 - Timeout runs preserve partial progress and customer-safe timeout wording.
+- If the crawler subprocess disappears mid-step or stops emitting output, the
+  last safe provisional snapshot is preserved and the run still finalizes
+  cleanly instead of hanging on live progress.
 
 ### Phase 19C AI Evaluation Progress Tests
 
@@ -989,6 +1017,8 @@ CR-037 is deferred and should not block CR-036/Phase 17.1.
 - AI provider failure still marks content for manual review and does not block
   report generation.
 - Final AI counts remain exact after the full evaluation loop completes.
+- Late or repeated progress updates do not regress final AI counts or reopen a
+  terminal run.
 
 ### Phase 19D Run Center Frontend Progress And Polling Tests
 
@@ -1039,6 +1069,9 @@ implementation gate when Phase 20 becomes the active execution batch.
   `truncated=true` marker or equivalent trace metadata.
 - Oversized trace snapshots do not block AI evaluation, report generation, or
   terminal run finalization.
+- Trace write failures or retention cleanup must not mutate `ai_evaluations`,
+  report rows, or delivery logs; only trace rows and redacted diagnostics may
+  change.
 - `ai_trace_retention_days` is visible in administrator runtime settings and
   follows the same database override and environment-lock behavior as other
   runtime retention settings once implemented.
@@ -1087,14 +1120,18 @@ implementation gate when Phase 20 becomes the active execution batch.
 - Report lead detail can link back to the originating run detail when `run_id`
   is available.
 - Lead detail shows a visible scope label, count, and applied filter summary
-  for selected report, selected group, originating run, or current filters.
+  for selected report, selected group, originating run, or drawer-local
+  filters.
 - Default Report Center loading does not present an unlabeled flat lead table
   that could be mistaken for all leads.
-- If a current-filter aggregate lead list is supported, it is labeled as a
-  filtered aggregate and remains visually distinct from selected-report lead
-  detail.
+- Default Report Center loading fails validation if the lead table is rendered
+  without a visible scope label and count; a flat unlabeled list is not an
+  acceptable default.
+- Lead-state filtering is drawer-local after a selected report or run scope is
+  opened; the first-level Report Center toolbar must not become a global lead
+  workbench filter surface.
 - Empty states distinguish no selected report, selected report has no leads,
-  and current filters have no matching leads.
+  and drawer-local filters have no matching leads.
 - Report Center remains focused on final report artifacts, downloads, email
   delivery history, and report-scoped leads.
 
@@ -1182,6 +1219,8 @@ smoke checks, then finalized through Phase 21P cross-page verification.
   delivery-status navigation, and compact real-email state in one page-level
   action bar without duplicating edit/test actions inside the SMTP/defaults
   summary.
+- Mail Configuration DOM checks fail if the SMTP/defaults summary repeats the
+  same edit/test labels that already exist in the page header.
 - The real-email send state is visible as the single CR-043 switch, remains
   compact when off, and still requires explicit confirmation before enabling
   real SMTP.
@@ -1198,6 +1237,9 @@ smoke checks, then finalized through Phase 21P cross-page verification.
 - Report Center delivery history opens as scoped secondary detail from the
   selected report row/status action and does not dominate the initial report
   archive layout.
+- Report Center lead detail tests fail if the page renders an unlabeled global
+  lead table, omits the selected-report/selected-run scope label, or exposes
+  lead-state filters as first-level Report Center controls.
 - System Diagnostics preserves rerun diagnosis, run system diagnosis, handle
   account resources, readiness/action cards, runtime state, scheduler state,
   and platform state.

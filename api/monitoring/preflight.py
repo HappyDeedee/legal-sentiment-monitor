@@ -5,6 +5,7 @@ from typing import Any
 from .ai import ai_api_disabled
 from .database import (
     get_active_ai_key_profile,
+    get_active_email_template,
     get_ai_config,
     get_email_config,
     get_ai_key_profile,
@@ -12,6 +13,7 @@ from .database import (
     get_proxy_profile,
     get_social_account,
     has_job_template_placeholders,
+    email_template_has_report_body_placeholder,
     list_social_accounts,
 )
 from .platform_status import list_platform_status
@@ -231,15 +233,18 @@ def _ai_config_check(job: dict[str, Any]) -> dict[str, Any]:
 
 def _email_config_check(job: dict[str, Any]) -> dict[str, Any]:
     cfg = get_email_config(masked=True)
-    recipients = job.get("recipients") or cfg.get("default_recipients") or []
+    task_recipients = [item for item in (job.get("recipients") or []) if str(item).strip()]
+    default_recipients = [item for item in (cfg.get("default_recipients") or []) if str(item).strip()]
+    recipients = task_recipients or default_recipients
     if not recipients:
         return _check("email_config", "邮件配置", "warning", "未配置收件人；报告会生成，但不会发出日报")
+    source_note = "任务收件人优先" if task_recipients else "任务收件人为空，本轮使用全局默认收件人"
     complete = bool(cfg.get("smtp_host") and cfg.get("sender"))
     if not complete:
-        return _check("email_config", "邮件配置", "warning", "SMTP 未配置完整；报告会生成，但邮件发送会失败")
+        return _check("email_config", "邮件配置", "warning", f"SMTP 未配置完整；报告会生成，但邮件发送会失败。{source_note}，发件人不会自动成为收件人")
     if cfg.get("last_test_status") != "success":
-        return _check("email_config", "邮件配置", "warning", "邮件配置未测试通过；建议先发送测试邮件")
-    return _check("email_config", "邮件配置", "ok", "邮件最近测试通过")
+        return _check("email_config", "邮件配置", "warning", f"邮件配置未测试通过；建议先发送测试邮件。{source_note}，发件人不会自动成为收件人")
+    return _check("email_config", "邮件配置", "ok", f"邮件最近测试通过；{source_note}，发件人不会自动成为收件人")
 
 
 def _job_ai_profile(job: dict[str, Any]) -> dict[str, Any] | None:
@@ -254,17 +259,25 @@ def _job_ai_profile(job: dict[str, Any]) -> dict[str, Any] | None:
 
 def _email_template_check(job: dict[str, Any]) -> dict[str, Any]:
     template_id = job.get("email_template_id")
+    source_label = "任务绑定邮件模板"
     if not template_id:
-        return _check("email_template", "邮件模板", "ok", "使用当前启用邮件模板")
-    try:
-        template = get_email_template(int(template_id))
-    except (TypeError, ValueError):
-        template = None
+        template = get_active_email_template()
+        source_label = "当前启用邮件模板"
+        if not template:
+            return _check("email_template", "邮件模板", "ok", "未配置当前模板；本轮使用系统默认报告正文")
+    else:
+        try:
+            template = get_email_template(int(template_id))
+        except (TypeError, ValueError):
+            template = None
     if not template:
         return _check("email_template", "邮件模板", "warning", "任务绑定的邮件模板已不存在；本轮会回退到当前启用模板")
-    if not str(template.get("html_template") or "").strip():
-        return _check("email_template", "邮件模板", "warning", "任务绑定的邮件模板未填写 HTML；本轮会使用报告默认正文")
-    return _check("email_template", "邮件模板", "ok", "任务绑定邮件模板可用")
+    html_template = str(template.get("html_template") or "")
+    if not html_template.strip():
+        return _check("email_template", "邮件模板", "warning", f"{source_label}未填写 HTML；本轮会使用报告默认正文")
+    if not email_template_has_report_body_placeholder(html_template):
+        return _check("email_template", "邮件模板", "warning", f"{source_label}缺少 {{report_html}} 或 {{report_body}}；本轮会保留报告正文，但建议先修正模板")
+    return _check("email_template", "邮件模板", "ok", f"{source_label}可用；系统会插入本次运行生成的报告正文")
 
 
 def _check(key: str, label: str, severity: str, message: str) -> dict[str, Any]:

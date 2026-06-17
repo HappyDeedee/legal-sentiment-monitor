@@ -1728,7 +1728,7 @@ Non-goals:
 - Do not delete the two existing `.eml` files, report artifacts, database rows,
   or delivery logs without explicit operator approval.
 
-Status: Accepted
+Status: Verified
 
 Related tasks:
 
@@ -1751,6 +1751,15 @@ Acceptance:
   effective recipients and the effective-recipient source.
 - Documentation and tests clearly distinguish production real SMTP validation
   from local automated tests and diagnostics.
+
+Verification:
+
+- Verified on 2026-06-18 through Phase 17.1A-D implementation and tests.
+  Automated/local/report-delivery paths are non-sending by default, the SMTP
+  tripwire protects the test suite, delivery logs persist effective recipients
+  and trigger source, preflight and UI copy explain recipient precedence, and
+  historical orphan evidence review is dry-run only with `mutations_attempted=0`
+  plus backup/approval/rollback gates.
 
 ## CR-037 - Role-Based Email Delivery Governance And Quotas
 
@@ -2032,7 +2041,7 @@ Non-goals:
   or raw platform credentials in template provenance.
 - Do not make normal users edit template HTML.
 
-Status: Accepted
+Status: Verified
 
 Related tasks:
 
@@ -2049,6 +2058,16 @@ Acceptance:
 - The mail-template UI direction is preset-style selection with
   system-controlled report body insertion, not unrestricted HTML editing as the
   long-term product model.
+
+Verification:
+
+- Verified on 2026-06-18 through Phase 17.2A-C implementation and tests. Report
+  snapshots and delivery logs record effective template provenance; delivery
+  history shows send-time template/source; custom templates without
+  `{report_html}` or `{report_body}` are blocked on save; legacy templates
+  remain readable and append the generated report body during preview/send; and
+  the template drawer offers governed preset wrappers that preserve the
+  system-generated report body.
 
 ## CR-040 - Formal Console Page-Level UI/UX Refinement
 
@@ -2699,7 +2718,7 @@ Non-goals:
 - Do not rewrite historical completed Phase 7 or Phase 7.1 status; record this
   as a follow-up fix.
 
-Status: Accepted
+Status: Verified
 
 Related tasks:
 
@@ -3017,8 +3036,8 @@ Requirements:
   separate from report preview. Preview may still update lead context, but it
   must not be the only discoverable path.
 - Lead detail scope should include a count and applied filter summary such as
-  risk, platform, date range, law firm, report ID, group, or run ID when
-  available.
+  drawer-local lead status, platform, date range, law firm, report ID, group,
+  or run ID when available.
 - Empty states must distinguish "no report selected," "this selected report
   has no leads," and "current filters have no matching leads."
 - If a current-filter aggregate lead list is kept, it must be visually and
@@ -3058,7 +3077,7 @@ Non-goals:
 - Do not expose administrator-only AI debug fields or raw model responses in
   Report Center.
 
-Status: Accepted
+Status: Verified
 
 Related tasks:
 
@@ -3082,6 +3101,20 @@ Acceptance:
   no leads, or the current filters have no matches.
 - Report Center keeps a report-first hierarchy while Phase 20 Run Detail
   remains the place for per-run lifecycle and per-AI-evaluation evidence.
+
+Verification:
+
+- Verified on 2026-06-17 in the focused CR-048/CR-049 frontend batch. Report
+  Center no longer renders a first-level `leads_table`, no longer shows the
+  process-draft preview hint, and exposes report row "查看线索" as a scoped
+  drawer with scope label, count, and selected-report filter summary.
+- Run Center rows expose a "查看线索" entry that opens the same drawer with a
+  run-scoped title, count, and "not a global lead workbench" hint.
+- Follow-up acceptance tuning moved `线索状态` out of the first-level Report
+  Center toolbar and into the lead drawer. The first-level Report Center toolbar
+  now stays on report dimensions (`律所`, `平台`, date range, `报告范围`), while
+  drawer-local `线索状态` filters only the selected report or selected run lead
+  scope.
 
 ## CR-049 - Mail Configuration And Delivery History Action Hierarchy
 
@@ -3167,7 +3200,7 @@ Non-goals:
 - Do not treat SMTP `sent` as proof of recipient inbox delivery.
 - Do not send real SMTP during automated verification.
 
-Status: Accepted
+Status: Verified
 
 Related tasks:
 
@@ -3187,6 +3220,19 @@ Acceptance:
 - Report Center delivery history is opened from a scoped report action/status
   and does not dominate the initial report page layout.
 - Existing CR-043/CR-044 safety behavior and wording remain intact.
+
+Verification:
+
+- Verified on 2026-06-17 in the focused CR-048/CR-049 frontend batch. Mail
+  Configuration keeps edit, test, refresh/status, delivery-status navigation,
+  and the single real-email switch in the page-level action bar.
+- The old first-level "SMTP 与发送默认值" and full-width real-email status
+  panels were removed; the page now shows only compact summary metrics plus
+  the modal edit/test flows.
+- Report Center no longer renders `email_delivery_history` as a first-level
+  panel. Clicking a report email status or "更多 > 查看交付历史" opens a scoped
+  delivery-history drawer with selected-report scope, count, refresh action,
+  latest status, and SMTP-acceptance wording.
 ## CR-050 - Report Center Lead Status Filter Precision Regression Fix
 
 Date: 2026-06-17

@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-06-17
+Last updated: 2026-06-18
 
 ## Current Phase
 
@@ -72,12 +72,21 @@ explicit production/pilot real-mail validation path. Phase 17.1A-B is now
 implemented and verified locally with an environment-controlled real SMTP
 safety gate, read-only deployment runtime visibility, default non-sending
 automated/local/report-delivery behavior, explicit opt-in SMTP validation
-tests, and a suite-level SMTP tripwire. Phase 17.1C and Phase 17.2A backend
-metadata for effective recipients, trigger source, and effective template
-provenance is also implemented and verified for report snapshots and delivery
-logs; remaining operator-facing copy/preflight explanation and historical
-email/template explanation work stays open. Historical unexpected email
-evidence is confirmed to be preserved by default. CR-037 Role-Based
+tests, and a suite-level SMTP tripwire. Phase 17.1C is now complete: effective
+recipient metadata is persisted in delivery logs, and task configuration, mail
+configuration, preflight, and delivery-history surfaces explain that task
+recipients win, global default recipients are fallback-only, and SMTP sender
+is not a delivery target. Phase 17.1D is also implemented and verified with a
+read-only orphan email evidence review helper, no-op proof, and
+backup/approval/rollback runbook notes for the historical `job_id=9686` and
+`job_id=9759` evidence. Phase 17.2A-C is now complete: report snapshots and
+delivery logs persist effective template provenance, delivery history shows
+the send-time template/source, custom HTML templates are blocked unless they
+contain `{report_html}` or `{report_body}`, legacy templates stay readable and
+append the generated report body if needed, template preview clearly states it
+uses sample data, and new templates are steered through administrator style
+presets that wrap the system-generated report body. Historical unexpected
+email evidence is confirmed to be preserved by default. CR-037 Role-Based
 Email Delivery Governance And Quotas is deferred as a future capability for
 administrator-managed normal-user send/resend policy and quotas. CR-040 Formal
 Console Page-Level UI/UX Refinement is accepted as Phase 21, a frontend-only
@@ -130,12 +139,17 @@ Run Center, leads API, report generation, and filters split unrelated,
 evaluated no-risk, suspected negative, high-risk, pending manual review, and
 unevaluated/limited-context states; active timeout/partial finalization creates
 `pending_review` fallback rows for known unresolved candidate IDs when safe and
-records customer-safe fallback evidence. CR-050 is now implemented and
-verified as a focused CR-045 follow-up: Report Center and leads API risk
-filters keep `高风险` and `疑似负面` exact, so the `疑似负面` filter no longer
-includes high-risk rows. Phase 7.2C-D relevance hardening and calibration
-fixtures remain open, including the stricter `source_keyword`
-recall-provenance-only rule.
+records customer-safe fallback evidence. Phase 7.2C-D is now implemented and
+verified locally: the AI prompt and post-provider normalization enforce that
+`source_keyword` is recall provenance only; title, description, author, or
+actually collected comments must contain the target law firm or accepted alias
+before model output can mark a row as target-related or negative; homonym or
+geography-only mentions such as "海安" remain unrelated unless the target law
+firm/alias appears; calibration fixtures cover noisy-positive keyword-only
+output, broad refund/legal noise, true title evidence, and comment-only target
+evidence. CR-050 is implemented and verified as a focused CR-045 follow-up:
+Report Center and leads API risk filters keep `高风险` and `疑似负面` exact, so
+the `疑似负面` filter no longer includes high-risk rows.
 CR-047 Account Browser Environment Consistency is accepted as Phase 5.1, a
 future account-environment optimization that extends the existing
 `profile_key` model with fixed browser-environment settings. It uses
@@ -146,24 +160,28 @@ the fixed-environment proxy override policy must be confirmed and recorded:
 task-level proxy overrides must either be blocked for locked account
 environments or treated as explicit visible exceptions with audit and
 customer-safe explanation.
-CR-048 Report Center Lead Detail Information Architecture is accepted as a
-Report Center information-architecture optimization linked to Phase 20E and
-Phase 21M. It clarifies that Report Center remains a report-first surface:
-lead detail must be explicit and scoped to a selected report, selected group,
-originating run, or visibly labeled current-filter aggregate. It must not look
-like an unlabeled global lead workbench, and per-run lifecycle plus every AI
-evaluation record remain CR-034 / Phase 20 Run Detail responsibilities. The
-primary home for run-scoped lead/evaluation inspection is Run Center / Run
-Detail; Report Center provides report-scoped "view leads" shortcuts after
-report generation.
-CR-049 Mail Configuration And Delivery History Action Hierarchy is accepted as
-a frontend information-architecture optimization linked to Phase 21I and
-Phase 21M. It keeps CR-043/CR-044 safety behavior intact while moving mail
-configuration primary actions into one page-level action bar, avoiding
-duplicated edit/test actions inside SMTP/default summaries, rendering the
-real-email state as one compact administrator control, and keeping Report
-Center delivery history as scoped secondary detail rather than a dominant
-default panel.
+CR-048 Report Center Lead Detail Information Architecture is implemented and
+verified for the focused Phase 20E/21M frontend information-architecture
+batch. Report Center no longer renders lead detail as a first-level flat
+table; report rows expose explicit "查看线索" actions, the lead drawer shows
+selected-report scope, count, filter summary, and empty states, and Run Center
+rows expose a run-scoped "查看线索" shortcut that opens the same drawer without
+turning Report Center into a global lead workbench. Follow-up acceptance tuning
+keeps the first-level Report Center toolbar limited to report dimensions
+(`律所`, `平台`, date range, and `报告范围`), while `线索状态` appears inside the
+lead drawer and filters only the currently selected report or selected run lead
+scope. Full Run Detail, per-run lifecycle, and every AI evaluation record remain
+CR-034 / Phase 20 responsibilities outside this focused batch.
+CR-049 Mail Configuration And Delivery History Action Hierarchy is implemented
+and verified for the focused Phase 21I/21M frontend information-architecture
+batch. CR-043/CR-044 safety behavior remains intact while Mail Configuration
+now keeps edit, test, refresh/status, delivery-status navigation, and the
+single real-email switch in the page-level action bar; the old first-level
+"SMTP 与发送默认值" and large real-email status panels are removed. Report
+Center delivery history is no longer a dominant default panel and opens as a
+scoped drawer from a report email-status button or "更多 > 查看交付历史", with
+selected-report scope, count, refresh action, latest status, and SMTP
+acceptance wording.
 The active SQLite schema now provides the foundation tables and columns
 required before later implementation work, and the web/API layer now has
 session login, administrator/normal-user roles, menu visibility,
@@ -246,17 +264,18 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   still requires backup, rollback, dry-run preview, and explicit operator
   approval.
 - Phase 7.2 - AI Evaluation Accuracy And Lead Status Clarity Follow-up:
-  partially complete and verified locally. Phase 7.2A-B is implemented:
+  complete and verified locally. Phase 7.2A-D is implemented:
   missing AI evaluation rows are never returned, counted, filtered, or rendered
   as no-risk; missing rows surface as unevaluated/limited-context where safe
   mutation is not possible; report/run summaries and risk filters split
   pending-review, unrelated, evaluated no-risk, suspected negative, high-risk,
   and unevaluated buckets; timeout/partial finalization creates
   `pending_review` fallback rows for known unresolved AI candidate IDs when
-  safe and records customer-safe fallback evidence. CR-050 has corrected the
-  Report Center risk-filter precision gap so suspected-negative and high-risk
-  filters do not include each other. Phase 7.2C-D relevance hardening and
-  calibration fixtures remain open.
+  safe and records customer-safe fallback evidence; source-keyword-only,
+  homonym/geography-only, broad refund/legal, title-evidence, and
+  comment-evidence calibration fixtures verify the target-evidence gate. CR-050
+  has corrected the Report Center risk-filter precision gap so
+  suspected-negative and high-risk filters do not include each other.
 - Phase 8 - Server-Like Validation: complete and verified through automated
   server-like validation.
 - Phase 9 - Security And Operations: complete and verified locally.
@@ -276,17 +295,18 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
 - Phase 16 - Email Delivery Data Model Preparation: complete and verified.
 - Phase 17 - Email Delivery Governance: complete and verified through Phase
   17A-17B.
-- Phase 17.1 - Email Delivery Safety Follow-up: partially complete and
-  verified locally. Phase 17.1A-B real SMTP safety gate and automated-test
-  tripwire are implemented. Phase 17.1C backend effective-recipient
-  traceability is implemented for report delivery and delivery logs. Remaining
-  Phase 17.1C operator-facing preflight/UI copy and Phase 17.1D historical
-  orphan evidence operations notes are still open.
-- Phase 17.2 - Report Email Template Governance: partially complete and
-  verified locally. Phase 17.2A backend effective-template provenance is
-  implemented for new report snapshots and email delivery logs. Phase 17.2B-C
-  report-body guardrails, preview semantics, and preset-style governance remain
-  accepted follow-up work.
+- Phase 17.1 - Email Delivery Safety Follow-up: complete and verified locally.
+  Phase 17.1A-B real SMTP safety gate and automated-test tripwire are
+  implemented. Phase 17.1C effective-recipient traceability is implemented in
+  delivery logs, preflight, task copy, mail configuration copy, and
+  delivery-history UI. Phase 17.1D historical orphan evidence dry-run/runbook
+  work is implemented and verified.
+- Phase 17.2 - Report Email Template Governance: complete and verified
+  locally. Phase 17.2A effective-template provenance is implemented for new
+  report snapshots and email delivery logs, while Phase 17.2B-C blocks new
+  body-dropping custom templates, keeps legacy templates readable with a safe
+  generated-body fallback, clarifies preview-vs-real-send semantics, and adds
+  administrator style presets that preserve the system-generated report body.
 - Phase 18 - Report Center Task Grouping: complete and verified through Phase
   18A-18B.
 - Phase 19 - Run Center Realtime Progress And Requirement Intake Governance:
@@ -300,11 +320,13 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   unredacted raw responses for any role, new `ai_evaluation_traces` storage,
   and default trace size guardrails.
 - Phase 21 - Formal Console Page-Level UI/UX Refinement: accepted but not
-  implemented. This is a frontend-only formal console refinement phase covering
-  global shell/design tokens, navigation hierarchy, Operations Home,
-  Monitoring, Platform Accounts, Proxies, AI Access, AI Rules, Mail
-  Configuration, Mail Templates, Runtime Strategy, Run Center, Report Center,
-  System Diagnostics, Login, and cross-page verification.
+  fully implemented. The focused CR-048/CR-049 frontend information-
+  architecture subset for Mail Configuration and Report Center is implemented
+  and verified, but the broader Phase 21 page-level visual refinement
+  workstreams for global shell/design tokens, navigation hierarchy, Operations
+  Home, Monitoring, Platform Accounts, Proxies, AI Access, AI Rules, Mail
+  Templates, Runtime Strategy, Run Center, System Diagnostics, Login, and
+  cross-page verification remain open.
 - Minimum Usable Pilot Acceptance Gate: satisfied for first usable pilot. CR-036 /
   Phase 17.1A-B email side-effect safety and CR-035/Phase 7.1A-C run
   lifecycle/AI fallback/partial-report safety are implemented, locally
@@ -328,10 +350,10 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   recipient count/source in the API and frontend, and keeps automated
   verification on mocked SMTP so tests do not send real external mail.
 - CR-045 - AI Evaluation Accuracy And Unevaluated Lead Status Clarity:
-  partially implemented and verified for Phase 7.2A-B. Unevaluated/limited-
-  context status safety and active-finalization fallback are implemented;
-  relevance prompt hardening and calibration fixtures remain open under Phase
-  7.2C-D before the full CR is closed.
+  complete and verified for Phase 7.2A-D. Unevaluated/limited-context status
+  safety, active-finalization fallback, source-keyword recall-provenance
+  enforcement, target-evidence gating, homonym/geography safeguards, and
+  calibration fixtures are implemented and verified locally.
 - CR-050 - Report Center Lead Status Filter Precision Regression Fix:
   complete and verified. Report Center and leads API filters now treat
   `高风险` and `疑似负面` as exact status filters; suspected-negative filtering
@@ -350,17 +372,16 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   reuse of the same profile/user-agent/browser-platform/timezone/locale/screen
   and proxy policy, explicit reset/re-login for locked changes, and optional
   CloakBrowser-style provider evaluation without making it a hard dependency.
-- CR-048 - Report Center Lead Detail Information Architecture: accepted but
-  not implemented. Confirmed scope is an explicit "view leads" path, visible
-  lead-detail scope/count/filter summary, no unlabeled flat all-leads table in
-  Report Center, filtered-aggregate labeling if retained, Run Center / Run
-  Detail as the primary run-scoped lead/evaluation entry, and preservation of
-  report preview, downloads, resend, and delivery history.
-- CR-049 - Mail Configuration And Delivery History Action Hierarchy: accepted
-  but not implemented. Confirmed scope is one Mail Configuration page-level
-  action bar, no duplicated edit/test buttons inside the SMTP/defaults
-  summary, compact single real-email switch state with explicit enable
-  confirmation, and Report Center delivery history as scoped secondary detail.
+- CR-048 - Report Center Lead Detail Information Architecture: focused
+  frontend batch complete and verified. Report Center uses explicit
+  report-scoped "查看线索" actions and a scoped lead drawer; Run Center also
+  exposes run-scoped "查看线索"; the default Report Center no longer renders an
+  unlabeled lead table or process-draft preview hint.
+- CR-049 - Mail Configuration And Delivery History Action Hierarchy: focused
+  frontend batch complete and verified. Mail Configuration primary actions and
+  the single real-email switch live in the page-level action bar, duplicated
+  first-level SMTP/default panels are removed, and Report Center delivery
+  history opens as a scoped drawer from report row/status actions.
 
 The documented V1 product roadmap is implemented through Phase 9 in this
 worktree, and the console optimization roadmap is verified through Phase 18B.
@@ -537,8 +558,9 @@ separate follow-up work.
 - CR-040 Formal Console Page-Level UI/UX Refinement has been accepted as Phase
   21. The standalone execution plan defines per-page preservation rules,
   allowed visual changes, testing, verification, and acceptance criteria. The
-  planning update does not change code and does not reopen CR-033; Phase 21
-  implementation work remains not started.
+  focused CR-048/CR-049 Report Center and Mail Configuration information-
+  architecture subset is implemented and verified, but the broader Phase 21
+  page-level visual refinement remains open and does not reopen CR-033.
 - CR-034 Run Detail And AI Evaluation Traceability has been accepted as a
   run-center optimization with data-model implications. The current
   code can construct AI input payloads and stores final evaluation results, but
@@ -550,10 +572,12 @@ separate follow-up work.
 - No active code implementation batch is currently in progress. Phase 10-18
   console optimization is complete and verified through Phase 18B. Phase 19A
   documentation governance is complete. Phase 19B-19D run-center realtime
-  progress code work is not started. Phase 7.1A-C, Phase 7.2A-B, and
-  CR-043/CR-044 are implemented and verified; Phase 7.1D remains gated and
-  Phase 7.2C-D remain open. Phase 20 is accepted but not implemented. Phase 21
-  is accepted but not implemented. CR-037 is deferred.
+  progress code work is not started. Phase 7.1A-C, Phase 7.2A-D, CR-043,
+  CR-044, CR-045, and CR-050 are implemented and verified; Phase 7.1D remains
+  gated. Phase 20 is accepted but not implemented. Phase 21 is accepted but
+  not fully implemented; only the focused CR-048/CR-049 Report Center and Mail
+  Configuration information-architecture subset is verified. CR-037 is
+  deferred.
 
 ## Known Risks
 
@@ -601,19 +625,24 @@ separate follow-up work.
   `8317` still must not be repaired automatically; Phase 7.1D requires safe
   operational steps, backup, rollback, dry-run preview, and explicit operator
   approval before changing historical AI rows, reports, or terminal status.
-- CR-036 Phase 17.1A-B and backend Phase 17.1C/17.2A are implemented and
-  locally verified. The product direction is not "never send real mail"; real
-  mail must be intentional, visible, and attributable through the
-  administrator Mail Configuration "真实邮件发送" switch introduced by CR-043.
-  Operator-facing recipient-source UI/preflight explanation, orphan evidence
-  operations notes, and template guardrails remain follow-up work.
-- CR-045 Phase 7.2A-B reduces the live pilot safety risk for missing
-  `ai_evaluations` rows: missing rows now surface as unevaluated or limited-
-  context rather than no-risk, and active finalization creates pending-review
-  fallback rows for known unresolved candidates when safe. Broad-keyword
-  relevance hardening remains open in Phase 7.2C-D, so operators should still
-  manually inspect broad-keyword recall noise and rows with empty AI
-  reason/evidence and should not rely on broad keyword AI labels as final.
+- CR-036 Phase 17.1A-D is implemented and locally verified. The product
+  direction is not "never send real mail"; real mail must be intentional,
+  visible, and attributable through the administrator Mail Configuration
+  "真实邮件发送" switch introduced by CR-043. Recipient-source UI/preflight
+  explanation and orphan evidence operations notes are now closed for the
+  focused follow-up scope; role/quota governance remains deferred as CR-037.
+- CR-039 Phase 17.2A-C is implemented and locally verified for template
+  provenance, report-body guardrails, sample-data preview wording, send-time
+  template explanation, and administrator style presets that wrap the
+  system-generated report body.
+- CR-045 Phase 7.2A-D reduces the live pilot safety risk for missing
+  `ai_evaluations` rows and broad-keyword recall noise: missing rows now
+  surface as unevaluated or limited-context rather than no-risk, active
+  finalization creates pending-review fallback rows for known unresolved
+  candidates when safe, and keyword-only or homonym/geography-only AI model
+  positives are forced back to unrelated unless target evidence appears in
+  title, description, author, or actually collected comments. AI output remains
+  an initial suspected-lead screen, not a factual determination.
 - CR-037 is deferred: normal-user email send/resend quotas and administrator
   policy controls are not yet designed. Existing V1 role permissions remain in
   force until a future confirmed phase changes them.
@@ -621,16 +650,11 @@ separate follow-up work.
   prompt/request/response details will add new trace persistence and role-safe
   APIs. Historical AI evaluations cannot be treated as having exact input
   snapshots because those snapshots were not persisted at evaluation time.
-- CR-048 is accepted but not implemented: the current Report Center can still
-  make lead details feel like a flat list. Until the scope-clarity UI is
-  implemented, operators may need to distinguish current-filter aggregate
-  leads from selected-report leads by the action path rather than by a strong
-  visual hierarchy.
-- CR-049 is accepted but not implemented: the current Mail Configuration page
-  may still show duplicate edit/test actions and a visually heavy real-email
-  section. Until Phase 21I or a small mail-UI batch implements the new action
-  hierarchy, operators should treat the page-header actions as the primary
-  controls and the lower SMTP block as status/context.
+- CR-048/CR-049 focused frontend information architecture is verified, but it
+  intentionally does not implement Phase 20 AI trace persistence, full Run
+  Detail, or the full Phase 21 visual refinement. Report Center lead drawers
+  remain report/run-scoped shortcuts rather than a standalone global lead
+  workbench.
 - Phase 18B report-center task grouping is implemented and verified. The
   current frontend has the complete Phase 11-12 foundation and Phase 13A data
   contract: local static module
@@ -710,58 +734,86 @@ separate follow-up work.
 
 Next allowed implementation order:
 
-1. implement CR-045/Phase 7.2C-D AI relevance hardening and calibration
-   fixtures before operators rely on broad-keyword AI risk labels;
-2. implement a deliberately small CR-048/CR-049 frontend information-
-   architecture batch if the user wants the Report Center and Mail
-   Configuration cleanup before full Phase 21: limit it to Phase 21I and
-   Phase 21M behavior, keep the Report Center report-first, keep delivery
-   history as scoped secondary detail, and do not implement Phase 20 AI
-   trace/debug fields in the Report Center;
-3. implement Phase 17.1D historical orphan email evidence only as a read-only
-   dry-run/checklist/runbook batch unless the operator explicitly approves a
-   backup, rollback, and mutation path;
-4. implement Phase 21 formal console page-level UI/UX refinement as
+1. implement Phase 21 formal console page-level UI/UX refinement as
    frontend-only workstreams with the Phase 21P cross-page layout-resilience
    gate. Do not run multiple Phase 21/UI worktrees that edit
    `api/monitor_web/index.html`, `api/webui/monitor/monitor.css`, or
    `api/webui/monitor/monitor.js` at the same time unless the split is
    deliberately coordinated;
-5. implement CR-047/Phase 5.1 account browser-environment consistency only
+2. implement CR-047/Phase 5.1 account browser-environment consistency only
    after the fixed-environment proxy override policy is confirmed and
    recorded; do this before adopting any optional CloakBrowser-style
    CDP/noVNC provider or expanding platform account environment controls;
-6. implement Phase 17.1C/17.2A remaining operator-facing recipient/template
-   explanations and Phase 17.2B-C template guardrails as a consolidated
-   email/template follow-up batch if it becomes the next accepted batch;
-7. implement CR-031/Phase 19B-19D realtime run-progress work after Phase 7.1
+3. keep Phase 17.1D historical orphan email evidence closed as read-only
+   dry-run/checklist/runbook work unless the operator explicitly approves a
+   backup, rollback, and mutation path;
+4. implement CR-031/Phase 19B-19D realtime run-progress work after Phase 7.1
    lifecycle fields are available, unless a deliberately small compatible
    provisional-progress batch is documented first. Keep Phase 19 focused on
    active run progress and do not mix it with Phase 20 AI trace storage or run
    detail UI in the same goal;
-8. schedule CR-034/Phase 20 implementation when per-run lead inspection and
+5. schedule CR-034/Phase 20 implementation when per-run lead inspection and
    every AI evaluation record become the next execution priority. Keep Phase
    20 as a dedicated traceability goal because it adds data-model, API,
-   retention, redaction, and frontend run-detail work;
-9. handle CR-035/Phase 7.1D historical run remediation only when the operator
+   retention, redaction, and frontend run-detail work; treat trace-write
+   failures as non-blocking for run finalization but still covered by
+   negative tests;
+6. handle CR-035/Phase 7.1D historical run remediation only when the operator
    explicitly approves the dry-run, backup, rollback, and repair path; it is a
    conditional operations task, not a normal feature batch;
-10. prepare broader production pilot handoff and deployment-specific validation
-   for additional live credentials after the first usable pilot baseline.
+7. prepare broader production pilot handoff and deployment-specific validation
+    for additional live credentials after the first usable pilot baseline.
 
-Lowest-risk parallel execution lanes:
+Test gate hardening recorded:
 
-1. CR-045/Phase 7.2C-D AI relevance hardening and calibration fixtures;
-2. a targeted CR-048/CR-049 Phase 21I/21M frontend information-architecture
-   batch;
-3. Phase 17.1D historical orphan email evidence dry-run/checklist/runbook.
+- CR-047 now requires explicit proxy-override policy confirmation plus
+  fail-closed browser-environment tests.
+- CR-045 now requires a noisy-positive model override fixture so keyword-only
+  evidence cannot backdoor target-related negative classification.
+- Phase 17.1D now requires dry-run no-op proof plus backup/approval gates
+  before any mutation path.
+- Phase 19 now requires disappearing-subprocess and repeated-finalization
+  coverage so a run cannot stay stuck in provisional progress.
+- Phase 20 now requires trace-write-failure and retention-cleanup safety so
+  finalization cannot be blocked or mutate business rows.
+- CR-048 and CR-049 now require UI tripwires for unlabeled lead tables and
+  duplicated mail edit/test actions.
+
+Lowest-risk parallel execution lane:
+
+1. Phase 21 frontend-only page-level refinement may proceed after this focused
+   email/template batch, but it should remain separate from Phase 19 and Phase
+   20 because those add runtime progress and traceability surfaces.
 
 Do not run Phase 19 and Phase 20 in parallel, and do not run more than one
 frontend worktree that edits the formal console shell at the same time.
-CR-038 and CR-050 are already verified follow-ups and should remain historical
-closed items rather than next implementation tasks.
+CR-038, CR-045, and CR-050 are already verified follow-ups and should remain
+historical closed items rather than next implementation tasks.
 
 ## Latest Verification
+
+Phase 17.1D historical orphan email evidence verification on 2026-06-18:
+
+- Added `scripts/review_orphan_email_evidence.py` as a read-only dry-run helper
+  for delivery-log rows whose `job_id` or `report_id` no longer resolves to
+  active records.
+- The helper reports delivery-log id, `job_id`, `report_id`, send type/status,
+  sent/created time, job/report/run existence, artifact existence,
+  classification, `mode=dry_run`, `mutations_attempted=0`, and the database
+  backup, artifact/email backup, explicit operator approval, and rollback
+  gates required before any future mutation.
+- Documented the observed CR-036 historical evidence for delivery-log rows `60`
+  and `81`, `job_id=9686` / `run_id=8380` / `report_id=3959` and
+  `job_id=9759` / `run_id=8447` / `report_id=3998`, including exported `.eml`
+  references, attachment names, missing job/run/report rows, and the default
+  preserve policy.
+- Verified the helper does not mutate `email_delivery_logs`, `reports`, or
+  `crawl_runs`, does not change artifact files, and keeps existing non-orphan
+  report delivery history readable.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_17_1d or phase_17b_email_delivery_history_api_scope_and_safe_fields or phase_17b_report_center_delivery_history_frontend_hooks or phase_18b_report_center_task_grouping_frontend_hooks"`
+- Result: 4 passed, 288 deselected, 3 warnings.
+- `uv run python -m py_compile scripts\review_orphan_email_evidence.py tests\test_monitoring_mvp.py`
+- Result: PASS.
 
 Phase 18B report-center task grouping frontend verification on 2026-06-16:
 

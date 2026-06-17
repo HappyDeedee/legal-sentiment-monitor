@@ -509,7 +509,7 @@ button:disabled {
 }
 
 .run-actions {
-  min-width: 230px;
+  min-width: 310px;
 }
 
 .task-loop-shortcuts {
@@ -985,20 +985,58 @@ button:disabled {
   line-height: var(--line-height-relaxed);
 }
 
-.email-delivery-history-panel {
-  display: grid;
-  gap: var(--space-3);
+.report-leads-drawer {
+  width: min(1120px, calc(100% - 36px));
 }
 
-.panel-title-row {
+.email-delivery-history-drawer {
+  width: min(960px, calc(100% - 36px));
+}
+
+.report-leads-toolbar {
   display: flex;
-  align-items: flex-start;
+  align-items: center;
   justify-content: space-between;
   gap: var(--space-3);
+  padding: var(--space-3);
+  margin-bottom: var(--space-3);
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-control-medium);
+  background: var(--color-neutral-25);
 }
 
-.panel-title-row h3 {
+.report-leads-toolbar .small {
   margin: 0;
+  color: var(--color-neutral-500);
+}
+
+.report-leads-filter {
+  margin: 0 0 var(--space-3);
+  padding: var(--space-2);
+  background: var(--color-neutral-50);
+}
+
+.report-leads-content {
+  min-height: 180px;
+  overflow: auto;
+}
+
+.email-toolbar-switch {
+  min-height: 36px;
+  padding: 5px 9px;
+  border: 1px solid var(--color-neutral-200);
+  border-radius: var(--radius-control-small);
+  background: var(--color-neutral-0);
+  box-shadow: var(--shadow-subtle);
+}
+
+.email-toolbar-switch span:last-child {
+  white-space: nowrap;
+}
+
+.email-delivery-history-content {
+  min-height: 180px;
+  overflow: auto;
 }
 
 .email-status-button {
