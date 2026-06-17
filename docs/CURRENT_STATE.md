@@ -712,36 +712,54 @@ Next allowed implementation order:
 
 1. implement CR-045/Phase 7.2C-D AI relevance hardening and calibration
    fixtures before operators rely on broad-keyword AI risk labels;
-2. handle CR-038 sticky drawer close accessibility as a small frontend quick
-   fix, or merge it into the first Phase 21 UI workstream if Phase 21 is the
-   next frontend batch;
-3. implement Phase 21 formal console page-level UI/UX refinement as
+2. implement a deliberately small CR-048/CR-049 frontend information-
+   architecture batch if the user wants the Report Center and Mail
+   Configuration cleanup before full Phase 21: limit it to Phase 21I and
+   Phase 21M behavior, keep the Report Center report-first, keep delivery
+   history as scoped secondary detail, and do not implement Phase 20 AI
+   trace/debug fields in the Report Center;
+3. implement Phase 17.1D historical orphan email evidence only as a read-only
+   dry-run/checklist/runbook batch unless the operator explicitly approves a
+   backup, rollback, and mutation path;
+4. implement Phase 21 formal console page-level UI/UX refinement as
    frontend-only workstreams with the Phase 21P cross-page layout-resilience
-   gate;
-4. include CR-048 Report Center lead-detail scope clarity when Phase 20E,
-   Phase 21M, or a deliberately small Report Center UI batch becomes active;
-   keep it report-first and do not implement Phase 20 AI trace/debug fields in
-   the Report Center;
-5. include CR-049 Mail Configuration and delivery-history action hierarchy
-   when Phase 21I/21M or a deliberately small mail/report UI batch becomes
-   active; keep CR-043/CR-044 safety behavior unchanged;
-6. implement CR-047/Phase 5.1 account browser-environment consistency only
+   gate. Do not run multiple Phase 21/UI worktrees that edit
+   `api/monitor_web/index.html`, `api/webui/monitor/monitor.css`, or
+   `api/webui/monitor/monitor.js` at the same time unless the split is
+   deliberately coordinated;
+5. implement CR-047/Phase 5.1 account browser-environment consistency only
    after the fixed-environment proxy override policy is confirmed and
    recorded; do this before adopting any optional CloakBrowser-style
    CDP/noVNC provider or expanding platform account environment controls;
-7. implement Phase 17.1C/17.2A remaining operator-facing recipient/template
+6. implement Phase 17.1C/17.2A remaining operator-facing recipient/template
    explanations and Phase 17.2B-C template guardrails as a consolidated
    email/template follow-up batch if it becomes the next accepted batch;
-8. implement CR-031/Phase 19B-19D realtime run-progress work after Phase 7.1
+7. implement CR-031/Phase 19B-19D realtime run-progress work after Phase 7.1
    lifecycle fields are available, unless a deliberately small compatible
-   provisional-progress batch is documented first;
-9. schedule CR-034/Phase 20 implementation after higher-priority safety and
-   lifecycle work if run-detail traceability becomes the next execution batch;
-10. handle CR-035/Phase 7.1D historical run remediation only when the operator
+   provisional-progress batch is documented first. Keep Phase 19 focused on
+   active run progress and do not mix it with Phase 20 AI trace storage or run
+   detail UI in the same goal;
+8. schedule CR-034/Phase 20 implementation when per-run lead inspection and
+   every AI evaluation record become the next execution priority. Keep Phase
+   20 as a dedicated traceability goal because it adds data-model, API,
+   retention, redaction, and frontend run-detail work;
+9. handle CR-035/Phase 7.1D historical run remediation only when the operator
    explicitly approves the dry-run, backup, rollback, and repair path; it is a
    conditional operations task, not a normal feature batch;
-11. prepare broader production pilot handoff and deployment-specific validation
+10. prepare broader production pilot handoff and deployment-specific validation
    for additional live credentials after the first usable pilot baseline.
+
+Lowest-risk parallel execution lanes:
+
+1. CR-045/Phase 7.2C-D AI relevance hardening and calibration fixtures;
+2. a targeted CR-048/CR-049 Phase 21I/21M frontend information-architecture
+   batch;
+3. Phase 17.1D historical orphan email evidence dry-run/checklist/runbook.
+
+Do not run Phase 19 and Phase 20 in parallel, and do not run more than one
+frontend worktree that edits the formal console shell at the same time.
+CR-038 and CR-050 are already verified follow-ups and should remain historical
+closed items rather than next implementation tasks.
 
 ## Latest Verification
 
