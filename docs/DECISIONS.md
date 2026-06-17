@@ -247,3 +247,25 @@ short `Superseded by` note rather than deleting history.
   target law firm, accepted aliases, or a clearly equivalent reference.
   Missing AI evaluation records, timeout leftovers, and interrupted evaluation
   candidates must not be displayed as no-risk content.
+
+## 2026-06-17
+
+- Confirmed for CR-047: Account Browser Environment Consistency is accepted as
+  a Phase 5.1 existing-feature optimization. The initial local draft used
+  CR-042, but CR-042 is already the historical rejected real-email validation
+  window, so the account browser-environment requirement is recorded as
+  CR-047.
+- Confirmed for CR-047: the target rule is one platform account equals one
+  `profile_key` and one fixed browser environment. Server-side QR login,
+  accepted Cookie validation, login-state checks, and crawling should reuse the
+  same persisted profile, user agent, browser platform/fingerprint family,
+  timezone, locale, screen size, and effective proxy policy.
+- Confirmed for CR-047: CloakBrowser-Manager is a reference for stable
+  profile settings, CDP, and noVNC concepts only. It is not a required
+  dependency, must not replace the current Platform Accounts center, and any
+  optional provider evaluation requires a separate security, deployment,
+  license, authentication, noVNC access-control, storage, and redaction review.
+- Confirmed for CR-047: locked browser-environment fields must not be silently
+  edited after successful login validation. Changing a locked environment
+  requires an explicit administrator reset/re-login flow with audit logging and
+  clear consequences.

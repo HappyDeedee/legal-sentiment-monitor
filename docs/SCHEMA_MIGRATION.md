@@ -88,6 +88,43 @@ profile_key TEXT
 Existing `profile_path` can remain temporarily during schema transition, but it
 should not be used as the primary identity for new account environments.
 
+### Accepted Phase 5.1 - Add Account Browser Environment Fields
+
+Status: Accepted for CR-047, not implemented yet. Phase 5.1 must extend the
+existing `profile_key` model with a persisted, locked browser environment for
+each platform account.
+
+Additive fields for `social_accounts`:
+
+```text
+browser_platform TEXT NOT NULL DEFAULT ''
+fingerprint_seed TEXT NOT NULL DEFAULT ''
+user_agent TEXT NOT NULL DEFAULT ''
+timezone TEXT NOT NULL DEFAULT ''
+locale TEXT NOT NULL DEFAULT ''
+screen_width INTEGER
+screen_height INTEGER
+browser_environment_locked_at TEXT
+browser_environment_lock_reason TEXT NOT NULL DEFAULT ''
+```
+
+Migration and compatibility:
+
+- generate or assign browser-environment values before first QR login or
+  accepted Cookie validation;
+- lock the browser environment after successful QR login or accepted Cookie
+  validation;
+- keep existing accounts readable and either backfill customer-safe defaults or
+  mark them as needing environment confirmation/re-login;
+- do not move old profile directories during this migration;
+- keep `proxy_id` as the account-bound stable proxy policy field and settle how
+  task-level proxy overrides interact with fixed account environments before
+  code implementation;
+- block silent edits to locked browser-environment fields and require an
+  audited reset/re-login path;
+- do not expose raw profile paths, cookies, proxy credentials, CDP endpoints,
+  noVNC sessions, or fingerprint-debug output through customer-facing APIs.
+
 ### Step 4 - Add Runtime Settings
 
 Create `system_settings` table. Recommended flexible shape:

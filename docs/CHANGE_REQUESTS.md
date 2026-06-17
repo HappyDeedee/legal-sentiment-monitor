@@ -63,6 +63,7 @@ Status values:
 - CR-044: Mail Test Recipient Coverage And SMTP Acceptance Clarity
 - CR-045: AI Evaluation Accuracy And Unevaluated Lead Status Clarity
 - CR-046: Platform Account Avatar Safe Cache Display Regression Fix
+- CR-047: Account Browser Environment Consistency
 
 ## Entry Classification Rule
 
@@ -2794,3 +2795,150 @@ Verification:
 - Verified on 2026-06-17 with targeted avatar-cache tests covering signed URL
   redaction, same-origin avatar URL output, administrator-only avatar serving,
   path traversal rejection, and profile/cookie path hiding.
+
+## CR-047 - Account Browser Environment Consistency
+
+Date: 2026-06-17
+
+Source: user request after reviewing CloakHQ/CloakBrowser-Manager as a
+reference for stable browser-profile environments. This requirement was
+initially drafted locally as CR-042, but CR-042 is already the historical
+rejected real-email validation-window design, so this accepted requirement is
+recorded as CR-047.
+
+Module: account environment, platform account login, server-side browser
+runtime
+
+Type: Existing Feature Optimization
+
+Background:
+
+Phase 5 and Phase 6 already established the core account-environment model:
+one platform account maps to one `profile_key`, the server persists account
+profiles, login and crawling use server-side browser sessions, and
+account/profile/proxy locks prevent concurrent reuse. The remaining
+consistency gap is that `profile_key` identifies the persisted profile
+directory, but it does not explicitly persist the browser identity inputs that
+make a login environment stable.
+
+CloakBrowser-Manager is useful as a technical reference because it treats
+browser profile properties such as platform, fingerprint seed, user agent,
+timezone, locale, screen size, proxy, CDP access, and noVNC viewing as
+profile-level settings. The project should learn from that profile-environment
+model, but should not copy CloakBrowser-Manager's standalone account center,
+database, authentication model, frontend, or deployment shape into this
+system.
+
+Purpose:
+
+Make the account environment rule explicit and enforceable:
+
+```text
+one platform account = one profile_key = one fixed browser environment
+```
+
+For the same platform account, server-side QR login, login-state checks, and
+later crawling should all use the same persisted profile, same user agent, same
+browser platform fingerprint family, same timezone/locale, same screen size,
+and same proxy policy.
+
+Requirement:
+
+- Add a persisted account browser-environment configuration on top of the
+  current `profile_key` model. The minimum fields are:
+  `browser_platform`, `fingerprint_seed`, `user_agent`, `timezone`, `locale`,
+  `screen_width`, `screen_height`, lock status/timestamp/reason, and the
+  account-bound `proxy_id` policy.
+- Generate or assign the account browser environment before the first
+  server-side QR login attempt or accepted Cookie login validation, and lock it
+  after successful login validation.
+- Login, login-state checks, and crawling must read the same persisted account
+  browser environment instead of deriving browser identity from changing
+  process defaults.
+- Existing Platform Accounts UI should show a customer-safe summary such as
+  browser platform, timezone/locale, screen size, and proxy binding state, but
+  must not expose raw profile paths, cookies, proxy credentials, local command
+  lines, CDP endpoints, noVNC sessions, or fingerprint-debug output.
+- Administrator changes to a locked browser environment require an explicit
+  reset/re-login flow with audit logging. Silent edits after successful login
+  are not allowed.
+- Reconcile the existing proxy-priority rule with account-environment
+  consistency before code implementation. The preferred direction is that an
+  account-bound proxy is the stable default for that account; any task-level
+  proxy override must be treated as an explicit, visible exception or blocked
+  for fixed-environment accounts according to the final accepted design.
+- Introduce an internal browser-environment provider boundary so the existing
+  Playwright/CDP path can consume the persisted settings first. CloakBrowser or
+  CloakBrowser-Manager-style CDP/noVNC management may be evaluated later as an
+  optional provider, not as a required dependency.
+- If an optional CloakBrowser-based provider is evaluated, review deployment
+  fit, license boundaries, authentication exposure, noVNC access control,
+  persistent storage, server resource use, and whether observable browser
+  signals match the stored account environment.
+
+Preserved behavior:
+
+- Keep `profile_key = {workspace_id}/{platform}/acc_{account_id}` as the
+  account profile identity.
+- Keep one profile per platform account and one account/profile concurrency
+  lock.
+- Keep server-side QR/status login as the production path.
+- Keep Cookie login as a supported account login type.
+- Keep verification/captcha/SMS states returned to the UI rather than bypassed.
+- Keep normal users away from account/profile/proxy/browser implementation
+  details.
+
+Scope boundary:
+
+- This CR optimizes the existing account-environment feature. It does not
+  create a separate browser-account product or replace the current account
+  center.
+- Planned implementation areas are `social_accounts` data model/migration,
+  account environment helpers, login QR/session launch options, crawler/CDP
+  runtime binding, Platform Accounts UI summaries, audit logs, and tests.
+- CloakBrowser-Manager may be used as a reference design for stable profile
+  settings, CDP, and noVNC, but its standalone manager service should not be
+  adopted wholesale without a separate provider evaluation and decision.
+
+Non-goals:
+
+- Do not promise that every platform login HTTP request is byte-for-byte
+  identical. Dynamic tokens, timestamps, cookies, platform challenges, and
+  network behavior can still change.
+- Do not bypass captcha, slider, SMS, or manual platform verification.
+- Do not add complex account rotation, dynamic proxy scheduling, or
+  high-concurrency browser orchestration.
+- Do not expose raw profile paths, cookies, proxy credentials, fingerprint
+  internals, CDP endpoints, or noVNC sessions to normal users.
+- Do not make CloakBrowser or CloakBrowser-Manager a hard dependency for the
+  first implementation batch.
+
+Status: Accepted
+
+Related tasks:
+
+- Phase 5.1 Account Browser Environment Consistency in `TASKS.md`
+- CR-047 Account Browser Environment Consistency in `TRACEABILITY.md`
+
+Acceptance:
+
+- New platform accounts receive a deterministic `profile_key` and a persisted
+  browser-environment configuration before first QR login or Cookie
+  validation.
+- Successful QR login or accepted Cookie validation locks the
+  browser-environment configuration.
+- Repeated login-state checks and crawl runs for the same account use the same
+  stored `profile_key`, `browser_platform`, `fingerprint_seed`, `user_agent`,
+  `timezone`, `locale`, `screen_width`, `screen_height`, and effective proxy
+  policy.
+- Same-platform accounts have separate profile keys and separate browser
+  environment values unless an administrator explicitly clones a safe template
+  before first login.
+- Attempts to edit a locked browser environment are blocked unless the operator
+  uses an explicit reset/re-login path that records an audit log.
+- Tests verify that service restart or process default changes do not change
+  the observable account browser environment for subsequent login/crawl
+  sessions.
+- If an optional CloakBrowser-style provider is enabled, CDP/noVNC access is
+  administrator-scoped, authenticated, and does not bypass the existing
+  account/profile/proxy locks or sensitive-data redaction rules.

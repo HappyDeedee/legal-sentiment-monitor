@@ -17,6 +17,17 @@ Rules:
 - proxy priority is task proxy, account proxy, then default network;
 - login and crawling should use the same proxy when a proxy is bound.
 
+Accepted CR-047 target rule:
+
+```text
+one platform account = one profile_key = one fixed browser environment
+```
+
+The fixed browser environment means that server-side login, login-state
+checks, and crawling for the same platform account should reuse the same
+persisted profile, user agent, browser platform fingerprint family, timezone,
+locale, screen size, fingerprint seed, and proxy policy.
+
 ## Profile Identity
 
 Confirmed target design:
@@ -55,6 +66,15 @@ Target fields:
 - status;
 - profile_key;
 - proxy_id;
+- browser_platform;
+- fingerprint_seed;
+- user_agent;
+- timezone;
+- locale;
+- screen_width;
+- screen_height;
+- browser_environment_locked_at;
+- browser_environment_lock_reason;
 - notes;
 - last_login_at;
 - last_checked_at;
@@ -66,6 +86,23 @@ Target fields:
 Existing `profile_path` is a transition-only legacy field. New account
 environments must use `profile_key`, and old low-volume accounts can be
 re-created or re-logged in instead of receiving long-term compatibility logic.
+
+The CR-047 browser-environment fields are accepted for future implementation,
+not yet implemented in the current runtime. They should be assigned before the
+first QR login or accepted Cookie login validation and locked after the account
+environment becomes usable. Silent edits after successful login are not
+allowed; changing a locked environment requires an explicit reset/re-login flow
+with audit logging.
+
+Reference note:
+
+- CloakBrowser-Manager is a useful reference for stable profile settings such
+  as browser platform, fingerprint seed, user agent, timezone, locale, screen
+  size, proxy, CDP, and noVNC.
+- This project should absorb that account-environment model, but should not
+  copy CloakBrowser-Manager's standalone account center, database, frontend,
+  authentication model, or deployment layout without a separate provider
+  decision.
 
 ## Login Types
 
@@ -129,12 +166,24 @@ At crawl time:
 
 1. if task has bound account, use that account;
 2. otherwise select an active same-platform account in the workspace;
-3. if task has bound proxy, use task proxy;
-4. else use account proxy;
-5. else use default network.
+3. resolve its `profile_key` and, after CR-047 implementation, its locked
+   browser-environment configuration;
+4. before CR-047 implementation, use existing proxy priority: task proxy,
+   account proxy, then default network;
+5. after CR-047 implementation, apply the persisted user agent, browser
+   platform/fingerprint inputs, timezone, locale, screen size, and effective
+   proxy policy;
+6. use the same resolved environment for QR login, login-state checks, and
+   crawling.
 
 If no usable account exists for a platform, skip or fail only that platform and
 record a clear reason.
+
+The existing proxy-priority rule must be reconciled before CR-047 code work: an
+account-bound proxy is the stable default for the account environment. A
+task-level proxy override must either be a visible explicit exception or be
+blocked for fixed-environment accounts according to the final implementation
+decision.
 
 ## Locks
 

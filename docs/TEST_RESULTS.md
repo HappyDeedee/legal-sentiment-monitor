@@ -11,6 +11,25 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
 `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-17 - CR-047 Account Browser Environment Consistency Documentation
+
+Environment: `E:\myproject\MediaCrawler`, branch `main`.
+
+Result:
+
+- Restored the locally drafted account browser-environment consistency
+  requirement into current mainline documents under the new CR-047 number.
+- Kept historical CR-042 as the rejected real-email validation-window design
+  superseded by CR-043.
+- Added Phase 5.1 tasks, traceability, test-plan coverage, data-model and
+  migration notes, account-environment rules, product requirements, and
+  decision records for the accepted-but-not-implemented CR-047 scope.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS.
+
 ## 2026-06-17 - CR-046 Platform Account Avatar Safe Cache Display
 
 Environment: isolated worktree

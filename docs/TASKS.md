@@ -117,6 +117,75 @@ and permission work.
       locks.
 - [x] Ensure login and crawling use the same account proxy when configured.
 
+## Phase 5.1 - Account Browser Environment Consistency
+
+Planning status:
+
+CR-047 is an accepted existing-feature optimization for the completed Phase 5
+account-environment responsibility area. It does not rewrite Phase 5's
+historical completion record. It extends the existing
+`profile_key = workspace/platform/account` model with a persisted, locked
+browser-environment configuration so the same platform account logs in and
+crawls through the same profile, browser platform, user agent, timezone,
+locale, screen size, fingerprint seed, and proxy policy.
+
+CloakBrowser-Manager is a reference for the profile-environment idea only:
+stable per-profile fields, CDP automation access, and noVNC viewing. Do not
+copy its standalone account manager, database, frontend, auth model, or
+deployment shape into this project without a separate provider decision.
+
+### Phase 5.1A - Account Browser Environment Data Model
+
+- [ ] Add additive browser-environment fields for platform accounts:
+      `browser_platform`, `fingerprint_seed`, `user_agent`, `timezone`,
+      `locale`, `screen_width`, `screen_height`, environment lock status, and
+      lock timestamp/reason.
+- [ ] Keep `proxy_id` as the account-bound stable proxy policy field and
+      document how it interacts with any task-level proxy override before
+      implementation.
+- [ ] Backfill existing active accounts with a customer-safe default or mark
+      them as needing environment confirmation/re-login without moving old
+      profile directories.
+- [ ] Keep old accounts readable and avoid exposing raw `profile_path`.
+
+### Phase 5.1B - Environment Generation And Locking
+
+- [ ] Generate or assign browser-environment values before first QR login or
+      Cookie validation.
+- [ ] Lock the browser-environment configuration after successful QR login or
+      accepted Cookie validation.
+- [ ] Block silent edits to locked environment fields.
+- [ ] Add an explicit administrator reset/re-login path for changing a locked
+      environment, with audit logging and clear consequences.
+- [ ] Preserve one account/profile concurrency locks and server-side QR login
+      behavior.
+
+### Phase 5.1C - Login And Crawl Runtime Binding
+
+- [ ] Ensure QR login launch options use the persisted environment values
+      rather than process defaults for user agent, viewport/screen, locale,
+      timezone, proxy, and browser-platform/fingerprint provider inputs where
+      supported.
+- [ ] Ensure crawler/CDP launch and reconnect paths use the same persisted
+      account environment as login.
+- [ ] Add a browser-environment provider boundary so existing Playwright/CDP
+      remains the default provider while CloakBrowser-style providers can be
+      evaluated later.
+- [ ] Verify service restart, scheduler run, and manual run paths do not change
+      the stored account browser environment.
+
+### Phase 5.1D - Optional CloakBrowser-Style Provider Evaluation
+
+- [ ] Evaluate whether CloakBrowser or CloakBrowser-Manager-style CDP/noVNC
+      management should become an optional provider.
+- [ ] Review license, deployment, authentication, noVNC access-control,
+      profile storage, server resource use, and sensitive-data redaction before
+      any provider is enabled.
+- [ ] Keep optional provider endpoints administrator-only and consistent with
+      existing account/profile/proxy locks.
+- [ ] Record a separate decision before making CloakBrowser or
+      CloakBrowser-Manager a required production dependency.
+
 ## Phase 6 - Server Login Flow
 
 - [x] Make server-side QR login the primary flow.

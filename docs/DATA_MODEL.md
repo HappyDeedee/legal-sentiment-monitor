@@ -139,6 +139,15 @@ status
 profile_key
 profile_path_legacy
 proxy_id
+browser_platform
+fingerprint_seed
+user_agent
+timezone
+locale
+screen_width
+screen_height
+browser_environment_locked_at
+browser_environment_lock_reason
 cookies_encrypted
 notes
 last_login_at
@@ -157,6 +166,29 @@ updated_at
 direction is to use new `profile_key` profiles and require old low-volume
 accounts to re-login instead of preserving long-term legacy path compatibility.
 The inline lock fields protect both the account and its `profile_key`.
+
+CR-047 account browser-environment fields are accepted for future
+implementation, not yet active in the current schema unless the Phase 5.1
+migration has run. The fields make the browser identity inputs for a platform
+account explicit and persistent:
+
+- `browser_platform`: the browser platform fingerprint family such as
+  `windows`, `macos`, or `linux`;
+- `fingerprint_seed`: deterministic seed used by a browser-environment
+  provider where supported;
+- `user_agent`: the account's stable user-agent string;
+- `timezone` and `locale`: stable browser context timezone and language;
+- `screen_width` and `screen_height`: stable viewport/screen dimensions;
+- `browser_environment_locked_at`: set after successful QR login or accepted
+  Cookie login validation;
+- `browser_environment_lock_reason`: customer-safe reason such as
+  `qrcode_login_success` or `cookie_validation_success`.
+
+`proxy_id` remains the account-bound stable proxy policy field. CR-047 must
+settle how task-level proxy overrides interact with fixed account environments
+before implementation. The migration should be additive, should keep existing
+accounts readable, and should not expose raw profile paths or fingerprint-debug
+internals through normal-user APIs.
 
 ### proxy_profiles
 

@@ -493,11 +493,16 @@ Fields:
 - latest error.
 - recognized platform identity, including display name and avatar when
   available.
+- accepted future CR-047 browser-environment summary: browser platform,
+  timezone/locale, screen size, environment lock state, and proxy binding state
+  after Phase 5.1 is implemented.
 
 Rules:
 
 - one platform account maps to one profile;
 - profile path is not shown to users;
+- future CR-047 implementation must keep one platform account mapped to one
+  `profile_key` and one fixed browser environment;
 - account name is display-only and not profile identity;
 - login sessions are scoped to the current account;
 - no phone-login UI is shown unless a complete supported chain exists;
@@ -505,6 +510,9 @@ Rules:
 - platform avatar display must not expose signed external image URLs or query
   parameters to the frontend; use a same-origin server-side cache endpoint and
   fall back to the placeholder when the avatar cannot be fetched safely.
+- browser-environment summaries must not expose raw profile paths, cookies,
+  proxy credentials, local command lines, CDP endpoints, noVNC sessions, or
+  fingerprint-debug output.
 
 Acceptance:
 
@@ -513,6 +521,9 @@ Acceptance:
 - adding a second same-platform account does not reuse the first profile;
 - recognized account avatars render from a customer-safe same-origin URL and
   do not expose platform signatures, cookies, profile paths, or proxy secrets.
+- after CR-047 is implemented, repeated login-state checks and crawl runs for
+  the same platform account reuse the same locked browser environment unless
+  an administrator performs an explicit audited reset/re-login flow.
 
 ### 5.2 Proxy Resources
 

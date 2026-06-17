@@ -124,6 +124,12 @@ refund/legal posts. Phase 7 and Phase 7.1 remain historical snapshots; Phase
 timeout/partial-finalization creates pending-review fallback rows when safe,
 and `source_keyword` is treated as recall provenance rather than target-law-
 firm relatedness proof.
+CR-047 Account Browser Environment Consistency is accepted as Phase 5.1, a
+future account-environment optimization that extends the existing
+`profile_key` model with fixed browser-environment settings. It uses
+CloakBrowser-Manager only as a reference for stable profile settings, CDP, and
+noVNC, and does not make CloakBrowser-Manager a required dependency or replace
+the current Platform Accounts center.
 The active SQLite schema now provides the foundation tables and columns
 required before later implementation work, and the web/API layer now has
 session login, administrator/normal-user roles, menu visibility,
@@ -292,6 +298,13 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
 - Phase 5/6 - Account Environment and Server Login: profile key, timeout, and
   lock-storage decisions are accepted; Phase 5 account environment runtime and
   Phase 6 login-flow runtime are complete.
+- CR-047 / Phase 5.1 - Account Browser Environment Consistency: accepted but
+  not implemented. Confirmed scope includes persisted per-account
+  browser-environment fields, environment generation before first login,
+  locking after successful QR login or accepted Cookie validation, login/crawl
+  reuse of the same profile/user-agent/browser-platform/timezone/locale/screen
+  and proxy policy, explicit reset/re-login for locked changes, and optional
+  CloakBrowser-style provider evaluation without making it a hard dependency.
 
 The documented V1 product roadmap is implemented through Phase 9 in this
 worktree, and the console optimization roadmap is verified through Phase 18B.
@@ -638,6 +651,9 @@ Next allowed implementation order:
 4. implement Phase 21 formal console page-level UI/UX refinement as
    frontend-only workstreams with the Phase 21P cross-page layout-resilience
    gate;
+5. implement CR-047/Phase 5.1 account browser-environment consistency before
+   adopting any optional CloakBrowser-style CDP/noVNC provider or expanding
+   platform account environment controls.
 5. implement CR-031/Phase 19B-19D realtime run-progress work after Phase 7.1
    lifecycle fields are available, unless a deliberately small compatible
    provisional-progress batch is documented first;

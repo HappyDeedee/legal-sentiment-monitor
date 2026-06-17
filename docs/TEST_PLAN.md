@@ -136,6 +136,36 @@ Use the standard permission test data:
 - Scheduler recovery marks stale running runs as `timeout` or `interrupted`
   before releasing locks.
 
+### Account Browser Environment Consistency Tests
+
+CR-047 / Phase 5.1 must verify that account profile identity is paired with a
+stable browser environment instead of relying on changing process defaults.
+
+- New platform accounts receive a deterministic `profile_key` and persisted
+  browser-environment fields before first QR login or accepted Cookie
+  validation.
+- Successful QR login or accepted Cookie validation locks the account browser
+  environment.
+- Repeated login-state checks and crawl runs for the same account use the same
+  stored `profile_key`, `browser_platform`, `fingerprint_seed`, `user_agent`,
+  `timezone`, `locale`, `screen_width`, `screen_height`, and effective proxy
+  policy.
+- Same-platform accounts have separate profile keys and separate browser
+  environment values unless an administrator explicitly clones a safe template
+  before first login.
+- Attempts to silently edit a locked browser environment are rejected; the
+  explicit reset/re-login path records an audit log and makes consequences
+  visible to the administrator.
+- Service restart, scheduler run, and manual run paths do not change the stored
+  account browser environment.
+- Platform Accounts UI/API show only customer-safe browser environment
+  summaries and never expose raw profile paths, cookies, proxy credentials, CDP
+  endpoints, noVNC sessions, or fingerprint-debug output.
+- If a CloakBrowser-style provider is evaluated, tests or review evidence must
+  cover license/deployment fit, authentication, noVNC access control,
+  sensitive-data redaction, and compatibility with existing account/profile/proxy
+  locks before the provider can be enabled.
+
 ### Platform Account Avatar Safety Tests
 
 - A signed platform avatar URL stored after account identity detection is not
