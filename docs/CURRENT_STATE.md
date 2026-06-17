@@ -85,11 +85,12 @@ implementation phase with `docs/FORMAL_CONSOLE_UI_REFINEMENT_PLAN.md` as the
 execution-plan reference; Phase 21 code work has not started yet and no
 production frontend code has been changed for CR-040 in the planning update.
 The Phase 21 plan now explicitly treats prototype-observed layout collapse as
-a hard production risk: dashboard cards, closed-loop tracks, dense status
-cards, resource cards, run/report cards, and secondary overlays must not
-squeeze text into one-character vertical columns, overlap content, hide
-primary actions, or create horizontal overflow at `1440x900`, `1024x768`, or
-`390x844`. Phase 21 also explicitly excludes the currently unrendered
+a hard production verification risk rather than confirmed current production
+breakage: dashboard cards, closed-loop tracks, dense status cards, resource
+cards, run/report cards, and secondary overlays must not squeeze text into
+one-character vertical columns, overlap content, hide primary actions, or
+create horizontal overflow at `1440x900`, `1024x768`, or `390x844`. Phase 21
+also explicitly excludes the currently unrendered
 `Users And Permissions` page; implementing that page would require a separate
 new-capability CR. CR-041 Minimum Usable Pilot Acceptance Gate is now satisfied
 for the current "system can be used first" readiness standard:
@@ -129,7 +130,11 @@ future account-environment optimization that extends the existing
 `profile_key` model with fixed browser-environment settings. It uses
 CloakBrowser-Manager only as a reference for stable profile settings, CDP, and
 noVNC, and does not make CloakBrowser-Manager a required dependency or replace
-the current Platform Accounts center.
+the current Platform Accounts center. Before Phase 5.1 code implementation,
+the fixed-environment proxy override policy must be confirmed and recorded:
+task-level proxy overrides must either be blocked for locked account
+environments or treated as explicit visible exceptions with audit and
+customer-safe explanation.
 The active SQLite schema now provides the foundation tables and columns
 required before later implementation work, and the web/API layer now has
 session login, administrator/normal-user roles, menu visibility,
@@ -643,23 +648,28 @@ Next allowed implementation order:
 
 1. implement CR-045/Phase 7.2 AI evaluation accuracy and unevaluated-lead
    status safety before operators rely on broad-keyword AI risk labels;
-2. handle CR-035/Phase 7.1D historical run remediation only through the
-   dry-run, backup, rollback, and explicit-operator-approval gate;
-3. implement Phase 17.1C/17.2A remaining operator-facing recipient/template
-   explanations and Phase 17.2B-C template guardrails as follow-up if they
-   become the next accepted batch;
-4. implement Phase 21 formal console page-level UI/UX refinement as
+2. handle CR-038 sticky drawer close accessibility as a small frontend quick
+   fix, or merge it into the first Phase 21 UI workstream if Phase 21 is the
+   next frontend batch;
+3. implement Phase 21 formal console page-level UI/UX refinement as
    frontend-only workstreams with the Phase 21P cross-page layout-resilience
    gate;
-5. implement CR-047/Phase 5.1 account browser-environment consistency before
-   adopting any optional CloakBrowser-style CDP/noVNC provider or expanding
-   platform account environment controls.
-5. implement CR-031/Phase 19B-19D realtime run-progress work after Phase 7.1
+4. implement CR-047/Phase 5.1 account browser-environment consistency only
+   after the fixed-environment proxy override policy is confirmed and
+   recorded; do this before adopting any optional CloakBrowser-style
+   CDP/noVNC provider or expanding platform account environment controls;
+5. implement Phase 17.1C/17.2A remaining operator-facing recipient/template
+   explanations and Phase 17.2B-C template guardrails as a consolidated
+   email/template follow-up batch if it becomes the next accepted batch;
+6. implement CR-031/Phase 19B-19D realtime run-progress work after Phase 7.1
    lifecycle fields are available, unless a deliberately small compatible
    provisional-progress batch is documented first;
-6. schedule CR-034/Phase 20 implementation after higher-priority safety and
+7. schedule CR-034/Phase 20 implementation after higher-priority safety and
    lifecycle work if run-detail traceability becomes the next execution batch;
-7. prepare broader production pilot handoff and deployment-specific validation
+8. handle CR-035/Phase 7.1D historical run remediation only when the operator
+   explicitly approves the dry-run, backup, rollback, and repair path; it is a
+   conditional operations task, not a normal feature batch;
+9. prepare broader production pilot handoff and deployment-specific validation
    for additional live credentials after the first usable pilot baseline.
 
 ## Latest Verification

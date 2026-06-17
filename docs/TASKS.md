@@ -136,6 +136,10 @@ deployment shape into this project without a separate provider decision.
 
 ### Phase 5.1A - Account Browser Environment Data Model
 
+- [ ] Confirm and record the fixed-environment proxy override policy before
+      code implementation: task-level proxy overrides must either be blocked
+      for locked account environments or treated as an explicit visible
+      exception with audit/customer-safe explanation.
 - [ ] Add additive browser-environment fields for platform accounts:
       `browser_platform`, `fingerprint_seed`, `user_agent`, `timezone`,
       `locale`, `screen_width`, `screen_height`, environment lock status, and
@@ -302,6 +306,13 @@ rewrite Phase 7 or Phase 7.1 historical completion records. It tightens the
 AI evaluation and report-lead safety contract after live pilot inspection found
 that missing AI evaluation rows could be displayed as "no risk" and broad
 target-bearing keywords could recall many unrelated refund/legal posts.
+
+Safety priority:
+
+Phase 7.2 is the first ordinary implementation priority before operators rely
+on broad-keyword AI risk labels in pilot use. Until it is implemented, missing
+AI evaluation records must be treated as unevaluated or pending review, not as
+no-risk content.
 
 ### Phase 7.2A - Unevaluated Lead Status Safety
 
@@ -1215,6 +1226,13 @@ Planning status:
 CR-038 is an accepted frontend-only follow-up to the verified formal console
 optimization pass. It fixes scrollable drawer close accessibility without
 reopening CR-033 or changing backend behavior.
+
+Queue note:
+
+CR-038 may be handled as a small frontend quick fix before Phase 21, or merged
+into the first Phase 21 frontend workstream if Phase 21 is the next UI batch.
+It is not a pilot blocker, but it should not remain unplaced in the active
+follow-up queue.
 
 - [ ] Make shared drawer/modal headers sticky within scrollable drawers so the
       top-right close button remains visible while content scrolls.

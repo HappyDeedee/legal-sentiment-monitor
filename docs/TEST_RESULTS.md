@@ -11,6 +11,33 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
 `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-17 - Current TODO Cross-Validation And Queue Refinement
+
+Environment: `E:\myproject\MediaCrawler`, branch `main`.
+
+Result:
+
+- Reviewed the current open TODO queue with the `plan-cross-validation` flow
+  and a read-only Claude review over project documents.
+- Confirmed no global roadmap blocker was found, but adjusted documentation so
+  CR-045/Phase 7.2 is clearly the first ordinary implementation priority
+  before broad-keyword AI labels are relied on in pilot use.
+- Repositioned CR-035/Phase 7.1D as a conditional operator-approved historical
+  remediation path rather than a normal feature batch.
+- Added CR-038 sticky drawer close accessibility to the active follow-up queue.
+- Added a Phase 5.1 prerequisite to confirm the fixed-environment proxy
+  override policy before account browser-environment code implementation.
+- Clarified that Phase 21 layout collapse is a hard verification risk, not a
+  confirmed current production breakage claim.
+
+Verification:
+
+- Read-only Claude review reported no global blocking findings.
+- Follow-up read-only Claude review after queue refinements reported no
+  blocking findings and no material findings.
+- `uv run python scripts/check_docs.py`
+- Result: PASS.
+
 ## 2026-06-17 - CR-047 Account Browser Environment Consistency Documentation
 
 Environment: `E:\myproject\MediaCrawler`, branch `main`.
