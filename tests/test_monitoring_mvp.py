@@ -18,11 +18,14 @@ from api.monitoring.ai import _build_endpoint, _parse_json, _validate_ai_output,
 from api.monitoring.ai import DEFAULT_PROMPT
 from api.monitoring.auth import SESSION_COOKIE_NAME
 from api.monitoring.account_environment import resolve_account_profile_path
+import api.monitoring.database as database_module
 from api.monitoring.database import (
     acquire_account_lock,
     acquire_proxy_lock,
     authenticate_user,
     bootstrap_admin_from_env,
+    ai_evaluation_trace_state,
+    cleanup_ai_evaluation_traces,
     create_login_session,
     create_run,
     email_send_window_key,
@@ -39,6 +42,7 @@ from api.monitoring.database import (
     get_report,
     get_run,
     get_runtime_setting_value,
+    get_ai_evaluation_trace,
     get_social_account,
     get_user_by_email,
     has_running_run_for_job,
@@ -77,6 +81,7 @@ from api.monitoring.database import (
     save_runtime_settings,
     save_social_account,
     save_user,
+    save_ai_evaluation_trace,
     set_active_ai_key_profile,
     set_active_ai_rule_profile,
     update_social_account_check_state,
@@ -112,6 +117,18 @@ from api.monitoring.scheduler import _is_due, next_run_at, scheduler_disabled_re
 from tools.cdp_browser import resolve_cdp_user_data_dir
 from scripts.pilot_gate_c_evidence import build_template, validate_evidence, write_template
 from scripts.review_orphan_email_evidence import build_orphan_email_evidence_review, main as review_orphan_email_main
+
+
+def _monitor_section(page: str, section_id: str) -> str:
+    start = page.index(f'<section id="{section_id}"')
+    end = page.find("\n      <section id=", start + 1)
+    if end == -1:
+        end = page.index("</main>", start)
+    return page[start:end]
+
+
+def _task_group_view(page: str) -> str:
+    return _monitor_section(page, "runs")
 
 
 @pytest.fixture(autouse=True)
@@ -2891,8 +2908,11 @@ def test_report_path_guard_rejects_files_outside_report_dir(tmp_path, monkeypatc
 def test_sensitive_text_is_redacted():
     text = "Authorization: Bearer sk-secret123456789 api_key=abc123 password=hunter2 cookie=session=abc token=mytoken 密码：明文密码 代理地址=http://user:pass@example.com"
     proxy_text = "proxy=http://user:pass@127.0.0.1:8081"
+    path_text = r"Browser path: C:\Program Files\Google\Chrome\Application\chrome.exe and E:\myproject\MediaCrawler\monitor_data\runs\job_1\run_2\crawler.log"
     redacted = redact_sensitive(text)
     redacted_proxy = redact_sensitive(proxy_text)
+    redacted_path = redact_sensitive(path_text)
+    customer_safe = monitor_router.customer_safe_text(path_text)
 
     assert "sk-secret123456789" not in redacted
     assert "abc123" not in redacted
@@ -2904,6 +2924,13 @@ def test_sensitive_text_is_redacted():
     assert "user:pass" not in redacted_proxy
     assert "http://[REDACTED]@127.0.0.1:8081" in redacted_proxy
     assert "[REDACTED]" in redacted
+    assert "Program Files" not in redacted_path
+    assert r"Chrome\Application" not in redacted_path
+    assert r"E:\myproject" not in redacted_path
+    assert "运行日志" in customer_safe
+    assert "Program Files" not in customer_safe
+    assert r"Chrome\Application" not in customer_safe
+    assert r"E:\myproject" not in customer_safe
 
 
 def test_phase_9_admin_resource_operations_are_audited_without_secrets():
@@ -3034,8 +3061,10 @@ def test_run_summary_and_log_api_redact_sensitive_values(tmp_path, monkeypatch):
     )
     run_dir = tmp_path / "runs" / "job_1" / f"run_{run_id}_pytest" / "dy"
     run_dir.mkdir(parents=True)
-    (run_dir / "crawler.log").write_text(secret_text, encoding="utf-8")
+    path_text = r"Browser path: C:\Program Files\Google\Chrome\Application\chrome.exe profile_path=E:\myproject\MediaCrawler\monitor_data\profiles\dy\acc_1"
+    (run_dir / "crawler.log").write_text(f"{secret_text}\n{path_text}", encoding="utf-8")
     monkeypatch.setattr(monitor_router, "MONITOR_DATA_DIR", tmp_path)
+    monkeypatch.setattr(database_module, "MONITOR_DATA_DIR", tmp_path)
 
     with get_conn() as conn:
         row = conn.execute("SELECT summary, error_message FROM crawl_runs WHERE id=?", (run_id,)).fetchone()
@@ -3046,6 +3075,10 @@ def test_run_summary_and_log_api_redact_sensitive_values(tmp_path, monkeypatch):
     assert "hunter2" not in row["error_message"]
     assert logs
     assert "session=abc" not in logs[0]["content"]
+    assert "Program Files" not in logs[0]["content"]
+    assert r"Chrome\Application" not in logs[0]["content"]
+    assert r"E:\myproject" not in logs[0]["content"]
+    assert "profile_path" not in logs[0]["content"]
     assert "[REDACTED]" in logs[0]["content"]
 
 
@@ -8720,8 +8753,10 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
 
     assert "总览" in page
     assert "舆情监控" in page
-    assert "运行中心" in page
-    assert "报告中心" in page
+    assert "任务中心" in page
+    assert 'data-tab="reports"' not in page
+    assert 'data-shortcut-tab="reports"' not in page
+    assert '<section id="reports"' not in page
     assert "资源管理" in page
     assert "系统配置" in page
     assert "dashboard_metrics" in page
@@ -8894,16 +8929,17 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "检查 AI 接入" in page
     assert "配置测试邮件" in page
     assert "运行抖音采集" in page
-    assert "查看报告和线索" in page
+    assert "查看任务中心" in page
     assert "switchTab" in page
     assert "已运行但未采到内容" in page
     assert "采集无结果" in page
     assert "系统诊断" in page
-    assert "刷新调度时间" in page
+    assert "Refresh schedule times" in page
     assert "refreshJobSchedule" in page
     assert "jobs/refresh-schedule" in page
     assert "toast('任务已保存'); resetJobForm(); closeJobDrawer(); await Promise.all([loadJobs(), loadDashboard(), loadDoctor()]);" in page
-    assert "toast('调度时间已刷新'); await Promise.all([loadJobs(), loadSchedulerStatus(), loadDashboard()]);" in page
+    assert "toast('调度时间已刷新');" in page
+    assert "await Promise.all([loadJobs(), loadSchedulerStatus(), loadDashboard()]);" in page
     assert "打开登录窗口" in page
     assert "用于默认登录态维护；账号资源请在账号详情里发起登录。" not in page
     assert "平台默认登录态" not in page
@@ -9122,66 +9158,64 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "email-templates/preview" in page
     assert "email_template_preview" in page
     assert "scheduleEmailPreview" in page
-    assert "线索明细" in page
-    reports_section = page[page.index('<section id="reports"') : page.index('<section id="doctor"')]
+    assert "线索明细" not in page
+    task_center_section = _monitor_section(page, "runs")
     delivery_drawer = page[page.index('id="email_delivery_history_drawer"') : page.index('id="email_template_drawer_backdrop"')]
-    lead_drawer = page[page.index('id="report_leads_drawer"') : page.index('id="email_template_drawer_backdrop"')]
-    assert "<label>线索状态</label>" not in reports_section
-    assert 'id="report_risk"' not in reports_section
-    assert '<label>线索状态</label>' in lead_drawer
-    assert 'id="lead_status_filter"' in lead_drawer
-    assert "筛选线索" in lead_drawer
-    assert "<label>风险</label>" not in reports_section
-    assert "<label>报告范围</label>" in reports_section
-    assert "全部报告和线索" not in reports_section
-    assert "线索状态：" in page
-    assert "data-report-lead-panel" not in reports_section
-    assert "leads_table" not in reports_section
-    assert "report-hint" not in reports_section
-    assert "选择报告后查看正文" not in reports_section
-    assert "点击报告列表中的“预览”" not in reports_section
-    assert "点击报告行的邮件状态或“更多 > 查看交付历史”会打开悬浮窗" in reports_section
-    assert 'id="email_delivery_history"' not in reports_section
-    assert "data-report-delivery-panel" not in reports_section
+    assert "<label>线索状态</label>" not in task_center_section
+    assert 'id="report_risk"' not in task_center_section
+    assert '<label>线索状态</label>' not in page
+    assert 'id="lead_status_filter"' not in page
+    assert "筛选线索" not in page
+    assert "<label>风险</label>" not in task_center_section
+    assert "<label>报告范围</label>" in page
+    assert "全部报告和线索" not in task_center_section
+    assert "线索状态：" not in page
+    assert "data-report-lead-panel" not in task_center_section
+    assert "leads_table" not in task_center_section
+    assert "report-hint" not in task_center_section
+    assert "选择报告后查看正文" not in task_center_section
+    assert "点击报告列表中的“预览”" not in task_center_section
+    assert "查看交付历史" not in task_center_section
+    assert "点击报告行的邮件状态或“更多 > 查看交付历史”会打开悬浮窗" not in task_center_section
+    assert 'id="email_delivery_history"' not in task_center_section
+    assert "data-report-delivery-panel" not in task_center_section
     assert "data-report-delivery-panel" in delivery_drawer
     assert 'id="email_delivery_history"' in delivery_drawer
     assert 'id="email_delivery_history_scope"' in delivery_drawer
     assert 'id="email_delivery_history_count"' in delivery_drawer
-    assert "report_leads_drawer" in page
-    assert "report_leads_backdrop" in page
-    assert "closeReportLeadsDrawer" in page
-    assert "leads_scope_hint" in page
-    assert "线索限定在当前报告，不作为全局线索工作台。" in page
-    assert "线索限定在当前运行，不作为全局线索工作台。" in page
-    assert "viewRunLeads" in page
-    assert "leadScopeForRun" in page
-    assert "run_id:String(id)" in page
-    assert "reloadCurrentLeadDrawer" in page
-    assert "risk:val('lead_status_filter')" in page
+    assert "report_leads_drawer" not in page
+    assert "report_leads_backdrop" not in page
+    assert "closeReportLeadsDrawer" not in page
+    assert "leads_scope_hint" not in page
+    assert "线索限定在当前报告，不作为全局线索工作台。" not in page
+    assert "线索限定在当前运行，不作为全局线索工作台。" not in page
+    assert "viewRunLeads" not in page
+    assert "leadScopeForRun" not in page
+    assert "reloadCurrentLeadDrawer" not in page
+    assert "risk:val('lead_status_filter')" not in page
     assert "risk:val('report_risk')" not in page
-    assert "viewRunLeads(${Number(r.id)})" in page
     assert "report-workspace" not in page
-    assert "reportActions" in page
-    assert "renderReportsTable" in page
-    assert "currentReports" in page
     assert "action-menu-host" in page
-    assert "report-action-menu" in page
-    assert "data-report-menu-button" in page
-    assert "positionReportActionMenu" in page
+    assert "report-action-menu" not in page
+    assert "data-report-menu-button" not in page
+    assert "positionReportActionMenu" not in page
+    assert "renderReportsTable" not in page
+    assert "currentReports" not in page
+    assert "reportActions" not in page
+    assert 'title="交付历史可从更多菜单或运行详情查看"' not in page
+    assert '请从运行详情的邮件交付区域打开' in page
     assert "下载 Markdown" in page
-    assert "api('/leads?" in page
-    assert "report_id:String(id)" in page
-    assert "run_id:String(id)" in page
-    assert "viewReportLeads" in page
-    assert "leadScopeForReport" in page
-    assert "activeReportFilterSummary" in page
-    assert "报告 #${Number(id)} 的线索明细" in page
+    assert "api('/leads?" not in page
+    assert "jumpToReportAiEvaluations" in page
+    assert "run_detail_report_filter" in page
+    assert "setRunDetailAiFilters" in page
+    assert "report_id: reportId" in page
     assert "当前筛选条件下的线索" not in page
     assert "待人工复核" in page
     assert "待复核" in page
     assert "运行系统诊断" in page
     assert "reports/system-check" in page
-    assert "loadReports(), loadRuns(), loadReadiness(), loadDoctor(), loadDashboard()" in page
+    assert "loadRuns(), loadReadiness(), loadDoctor(), loadDashboard()" in page
     assert "重发邮件" in page
     assert "系统自检报告已生成" not in page
 
@@ -9198,10 +9232,12 @@ def test_monitor_page_uses_consistent_buttons_tables_and_modal_actions():
     assert ".row > button, .row > a { flex:0 0 auto; }" in page
     assert ".wide-actions { display:inline-flex; gap:6px; align-items:center; flex-wrap:nowrap;" in page
     assert "td.col-actions, th.col-actions" in page
-    assert "position:sticky; right:0" in page
-    assert "th.col-actions { background:#f8fafc; z-index:4; }" in page
-    assert "headers[i]==='操作'?'col-actions':''" in page
-    assert "Math.max(920, (headers||[]).length * 112)" in page
+    assert "right: 0;" in monitor_css
+    assert "th.col-actions" in monitor_css
+    assert "function tableColumnClass(header)" in page
+    assert "if(['操作','详情'].includes(header)) classes.push('col-actions');" in page
+    assert "if(header==='状态') classes.push('col-status');" in page
+    assert "Math.max(Number(options.minWidth||0) || 920, (headers||[]).length * 112)" in page
     assert "class=\"form-actions\"" in page
     assert ".form-actions { position:sticky;" in page
     assert ".account-flow-actions { position:sticky;" in page
@@ -9221,8 +9257,29 @@ def test_monitor_page_uses_consistent_buttons_tables_and_modal_actions():
     assert ".schema-item { grid-template-columns:1fr; }" in page or ".schema-item {" in monitor_css
     assert ".action-menu-host" in frontend_source
     assert ".action-menu.active" in frontend_source
-    assert ".report-action-menu {" in frontend_source
-    assert "openReportMenuId" in page
+    assert ".report-action-menu {" not in frontend_source
+    assert "function enhanceFilterSelects(root=document)" in page
+    assert "root.querySelectorAll('.page-filter-region select:not([data-filter-select-enhanced])')" in page
+    assert "className='filter-select-menu'" in page
+    assert "document.body.appendChild(menu)" in page
+    assert "activeFilterSelect.dispatchEvent(new Event('change', {bubbles:true}))" in page
+    assert ".filter-select-menu {\n  position: fixed;" in monitor_css
+    assert "z-index: calc(var(--z-modal) + 12);" in monitor_css
+    assert ".filter-select-native" in monitor_css
+    assert ".filter-select-button" in monitor_css
+    assert "el.matches('.page-filter-region select[data-filter-select-enhanced=\"1\"]')" in page
+    assert "function enhanceFilterDateInputs(root=document)" in page
+    assert "root.querySelectorAll('.page-filter-region input[type=\"date\"]:not([data-filter-date-enhanced])')" in page
+    assert "className='filter-date-menu'" in page
+    assert "data-filter-date-value" in page
+    assert "const input=activeFilterDateInput;" in page
+    assert "input.dispatchEvent(new Event('change', {bubbles:true}))" in page
+    assert "activeFilterDateInput.dispatchEvent(new Event('change', {bubbles:true}))" not in page
+    assert ".filter-date-menu {\n  position: absolute;" in monitor_css
+    assert ".filter-date-native" in monitor_css
+    assert ".filter-date-button" in monitor_css
+    assert "el.matches('.page-filter-region input[type=\"date\"][data-filter-date-enhanced=\"1\"]')" in page
+    assert "openReportMenuId" not in page
     assert "resourceStat(label, value)" in page
     assert "renderProxyProfilesTable" in page
     assert "renderAIProfilesTable" in page
@@ -9234,7 +9291,7 @@ def test_monitor_page_uses_consistent_buttons_tables_and_modal_actions():
     assert "btn.innerHTML = oldHtml" in page
     assert "<div class=\"wide-actions\"><button class=\"secondary\" onclick=\"switchTab('accounts')\">管理账号</button></div>" in page
     assert "jobActions(j, running)" in page
-    assert "leadLinks(item)" in page
+    assert "leadLinks(item)" not in page
     assert "resendReportEmail" in page
     assert "resend-email" in page
     assert "邮件预览" in page
@@ -9242,6 +9299,80 @@ def test_monitor_page_uses_consistent_buttons_tables_and_modal_actions():
     assert "email-preview" in page
     assert "邮件标题：" in page
     assert "download?type=html" in page
+
+
+def test_cr071_drawer_modal_selects_reuse_filter_dropdown_mechanism():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+
+    assert "function refreshEnhancedFilterSelects(root=document)" in page
+    assert "refreshEnhancedFilterSelects(document.getElementById('job_drawer'))" in page
+    assert "refreshEnhancedFilterSelects(dialog)" in page
+    assert "refreshEnhancedFilterSelects(document.getElementById('proxy_drawer'))" in page
+    assert "refreshEnhancedFilterSelects(document.getElementById('ai_profile_drawer'))" in page
+    assert "refreshEnhancedFilterSelects(document.getElementById('ai_rule_modal'))" in page
+    assert "refreshEnhancedFilterSelects(document.getElementById('mail_config_modal'))" in page
+    assert "refreshEnhancedFilterSelects(document.getElementById('email_template_drawer'))" in page
+    assert "function refreshEnhancedFilterDateInputs(root=document)" in page
+    assert "refreshEnhancedFilterDateInputs(document.getElementById('job_drawer'))" in page
+    assert ".modal-filter-region.page-filter-region" in page
+    assert ".modal-filter-region.page-filter-region" in css
+
+    enhanced_select_ids = [
+        "job_account_id",
+        "job_proxy_id",
+        "job_target_type",
+        "job_output_mode",
+        "job_browser_mode",
+        "time_window_type",
+        "frequency",
+        "job_ai_profile_id",
+        "job_email_template_id",
+        "social_account_platform",
+        "social_account_status",
+        "social_account_proxy_id",
+        "proxy_status",
+        "ai_profile_provider",
+        "ai_sample_platform",
+        "encryption",
+        "email_template_preset",
+    ]
+    for select_id in enhanced_select_ids:
+        marker = f'<select id="{select_id}"'
+        select_index = page.index(marker)
+        region_index = page.rfind("page-filter-region modal-filter-region", 0, select_index)
+        assert region_index != -1, select_id
+        assert select_index - region_index < 1400, select_id
+
+    for function_name in [
+        "renderJobAccountOptions",
+        "renderProxySelectOptions",
+        "renderJobAIProfileOptions",
+        "renderJobEmailTemplateOptions",
+    ]:
+        start = page.index(f"function {function_name}")
+        end = page.find("\n    function ", start + 1)
+        snippet = page[start:end]
+        assert "syncFilterSelectButton(select);" in snippet
+
+    ai_profile_drawer = page[
+        page.index('id="ai_profile_drawer"') : page.index('id="ai_rule_modal_backdrop"')
+    ]
+    assert 'id="ai_profile_model"' in ai_profile_drawer
+    assert '<select id="ai_profile_model"' not in ai_profile_drawer
+    assert 'id="ai_profile_model_options" class="model-options"' in ai_profile_drawer
+
+    for date_id in ["custom_start", "custom_end"]:
+        marker = f'<input id="{date_id}" type="date">'
+        date_index = page.index(marker)
+        region_index = page.rfind("page-filter-region modal-filter-region", 0, date_index)
+        assert region_index != -1, date_id
+        assert date_index - region_index < 500, date_id
+
+    assert "filter-date-enhanced" in css
+    assert "filter-select-button filter-date-button" in page
+    assert ".filter-date-menu {\n  position: absolute;" in css
+    assert "top='calc(100% + 4px)'" in page
     assert "download?type=excel" in page
     assert "download?type=markdown" in page
     assert "下一步处理" in page
@@ -9382,8 +9513,7 @@ def test_phase_11c_interaction_helpers_and_floating_menus():
         ".drawer {",
         ".modal-close",
         ".action-menu,",
-        ".account-action-menu,",
-        ".report-action-menu {",
+        ".account-action-menu {",
         ".monitor-portal-root",
     ]:
         assert selector in css
@@ -9392,6 +9522,7 @@ def test_phase_11c_interaction_helpers_and_floating_menus():
     assert ".account-action-menu { position:absolute" not in inline_style
     assert ".action-menu { position:absolute" not in inline_style
     assert ".report-action-menu {" not in inline_style
+    assert ".report-action-menu" not in css
 
     for marker in [
         "function positionFloatingMenu(triggerEl, menuEl",
@@ -9406,7 +9537,6 @@ def test_phase_11c_interaction_helpers_and_floating_menus():
         "data-account-menu-button",
         "data-job-menu-button",
         "data-ai-rule-menu-button",
-        "data-report-menu-button",
         'id="account_action_menu"',
         'id="job_action_menu"',
         'id="ai_rule_action_menu"',
@@ -9420,6 +9550,8 @@ def test_phase_11c_interaction_helpers_and_floating_menus():
     assert 'id="account_menu_${id}"' not in page
     assert 'id="job_menu_${id}"' not in page
     assert 'id="ai_rule_menu_${id}"' not in page
+    assert "data-report-menu-button" not in page
+    assert 'id="report_action_menu"' not in page
     assert "data-proxy-menu-button" not in page
     assert "data-ai-profile-menu-button" not in page
     assert "data-email-template-menu-button" not in page
@@ -9532,7 +9664,8 @@ def test_cr038_sticky_drawer_close_controls_are_shared_and_preserved():
         "background: var(--color-neutral-0);",
         "border-bottom: 1px solid var(--color-neutral-200);",
         "box-shadow: 0 8px 18px rgba(15, 23, 42, 0.07);",
-        "margin: 0 calc(var(--drawer-padding-x) * -1) var(--space-4);",
+        "flex: 0 0 auto;",
+        "margin: 0;",
         "padding: var(--drawer-padding-y) var(--drawer-padding-x) var(--space-3);",
         "border-radius: calc(var(--radius-modal-medium) - 1px) calc(var(--radius-modal-medium) - 1px) 0 0;",
     ]:
@@ -9542,7 +9675,9 @@ def test_cr038_sticky_drawer_close_controls_are_shared_and_preserved():
     assert "--drawer-padding-y: 18px;" in css
     assert "--drawer-padding-x: 14px;" in css
     assert "--drawer-padding-y: 14px;" in css
-    assert "padding: 0 var(--drawer-padding-x) var(--drawer-padding-y);" in css
+    assert "padding: var(--space-4) var(--drawer-padding-x) var(--drawer-padding-y);" in css
+    assert "function normalizeDrawerScrollBodies(root=document)" in page
+    assert "body.className='drawer-scroll-body';" in page
     assert ".modal-head > div,\n.drawer-head > div {\n  min-width: 0;" in css
     assert "flex: 0 0 34px;" in css
     assert "--z-floating-menu: 55;" in css
@@ -9564,6 +9699,87 @@ def test_cr038_sticky_drawer_close_controls_are_shared_and_preserved():
     assert "document.addEventListener('keydown', event => {" in page
     assert "if(event.key === 'Escape'){" in page
     assert "closeAllOverlays();" in page
+
+
+def test_cr073_scrollable_drawer_scrollbars_preserve_corner_radius():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+
+    for drawer_id in [
+        "job_drawer",
+        "account_dialog",
+        "proxy_drawer",
+        "ai_profile_drawer",
+        "ai_rule_modal",
+        "mail_config_modal",
+        "email_template_drawer",
+        "run_detail_drawer",
+        "run_log_drawer",
+        "report_preview_drawer",
+        "email_delivery_history_drawer",
+    ]:
+        assert f'id="{drawer_id}"' in page
+
+    drawer_block = css[css.index(".drawer {") : css.index(".drawer-scroll-body {")]
+    for marker in [
+        "display: flex;",
+        "flex-direction: column;",
+        "padding: 0;",
+        "overflow: hidden;",
+        "border-radius: var(--radius-modal-medium);",
+    ]:
+        assert marker in drawer_block
+
+    drawer_body_block = css[
+        css.index(".drawer-scroll-body {") : css.index(".drawer-scroll-body::-webkit-scrollbar {")
+    ]
+    for marker in [
+        "flex: 1 1 auto;",
+        "min-height: 0;",
+        "padding: var(--space-4) var(--drawer-padding-x) var(--drawer-padding-y);",
+        "overflow: auto;",
+        "scrollbar-color: rgba(100, 116, 139, 0.36) transparent;",
+        "scrollbar-width: thin;",
+    ]:
+        assert marker in drawer_body_block
+
+    scrollbar_block = css[
+        css.index(".drawer-scroll-body::-webkit-scrollbar {") : css.index(".drawer.active {")
+    ]
+    for marker in [
+        ".drawer-scroll-body::-webkit-scrollbar-track {",
+        "margin-bottom: calc(var(--radius-modal-medium) + 2px);",
+        "background: transparent;",
+        ".drawer-scroll-body::-webkit-scrollbar-thumb {",
+        "border: 3px solid transparent;",
+        "border-radius: 999px;",
+        "background-clip: content-box;",
+        ".drawer-scroll-body::-webkit-scrollbar-corner {",
+    ]:
+        assert marker in scrollbar_block
+    assert ".drawer::before {" not in css
+    assert ".drawer::-webkit-scrollbar" not in css
+
+    sticky_header_block = css[css.index(".modal-head,\n.drawer-head {") : css.index(".modal-head h3,")]
+    assert "position: sticky;" in sticky_header_block
+    assert "border-radius: calc(var(--radius-modal-medium) - 1px) calc(var(--radius-modal-medium) - 1px) 0 0;" in sticky_header_block
+
+    for marker in [
+        "function normalizeDrawerScrollBodies(root=document)",
+        "root.querySelectorAll('.drawer').forEach(drawer=>{",
+        "drawer.querySelector(':scope > .drawer-scroll-body')",
+        "drawer.querySelector(':scope > .drawer-head, :scope > .modal-head')",
+        "body.className='drawer-scroll-body';",
+        "drawer.appendChild(body);",
+        "normalizeDrawerScrollBodies();",
+    ]:
+        assert marker in page
+
+    modal_close_block = css[css.index(".modal-close {") : css.index(".modal-close:hover {")]
+    assert "flex: 0 0 34px;" in modal_close_block
+    assert "position: relative;" in modal_close_block
+    assert "margin-left" not in modal_close_block
+    assert "right:" not in modal_close_block
 
 
 def test_phase_12a_navigation_groups_and_login_landing():
@@ -9623,12 +9839,12 @@ def test_phase_12a_navigation_groups_and_login_landing():
 def test_phase_12b_page_entry_and_role_flow_shortcuts():
     page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
     css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    dashboard_section = _monitor_section(page, "dashboard")
 
     for entry in [
         'data-page-entry="dashboard"',
         'data-page-entry="jobs"',
         'data-page-entry="runs"',
-        'data-page-entry="reports"',
         'data-page-entry="accounts"',
         'data-page-entry="proxies"',
         'data-page-entry="ai"',
@@ -9643,20 +9859,25 @@ def test_phase_12b_page_entry_and_role_flow_shortcuts():
     for marker in [
         "运营首页",
         "任务监控",
-        "运行中心",
-        "报告中心",
-        "邮件交付",
+        "任务中心",
+        "运行记录",
         "资源支撑",
         "系统配置",
         'id="task_loop_shortcuts"',
         'class="task-loop-shortcuts"',
         'data-shortcut-action="new-job"',
-        'data-shortcut-target="email_delivery_status_entry"',
-        'id="email_delivery_status_entry"',
-        "报告邮件状态与交付历史",
-        "报告列表展示最新邮件状态",
-        "function refreshActiveSection()",
+        'data-shortcut-target="task_center_panel"',
+        'data-shortcut-grouped="1"',
+        'data-shortcut-grouped="0"',
+        'id="task_center_panel"',
+        'id="task_group_toggle"',
+        "async function refreshActiveSection(button=null)",
         "function navigateShortcut(tab, options={})",
+        "function normalizeConsoleTab(tab)",
+        "function setTaskCenterGrouped(checked, options={})",
+        "function loadTaskCenter()",
+        "function clearRunFilters()",
+        "function refreshTaskCenter()",
         "function bindShortcutButtons(root=document)",
         "root.querySelectorAll('[data-shortcut-tab]').forEach",
         "document.querySelectorAll('[data-shortcut-tab][data-menu-key]')",
@@ -9679,12 +9900,16 @@ def test_phase_12b_page_entry_and_role_flow_shortcuts():
         ".task-loop-shortcuts",
         ".shortcut-card",
         ".shortcut-primary",
-        ".email-delivery-entry",
+        ".report-task-group",
     ]:
         assert selector in css
 
     assert "刷新全局状态" not in page
-    assert "刷新当前页面" in page
+    assert "刷新当前页面" not in page
+    assert 'id="global_refresh_button"' in page
+    assert 'aria-label="Refresh current page"' in page
+    assert ".refresh-icon-button" in css
+    assert ".refresh-icon-button.is-loading .refresh-icon" in css
 
     # Normal-user shortcuts and page actions must not expose administrator
     # resource entries when menu permissions hide them.
@@ -9695,14 +9920,15 @@ def test_phase_12b_page_entry_and_role_flow_shortcuts():
     assert 'data-shortcut-tab="ai_rules" data-menu-key="ai_rules"' in page
 
     assert "/api/monitor/dashboard" not in page
-    assert "email_delivery_logs" not in page
-    assert "job_snapshot_json" not in page
-    assert "crawl_runs.visibility" not in page
+    assert "email_delivery_logs" not in dashboard_section
+    assert "job_snapshot_json" not in dashboard_section
+    assert "crawl_runs.visibility" not in dashboard_section
 
 
 def test_phase_13b_operations_home_desktop_visual_metrics():
     page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
     css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    dashboard_section = _monitor_section(page, "dashboard")
 
     for marker in [
         'class="operations-home"',
@@ -9718,7 +9944,8 @@ def test_phase_13b_operations_home_desktop_visual_metrics():
         "function renderOperationsResourceHealth(resource)",
         "function renderOperationsAdminHealth(home)",
         "bindShortcutButtons(document.getElementById('dashboard'))",
-        "data-shortcut-target=\"email_delivery_status_entry\"",
+        "data-shortcut-target=\"task_center_panel\"",
+        "data-shortcut-grouped=\"1\"",
         "data-shortcut-tab=\"accounts\" data-menu-key=\"platform_accounts\"",
         "资源由管理员维护",
         "当前展示报告最新交付状态",
@@ -9753,9 +9980,214 @@ def test_phase_13b_operations_home_desktop_visual_metrics():
 
     assert "new Chart(" not in page
     assert "chart.js" not in page.lower()
-    assert "email_delivery_logs" not in page
-    assert "job_snapshot_json" not in page
-    assert "crawl_runs.visibility" not in page
+    assert "email_delivery_logs" not in dashboard_section
+    assert "job_snapshot_json" not in dashboard_section
+    assert "crawl_runs.visibility" not in dashboard_section
+
+
+def test_cr051_task_center_consolidates_report_grouping_without_separate_report_center():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    task_center = _monitor_section(page, "runs")
+
+    assert '<button data-tab="runs" data-menu-key="run_center"' in page
+    assert ">任务中心</button>" in page
+    assert '<section id="reports"' not in page
+    assert 'data-tab="reports"' not in page
+    assert 'data-shortcut-tab="reports"' not in page
+    assert "report_center" not in page
+
+    assert 'id="task_group_view"' not in task_center
+    assert 'id="run_records_view"' not in task_center
+    assert 'id="task_center_panel"' in task_center
+    assert 'id="task_group_toggle"' in task_center
+    assert 'id="runs_table"' in task_center
+    assert "按舆情任务分组" in task_center
+    assert "用同一套运行记录查看采集、AI 评估、报告和交付" in task_center
+    assert "字段口径保持一致；分组模式会隐藏组标题已展示的任务身份" in task_center
+
+    assert "function renderGroupedTaskRuns(runs)" in page
+    assert "function groupRunsByTask(runs)" in page
+    assert "function renderTaskRunGroup(group)" in page
+    assert "function runTableHeaders(mode='flat')" in page
+    assert "if(context.jobId) return `job:${context.jobId}`;" in page
+    assert "const jobId=Number(run.job_id || summary.job_id || 0) || null;" in page
+    assert "function runGroupMetricChips(group)" in page
+    assert "function runGroupContextNote(group)" in page
+    assert 'class="report-task-group-metrics" aria-label="运行分组汇总"' in page
+    assert "旧运行缺少完整任务快照，可逐条进入详情。" in page
+    assert "按舆情监控任务汇总运行记录。" not in page
+    assert "function normalizeConsoleTab(tab)" in page
+    assert "return tab==='reports' ? 'runs' : tab;" in page
+    assert "function switchRunCenterView(viewId, options={})" in page
+    assert "function loadTaskCenter()" in page
+    assert "function refreshTaskCenter()" in page
+
+    assert "'任务 ID','运行 ID','状态','任务名称 / 律所','平台','关键词摘要','开始时间'" in page
+    assert "'运行 ID','状态','开始时间','耗时','采集数','新增数'" in page
+    assert "任务 / 律所" in _monitor_section(page, "runs")
+
+
+def test_task_center_single_grouping_switch_unifies_rows_and_actions():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    task_center = _monitor_section(page, "runs")
+    run_detail_drawer = page[page.index('id="run_detail_drawer"') : page.index('id="report_preview_backdrop"')]
+
+    assert 'id="task_group_view"' not in task_center
+    assert 'id="run_records_view"' not in task_center
+    assert 'id="task_center_panel"' in task_center
+    assert 'id="task_group_toggle"' in task_center
+    assert "setTaskCenterGrouped(this.checked)" in task_center
+    assert "let taskCenterGrouped = true;" in page
+    assert "taskCenterGrouped ? renderGroupedTaskRuns(runs) : renderFlatTaskRuns(runs)" in page
+    assert "const headers=runTableHeaders('flat');" in page
+    assert "return table(headers, runs.map(r=>runRow(r, headers)), {className:'run-record-table run-record-table-flat', minWidth:1720});" in page
+    assert "const headers=runTableHeaders('grouped');" in page
+    assert "table(headers, group.runs.map(r=>runRow(r, headers)), {className:'run-record-table run-record-table-grouped', minWidth:1320})" in page
+    assert "return (headers||runTableHeaders()).map(header=>cells[header] ?? '');" in page
+    assert "'任务 ID': r.job_id || '-'," in page
+    assert "'关键词摘要': `<div class=\"truncate\"" in page
+    assert "function tableColumnClass(header)" in page
+    assert "if(['操作','详情'].includes(header)) classes.push('col-actions');" in page
+    assert "if(header==='状态') classes.push('col-status');" in page
+    assert "right: 0;" in css
+    assert "th.col-actions" in css
+    assert "td.col-status" in css
+    assert "task_group_toggle" in task_center
+    assert "刷新任务中心" not in task_center
+    assert "onclick=\"loadRuns()\">刷新</button>" not in task_center
+    assert ".content {\n  min-width: 0;\n  overflow: visible;\n}" in css
+    assert ".content { min-width:0; overflow:visible; }" in page
+    assert ".content { min-width:0; overflow:hidden; }" not in page
+    assert "enhanceFilterSelects();" in page
+    assert "enhanceFilterDateInputs();" in page
+    assert 'id="run_status_filter"' in task_center
+    assert 'id="run_platform_filter"' in task_center
+    assert 'id="run_date_from" type="date"' in task_center
+    assert 'id="run_date_to" type="date"' in task_center
+    assert 'id="run_type_filter"' in task_center
+    assert 'id="run_visibility_filter"' in task_center
+    assert 'id="run_limit"' in task_center
+    assert "filter-select-button" in css
+    assert "filter-select-option" in css
+    assert "filter-date-menu" in css
+    assert "filter-date-day.is-selected" in css
+    assert "const wrapper=activeFilterDateButton.closest('.filter-date-enhanced');" in page
+    assert "if(wrapper && menu.parentElement !== wrapper)" in page
+    assert "wrapper.appendChild(menu);" in page
+    assert "const triggerWidth=Math.max(0, Math.round(activeFilterDateButton.getBoundingClientRect().width));" in page
+    assert "menu.style.width=`${triggerWidth}px`;" in page
+    assert "menu.style.setProperty('--filter-date-anchor-x', '50%');" in page
+    assert "menu.style.position='absolute';" in page
+    assert "menu.style.left='0';" in page
+    assert "menu.style.top='calc(100% + 4px)';" in page
+    assert "const visualViewportWidth=window.visualViewport?.width || 0;" not in page
+    assert "const viewportWidth=visualViewportWidth || window.innerWidth || document.documentElement.clientWidth || 0;" not in page
+    assert "const edgeMargin=6;" not in page
+    assert "const attachedWidth=Math.max(0, viewportWidth - rect.left - edgeMargin);" not in page
+    assert "const maxMenuWidth=Math.max(0, viewportWidth - edgeMargin * 2);" not in page
+    assert "const triggerWidth=Math.max(0, Math.round(rect.width));" not in page
+    assert "const minimumReadableWidth=Math.min(168, maxMenuWidth);" not in page
+    assert "const menuWidth=Math.min(Math.max(triggerWidth, minimumReadableWidth), attachedWidth || maxMenuWidth, maxMenuWidth, 340);" not in page
+    assert "const maxLeft=Math.max(edgeMargin, viewportWidth - menuWidth - edgeMargin);" not in page
+    assert "let left=Math.max(edgeMargin, Math.min(maxLeft, rect.left));" not in page
+    assert "const readableWidth=Math.max(236, Math.round(rect.width));" not in page
+    assert "const menuWidth=Math.min(readableWidth, attachedWidth || maxMenuWidth, maxMenuWidth, 340);" not in page
+    assert "const minAttachedWidth=Math.min(188, maxMenuWidth);" not in page
+    assert "const attachedWidth=Math.min(menuWidth, Math.max(0, viewportWidth - rect.left - edgeMargin));" not in page
+    assert "const canUseTriggerLeft=rect.left >= edgeMargin && rect.left + menuWidth <= viewportWidth - edgeMargin;" not in page
+    assert "const preferredLeft=rect.right - menuWidth;" not in page
+    assert "const anchorX=Math.max(18, Math.min(menuWidth - 18, rect.left + rect.width / 2 - left));" not in page
+    assert "menu.style.setProperty('--filter-date-anchor-x', `${Math.round(anchorX)}px`);" not in page
+    assert "menu.style.width=`${Math.round(menuWidth)}px`;" not in page
+    assert "menu.style.left=`${Math.round(left)}px`;" not in page
+    assert ".filter-date-menu::before" in css
+    assert "grid-template-columns: repeat(7, minmax(0, 1fr));" in css
+    assert ".filter-date-day {\n  width: 100%;" in css
+    assert "  padding: 0;" in css
+    assert "grid-template-columns: 24px 1fr 24px;" in css
+    assert ".report-task-group-metrics" in css
+    assert ".report-task-group-metric.is-danger" in css
+    assert ".report-task-group-note" in css
+
+    assert "function groupRunsByTask(runs)" in page
+    assert "function runGroupingContext(run)" in page
+    assert "const jobId=Number(run.job_id || summary.job_id || 0) || null;" in page
+    assert "if(context.jobId) return `job:${context.jobId}`;" in page
+    assert "历史运行：任务上下文有限" in page
+
+    assert "viewRunLeads(${Number(r.id)})" not in page
+    assert "loadRunLogs(${Number(r.id)})" not in page
+    assert "stopRun(${Number(r.id)})" not in page
+    assert "archiveRun(${Number(r.id)})" not in page
+    assert "restoreRun(${Number(r.id)})" not in page
+    assert '<button class="secondary" onclick="openRunDetail(${Number(r.id)})">详情</button>' in page
+
+    assert "run_detail_actions" in run_detail_drawer
+    assert "stopRunFromDetail" in page
+    assert "archiveRunFromDetail" in page
+    assert "restoreRunFromDetail" in page
+    assert "previewReport(${Number(report.id)})" in page
+    assert "jumpToReportAiEvaluations(${Number(report.id)})" in page
+    assert "loadEmailDeliveryHistory(${Number(report.id)})" in page
+    assert "resendReportEmail(${Number(report.id)})" in page
+    assert "/reports/${Number(report.id)}/download?type=html" in page
+    assert "/reports/${Number(report.id)}/download?type=excel" in page
+    assert "/reports/${Number(report.id)}/download?type=markdown" in page
+
+
+def test_cr074_page_refresh_actions_are_deduplicated_icon_only():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    header = page[page.index("<header>") : page.index("</header>", page.index("<header>"))]
+
+    assert 'id="global_refresh_button"' in header
+    assert 'class="secondary btn-icon refresh-icon-button"' in header
+    assert 'onclick="refreshActiveSection(this)"' in header
+    assert 'aria-label="Refresh current page"' in header
+    assert '<use href="#icon-refresh"></use>' in header
+
+    for duplicate_button in [
+        ">刷新当前页面</button>",
+        ">刷新首页</button>",
+        ">刷新账号</button>",
+        ">刷新代理</button>",
+        ">刷新 AI 接入</button>",
+        ">刷新规则</button>",
+        ">刷新配置</button>",
+        ">刷新模板</button>",
+        ">刷新策略</button>",
+        ">刷新任务中心</button>",
+        ">刷新历史</button>",
+        ">刷新预览</button>",
+        ">刷新日志</button>",
+        ">刷新详情</button>",
+        ">刷新调度时间</button>",
+    ]:
+        assert duplicate_button not in page
+
+    for scoped_refresh in [
+        'aria-label="Refresh schedule times"',
+        'aria-label="Refresh delivery history"',
+        'aria-label="Refresh preview"',
+        'aria-label="Refresh logs"',
+        'aria-label="Refresh run detail"',
+    ]:
+        assert scoped_refresh in page
+
+    assert page.count('class="secondary btn-icon refresh-icon-button"') == 6
+    assert "async function refreshActiveSection(button=null)" in page
+    assert "await loadSectionData(tab);" in page
+    assert "button || document.getElementById('global_refresh_button')" in page
+    assert "if(!btn.classList.contains('refresh-icon-button'))" in page
+    assert "const remaining=650 - (Date.now() - startedAt);" in page
+    assert "async function refreshJobSchedule(button=null)" in page
+    assert "async function refreshCurrentRunLogs(button=null)" in page
+    assert "async function refreshSelectedEmailDeliveryHistory(button=null)" in page
+    assert "async function refreshRunDetail(button=null)" in page
+    assert ".refresh-icon-button {" in css
+    assert ".refresh-icon-button.is-loading .refresh-icon" in css
+    assert "animation: monitor-spin 0.8s linear infinite;" in css
 
 
 def test_phase_13c_operations_home_responsive_role_views():
@@ -9782,8 +10214,8 @@ def test_phase_13c_operations_home_responsive_role_views():
         assert diagnostic_mount not in dashboard_section
         assert diagnostic_mount in doctor_section
 
-    assert "if(tab==='dashboard') {\n        loadDashboard();\n      }" in load_section
-    assert "if(tab==='doctor') {\n        loadDoctor();\n        loadReadiness();\n        loadSchedulerStatus();\n        loadPlatformStatus();\n        loadSystemChecklist();\n      }" in load_section
+    assert "if(tab==='dashboard') {\n        return loadDashboard();\n      }" in load_section
+    assert "if(tab==='doctor') {\n        return Promise.all([\n          loadDoctor(),\n          loadReadiness(),\n          loadSchedulerStatus(),\n          loadPlatformStatus(),\n          loadSystemChecklist()\n        ]);\n      }" in load_section
     assert "safeLoad('运行状态', loadReadiness)" not in page
     assert "addPermittedLoad(loads, '运行状态', 'system_diagnostics', loadReadiness)" in page
 
@@ -9808,7 +10240,7 @@ def test_phase_13c_operations_home_responsive_role_views():
     assert "social_accounts_total" not in dashboard_section.split("function renderOperationsAdminHealth", 1)[-1]
     assert "new Chart(" not in page
     assert "chart.js" not in page.lower()
-    assert "email_delivery_logs" not in page
+    assert "email_delivery_logs" not in dashboard_section
     assert "job_snapshot_json" not in page
     assert "crawl_runs.visibility" not in page
 
@@ -10069,7 +10501,7 @@ def test_phase_15b_run_center_frontend_filters_pagination_archive_controls():
     assert "confirm('确认恢复这条运行记录？恢复后它会回到默认可见列表。')" in page
     assert "applyRunCenterRoleMode()" in page
     assert "document.querySelectorAll('.run-admin-control')" in page
-    assert "if(!admin)" in page and "visibility.value='visible'" in page
+    assert "if(!admin)" in page and "set('run_visibility_filter','visible')" in page
     assert "runTypeBadge(r.run_type)" in page
     assert "runVisibilityBadge(r.visibility)" in page
     assert "测试/诊断" in page
@@ -10077,20 +10509,136 @@ def test_phase_15b_run_center_frontend_filters_pagination_archive_controls():
     assert "已归档" in page
     assert "全部记录" in page
     assert "loadRunLogs" in page
-    assert "viewRunLeads" in page
-    assert "viewRunLeads(${Number(r.id)})" in page
-    assert "function viewRunLeads(id)" in page
-    assert "new URLSearchParams({run_id:String(id), limit:'0', risk:val('lead_status_filter')})" in page
-    assert "function leadScopeForRun(id, leads)" in page
+    assert "loadRunLogs(${Number(r.id)})" not in page
+    assert "viewRunLeads(${Number(r.id)})" not in page
+    assert "function viewRunLeads(id)" not in page
+    assert "new URLSearchParams({run_id:String(id), limit:'0', risk:val('lead_status_filter')})" not in page
+    assert "function leadScopeForRun(id, leads)" not in page
     assert "copyCurrentRunLogs" in page
     assert "downloadCurrentRunLogs" in page
+    assert "复制日志" in page
+    assert "下载日志" in page
     assert "/runs/'+id+'/archive" in page
     assert "/runs/'+id+'/restore" in page
     assert ".run-center-meta" in css
     assert ".run-pagination" in css
     assert ".run-actions" in css
-    assert "email_delivery_logs" not in page
+    task_center = _monitor_section(page, "runs")
+    assert "email_delivery_logs" not in task_center
     assert "job_snapshot_json" not in page
+
+
+def test_phase_19d_run_center_frontend_progress_polling_hooks():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+
+    assert "let runPollInFlight = false;" in page
+    assert "async function loadRuns(options={})" in page
+    assert "const silent=!!options.silent;" in page
+    assert "if(!silent){" in page
+    assert "setLoadingMarkup('runs_table', tableSkeleton(5, 8));" in page
+    assert "syncRunPolling(runs);" in page
+    assert "return runs.some(run=>run.status==='running');" in page
+    assert "function startRunPolling()" in page
+    assert "loadRuns({silent:true})" in page
+    assert "function stopRunPolling()" in page
+    assert "function syncRunPolling(runs=[])" in page
+    assert "function isRunsPageActive()" in page
+    assert "if(!isRunsPageActive()){ stopRunPolling(); return; }" in page
+    assert "if(!running){" in page
+    assert "await Promise.all([loadJobs(), loadReports(), loadReadiness(), loadPlatformStatus(), loadDoctor()]);" not in page
+    assert "await Promise.all([loadJobs(), loadRuns(), loadReadiness(), loadPlatformStatus(), loadDoctor()]);" in page
+    assert "if(btn.dataset.tab!=='runs') stopRunPolling();" in page
+    assert "if(target!=='run_records_view') stopRunPolling();" not in page
+    assert "activeRunCenterView()==='run_records_view' ? loadRuns() : loadReports()" not in page
+    run_poll_block = page[page.index("function startRunPolling()") : page.index("function stopRunPolling()")]
+    assert "let rounds=40" not in run_poll_block
+    assert "rounds++" not in run_poll_block
+    assert "rounds--" not in run_poll_block
+
+    assert "function runProgressDetails(run)" in page
+    assert "if(run.status!=='running') return [];" in page
+    assert "function compactRunProgressText(run, details=[])" in page
+    assert "function compactRunStatusLabel(run)" in page
+    assert "compactRunStatusLabel(run)" in page
+    assert "run.display_status || formatRunStatus(status)" not in page
+    assert "function runCollectionProgressText(progress)" in page
+    assert "function runAiProgressText(progress)" in page
+    assert "run.collection_progress || summary.collection_progress" in page
+    assert "run.ai_progress || summary.ai_progress" in page
+    assert "临时 ${esc(progressValue)}" in page
+    assert "采集中：已观察" in page
+    assert "采集中 ${Number(collection.raw_items_seen||0)}（临时）" in page
+    assert "AI ${progress.final?'完成':'评估中'}" in page
+    assert "AI ${Number(ai.evaluated_items||0)}/${Number(ai.total_candidates||0)}" in page
+    assert "if(run.status==='success') return '';" in page
+    assert "return run.status==='running' ? ((details||[])[0] || '') : '';" in page
+    assert "报告生成中" in page
+    assert "邮件发送中" in page
+    assert "运行超时" in page
+    assert "已取消" in page
+    assert "已完成" in page
+    assert "执行中断" in page
+    assert "if(run.status==='success') parts.push('已完成')" not in page
+    assert "if(run.status==='cancelled') parts.push('已取消')" not in page
+    assert "if(run.status==='interrupted') parts.push('执行中断')" not in page
+    assert "interrupted:'执行中断'" in page
+
+    assert "viewRunLeads(${Number(r.id)})" not in page
+    assert "loadRunLogs(${Number(r.id)})" not in page
+    assert "stopRun(${Number(r.id)})" not in page
+    assert "archiveRun(${Number(r.id)})" not in page
+    assert "restoreRun(${Number(r.id)})" not in page
+    assert "function stopRunFromDetail(id)" in page
+    assert "function archiveRunFromDetail(id)" in page
+    assert "function restoreRunFromDetail(id)" in page
+    assert "const visibility=isAdminUser() ? (val('run_visibility_filter') || 'visible') : 'visible';" in page
+    assert "applyRunCenterRoleMode()" in page
+
+    assert ".run-status-stack" in css
+    assert "width: fit-content;" in css
+    assert ".run-status-badge" in css
+    assert "display: inline-flex;" in css
+    assert "#runs_table .run-record-table th.col-status" in css
+    assert "#runs_table .run-record-table td.col-status" in css
+    assert "max-width: 86px;" in css
+    assert "run-status-badge ${cls}" in page
+    assert "status run-status-badge" not in page
+    assert ".run-progress-lines" in css
+    assert ".run-progress-note" in css
+    assert ".run-actions" in css
+    assert "white-space: normal;" in css
+    assert "flex-wrap: wrap;" in css
+
+
+def test_phase_19d_run_display_status_labels_match_progress_ui_terms():
+    init_db()
+    jobs_snapshot = _snapshot_monitor_jobs()
+    snapshots = {"crawl_runs": _snapshot_table("crawl_runs")}
+    _clear_monitor_jobs()
+    try:
+        job = save_job(
+            {
+                "law_firm_name": "Phase19D状态律所",
+                "keywords": ["Phase19D状态律所投诉"],
+                "platforms": ["dy"],
+                "enabled": True,
+            }
+        )
+        expected = {
+            "success": "已完成",
+            "timeout": "运行超时",
+            "cancelled": "已取消",
+            "interrupted": "执行中断",
+        }
+        for status, label in expected.items():
+            run_id = create_run(job["id"], {"job_id": job["id"], "platforms": ["dy"]})
+            finish_run(run_id, status, {"job_id": job["id"], "platforms": ["dy"]})
+            run = get_run(run_id)
+            assert run and run["display_status"] == label
+    finally:
+        _restore_table("crawl_runs", snapshots["crawl_runs"])
+        _restore_monitor_jobs(jobs_snapshot)
 
 
 def test_phase_16_email_delivery_logs_schema_window_keys_and_compatibility():
@@ -11429,7 +11977,7 @@ def test_phase_17b_report_center_delivery_history_frontend_hooks():
     css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
     frontend_source = page + "\n" + css
 
-    reports_section = page[page.index('<section id="reports"') : page.index('<section id="doctor"')]
+    reports_section = _task_group_view(page)
     delivery_drawer = page[page.index('id="email_delivery_history_drawer"') : page.index('id="email_template_drawer_backdrop"')]
     assert "邮件交付历史" in delivery_drawer
     assert "email_delivery_history" not in reports_section
@@ -11439,7 +11987,6 @@ def test_phase_17b_report_center_delivery_history_frontend_hooks():
     assert "email_delivery_history_count" in delivery_drawer
     assert "data-report-delivery-panel" not in reports_section
     assert "data-report-delivery-panel" in delivery_drawer
-    assert "查看交付历史" in page
     assert "loadEmailDeliveryHistory" in page
     assert "openEmailDeliveryHistoryDrawer" in page
     assert "closeEmailDeliveryHistoryDrawer" in page
@@ -11449,7 +11996,7 @@ def test_phase_17b_report_center_delivery_history_frontend_hooks():
     assert "email-delivery-logs" in page
     assert "confirm('确认手动重发这份报告邮件？系统会单独记录本次重发历史。')" in page
     assert "await loadEmailDeliveryHistory(id, {silent:true})" in page
-    assert "reportEmailStatusCell" in page
+    assert "reportEmailStatusCell" not in page
     assert "emailDeliveryStatusLabel" in page
     assert "邮件已提交 SMTP，请人工确认收件箱或垃圾箱" in page
     assert "sent:'SMTP已接受'" in page
@@ -11607,8 +12154,7 @@ def test_phase_17_1d_orphan_email_evidence_dry_run_helper_is_noop(tmp_path, caps
 def test_cr048_report_center_lead_detail_requires_visible_scope_and_report_action():
     page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
     css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
-    reports_section = page[page.index('<section id="reports"') : page.index('<section id="doctor"')]
-    lead_drawer = page[page.index('id="report_leads_drawer"') : page.index('id="email_template_drawer_backdrop"')]
+    reports_section = _task_group_view(page)
 
     assert 'data-report-lead-panel' not in reports_section
     assert 'id="leads_scope"' not in reports_section
@@ -11616,43 +12162,156 @@ def test_cr048_report_center_lead_detail_requires_visible_scope_and_report_actio
     assert 'id="leads_table"' not in reports_section
     assert 'id="lead_status_filter"' not in reports_section
     assert '<label>线索状态</label>' not in reports_section
-    assert 'id="report_leads_backdrop"' in page
-    assert 'id="report_leads_drawer"' in page
-    assert 'data-report-lead-panel' in lead_drawer
-    assert 'id="leads_scope"' in lead_drawer
-    assert 'id="leads_scope_count"' in lead_drawer
-    assert 'id="leads_table"' in lead_drawer
-    assert 'id="leads_scope_hint"' in lead_drawer
-    assert 'id="lead_status_filter"' in lead_drawer
-    assert 'onclick="reloadCurrentLeadDrawer()"' in lead_drawer
-    assert '从报告中心或运行中心点击“查看线索”' in lead_drawer
-    assert 'function viewReportLeads(id)' in page
-    assert 'function viewRunLeads(id)' in page
-    assert 'function openReportLeadsDrawer(id, options={})' in page
-    assert 'function closeReportLeadsDrawer()' in page
-    assert "openReportLeadsDrawer(id);" in page
-    assert "openReportLeadsDrawer(id, {source:'run'});" in page
-    assert "new URLSearchParams({run_id:String(id), limit:'0', risk:val('lead_status_filter')})" in page
-    assert "function leadScopeForRun(id, leads)" in page
-    assert "function reloadCurrentLeadDrawer()" in page
-    assert "运行 #${Number(id)} 的线索明细" in page
-    assert "完整 AI 评估详情仍属于后续运行详情" in page
-    assert '<button class="secondary" onclick="viewReportLeads(${reportId})">查看线索</button>' in page
-    assert 'renderLeads([], {' in page
-    assert "type: 'none_selected'" in page
+    assert 'id="report_leads_backdrop"' not in page
+    assert 'id="report_leads_drawer"' not in page
+    assert 'data-report-lead-panel' not in page
+    assert 'id="leads_scope"' not in page
+    assert 'id="leads_scope_count"' not in page
+    assert 'id="leads_table"' not in page
+    assert 'id="leads_scope_hint"' not in page
+    assert 'id="lead_status_filter"' not in page
+    assert 'function viewReportLeads(id)' not in page
+    assert 'function viewRunLeads(id)' not in page
+    assert 'function openReportLeadsDrawer(id, options={})' not in page
+    assert 'function closeReportLeadsDrawer()' not in page
+    assert "function reloadCurrentLeadDrawer()" not in page
+    assert "run_detail_report_filter" in page
+    assert "function setRunDetailAiFilters(filters={}, options={})" in page
+    assert "function jumpToReportAiEvaluations(reportId)" in page
+    assert "报告 #${esc(report.id)}" in page
+    assert '<button class="secondary" onclick="viewReportLeads(${reportId})">查看线索</button>' not in page
+    assert "closeReportActionMenu" not in page
+    assert "jumpToReportAiEvaluations(${Number(report.id)})" in page
+    assert 'renderLeads([], {' not in page
+    assert "type:'none_selected'" not in page
     assert "当前筛选条件下的线索" not in page
     assert "document.getElementById('leads_scope').textContent = '正在加载当前报告线索...';" not in page
-    assert ".report-leads-drawer" in css
-    assert ".report-leads-toolbar" in css
-    assert ".report-leads-content" in css
+    assert ".report-leads-drawer" not in css
+    assert ".report-leads-toolbar" not in css
+    assert ".report-leads-content" not in css
     assert ".lead-detail-panel" not in css
+
+
+def test_phase_20d_run_detail_frontend_hooks():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    runs_section = _monitor_section(page, "runs")
+    reports_section = _task_group_view(page)
+    run_detail_drawer = page[page.index('id="run_detail_drawer"') : page.index('id="report_preview_backdrop"')]
+
+    assert 'data-run-detail-panel' not in runs_section
+    assert 'data-run-detail-panel' not in reports_section
+    assert 'id="run_detail_backdrop"' in page
+    assert 'id="run_detail_drawer"' in page
+    assert 'data-run-detail-panel' in run_detail_drawer
+    assert 'id="run_detail_body"' in run_detail_drawer
+    assert 'data-run-detail-tab="overview"' in run_detail_drawer
+    assert 'data-run-detail-tab="logs"' in run_detail_drawer
+    assert 'data-run-detail-tab="contents"' in run_detail_drawer
+    assert 'data-run-detail-tab="ai"' in run_detail_drawer
+    assert 'data-run-detail-tab="reports"' in run_detail_drawer
+    assert 'data-run-detail-tab="email"' in run_detail_drawer
+    assert 'onclick="openRunDetail(${Number(r.id)})">详情</button>' in page
+    assert "function openRunDetail(id)" in page
+    assert "function loadRunDetail(id)" in page
+    assert "function renderRunDetailBody(detail)" in page
+    assert "function renderRunAiEvaluations(detail)" in page
+    assert "function syncRunDetailTabs()" in page
+    assert "syncRunDetailTabs();" in page
+    assert "function openRunEvaluationDetail(runId, evaluationId)" in page
+    assert 'onclick="closeRunDetailDrawer()">返回列表</button>' in page
+    assert 'onclick="renderRunDetailBody(currentRunDetailState)">返回列表</button>' not in page
+    assert "/runs/${Number(id)}/detail" in page
+    assert "/runs/${Number(runId)}/ai-evaluations/${Number(evaluationId)}" in page
+    assert "日志和 AI 详情在同一面板内可达" in page
+    assert "runDetailLogsText(logs)" in page
+    assert "复制日志" in page
+    assert "下载日志" in page
+    assert 'id="run_detail_actions"' in run_detail_drawer
+    assert "stopRunFromDetail" in page
+    assert "archiveRunFromDetail" in page
+    assert "restoreRunFromDetail" in page
+    assert "run-detail-report-actions" in page
+    assert "function setRunDetailAiFilters(filters={}, options={})" in page
+    assert "function jumpToReportAiEvaluations(reportId)" in page
+    assert "jumpToReportAiEvaluations(${Number(report.id)})" in page
+    assert 'run-detail-ai-toolbar page-filter-region' in page
+    assert 'data-filter-region="run-detail-ai"' in page
+    assert "run_detail_report_filter" in page
+    assert 'id="run_detail_report_filter" type="hidden"' in page
+    assert "reports.length > 1 ? `" in page
+    assert '<select id="run_detail_report_filter"' in page
+    assert "reports.length > 1" in page
+    assert "run-detail-ai-scope-note" in page
+    assert "仅看报告 #${aiAppliedFilters.report_id}" in page
+    assert "当前运行关联报告" in page
+    assert "run_detail_ai_status_filter" in page
+    assert "run_detail_ai_risk_filter" in page
+    assert "run_detail_ai_platform_filter" in page
+    assert "run_detail_ai_keyword_filter" in page
+    assert "run_detail_ai_title_filter" in page
+    assert "report_leads_drawer" not in page
+    assert "report_leads_backdrop" not in page
+    assert "closeReportLeadsDrawer" not in page
+    assert "loadEmailDeliveryHistory(${Number(report.id)})" in page
+    assert "resendReportEmail(${Number(report.id)})" in page
+    assert "/reports/${Number(report.id)}/download?type=html" in page
+    assert "返回 AI 评估列表" in page
+    assert ".run-detail-drawer" in css
+    assert ".run-detail-tabs" in css
+    assert ".run-detail-grid" in css
+    assert ".run-detail-code" in css
+    assert ".run-detail-action-slot" in css
+    assert ".run-detail-report-actions" in css
+    assert ".run-detail-ai-toolbar" in css
+    assert ".run-detail-ai-filters" in css
+    assert ".run-detail-ai-filters .filter-select-button" in css
+    assert ".run-detail-ai-filters .filter-select-enhanced" in css
+    assert ".run-detail-ai-scope-note" in css
+    assert ".run-detail-tabs {\n    display: grid;" in css
+    assert "grid-template-columns: repeat(2, minmax(0, 1fr));" in css
+    assert ".detail-tabs.run-detail-tabs {\n        display:grid;" in page
+
+
+def test_phase_20d_run_detail_uses_final_summary_fallbacks():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+
+    assert "summaryAi=summary.ai_evaluation || {}" in page
+    assert "finalRawCount=Number(collection.final_raw_contents ?? summary.raw_contents ?? contents.length ?? 0)" in page
+    assert "hasFinalCollection=!!collection.final || summary.raw_contents !== undefined || run.status !== 'running'" in page
+    assert "aiTotal=Number(ai.total_candidates ?? summaryAi.total_candidates ?? (detail?.ai_pagination||{}).total ?? aiItems.length ?? 0)" in page
+    assert "aiEvaluated=Number(ai.evaluated_items ?? summaryAi.evaluated ?? aiItems.filter(item=>item.evaluation_id).length ?? 0)" in page
+    assert "aiManual=Number(ai.manual_review_count ?? summary.manual_review_count ?? summary.pending_review_count ?? aiItems.filter(item=>item.lead_status==='pending_review').length ?? 0)" in page
+    assert "已采集 ${finalRawCount}" in page
+    assert "临时 ${seenRawCount}" in page
+    assert "aiTotal ? (aiFinal ? 'ok' : 'warn') : ''" in page
+
+
+def test_phase_20e_report_leads_backlink_to_run_detail():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    reports_section = _task_group_view(page)
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+
+    assert 'data-run-detail-panel' not in reports_section
+    assert 'id="report_leads_drawer"' not in page
+    assert "function leadLinks(item)" not in page
+    assert "closeReportLeadsDrawer(); openRunDetail(${runId})" not in page
+    assert "jumpToReportAiEvaluations(${Number(report.id)})" in page
+    assert "report_id: reportId" in page
+    assert "报告 #${filters.report_id}" in page
+    assert "上下文有限</span>" in page
+    assert '<label>线索状态</label>' not in reports_section
+    assert 'id="leads_table"' not in reports_section
+    assert ".report-leads-drawer" not in css
+    assert "#report_leads_drawer.drawer.active" not in css
+    assert "#report_leads_backdrop.active" not in css
 
 
 def test_cr049_mail_and_delivery_history_action_hierarchy_frontend_hooks():
     page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
     css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
     email_section = page[page.index('<section id="email"') : page.index('<div id="mail_config_backdrop"')]
-    reports_section = page[page.index('<section id="reports"') : page.index('<section id="doctor"')]
+    reports_section = _task_group_view(page)
 
     assert "email-toolbar-switch" in email_section
     assert "真实邮件：已关闭" in email_section
@@ -11668,8 +12327,10 @@ def test_cr049_mail_and_delivery_history_action_hierarchy_frontend_hooks():
     assert 'id="email_delivery_history_scope"' in delivery_drawer
     assert 'id="email_delivery_history_count"' in delivery_drawer
     assert 'is-secondary-detail' not in reports_section
-    assert '点击报告行的邮件状态或“更多 > 查看交付历史”会打开悬浮窗' in reports_section
+    assert '点击报告行的邮件状态或“更多 > 查看交付历史”会打开悬浮窗' not in reports_section
     assert "document.querySelector('[data-report-delivery-panel]')?.scrollIntoView" not in page
+    assert "closeReportActionMenu" not in page
+    assert "loadEmailDeliveryHistory(${Number(report.id)})" in page
     assert ".email-toolbar-switch" in css
     assert ".email-delivery-history-drawer" in css
     assert ".email-delivery-history-content" in css
@@ -11714,37 +12375,30 @@ def test_phase_18b_report_center_task_grouping_frontend_hooks():
     css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
     frontend_source = page + "\n" + css
 
-    reports_section = page[page.index('<section id="reports"') : page.index('<section id="doctor"')]
-    for hook in [
-        "groupReportsByTask",
-        "reportGroupingContext",
-        "reportGroupKey",
-        "renderReportTaskGroup",
-        "reportGroupBadges",
-        "reportGroupSummaryText",
-        "reportGroupMetaChips",
-        "formatReportFrequency",
-    ]:
-        assert hook in page
-    assert 'target.innerHTML=`<div class="report-task-groups">' in page
-    assert "if(report?.limited_context) return 'limited:historical'" in page
-    assert 'return `active:${context.jobId}`' in page
-    assert 'return `snapshot:${context.jobId}`' in page
+    reports_section = _task_group_view(page)
+    assert "groupReportsByTask" not in page
+    assert "renderReportTaskGroup" not in page
+    assert "reportGroupSummaryText" not in page
+    assert "formatReportFrequency" in page
+    assert "function groupRunsByTask(runs)" in page
+    assert "function renderTaskRunGroup(group)" in page
+    assert 'return `<div class="task-run-groups">' in page
+    assert "const jobId=Number(run.job_id || summary.job_id || 0) || null;" in page
+    assert "if(context.jobId) return `job:${context.jobId}`;" in page
     assert "原任务已删除" in page
     assert "上下文有限" in page
-    assert "历史快照" in page
+    assert "历史运行：任务上下文有限" in page
     assert "平台：" in page
     assert "关键词：" in page
-    assert "频率：" in page
-    assert "删除时间：" in page
     assert "job_snapshot_json" not in reports_section
     assert "recipients_json" not in reports_section
     assert "smtp_password" not in reports_section
-    assert "previewReport(${reportId})" in page
-    assert "toggleReportActionMenu(${reportId}, this)" in page
-    assert "loadEmailDeliveryHistory(${Number(id)})" in page
-    assert "/reports/${Number(id)}/download?type=html" in page
-    assert "/leads?'+qs.toString()" in page
+    assert "previewReport(${reportId})" not in page
+    assert "previewReport(${Number(report.id)})" in page
+    assert "toggleReportActionMenu" not in page
+    assert "loadEmailDeliveryHistory(${Number(report.id)})" in page
+    assert "/reports/${Number(report.id)}/download?type=html" in page
+    assert "/leads?'+qs.toString()" not in page
     for selector in [
         ".report-task-groups",
         ".report-task-group",
@@ -12303,6 +12957,781 @@ def test_leads_api_can_scope_items_to_selected_run():
         _cleanup_test_records(job["id"], second_id)
 
     assert [item["content_id"] for item in scoped] == [first_id]
+
+
+def test_phase_19b_collection_progress_tolerates_partial_outputs_and_keeps_final_counts(tmp_path):
+    init_db()
+    job = save_job(
+        {
+            "law_firm_name": "进度测试律所",
+            "aliases": [],
+            "exclude_words": [],
+            "keywords": ["进度测试律所避雷"],
+            "platforms": ["dy"],
+            "recipients": [],
+            "enable_comments": False,
+            "time_window_type": "recent_1d",
+            "frequency": "daily",
+            "email_time": "09:00",
+            "enabled": True,
+        }
+    )
+    run_id = create_run(job["id"], {"job_id": job["id"], "raw_contents": 0, "new_contents": 0}, timeout_seconds=120)
+    json_dir = tmp_path / "douyin" / "json"
+    jsonl_dir = tmp_path / "douyin" / "jsonl"
+    json_dir.mkdir(parents=True)
+    jsonl_dir.mkdir(parents=True)
+    now_ts = int(datetime.now(timezone.utc).timestamp())
+    (json_dir / "search_contents_valid.json").write_text(
+        json.dumps(
+            [
+                {
+                    "aweme_id": "pytest_phase19b_valid_001",
+                    "title": "进度测试律所避雷",
+                    "desc": "可正常入库",
+                    "create_time": now_ts,
+                }
+            ],
+            ensure_ascii=False,
+        ),
+        encoding="utf-8",
+    )
+    (json_dir / "search_contents_empty.json").write_text("", encoding="utf-8")
+    (json_dir / "search_contents_partial.json").write_text('{"aweme_id": "broken"', encoding="utf-8")
+    (jsonl_dir / "search_contents_partial.jsonl").write_text(
+        json.dumps(
+            {
+                "aweme_id": "pytest_phase19b_valid_002",
+                "title": "进度测试律所避雷二",
+                "desc": "JSONL 部分可读",
+                "create_time": now_ts,
+            },
+            ensure_ascii=False,
+        )
+        + "\n{bad",
+        encoding="utf-8",
+    )
+    try:
+        provisional = runner_module._update_collection_progress(run_id, "dy", tmp_path, phase="collecting")
+        assert provisional["collection_progress"]["provisional"] is True
+        assert provisional["collection_progress"]["final"] is False
+        assert provisional["collection_progress"]["raw_items_seen"] == 2
+        assert provisional["collection_progress"]["malformed_files"] >= 2
+        assert provisional["collection_progress"]["platforms"]["dy"]["empty_files"] >= 1
+        assert provisional["raw_contents"] == 0
+        assert provisional["new_contents"] == 0
+
+        contents, comments = collect_platform_outputs(tmp_path, "dy")
+        result = ingest_outputs(job, run_id, "dy", contents, comments)
+        runner_module._finalize_collection_progress(run_id, "dy", result)
+        summary = {"job_id": job["id"], **result}
+        runner_module._sync_progress_from_stored_summary(run_id, summary, finalize=True)
+        finish_run(run_id, "success", summary)
+        run = get_run(run_id)
+    finally:
+        _cleanup_test_records(job["id"], "pytest_phase19b_valid_001")
+        _cleanup_test_records(job["id"], "pytest_phase19b_valid_002")
+
+    assert result["raw_contents"] == 2
+    assert result["filtered_contents"] == 2
+    assert result["new_contents"] == 2
+    assert run
+    assert run["summary"]["raw_contents"] == 2
+    assert run["summary"]["new_contents"] == 2
+    assert run["summary"]["collection_progress"]["final"] is True
+    assert run["summary"]["collection_progress"]["final_raw_contents"] == 2
+    assert run["summary"]["collection_progress"]["final_new_contents"] == 2
+    assert run["collection_progress"]["platforms"]["dy"]["final"] is True
+
+
+def test_phase_20b_ai_trace_persistence_redaction_truncation_and_retention():
+    init_db()
+    settings_snapshot = _snapshot_table("system_settings")
+    traces_snapshot = _snapshot_table("ai_evaluation_traces")
+    try:
+        with get_conn() as conn:
+            conn.execute("DELETE FROM system_settings")
+            conn.execute("DELETE FROM ai_evaluation_traces")
+        settings = list_runtime_settings()
+        assert settings["ai_trace_retention_days"]["value"] == 30
+        assert settings["ai_trace_retention_days"]["group"] == "Retention"
+        updated = save_runtime_settings({"ai_trace_retention_days": 7}, actor_id=1)
+        assert updated["ai_trace_retention_days"]["value"] == 7
+        assert get_runtime_setting_value("ai_trace_retention_days") == 7
+
+        trace = save_ai_evaluation_trace(
+            {
+                "workspace_id": 1,
+                "run_id": 501,
+                "raw_content_id": 601,
+                "ai_evaluation_id": 701,
+                "attempt_index": 1,
+                "status": "ok",
+                "provider": "openai",
+                "model": "trace-model",
+                "prompt_snapshot": "判断律所负面 " + ("P" * 20000),
+                "input_payload": {
+                    "law_firm_name": "Phase20B律所",
+                    "profile_path": "C:\\secret\\profile",
+                    "comments": [{"content": "C" * 800, "author_name": "用户"} for _ in range(25)],
+                },
+                "request_snapshot": {
+                    "headers": {
+                        "Authorization": "Bearer sk-secret-token",
+                        "Cookie": "session=secret",
+                    },
+                    "json": {
+                        "messages": [{"role": "user", "content": "hello"}],
+                        "proxy_url": "http://user:pass@example.com:8080",
+                    },
+                },
+                "response_snapshot": json.dumps({"raw": "R" * 30000, "api_key": "sk-response-secret"}),
+                "parsed_result": {"is_related": True, "is_negative": True, "risk_level": "high"},
+                "error_message": "authorization: Bearer sk-error-secret at C:\\server\\local\\path",
+                "duration_ms": 123,
+                "started_at": "2026-06-18T00:00:00Z",
+                "finished_at": "2026-06-18T00:00:01Z",
+            }
+        )
+        stored = get_ai_evaluation_trace(ai_evaluation_id=701)
+        state = ai_evaluation_trace_state(ai_evaluation_id=701)
+        missing_state = ai_evaluation_trace_state(ai_evaluation_id=999999)
+
+        with get_conn() as conn:
+            conn.execute(
+                "UPDATE ai_evaluation_traces SET created_at=? WHERE id=?",
+                ((datetime.now(timezone.utc) - timedelta(days=8)).isoformat(), trace["id"]),
+            )
+        cleanup = cleanup_ai_evaluation_traces()
+        after_cleanup = get_ai_evaluation_trace(ai_evaluation_id=701)
+    finally:
+        _restore_table("ai_evaluation_traces", traces_snapshot)
+        _restore_table("system_settings", settings_snapshot)
+
+    combined = json.dumps(stored, ensure_ascii=False)
+    assert stored["provider"] == "openai"
+    assert stored["model"] == "trace-model"
+    assert stored["duration_ms"] == 123
+    assert stored["limited_context"] is False
+    assert stored["parsed_result"]["_trace_meta"]["truncated"] is True
+    assert "prompt_snapshot" in stored["parsed_result"]["_trace_meta"]["truncated_fields"]
+    assert stored["input_payload"]["truncated"] is True
+    assert len(stored["input_payload"]["comments"]) == 20
+    assert "sk-secret" not in combined
+    assert "session=secret" not in combined
+    assert "user:pass" not in combined
+    assert "C:\\secret" not in combined
+    assert "C:\\server" not in combined
+    assert state["status"] == "available"
+    assert missing_state["limited_context"] is True
+    assert "历史记录未保存完整入参/出参" in missing_state["message"]
+    assert cleanup["deleted"] == 1
+    assert cleanup["retention_days"] == 7
+    assert after_cleanup is None
+
+
+def test_phase_20b_evaluate_new_contents_persists_success_and_fallback_traces(monkeypatch):
+    init_db()
+    snapshots = {
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "raw_contents": _snapshot_table("raw_contents"),
+        "raw_comments": _snapshot_table("raw_comments"),
+        "ai_evaluations": _snapshot_table("ai_evaluations"),
+        "ai_evaluation_traces": _snapshot_table("ai_evaluation_traces"),
+    }
+    jobs_snapshot = _snapshot_monitor_jobs()
+    try:
+        _clear_monitor_jobs()
+        with get_conn() as conn:
+            for table in ["reports", "crawl_runs", "raw_contents", "raw_comments", "ai_evaluations", "ai_evaluation_traces"]:
+                conn.execute(f"DELETE FROM {table}")
+        job = save_job(
+            {
+                "law_firm_name": "Phase20B追溯律所",
+                "keywords": ["Phase20B追溯律所投诉"],
+                "platforms": ["dy"],
+                "recipients": [],
+                "enable_comments": True,
+                "time_window_type": "recent_1d",
+                "enabled": True,
+            }
+        )
+        run_id = create_run(job["id"], {"job_id": job["id"], "phase_20b_trace": True}, timeout_seconds=120)
+        now_ts = int(datetime.now(timezone.utc).timestamp())
+        ingested = ingest_outputs(
+            job,
+            run_id,
+            "dy",
+            [
+                {
+                    "aweme_id": "pytest_phase20b_trace_ok",
+                    "title": "Phase20B追溯律所投诉",
+                    "desc": "服务争议",
+                    "create_time": now_ts,
+                },
+                {
+                    "aweme_id": "pytest_phase20b_trace_fail",
+                    "title": "Phase20B追溯律所待复核",
+                    "desc": "需要人工判断",
+                    "create_time": now_ts,
+                },
+            ],
+            [
+                {
+                    "comment_id": "pytest_phase20b_comment_1",
+                    "aweme_id": "pytest_phase20b_trace_ok",
+                    "content": "Phase20B追溯律所沟通问题",
+                    "create_time": now_ts,
+                }
+            ],
+        )
+
+        async def fake_evaluate(job_arg, content, comments):
+            if content["content_id"] == "pytest_phase20b_trace_fail":
+                raise RuntimeError("provider failed api_key=sk-secret Authorization: Bearer hidden")
+            return {
+                "status": "ok",
+                "is_related": True,
+                "is_negative": True,
+                "risk_level": "high",
+                "reason": "命中投诉",
+                "evidence_quotes": [content["title"]],
+                "recommended_action": "人工复核",
+                "raw_response": '{"risk_level":"high","api_key":"sk-secret"}',
+                "_ai_trace": {
+                    "workspace_id": 1,
+                    "run_id": run_id,
+                    "raw_content_id": content["id"],
+                    "attempt_index": 1,
+                    "status": "ok",
+                    "provider": "openai",
+                    "model": "trace-model",
+                    "prompt_snapshot": "prompt api_key=sk-secret",
+                    "input_payload": {"title": content["title"], "comments": comments},
+                    "request_snapshot": {"headers": {"Authorization": "Bearer sk-secret"}},
+                    "response_snapshot": '{"risk_level":"high","api_key":"sk-secret"}',
+                    "parsed_result": {"risk_level": "high"},
+                    "duration_ms": 10,
+                },
+            }
+
+        monkeypatch.setattr(runner_module, "evaluate_content", fake_evaluate)
+        eval_summary = asyncio.run(evaluate_new_contents(job, run_id, ingested["content_db_ids"]))
+        report = create_report(run_id, job, {"job_id": job["id"], "platforms": ["dy"], **ingested, **eval_summary})
+        with get_conn() as conn:
+            traces = [dict(row) for row in conn.execute("SELECT * FROM ai_evaluation_traces ORDER BY raw_content_id").fetchall()]
+            evaluations = [dict(row) for row in conn.execute("SELECT * FROM ai_evaluations ORDER BY raw_content_id").fetchall()]
+    finally:
+        _restore_monitor_jobs(jobs_snapshot)
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+    assert eval_summary["negative_count"] == 1
+    assert eval_summary["high_count"] == 1
+    assert eval_summary["pending_review_count"] == 1
+    assert report["summary"]["pending_review_count"] == 1
+    assert len(evaluations) == 2
+    assert len(traces) == 2
+    assert {row["status"] for row in traces} == {"ok", "pending_review"}
+    combined = json.dumps(traces, ensure_ascii=False)
+    assert "sk-secret" not in combined
+    assert "Bearer hidden" not in combined
+    assert "provider failed" in combined
+    assert all(row["ai_evaluation_id"] for row in traces)
+
+
+def test_phase_20b_trace_write_failure_does_not_block_evaluation_or_report(monkeypatch):
+    init_db()
+    snapshots = {
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "raw_contents": _snapshot_table("raw_contents"),
+        "raw_comments": _snapshot_table("raw_comments"),
+        "ai_evaluations": _snapshot_table("ai_evaluations"),
+        "ai_evaluation_traces": _snapshot_table("ai_evaluation_traces"),
+    }
+    jobs_snapshot = _snapshot_monitor_jobs()
+    try:
+        _clear_monitor_jobs()
+        with get_conn() as conn:
+            for table in ["reports", "crawl_runs", "raw_contents", "raw_comments", "ai_evaluations", "ai_evaluation_traces"]:
+                conn.execute(f"DELETE FROM {table}")
+        job = save_job(
+            {
+                "law_firm_name": "Phase20B非阻塞律所",
+                "keywords": ["Phase20B非阻塞律所投诉"],
+                "platforms": ["dy"],
+                "recipients": [],
+                "enable_comments": False,
+                "time_window_type": "recent_1d",
+                "enabled": True,
+            }
+        )
+        run_id = create_run(job["id"], {"job_id": job["id"]}, timeout_seconds=120)
+        ingested = ingest_outputs(
+            job,
+            run_id,
+            "dy",
+            [{"aweme_id": "pytest_phase20b_trace_nonblocking", "title": "Phase20B非阻塞律所投诉", "create_time": int(datetime.now(timezone.utc).timestamp())}],
+            [],
+        )
+
+        async def fake_evaluate(job_arg, content, comments):
+            return {
+                "status": "pending_review",
+                "is_related": True,
+                "is_negative": False,
+                "risk_level": "low",
+                "reason": "人工复核",
+                "evidence_quotes": [content["title"]],
+                "recommended_action": "人工复核",
+                "raw_response": "",
+                "_ai_trace": {
+                    "workspace_id": 1,
+                    "run_id": run_id,
+                    "raw_content_id": content["id"],
+                    "status": "pending_review",
+                    "provider": "openai",
+                    "model": "trace-model",
+                },
+            }
+
+        def boom(trace):
+            raise RuntimeError("trace write failed")
+
+        monkeypatch.setattr(runner_module, "evaluate_content", fake_evaluate)
+        monkeypatch.setattr(runner_module, "save_ai_evaluation_trace", boom)
+        eval_summary = asyncio.run(evaluate_new_contents(job, run_id, ingested["content_db_ids"]))
+        report = create_report(run_id, job, {"job_id": job["id"], "platforms": ["dy"], **ingested, **eval_summary})
+        with get_conn() as conn:
+            eval_count = conn.execute("SELECT COUNT(*) AS n FROM ai_evaluations WHERE run_id=?", (run_id,)).fetchone()["n"]
+            trace_count = conn.execute("SELECT COUNT(*) AS n FROM ai_evaluation_traces WHERE run_id=?", (run_id,)).fetchone()["n"]
+    finally:
+        _restore_monitor_jobs(jobs_snapshot)
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+    assert eval_summary["pending_review_count"] == 1
+    assert eval_count == 1
+    assert trace_count == 0
+    assert Path(report["html_path"]).exists()
+
+
+def test_phase_20c_run_detail_api_scope_filters_and_redacted_trace():
+    from api import main as api_main
+
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "user_sessions": _snapshot_table("user_sessions"),
+        "users": _snapshot_table("users"),
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "raw_contents": _snapshot_table("raw_contents"),
+        "raw_comments": _snapshot_table("raw_comments"),
+        "ai_evaluations": _snapshot_table("ai_evaluations"),
+        "ai_evaluation_traces": _snapshot_table("ai_evaluation_traces"),
+        "email_delivery_logs": _snapshot_table("email_delivery_logs"),
+    }
+    jobs_snapshot = _snapshot_monitor_jobs()
+    try:
+        _clear_monitor_jobs()
+        with get_conn() as conn:
+            for table in ["audit_logs", "user_sessions", "users", "reports", "crawl_runs", "raw_contents", "raw_comments", "ai_evaluations", "ai_evaluation_traces", "email_delivery_logs"]:
+                conn.execute(f"DELETE FROM {table}")
+        admin = bootstrap_admin_from_env("phase20c-admin@example.com", "AdminPass123!", "Phase20C Admin")
+        user1 = save_user({"email": "phase20c-user1@example.com", "display_name": "User1", "password": "UserPass123!", "role": "normal"}, actor_id=int(admin["id"]))
+        user2 = save_user({"email": "phase20c-user2@example.com", "display_name": "User2", "password": "UserPass123!", "role": "normal"}, actor_id=int(admin["id"]))
+        job1 = save_job(
+            {
+                "law_firm_name": "Phase20C律所",
+                "keywords": ["Phase20C律所投诉", "Phase20C律所口碑"],
+                "platforms": ["dy", "xhs"],
+                "recipients": ["ops@example.com"],
+                "enabled": True,
+            },
+            actor=user1,
+        )
+        job2 = save_job(
+            {
+                "law_firm_name": "Other20C律所",
+                "keywords": ["Other20C律所投诉"],
+                "platforms": ["ks"],
+                "recipients": ["ops@example.com"],
+                "enabled": True,
+            },
+            actor=user2,
+        )
+        run1 = create_run(job1["id"], {"job_id": job1["id"], "law_firm_name": job1["law_firm_name"], "platforms": ["dy", "xhs"]})
+        run2 = create_run(job2["id"], {"job_id": job2["id"], "law_firm_name": job2["law_firm_name"], "platforms": ["ks"]})
+        now = datetime.now(timezone.utc).isoformat()
+        now_ts = int(datetime.now(timezone.utc).timestamp())
+        with get_conn() as conn:
+            raw_ids: list[int] = []
+            rows = [
+                ("dy", "pytest_phase20c_high", "Phase20C律所投诉", "Phase20C律所多人投诉", "服务争议", user1["id"], run1, job1["id"]),
+                ("xhs", "pytest_phase20c_pending", "Phase20C律所口碑", "Phase20C律所待复核", "待判断", user1["id"], run1, job1["id"]),
+                ("dy", "pytest_phase20c_old", "Phase20C律所投诉", "Phase20C律所旧评估", "旧数据", user1["id"], run1, job1["id"]),
+                ("ks", "pytest_phase20c_other", "Other20C律所投诉", "Other20C律所投诉", "其他用户数据", user2["id"], run2, job2["id"]),
+            ]
+            for platform_code, content_id, keyword, title_text, desc, owner_id, run_id_value, job_id_value in rows:
+                conn.execute(
+                    """
+                    INSERT INTO raw_contents (
+                        workspace_id, platform, content_id, job_id, run_id,
+                        law_firm_name, source_keyword, title, description,
+                        author_name, content_url, cover_url, publish_time,
+                        comment_count, raw_json, first_seen_at, last_seen_at,
+                        created_by, updated_by
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (
+                        1,
+                        platform_code,
+                        content_id,
+                        job_id_value,
+                        run_id_value,
+                        "Phase20C律所" if run_id_value == run1 else "Other20C律所",
+                        keyword,
+                        title_text,
+                        desc,
+                        "用户",
+                        "https://example.com/" + content_id,
+                        "",
+                        now_ts,
+                        0,
+                        "{}",
+                        now,
+                        now,
+                        owner_id,
+                        owner_id,
+                    ),
+                )
+                raw_ids.append(int(conn.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]))
+            eval_rows = [
+                (raw_ids[0], run1, "ok", 1, 1, "high", "高风险投诉", '["多人投诉"]', "人工复核", user1["id"]),
+                (raw_ids[1], run1, "pending_review", 1, 0, "low", "AI 超时，待复核", "[]", "人工复核", user1["id"]),
+                (raw_ids[2], run1, "ok", 1, 0, "low", "旧评估无风险", "[]", "观察", user1["id"]),
+                (raw_ids[3], run2, "ok", 1, 1, "high", "其他用户投诉", '["其他"]', "人工复核", user2["id"]),
+            ]
+            eval_ids: list[int] = []
+            for raw_id, run_id_value, status_value, related, negative, risk_value, reason_value, quotes, action, owner_id in eval_rows:
+                conn.execute(
+                    """
+                    INSERT INTO ai_evaluations (
+                        workspace_id, raw_content_id, run_id, status, is_related,
+                        is_negative, risk_level, reason, evidence_quotes,
+                        recommended_action, raw_response, created_at, created_by,
+                        updated_by
+                    ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                    """,
+                    (1, raw_id, run_id_value, status_value, related, negative, risk_value, reason_value, quotes, action, '{"api_key":"sk-raw-secret"}', now, owner_id, owner_id),
+                )
+                eval_ids.append(int(conn.execute("SELECT last_insert_rowid() AS id").fetchone()["id"]))
+        trace = save_ai_evaluation_trace(
+            {
+                "workspace_id": 1,
+                "run_id": run1,
+                "raw_content_id": raw_ids[0],
+                "ai_evaluation_id": eval_ids[0],
+                "status": "ok",
+                "provider": "openai",
+                "model": "phase20c-model",
+                "prompt_snapshot": "prompt api_key=sk-secret C:\\server\\profile",
+                "input_payload": {
+                    "law_firm_name": "Phase20C律所",
+                    "platform": "抖音",
+                    "platform_code": "dy",
+                    "source_keyword": "Phase20C律所投诉",
+                    "title": "Phase20C律所多人投诉",
+                    "description": "服务争议",
+                    "comments": ["授权 Authorization: Bearer hidden"],
+                    "profile_path": "C:\\server\\profile",
+                },
+                "request_snapshot": {"headers": {"Authorization": "Bearer sk-secret", "Cookie": "sid=secret"}, "smtp_password": "mail-secret"},
+                "response_snapshot": '{"risk":"high","api_key":"sk-secret","cookie":"sid=secret"}',
+                "parsed_result": {"status": "ok", "is_related": True, "is_negative": True, "risk_level": "high", "reason": "高风险投诉", "evidence_quotes": ["多人投诉"], "recommended_action": "人工复核"},
+                "error_message": "proxy_url=http://user:pass@example.com:8080",
+                "duration_ms": 321,
+            }
+        )
+        report = create_report(run1, job1, {"job_id": job1["id"], "platforms": ["dy", "xhs"], "negative_count": 1, "high_count": 1, "pending_review_count": 1})
+        other_report = create_report(run2, job2, {"job_id": job2["id"], "platforms": ["ks"], "negative_count": 1, "high_count": 1})
+        record_email_delivery_log(
+            {
+                "workspace_id": 1,
+                "job_id": job1["id"],
+                "report_id": report["id"],
+                "send_window_key": "phase20c_window",
+                "send_type": "manual_resend",
+                "status": "failed",
+                "error_message": "smtp_password=mail-secret Authorization: Bearer hidden",
+                "effective_recipients": ["ops@example.com"],
+                "effective_recipient_source": "task_recipients",
+            }
+        )
+        transport = httpx.ASGITransport(app=api_main.app)
+
+        async def exercise() -> None:
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as user_client:
+                login = await user_client.post("/api/auth/login", json={"email": "phase20c-user1@example.com", "password": "UserPass123!"})
+                assert login.status_code == 200
+                detail_response = await user_client.get(f"/api/monitor/runs/{run1}/detail", params={"ai_limit": 2, "risk": "high", "platform": "dy", "keyword": "投诉", "title": "多人"})
+                assert detail_response.status_code == 200
+                detail = detail_response.json()["detail"]
+                assert detail["run"]["id"] == run1
+                assert detail["ai_pagination"]["total"] == 1
+                assert len(detail["ai_evaluations"]) == 1
+                assert detail["ai_evaluations"][0]["evaluation_id"] == eval_ids[0]
+                assert detail["reports"][0]["id"] == report["id"]
+                assert detail["email_delivery_logs"][0]["status"] == "failed"
+                report_detail_response = await user_client.get(
+                    f"/api/monitor/runs/{run1}/detail",
+                    params={
+                        "report_id": report["id"],
+                        "risk": "pending",
+                        "platform": "xhs",
+                        "keyword": "口碑",
+                        "title": "待复核",
+                    },
+                )
+                assert report_detail_response.status_code == 200
+                report_detail = report_detail_response.json()["detail"]
+                assert report_detail["ai_filters"]["report_id"] == report["id"]
+                assert report_detail["ai_filters"]["risk"] == "pending"
+                assert report_detail["ai_pagination"]["total"] == 1
+                assert report_detail["ai_evaluations"][0]["evaluation_id"] == eval_ids[1]
+                cross_report_filter = await user_client.get(f"/api/monitor/runs/{run1}/detail", params={"report_id": other_report["id"]})
+                assert cross_report_filter.status_code == 404
+                own_eval = await user_client.get(f"/api/monitor/runs/{run1}/ai-evaluations/{eval_ids[0]}")
+                assert own_eval.status_code == 200
+                own_payload = own_eval.json()["evaluation"]
+                assert "debug" not in own_payload["trace"]
+                assert own_payload["trace"]["business_input"]["title"] == "Phase20C律所多人投诉"
+                assert own_payload["trace"]["structured_output"]["risk_level"] == "high"
+                old_eval = await user_client.get(f"/api/monitor/runs/{run1}/ai-evaluations/{eval_ids[2]}")
+                assert old_eval.status_code == 200
+                assert old_eval.json()["evaluation"]["trace"]["limited_context"] is True
+                other_detail = await user_client.get(f"/api/monitor/runs/{run2}/detail")
+                assert other_detail.status_code == 404
+
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as user2_client:
+                login = await user2_client.post("/api/auth/login", json={"email": "phase20c-user2@example.com", "password": "UserPass123!"})
+                assert login.status_code == 200
+                cross_eval = await user2_client.get(f"/api/monitor/runs/{run1}/ai-evaluations/{eval_ids[0]}")
+                assert cross_eval.status_code == 404
+
+            async with httpx.AsyncClient(transport=transport, base_url="http://testserver") as admin_client:
+                login = await admin_client.post("/api/auth/login", json={"email": "phase20c-admin@example.com", "password": "AdminPass123!"})
+                assert login.status_code == 200
+                detail_response = await admin_client.get(f"/api/monitor/runs/{run1}/detail", params={"ai_limit": 2, "ai_page": 1})
+                assert detail_response.status_code == 200
+                detail = detail_response.json()["detail"]
+                assert detail["ai_pagination"]["total"] == 3
+                assert len(detail["ai_evaluations"]) == 2
+                second_page = await admin_client.get(f"/api/monitor/runs/{run1}/detail", params={"ai_limit": 2, "ai_page": 2})
+                assert second_page.status_code == 200
+                assert len(second_page.json()["detail"]["ai_evaluations"]) == 1
+                admin_eval = await admin_client.get(f"/api/monitor/runs/{run1}/ai-evaluations/{eval_ids[0]}")
+                assert admin_eval.status_code == 200
+                admin_payload = admin_eval.json()["evaluation"]
+                assert "debug" in admin_payload["trace"]
+                assert admin_payload["trace"]["provider"] == "openai"
+                combined = json.dumps({"detail": detail, "eval": admin_payload}, ensure_ascii=False)
+                forbidden = [
+                    "sk-secret",
+                    "sk-raw-secret",
+                    "Bearer hidden",
+                    "sid=secret",
+                    "mail-secret",
+                    "user:pass",
+                    "C:\\server",
+                    "profile_path",
+                    "smtp_password",
+                    "Authorization: Bearer",
+                ]
+                for marker in forbidden:
+                    assert marker not in combined
+                assert "[REDACTED]" in combined or "[PATH_REDACTED]" in combined
+
+        asyncio.run(exercise())
+    finally:
+        _restore_monitor_jobs(jobs_snapshot)
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+
+def test_phase_19c_ai_progress_updates_and_final_counts_are_terminal_safe(monkeypatch):
+    init_db()
+    snapshots = {
+        "reports": _snapshot_table("reports"),
+        "crawl_runs": _snapshot_table("crawl_runs"),
+        "raw_contents": _snapshot_table("raw_contents"),
+        "raw_comments": _snapshot_table("raw_comments"),
+        "ai_evaluations": _snapshot_table("ai_evaluations"),
+    }
+    jobs_snapshot = _snapshot_monitor_jobs()
+    content_ids = [
+        "pytest_phase_19c_high",
+        "pytest_phase_19c_suspected",
+        "pytest_phase_19c_fallback",
+    ]
+    seen_progress: list[dict] = []
+    try:
+        _clear_monitor_jobs()
+        with get_conn() as conn:
+            for table in ["reports", "crawl_runs", "raw_contents", "raw_comments", "ai_evaluations"]:
+                conn.execute(f"DELETE FROM {table}")
+        job = save_job(
+            {
+                "law_firm_name": "Phase19C进度律所",
+                "keywords": ["Phase19C进度律所投诉"],
+                "platforms": ["dy"],
+                "recipients": [],
+                "enable_comments": False,
+                "time_window_type": "recent_1d",
+                "enabled": True,
+            }
+        )
+        run_id = create_run(job["id"], {"job_id": job["id"], "phase_7_1_lifecycle": True}, timeout_seconds=120)
+        now_ts = int(datetime.now(timezone.utc).timestamp())
+        ingested = ingest_outputs(
+            job,
+            run_id,
+            "dy",
+            [
+                {
+                    "aweme_id": content_ids[0],
+                    "title": "Phase19C进度律所多人投诉",
+                    "desc": "多人退费争议",
+                    "create_time": now_ts,
+                },
+                {
+                    "aweme_id": content_ids[1],
+                    "title": "Phase19C进度律所收费争议",
+                    "desc": "服务体验较差",
+                    "create_time": now_ts,
+                },
+                {
+                    "aweme_id": content_ids[2],
+                    "title": "Phase19C进度律所待判断",
+                    "desc": "需要人工复核",
+                    "create_time": now_ts,
+                },
+            ],
+            [],
+        )
+
+        async def fake_evaluate(job_arg, content, comments):
+            run = get_run(run_id)
+            seen_progress.append(run["summary"].get("ai_progress") or {})
+            cid = content.get("content_id")
+            if cid == content_ids[0]:
+                return {
+                    "status": "ok",
+                    "is_related": True,
+                    "is_negative": True,
+                    "risk_level": "high",
+                    "reason": "多人投诉",
+                    "evidence_quotes": [content.get("title")],
+                    "recommended_action": "人工复核",
+                    "raw_response": "{}",
+                }
+            if cid == content_ids[1]:
+                return {
+                    "status": "ok",
+                    "is_related": True,
+                    "is_negative": True,
+                    "risk_level": "medium",
+                    "reason": "收费争议",
+                    "evidence_quotes": [content.get("title")],
+                    "recommended_action": "观察",
+                    "raw_response": "{}",
+                }
+            raise RuntimeError("provider failed api_key=secret")
+
+        monkeypatch.setattr(runner_module, "evaluate_content", fake_evaluate)
+
+        eval_summary = asyncio.run(evaluate_new_contents(job, run_id, ingested["content_db_ids"]))
+        run = get_run(run_id)
+        final_progress = run["summary"]["ai_progress"]
+        stale = runner_module._merge_ai_progress_summary(
+            run_id,
+            {
+                "total_candidates": 3,
+                "successful_evaluations": 0,
+                "failed_fallback_evaluations": 0,
+                "pending_review_items": 0,
+                "manual_review_count": 0,
+                "negative_count": 0,
+                "high_count": 0,
+                "unresolved_items": 3,
+                "evaluated_items": 0,
+                "final": False,
+            },
+            negative_count=0,
+            high_count=0,
+            pending_review_count=0,
+        )
+        finish_run(run_id, "success", {"job_id": job["id"], **ingested, **eval_summary})
+        report = create_report(run_id, job, {"job_id": job["id"], "platforms": ["dy"], **ingested, **eval_summary})
+        after_terminal = runner_module._merge_ai_progress_summary(
+            run_id,
+            {
+                "total_candidates": 3,
+                "successful_evaluations": 1,
+                "failed_fallback_evaluations": 0,
+                "pending_review_items": 0,
+                "manual_review_count": 0,
+                "negative_count": 1,
+                "high_count": 0,
+                "unresolved_items": 2,
+                "evaluated_items": 1,
+                "final": False,
+            },
+            negative_count=1,
+            high_count=0,
+            pending_review_count=0,
+        )
+        terminal_run = get_run(run_id)
+        with get_conn() as conn:
+            rows = conn.execute(
+                "SELECT status, risk_level, reason FROM ai_evaluations WHERE run_id=? ORDER BY raw_content_id",
+                (run_id,),
+            ).fetchall()
+    finally:
+        _restore_monitor_jobs(jobs_snapshot)
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+    assert seen_progress[0]["total_candidates"] == 3
+    assert seen_progress[0]["evaluated_items"] == 0
+    assert seen_progress[1]["evaluated_items"] == 1
+    assert seen_progress[1]["negative_count"] == 1
+    assert seen_progress[1]["high_count"] == 1
+    assert seen_progress[2]["evaluated_items"] == 2
+    assert seen_progress[2]["negative_count"] == 2
+    assert eval_summary["negative_count"] == 2
+    assert eval_summary["high_count"] == 1
+    assert eval_summary["pending_review_count"] == 1
+    assert final_progress["evaluated_items"] == 3
+    assert final_progress["total_candidates"] == 3
+    assert final_progress["negative_count"] == 2
+    assert final_progress["high_count"] == 1
+    assert final_progress["manual_review_count"] == 1
+    assert final_progress["unresolved_items"] == 0
+    assert final_progress["final"] is True
+    assert run["summary"]["ai_progress_final"] is True
+    assert "AI 评估已完成" in run["summary"]["progress_message"]
+    assert stale["ai_progress"] == final_progress
+    assert terminal_run["summary"]["ai_progress"] == final_progress
+    assert after_terminal == {}
+    assert report["summary"]["pending_review_count"] == 1
+    assert Path(report["html_path"]).exists()
+    assert [row["status"] for row in rows] == ["ok", "ok", "pending_review"]
+    assert "secret" not in rows[2]["reason"]
+    assert terminal_run["status"] == "success"
 
 
 def test_delete_running_job_is_blocked_and_stop_job_marks_stale_run(monkeypatch):

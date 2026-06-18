@@ -3,6 +3,7 @@ from __future__ import annotations
 import json
 import os
 import re
+import time
 from typing import Any
 from urllib.parse import urlsplit, urlunsplit
 
@@ -22,23 +23,50 @@ def ai_api_disabled() -> bool:
 
 
 async def evaluate_content(job: dict[str, Any], content: dict[str, Any], comments: list[dict[str, Any]]) -> dict[str, Any]:
+    started_at = _trace_now()
+    start_time = time.perf_counter()
     if ai_api_disabled():
-        return _fallback("AI 服务未启用，本条内容待人工复核。", content)
+        return _with_trace(
+            _fallback("AI 服务未启用，本条内容待人工复核。", content),
+            _build_trace_snapshot(
+                job,
+                content,
+                comments,
+                status="pending_review",
+                started_at=started_at,
+                start_time=start_time,
+                error_message="AI 服务未启用，本条内容待人工复核。",
+            ),
+        )
 
     cfg = _job_ai_config(job)
     if not cfg.get("api_key") or not cfg.get("model") or not cfg.get("base_url"):
-        return _fallback("AI 配置未完成", content)
+        return _with_trace(
+            _fallback("AI 配置未完成", content),
+            _build_trace_snapshot(
+                job,
+                content,
+                comments,
+                cfg=cfg,
+                status="pending_review",
+                started_at=started_at,
+                start_time=start_time,
+                error_message="AI 配置未完成",
+            ),
+        )
 
     prompt = cfg.get("prompt") or DEFAULT_PROMPT
     user_payload = build_evaluation_payload(job, content, comments)
     try:
         if cfg.get("provider") == "anthropic":
             raw = await _call_anthropic(cfg, prompt, user_payload)
+            request_snapshot = _anthropic_request_snapshot(cfg, prompt, user_payload)
         else:
             raw = await _call_openai(cfg, prompt, user_payload)
+            request_snapshot = _openai_request_snapshot(cfg, prompt, user_payload)
         data = _validate_ai_output(_parse_json(raw))
         data = _apply_target_evidence_gate(data, job, content, comments)
-        return {
+        result = {
             "status": "ok",
             "is_related": data["is_related"],
             "is_negative": data["is_negative"],
@@ -48,8 +76,42 @@ async def evaluate_content(job: dict[str, Any], content: dict[str, Any], comment
             "recommended_action": data["recommended_action"],
             "raw_response": raw,
         }
+        return _with_trace(
+            result,
+            _build_trace_snapshot(
+                job,
+                content,
+                comments,
+                cfg=cfg,
+                prompt=prompt,
+                input_payload=user_payload,
+                request_snapshot=request_snapshot,
+                response_snapshot=raw,
+                parsed_result=result,
+                status="ok",
+                started_at=started_at,
+                start_time=start_time,
+            ),
+        )
     except Exception as exc:
-        return _fallback(f"AI 评估失败：{type(exc).__name__}: {_redact_ai_error(exc)}", content)
+        fallback = _fallback(f"AI 评估失败：{type(exc).__name__}: {_redact_ai_error(exc)}", content)
+        return _with_trace(
+            fallback,
+            _build_trace_snapshot(
+                job,
+                content,
+                comments,
+                cfg=cfg,
+                prompt=prompt,
+                input_payload=user_payload,
+                request_snapshot=_safe_request_snapshot(cfg, prompt, user_payload),
+                parsed_result=fallback,
+                status="pending_review",
+                started_at=started_at,
+                start_time=start_time,
+                error_message=f"{type(exc).__name__}: {_redact_ai_error(exc)}",
+            ),
+        )
 
 
 async def test_ai(payload: dict[str, Any]) -> dict[str, Any]:
@@ -167,6 +229,101 @@ def _job_ai_config(job: dict[str, Any]) -> dict[str, Any]:
         active["prompt"] = global_config.get("prompt") or DEFAULT_PROMPT
         return active
     return global_config
+
+
+def _with_trace(result: dict[str, Any], trace: dict[str, Any]) -> dict[str, Any]:
+    merged = dict(result or {})
+    merged["_ai_trace"] = trace
+    return merged
+
+
+def _build_trace_snapshot(
+    job: dict[str, Any],
+    content: dict[str, Any],
+    comments: list[dict[str, Any]],
+    *,
+    cfg: dict[str, Any] | None = None,
+    prompt: str | None = None,
+    input_payload: dict[str, Any] | None = None,
+    request_snapshot: dict[str, Any] | None = None,
+    response_snapshot: Any | None = None,
+    parsed_result: dict[str, Any] | None = None,
+    status: str = "",
+    started_at: str = "",
+    start_time: float | None = None,
+    error_message: str = "",
+) -> dict[str, Any]:
+    payload = input_payload or _trace_input_payload(job, content, comments)
+    duration_ms = int(max(0, (time.perf_counter() - (start_time or time.perf_counter())) * 1000))
+    return {
+        "workspace_id": job.get("workspace_id") or 1,
+        "run_id": content.get("run_id") or job.get("run_id") or 0,
+        "raw_content_id": content.get("id") or 0,
+        "attempt_index": 1,
+        "status": status or "pending_review",
+        "provider": (cfg or {}).get("provider", ""),
+        "model": (cfg or {}).get("model", ""),
+        "prompt_snapshot": prompt or (cfg or {}).get("prompt") or DEFAULT_PROMPT,
+        "input_payload": payload,
+        "request_snapshot": request_snapshot or _safe_request_snapshot(cfg or {}, prompt or DEFAULT_PROMPT, payload),
+        "response_snapshot": response_snapshot or "",
+        "parsed_result": parsed_result or {},
+        "error_message": error_message or "",
+        "duration_ms": duration_ms,
+        "started_at": started_at,
+        "finished_at": _trace_now(),
+    }
+
+
+def _trace_input_payload(job: dict[str, Any], content: dict[str, Any], comments: list[dict[str, Any]]) -> dict[str, Any]:
+    payload = build_evaluation_payload(job, content, comments)
+    payload["job_id"] = job.get("id")
+    payload["run_id"] = content.get("run_id") or job.get("run_id")
+    payload["raw_content_id"] = content.get("id")
+    payload["evaluated_at"] = _trace_now()
+    return payload
+
+
+def _trace_now() -> str:
+    return time.strftime("%Y-%m-%dT%H:%M:%SZ", time.gmtime())
+
+
+def _openai_request_snapshot(cfg: dict[str, Any], prompt: str, payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "endpoint": _build_endpoint(str(cfg.get("base_url", "")), "/v1/chat/completions"),
+        "headers": {"Authorization": "Bearer [REDACTED]", "Content-Type": "application/json"},
+        "json": {
+            "model": cfg.get("model"),
+            "temperature": float(cfg.get("temperature", 0) or 0),
+            "messages": [
+                {"role": "system", "content": prompt},
+                {"role": "user", "content": json.dumps(payload, ensure_ascii=False)},
+            ],
+        },
+    }
+
+
+def _anthropic_request_snapshot(cfg: dict[str, Any], prompt: str, payload: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "endpoint": _build_endpoint(str(cfg.get("base_url", "")), "/v1/messages"),
+        "headers": {"x-api-key": "[REDACTED]", "anthropic-version": "2023-06-01", "Content-Type": "application/json"},
+        "json": {
+            "model": cfg.get("model"),
+            "max_tokens": 800,
+            "temperature": float(cfg.get("temperature", 0) or 0),
+            "system": prompt,
+            "messages": [{"role": "user", "content": _anthropic_text_content(json.dumps(payload, ensure_ascii=False))}],
+        },
+    }
+
+
+def _safe_request_snapshot(cfg: dict[str, Any], prompt: str, payload: dict[str, Any]) -> dict[str, Any]:
+    try:
+        if cfg.get("provider") == "anthropic":
+            return _anthropic_request_snapshot(cfg, prompt, payload)
+        return _openai_request_snapshot(cfg, prompt, payload)
+    except Exception:
+        return {"provider": cfg.get("provider"), "model": cfg.get("model"), "snapshot_error": "request snapshot unavailable"}
 
 
 async def _call_openai(cfg: dict[str, Any], prompt: str, payload: dict[str, Any]) -> str:

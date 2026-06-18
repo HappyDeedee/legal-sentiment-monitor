@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-06-18
+Last updated: 2026-06-19
 
 ## Current Phase
 
@@ -34,22 +34,135 @@ is complete and verified. Phase 18B - Report Center Task Grouping Frontend is
 complete and verified. Phase 10-18 console optimization is complete through
 the accepted roadmap. Phase 19A - Requirement Intake Classification Rules is
 complete and verified as a documentation-governance update. CR-031 Run Center
-Realtime Progress Visibility is accepted as the next run-center optimization
-requirement, but its product code is not implemented yet. CR-033 Formal
+Realtime Progress Visibility is implemented and verified through Phase 19B-19D:
+running crawler progress is stored in the existing `crawl_runs.summary`
+lifecycle/progress shape, AI progress is updated during long batches, and the
+Run Center frontend now keeps visible active-run polling alive, labels
+provisional collection counts, shows AI evaluated/total progress plus
+report/email/timeout/cancel/interrupted states, and preserves administrator and
+normal-user scoped visibility. CR-033 Formal
 Console Full-Coverage Positive UI Optimization is complete and verified as a
 frontend-only pass on the latest formal `/monitor` console; it does not change
 backend APIs, database schema, permissions, crawler behavior, AI provider
 logic, SMTP delivery, or Phase 19B-19D product scope. The CR-033 pass now also
 includes stable secondary drawer/modal button-level loading feedback for
 account login, resource saves, AI/mail tests, and template preview actions.
-CR-034 Run Detail And AI Evaluation Traceability is accepted as Phase 20, but
-implementation has not started. Trace retention must be an
-administrator-configurable runtime setting with a 30-day default, not a
-hard-coded value. Permission visibility is also confirmed: normal users see
-only business-safe summaries for their own runs, administrators may see
-redacted prompt/request/response debug snapshots, and unredacted raw responses
-must not be exposed. Trace storage uses a new `ai_evaluation_traces` table
-with capped/redacted JSON fields and accepted default size guardrails. CR-035
+CR-034 Run Detail And AI Evaluation Traceability is implemented and verified
+through Phase 20B-D plus the remaining Phase 20E report-to-run backlink: new
+evaluations now persist redacted and capped
+`ai_evaluation_traces` rows with business input, prompt/request,
+provider/model, structured output, response snapshot, fallback/error detail,
+duration, and timestamps; `ai_trace_retention_days` is an administrator
+runtime setting with a 30-day default and cleanup helper; old evaluations
+without trace snapshots return an explicit limited-context state. Phase 20C
+adds scoped run-detail APIs for lifecycle overview, crawler logs, collected
+contents, paginated/filterable AI evaluations, report links, email-delivery
+links, and per-evaluation trace detail. Normal users may see only business-safe
+summaries for their own runs, administrators may see redacted debug snapshots,
+and no API role may see unredacted raw responses, API keys, authorization
+headers, cookies, SMTP passwords, proxy credentials, profile paths, or server
+local paths; collection logs and trace text now also redact Windows paths with
+spaces, Unix absolute paths, residual path fragments, and implementation-only
+path field names. Phase 20D adds the Run Center `详情` entry and a run-scoped
+detail drawer with Overview, Collection Logs, Collected Contents, AI
+Evaluation, Report, and Email Delivery sections; every AI evaluation row can
+open role-safe input/output trace detail in the same run detail surface.
+Phase 20E now links report-scoped leads with `run_id` back to the originating
+run detail while keeping old/no-run rows as limited-context and preserving the
+CR-048/CR-049 Report Center and delivery-history information architecture.
+CR-051 Task Center And Report Grouping Consolidation is implemented and
+verified as a frontend information-architecture follow-up: the formal console
+now exposes one top-level `任务中心` entry instead of separate Run Center and
+Report Center entries, opens by default on the existing report-by-monitoring-
+task grouping, and keeps the old run-record table as a `运行记录` subview for
+run ID, task ID, type, visibility, duration, full failure reason, stop/log/
+archive/restore, and Run Detail operations. The first-level task-group view
+prioritizes monitoring-task identity and public-opinion result summaries
+rather than copying every run-record field. Report preview, report-scoped
+lead inspection, delivery history, resend, downloads, and Run Detail remain
+reachable from the task-group surface while CR-048/CR-049 scoped drawers
+remain secondary detail.
+CR-053 Task Center Field Priority And Global Select Alignment is implemented
+and verified as a frontend density/interaction follow-up: flat Task Center run
+tables now begin with `任务 ID`, `运行 ID`, and compact `状态`; grouped mode
+hides the duplicated `任务 ID` column because the group header carries task
+identity, and group rows begin with `运行 ID` followed by compact `状态`;
+completed rows no longer carry long ingestion detail in the status cell; the
+filter toolbar keeps only the page-level Task Center refresh entry; and the
+main content container no longer clips native select/dropdown overflow,
+fixing the global dropdown misalignment reported in the browser.
+CR-054 Task Center Status Badge Compactness Regression Fix is implemented and
+verified as a focused follow-up to CR-053: Task Center status badges now use
+normalized short lifecycle labels instead of raw long `display_status`
+strings, so completed rows render as `已完成` even when backend progress
+metadata includes ingestion detail; active rows may still show one short
+progress cue below the badge, while full progress remains in Run Detail.
+CR-055 Task Center Status Column Visual Refinement is implemented and verified
+as a small frontend follow-up to CR-054: Task Center run tables now mark status
+columns with a stable `col-status` class and render first-level run statuses as
+Task Center-specific narrow state-dot badges rather than the global heavy
+`.status` pill, keeping task/run identifiers visually prioritized.
+CR-056 Filter Dropdown Alignment Regression Fix is implemented and verified as
+a follow-up to CR-053 after browser review found filter dropdowns could still
+misalign at `1440x900`: filter toolbar selects now keep their original select
+values and filtering semantics, but render the visible dropdown as a
+fixed-position in-page menu scoped to `.page-filter-region`; ordinary form
+configuration selects remain native. CR-057 Task Center Group Summary Metric
+Chips is implemented and verified as a frontend-only density refinement:
+grouped Task Center headers now render the former long slash-separated
+aggregate sentence as compact labeled metric chips while preserving the same
+counts, grouped table, filters, Run Detail entry, and dropdown behavior.
+CR-058 Filter Date Picker Alignment Regression Fix is implemented and verified
+as a follow-up to CR-056; CR-059 through CR-067 are retained as verified
+historical positioning attempts for the same date-filter surface. CR-068 Filter
+Date Picker Local Attached Menu Regression Fix is the current visual rule:
+page-level filter date inputs inside `.page-filter-region` keep their original
+date values and `change` semantics, but render the active date menu inside the
+clicked `.filter-date-enhanced` wrapper with local absolute positioning. The
+menu opens directly under the clicked field, matches the trigger width, keeps
+the top anchor marker centered, and preserves the seven-column day grid without
+clipped day numbers. Ordinary form/configuration date inputs remain native. The
+CR-069 verification pass now also confirms the Run Detail `AI 评估` filters use
+the same page-filter dropdown treatment, and `报告范围` is shown as a selectable
+filter only when the current run has multiple reports; zero-report or
+single-report runs use a read-only scope note. CR-071 Drawer And Modal Select
+Dropdown Consistency is implemented and verified as a focused frontend-only
+follow-up: selected secondary drawer/modal `select` fields now explicitly
+reuse the existing `.page-filter-region select` enhancement and `.filter-select-*`
+menu classes, including Monitoring task edit, Platform Account detail, Proxy
+edit, AI Access edit, AI Evaluation Rule edit, Mail Configuration edit, and
+Mail Template edit. AI Access `模型名称` remains the existing combobox, and
+dynamic option/disabled-state updates synchronize the visible enhanced labels.
+CR-072 Task Edit Custom Date Picker Consistency now layers the Monitoring task
+edit drawer's `自定义开始日期` and `自定义结束日期` onto the existing
+`.page-filter-region input[type="date"]` enhancement so they use the same
+local attached date menu as Task Center filters, while unrelated ordinary date
+fields remain native unless separately accepted.
+CR-073 Scrollable Drawer Corner Radius Regression Fix is implemented and
+verified as a focused frontend-only visual follow-up: shared drawer shells now
+keep the rounded outer chrome and top-right close button outside the scroll
+container, while content after the header scrolls inside a normalized
+`.drawer-scroll-body`; the visible scrollbar therefore begins below the header
+instead of at the absolute drawer top edge, and CR-038 sticky close,
+CR-071 enhanced selects, and CR-072 task edit date picker behavior are
+preserved.
+CR-074 Console Refresh Action Deduplication And Icon Loading is implemented
+and verified as a focused frontend-only interaction-density follow-up: the
+formal console now uses one top-bar current-page refresh icon for page-level
+reloads, removes duplicate page-header/filter-toolbar refresh buttons that
+loaded the same data, keeps semantically scoped refresh actions as icon-only
+controls for schedule recomputation, delivery history, template preview, run
+logs, and Run Detail, and shows disabled/loading spin feedback while refresh
+work is pending.
+A final local regression pass on 2026-06-18
+verified the full Phase 19B-D, Phase 20B-E, CR-048/CR-049 preservation, and
+Task Center consolidation scope: the focused Phase 19/20/Task Center/CR-048/049
+pytest selection passed, the full `tests/test_monitoring_mvp.py` suite passed
+with 307 tests, `node --check api/webui/monitor/monitor.js`, the inline
+`api/monitor_web/index.html` script parse, and `scripts/check_docs.py` passed,
+and browser checks covered administrator plus normal-user Task Center/Run
+Detail paths at desktop, tablet, and mobile viewports.
+CR-035
 Run Lifecycle Finalization And AI Stuck
 Recovery Regression Fix is accepted as a follow-up for the completed Phase 7
 responsibility area; Phase 7 remains a historical verified snapshot, while
@@ -150,16 +263,48 @@ output, broad refund/legal noise, true title evidence, and comment-only target
 evidence. CR-050 is implemented and verified as a focused CR-045 follow-up:
 Report Center and leads API risk filters keep `高风险` and `疑似负面` exact, so
 the `疑似负面` filter no longer includes high-risk rows.
-CR-047 Account Browser Environment Consistency is accepted as Phase 5.1, a
-future account-environment optimization that extends the existing
-`profile_key` model with fixed browser-environment settings. It uses
-CloakBrowser-Manager only as a reference for stable profile settings, CDP, and
-noVNC, and does not make CloakBrowser-Manager a required dependency or replace
-the current Platform Accounts center. Before Phase 5.1 code implementation,
-the fixed-environment proxy override policy must be confirmed and recorded:
-task-level proxy overrides must either be blocked for locked account
-environments or treated as explicit visible exceptions with audit and
-customer-safe explanation.
+CR-047 Account Identity Fidelity is accepted as Phase 5.1, a future
+account-environment optimization that extends the existing `profile_key` model
+with lifecycle-level identity consistency: profile traces, browser
+environment, proxy region/policy, runtime binding, lock state, and audit
+state. The documentation now distinguishes profile-folder traces from
+database-stored launch/environment rules and adds the planned Account Identity
+Generator and Validator requirements. Template selection is now documented as
+automatic by default, with only an advanced pre-login administrator
+template-family override and no field-level identity editing for normal users
+or ordinary account creation. CloakBrowser-Manager remains a reference only for
+stable profile settings, CDP, and noVNC, and does not become a required
+dependency or replace the current Platform Accounts center. V1 now explicitly
+stays on the existing Playwright/CDP provider path and does not introduce
+CloakBrowser. Canvas, WebGL, font inventory, plugins, extensions, and long
+browsing history are future/provider-dependent rather than V1 managed surfaces
+because they depend on provider/browser/OS/profile/runtime behavior that cannot
+be guaranteed by static launch settings alone. The fixed-environment proxy
+override policy is confirmed for Phase 5.1: after CR-047 locks an account
+identity, task-level proxy overrides are blocked for that locked account
+environment, and changing the proxy requires explicit reset/re-login. The
+first Plan Cross Validation review found implementation specification gaps, so
+the documentation now adds the Phase 5.1 generation algorithm, deterministic
+template-selection rule, template catalog, fail-closed enforcement rules,
+Playwright/CDP provider contract, identity lifecycle state machine, runtime
+snapshot shape, audit events, and test-safety tripwires. These are
+documentation gates only; CR-047 code and schema implementation have not
+started.
+CR-070 Account Environment Export And Import Package is accepted as a Phase
+5.2 new capability for moving a single platform account environment between
+deployments. It extends the CR-047 identity model with metadata-only and slim
+encrypted login-state migration package concepts, including manifest/version/
+checksum rules, passphrase encryption, encrypted login/session material
+handling, necessary profile state rather than raw whole-profile cache,
+platform-account metadata, encrypted proxy host/IP plus port hint without
+credentials, target-side proxy mapping, import preflight, post-import
+login-state verification, audit logging, and fail-closed `requires_relogin`
+behavior. The package scope is explicitly one selected platform account
+environment, not a full database backup of tasks, runs, reports, AI traces,
+mail logs, users, runtime settings, or business history. V1 creates a new
+target account/profile on import and exports avatar metadata only. This is
+documentation planning only; no export/import code, schema migration, package
+artifact, real profile, cookie, proxy, or login state has been changed.
 CR-048 Report Center Lead Detail Information Architecture is implemented and
 verified for the focused Phase 20E/21M frontend information-architecture
 batch. Report Center no longer renders lead detail as a first-level flat
@@ -181,7 +326,10 @@ single real-email switch in the page-level action bar; the old first-level
 Center delivery history is no longer a dominant default panel and opens as a
 scoped drawer from a report email-status button or "更多 > 查看交付历史", with
 selected-report scope, count, refresh action, latest status, and SMTP
-acceptance wording.
+acceptance wording. Later CR-051 through CR-058 Task Center consolidation
+removes the report-list entry and row more-menu surface from the current
+console; delivery history, resend, and downloads now live under Run Detail's
+Report and Email Delivery sections.
 The active SQLite schema now provides the foundation tables and columns
 required before later implementation work, and the web/API layer now has
 session login, administrator/normal-user roles, menu visibility,
@@ -310,15 +458,41 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
 - Phase 18 - Report Center Task Grouping: complete and verified through Phase
   18A-18B.
 - Phase 19 - Run Center Realtime Progress And Requirement Intake Governance:
-  Phase 19A documentation-governance rules are complete and verified; Phase
-  19B-19D run-center realtime progress implementation is accepted but not
-  started.
-- Phase 20 - Run Detail And AI Evaluation Traceability: accepted but not
-  implemented. Confirmed scope includes configurable `ai_trace_retention_days`
-  with a 30-day default, normal-user business-safe summaries only,
-  administrator redacted prompt/request/response debug snapshots, no
-  unredacted raw responses for any role, new `ai_evaluation_traces` storage,
-  and default trace size guardrails.
+  Phase 19A documentation-governance rules are complete and verified. Phase
+  19B run-progress data layer is implemented and locally verified: running
+  crawler attempts now write provisional collection progress into
+  `crawl_runs.summary`, tolerate missing, empty, partially written, and
+  malformed JSON/JSONL output files, preserve final `raw_contents`,
+  `filtered_contents`, `excluded_contents`, and `new_contents` ingest
+  semantics, and expose customer-safe progress fields through run reads. Phase
+  19C AI-evaluation progress is implemented and locally verified: active AI
+  loops now write `ai_progress` with evaluated/total candidates, successful
+  evaluations, fallback/manual-review count, suspected-negative count, high-risk
+  count, unresolved count, and a final marker; final AI counts remain exact,
+  failed AI items still fall back to `pending_review` so reports can be
+  generated, and late or repeated progress writes cannot regress final AI
+  progress or reopen a terminal run. Phase 19D Run Center frontend progress
+  display and polling is implemented and verified: active visible rows poll
+  silently until terminal state, collection progress stays provisional, AI
+  progress and lifecycle labels are visible, and stop/log/lead/archive/restore
+  actions remain reachable.
+- Phase 20 - Run Detail And AI Evaluation Traceability: Phase 20B AI trace
+  persistence, Phase 20C Run Detail API, Phase 20D Run Detail frontend, and
+  the remaining Phase 20E report-to-run backlink are implemented and verified.
+  New
+  successful, failed, and fallback AI evaluations persist safe
+  `ai_evaluation_traces` snapshots with capped/redacted input, prompt/request,
+  provider/model, structured output, response, fallback/error, duration, and
+  timestamps; trace writes and retention cleanup are non-blocking, old
+  evaluations without trace snapshots return limited-context, and
+  `ai_trace_retention_days` defaults to 30 days as an administrator runtime
+  setting. The run-detail API now returns scoped overview, crawler logs,
+  collected contents, paginated/filterable AI evaluations, reports, email
+  delivery logs, and per-evaluation role-safe trace detail. The Run Detail
+  frontend is the primary run-scoped entry for logs, contents, reports,
+  delivery, and every AI evaluation record; report lead rows with `run_id`
+  can return to the originating run detail without turning Report Center into
+  a global lead workbench.
 - Phase 21 - Formal Console Page-Level UI/UX Refinement: accepted but not
   fully implemented. The focused CR-048/CR-049 frontend information-
   architecture subset for Mail Configuration and Report Center is implemented
@@ -358,6 +532,58 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   complete and verified. Report Center and leads API filters now treat
   `高风险` and `疑似负面` as exact status filters; suspected-negative filtering
   no longer includes high-risk rows.
+- CR-051 - Task Center And Report Grouping Consolidation: complete and
+  verified. The formal console now has one top-level `任务中心`; task/report
+  grouping is the default first view, `运行记录` is a subview for operational
+  run fields and controls, and the old separate Report Center top-level entry
+  and `reports` section are removed. Current Task Center rows expose only
+  `详情`; report preview, downloads, resend, delivery history, and lead
+  inspection are reached through Run Detail.
+- CR-053 - Task Center Field Priority And Global Select Alignment: complete
+  and verified. Flat Task Center rows front-load `任务 ID` and `运行 ID`;
+  grouped rows hide duplicated `任务 ID` and front-load `运行 ID`; status cells
+  stay compact, the duplicate filter-toolbar refresh button is removed, and
+  native select dropdowns are no longer clipped by the main content overflow
+  rule.
+- CR-054 - Task Center Status Badge Compactness Regression Fix: complete and
+  verified. Task Center status badges now render short lifecycle labels and do
+  not reuse long backend `display_status` text as the visible badge.
+- CR-055 - Task Center Status Column Visual Refinement: complete and verified.
+  Task Center status cells use a dedicated narrow status column and lightweight
+  state-dot badge, while grouped/flat field order and the single `详情` action
+  remain unchanged.
+- CR-056 - Filter Dropdown Alignment Regression Fix: complete and verified.
+  Filter toolbar dropdowns now use fixed-position in-page menus that stay
+  aligned with their trigger at `1440x900`, while underlying select values and
+  existing filtering behavior remain unchanged.
+- CR-057 - Task Center Group Summary Metric Chips: complete and verified.
+  Grouped Task Center headers now show run, collection, new-content, risk,
+  review, and unevaluated aggregates as compact metric chips instead of one
+  long slash-separated sentence.
+- CR-058 - Filter Date Picker Alignment Regression Fix: complete and
+  verified. CR-059 - Filter Date Picker Edge Anchoring Regression Fix and
+  CR-060 - Filter Date Picker Compact Center Alignment Regression Fix are
+  verified historical follow-ups; CR-061 - Filter Date Picker Trigger-Width
+  Anchoring Regression Fix is a verified historical follow-up: it proved that
+  date menus can match the clicked trigger width and align to the trigger's
+  left edge after browser review found that a wider centered menu could still
+  read as visually offset.
+  CR-062 - Filter Date Picker Grid Compression Regression Fix is also complete
+  and verified: day cells no longer inherit button padding/auto minimum width
+  that can clip the last calendar columns inside the trigger-width menu.
+  CR-063 - Filter Date Picker Readable Anchored Popover Regression Fix,
+  CR-064 - Filter Date Picker Trigger-Attached Edge Shrink Regression Fix,
+  CR-065 - Filter Date Picker Center-Anchored Visual Alignment Regression Fix,
+  and CR-066 - Filter Date Picker Trigger-Attached Dropdown Alignment
+  Regression Fix are verified historical follow-ups.
+  CR-067 - Filter Date Picker Trigger-Width Visual Attachment Regression Fix
+  is complete and verified: the current date menu matches the clicked trigger
+  width when usable, aligns to the trigger's left edge, keeps the top anchor
+  marker aligned to the trigger center, and uses a small minimum readable width
+  only for unusually narrow triggers before viewport clamping.
+  Browser review found zero overflowing date cells at desktop review width.
+  Underlying date values, clear/reset behavior, and existing filtering
+  semantics remain unchanged.
 - CR-046 - Platform Account Avatar Safe Cache Display Regression Fix:
   complete and verified. Platform-account identity rows now expose only a
   same-origin avatar URL; signed platform image URLs remain server-side
@@ -365,13 +591,21 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
 - Phase 5/6 - Account Environment and Server Login: profile key, timeout, and
   lock-storage decisions are accepted; Phase 5 account environment runtime and
   Phase 6 login-flow runtime are complete.
-- CR-047 / Phase 5.1 - Account Browser Environment Consistency: accepted but
-  not implemented. Confirmed scope includes persisted per-account
-  browser-environment fields, environment generation before first login,
-  locking after successful QR login or accepted Cookie validation, login/crawl
-  reuse of the same profile/user-agent/browser-platform/timezone/locale/screen
-  and proxy policy, explicit reset/re-login for locked changes, and optional
-  CloakBrowser-style provider evaluation without making it a hard dependency.
+- CR-047 / Phase 5.1 - Account Identity Fidelity: accepted but not
+  implemented. Confirmed scope includes persisted per-account identity fields,
+  profile-trace versus database-identity responsibility split, stable Account
+  Identity Generator, fail-closed Account Identity Validator, China mainland
+  region/timezone/locale/accept-language defaults, identity generation before
+  first login, locking after successful QR login or accepted Cookie
+  validation, login/crawl reuse of the same profile/user-agent/browser-
+  platform/timezone/locale/device/proxy policy, explicit reset/re-login for
+  locked changes, and a V1 boundary that keeps CloakBrowser out of the first
+  implementation while recording Canvas/WebGL/fonts/plugins/extensions/history
+  as future/provider-dependent scope. The current documentation also includes
+  implementation-level gates for deterministic generation, exact template
+  expansion, provider requested/effective probes, runtime snapshots,
+  `identity_state`, audit events, and test tripwires; implementation remains
+  pending until cross-validation finds no P0/P1 gaps.
 - CR-048 - Report Center Lead Detail Information Architecture: focused
   frontend batch complete and verified. Report Center uses explicit
   report-scoped "查看线索" actions and a scoped lead drawer; Run Center also
@@ -524,7 +758,10 @@ separate follow-up work.
   active runs should show provisional collection progress before platform
   subprocess completion, AI progress should update during long evaluation
   batches, and frontend polling should continue while visible runs remain
-  active. This is documented but not implemented.
+  active. Phase 19B-19D is now implemented and verified: progress stays in
+  `crawl_runs.summary`, final collection/AI counts keep their existing
+  semantics, and the Run Center shows active progress without hiding stop,
+  log, lead, archive, or restore actions.
 - CR-035 Run Lifecycle Finalization And AI Stuck Recovery Regression Fix has
   been recorded as a follow-up regression fix after live task `9297` / run
   `8317` showed collection and partial AI evaluation had progressed while the
@@ -562,22 +799,22 @@ separate follow-up work.
   architecture subset is implemented and verified, but the broader Phase 21
   page-level visual refinement remains open and does not reopen CR-033.
 - CR-034 Run Detail And AI Evaluation Traceability has been accepted as a
-  run-center optimization with data-model implications. The current
-  code can construct AI input payloads and stores final evaluation results, but
-  it does not persist exact prompt/request/input snapshots for historical
-  evaluations. Phase 20 implementation has not started.
+  run-center optimization with data-model implications. Phase 20B-D plus the
+  remaining Phase 20E backlink are implemented and verified: new AI
+  evaluations store trace snapshots, scoped run-detail and per-evaluation APIs
+  expose role-safe detail, Run Center opens run detail, and report leads with
+  `run_id` link back to the originating run detail.
 
 ## In Progress
 
-- No active code implementation batch is currently in progress. Phase 10-18
+- Phase 10-18
   console optimization is complete and verified through Phase 18B. Phase 19A
-  documentation governance is complete. Phase 19B-19D run-center realtime
-  progress code work is not started. Phase 7.1A-C, Phase 7.2A-D, CR-043,
-  CR-044, CR-045, and CR-050 are implemented and verified; Phase 7.1D remains
-  gated. Phase 20 is accepted but not implemented. Phase 21 is accepted but
-  not fully implemented; only the focused CR-048/CR-049 Report Center and Mail
-  Configuration information-architecture subset is verified. CR-037 is
-  deferred.
+  documentation governance is complete, and Phase 19B-19D run-center realtime
+  progress is implemented and verified. Phase 7.1A-C, Phase 7.2A-D, CR-043,
+  CR-044, CR-045, CR-050, and Phase 20B-E are implemented and verified; Phase
+  7.1D remains gated. Phase 21 is accepted but not fully implemented; only the
+  focused CR-048/CR-049 Report Center and Mail Configuration information-
+  architecture subset is verified. CR-037 is deferred.
 
 ## Known Risks
 
@@ -617,10 +854,12 @@ separate follow-up work.
   surfaces, secret-looking values, raw local paths, provider endpoints, proxy
   credentials, cookies, and sensitive evidence keys. It does not start
   services, crawl platforms, call AI, mutate data, or send email.
-- CR-031 is accepted but not implemented: active Run Center rows still depend
-  on the current `crawl_runs.summary` update timing until Phase 19B-19D code
-  work is completed. Operators may still need manual refresh or logs to
-  understand long-running crawl progress in the current runtime.
+- CR-031 Phase 19B-19D is implemented and locally verified: active Task Center
+  rows use the existing `crawl_runs.summary` lifecycle/progress shape for
+  provisional collection and AI progress, poll while visible runs are active,
+  and keep terminal counts separate from provisional progress. Real platform
+  crawl latency and deployment-specific browser/network behavior still require
+  pilot observation.
 - CR-035 Phase 7.1A-C is implemented and locally verified. Historical run
   `8317` still must not be repaired automatically; Phase 7.1D requires safe
   operational steps, backup, rollback, dry-run preview, and explicit operator
@@ -646,15 +885,19 @@ separate follow-up work.
 - CR-037 is deferred: normal-user email send/resend quotas and administrator
   policy controls are not yet designed. Existing V1 role permissions remain in
   force until a future confirmed phase changes them.
-- CR-034 is accepted but not implemented: storing and exposing AI
-  prompt/request/response details will add new trace persistence and role-safe
-  APIs. Historical AI evaluations cannot be treated as having exact input
-  snapshots because those snapshots were not persisted at evaluation time.
-- CR-048/CR-049 focused frontend information architecture is verified, but it
-  intentionally does not implement Phase 20 AI trace persistence, full Run
-  Detail, or the full Phase 21 visual refinement. Report Center lead drawers
-  remain report/run-scoped shortcuts rather than a standalone global lead
-  workbench.
+- CR-034 Phase 20B-E is implemented and locally verified: new AI evaluations
+  store capped/redacted trace snapshots and run-detail APIs expose scoped
+  business-safe summaries plus administrator-only redacted debug snapshots.
+  Run Detail now provides the run-scoped frontend entry for lifecycle, logs,
+  contents, every AI evaluation, reports, and email delivery, and report leads
+  with `run_id` can return to that run detail. Historical AI evaluations
+  without saved trace rows remain limited-context and cannot be treated as
+  having exact input snapshots.
+- CR-048/CR-049 focused frontend information architecture is verified and
+  preserved by Phase 20E: Report Center lead drawers remain report/run-scoped
+  shortcuts rather than a standalone global lead workbench, and delivery
+  history remains a scoped secondary drawer. The full Phase 21 visual
+  refinement remains open.
 - Phase 18B report-center task grouping is implemented and verified. The
   current frontend has the complete Phase 11-12 foundation and Phase 13A data
   contract: local static module
@@ -740,34 +983,29 @@ Next allowed implementation order:
    `api/monitor_web/index.html`, `api/webui/monitor/monitor.css`, or
    `api/webui/monitor/monitor.js` at the same time unless the split is
    deliberately coordinated;
-2. implement CR-047/Phase 5.1 account browser-environment consistency only
-   after the fixed-environment proxy override policy is confirmed and
-   recorded; do this before adopting any optional CloakBrowser-style
-   CDP/noVNC provider or expanding platform account environment controls;
+2. implement CR-047/Phase 5.1 account identity fidelity using the confirmed
+   policy that locked account environments reject task-level proxy overrides;
+   do this on the existing Playwright/CDP provider path before considering any
+   optional CloakBrowser-style CDP/noVNC provider or expanding platform account
+   environment controls;
 3. keep Phase 17.1D historical orphan email evidence closed as read-only
    dry-run/checklist/runbook work unless the operator explicitly approves a
    backup, rollback, and mutation path;
-4. implement CR-031/Phase 19B-19D realtime run-progress work after Phase 7.1
-   lifecycle fields are available, unless a deliberately small compatible
-   provisional-progress batch is documented first. Keep Phase 19 focused on
-   active run progress and do not mix it with Phase 20 AI trace storage or run
-   detail UI in the same goal;
-5. schedule CR-034/Phase 20 implementation when per-run lead inspection and
-   every AI evaluation record become the next execution priority. Keep Phase
-   20 as a dedicated traceability goal because it adds data-model, API,
-   retention, redaction, and frontend run-detail work; treat trace-write
-   failures as non-blocking for run finalization but still covered by
-   negative tests;
-6. handle CR-035/Phase 7.1D historical run remediation only when the operator
+4. handle CR-035/Phase 7.1D historical run remediation only when the operator
    explicitly approves the dry-run, backup, rollback, and repair path; it is a
    conditional operations task, not a normal feature batch;
-7. prepare broader production pilot handoff and deployment-specific validation
+5. prepare broader production pilot handoff and deployment-specific validation
     for additional live credentials after the first usable pilot baseline.
 
 Test gate hardening recorded:
 
-- CR-047 now requires explicit proxy-override policy confirmation plus
-  fail-closed browser-environment tests.
+- CR-047 now has a confirmed no-task-proxy-override policy for locked account
+  environments and still requires stable identity generation tests,
+  self-consistency validation tests, and fail-closed browser-environment tests.
+  It also has a V1 provider boundary: unsupported high-fidelity surfaces must
+  be reported as not-managed or future/provider-dependent, not silently claimed.
+  A focused re-review is required after the newly added generation/provider/
+  lifecycle/snapshot/test-safety specifications.
 - CR-045 now requires a noisy-positive model override fixture so keyword-only
   evidence cannot backdoor target-related negative classification.
 - Phase 17.1D now requires dry-run no-op proof plus backup/approval gates

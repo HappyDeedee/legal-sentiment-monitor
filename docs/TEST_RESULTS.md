@@ -11,6 +11,1443 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
 `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-19 - CR-074 Console Refresh Action Deduplication And Icon Loading
+
+Environment: local worktree `E:\myproject\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19220/monitor?codex_verify_overall=1`.
+
+Result:
+
+- Removed redundant first-level page refresh buttons that duplicated the shared
+  current-page refresh action.
+- Kept one top-bar current-page refresh entry and rendered it as an icon-only
+  SVG button with accessible label/tooltip.
+- Converted semantically scoped refresh actions for schedule recomputation,
+  delivery history, email-template preview, run logs, and Run Detail into the
+  same icon-only refresh treatment.
+- Added refresh-icon loading behavior with disabled state and a short minimum
+  visible spin window so users get clear feedback even when the data request is
+  fast.
+- Preserved Task Center grouping and filters, resource page primary actions,
+  Run Detail, logs, template preview, delivery history, and diagnostics.
+
+Verification:
+
+- `uv run pytest tests/test_monitoring_mvp.py -q -k "cr074 or phase_12b or task_center_single_grouping or monitor_page_uses_tob_information_architecture"`
+- Result: PASS, 4 passed.
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- Browser verification on local `/monitor`:
+  - Confirmed six `.refresh-icon-button` controls remain: one top-bar
+    current-page refresh plus five scoped refresh actions.
+  - Confirmed no visible button text begins with `刷新`.
+  - Clicked the top-bar refresh icon and confirmed it enters disabled/loading
+    state, keeps empty visible text, then restores to enabled/non-loading.
+
+## 2026-06-19 - CR-070 Plan Cross Validation Re-Review
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Ran a fresh read-only Plan Cross Validation review for CR-070 using the
+  current accepted docs set and an external ClaudeCode reviewer.
+- The reviewer reported no P0 blockers.
+- The reviewer's claimed P1 gaps for missing TEST_PLAN and TRACEABILITY
+  coverage did not hold after re-checking the current docs; both already
+  contain CR-070-specific coverage.
+- Accepted the reviewer's P2 wording note that the plan should avoid stale
+  "full migration" / "proposed" phrasing in current normative docs.
+- Normalized the CR-070 wording in docs so the active plan consistently refers
+  to the slim login-state migration package instead of a raw full-profile
+  export.
+- No code, database, package artifact, real profile, Cookie, proxy, login
+  state, crawler, email, AI provider, or deployment configuration was changed.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- `rg` cross-check against current CR-070 wording in docs
+- Result: remaining hits are expected historical or exclusion wording, not
+  unresolved current-plan contradictions.
+
+## 2026-06-19 - CR-073 Scrollable Drawer Corner Radius Regression Fix
+
+Environment: local worktree `E:\myproject\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19220/monitor?codex_verify_overall=1`.
+
+Result:
+
+- Implemented the focused scrollable drawer corner-radius regression fix.
+- Shared `.drawer` shells now keep the rounded chrome and top-right close
+  button outside the scroll container, while the content after the header is
+  normalized into a shared `.drawer-scroll-body` that owns scrolling.
+- The visible scrollbar now belongs to the inner content body and starts below
+  the sticky header area instead of painting into the absolute drawer top
+  edge.
+- The top-right close button remains in the header's top-right position; it
+  was not moved inward or toward the center as the workaround.
+- CR-038 sticky header/close behavior, CR-071 enhanced drawer/modal selects,
+  and CR-072 task edit custom date picker behavior are preserved.
+
+Verification:
+
+- `uv run pytest tests/test_monitoring_mvp.py -q -k "cr073 or cr038 or cr071_drawer_modal_selects_reuse_filter_dropdown_mechanism"`
+- Result: PASS, 3 passed.
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- Browser verification on local `/monitor`, administrator path:
+  - Reloaded the page and opened the long Monitoring task drawer through
+    `新建监控任务`.
+  - Confirmed the drawer shell itself is clipped while the inner
+    `.drawer-scroll-body` is the scrolling surface.
+  - Confirmed the visible scrollbar belongs to the inner body and starts below
+    the header area rather than at the outer shell's top edge.
+  - Confirmed the top-right corner remains rounded and the close button remains
+    visible in the top-right header position.
+
+## 2026-06-19 - CR-070 User Decision Confirmation Documentation Update
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Accepted CR-070 as Phase 5.2 planning after user confirmation.
+- Corrected the export design from a raw full-profile migration idea to a slim
+  encrypted login-state migration package: export account configuration,
+  CR-047 identity metadata, platform-account metadata, login/session state,
+  and necessary profile state, while excluding raw browser cache, GPU cache,
+  code cache, media cache, crash dumps, downloads, screenshots, temporary
+  files, and duplicated or regenerable browser artifacts by default.
+- Confirmed V1 package encryption uses a passphrase-based encrypted envelope.
+- Confirmed V1 may include source proxy host/IP plus port only as an encrypted
+  endpoint hint for target-side mapping, and must not export proxy username,
+  password, token, authentication header, or provider secret.
+- Confirmed V1 imports create a new target account/profile by default.
+- Confirmed V1 exports avatar metadata only, not cached avatar image bytes.
+- No code, database, package artifact, real profile, Cookie, proxy, login
+  state, crawler, email, AI provider, or deployment configuration was changed.
+- Updated the CR-070 design from a raw full-profile migration idea to a slim
+  encrypted login-state migration package that carries login/session state and
+  necessary profile state while excluding raw whole-profile cache and other
+  regenerable browser artifacts by default.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+
+## 2026-06-19 - CR-072 Task Edit Custom Date Picker Consistency
+
+Environment: local worktree `E:\myproject\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19220/monitor`.
+
+Result:
+
+- Implemented the focused task edit custom date consistency follow-up.
+- Monitoring task edit `自定义开始日期` and `自定义结束日期` now opt into the
+  existing `.page-filter-region input[type="date"]` enhancement and render
+  through `.filter-date-enhanced`, `.filter-select-button.filter-date-button`,
+  and `.filter-date-menu`.
+- The visible date trigger matches Task Center's date-filter button style.
+- The original hidden date inputs still store `custom_start` / `custom_end`
+  values for the task form and dispatch the same `change` event when changed.
+- AI Access `模型名称`, drawer/modal select dropdowns, and unrelated ordinary
+  date fields keep their accepted behavior.
+
+Verification:
+
+- `uv run pytest tests/test_monitoring_mvp.py -q -k "cr071_drawer_modal_selects_reuse_filter_dropdown_mechanism or monitor_page_uses_consistent_buttons_tables_and_modal_actions"`
+- Result: PASS.
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- Browser verification on local `/monitor`, administrator path:
+  - Opened the visible Monitoring task drawer through `舆情监控 -> 新建任务`.
+  - Task edit `自定义开始日期` opened the local attached `.filter-date-menu`
+    inside its own `.filter-date-enhanced` wrapper with `position: absolute`,
+    `left: 0`, about a 4px top gap, and width matching the trigger within
+    about 0.5px.
+  - The menu included month navigation, seven weekday labels, a day grid,
+    `今天`, and `清空`.
+  - Selecting `今天` updated hidden `custom_start` to `2026-06-19` and the
+    visible label to `2026/06/19`; clearing reset the hidden value and label.
+  - Task edit `自定义结束日期` opened with the same local attachment, weekday
+    row, day grid, `今天`, and `清空`; selecting `2026-06-01` updated hidden
+    `custom_end` and the visible label.
+  - Scope check confirmed the only enhanced date inputs were task edit
+    `custom_start`, task edit `custom_end`, and the existing Task Center date
+    filters; AI Access `模型名称` remained the existing input/model-list
+    combobox.
+
+## 2026-06-19 - CR-070 Plan Cross Validation Documentation Gates
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Continued CR-070 documentation-only planning after the first external
+  read-only Plan Cross Validation review.
+- Added proposed package schema details, encrypted package envelope rules,
+  metadata-only sensitivity boundary, export/import state machines, operation
+  locks, cleanup/finalization rules, target proxy mapping rules, profile
+  snapshot path/quota safety, package retention behavior, redacted audit
+  fields, and CR-070-specific test tripwires.
+- Clarified that CR-070 package scope is one selected platform account
+  environment, not a full database backup of tasks, runs, reports, AI traces,
+  email delivery logs, users, runtime settings, or business history.
+- Kept CR-070 status as `Needs Confirmation` for package modes, encryption
+  model, proxy credential policy, import conflict behavior, and avatar
+  handling.
+- No code, database, package artifact, real profile, Cookie, proxy, login
+  state, crawler, email, AI provider, or deployment configuration was changed.
+- Focused external read-only CR-070 re-review verdict:
+  `READY AFTER USER DECISIONS`. The reviewer confirmed the previous P1 gaps
+  are closed, found no new P0/P1 blockers, and treated the remaining five
+  confirmation items as intentional user/business decisions rather than Codex
+  documentation gaps.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before focused re-review.
+- Focused external read-only CR-070 re-review through ClaudeCode CLI.
+- Result: READY AFTER USER DECISIONS; no new P0/P1 blockers.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency after recording re-review result and adding
+  the proposed passphrase-mode envelope shape.
+
+## 2026-06-19 - CR-071 Drawer And Modal Select Dropdown Consistency
+
+Environment: local worktree `E:\myproject\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19220/monitor`.
+
+Result:
+
+- Implemented the focused drawer/modal select consistency follow-up.
+- The listed secondary surfaces now opt selected `select` fields into the
+  existing `.page-filter-region select` enhancement and reuse the same
+  `.filter-select-*` classes and menu behavior as Task Center filters.
+- Confirmed the AI Access `模型名称` field remains the existing free-text/model
+  list combobox and is not converted.
+- Confirmed task edit custom start/end date fields remain native form date
+  inputs.
+- Confirmed dynamic option refresh paths synchronize visible enhanced labels
+  for account, proxy, AI profile, email template, platform login, and disabled
+  state changes.
+
+Verification:
+
+- `uv run pytest tests/test_monitoring_mvp.py -q -k "cr071_drawer_modal_selects_reuse_filter_dropdown_mechanism or monitor_page_uses_consistent_buttons_tables_and_modal_actions"`
+- Result: 2 passed, 306 deselected, 1 warning.
+- `uv run pytest tests/test_monitoring_mvp.py -q`
+- Result: 308 passed, 3 warnings.
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- Browser verification on local `/monitor`, administrator path:
+  - Monitoring task edit, Platform Account detail, Proxy edit, AI Access edit,
+    AI Evaluation Rule edit, Mail Configuration edit, and Mail Template edit
+    dropdowns opened with `.filter-select-button` triggers and
+    `.filter-select-menu` options.
+  - Open menus stayed aligned to their triggers and rendered a single
+    `.filter-select-option.is-selected` item.
+  - AI Access `模型名称` remained the model combobox.
+  - Task edit custom date inputs remained native date inputs.
+
+## 2026-06-19 - CR-070 Account Environment Export/Import Documentation
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Recorded CR-070 as a proposed new capability for account-environment
+  export/import, without implementing code, schema migration, package
+  generation, profile access, Cookie access, proxy access, or platform login
+  behavior.
+- Documented two package modes: metadata-only export and full encrypted
+  migration package.
+- Documented package manifest, encrypted login/profile material handling,
+  platform-account metadata, proxy mapping, import preflight, target
+  `profile_key` derivation, post-import login-state verification, and
+  `requires_relogin` fallback.
+- Documented that package import verifies restoration and login state, but
+  does not guarantee that a platform will accept a migrated session across
+  different servers, proxies, browser builds, or risk states.
+- Marked CR-070 as `Needs Confirmation` for package modes, encryption model,
+  proxy credential policy, import conflict behavior, and avatar handling.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+
+## 2026-06-18 - CR-069 Run Detail AI Evaluation Consolidation Verification
+
+Environment: local worktree `E:\myproject\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19220/monitor`.
+
+Result:
+
+- Verified the Task Center / Run Detail information architecture follow-up that
+  consolidates report `查看线索` into Run Detail `AI 评估`.
+- Confirmed report `查看线索` now acts as a report-scoped shortcut into the same
+  AI Evaluation table instead of opening a duplicate lead drawer/table.
+- Confirmed Run Detail `AI 评估` keeps report, status, risk, platform, keyword,
+  and title filters, while retaining per-evaluation trace detail and
+  limited-context old rows.
+- Confirmed `报告范围` is a selectable filter only when the selected run has
+  multiple reports; runs with zero or one report show a read-only scope note.
+- Confirmed Run Detail `AI 评估` status/risk/platform dropdowns use the same
+  enhanced page-filter dropdown treatment as first-level Task Center filters.
+
+Verification:
+
+- `uv run pytest tests/test_monitoring_mvp.py -q -k "phase_20c_run_detail_api_scope_filters_and_redacted_trace or phase_20d_run_detail_frontend_hooks or phase_20e_report_leads_backlink_to_run_detail or monitor_page_uses_consistent_buttons_tables_and_modal_actions or task_center_single_grouping_switch_unifies_rows_and_actions or cr048 or cr049 or cr051 or cr052 or cr053 or cr056 or cr057 or phase_18b_report_center_task_grouping_frontend_hooks"`
+- Result: 9 passed, 298 deselected, 3 warnings.
+- `uv run pytest tests/test_monitoring_mvp.py -q`
+- Result: 307 passed, 3 warnings.
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- Browser verification on local `/monitor`, administrator Task Center:
+  - Opened run detail for `run_id=10693` and switched to `AI 评估`.
+  - Verified the AI filter toolbar is a `.page-filter-region`.
+  - Verified `状态`, `风险`, and `平台` render as enhanced filter dropdown
+    buttons with consistent height and styling.
+  - Verified the current run with no generated report shows `报告范围` as a
+    hidden stored value plus read-only scope note, not as a dropdown.
+
+## 2026-06-18 - CR-047 Template Selection Policy Documentation
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Documented the CR-047 template selection policy as a documentation-only
+  refinement, without implementing code, schema, runtime, profile, cookie,
+  proxy, or login changes.
+- Recorded that account identity template selection is automatic by default.
+- Recorded that normal users cannot choose identity templates or field-level
+  browser identity values.
+- Recorded that administrators may only use an advanced pre-login path to
+  choose a template family, while UA, viewport, screen, timezone, locale,
+  accept-language, and device flags come from the selected catalog template and
+  region bundle.
+- Added a deterministic template-selection seed and catalog-order selection
+  rule before final fingerprint seed generation.
+- Added explicit state-machine rules for template-family changes in `draft`,
+  `generated`, `validated`, `login_in_progress`, `locked`, `active`,
+  `requires_relogin`, and `resetting`.
+- Recorded that changing a locked template requires explicit reset/re-login
+  and audit logging.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+
+## 2026-06-18 - CR-068 Date Filter Local Attached Menu Regression Fix
+
+Environment: local worktree `E:\myproject\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19220/monitor`.
+
+Result:
+
+- Fixed the remaining Task Center date dropdown visual offset after CR-067.
+- The date menu now mounts inside the clicked date control wrapper while open,
+  uses wrapper-local absolute positioning, opens directly under the clicked
+  field, and matches the clicked trigger width.
+- Preserved the original hidden date inputs, stored date values, `change`
+  events, clear/reset behavior, weekday/day grid, and ordinary
+  form/configuration date inputs.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "task_center_single_grouping_switch_unifies_rows_and_actions or monitor_page_uses_consistent_buttons_tables_and_modal_actions"`
+- Result: 2 passed, 305 deselected, 1 warning.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 307 passed, 3 warnings.
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for current `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- Browser verification on local `/monitor`, normal-user Task Center:
+  - Desktop effective viewport `1383x874`: `开始日期` and `结束日期` menus were
+    mounted inside their clicked `.filter-date-enhanced` wrappers, used
+    `position: absolute`, had left-edge delta `0px`, top gap about `4px`, and
+    width delta about `0.03px`.
+  - Tablet effective viewport `980x746`: `结束日期` menu was mounted inside its
+    clicked wrapper, used `position: absolute`, had left-edge delta `0px`, top
+    gap about `4px`, width delta `0px`, and no horizontal page overflow.
+  - Mobile effective viewport `364x819`: after scrolling the date field into
+    view, `结束日期` menu was mounted inside its clicked wrapper, used
+    `position: absolute`, had left-edge delta `0px`, top gap about `4px`,
+    width delta about `0.23px`, and no horizontal page overflow.
+
+## 2026-06-18 - CR-067 Date Filter Trigger-Width Visual Attachment Regression Fix
+
+Environment: local worktree `E:\myproject\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19220/monitor`.
+
+Result:
+
+- Fixed the remaining Task Center date dropdown visual offset after CR-066.
+- The date menu now matches the clicked trigger width when the trigger is
+  usable, aligns its left edge to the trigger left edge, keeps the top anchor
+  marker tied to the trigger center, and only uses a small minimum readable
+  width for unusually narrow triggers before viewport clamping.
+- Preserved the original hidden date inputs, stored date values, `change`
+  events, clear/reset behavior, weekday/day grid, and ordinary
+  form/configuration date inputs.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "task_center_single_grouping_switch_unifies_rows_and_actions or monitor_page_uses_consistent_buttons_tables_and_modal_actions"`
+- Result: PASS after implementation.
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for current `api/monitor_web/index.html`
+- Result: PASS.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- Browser verification on local `/monitor`, normal-user Task Center:
+  - Desktop effective viewport `1383x874`: `开始日期` and `结束日期` menus
+    matched the clicked trigger width within about `0.04px`, aligned left
+    edges within about `0.4px`, kept the top anchor marker aligned to the
+    trigger center within about `0.12px`, stayed inside the visual viewport,
+    and had zero overflowing date cells.
+
+## 2026-06-18 - Phase 19-20 And Task Center Final Regression Verification
+
+Environment: local worktree `E:\myproject\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19220/monitor`, validation database
+`.codex_tmp/phase20_browser/monitor.sqlite`.
+
+Result:
+
+- Re-verified Phase 19B-D, Phase 20B-E, CR-048/CR-049 preservation, and the
+  Task Center information-architecture consolidation after the latest Task
+  Center/date-filter refinements.
+- Confirmed the formal console exposes one top-level `任务中心` instead of a
+  separate Report Center, the Task Center list uses one filter surface, the
+  `按舆情任务分组` control is a display switch, grouped rows are keyed by the
+  monitoring task context, and row actions are limited to `详情`.
+- Confirmed Run Detail is the shared run-scoped surface for Overview,
+  Collection Logs, Collected Contents, AI Evaluation, Report, and Email
+  Delivery; AI evaluation rows open detail from the same surface, and Report
+  contains preview, report-scoped leads, delivery history, resend, and
+  HTML/Excel/Markdown downloads.
+- Confirmed normal users see only allowed navigation (`总览`, `舆情监控`,
+  `任务中心`) and can open Task Center `详情` without seeing administrator
+  resource/configuration navigation.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_19b or phase_19c or phase_19d or phase_20b or phase_20c or phase_20d or phase_20e or cr051 or task_center_single_grouping_switch_unifies_rows_and_actions or monitor_page_uses_consistent_buttons_tables_and_modal_actions or cr048 or cr049"`
+- Result: 16 passed, 291 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 307 passed, 3 warnings.
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- Browser verification on local `/monitor`, administrator path:
+  - Desktop effective viewport `1383x874`: Task Center had no Report Center
+    entry, no page horizontal overflow, grouped mode was enabled, grouped rows
+    showed only `详情` actions, and Run Detail opened with six tabs.
+  - Run `#1` Run Detail showed AI Evaluation counts and row-level `查看`, the
+    Report tab showed `预览`, `查看线索`, `交付历史`, `重发邮件`, and
+    `下载 HTML/Excel/Markdown`, the Email Delivery tab showed scoped delivery
+    status, and visible Run Detail text did not expose raw API keys,
+    authorization headers, cookies, SMTP passwords, proxy credentials, profile
+    paths, or server-local paths.
+- Browser verification on local `/monitor`, normal-user path
+  (`user@example.com` / `UserPass123!`):
+  - Desktop effective viewport `1383x874`: visible navigation was limited to
+    `总览`, `舆情监控`, and `任务中心`; no Report Center entry was visible; Task
+    Center grouped rows showed only `详情`; no page horizontal overflow.
+  - Tablet effective viewport `980x746`: Task Center remained reachable,
+    visible row `详情` buttons opened Run Detail, Run Detail stayed within the
+    viewport with the six expected tabs, and no page horizontal overflow was
+    observed.
+  - Mobile effective viewport `364x819`: after scrolling the Task Center table
+    into view, row `详情` buttons remained reachable, Run Detail opened as a
+    readable near-fullscreen drawer with the six expected tabs, and no page
+    horizontal overflow was observed.
+
+## 2026-06-18 - CR-066 Date Filter Trigger-Attached Dropdown Alignment Regression Fix
+
+Environment: local worktree `E:\myproject\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19220/monitor`.
+
+Result:
+
+- Fixed the remaining Task Center date dropdown visual offset after CR-065.
+- The date menu now opens from the clicked trigger's left edge like a normal
+  attached filter dropdown, shrinks before clamping near the right edge, keeps
+  the visual-viewport safety checks, and preserves the top anchor marker
+  connection to the clicked trigger center.
+- Preserved the original hidden date inputs, stored date values, `change`
+  events, clear/reset behavior, weekday/day grid, and ordinary
+  form/configuration date inputs.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for current `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "task_center_single_grouping_switch_unifies_rows_and_actions or monitor_page_uses_consistent_buttons_tables_and_modal_actions"`
+- Result: 2 passed, 305 deselected, 1 warning.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- Browser verification on local `/monitor`, Task Center, administrator path:
+  - Desktop effective viewport `1383x874`: `开始日期` and `结束日期` menus opened
+    from the clicked trigger's left edge. `开始日期` left-edge delta was about
+    `0.36px`; `结束日期` left-edge delta was about `0.39px` after shrinking to
+    about `221px`. Both stayed inside the visual viewport, had zero overflowing
+    date cells, and created no page horizontal overflow.
+
+## 2026-06-18 - CR-065 Date Filter Center-Anchored Visual Alignment Regression Fix
+
+Result:
+
+- Historical verified snapshot superseded by CR-066. It proved the
+  center-anchored readable popover had correct mathematical center alignment,
+  but later browser review found it still looked visually detached from the
+  date field at desktop review width.
+
+## 2026-06-18 - CR-064 Date Filter Trigger-Attached Edge Shrink Regression Fix
+
+Environment: local worktree `E:\myproject\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19220/monitor`.
+
+Result:
+
+- Fixed the remaining Task Center date dropdown visual offset after CR-063.
+- The date menu now uses the visual viewport for fixed-position edge checks,
+  prefers left-edge attachment to the clicked date filter, and slightly shrinks
+  near the right edge before falling back to right alignment or viewport
+  clamping.
+- Preserved the original hidden date inputs, stored date values, `change`
+  events, clear/reset behavior, weekday/day grid, and ordinary
+  form/configuration date inputs.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for current `api/monitor_web/index.html`
+- Result: PASS, 2 inline scripts parsed.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "task_center_single_grouping_switch_unifies_rows_and_actions or monitor_page_uses_consistent_buttons_tables_and_modal_actions"`
+- Result: 2 passed, 305 deselected, 1 warning.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 307 passed, 3 warnings.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- Browser verification on local `/monitor`, Task Center:
+  - Desktop effective viewport `1383x874`: `开始日期` left edge aligned to the
+    trigger within about `0.4px`; `结束日期` left edge aligned within about
+    `0.4px` after shrinking to about `221px`; both had zero overflowing date
+    cells and no visual-viewport overflow.
+  - Tablet effective viewport `980x746`: `开始日期` left edge aligned within
+    about `0.3px`; `结束日期` left edge aligned within about `0.3px` after
+    shrinking to about `198px`; both had zero overflowing date cells and no
+    visual-viewport overflow.
+  - Mobile effective viewport `364x819`: both date menus used the mobile
+    trigger width, stayed attached to the field, had zero overflowing date
+    cells, and created no page horizontal overflow.
+
+## 2026-06-18 - CR-047 Task-Level Proxy Override Policy Decision
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Recorded the confirmed CR-047 V1 policy: after an account identity is
+  locked, task-level proxy overrides are rejected for that locked account
+  environment.
+- Recorded that proxy changes require explicit account identity reset/re-login.
+- Recorded that existing logged-in accounts should remain readable but not
+  receive guessed identity backfill; they should be re-logged in under CR-047
+  identity rules when the feature is implemented.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+
+## 2026-06-18 - CR-063 Date Filter Readable Anchored Popover Regression Fix
+
+Environment: local worktree `E:\myproject\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19220/monitor`.
+
+Result:
+
+- Fixed the remaining Task Center date dropdown visual misalignment report
+  after CR-062.
+- Browser inspection showed the CR-062 menu was coordinate-correct, but the
+  trigger-width calendar was still visually cramped. The current menu uses a
+  compact readable calendar width and a top anchor marker aligned to the
+  clicked trigger.
+- Preserved the original hidden date inputs, stored date values, `change`
+  events, clear/reset behavior, weekday/day grid, and ordinary
+  form/configuration date inputs.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, `.codex_tmp/inline_datepicker_cr063.js` parsed.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "task_center_single_grouping_switch_unifies_rows_and_actions or monitor_page_uses_consistent_buttons_tables_and_modal_actions"`
+- Result: 2 passed, 305 deselected, 1 warning.
+- `uv run python -m pytest tests/test_monitoring_mvp.py`
+- Result: 307 passed, 3 warnings.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- Browser verification on local `/monitor`, normal-user Task Center:
+  - Desktop effective viewport `1383x874`: `开始日期` opened at about `236px`
+    wide with its left edge aligned to the trigger, `结束日期` opened at about
+    `236px` wide with its right edge aligned to the trigger, both with zero
+    overflowing day cells.
+  - Tablet effective viewport `980x746`: `结束日期` stayed inside the viewport,
+    kept about a `4px` top gap, and had zero overflowing day cells.
+  - Mobile effective viewport `364x819`: `结束日期` used the mobile trigger
+    width, stayed inside the viewport, had zero overflowing day cells, and
+    created no page horizontal overflow.
+
+## 2026-06-18 - CR-062 Date Filter Grid Compression Regression Fix
+
+Environment: local worktree `E:\myproject\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19220/monitor`.
+
+Result:
+
+- Fixed the remaining date-filter visual misalignment report after CR-061.
+- Browser inspection showed the date-picker shell was already aligned to the
+  trigger, but the internal calendar cells could still be compressed because
+  date buttons inherited browser default padding and automatic minimum width.
+- Updated the date grid CSS so weekday/day columns share the available
+  trigger-width surface and two-digit day numbers no longer overflow or clip.
+- Preserved CR-061 trigger-width left-edge anchoring, original hidden date
+  inputs, date values, `change` events, clear/reset behavior, and ordinary
+  form/configuration date inputs.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "task_center_single_grouping_switch_unifies_rows_and_actions or monitor_page_uses_consistent_buttons_tables_and_modal_actions"`
+- Result: 2 passed, 305 deselected, 1 warning.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- Browser verification on local `/monitor`, administrator Task Center at the
+  desktop review viewport:
+  - `开始日期` and `结束日期` menu widths still matched the trigger within about
+    `0.03px`;
+  - left/right edge deltas stayed within about `0.42px`;
+  - both menus showed all seven weekday/day columns;
+  - date cell overflow checks returned no overflowing day numbers.
+
+## 2026-06-18 - Phase 19/20 And Task Center Final Verification Refresh
+
+Environment: local worktree `E:\myproject\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19220/monitor`.
+
+Result:
+
+- Re-ran the Phase 19B-D, Phase 20B-E, CR-048/CR-049 preservation, and Task
+  Center consolidation regression set after the latest Task Center date-filter
+  refinement.
+- Re-checked the formal Task Center in the in-app browser for administrator
+  and normal-user paths at desktop, tablet, and mobile review viewports.
+- Confirmed the top-level navigation exposes `任务中心` and no separate
+  `报告中心`; normal users see only `总览`, `舆情监控`, and `任务中心`.
+- Confirmed grouped Task Center rows keep row action text to `详情`; Run Detail
+  opens with `概览`, `采集日志`, `采集内容`, `AI 评估`, `报告`, and `邮件交付`.
+- Confirmed Task Center date filters use the CR-065 center-anchored readable
+  popover, remain inside the viewport, keep seven date columns readable, and do
+  not create page-level horizontal overflow at the tested viewports.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_19b or phase_19c or phase_19d or phase_20b or phase_20c or phase_20d or phase_20e or cr048 or cr049 or cr051 or cr052 or cr053 or cr054 or cr055 or cr056 or cr057 or cr058 or cr059 or cr060 or cr061 or task_center_single_grouping_switch or monitor_page_uses_consistent_buttons_tables_and_modal_actions or run_summary_and_log_api_redact_sensitive_values or sensitive_text_is_redacted"`
+- Result: 18 passed, 289 deselected, 3 warnings.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- Administrator browser verification:
+  - 1440x900 effective viewport `1383x874`: no page horizontal overflow, no
+    `报告中心` nav, row actions only `详情`, grouped headers start with
+    `运行 ID` and compact status, Run Detail opened with all six tabs, and no
+    sensitive-key/path pattern was visible in the Run Detail drawer.
+  - 1024x768 effective viewport `980x746`: no page horizontal overflow, no
+    `报告中心` nav, row actions only `详情`, and date menus stayed inside the
+    viewport.
+  - 390x844 effective viewport `364x819`: no page horizontal overflow, no
+    `报告中心` nav, row actions only `详情`, date filter controls remained
+    visible and usable, and date menus stayed inside the viewport.
+- Normal-user browser verification:
+  - 1440x900 effective viewport `1383x874`: nav only `总览`, `舆情监控`,
+    `任务中心`; no page horizontal overflow; row actions only `详情`; Run
+    Detail opened with all six tabs and no sensitive-key/path pattern.
+  - 1024x768 effective viewport `980x746`: nav only allowed pages, no page
+    horizontal overflow, row actions only `详情`, and date menus stayed inside
+    the viewport.
+  - 390x844 effective viewport `364x819`: nav only allowed pages, no page
+    horizontal overflow, row actions only `详情`, date filter controls remained
+    visible and usable, and date menus stayed inside the viewport.
+
+## 2026-06-18 - CR-047 Account Identity Fidelity Documentation Refinement
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Refined CR-047 from Account Browser Environment Consistency into Account
+  Identity Fidelity without implementing code, schema, or runtime changes.
+- Documented the account identity lifecycle target: profile traces, browser
+  environment, proxy region/policy, runtime binding, lock state, and audit
+  state.
+- Split profile-folder responsibilities from database-stored identity launch
+  rules.
+- Added planned Account Identity Generator and Account Identity Validator
+  expectations, including stable generation, self-consistency validation, China
+  mainland region/timezone/locale/accept-language defaults, and fail-closed
+  behavior for missing or contradictory identity fields.
+- Kept CR-047 accepted but not implemented, and kept the fixed-environment
+  proxy override policy as a required confirmation before code implementation.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+
+## 2026-06-18 - CR-047 V1 Provider Boundary Documentation
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Recorded the confirmed CR-047 boundary that V1 does not introduce
+  CloakBrowser or CloakBrowser-Manager.
+- Recorded that V1 stays on the existing Playwright/CDP provider path and uses
+  a provider boundary for future expansion.
+- Recorded why Canvas, WebGL, font inventory, plugins, extensions, and long
+  browsing history are future/provider-dependent rather than V1 commitments:
+  they depend on browser build, OS/fonts, graphics stack, installed extensions,
+  profile history, provider behavior, and runtime JavaScript probes instead of
+  static launch options alone.
+- Added a planning estimate for future high-fidelity browser-persona work:
+  1-2 days for provider/license/deployment review, 3-5 days for a one-platform
+  prototype, 1-2 weeks for optional provider integration, and 3-6+ weeks for a
+  production-grade browser-pool/profile-history capability.
+
+## 2026-06-18 - CR-047 Generation And Lifecycle Spec Update
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Added the first-pass deterministic identity-generation specification:
+  canonical input tuple, HMAC-SHA256 seed derivation, template catalog, and
+  versioned catalog note for future browser upgrades.
+- Added the identity lifecycle state machine, fail-closed launch order, runtime
+  snapshot shape, audit events, and test-safety tripwires to the CR-047
+  account-environment docs.
+- Synchronized CR-047 requirements across TASKS, CURRENT_STATE, DECISIONS,
+  CHANGE_REQUESTS, DATA_MODEL, SCHEMA_MIGRATION, TRACEABILITY, TEST_PLAN, and
+  PRODUCT_REQUIREMENTS without changing runtime code.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+
+## 2026-06-18 - CR-061 Date Filter Trigger-Width Anchoring Regression Fix
+
+Environment: local worktree `E:\myproject\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19220/monitor`.
+
+Result:
+
+- Adjusted the page-level filter date menu after browser review found the
+  CR-060 centered compact calendar still looked offset beside the date button.
+- The custom date menu now matches the clicked date trigger width and aligns
+  to the trigger's left edge, so it reads as an attached dropdown instead of a
+  wider floating calendar.
+- The calendar internals were compacted to keep month navigation, day grid,
+  and quick actions readable inside the trigger-width menu.
+- Existing hidden date inputs, values, `change` events, clear/reset behavior,
+  and ordinary form/configuration date inputs remain unchanged.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "task_center_single_grouping_switch_unifies_rows_and_actions or monitor_page_uses_consistent_buttons_tables_and_modal_actions"`
+- Result: 2 passed, 305 deselected, 1 warning.
+- Browser coordinate inspection on local `/monitor` after logging in as the
+  administrator and opening Task Center at the desktop review viewport.
+- Result: PASS; `开始日期` opened with menu width matching the trigger within
+  about `0.03px`, left/right edge deltas within about `0.40px`, inside the
+  viewport, and about a `4px` top gap.
+- Result: PASS; `结束日期` opened with menu width matching the trigger within
+  about `0.03px`, left/right edge deltas within about `0.43px`, inside the
+  viewport, and about a `4px` top gap.
+
+## 2026-06-18 - CR-060 Date Filter Compact Center Alignment Regression Fix
+
+Environment: local worktree `E:\myproject\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19220/monitor`.
+
+Result:
+
+- Adjusted the page-level filter date menu after browser review found the
+  CR-059 edge-aligned calendar still looked offset beside narrow date buttons.
+- The custom date menu now uses a compact calendar width of about `232px`
+  instead of forcing a 280px minimum for the Task Center date filters.
+- `开始日期` and `结束日期` now align the menu center line to the trigger center
+  line when space allows, then clamp only as a final viewport-safety fallback.
+- Existing hidden date inputs, values, `change` events, clear/reset behavior,
+  and ordinary form/configuration date inputs remain unchanged.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "task_center_single_grouping_switch_unifies_rows_and_actions or monitor_page_uses_consistent_buttons_tables_and_modal_actions"`
+- Result: 2 passed, 305 deselected, 1 warning.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- Browser coordinate inspection on local `/monitor` after reloading the page
+  and opening Task Center at the desktop review viewport.
+- Result: PASS; `开始日期` opened with the menu center aligned to the trigger
+  center within about `0.13px`, stayed inside the viewport, and kept about a
+  `4px` top gap.
+- Result: PASS; `结束日期` opened with the menu center aligned to the trigger
+  center within about `0.10px`, stayed inside the viewport, and kept about a
+  `4px` top gap.
+
+## 2026-06-18 - CR-059 Date Filter Edge Anchoring Regression Fix
+
+Environment: local worktree `E:\myproject\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19220/monitor`.
+
+Result:
+
+- Adjusted the page-level filter date menu positioning so wider date menus
+  attach to the clicked trigger edge instead of centering and visually drifting
+  from the trigger.
+- `开始日期` aligns the menu left edge to the trigger left edge when there is
+  room.
+- `结束日期` near the right viewport edge aligns the menu right edge to the
+  trigger right edge when needed to avoid overflow.
+- Existing hidden date inputs, values, `change` events, clear/reset behavior,
+  and ordinary form/configuration date inputs remain unchanged.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "task_center_single_grouping_switch_unifies_rows_and_actions or monitor_page_uses_consistent_buttons_tables_and_modal_actions"`
+- Result: 2 passed, 305 deselected, 1 warning.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency before final status update.
+- Browser coordinate inspection on local `/monitor` after reloading the page
+  and opening Task Center at the desktop review viewport.
+- Result: PASS; `开始日期` opened with the menu left edge aligned to the trigger
+  left edge within about `0.36px`.
+- Result: PASS; `结束日期` opened with the menu right edge aligned to the
+  trigger right edge within about `0.42px`.
+- Result: PASS; both menus stayed inside the viewport with about a `4px` top
+  gap.
+- Browser interaction check selected `2026-06-18` and then cleared it on
+  `结束日期`; the original input changed to `2026-06-18`, the visible label
+  changed to `2026/06/18`, and clearing reset both value and label.
+
+## 2026-06-18 - Phase 20C Run Detail Path Redaction Hardening
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Hardened the shared sensitive-text redaction so Run Detail collection logs
+  and AI trace text redact Windows paths with spaces, Unix absolute paths,
+  residual Chrome path fragments, and implementation-only path field names
+  such as `profile_path`.
+- The Run Detail log API keeps returning customer-safe log content, but no
+  longer leaks path tails such as `Program Files\Google\Chrome\Application`.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "sensitive_text_is_redacted or run_summary_and_log_api_redact_sensitive_values or phase_20c_run_detail_api_scope_filters_and_redacted_trace or phase_20b_ai_trace_persistence_redaction_truncation_and_retention"`
+- Result: 4 passed, 303 deselected, 3 warnings.
+- Manual sample check through `api.monitoring.security.redact_sensitive` and
+  `customer_safe_text`.
+- Result: PASS; sample strings containing `C:\Program Files\Google\Chrome`,
+  `Files\Google\Chrome`, `profile_path=C:\Users\...`, and
+  `/home/app/monitor_data/...` were redacted to `[PATH_REDACTED]`,
+  `[REDACTED]`, or customer-safe `运行日志` wording.
+
+## 2026-06-18 - CR-058 Date Filter Center Clamp Follow-up
+
+Environment: local worktree `E:\myproject\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19220/monitor`.
+
+Result:
+
+- Adjusted the Task Center date filter menu to center on the clicked trigger
+  control by default, then clamp only when the wider menu approaches the
+  viewport edge.
+- Fixed the date select/clear path so it stores the active input before
+  closing the menu; this prevents the date menu click handler from clearing
+  its own state before dispatching the existing `change` event.
+- The original date inputs, visible date labels, clear/reset behavior, and
+  existing filter semantics remain unchanged.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 2 inline/module script blocks parsed.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "task_center_single_grouping_switch_unifies_rows_and_actions or monitor_page_uses_consistent_buttons_tables_and_modal_actions"`
+- Result: 2 passed, 305 deselected, 1 warning.
+- Browser coordinate inspection with the in-app browser after applying the
+  `1440x900` browser target, effective viewport `1398x874`.
+- Result: PASS; both `开始日期` and `结束日期` date menus used
+  `position: fixed`, opened with about a 4px top gap, and stayed inside the
+  viewport.
+- `开始日期`: menu center matched the trigger center within about `0.13px`.
+- `结束日期`: menu center was shifted left by about `12.10px` because the
+  280px menu reached the right viewport clamp; the menu still stayed inside
+  the viewport with the intended right margin.
+
+## 2026-06-18 - CR-058 Date Filter Edge Alignment Follow-up
+
+Environment: local worktree `E:\myproject\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19220/monitor`.
+
+Result:
+
+- Adjusted the Task Center date filter floating menu from center anchoring to
+  trigger-edge alignment with viewport clamping. This keeps the wider picker
+  visually attached to the clicked date control instead of floating beside it.
+- The original date inputs, visible date labels, clear/reset behavior, and
+  existing filter `change` semantics remain unchanged.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 2 inline/module script blocks parsed.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "task_center_single_grouping_switch_unifies_rows_and_actions or monitor_page_uses_consistent_buttons_tables_and_modal_actions"`
+- Result: 2 passed, 305 deselected, 1 warning.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_19b or phase_19c or phase_19d or phase_20b or phase_20c or phase_20d or phase_20e or cr048 or cr049 or cr051 or cr052 or cr053 or cr054 or cr055 or cr056 or cr057 or cr058 or task_center_single_grouping_switch or monitor_page_uses_consistent_buttons_tables_and_modal_actions"`
+- Result: 16 passed, 291 deselected, 3 warnings.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- Browser coordinate inspection with the in-app browser after applying the
+  `1440x900` browser target, effective viewport `1398x874`.
+- Result: PASS; `开始日期` and `结束日期` date menus used `position: fixed`,
+  opened with about a 4px top gap, and stayed inside the viewport.
+- `开始日期`: menu left edge aligned with the trigger left edge within about
+  `0.36px`.
+- `结束日期`: menu right edge aligned with the trigger right edge within about
+  `0.42px`.
+
+## 2026-06-18 - CR-058 Date Filter Center-Anchoring Follow-up
+
+Environment: local worktree `E:\myproject\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19220/monitor`.
+
+Result:
+
+- Adjusted the Task Center date filter floating menu from side-specific
+  alignment to center anchoring on the trigger control, with viewport clamping
+  only when needed.
+- The original date inputs, visible date labels, clear/reset behavior, and
+  existing filter `change` semantics remain unchanged.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 2 inline/module script blocks parsed.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "task_center_single_grouping_switch_unifies_rows_and_actions or monitor_page_uses_consistent_buttons_tables_and_modal_actions"`
+- Result: 2 passed, 305 deselected, 1 warning.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- Browser coordinate inspection with the in-app browser after applying the
+  `1440x900` browser target, effective viewport `1398x874`.
+- Result: PASS; `开始日期` and `结束日期` date menus used `position: fixed`,
+  opened with about a 4px top gap, stayed inside the viewport, and their menu
+  center lines matched the trigger center lines within 1px. Measured center
+  delta was about `-0.13px` for `开始日期` and `-0.10px` for `结束日期`.
+
+## 2026-06-18 - Task Center Report Action Menu Removal Follow-up
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Removed the legacy report-list grouping and report-row action menu model from
+  the formal console after Task Center consolidation.
+- Task Center grouped and flat rows now keep the list-layer action model to
+  `详情`; report preview, lead inspection, delivery history, resend, and
+  downloads remain available inside Run Detail.
+- The email delivery history drawer now points users to Run Detail's email
+  delivery area instead of the old report list status/more-menu entry.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "cr051 or cr052 or cr053 or cr054 or cr055 or cr056 or cr057 or cr058 or phase_17b_report_center_delivery_history_frontend_hooks or phase_18b_report_center_task_grouping_frontend_hooks or phase_20d_run_detail_frontend_hooks or phase_20e_report_leads_backlink_to_run_detail or monitor_page_uses_consistent_buttons_tables_and_modal_actions"`
+- Result: 6 passed, 301 deselected, 1 warning.
+- Static search confirmed the production frontend no longer contains
+  `report-action-menu`, `data-report-menu-button`, `renderReportsTable`,
+  `currentReports`, `reportEmailStatusCell`, or old report action-menu
+  functions.
+
+## 2026-06-18 - CR-058 Filter Date Picker Alignment Regression Fix
+
+Environment: local worktree `E:\myproject\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19220/monitor`.
+
+Result:
+
+- Follow-up fix: Task Center date filters now anchor the wider date menu to
+  the trigger's center line and clamp only when needed to avoid viewport
+  overflow, preventing date pickers from looking detached after viewport
+  clamping.
+- Task Center page-level date filters now keep their original
+  `<input type="date">` values and filtering semantics while rendering the
+  visible picker through a fixed-position in-page date menu.
+- The enhancement is scoped to `.page-filter-region input[type="date"]`;
+  ordinary form and configuration date inputs remain native.
+- Date selection and clear/reset paths synchronize the visible date button
+  label with the underlying date input value.
+- CR-057 grouped Task Center metric chips are also verified: the grouped header
+  shows compact labeled aggregate chips instead of the previous long
+  slash-separated summary sentence.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "task_center_single_grouping_switch_unifies_rows_and_actions or cr051_task_center_consolidates_report_grouping_without_separate_report_center or phase_19d_run_center_frontend_progress_polling_hooks or monitor_page_uses_consistent_buttons_tables_and_modal_actions"`
+- Result: 4 passed, 303 deselected, 1 warning.
+- Browser coordinate inspection with the in-app browser on local `/monitor` at
+  effective viewport `1398x874` after applying the `1440x900` browser target.
+- Result: PASS; Task Center `run_date_from` date menu used `position: fixed`,
+  opened with a 4px top gap, stayed within the viewport, and did not create
+  horizontal overflow.
+- Browser interaction inspection on the same date filter.
+- Result: PASS; selecting `2026-06-01` updated the original input to
+  `2026-06-01` and visible label to `2026/06/01`; clearing reset the input to
+  empty and visible label to `开始日期`.
+- Browser coordinate inspection for the right-side `run_date_to` filter after
+  the follow-up fix.
+- Result: PASS; at effective viewport `1398x874`, the `结束日期` trigger was
+  about 173px wide and the date menu about 280px wide; the menu used
+  `position: fixed`, stayed inside the viewport, opened with a 4px top gap,
+  and remained visually anchored to the trigger.
+
+## 2026-06-18 - CR-056 Filter Dropdown Alignment Regression Fix
+
+Environment: local worktree `E:\myproject\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19220/monitor`.
+
+Result:
+
+- Filter-region selects now keep their original select elements and filter
+  values while rendering the visible dropdown through a fixed-position in-page
+  menu.
+- The enhancement is scoped to `.page-filter-region`; ordinary form and
+  configuration selects remain native.
+- Programmatic filter resets and role-mode updates synchronize the visible
+  filter button label with the underlying select value.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "task_center_single_grouping_switch or phase_19d_run_center_frontend_progress_polling_hooks or monitor_page_uses_consistent_buttons_tables_and_modal_actions"`
+- Result: 3 passed, 304 deselected, 1 warning.
+- Browser coordinate inspection with Chrome at `1440x900` on Task Center
+  `run_status_filter`.
+- Result: PASS; dropdown left aligned with trigger within 1px, stayed inside
+  viewport, and selecting `已完成` updated the original select value.
+- Browser coordinate inspection with Chrome at `1440x900` on Platform Accounts
+  `account_status_filter`.
+- Result: PASS; dropdown aligned with trigger and stayed inside viewport.
+
+## 2026-06-18 - CR-055 Task Center Status Column Visual Refinement
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Task Center table rendering now gives `状态` headers and cells a stable
+  `col-status` class.
+- First-level run status badges no longer reuse the global `.status` pill class.
+- Status badges render as compact state-dot labels with constrained status-column
+  width, while active progress remains a short helper line below the badge.
+- Grouped and flat Task Center field order, single `详情` action, and Run Detail
+  behavior remain unchanged.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_19d_run_center_frontend_progress_polling_hooks or task_center_single_grouping_switch or monitor_page_uses_consistent_buttons_tables_and_modal_actions"`
+- Result: 3 passed, 304 deselected, 1 warning.
+- Browser inspection of local `/monitor` at desktop, tablet, and mobile widths.
+- Result: PASS for compact status column and visible `详情` action.
+
+## 2026-06-18 - CR-054 Task Center Status Badge Compactness Regression Fix
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Task Center status badges now use normalized short lifecycle labels instead
+  of raw long `display_status` text.
+- Completed rows render as `已完成` even if backend progress metadata includes
+  ingestion completion detail.
+- Active rows still may show one short progress cue below the badge.
+- Task Center CSS constrains status badges to compact text-sized width, so the
+  status cell no longer reads as a full-width bar.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_19d_run_center_frontend_progress_polling_hooks or task_center_single_grouping_switch or cr051 or monitor_page_uses_consistent_buttons_tables_and_modal_actions"`
+- Result: 4 passed, 303 deselected, 1 warning.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+
+## 2026-06-18 - CR-053 Task Center Field Priority And Global Select Alignment
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Flat Task Center run rows now begin with `任务 ID`, `运行 ID`, and compact
+  `状态`.
+- Grouped Task Center rows hide duplicated `任务 ID` because the group header
+  already identifies the monitoring task; group rows begin with `运行 ID` and
+  compact `状态`.
+- Terminal status cells stay short, and completed rows no longer append long
+  ingestion/progress text in the table.
+- Task Center status badges render as compact text-sized badges instead of
+  full-width bars.
+- Task Center keeps a single page-level refresh action; the filter toolbar
+  keeps `筛选` and `清空`.
+- The main content container no longer clips vertical overflow, reducing
+  native select/dropdown misalignment across console pages.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "cr051 or task_center_single_grouping_switch or monitor_page_uses_consistent_buttons_tables_and_modal_actions or phase_15b_run_center_frontend_filters_pagination_archive_controls or phase_19d_run_center_frontend_progress_polling_hooks"`
+- Result: 5 passed, 302 deselected, 1 warning.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+
+## 2026-06-18 - CR-051 Task Center And Report Grouping Consolidation
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Consolidated the formal console's separate Run Center / Report Center
+  top-level IA into one `任务中心` entry.
+- Task Center now opens on the existing report-by-monitoring-task grouping so
+  each law-firm monitoring task shows its report rows, risk counts, preview,
+  Run Detail, and secondary row actions in one surface.
+- The old run-record table is preserved as the `运行记录` subview for run ID,
+  task ID, type, visibility, duration, full failure reason, stop/log/archive/
+  restore, and Run Detail operations.
+- Removed the separate top-level `reports` section and `report_center` menu
+  key. Legacy `reports` shortcut calls normalize to Task Center's task-group
+  view.
+- Kept report preview, report-scoped lead inspection, delivery history,
+  resend, HTML/Excel/Markdown downloads, and Run Detail reachable while
+  preserving CR-048/CR-049 scoped drawers as secondary detail.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 2 inline/module script blocks parsed.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "cr051 or phase_18b_report_center_task_grouping_frontend_hooks or phase_17b_report_center_delivery_history_frontend_hooks or cr048 or cr049 or phase_20d_run_detail_frontend_hooks or phase_20e_report_leads_backlink_to_run_detail or phase_19d_run_center_frontend_progress_polling_hooks or phase_12b_page_entry_and_role_flow_shortcuts or phase_13b_operations_home_desktop_visual_metrics or monitor_page_uses_tob_information_architecture"`
+- Result: 11 passed, 295 deselected, 1 warning.
+
+## 2026-06-18 - Phase 20D Run Detail Frontend And Phase 20E Backlink
+
+Environment: local worktree `E:\myproject\MediaCrawler`, plus an isolated
+local FastAPI service on `http://127.0.0.1:19220/monitor` using
+`.codex_tmp\phase20_browser` as temporary validation data.
+
+Result:
+
+- Added Run Center `详情` as the run-scoped entry into Run Detail.
+- Run Detail now groups Overview, Collection Logs, Collected Contents, AI
+  Evaluation, Report, and Email Delivery for the selected `run_id`.
+- AI Evaluation lists every candidate/result returned by the run-detail API
+  and opens a per-evaluation detail view with business input, structured
+  output, limited-context or redacted trace information, and role-safe debug
+  visibility.
+- Completed the remaining Phase 20E backlink: report lead rows with `run_id`
+  expose `运行详情`, old/no-run rows show `上下文有限`, and the report lead
+  drawer stays above Run Detail when opened from Run Detail's Report tab.
+- Preserved CR-048/CR-049: Report Center still has no first-level global lead
+  table, lead-state filtering remains drawer-local, and delivery history stays
+  a scoped secondary drawer.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_19b or phase_19c or phase_19d or phase_20b or phase_20c or phase_20d or phase_20e or cr048 or cr049"`
+- Result: 13 passed, 292 deselected, 3 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_20e_report_leads_backlink_to_run_detail"`
+- Result: 1 passed, 304 deselected, 1 warning.
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 2 inline/module script blocks parsed in the final check.
+- `uv run python scripts/check_docs.py`
+- Result before final documentation update: PASS docs consistency.
+- Browser acceptance on the isolated local service:
+  - administrator and normal user at 1440x900, 1024x768, and 390x844 could
+    log in, open Run Center, open run `#1` details, see final collection count
+    `已采集 2`, see AI progress `2 / 2`, switch through the six Run Detail
+    sections, and open per-evaluation detail.
+  - normal-user detail stayed business-safe and did not show administrator
+    debug trace text; neither role saw API keys, authorization headers,
+    cookies, SMTP passwords, proxy credentials, profile paths, server-local
+    paths, or raw unredacted model responses.
+  - Run Detail's Report tab opened report `#1` leads; the lead drawer showed
+    report scope and a clickable `运行详情` backlink; clicking it closed the
+    lead drawer and returned to originating run `#1`.
+  - The final overlay check confirmed `#report_leads_drawer.drawer.active`
+    has a higher z-index than `#run_detail_drawer`, so the backlink is
+    actually clickable when opened from inside Run Detail.
+  - Report Center still did not render `leads_table` as first-level page
+    content and the checked viewports had no page-level horizontal overflow.
+
+## 2026-06-18 - Phase 20C Run Detail And AI Evaluation API
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Added scoped run-detail API output for lifecycle overview, crawler logs,
+  collected content, paginated/filterable AI evaluations, reports, and email
+  delivery links by `run_id`.
+- Added per-evaluation detail API output with role-safe trace fields: normal
+  users receive business-safe input/output summaries for their own runs only,
+  while administrators receive redacted debug snapshots.
+- AI evaluation list filters now cover status, risk, platform, source keyword,
+  and title with pagination metadata.
+- API output removes or redacts raw responses, API keys, authorization headers,
+  cookies, SMTP passwords, proxy credentials, profile paths, server-local
+  paths, and sensitive diagnostic labels. Historical evaluations without trace
+  rows remain explicit limited-context.
+
+Verification:
+
+- `python -m py_compile api/monitoring/database.py api/routers/monitor.py tests/test_monitoring_mvp.py`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_20c or phase_20b"`
+- Result: 4 passed, 298 deselected, 3 warnings.
+
+## 2026-06-18 - Phase 20B AI Evaluation Trace Persistence
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Added the `ai_evaluation_traces` schema and migration path with indexes for
+  run/content, evaluation, and status/created-time lookup.
+- New successful, failed, and fallback AI evaluations persist redacted/capped
+  trace snapshots with business input, prompt/request, provider/model,
+  structured output, redacted response, fallback/error detail, duration, and
+  timestamps.
+- `ai_trace_retention_days` is now an administrator runtime setting with a
+  30-day default, monitor YAML mapping, doctor retention visibility, and a
+  trace-only cleanup helper.
+- Old evaluations without trace snapshots return explicit limited-context
+  state. Trace write failures and retention cleanup do not block
+  `ai_evaluations`, report generation, terminal run finalization, or email
+  delivery semantics.
+- Trace storage redacts API keys, authorization headers, cookies, proxy
+  credentials, profile/server-local paths, and oversized prompt/request/
+  response/comment snapshots include truncation metadata.
+
+Verification:
+
+- `python -m py_compile api/monitoring/ai.py api/monitoring/database.py api/monitoring/doctor.py api/monitoring/runner.py tests/test_monitoring_mvp.py`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_20b or phase_2_runtime_settings_storage_validation_and_environment_locks or phase_2_runtime_settings_api_is_admin_only or phase_7_1_ai_invalid_json_exception_and_timeout_fallback_to_pending_review or phase_19c or phase_19b"`
+- Result: 8 passed, 293 deselected, 3 warnings.
+
+## 2026-06-18 - Phase 19D Run Center Frontend Progress Display And Polling
+
+Environment: local worktree `E:\myproject\MediaCrawler`, plus an isolated
+local FastAPI service on `http://127.0.0.1:19219/monitor` using
+`.codex_tmp\phase19d_browser` as temporary validation data.
+
+Result:
+
+- Implemented Run Center silent polling for visible active runs, with polling
+  stopped when visible rows no longer contain `running` status or when the
+  user leaves Run Center.
+- The Run Center row now displays provisional collection progress and active
+  AI evaluation progress from `collection_progress` / `ai_progress` without
+  replacing final `raw_contents`, `new_contents`, suspected-negative,
+  high-risk, manual-review, or unevaluated summary semantics.
+- Status rendering now covers running collection, AI evaluation, report
+  generation, email sending, timeout, cancelled, interrupted, skipped,
+  partial-failed, failed, and completed states. User-facing run status labels
+  now match the accepted Run Center terms: `已完成`, `运行超时`, `已取消`, and
+  `执行中断`.
+- Stop, log, lead, archive, and restore actions remain reachable while
+  progress values refresh. Normal users keep own-run scope and do not see
+  administrator archive/restore controls.
+
+Verification:
+
+- `python -m py_compile api/monitoring/database.py tests/test_monitoring_mvp.py`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_19d or phase_15b or phase_19b or phase_19c"`
+- Result: 5 passed, 293 deselected, 1 warning.
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS.
+- Browser acceptance on the isolated local service:
+  - administrator at 1440x900, 1024x768, and 390x844: Run Center displayed
+    active provisional collection progress, AI `evaluated/total` progress,
+    terminal states, and `查看日志` / `查看线索` / `归档` actions with no page
+    horizontal overflow, no tiny collapsed buttons, and table overflow kept
+    inside the table scroller.
+  - normal user at 1440x900, 1024x768, and 390x844: navigation exposed only
+    `总览`, `舆情监控`, `运行中心`, and `报告中心`; Run Center showed only the
+    normal user's scoped runs; `归档`/`恢复` administrator controls were hidden;
+    `查看日志` and `查看线索` stayed reachable with no page horizontal overflow.
+
+## 2026-06-18 - Phase 19C AI Evaluation Progress Updates
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Implemented AI evaluation progress snapshots in `crawl_runs.summary` without
+  adding a separate progress model.
+- Active AI evaluation now updates `ai_progress` with total candidates,
+  evaluated items, successful evaluations, failed/fallback evaluations,
+  manual-review count, suspected-negative count, high-risk count, unresolved
+  items, and a final marker.
+- AI provider exceptions still fall back to `pending_review` / manual review,
+  and report generation remains possible from the fallback state.
+- Final AI progress is protected from stale or repeated running-progress
+  writes, and terminal runs ignore later progress writes.
+- Timeout/partial-failure AI finalization summaries now use the same visible
+  progress fields for final manual-review fallback state.
+
+Verification:
+
+- `python -m py_compile api/monitoring/runner.py tests/test_monitoring_mvp.py`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_19c or phase_7_1_ai_invalid_json_exception_and_timeout_fallback_to_pending_review or phase_7_2_timeout_finalization_creates_pending_review_fallback_rows"`
+- Result: 3 passed, 293 deselected, 1 warning.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_19b or phase_19c or run_platform_retries_transient_crawler_failure or phase_2_run_platform_uses_settings_for_retry_and_deadline or run_platform_attaches_bound_proxy_summary or run_platform_does_not_retry_login_required_error"`
+- Result: 6 passed, 290 deselected, 1 warning.
+
+## 2026-06-18 - Phase 19B Run Center Progress Data Layer
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Implemented provisional collection progress in `crawl_runs.summary` using
+  the existing Phase 7.1 lifecycle/progress fields instead of adding a new
+  progress table or conflicting model.
+- Running crawler attempts now update safe collection snapshots from crawler
+  output files while preserving the existing subprocess, timeout, stop, retry,
+  log-redaction, and resource-lock flow.
+- Missing output, empty files, partially written JSON, malformed JSON, and
+  partially valid JSONL are tolerated; readable records can contribute to
+  provisional progress while malformed fragments are counted as malformed
+  progress evidence.
+- Final ingestion counts remain the existing `raw_contents`,
+  `filtered_contents`, `excluded_contents`, and `new_contents` values and are
+  not replaced by provisional output counts.
+- Run-list reads now expose customer-safe `collection_progress`,
+  `progress_message`, `progress_updated_at`, and `ai_progress` fields for the
+  later Phase 19D frontend display.
+
+Verification:
+
+- `python -m py_compile api/monitoring/runner.py api/monitoring/database.py api/routers/monitor.py tests/test_monitoring_mvp.py`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_19b or run_platform_retries_transient_crawler_failure or phase_2_run_platform_uses_settings_for_retry_and_deadline or run_platform_attaches_bound_proxy_summary or run_platform_does_not_retry_login_required_error"`
+- Result: 5 passed, 290 deselected, 1 warning.
+
 ## 2026-06-18 - Phase 17.1C And Phase 17.2B-C Email Explanation And Guardrails
 
 Environment: local worktree `E:\myproject\MediaCrawler`, browser acceptance

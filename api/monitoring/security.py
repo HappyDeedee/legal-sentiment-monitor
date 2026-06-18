@@ -68,11 +68,30 @@ def redact_sensitive(text: str | None) -> str:
         (r"(?i)(cookies?[_-]?encrypted\s*[:=]\s*)[^\s,;'\"]+", r"\1[REDACTED]"),
         (r"(?i)(api[_-]?key[_-]?encrypted\s*[:=]\s*)[^\s,;'\"]+", r"\1[REDACTED]"),
         (r"(?i)(password[_-]?encrypted\s*[:=]\s*)[^\s,;'\"]+", r"\1[REDACTED]"),
+        (r"(?i)(?:profile_path|profile_dir|server_path|local_path|user_data_dir)\s*[:=]\s*[^\r\n,;，；]+", "[REDACTED]"),
         (r"(密钥|密码|令牌|授权|Cookie|代理地址)\s*[：:=]\s*[^\s,;，；'\"]+", r"\1=[REDACTED]"),
         (r"\bsk-[A-Za-z0-9_\-]{12,}\b", "sk-[REDACTED]"),
     ]
     for pattern, repl in patterns:
         result = re.sub(pattern, repl, result)
+    result = redact_local_paths(result)
+    return result
+
+
+def redact_local_paths(text: str | None, replacement: str = "[PATH_REDACTED]") -> str:
+    """Redact server-local filesystem paths, including Windows paths with spaces."""
+    if not text:
+        return ""
+    result = str(text)
+    win_drive = r"[A-Za-z]:\\(?:[^\\/:*?\"<>|\r\n]+\\)*[^\\/:*?\"<>|\s,;，；。'\"<>]*"
+    unix_path = r"(?<!https:)(?<!http:)(?<![A-Za-z0-9_.:-])/(?:home|Users|opt|var|tmp|srv|app|mnt|etc|root)/[^\s,;，；。'\"<>]+"
+    windows_tail = (
+        r"(?i)\b(?:Program Files|Program Files \(x86\)|Users|Windows|AppData|"
+        r"Documents|Downloads|Desktop|MediaCrawler|monitor_data|browser_data|"
+        r"Files\\Google|Google\\Chrome|Chrome\\Application)(?:\\[^\s,;，；。'\"<>]+)+"
+    )
+    for pattern in (win_drive, unix_path, windows_tail):
+        result = re.sub(pattern, replacement, result)
     return result
 
 
@@ -81,6 +100,8 @@ def customer_safe_text(text: str | None) -> str:
     if not text:
         return ""
     result = redact_sensitive(str(text))
+    result = redact_local_paths(result, "运行日志")
+    result = result.replace("[PATH_REDACTED]", "运行日志")
     replacements = [
         (r"MediaCrawler failed after \d+ attempt\(s\):\s*", ""),
         (r"MediaCrawler timed out after \d+s", "平台采集服务运行超时"),
@@ -122,8 +143,6 @@ def customer_safe_text(text: str | None) -> str:
         result = re.sub(pattern, repl, result)
     result = re.sub(r"; see .*$", "", result)
     result = re.sub(r"；see .*$", "", result)
-    result = re.sub(r"see [A-Za-z]:\\[^\s，。；]+", "", result)
-    result = re.sub(r"[A-Za-z]:\\[^\s，。；]+", "运行日志", result)
     result = result.replace("AI API 已通过 AI 离线测试模式 临时关闭", "AI 服务未启用")
     if "AI 服务未启用" in result and ("待人工复核模式" in result or "规则检查" in result):
         return "AI 服务未启用；采集不受影响，内容会进入待人工复核。"

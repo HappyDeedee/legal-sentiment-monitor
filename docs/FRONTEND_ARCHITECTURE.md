@@ -43,7 +43,7 @@ If frontend documents conflict, follow this priority:
 The console should be rebuilt around the monitoring task loop:
 
 ```text
-Operations Home -> Create / manage task -> Run Center -> Report Center -> Email delivery
+Operations Home -> Create / manage task -> Task Center -> Run Detail / report delivery
 ```
 
 Administrator resource management supports the loop, but it should not dominate
@@ -385,8 +385,8 @@ Files:
 
 Rules:
 
-- apply a common page header pattern to Operations Home, Monitoring, Run
-  Center, Report Center, account resources, proxy resources, AI access, AI
+- apply a common page header pattern to Operations Home, Monitoring, Task
+  Center, account resources, proxy resources, AI access, AI
   rules, mail configuration, mail templates, runtime settings, and system
   diagnostics;
 - each page header should define title, description, primary action, and
@@ -473,8 +473,8 @@ Phase 11 batches must protect these core flows:
 - page navigation and tab switching;
 - monitoring task list loading;
 - normal-user task wizard entry;
-- run center list and log modal;
-- report list, preview, lead switching, and downloads;
+- Task Center task grouping, run-record list, and log modal;
+- report preview, lead switching, and downloads from Task Center;
 - account resource list and QR login entry;
 - proxy, AI, mail configuration, and mail-template pages;
 - modal open/close behavior;
@@ -544,10 +544,9 @@ Primary navigation must make the task loop obvious:
 
 1. Operations Home;
 2. Monitoring Tasks;
-3. Run Center;
-4. Report Center;
-5. Resource Management;
-6. System Configuration.
+3. Task Center;
+4. Resource Management;
+5. System Configuration.
 
 Resource Management and System Configuration should be expandable groups in the
 navigation tree. They should not rely on detached popover menus because those
@@ -599,8 +598,8 @@ The operations home should be visual and task-oriented:
 - report generation and email delivery status;
 - suspected negative lead trends;
 - account availability summary;
-- drilldown links into Monitoring, Run Center, Report Center, and Resource
-  Management.
+- drilldown links into Monitoring, Task Center task grouping, Task Center run
+  records, and Resource Management.
 
 Avoid long diagnostic blocks on the home page. System diagnostics belong under
 administrator system configuration unless summarized as a small health signal.

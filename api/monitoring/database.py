@@ -31,7 +31,7 @@ from .login_status import (
     normalize_login_state,
 )
 from .prompts import DEFAULT_PROMPT
-from .security import MONITOR_DATA_DIR, customer_safe_text, customer_safe_url, decrypt_secret, encrypt_secret, mask_secret, redact_sensitive
+from .security import MONITOR_DATA_DIR, customer_safe_text, customer_safe_url, decrypt_secret, encrypt_secret, mask_secret, redact_local_paths, redact_sensitive
 from .settings import (
     DEFINITIONS_BY_KEY,
     effective_runtime_settings,
@@ -56,6 +56,10 @@ EMAIL_DELIVERY_SEND_TYPES = {"auto", "manual_resend"}
 EMAIL_DELIVERY_STATUSES = {"pending", "sending", "sent", "failed", "skipped"}
 SESSION_TTL_SECONDS = 8 * 60 * 60
 RUN_TERMINAL_STATUSES = {"success", "partial_failed", "failed", "timeout", "cancelled", "interrupted", "skipped", "selftest"}
+AI_TRACE_PROMPT_LIMIT = 16 * 1024
+AI_TRACE_REQUEST_LIMIT = 24 * 1024
+AI_TRACE_RESPONSE_LIMIT = 24 * 1024
+AI_TRACE_TOTAL_LIMIT = 64 * 1024
 LEAD_STATUS_LABELS = {
     "unrelated": "不相关",
     "no_risk": "已评估无风险",
@@ -483,6 +487,28 @@ def init_db() -> None:
                 created_by INTEGER,
                 updated_by INTEGER,
                 UNIQUE(raw_content_id)
+            );
+
+            CREATE TABLE IF NOT EXISTS ai_evaluation_traces (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL,
+                run_id INTEGER NOT NULL,
+                raw_content_id INTEGER NOT NULL,
+                ai_evaluation_id INTEGER,
+                attempt_index INTEGER NOT NULL DEFAULT 1,
+                status TEXT NOT NULL,
+                provider TEXT NOT NULL DEFAULT '',
+                model TEXT NOT NULL DEFAULT '',
+                prompt_snapshot TEXT NOT NULL DEFAULT '',
+                input_payload_json TEXT NOT NULL DEFAULT '{}',
+                request_snapshot_json TEXT NOT NULL DEFAULT '{}',
+                response_snapshot TEXT NOT NULL DEFAULT '',
+                parsed_result_json TEXT NOT NULL DEFAULT '{}',
+                error_message TEXT NOT NULL DEFAULT '',
+                duration_ms INTEGER,
+                started_at TEXT,
+                finished_at TEXT,
+                created_at TEXT NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS reports (
@@ -924,6 +950,7 @@ def _ensure_phase_05_schema(conn: sqlite3.Connection) -> None:
     _ensure_phase_14_run_center_schema(conn)
     _ensure_phase_16_email_delivery_schema(conn)
     _ensure_phase_18_report_snapshot_schema(conn)
+    _ensure_phase_20_ai_trace_schema(conn)
     _backfill_social_account_profile_keys(conn)
     _backfill_login_session_profile_keys(conn)
 
@@ -1053,6 +1080,44 @@ def _ensure_phase_18_report_snapshot_schema(conn: sqlite3.Connection) -> None:
             "UPDATE reports SET job_snapshot_json=? WHERE id=?",
             (report_job_snapshot_json(job), row["report_id"]),
         )
+
+
+def _ensure_phase_20_ai_trace_schema(conn: sqlite3.Connection) -> None:
+    conn.execute(
+        """
+        CREATE TABLE IF NOT EXISTS ai_evaluation_traces (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            workspace_id INTEGER NOT NULL,
+            run_id INTEGER NOT NULL,
+            raw_content_id INTEGER NOT NULL,
+            ai_evaluation_id INTEGER,
+            attempt_index INTEGER NOT NULL DEFAULT 1,
+            status TEXT NOT NULL,
+            provider TEXT NOT NULL DEFAULT '',
+            model TEXT NOT NULL DEFAULT '',
+            prompt_snapshot TEXT NOT NULL DEFAULT '',
+            input_payload_json TEXT NOT NULL DEFAULT '{}',
+            request_snapshot_json TEXT NOT NULL DEFAULT '{}',
+            response_snapshot TEXT NOT NULL DEFAULT '',
+            parsed_result_json TEXT NOT NULL DEFAULT '{}',
+            error_message TEXT NOT NULL DEFAULT '',
+            duration_ms INTEGER,
+            started_at TEXT,
+            finished_at TEXT,
+            created_at TEXT NOT NULL
+        )
+        """
+    )
+    conn.executescript(
+        """
+        CREATE INDEX IF NOT EXISTS idx_ai_traces_run_content
+            ON ai_evaluation_traces(workspace_id, run_id, raw_content_id);
+        CREATE INDEX IF NOT EXISTS idx_ai_traces_evaluation
+            ON ai_evaluation_traces(workspace_id, ai_evaluation_id);
+        CREATE INDEX IF NOT EXISTS idx_ai_traces_status_created
+            ON ai_evaluation_traces(workspace_id, status, created_at);
+        """
+    )
 
 
 def _backfill_social_account_profile_keys(conn: sqlite3.Connection) -> None:
@@ -1344,6 +1409,386 @@ def get_runtime_setting_value(key: str) -> Any:
     if key not in settings:
         raise ValueError(f"unknown runtime setting: {key}")
     return settings[key]["value"]
+
+
+def save_ai_evaluation_trace(trace: dict[str, Any]) -> dict[str, Any]:
+    if not isinstance(trace, dict):
+        trace = {}
+    prepared = _prepare_ai_trace_for_storage(trace)
+    now = utc_now()
+    with get_conn() as conn:
+        cur = conn.execute(
+            """
+            INSERT INTO ai_evaluation_traces (
+                workspace_id, run_id, raw_content_id, ai_evaluation_id,
+                attempt_index, status, provider, model, prompt_snapshot,
+                input_payload_json, request_snapshot_json, response_snapshot,
+                parsed_result_json, error_message, duration_ms, started_at,
+                finished_at, created_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                prepared["workspace_id"],
+                prepared["run_id"],
+                prepared["raw_content_id"],
+                prepared.get("ai_evaluation_id"),
+                prepared["attempt_index"],
+                prepared["status"],
+                prepared["provider"],
+                prepared["model"],
+                prepared["prompt_snapshot"],
+                prepared["input_payload_json"],
+                prepared["request_snapshot_json"],
+                prepared["response_snapshot"],
+                prepared["parsed_result_json"],
+                prepared["error_message"],
+                prepared.get("duration_ms"),
+                prepared.get("started_at") or None,
+                prepared.get("finished_at") or None,
+                now,
+            ),
+        )
+        trace_id = int(cur.lastrowid)
+        row = conn.execute("SELECT * FROM ai_evaluation_traces WHERE id=?", (trace_id,)).fetchone()
+    return _hydrate_ai_trace_row(row)
+
+
+def get_ai_evaluation_trace(ai_evaluation_id: int | None = None, raw_content_id: int | None = None, run_id: int | None = None) -> dict[str, Any] | None:
+    clauses: list[str] = []
+    params: list[Any] = []
+    if ai_evaluation_id:
+        clauses.append("ai_evaluation_id=?")
+        params.append(int(ai_evaluation_id))
+    if raw_content_id:
+        clauses.append("raw_content_id=?")
+        params.append(int(raw_content_id))
+    if run_id:
+        clauses.append("run_id=?")
+        params.append(int(run_id))
+    if not clauses:
+        return None
+    with get_conn() as conn:
+        row = conn.execute(
+            f"SELECT * FROM ai_evaluation_traces WHERE {' AND '.join(clauses)} ORDER BY id DESC LIMIT 1",
+            params,
+        ).fetchone()
+    return _hydrate_ai_trace_row(row) if row else None
+
+
+def ai_evaluation_trace_state(ai_evaluation_id: int | None = None, raw_content_id: int | None = None, run_id: int | None = None) -> dict[str, Any]:
+    trace = get_ai_evaluation_trace(ai_evaluation_id=ai_evaluation_id, raw_content_id=raw_content_id, run_id=run_id)
+    if trace:
+        return {"status": "available", "limited_context": False, "trace_id": trace["id"], "message": ""}
+    return {
+        "status": "limited_context",
+        "limited_context": True,
+        "trace_id": None,
+        "message": "历史记录未保存完整入参/出参。",
+    }
+
+
+def role_safe_ai_trace_view(trace: dict[str, Any] | None, *, admin: bool = False) -> dict[str, Any]:
+    if not trace:
+        return {
+            "status": "limited_context",
+            "limited_context": True,
+            "message": "历史记录未保存完整入参/出参。",
+        }
+    business_input = _business_safe_ai_input(trace.get("input_payload"))
+    structured_output = _business_safe_ai_output(trace.get("parsed_result"))
+    result = {
+        "status": "available",
+        "limited_context": False,
+        "trace_id": trace.get("id"),
+        "business_input": business_input,
+        "structured_output": structured_output,
+        "provider": customer_safe_text(trace.get("provider")),
+        "model": customer_safe_text(trace.get("model")),
+        "duration_ms": trace.get("duration_ms"),
+        "started_at": customer_safe_text(trace.get("started_at")),
+        "finished_at": customer_safe_text(trace.get("finished_at")),
+        "created_at": customer_safe_text(trace.get("created_at")),
+        "error_message": customer_safe_text(trace.get("error_message")),
+    }
+    if admin:
+        result["debug"] = {
+            "prompt_snapshot": customer_safe_text(trace.get("prompt_snapshot")),
+            "request_snapshot": _trace_safe_api_payload(trace.get("request_snapshot") or {}),
+            "response_snapshot": customer_safe_text(trace.get("response_snapshot")),
+            "parsed_result": _trace_safe_api_payload(trace.get("parsed_result") or {}),
+        }
+    return result
+
+
+def cleanup_ai_evaluation_traces(retention_days: int | None = None, now: datetime | None = None) -> dict[str, Any]:
+    try:
+        days = int(retention_days if retention_days is not None else get_runtime_setting_value("ai_trace_retention_days"))
+    except Exception:
+        days = 30
+    days = max(1, min(days, 3650))
+    now_dt = now.astimezone(timezone.utc) if now and now.tzinfo else (now.replace(tzinfo=timezone.utc) if now else datetime.now(timezone.utc))
+    cutoff = (now_dt - timedelta(days=days)).isoformat()
+    with get_conn() as conn:
+        cur = conn.execute("DELETE FROM ai_evaluation_traces WHERE created_at < ?", (cutoff,))
+        deleted = int(cur.rowcount or 0)
+    return {"deleted": deleted, "retention_days": days, "cutoff": cutoff}
+
+
+def _prepare_ai_trace_for_storage(trace: dict[str, Any]) -> dict[str, Any]:
+    parsed_result = trace.get("parsed_result")
+    if parsed_result is None and trace.get("structured_output") is not None:
+        parsed_result = trace.get("structured_output")
+    input_json, input_truncated = _trace_json_text(trace.get("input_payload") or trace.get("input_payload_json") or {}, AI_TRACE_REQUEST_LIMIT)
+    request_json, request_truncated = _trace_json_text(trace.get("request_snapshot") or trace.get("request_snapshot_json") or {}, AI_TRACE_REQUEST_LIMIT)
+    parsed_json, parsed_truncated = _trace_json_text(parsed_result or {}, AI_TRACE_REQUEST_LIMIT)
+    prompt, prompt_truncated = _trace_text(trace.get("prompt_snapshot") or trace.get("prompt") or "", AI_TRACE_PROMPT_LIMIT)
+    response, response_truncated = _trace_text(trace.get("response_snapshot") or trace.get("raw_response") or "", AI_TRACE_RESPONSE_LIMIT)
+    error_message, error_truncated = _trace_text(trace.get("error_message") or trace.get("fallback_reason") or "", 4096)
+    truncated_fields = {
+        key
+        for key, truncated in {
+            "input_payload_json": input_truncated,
+            "request_snapshot_json": request_truncated,
+            "parsed_result_json": parsed_truncated,
+            "prompt_snapshot": prompt_truncated,
+            "response_snapshot": response_truncated,
+            "error_message": error_truncated,
+        }.items()
+        if truncated
+    }
+    prepared = {
+        "workspace_id": _safe_int(trace.get("workspace_id")) or DEFAULT_WORKSPACE_ID,
+        "run_id": _safe_int(trace.get("run_id")) or 0,
+        "raw_content_id": _safe_int(trace.get("raw_content_id")) or 0,
+        "ai_evaluation_id": _safe_int(trace.get("ai_evaluation_id")) or None,
+        "attempt_index": max(1, _safe_int(trace.get("attempt_index")) or 1),
+        "status": customer_safe_text(str(trace.get("status") or "pending_review"))[:80],
+        "provider": customer_safe_text(str(trace.get("provider") or ""))[:80],
+        "model": customer_safe_text(str(trace.get("model") or ""))[:160],
+        "prompt_snapshot": prompt,
+        "input_payload_json": input_json,
+        "request_snapshot_json": request_json,
+        "response_snapshot": response,
+        "parsed_result_json": _merge_trace_meta(parsed_json, truncated_fields),
+        "error_message": error_message,
+        "duration_ms": _safe_int(trace.get("duration_ms")) if trace.get("duration_ms") not in (None, "") else None,
+        "started_at": customer_safe_text(trace.get("started_at")),
+        "finished_at": customer_safe_text(trace.get("finished_at")),
+    }
+    _enforce_trace_total_limit(prepared)
+    return prepared
+
+
+def _trace_json_text(value: Any, limit: int) -> tuple[str, bool]:
+    cleaned = _redact_ai_trace_payload(value)
+    text = json.dumps(cleaned, ensure_ascii=False)
+    if len(text.encode("utf-8")) <= limit:
+        return text, bool(isinstance(cleaned, dict) and cleaned.get("truncated"))
+    preview, _ = _truncate_utf8(text, max(256, limit - 256), marker="")
+    compact = {"truncated": True, "preview": preview}
+    text = json.dumps(compact, ensure_ascii=False)
+    if len(text.encode("utf-8")) > limit:
+        preview, _ = _truncate_utf8(preview, max(32, limit - 128), marker="")
+        text = json.dumps({"truncated": True, "preview": preview}, ensure_ascii=False)
+    return text, True
+
+
+def _trace_text(value: Any, limit: int) -> tuple[str, bool]:
+    text = _redact_trace_text(str(value or ""))
+    return _truncate_utf8(text, limit, marker="\n[truncated=true]")
+
+
+def _truncate_utf8(text: str, limit: int, *, marker: str) -> tuple[str, bool]:
+    raw = str(text or "")
+    encoded = raw.encode("utf-8")
+    if len(encoded) <= limit:
+        return raw, False
+    marker_bytes = marker.encode("utf-8")
+    allowed = max(0, limit - len(marker_bytes))
+    return encoded[:allowed].decode("utf-8", errors="ignore") + marker, True
+
+
+def _redact_ai_trace_payload(value: Any) -> Any:
+    if isinstance(value, dict):
+        result: dict[str, Any] = {}
+        truncated = bool(value.get("truncated"))
+        for key, item in value.items():
+            lower_key = str(key).lower()
+            if _is_sensitive_trace_key(lower_key):
+                result[key] = "[REDACTED]"
+            elif lower_key in {"comments", "comment_samples"} and isinstance(item, list):
+                result[key], field_truncated = _redact_trace_comments(item)
+                truncated = truncated or field_truncated
+            else:
+                result[key] = _redact_ai_trace_payload(item)
+        if truncated:
+            result["truncated"] = True
+        return result
+    if isinstance(value, list):
+        return [_redact_ai_trace_payload(item) for item in value]
+    if isinstance(value, str):
+        return _redact_trace_text(value)
+    return value
+
+
+def _redact_trace_comments(items: list[Any]) -> tuple[list[Any], bool]:
+    result = []
+    truncated = len(items) > 20
+    for item in items[:20]:
+        if isinstance(item, dict):
+            cleaned = dict(_redact_ai_trace_payload(item))
+            content = str(cleaned.get("content") or cleaned.get("text") or "")
+            if content:
+                cleaned["content"], was_truncated = _truncate_utf8(content, 500, marker="[truncated=true]")
+                truncated = truncated or was_truncated
+            result.append(cleaned)
+        else:
+            text, was_truncated = _truncate_utf8(_redact_trace_text(str(item or "")), 500, marker="[truncated=true]")
+            truncated = truncated or was_truncated
+            result.append(text)
+    return result, truncated
+
+
+def _is_sensitive_trace_key(key: str) -> bool:
+    sensitive_fragments = (
+        "authorization",
+        "x-api-key",
+        "api_key",
+        "apikey",
+        "cookie",
+        "password",
+        "smtp_password",
+        "token",
+        "secret",
+        "proxy_url",
+        "proxy_password",
+        "cookies_encrypted",
+        "api_key_encrypted",
+        "password_encrypted",
+        "profile_path",
+        "profile_dir",
+        "server_path",
+        "local_path",
+    )
+    if key == "path" or key.endswith("_path"):
+        return True
+    return any(fragment in key for fragment in sensitive_fragments)
+
+
+def _redact_trace_text(value: str) -> str:
+    text = redact_sensitive(value)
+    text = re.sub(
+        r"(?i)([\"']?(?:authorization|x-api-key|api[_-]?key|cookie|password|smtp[_-]?password|token|secret|proxy[_-]?url)[\"']?\s*:\s*)[\"'][^\"']*[\"']",
+        r"\1\"[REDACTED]\"",
+        text,
+    )
+    text = redact_local_paths(text)
+    text = re.sub(r"(?<!:)//+", "/", text)
+    return text
+
+
+def _merge_trace_meta(parsed_json: str, truncated_fields: set[str]) -> str:
+    if not truncated_fields:
+        return parsed_json
+    parsed = _json_loads(parsed_json, {})
+    if not isinstance(parsed, dict):
+        parsed = {"value": parsed}
+    parsed["_trace_meta"] = {
+        "truncated": True,
+        "truncated_fields": sorted(truncated_fields),
+    }
+    return json.dumps(_redact_ai_trace_payload(parsed), ensure_ascii=False)
+
+
+def _enforce_trace_total_limit(prepared: dict[str, Any]) -> None:
+    keys = (
+        "prompt_snapshot",
+        "input_payload_json",
+        "request_snapshot_json",
+        "response_snapshot",
+        "parsed_result_json",
+        "error_message",
+    )
+    total = sum(len(str(prepared.get(key) or "").encode("utf-8")) for key in keys)
+    if total <= AI_TRACE_TOTAL_LIMIT:
+        return
+    overflow = total - AI_TRACE_TOTAL_LIMIT
+    response = str(prepared.get("response_snapshot") or "")
+    response_bytes = len(response.encode("utf-8"))
+    if response_bytes > 1024:
+        next_limit = max(1024, response_bytes - overflow - 64)
+        prepared["response_snapshot"], _ = _truncate_utf8(response, next_limit, marker="\n[truncated=true]")
+    total = sum(len(str(prepared.get(key) or "").encode("utf-8")) for key in keys)
+    if total > AI_TRACE_TOTAL_LIMIT:
+        parsed_meta = _json_loads(prepared.get("parsed_result_json"), {})
+        if not isinstance(parsed_meta, dict):
+            parsed_meta = {"value": parsed_meta}
+        parsed_meta["_trace_meta"] = {
+            **(parsed_meta.get("_trace_meta") if isinstance(parsed_meta.get("_trace_meta"), dict) else {}),
+            "truncated": True,
+            "total_limit_applied": True,
+        }
+        prepared["parsed_result_json"] = json.dumps(parsed_meta, ensure_ascii=False)
+
+
+def _hydrate_ai_trace_row(row: sqlite3.Row | None) -> dict[str, Any]:
+    if row is None:
+        return {}
+    item = dict(row)
+    item["input_payload"] = _json_loads(item.get("input_payload_json"), {})
+    item["request_snapshot"] = _json_loads(item.get("request_snapshot_json"), {})
+    item["parsed_result"] = _json_loads(item.get("parsed_result_json"), {})
+    item["prompt_snapshot"] = customer_safe_text(item.get("prompt_snapshot"))
+    item["response_snapshot"] = customer_safe_text(item.get("response_snapshot"))
+    item["error_message"] = customer_safe_text(item.get("error_message"))
+    item["limited_context"] = False
+    return item
+
+
+def _business_safe_ai_input(payload: Any) -> dict[str, Any]:
+    payload = payload if isinstance(payload, dict) else {}
+    allowed = (
+        "law_firm_name",
+        "aliases",
+        "exclude_words",
+        "platform",
+        "platform_code",
+        "source_keyword",
+        "title",
+        "description",
+        "author_name",
+        "content_url",
+        "cover_url",
+        "publish_time",
+        "comment_count",
+        "comment_summary",
+        "comments",
+        "comment_samples",
+    )
+    result = {key: _trace_safe_api_payload(payload.get(key)) for key in allowed if key in payload}
+    if "comment_samples" in result and isinstance(result["comment_samples"], list):
+        result["comment_samples"] = result["comment_samples"][:20]
+    if "comments" in result and isinstance(result["comments"], list):
+        result["comments"] = [_trace_safe_text(item)[:500] for item in result["comments"][:20]]
+    return result
+
+
+def _business_safe_ai_output(payload: Any) -> dict[str, Any]:
+    payload = payload if isinstance(payload, dict) else {}
+    allowed = (
+        "status",
+        "is_related",
+        "is_negative",
+        "risk_level",
+        "reason",
+        "evidence_quotes",
+        "recommended_action",
+        "_trace_meta",
+    )
+    result = {key: _trace_safe_api_payload(payload.get(key)) for key in allowed if key in payload}
+    if "evidence_quotes" in result and isinstance(result["evidence_quotes"], list):
+        result["evidence_quotes"] = [_trace_safe_text(item) for item in result["evidence_quotes"][:20]]
+    return result
 
 
 EMAIL_VALIDATION_WINDOW_KEY = "__email_validation_window__"
@@ -2891,6 +3336,324 @@ def get_run(run_id: int, actor: dict[str, Any] | None = None) -> dict[str, Any] 
     return item
 
 
+def get_run_detail_bundle(
+    run_id: int,
+    *,
+    actor: dict[str, Any] | None = None,
+    ai_filters: dict[str, Any] | None = None,
+    page: int = 1,
+    per_page: int = 50,
+) -> dict[str, Any] | None:
+    run = get_run(run_id, actor=actor)
+    if not run:
+        return None
+    collection_logs = list_run_collection_logs(run_id)
+    contents = list_run_collected_contents(run_id, actor=actor)
+    ai_result = list_run_ai_evaluations(run_id, actor=actor, filters=ai_filters or {}, page=page, per_page=per_page)
+    reports = list_run_reports(run_id, actor=actor)
+    report_ids = [int(report["id"]) for report in reports if report.get("id")]
+    delivery_logs = list_run_email_delivery_logs(run_id, report_ids=report_ids, actor=actor)
+    return {
+        "run": run,
+        "overview": {
+            "run_id": run.get("id"),
+            "job_id": run.get("job_id"),
+            "status": run.get("status"),
+            "display_status": run.get("display_status"),
+            "law_firm_name": run.get("display_law_firm_name") or run.get("law_firm_name"),
+            "summary": run.get("summary") or {},
+        },
+        "collection_logs": collection_logs,
+        "collected_contents": contents,
+        "ai_evaluations": ai_result["items"],
+        "ai_pagination": ai_result["pagination"],
+        "ai_filters": ai_result["filters"],
+        "reports": reports,
+        "email_delivery_logs": delivery_logs,
+    }
+
+
+def list_run_collected_contents(run_id: int, actor: dict[str, Any] | None = None, limit: int = 500) -> list[dict[str, Any]]:
+    limit = min(5000, _coerce_limit(limit, 500))
+    clauses = ["c.run_id=?"]
+    params: list[Any] = [run_id]
+    if actor:
+        clauses.append("c.workspace_id=? AND (?='administrator' OR COALESCE(j.created_by, c.created_by)=?)")
+        params.extend([
+            _safe_int(actor.get("workspace_id")) or DEFAULT_WORKSPACE_ID,
+            actor.get("role"),
+            _safe_int(actor.get("id")) or 0,
+        ])
+    sql = f"""
+        SELECT
+            c.id, c.platform, c.content_id, c.job_id, c.run_id,
+            COALESCE(c.law_firm_name, j.law_firm_name) AS law_firm_name,
+            c.source_keyword, c.title, c.description, c.author_name,
+            c.content_url, c.cover_url, c.publish_time, c.comment_count,
+            c.first_seen_at, c.last_seen_at
+        FROM raw_contents c
+        LEFT JOIN monitor_jobs j ON j.id = c.job_id
+        WHERE {' AND '.join(clauses)}
+        ORDER BY c.id DESC
+    """
+    if limit > 0:
+        sql += " LIMIT ?"
+        params.append(limit)
+    with get_conn() as conn:
+        rows = conn.execute(sql, params).fetchall()
+    return [_hydrate_run_content_row(dict(row)) for row in rows]
+
+
+def list_run_collection_logs(run_id: int, limit_chars: int = 20000) -> list[dict[str, Any]]:
+    run_root = MONITOR_DATA_DIR / "runs"
+    logs = []
+    for path in run_root.glob(f"**/run_{int(run_id)}_*/**/crawler.log"):
+        content = customer_safe_text(path.read_text(encoding="utf-8", errors="ignore"))[-limit_chars:]
+        logs.append({"path": "运行日志", "content": content})
+    return logs
+
+
+def _hydrate_run_content_row(item: dict[str, Any]) -> dict[str, Any]:
+    for key in ("law_firm_name", "source_keyword", "title", "description", "author_name"):
+        item[key] = customer_safe_text(item.get(key))
+    item["content_url"] = customer_safe_url(item.get("content_url"))
+    item["cover_url"] = customer_safe_url(item.get("cover_url"))
+    return item
+
+
+def list_run_ai_evaluations(
+    run_id: int,
+    *,
+    actor: dict[str, Any] | None = None,
+    filters: dict[str, Any] | None = None,
+    page: int = 1,
+    per_page: int = 50,
+) -> dict[str, Any]:
+    filters = dict(filters or {})
+    page = max(1, _safe_int(page) or 1)
+    per_page = min(200, _coerce_limit(per_page, 50))
+    clauses = ["c.run_id=?"]
+    params: list[Any] = [run_id]
+    applied: dict[str, Any] = {}
+    report_id = _safe_int(filters.get("report_id"))
+    if report_id:
+        applied["report_id"] = report_id
+    if actor:
+        clauses.append("c.workspace_id=? AND (?='administrator' OR COALESCE(j.created_by, c.created_by)=?)")
+        params.extend([
+            _safe_int(actor.get("workspace_id")) or DEFAULT_WORKSPACE_ID,
+            actor.get("role"),
+            _safe_int(actor.get("id")) or 0,
+        ])
+    status = str(filters.get("status") or "").strip()
+    if status:
+        if status in {"unevaluated", "limited_context"}:
+            clauses.append("e.id IS NULL")
+        else:
+            clauses.append("e.status=?")
+            params.append(status)
+        applied["status"] = status
+    risk = str(filters.get("risk") or "").strip()
+    if risk:
+        if risk == "high":
+            clauses.append("e.status!='pending_review' AND e.is_related=1 AND e.is_negative=1 AND e.risk_level='high'")
+        elif risk in {"negative", "suspected_negative"}:
+            clauses.append("e.status!='pending_review' AND e.is_related=1 AND e.is_negative=1 AND COALESCE(e.risk_level, '')!='high'")
+        elif risk == "pending":
+            clauses.append("e.status='pending_review'")
+        elif risk == "unrelated":
+            clauses.append("e.id IS NOT NULL AND e.status!='pending_review' AND e.is_related=0")
+        elif risk in {"none", "no_risk"}:
+            clauses.append("e.id IS NOT NULL AND e.status!='pending_review' AND e.is_related=1 AND e.is_negative=0")
+        elif risk in {"unevaluated", "limited_context"}:
+            clauses.append("e.id IS NULL")
+        applied["risk"] = risk
+    platform = str(filters.get("platform") or "").strip()
+    if platform:
+        clauses.append("c.platform=?")
+        params.append(platform)
+        applied["platform"] = platform
+    keyword = str(filters.get("keyword") or "").strip()
+    if keyword:
+        clauses.append("COALESCE(c.source_keyword, '') LIKE ?")
+        params.append(f"%{keyword}%")
+        applied["keyword"] = keyword
+    title = str(filters.get("title") or "").strip()
+    if title:
+        clauses.append("COALESCE(c.title, '') LIKE ?")
+        params.append(f"%{title}%")
+        applied["title"] = title
+    where = " AND ".join(clauses)
+    base_sql = f"""
+        FROM raw_contents c
+        LEFT JOIN monitor_jobs j ON j.id = c.job_id
+        LEFT JOIN crawl_runs r ON r.id = c.run_id
+        LEFT JOIN ai_evaluations e ON e.raw_content_id = c.id
+        LEFT JOIN ai_evaluation_traces t ON t.ai_evaluation_id = e.id
+        WHERE {where}
+    """
+    with get_conn() as conn:
+        total = int(conn.execute(f"SELECT COUNT(*) AS n {base_sql}", params).fetchone()["n"] or 0)
+        sql = f"""
+            SELECT
+                c.id, c.platform, c.content_id, c.job_id, c.run_id,
+                COALESCE(c.law_firm_name, j.law_firm_name) AS law_firm_name,
+                c.source_keyword, c.title, c.description, c.author_name,
+                c.content_url, c.cover_url, c.publish_time, c.comment_count,
+                c.first_seen_at, c.last_seen_at,
+                r.status AS run_status,
+                e.id AS evaluation_id,
+                e.status AS eval_status, e.is_related, e.is_negative, e.risk_level,
+                e.reason, e.evidence_quotes, e.recommended_action, e.created_at AS evaluated_at,
+                t.id AS trace_id
+            {base_sql}
+            ORDER BY c.id DESC
+        """
+        query_params = list(params)
+        if per_page > 0:
+            sql += " LIMIT ? OFFSET ?"
+            query_params.extend([per_page, (page - 1) * per_page])
+        rows = conn.execute(sql, query_params).fetchall()
+    items = [_hydrate_run_ai_evaluation_row(dict(row)) for row in rows]
+    total_pages = 1 if per_page <= 0 else max(1, (total + per_page - 1) // per_page)
+    return {
+        "items": items,
+        "pagination": {"page": page, "per_page": per_page, "total": total, "total_pages": total_pages},
+        "filters": applied,
+    }
+
+
+def _hydrate_run_ai_evaluation_row(item: dict[str, Any]) -> dict[str, Any]:
+    item["is_related"] = bool(item.get("is_related"))
+    item["is_negative"] = bool(item.get("is_negative"))
+    item["evidence_quotes"] = [customer_safe_text(str(q)) for q in _json_loads(item.get("evidence_quotes"))]
+    for key in ("law_firm_name", "source_keyword", "title", "description", "author_name", "reason", "recommended_action"):
+        item[key] = customer_safe_text(item.get(key))
+    item["content_url"] = customer_safe_url(item.get("content_url"))
+    item["cover_url"] = customer_safe_url(item.get("cover_url"))
+    apply_lead_status_fields(item)
+    item["trace_state"] = {
+        "status": "available" if item.get("trace_id") else "limited_context",
+        "limited_context": not bool(item.get("trace_id")),
+        "trace_id": item.get("trace_id"),
+        "message": "" if item.get("trace_id") else "历史记录未保存完整入参/出参。",
+    }
+    return item
+
+
+def get_ai_evaluation_detail(
+    evaluation_id: int,
+    *,
+    run_id: int | None = None,
+    actor: dict[str, Any] | None = None,
+    admin_debug: bool = False,
+) -> dict[str, Any] | None:
+    clauses = ["e.id=?"]
+    params: list[Any] = [evaluation_id]
+    if run_id is not None:
+        clauses.append("c.run_id=?")
+        params.append(run_id)
+    if actor:
+        clauses.append("c.workspace_id=? AND (?='administrator' OR COALESCE(j.created_by, c.created_by, e.created_by)=?)")
+        params.extend([
+            _safe_int(actor.get("workspace_id")) or DEFAULT_WORKSPACE_ID,
+            actor.get("role"),
+            _safe_int(actor.get("id")) or 0,
+        ])
+    with get_conn() as conn:
+        row = conn.execute(
+            f"""
+            SELECT
+                c.id, c.platform, c.content_id, c.job_id, c.run_id,
+                COALESCE(c.law_firm_name, j.law_firm_name) AS law_firm_name,
+                c.source_keyword, c.title, c.description, c.author_name,
+                c.content_url, c.cover_url, c.publish_time, c.comment_count,
+                c.first_seen_at, c.last_seen_at,
+                r.status AS run_status,
+                e.id AS evaluation_id,
+                e.status AS eval_status, e.is_related, e.is_negative, e.risk_level,
+                e.reason, e.evidence_quotes, e.recommended_action, e.created_at AS evaluated_at,
+                t.id AS trace_id
+            FROM ai_evaluations e
+            JOIN raw_contents c ON c.id = e.raw_content_id
+            LEFT JOIN monitor_jobs j ON j.id = c.job_id
+            LEFT JOIN crawl_runs r ON r.id = c.run_id
+            LEFT JOIN ai_evaluation_traces t ON t.ai_evaluation_id = e.id
+            WHERE {' AND '.join(clauses)}
+            ORDER BY t.id DESC
+            LIMIT 1
+            """,
+            params,
+        ).fetchone()
+    if not row:
+        return None
+    item = _hydrate_run_ai_evaluation_row(dict(row))
+    trace = get_ai_evaluation_trace(ai_evaluation_id=evaluation_id, raw_content_id=item.get("id"), run_id=item.get("run_id"))
+    item["trace"] = role_safe_ai_trace_view(trace, admin=admin_debug)
+    return item
+
+
+def list_run_reports(run_id: int, actor: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    clauses = ["reports.run_id=?"]
+    params: list[Any] = [run_id]
+    if actor:
+        clauses.append("reports.workspace_id=? AND (?='administrator' OR COALESCE(monitor_jobs.created_by, reports.created_by)=?)")
+        params.extend([
+            _safe_int(actor.get("workspace_id")) or DEFAULT_WORKSPACE_ID,
+            actor.get("role"),
+            _safe_int(actor.get("id")) or 0,
+        ])
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT reports.*, monitor_jobs.id AS current_job_id, monitor_jobs.law_firm_name
+            FROM reports
+            LEFT JOIN monitor_jobs ON monitor_jobs.id = reports.job_id
+            WHERE {' AND '.join(clauses)}
+            ORDER BY reports.id DESC
+            """,
+            params,
+        ).fetchall()
+    result = []
+    for row in rows:
+        item = dict(row)
+        item["summary"] = _json_loads(item.get("summary"), {})
+        _hydrate_report_item(item)
+        result.append(item)
+    _attach_report_lead_counts(result)
+    return result
+
+
+def list_run_email_delivery_logs(run_id: int, report_ids: list[int] | None = None, actor: dict[str, Any] | None = None) -> list[dict[str, Any]]:
+    report_ids = [int(item) for item in (report_ids or []) if _safe_int(item)]
+    clauses = ["(reports.run_id=?"]
+    params: list[Any] = [run_id]
+    if report_ids:
+        clauses[0] += f" OR email_delivery_logs.report_id IN ({','.join('?' for _ in report_ids)})"
+        params.extend(report_ids)
+    clauses[0] += ")"
+    if actor:
+        clauses.append("email_delivery_logs.workspace_id=? AND (?='administrator' OR COALESCE(monitor_jobs.created_by, reports.created_by)=?)")
+        params.extend([
+            _safe_int(actor.get("workspace_id")) or DEFAULT_WORKSPACE_ID,
+            actor.get("role"),
+            _safe_int(actor.get("id")) or 0,
+        ])
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"""
+            SELECT email_delivery_logs.*
+            FROM email_delivery_logs
+            LEFT JOIN reports ON reports.id = email_delivery_logs.report_id
+            LEFT JOIN monitor_jobs ON monitor_jobs.id = email_delivery_logs.job_id
+            WHERE {' AND '.join(clauses)}
+            ORDER BY email_delivery_logs.id DESC
+            """,
+            params,
+        ).fetchall()
+    return [_hydrate_email_delivery_log(dict(row)) for row in rows]
+
+
 def _run_actor_scope_clause(actor: dict[str, Any] | None) -> tuple[str, list[Any]]:
     if not actor:
         return "", []
@@ -3092,7 +3855,21 @@ def _hydrate_run_row(row: sqlite3.Row) -> dict[str, Any]:
     item["display_status"] = _run_display_status(str(item.get("status") or ""), summary)
     item["display_error"] = customer_safe_text(_run_display_error(item, summary))
     item["error_message"] = customer_safe_text(item.get("error_message"))
+    _hydrate_run_progress_fields(item, summary)
     return item
+
+
+def _hydrate_run_progress_fields(item: dict[str, Any], summary: dict[str, Any]) -> None:
+    collection_progress = summary.get("collection_progress")
+    if isinstance(collection_progress, dict):
+        item["collection_progress"] = _customer_safe_payload(collection_progress)
+    ai_progress = summary.get("ai_progress")
+    if isinstance(ai_progress, dict):
+        item["ai_progress"] = _customer_safe_payload(ai_progress)
+    progress_message = str(summary.get("progress_message") or "").strip()
+    if progress_message:
+        item["progress_message"] = customer_safe_text(progress_message)
+    item["progress_updated_at"] = customer_safe_text(summary.get("progress_updated_at") or item.get("finished_at") or item.get("started_at") or "")
 
 
 def _attach_run_lead_counts(runs: list[dict[str, Any]]) -> None:
@@ -3120,11 +3897,11 @@ def _run_display_status(status: str, summary: dict[str, Any]) -> str:
         return "已跳过"
     labels = {
         "running": "运行中",
-        "success": "成功",
+        "success": "已完成",
         "partial_failed": "部分失败",
         "failed": "失败",
-        "cancelled": "已停止",
-        "timeout": "已超时",
+        "cancelled": "已取消",
+        "timeout": "运行超时",
         "interrupted": "执行中断",
     }
     return labels.get(status, status or "")
@@ -3600,6 +4377,43 @@ def _customer_safe_payload(value: Any) -> Any:
     if isinstance(value, str):
         return customer_safe_text(value)
     return value
+
+
+def _trace_safe_api_payload(value: Any) -> Any:
+    if isinstance(value, dict):
+        result: dict[str, Any] = {}
+        for key, item in value.items():
+            lower_key = str(key).lower()
+            if _is_sensitive_trace_key(lower_key):
+                continue
+            result[key] = _trace_safe_api_payload(item)
+        return result
+    if isinstance(value, list):
+        return [_trace_safe_api_payload(item) for item in value]
+    if isinstance(value, str):
+        text = _trace_safe_text(value)
+        if text.lstrip().startswith("{") or text.lstrip().startswith("["):
+            parsed = _json_loads(text, None)
+            if parsed is not None:
+                return _trace_safe_api_payload(parsed)
+        return text
+    return value
+
+
+def _trace_safe_text(value: Any) -> str:
+    text = customer_safe_text(str(value or ""))
+    patterns = (
+        r"(?i)\b(?:authorization|x-api-key|api[_-]?key|api key|cookie|cookies?[_-]?encrypted|password|smtp[_-]?password|token|secret|proxy[_-]?url|proxy[_-]?password|profile_path|profile_dir|server_path|local_path)\b\s*(?:[:=]\s*(?:bearer\s+)?)?[^\s,;，；\"'<>]+",
+        r"(?i)['\"](?:authorization|x-api-key|api[_-]?key|api key|cookie|cookies?[_-]?encrypted|password|smtp[_-]?password|token|secret|proxy[_-]?url|proxy[_-]?password|profile_path|profile_dir|server_path|local_path)['\"]\s*:\s*['\"][^'\"]*['\"]",
+    )
+    for pattern in patterns:
+        text = re.sub(pattern, "[REDACTED]", text)
+    text = re.sub(r"(?i)\bauthorization\b\s*:\s*bearer\s+\[REDACTED\]", "[REDACTED]", text)
+    text = re.sub(r"(?i)\bprofile_path\b", "[REDACTED]", text)
+    text = re.sub(r"(?i)\bprofile_dir\b", "[REDACTED]", text)
+    text = re.sub(r"(?i)\bserver_path\b", "[REDACTED]", text)
+    text = re.sub(r"(?i)\blocal_path\b", "[REDACTED]", text)
+    return text
 
 
 def get_dashboard_summary(actor: dict[str, Any] | None = None) -> dict[str, Any]:

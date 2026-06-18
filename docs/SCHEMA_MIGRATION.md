@@ -88,42 +88,174 @@ profile_key TEXT
 Existing `profile_path` can remain temporarily during schema transition, but it
 should not be used as the primary identity for new account environments.
 
-### Accepted Phase 5.1 - Add Account Browser Environment Fields
+### Accepted Phase 5.1 - Add Account Identity Fields
 
 Status: Accepted for CR-047, not implemented yet. Phase 5.1 must extend the
-existing `profile_key` model with a persisted, locked browser environment for
+existing `profile_key` model with a persisted, locked account identity for
 each platform account.
 
 Additive fields for `social_accounts`:
 
 ```text
+environment_region TEXT NOT NULL DEFAULT ''
 browser_platform TEXT NOT NULL DEFAULT ''
+identity_template TEXT NOT NULL DEFAULT ''
 fingerprint_seed TEXT NOT NULL DEFAULT ''
 user_agent TEXT NOT NULL DEFAULT ''
 timezone TEXT NOT NULL DEFAULT ''
 locale TEXT NOT NULL DEFAULT ''
+accept_language TEXT NOT NULL DEFAULT ''
 screen_width INTEGER
 screen_height INTEGER
+viewport_width INTEGER
+viewport_height INTEGER
+device_scale_factor REAL
+is_mobile INTEGER NOT NULL DEFAULT 0
+has_touch INTEGER NOT NULL DEFAULT 0
+identity_generator_name TEXT NOT NULL DEFAULT ''
+identity_generator_version TEXT NOT NULL DEFAULT ''
+identity_environment_version TEXT NOT NULL DEFAULT ''
+proxy_region_snapshot TEXT NOT NULL DEFAULT ''
 browser_environment_locked_at TEXT
 browser_environment_lock_reason TEXT NOT NULL DEFAULT ''
+requires_relogin INTEGER NOT NULL DEFAULT 0
+identity_state TEXT NOT NULL DEFAULT 'draft'
+identity_runtime_snapshot_json TEXT NOT NULL DEFAULT ''
 ```
 
 Migration and compatibility:
 
-- generate or assign browser-environment values before first QR login or
-  accepted Cookie validation;
-- lock the browser environment after successful QR login or accepted Cookie
+- use the generation, validation, provider, lifecycle, and snapshot
+  specifications in `docs/ACCOUNT_ENVIRONMENT.md` as the implementation source
+  of truth;
+- generate or assign account identity values before first QR login or accepted
+  Cookie validation;
+- keep generation stable, differentiated, self-consistent, and explainable by
+  persisting template and generator metadata;
+- validate region/timezone/locale/accept-language, UA/platform, screen/
+  viewport/device flags, proxy policy, and required locked fields before
+  login/crawl launch;
+- for China mainland proxies, use self-consistent defaults such as
+  `environment_region = CN_MAINLAND`, `timezone = Asia/Shanghai`, `locale =
+  zh-CN`, and `accept_language = zh-CN,zh;q=0.9`;
+- lock the account identity after successful QR login or accepted Cookie
   validation;
-- keep existing accounts readable and either backfill customer-safe defaults or
-  mark them as needing environment confirmation/re-login;
+- keep existing accounts readable, do not silently backfill guessed identity
+  values, and mark them as needing environment confirmation/re-login;
+- existing rows added by migration start as `identity_state = draft` with
+  empty identity fields; they are readable but cannot launch through CR-047
+  locked-identity paths until regenerated and re-logged in;
 - do not move old profile directories during this migration;
-- keep `proxy_id` as the account-bound stable proxy policy field and settle how
-  task-level proxy overrides interact with fixed account environments before
-  code implementation;
-- block silent edits to locked browser-environment fields and require an
-  audited reset/re-login path;
+- keep `proxy_id` as the account-bound stable proxy policy field and reject
+  task-level proxy overrides for locked account environments; changing the
+  proxy requires explicit reset/re-login;
+- block silent edits to locked account identity fields and require an audited
+  reset/re-login path;
+- mark locked accounts `requires_relogin` when a template or proxy-region
+  change would make the old identity inconsistent;
+- store requested/effective runtime identity evidence in
+  `identity_runtime_snapshot_json` after successful login validation or crawl
+  launch when effective values are available;
+- add indexes for operational queries:
+  `idx_social_accounts_identity_state`,
+  `idx_social_accounts_requires_relogin`, and
+  `idx_social_accounts_identity_template`;
 - do not expose raw profile paths, cookies, proxy credentials, CDP endpoints,
   noVNC sessions, or fingerprint-debug output through customer-facing APIs.
+
+### Accepted Phase 5.2 - Account Environment Export/Import Package
+
+Status: Accepted for CR-070 planning. Implementation should follow the
+confirmed V1 policy: metadata-only export plus slim passphrase-encrypted
+login-state migration package, proxy host/IP plus port hint allowed only inside
+the encrypted payload, no proxy credentials, create-new import by default, and
+avatar metadata only.
+
+No schema change is strictly required for a first metadata-only design if
+packages are generated as immediate encrypted download artifacts and audit logs
+record the action. The package is scoped to one selected platform account
+environment and is not a full database backup of monitoring tasks, crawl runs,
+reports, AI traces, email delivery logs, users, runtime settings, or customer
+business history. The migration package is a slim login-state package, not a
+raw full browser profile copy; exclude cache, GPU cache, code cache, media
+cache, crash dumps, downloads, screenshots, temporary files, and duplicated or
+regenerable browser artifacts by default. If persisted package history is
+accepted, add an optional
+metadata table:
+
+```text
+account_environment_packages
+  id INTEGER PRIMARY KEY
+  workspace_id INTEGER NOT NULL
+  account_id INTEGER NOT NULL
+  platform TEXT NOT NULL
+  package_mode TEXT NOT NULL
+  package_version TEXT NOT NULL
+  identity_environment_version TEXT NOT NULL DEFAULT ''
+  provider_name TEXT NOT NULL DEFAULT ''
+  status TEXT NOT NULL
+  redacted_checksum TEXT NOT NULL DEFAULT ''
+  manifest_summary_json TEXT NOT NULL DEFAULT '{}'
+  operation_type TEXT NOT NULL DEFAULT 'export'
+  failure_reason TEXT NOT NULL DEFAULT ''
+  artifact_path_redacted TEXT NOT NULL DEFAULT ''
+  created_by INTEGER
+  created_at TEXT NOT NULL
+  updated_at TEXT
+  expires_at TEXT
+  downloaded_at TEXT
+  deleted_at TEXT
+```
+
+Recommended indexes:
+
+```text
+idx_account_packages_account on account_environment_packages(workspace_id, account_id, created_at)
+idx_account_packages_status on account_environment_packages(workspace_id, status, created_at)
+idx_account_packages_expiry on account_environment_packages(expires_at)
+```
+
+Compatibility and safety:
+
+- this table stores package metadata only, not plaintext package content;
+- encrypted package bytes, if retained, must live in runtime artifact storage
+  with cleanup guidance and must never be committed to Git;
+- `manifest_summary_json` must be redacted and must not include cookies,
+  platform tokens, proxy credentials, proxy endpoint hints, raw profile paths,
+  package passphrases, CDP endpoints, noVNC tokens, command lines, or
+  deployment encryption keys;
+- export and import actions should also write `audit_logs` rows using the
+  redacted event names defined in `DATA_MODEL.md`;
+- `status` values should use the export/import operation-state vocabulary from
+  `DATA_MODEL.md` and `ACCOUNT_ENVIRONMENT.md`, including terminal states for
+  ready, completed, failed, cancelled, expired, deleted, preflight_failed,
+  active, requires_relogin, and rolled_back;
+- `artifact_path_redacted` may contain only an opaque runtime artifact ID or
+  redacted storage reference, never a local path;
+- metadata-only package metadata is still sensitive when it includes CR-047
+  identity details such as `fingerprint_seed`, recognized platform account
+  IDs, or runtime snapshot summaries. The recommended V1 package envelope is
+  encrypted unless a later redacted diagnostic export is confirmed;
+- slim login-state package payload may include source proxy host/IP plus port
+  only as an encrypted endpoint hint for target-side mapping. The database,
+  audit logs, manifest summaries, and ordinary APIs must not store or expose
+  this endpoint hint;
+- package operation locks must prevent concurrent export/import, login, crawl,
+  reset, or profile mutation for the same account while a package operation is
+  non-terminal;
+- export operations must release locks and delete staging files on success,
+  failure, cancellation, timeout, process interruption recovery, expiry, or
+  deletion;
+- metadata-only import creates or updates an account as needing login;
+- slim login-state import must write only validated slim profile-state files
+  under the target account profile root and must reject traversal, absolute
+  paths, full raw-profile cache dumps, and corrupt archives before any account
+  becomes active;
+- imported accounts should be marked active only after login-state verification
+  succeeds; otherwise mark `requires_relogin` or an equivalent account state.
+- import cleanup must be idempotent: repeated recovery cannot reopen terminal
+  states, overwrite an existing target account, or leave package/profile locks
+  stuck.
 
 ### Step 4 - Add Runtime Settings
 
@@ -147,13 +279,13 @@ Confirmed:
 
 ### Accepted Phase 20 - Add AI Evaluation Trace Snapshots
 
-Status: Accepted for CR-034, not implemented yet. Phase 20 must add a
-configurable `ai_trace_retention_days` runtime setting with a 30-day default.
-Visibility is confirmed: normal-user APIs return only business-safe summaries,
-administrator APIs may return redacted prompt/request/response debug snapshots,
-unredacted raw responses must not be stored or exposed, and normal-user APIs
-must not return raw responses. Trace storage uses the new
-`ai_evaluation_traces` table with capped/redacted JSON fields.
+Status: Phase 20B implemented and verified for CR-034 trace persistence.
+Phase 20B adds a configurable `ai_trace_retention_days` runtime setting with a
+30-day default and creates `ai_evaluation_traces` with capped/redacted JSON
+fields. Visibility is confirmed for the later Phase 20C APIs: normal-user APIs
+return only business-safe summaries, administrator APIs may return redacted
+prompt/request/response debug snapshots, unredacted raw responses must not be
+stored or exposed, and normal-user APIs must not return raw responses.
 
 Accepted compatible migration:
 
@@ -197,9 +329,9 @@ Compatibility:
   marked limited-context in the run-detail UI;
 - migration must be additive and must not rewrite or delete existing
   `ai_evaluations`, `raw_contents`, or `raw_comments` rows.
-- Phase 20 must add `ai_trace_retention_days` to runtime settings,
+- Phase 20B adds `ai_trace_retention_days` to runtime settings,
   `monitor.example.yaml`, validation, and diagnostics/cleanup visibility in the
-  same implementation batch; trace retention must not be hard-coded.
+  same implementation batch; trace retention is not hard-coded.
 - Accepted default size caps must be enforced before storage and before
   trace-detail API responses: each trace is about 64KB, prompt snapshot up to
   16KB, request snapshot up to 24KB, response snapshot up to 24KB, and sampled

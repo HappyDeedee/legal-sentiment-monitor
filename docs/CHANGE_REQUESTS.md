@@ -63,10 +63,34 @@ Status values:
 - CR-044: Mail Test Recipient Coverage And SMTP Acceptance Clarity
 - CR-045: AI Evaluation Accuracy And Unevaluated Lead Status Clarity
 - CR-046: Platform Account Avatar Safe Cache Display Regression Fix
-- CR-047: Account Browser Environment Consistency
+- CR-047: Account Identity Fidelity
 - CR-048: Report Center Lead Detail Information Architecture
 - CR-049: Mail Configuration And Delivery History Action Hierarchy
 - CR-050: Report Center Lead Status Filter Precision Regression Fix
+- CR-051: Task Center And Report Grouping Consolidation
+- CR-052: Task Center Row Action Deduplication
+- CR-053: Task Center Field Priority And Global Select Alignment
+- CR-054: Task Center Status Badge Compactness Regression Fix
+- CR-055: Task Center Status Column Visual Refinement
+- CR-056: Filter Dropdown Alignment Regression Fix
+- CR-057: Task Center Group Summary Metric Chips
+- CR-058: Filter Date Picker Alignment Regression Fix
+- CR-059: Filter Date Picker Edge Anchoring Regression Fix
+- CR-060: Filter Date Picker Compact Center Alignment Regression Fix
+- CR-061: Filter Date Picker Trigger-Width Anchoring Regression Fix
+- CR-062: Filter Date Picker Grid Compression Regression Fix
+- CR-063: Filter Date Picker Readable Anchored Popover Regression Fix
+- CR-064: Filter Date Picker Trigger-Attached Edge Shrink Regression Fix
+- CR-065: Filter Date Picker Center-Anchored Visual Alignment Regression Fix
+- CR-066: Filter Date Picker Trigger-Attached Dropdown Alignment Regression Fix
+- CR-067: Filter Date Picker Trigger-Width Visual Attachment Regression Fix
+- CR-068: Filter Date Picker Local Attached Menu Regression Fix
+- CR-069: Run Detail AI Evaluation Lead Entry Consolidation
+- CR-070: Account Environment Export And Import Package
+- CR-071: Drawer And Modal Select Dropdown Consistency
+- CR-072: Task Edit Custom Date Picker Consistency
+- CR-073: Scrollable Drawer Corner Radius Regression Fix
+- CR-074: Console Refresh Action Deduplication And Icon Loading
 
 ## Entry Classification Rule
 
@@ -2831,15 +2855,15 @@ Verification:
   redaction, same-origin avatar URL output, administrator-only avatar serving,
   path traversal rejection, and profile/cookie path hiding.
 
-## CR-047 - Account Browser Environment Consistency
+## CR-047 - Account Identity Fidelity
 
 Date: 2026-06-17
 
 Source: user request after reviewing CloakHQ/CloakBrowser-Manager as a
-reference for stable browser-profile environments. This requirement was
-initially drafted locally as CR-042, but CR-042 is already the historical
-rejected real-email validation-window design, so this accepted requirement is
-recorded as CR-047.
+reference for stable browser-profile environments, followed by account
+identity lifecycle discussion. This requirement was initially drafted locally
+as CR-042, but CR-042 is already the historical rejected real-email
+validation-window design, so this accepted requirement is recorded as CR-047.
 
 Module: account environment, platform account login, server-side browser
 runtime
@@ -2851,10 +2875,12 @@ Background:
 Phase 5 and Phase 6 already established the core account-environment model:
 one platform account maps to one `profile_key`, the server persists account
 profiles, login and crawling use server-side browser sessions, and
-account/profile/proxy locks prevent concurrent reuse. The remaining
-consistency gap is that `profile_key` identifies the persisted profile
-directory, but it does not explicitly persist the browser identity inputs that
-make a login environment stable.
+account/profile/proxy locks prevent concurrent reuse. The remaining fidelity
+gap is that `profile_key` identifies the persisted profile directory and
+therefore preserves browser traces such as cookies, local storage, IndexedDB,
+cache, history, preferences, service workers, and session state, but the
+database does not yet explicitly persist the browser identity inputs that make
+the account's login and crawl environment stable and self-consistent.
 
 CloakBrowser-Manager is useful as a technical reference because it treats
 browser profile properties such as platform, fingerprint seed, user agent,
@@ -2866,30 +2892,62 @@ system.
 
 Purpose:
 
-Make the account environment rule explicit and enforceable:
+Make account identity fidelity explicit and enforceable:
 
 ```text
-one platform account = one profile_key = one fixed browser environment
+one platform account = one profile_key = one stable account identity
 ```
 
-For the same platform account, server-side QR login, login-state checks, and
-later crawling should all use the same persisted profile, same user agent, same
-browser platform fingerprint family, same timezone/locale, same screen size,
-and same proxy policy.
+For the same platform account, server-side QR login, accepted Cookie
+validation, login-state checks, and later crawling should all use the same
+persisted profile traces, browser environment, proxy region/policy, runtime
+binding, lock state, and audit trail. This is an account identity lifecycle
+management requirement: profile traces plus browser environment plus proxy
+region plus run binding plus lock/audit consistency.
 
 Requirement:
 
-- Add a persisted account browser-environment configuration on top of the
-  current `profile_key` model. The minimum fields are:
-  `browser_platform`, `fingerprint_seed`, `user_agent`, `timezone`, `locale`,
-  `screen_width`, `screen_height`, lock status/timestamp/reason, and the
-  account-bound `proxy_id` policy.
+- Add a persisted account identity configuration on top of the current
+  `profile_key` model. The profile folder stores browser traces; the database
+  stores the launch/environment rules and lock/audit state used to recreate the
+  same identity.
+- Persist at least these environment fields: `environment_region`,
+  `browser_platform`, `identity_template`, `fingerprint_seed`, `user_agent`,
+  `timezone`, `locale`, `accept_language`, `screen_width`, `screen_height`,
+  `viewport_width`, `viewport_height`, `device_scale_factor`, `is_mobile`,
+  `has_touch`, `identity_generator_name`, `identity_generator_version`,
+  `identity_environment_version`, lock status/timestamp/reason,
+  `requires_relogin`, account-bound `proxy_id`, and a customer-safe
+  `proxy_region_snapshot`.
 - Generate or assign the account browser environment before the first
   server-side QR login attempt or accepted Cookie login validation, and lock it
   after successful login validation.
+- Introduce an Account Identity Generator that is stable, differentiated,
+  self-consistent, and explainable. Given the same workspace, platform,
+  account, proxy/region policy, automatic template selection or
+  administrator-selected template family, and seed salt, it must produce the
+  same identity. Different accounts should normally receive different
+  fingerprints unless an administrator explicitly assigns a safe template
+  family before first login.
+- Template selection defaults to the system. Normal users cannot choose
+  templates or browser-environment fields. Ordinary administrator account
+  creation does not require template choice; an advanced pre-login path may
+  choose only a template family, not individual UA, viewport, screen,
+  timezone, locale, accept-language, or device flags.
+- Introduce an Account Identity Validator that rejects inconsistent or
+  incomplete identity data before login/crawl launch. It must catch mismatches
+  such as proxy region versus timezone/locale, desktop UA with mobile touch
+  flags, mobile UA with desktop screen assumptions, missing locked fields, and
+  hidden process-default fallback.
+- For China mainland proxies, the default generated region should be
+  self-consistent: `environment_region = CN_MAINLAND`, `timezone =
+  Asia/Shanghai`, `locale = zh-CN`, and `accept_language =
+  zh-CN,zh;q=0.9`. The system should avoid overfitting province-level browser
+  details and instead keep proxy region/ISP, device template, and browser
+  environment coherent.
 - Login, login-state checks, and crawling must read the same persisted account
-  browser environment instead of deriving browser identity from changing
-  process defaults.
+  identity instead of deriving user agent, locale, timezone, viewport, proxy,
+  or fingerprint inputs from changing process defaults.
 - Existing Platform Accounts UI should show a customer-safe summary such as
   browser platform, timezone/locale, screen size, and proxy binding state, but
   must not expose raw profile paths, cookies, proxy credentials, local command
@@ -2898,14 +2956,33 @@ Requirement:
   reset/re-login flow with audit logging. Silent edits after successful login
   are not allowed.
 - Reconcile the existing proxy-priority rule with account-environment
-  consistency before code implementation. The preferred direction is that an
-  account-bound proxy is the stable default for that account; any task-level
-  proxy override must be treated as an explicit, visible exception or blocked
-  for fixed-environment accounts according to the final accepted design.
+  consistency before code implementation. Confirmed design: after CR-047 locks
+  an account identity, the account-bound proxy is the stable default for that
+  account, and task-level proxy overrides are blocked for locked account
+  environments. Changing the proxy requires explicit reset/re-login.
 - Introduce an internal browser-environment provider boundary so the existing
-  Playwright/CDP path can consume the persisted settings first. CloakBrowser or
-  CloakBrowser-Manager-style CDP/noVNC management may be evaluated later as an
-  optional provider, not as a required dependency.
+  Playwright/CDP path can consume the persisted settings first. V1 does not
+  introduce CloakBrowser. CloakBrowser or CloakBrowser-Manager-style CDP/noVNC
+  management may be evaluated later as an optional provider, not as a required
+  dependency.
+- Treat Canvas, WebGL, font inventory, `navigator.plugins`, extension state,
+  and long browsing history as future/provider-dependent scope. They are not
+  simple static launch options; they depend on provider behavior, browser
+  build, OS/fonts, graphics stack, installed extensions, profile history, and
+  runtime JavaScript probes. V1 must not claim these are fully managed unless a
+  dedicated provider and effective-value validation are added.
+- Use the implementation specifications in `ACCOUNT_ENVIRONMENT.md` as the
+  source of truth for deterministic identity generation, template expansion,
+  fail-closed validation, provider mapping, lifecycle state, runtime snapshots,
+  audit events, and test safety tripwires.
+- Persist `identity_state` and a customer-safe
+  `identity_runtime_snapshot_json` so requested/effective browser identity
+  values, provider metadata, unsupported fields, and no-fallback evidence can
+  be audited without exposing cookies, proxy credentials, raw paths, CDP
+  endpoints, or noVNC tokens.
+- Tests and local diagnostics must not touch real profile roots, cookies,
+  proxy credentials, or platform login sessions unless the explicit
+  test-allow environment flags documented in `ACCOUNT_ENVIRONMENT.md` are set.
 - If an optional CloakBrowser-based provider is evaluated, review deployment
   fit, license boundaries, authentication exposure, noVNC access control,
   persistent storage, server resource use, and whether observable browser
@@ -2934,6 +3011,14 @@ Scope boundary:
 - CloakBrowser-Manager may be used as a reference design for stable profile
   settings, CDP, and noVNC, but its standalone manager service should not be
   adopted wholesale without a separate provider evaluation and decision.
+- V1 high-fidelity boundary: Playwright/CDP is the provider path. Canvas,
+  WebGL, fonts, plugins, extensions, and long browsing history are recorded as
+  future/provider-dependent, not as V1 acceptance commitments.
+- Future high-fidelity browser-persona work should be estimated separately:
+  about 1-2 days for provider/license/deployment review, 3-5 days for a local
+  one-platform prototype, 1-2 weeks for optional provider integration with
+  locks/redaction/runtime snapshots, and 3-6+ weeks for a production-grade
+  browser-pool/profile-history capability.
 
 Non-goals:
 
@@ -2947,33 +3032,55 @@ Non-goals:
   internals, CDP endpoints, or noVNC sessions to normal users.
 - Do not make CloakBrowser or CloakBrowser-Manager a hard dependency for the
   first implementation batch.
+- Do not promise complete Canvas, WebGL, font, plugin, extension, or long-term
+  browsing-history management in V1.
 
 Status: Accepted
 
 Related tasks:
 
-- Phase 5.1 Account Browser Environment Consistency in `TASKS.md`
-- CR-047 Account Browser Environment Consistency in `TRACEABILITY.md`
+- Phase 5.1 Account Identity Fidelity in `TASKS.md`
+- CR-047 Account Identity Fidelity in `TRACEABILITY.md`
 
 Acceptance:
 
 - New platform accounts receive a deterministic `profile_key` and a persisted
-  browser-environment configuration before first QR login or Cookie
-  validation.
+  account identity configuration before first QR login or Cookie validation.
 - Successful QR login or accepted Cookie validation locks the
-  browser-environment configuration.
+  account identity configuration.
 - Repeated login-state checks and crawl runs for the same account use the same
   stored `profile_key`, `browser_platform`, `fingerprint_seed`, `user_agent`,
-  `timezone`, `locale`, `screen_width`, `screen_height`, and effective proxy
-  policy.
+  `timezone`, `locale`, `accept_language`, screen/viewport/device fields, and
+  effective proxy policy.
 - Same-platform accounts have separate profile keys and separate browser
-  environment values unless an administrator explicitly clones a safe template
-  before first login.
+  environment values unless an administrator explicitly chooses a safe template
+  family before first login.
+- Account Identity Generator output is stable for the same seed/input and
+  self-consistent with the proxy region. Validator checks fail closed when
+  identity fields are missing or contradictory.
+- Automatic template selection is deterministic, traceable to the template
+  catalog and generator version, and not dependent on runtime randomness or
+  process defaults.
+- Normal users cannot choose identity templates, and administrators cannot
+  edit individual identity fields directly.
+- The deterministic generation algorithm, provider contract, lifecycle state
+  machine, fail-closed rules, and runtime snapshot shape are documented before
+  implementation, and tests cover exact template expansion plus requested
+  versus effective values.
 - Attempts to edit a locked browser environment are blocked unless the operator
   uses an explicit reset/re-login path that records an audit log.
+- Task-level proxy overrides are rejected for locked account environments. To
+  use another proxy, an administrator must reset the account identity and
+  re-login under the new proxy policy.
+- Existing logged-in accounts are not silently backfilled with guessed identity
+  values. They stay readable and should be re-logged in under the CR-047
+  identity rules when the feature is implemented.
 - Tests verify that service restart or process default changes do not change
   the observable account browser environment for subsequent login/crawl
   sessions.
+- Tests prove local/automated runs cannot touch real account profiles,
+  cookies, proxy credentials, or platform login sessions without explicit
+  opt-in environment flags.
 - If an optional CloakBrowser-style provider is enabled, CDP/noVNC access is
   administrator-scoped, authenticated, and does not bypass the existing
   account/profile/proxy locks or sensitive-data redaction rules.
@@ -3233,6 +3340,10 @@ Verification:
   panel. Clicking a report email status or "更多 > 查看交付历史" opens a scoped
   delivery-history drawer with selected-report scope, count, refresh action,
   latest status, and SMTP-acceptance wording.
+- Superseded in the current Task Center surface by CR-051/CR-052 follow-ups:
+  the report-list row status/more-menu entry is no longer exposed, and the same
+  delivery-history, resend, and download capabilities are reached through Run
+  Detail.
 ## CR-050 - Report Center Lead Status Filter Precision Regression Fix
 
 Date: 2026-06-17
@@ -3311,3 +3422,2040 @@ Verification:
 - Verified on 2026-06-17 with targeted regression coverage proving
   high-risk and suspected-negative report/lead filters do not include each
   other.
+
+## CR-051 - Task Center And Report Grouping Consolidation
+
+Date: 2026-06-18
+
+Source: user conversation
+
+Module: formal console information architecture
+
+Type: Existing Feature Optimization
+
+Status: Verified
+
+Background:
+
+The console already has run detail, report grouping, and delivery-history
+surfaces. The current split between Run Center and Report Center makes the
+same operational story feel duplicated: one page shows execution records while
+another shows grouped report artifacts. The user wants a single main task
+center that makes the monitoring task-to-public-opinion relationship obvious
+at a glance.
+
+Purpose:
+
+Consolidate the two top-level execution/report surfaces into one task-scoped
+center. The user should be able to see, for each monitoring task, which
+reports and public-opinion results belong to it without navigating through a
+separate Report Center first.
+
+Requirements:
+
+- Rename the primary run/report entry to `任务中心` in the console navigation.
+- Reuse the existing report grouping logic inside that center so task groups
+  and their report rows are visible together.
+- Remove the separate top-level Report Center entry and section from the main
+  navigation.
+- The first-level task-center list should not copy every old run-record
+  column. It should prioritize monitoring-task identity and result summary:
+  law firm/task, platforms, keyword summary, latest status or report state,
+  latest run time where available, collected/new counts, suspected negative,
+  high risk, manual review, unevaluated, and a run-detail drilldown.
+- Operational run fields such as run ID, task ID, run type, visibility,
+  duration, and full failure reason remain available in the `运行记录` subview
+  and Run Detail.
+- Keep Run Detail as the deep drilldown for lifecycle, logs, AI evaluation, and
+  per-run report/email inspection.
+- Keep report preview, run detail, report-scoped lead inspection, and delivery
+  history reachable from the task-scoped surface.
+- Preserve CR-048 / CR-049 scoped detail behavior; only the center-level IA
+  changes.
+
+Scope boundary:
+
+- This CR changes frontend information architecture and entry placement only.
+- It does not change backend APIs, data model, permissions, AI behavior, crawl
+  behavior, SMTP behavior, or report generation semantics.
+
+Non-goals:
+
+- Do not introduce a new task database model.
+- Do not reopen CR-048/CR-049 scoped drawer behavior.
+- Do not add a second report workspace.
+
+Related tasks:
+
+- Phase 21L Run Center in `TASKS.md`
+- Phase 21M Report Center in `TASKS.md`
+
+Acceptance:
+
+- The main navigation exposes a single task-centric entry instead of separate
+  Run Center and Report Center entries.
+- Grouped task/report rows are visible inside that entry and clearly show which
+  reports belong to which monitoring task.
+- Run Detail remains accessible as the deep drilldown for execution and AI
+  detail.
+- Report-scoped preview and delivery history remain reachable from the
+  task-scoped surface.
+- Existing CR-048 / CR-049 scoped drawer behavior remains intact.
+
+Verification:
+
+- Verified on 2026-06-18 with a frontend-only consolidation of the formal
+  console: the navigation exposes `任务中心`, the separate `reports` section
+  and `report_center` menu key are removed, legacy `reports` shortcut calls are
+  normalized into the task-group view, report grouping renders inside
+  `task_group_view`, and `run_records_view` preserves the old run-record table
+  for operational troubleshooting.
+- Targeted regression coverage
+  `test_cr051_task_center_consolidates_report_grouping_without_separate_report_center`
+  asserts the single-entry task center, grouped report surface, run-record
+  subview, legacy route normalization, and first-level field split.
+
+## CR-052 - Task Center Row Action Deduplication
+
+Date: 2026-06-18
+
+Source: user conversation
+
+Module: formal console task center information architecture
+
+Type: Existing Feature Optimization
+
+Status: Verified
+
+Background:
+
+After CR-051 merged Run Center and Report Center into Task Center, some row
+actions duplicated capabilities already available inside Run Detail. In the
+run-record subview, `查看日志` opened the same run logs that are available in
+Run Detail's `采集日志` section. In the task-group report rows, `预览` opened
+the same report preview available from Run Detail's `报告` section.
+
+Purpose:
+
+Keep Task Center's first-level rows clean and make Run Detail the primary
+drilldown for logs, reports, AI evaluation, and delivery evidence.
+
+Requirements:
+
+- Remove the run-record row-level `查看日志` button.
+- Keep the same log content reachable from Run Detail's `采集日志` section.
+- Preserve log copy and download actions from the Run Detail log section.
+- Remove the task-group report row-level `预览` button.
+- Keep report preview reachable from Run Detail's `报告` section.
+- Keep task-group report rows focused on `运行详情` and `更多`; `更多` retains
+  report-scoped lead inspection, delivery history, resend, and downloads.
+
+Scope boundary:
+
+- This is a frontend information-architecture cleanup only.
+- It does not change run-log APIs, report preview APIs, report artifacts,
+  permissions, crawler behavior, AI behavior, SMTP behavior, or data model.
+
+Non-goals:
+
+- Do not remove the standalone log drawer implementation if older paths still
+  reference it.
+- Do not remove report preview capability.
+- Do not change CR-048 / CR-049 scoped lead and delivery-history behavior.
+
+Related tasks:
+
+- CR-052 Task Center Row Action Deduplication in `TASKS.md`
+- CR-051 Task Center And Report Grouping Consolidation in `TASKS.md`
+- Phase 20D Run Detail Frontend in `TASKS.md`
+
+Acceptance:
+
+- Run-record rows no longer show a first-level `查看日志` button.
+- Run Detail still shows `采集日志` and can copy/download the current run logs.
+- Task-group report rows no longer show a first-level `预览` button.
+- Run Detail's `报告` section still exposes report preview.
+- `运行详情`, `查看线索`, delivery history, resend, downloads, stop, archive,
+  and restore remain available in their intended scopes.
+
+Verification:
+
+- Verified on 2026-06-18 with targeted frontend regression coverage proving
+  the row-level duplicate actions are removed while Run Detail retains log
+  copy/download and report preview.
+
+## CR-053 - Task Center Field Priority And Global Select Alignment
+
+Date: 2026-06-18
+
+Source: user conversation and in-app browser review
+
+Module: formal console task center table density and global filters
+
+Type: Existing Feature Optimization
+
+Status: Verified
+
+Background:
+
+After CR-051 and CR-052, Task Center became the single operational entry, but
+the run table still read too much like the old dense Run Center. The status
+cell could contain long progress copy such as completed ingestion detail, key
+run identifiers were not the first visible fields, the filter toolbar had two
+refresh entry points, and native select dropdowns could appear visually
+misaligned because the main content container clipped overflow.
+
+Purpose:
+
+Make Task Center easier to scan before opening Run Detail: operators should
+first identify the monitoring task and concrete run, then read a compact
+status and the most important business counts. Filters and dropdowns should
+feel stable across all console pages.
+
+Requirements:
+
+- In flat mode, put `任务 ID` and `运行 ID` at the beginning of Task Center
+  run tables, followed by compact `状态`.
+- In grouped mode, keep `任务 ID` in the group header and hide the duplicated
+  task ID column inside the group; group rows begin with `运行 ID` followed by
+  compact `状态`.
+- Keep status cells short. Terminal success rows should show `已完成` without
+  appending long ingestion detail; active rows may show only short progress
+  such as `AI 3/10` or `采集中 20（临时）`.
+- Render the status cell as a compact badge, not as a full-width bar.
+- Keep full lifecycle, progress, logs, report, AI evaluation, and delivery
+  detail in Run Detail instead of expanding the first-level status cell.
+- In grouped mode, continue using the same run-row mapping and field
+  semantics, while keeping task ID, platform, keyword, and task name context in
+  the group header to reduce duplicated width.
+- Keep only one Task Center refresh entry at page level; the filter toolbar
+  should keep `筛选` and `清空`.
+- Prioritize the filter toolbar around task/law firm, status, platform, date
+  range, and then secondary run type, visibility, and page size.
+- Fix select/dropdown visual alignment globally by ensuring the main content
+  container does not clip vertical overflow.
+
+Scope boundary:
+
+- This CR is frontend-only. It does not change backend APIs, permissions,
+  data model, crawler behavior, AI behavior, SMTP behavior, report artifacts,
+  or run/report semantics.
+
+Non-goals:
+
+- Do not reintroduce a separate Report Center.
+- Do not add a new grouping model.
+- Do not remove Run Detail fields or report/email/AI trace capabilities.
+
+Related tasks:
+
+- CR-053 Task Center Field Priority And Global Select Alignment in `TASKS.md`
+- CR-051 Task Center And Report Grouping Consolidation in `TASKS.md`
+- CR-052 Task Center Row Action Deduplication in `TASKS.md`
+
+Acceptance:
+
+- Flat Task Center rows begin with `任务 ID`, `运行 ID`, and compact `状态`;
+  grouped rows hide duplicated `任务 ID` and begin with `运行 ID`, then `状态`.
+- Completed rows do not show long progress detail inside the status cell.
+- Status badges wrap to their own text width and do not stretch across the
+  status column.
+- Run Detail remains the place for full progress, logs, reports, AI
+  evaluation, and delivery detail.
+- Task Center has only one refresh button at page level.
+- Native select dropdowns are not clipped or shifted by the main content
+  container.
+
+Verification:
+
+- Verified on 2026-06-18 with targeted frontend regression coverage and syntax
+  checks proving the reordered headers, compact status logic, single refresh
+  entry, and global content overflow fix.
+
+## CR-054 - Task Center Status Badge Compactness Regression Fix
+
+Date: 2026-06-18
+
+Source: user in-app browser review of Task Center status cells
+
+Module: formal console Task Center run table
+
+Type: Regression Fix
+
+Status: Verified
+
+Background:
+
+After CR-053, the Task Center table was intended to show compact status
+badges, but a completed row could still display a long backend
+`display_status` string such as completed ingestion detail inside the status
+badge. This made the first visible column look like a long progress bar and
+pushed important identifiers and run parameters out of view.
+
+Purpose:
+
+Restore the CR-053 compact-status contract: the first-level Task Center table
+must show a short, scannable lifecycle label, while full progress and
+ingestion detail stays in Run Detail.
+
+Requirements:
+
+- Task Center status badges must use normalized short lifecycle labels such as
+  `已完成`, `运行中`, `部分失败`, `运行超时`, `已取消`, and `执行中断`.
+- A long backend `display_status` or progress message must not be rendered as
+  the status badge label.
+- Completed rows must not show ingestion completion text in the status badge.
+- The badge must stay text-sized and must not stretch across the status cell.
+- Active rows may still show one short progress cue under the badge.
+
+Scope boundary:
+
+- This is a frontend-only regression fix linked to CR-053.
+- It does not change backend APIs, run lifecycle semantics, database fields,
+  AI behavior, report generation, email delivery, permissions, or Run Detail
+  content.
+
+Non-goals:
+
+- Do not redesign Task Center again.
+- Do not reintroduce duplicate row actions.
+- Do not remove Run Detail progress, logs, AI evaluation, report, or email
+  delivery information.
+
+Related tasks:
+
+- CR-054 Task Center Status Badge Compactness Regression Fix in `TASKS.md`
+- CR-053 Task Center Field Priority And Global Select Alignment in `TASKS.md`
+
+Acceptance:
+
+- A completed row with a long `display_status` still renders the first-level
+  status badge as `已完成`.
+- First-level Task Center status badges use a compact text-sized style.
+- Short active progress remains available below the status badge when a run is
+  active.
+- Existing field order, grouping, single refresh, and Run Detail entry remain
+  unchanged.
+
+Verification:
+
+- Verified on 2026-06-18 with targeted frontend regression coverage, syntax
+  checks, docs check, and browser inspection of the local `/monitor` page.
+
+## CR-056 - Filter Dropdown Alignment Regression Fix
+
+Date: 2026-06-18
+
+Source: user in-app browser review at 1440x900.
+
+Module: formal console global filter dropdowns
+
+Type: Regression Fix
+
+Status: Verified
+
+Background:
+
+CR-053 reduced the original native select clipping issue by changing the main
+content overflow rule, but at `1440x900` the browser still showed visual
+misalignment for filter dropdowns. The reliable fix is to keep the existing
+filter values and page logic, while replacing only the visual dropdown surface
+inside `.page-filter-region` with a controlled in-page floating menu that is
+positioned from the button itself.
+
+Purpose:
+
+Keep filter controls aligned across console pages at `1440x900`, `1024x768`,
+and `390x844` without disturbing form selects used for edit drawers or other
+non-filter configuration surfaces.
+
+Requirements:
+
+- Enhance only selects inside `.page-filter-region`.
+- Keep the original `<select>` elements and `change` behavior so existing page
+  filtering code continues to work.
+- Render the visible filter control as a button plus fixed-position floating
+  menu that is not clipped by table, drawer, or scroll-container layout.
+- Keep the dropdown positioned from the clicked control and close it on outside
+  click, Escape, resize, scroll, or menu selection.
+- Do not touch ordinary configuration selects outside filter regions.
+
+Scope boundary:
+
+- Frontend-only regression fix linked to CR-053.
+- No backend API, data model, run lifecycle, AI trace, report, or email logic
+  changes.
+
+Non-goals:
+
+- Do not redesign Task Center again.
+- Do not convert all form selects into custom menus.
+- Do not alter the meaning of any filter values.
+
+Related tasks:
+
+- CR-056 Filter Dropdown Alignment Regression Fix in `TASKS.md`
+- CR-053 Task Center Field Priority And Global Select Alignment in `TASKS.md`
+
+Acceptance:
+
+- Filter dropdowns in Task Center and other page filter toolbars stay aligned
+  with their trigger control at `1440x900`.
+- Filter selection still updates the underlying page logic.
+- Non-filter form selects continue to use their existing native behavior.
+- No new clipping or misalignment appears in the browser validation sweep.
+
+Verification:
+
+- Verified on 2026-06-18 with syntax checks, targeted frontend regression
+  tests, docs check, and browser inspection at `1440x900`.
+
+## CR-057 - Task Center Group Summary Metric Chips
+
+Date: 2026-06-18
+
+Source: user in-app browser review of the Task Center grouped-run summary.
+
+Module: formal console Task Center grouped run cards
+
+Type: Existing Feature Optimization
+
+Status: Verified
+
+Background:
+
+After Task Center consolidation, grouped mode correctly aggregates runs under a
+monitoring task, but the group header summary rendered as one long sentence such
+as `2 条运行 / 采集 ...`. At desktop width this made the top of each group feel
+like unstructured copy rather than a scannable task summary.
+
+Purpose:
+
+Make the grouped Task Center header easier to scan while preserving the same
+counts, grouping key, row table, Run Detail entry, filters, and role behavior.
+
+Requirements:
+
+- Keep the group header focused on monitoring-task identity: task/law firm,
+  task badge, and task ID.
+- Replace the long run-summary sentence with compact metric chips for run
+  count, collected count, new count, suspected negative, high risk, manual
+  review, and unevaluated.
+- Use restrained risk emphasis for non-zero suspected negative, high-risk,
+  manual-review, and unevaluated values.
+- Keep limited-context, deleted-task, and historical-context explanations as a
+  short note only when needed.
+- Do not convert the group header into large nested cards or add duplicate row
+  actions.
+
+Scope boundary:
+
+- Frontend-only information-density refinement linked to CR-051 through CR-056.
+- No backend API, database, run lifecycle, AI trace, report, email, permission,
+  or scheduler changes.
+
+Non-goals:
+
+- Do not reintroduce a separate Report Center.
+- Do not change grouping semantics or table field order.
+- Do not hide counts or move operational evidence out of Run Detail.
+
+Related tasks:
+
+- CR-057 Task Center Group Summary Metric Chips in `TASKS.md`
+- CR-051 Task Center And Report Grouping Consolidation in `TASKS.md`
+
+Acceptance:
+
+- Grouped Task Center headers no longer show the aggregate counts as one long
+  slash-separated sentence.
+- The same aggregate values are visible as compact labeled chips.
+- Limited-context or deleted-task context remains visible without dominating the
+  header.
+- Browser review at `1440x900` shows the grouped header is more scannable and
+  does not collide with the table or filter dropdowns.
+
+Verification:
+
+- Verified on 2026-06-18 with syntax checks, targeted frontend regression
+  tests, docs check, and browser inspection at `1398x874` effective content
+  viewport for the local `/monitor` page. Grouped Task Center headers render
+  the aggregate values as compact metric chips and keep the grouped table,
+  filters, single `详情` action, and Run Detail entry intact.
+
+## CR-058 - Filter Date Picker Alignment Regression Fix
+
+Date: 2026-06-18
+
+Source: user in-app browser review of the Task Center date filter picker.
+
+Module: formal console global filter date controls
+
+Type: Regression Fix
+
+Status: Verified
+
+Background:
+
+CR-056 replaced filter-region selects with fixed-position in-page menus, but
+Task Center date range filters still used native `<input type="date">`
+pickers. Browser review at the same desktop viewport showed the date picker
+could still appear visually offset, leaving one remaining filter-control
+alignment regression.
+
+Purpose:
+
+Apply the same controlled floating-menu behavior to page-level filter date
+inputs without changing the stored date value or existing filter behavior.
+
+Requirements:
+
+- Enhance only `.page-filter-region input[type="date"]` controls.
+- Keep the original date input in place so existing `val(...)`, inline
+  `onchange`, and filter logic still read the same value.
+- Render the visible date picker as a button plus fixed-position in-page date
+  menu appended to the document body.
+- Selecting or clearing a date updates the original input value and dispatches
+  the same `change` event used by existing filters.
+- Programmatic reset paths such as `clearRunFilters()` synchronize the visible
+  date button text.
+- When the date menu is wider than its trigger control, center the menu on the
+  trigger by default and clamp inward only enough to keep it inside the
+  viewport.
+- Ordinary form or configuration date inputs remain native unless a later
+  accepted requirement changes them.
+
+Scope boundary:
+
+- Frontend-only regression fix linked to CR-056.
+- No backend API, database, run lifecycle, AI trace, report, email, permission,
+  or scheduler changes.
+
+Non-goals:
+
+- Do not replace all date inputs in edit/configuration forms.
+- Do not change date filter semantics or add a new date-range model.
+- Do not redesign the Task Center table or grouping.
+
+Related tasks:
+
+- CR-058 Filter Date Picker Alignment Regression Fix in `TASKS.md`
+- CR-056 Filter Dropdown Alignment Regression Fix in `TASKS.md`
+
+Acceptance:
+
+- Task Center date filter menus stay aligned with their trigger control at the
+  desktop browser viewport used during review.
+- Task Center date filter menus remain visually anchored to the trigger when
+  the menu is wider than the input/button.
+- Selecting a date updates the underlying date input and existing filter logic.
+- Clearing a date resets both the underlying input and visible date label.
+- Non-filter date inputs remain native.
+
+Verification:
+
+- Verified on 2026-06-18 with syntax checks, targeted frontend regression
+  tests, docs check, and browser coordinate inspection of the local `/monitor`
+  Task Center date filter. At `1398x874` effective content viewport, the date
+  menu used `position: fixed`, opened with a 4px top gap, stayed within the
+  viewport, and date select/clear synchronized the original input and visible
+  label.
+- Follow-up verification on 2026-06-18 covered both `开始日期` and `结束日期`
+  triggers: when the 280px menu is wider than the 173px trigger, the menu
+  centers on the trigger by default; near the right viewport edge it clamps
+  inward just enough to stay visible.
+
+## CR-059 - Filter Date Picker Edge Anchoring Regression Fix
+
+Date: 2026-06-18
+
+Source: user in-app browser review of the Task Center date filter picker after
+CR-058.
+
+Module: formal console global filter date controls
+
+Type: Regression Fix
+
+Status: Verified
+
+Background:
+
+CR-058 replaced page-level filter date inputs with a fixed-position in-page
+menu and then centered the wider date menu on the clicked trigger. Browser
+review still found the date dropdown could visually read as offset when the
+menu was wider than the date button, especially around the Task Center
+start/end date controls at the desktop review viewport.
+
+Purpose:
+
+Keep date filter menus visually attached to the control the user clicked by
+using trigger-edge anchoring, while preserving the original hidden date input,
+value, change event, selection, clearing, and viewport safety behavior.
+
+Requirements:
+
+- Keep the CR-058 custom date menu scoped only to `.page-filter-region
+  input[type="date"]`.
+- Use fixed positioning and append the menu outside table and page scroll
+  containers.
+- When space allows, align the date menu's left edge with the clicked trigger's
+  left edge.
+- Near the right viewport edge, align the menu's right edge with the clicked
+  trigger's right edge if that prevents overflow.
+- Clamp only as a final safety fallback when neither trigger edge can fit
+  cleanly inside the viewport.
+- Preserve date selection, clear/reset synchronization, and ordinary
+  form/configuration date input behavior.
+
+Scope boundary:
+
+- Frontend-only regression fix linked to CR-058.
+- No backend API, database, run lifecycle, AI trace, report, email, permission,
+  or scheduler changes.
+
+Non-goals:
+
+- Do not redesign Task Center filters.
+- Do not add a new date-range component or external dependency.
+- Do not replace non-filter date inputs.
+
+Related tasks:
+
+- CR-059 Filter Date Picker Edge Anchoring Regression Fix in `TASKS.md`
+- CR-058 Filter Date Picker Alignment Regression Fix in `TASKS.md`
+
+Acceptance:
+
+- `开始日期` opens with the menu left edge aligned to the trigger left edge
+  when space allows.
+- `结束日期` near the right side opens with the menu right edge aligned to the
+  trigger right edge when needed to avoid overflow.
+- Both menus remain inside the viewport and keep the small top gap below the
+  trigger unless they must open upward.
+- Selecting and clearing dates still update the underlying original input and
+  existing filter behavior.
+
+Verification:
+
+- Verified on 2026-06-18 with syntax checks, targeted frontend regression
+  tests, docs check, and browser coordinate inspection of the local `/monitor`
+  Task Center date filters at the desktop review viewport.
+- `开始日期` opened with the menu left edge aligned to the trigger left edge
+  within about `0.36px`.
+- `结束日期` opened with the menu right edge aligned to the trigger right edge
+  within about `0.42px`.
+- Both menus stayed inside the viewport with about a `4px` top gap, and date
+  select/clear synchronized the original input and visible label.
+
+## CR-060 - Filter Date Picker Compact Center Alignment Regression Fix
+
+Date: 2026-06-18
+
+Source: user in-app browser review of the Task Center date filter picker after
+CR-059.
+
+Module: formal console global filter date controls
+
+Type: Regression Fix
+
+Status: Verified
+
+Background:
+
+CR-059 proved that the date menu could be mathematically edge-aligned to the
+clicked trigger, but browser review still found the menu visually misaligned.
+The reason was that the date menu kept a 280px minimum width while the date
+filter button was about 173px wide; edge anchoring made the calendar extend far
+to one side and still look detached from the control.
+
+Purpose:
+
+Make page-level date filter menus feel visually attached to their trigger by
+using a compact calendar width and trigger-center alignment, while preserving
+the original hidden date input, value, change event, selection, clearing, and
+viewport safety behavior.
+
+Requirements:
+
+- Keep the CR-058 custom date menu scoped only to `.page-filter-region
+  input[type="date"]`.
+- Keep fixed positioning and append the menu outside table and page scroll
+  containers.
+- Use a compact calendar width close to the date trigger instead of forcing a
+  large 280px minimum when the trigger is narrow.
+- Align the date menu center line to the clicked trigger center line when
+  space allows.
+- Clamp only as a final safety fallback to keep the menu inside the viewport.
+- Preserve date selection, clear/reset synchronization, original `change`
+  events, and ordinary form/configuration date input behavior.
+
+Scope boundary:
+
+- Frontend-only regression fix linked to CR-058 and CR-059.
+- No backend API, database, run lifecycle, AI trace, report, email, permission,
+  or scheduler changes.
+
+Non-goals:
+
+- Do not redesign Task Center filters.
+- Do not add a new date-range component or external dependency.
+- Do not replace non-filter date inputs.
+
+Related tasks:
+
+- CR-060 Filter Date Picker Compact Center Alignment Regression Fix in
+  `TASKS.md`
+- CR-059 Filter Date Picker Edge Anchoring Regression Fix in `TASKS.md`
+
+Acceptance:
+
+- `开始日期` and `结束日期` open with the menu center aligned to the trigger
+  center within browser sub-pixel tolerance at the desktop review viewport.
+- The date menu is compact enough that it does not visibly drift far beyond the
+  date trigger on either side.
+- Both menus remain inside the viewport and keep the small top gap below the
+  trigger unless they must open upward.
+- Selecting and clearing dates still update the underlying original input and
+  existing filter behavior.
+
+Verification:
+
+- Verified on 2026-06-18 with syntax checks, targeted frontend regression
+  tests, docs check, and browser coordinate inspection of the local `/monitor`
+  Task Center date filters at the desktop review viewport.
+- `开始日期` opened with the menu center aligned to the trigger center within
+  about `0.13px`; the menu width was about `232px` instead of `280px`.
+- `结束日期` opened with the menu center aligned to the trigger center within
+  about `0.10px`; the menu stayed inside the viewport.
+- Both menus kept about a `4px` top gap and preserved the original date input
+  behavior.
+
+## CR-061 - Filter Date Picker Trigger-Width Anchoring Regression Fix
+
+Date: 2026-06-18
+
+Source: user in-app browser review of the Task Center date filter picker after
+CR-060.
+
+Module: formal console global filter date controls
+
+Type: Regression Fix
+
+Status: Verified
+
+Background:
+
+CR-060 proved that the date menu could be centered to the trigger within
+sub-pixel tolerance, but browser review still found the picker visually
+misaligned. The remaining issue was visual rather than mathematical: even a
+compact centered menu was still wider than the date trigger, so it extended on
+both sides and looked detached from the filter box.
+
+Purpose:
+
+Make page-level date filter menus behave like ordinary dropdowns by matching
+the visible date trigger width and aligning the menu left edge to the trigger
+left edge, while preserving the original hidden date input, value, change
+event, selection, clearing, and viewport safety behavior.
+
+Requirements:
+
+- Keep the CR-058 custom date menu scoped only to `.page-filter-region
+  input[type="date"]`.
+- Keep fixed positioning and append the menu outside table and page scroll
+  containers.
+- Use the clicked trigger's visual width for the date menu when viewport space
+  allows, with only a small minimum fallback for extremely narrow controls.
+- Align the date menu left edge to the clicked trigger left edge so the menu
+  reads as attached to the filter box.
+- Compact the calendar internals enough that the month grid remains readable
+  inside the trigger-width menu.
+- Clamp only as a final safety fallback to keep the menu inside the viewport.
+- Preserve date selection, clear/reset synchronization, original `change`
+  events, and ordinary form/configuration date input behavior.
+
+Scope boundary:
+
+- Frontend-only regression fix linked to CR-058 through CR-060.
+- No backend API, database, run lifecycle, AI trace, report, email, permission,
+  or scheduler changes.
+
+Non-goals:
+
+- Do not redesign Task Center filters.
+- Do not add a new date-range component or external dependency.
+- Do not replace non-filter date inputs.
+
+Related tasks:
+
+- CR-061 Filter Date Picker Trigger-Width Anchoring Regression Fix in
+  `TASKS.md`
+- CR-060 Filter Date Picker Compact Center Alignment Regression Fix in
+  `TASKS.md`
+
+Acceptance:
+
+- `开始日期` and `结束日期` open with the menu width matching the trigger width
+  within browser sub-pixel tolerance at the desktop review viewport.
+- The menu left and right edges align to the trigger edges within browser
+  sub-pixel tolerance when viewport clamping is not needed.
+- Both menus remain inside the viewport and keep the small top gap below the
+  trigger unless they must open upward.
+- Selecting and clearing dates still update the underlying original input and
+  existing filter behavior.
+
+Verification:
+
+- Verified on 2026-06-18 with syntax checks, targeted frontend regression
+  tests, and browser coordinate inspection of the local `/monitor` Task Center
+  date filters at the desktop review viewport.
+- `开始日期` opened with the menu width matching the trigger within about
+  `0.03px`; left and right edges aligned within about `0.40px`.
+- `结束日期` opened with the menu width matching the trigger within about
+  `0.03px`; left and right edges aligned within about `0.43px`.
+- Both menus stayed inside the viewport, kept about a `4px` top gap, and
+  preserved the original date input behavior.
+
+## CR-062 - Filter Date Picker Grid Compression Regression Fix
+
+Date: 2026-06-18
+
+Source: user in-app browser review of the Task Center date filter picker after
+CR-061.
+
+Module: formal console global filter date controls
+
+Type: Regression Fix
+
+Status: Verified
+
+Background:
+
+CR-061 made the date picker menu width match the trigger and fixed the outer
+alignment, but browser review found the calendar could still look wrong because
+the internal date cells inherited browser button padding and auto minimum
+width. At narrow trigger-width menus, the last date columns could be visually
+compressed or clipped even when the menu shell itself was aligned.
+
+Purpose:
+
+Keep the trigger-width anchored date picker while making the seven-column
+calendar grid readable and non-clipped.
+
+Requirements:
+
+- Keep CR-061's trigger-width menu and left-edge anchoring behavior.
+- Reset date-cell minimum width and padding so seven day columns share the
+  available grid width instead of overflowing their cells.
+- Keep weekdays, day cells, selected-day state, today state, quick actions, date
+  selection, clearing, and original date input `change` semantics unchanged.
+- Ordinary form/configuration date inputs remain native.
+
+Scope boundary:
+
+- Frontend-only CSS regression fix linked to CR-061.
+- No backend API, database, run lifecycle, AI trace, report, email, permission,
+  scheduler, or system-setting changes.
+
+Non-goals:
+
+- Do not redesign Task Center filters.
+- Do not widen the date menu into a detached calendar surface.
+- Do not replace non-filter date inputs.
+
+Related tasks:
+
+- CR-062 Filter Date Picker Grid Compression Regression Fix in `TASKS.md`
+- CR-061 Filter Date Picker Trigger-Width Anchoring Regression Fix in
+  `TASKS.md`
+
+Acceptance:
+
+- Task Center date filter menus still align to the clicked trigger's left edge
+  and match the trigger width within browser sub-pixel tolerance.
+- Weekday and day grids show all seven columns without clipped day numbers at
+  the desktop review viewport.
+- Date cells do not horizontally overflow their grid cells.
+- Selecting and clearing dates still update the underlying original input and
+  existing filter behavior.
+
+Verification:
+
+- Verified on 2026-06-18 with targeted frontend regression tests and browser
+  inspection of the local `/monitor` Task Center date filters.
+- `结束日期` opened with menu width matching the trigger within about `0.03px`,
+  left/right edge deltas within about `0.43px`, no overflowing date cells, and
+  all seven day columns visible.
+
+## CR-063 - Filter Date Picker Readable Anchored Popover Regression Fix
+
+Date: 2026-06-18
+
+Source: user in-app browser review of the Task Center date filter picker after
+CR-062.
+
+Module: formal console global filter date controls
+
+Type: Regression Fix
+
+Status: Verified
+
+Background:
+
+CR-061 and CR-062 made the date picker shell align to the trigger and prevented
+day-cell overflow, but browser review still found the date dropdown visually
+wrong. The remaining issue was UX-level readability: forcing a seven-column
+calendar into the narrow trigger width made the menu feel cramped and could
+still read as visually offset even when coordinates were correct.
+
+Purpose:
+
+Keep the date menu visibly attached to the clicked filter while giving the
+calendar enough width to read like a normal date picker.
+
+Requirements:
+
+- Keep the CR-058 custom date menu scoped only to `.page-filter-region
+  input[type="date"]`.
+- Use a readable compact calendar width instead of forcing narrow desktop
+  date triggers to be the menu width.
+- Use a top anchor marker aligned to the clicked trigger center so the menu
+  still reads as attached to the trigger.
+- When the menu would overflow the viewport, align the right edge to the
+  trigger right edge or clamp within the viewport.
+- Preserve the original hidden date input, value, `change` event, date
+  selection, clearing, reset synchronization, weekday/day grid, and ordinary
+  form/configuration date input behavior.
+
+Scope boundary:
+
+- Frontend-only regression fix linked to CR-058 through CR-062.
+- No backend API, database, run lifecycle, AI trace, report, email, permission,
+  scheduler, deployment, or system-setting changes.
+
+Non-goals:
+
+- Do not replace non-filter date inputs.
+- Do not add a new external date-picker dependency.
+- Do not redesign the Task Center filter toolbar or field set.
+
+Related tasks:
+
+- CR-063 Filter Date Picker Readable Anchored Popover Regression Fix in
+  `TASKS.md`
+- CR-062 Filter Date Picker Grid Compression Regression Fix in `TASKS.md`
+
+Acceptance:
+
+- `开始日期` and `结束日期` open as readable calendar menus rather than cramped
+  trigger-width calendars.
+- The menu remains visually anchored to the clicked date filter through the
+  top anchor marker and edge/viewport positioning.
+- The menu stays within the viewport at desktop, tablet, and mobile widths.
+- Weekday/day grids show all seven columns without clipped day numbers.
+- Selecting and clearing dates still update the underlying original input and
+  existing filter behavior.
+
+Verification:
+
+- Verified on 2026-06-18 with syntax checks, targeted frontend regression
+  tests, inline script parse check, docs check, and browser inspection of the
+  local `/monitor` Task Center date filters.
+- At the desktop review viewport, `开始日期` opened at about `236px` wide with
+  its left edge aligned to the trigger and no overflowing day cells; `结束日期`
+  opened at about `236px` wide with its right edge aligned to the trigger and
+  no overflowing day cells.
+- Tablet `1024x768` and mobile `390x844` viewport checks kept the menu inside
+  the viewport, with zero overflowing date cells and no page horizontal
+  overflow.
+
+## CR-064 - Filter Date Picker Trigger-Attached Edge Shrink Regression Fix
+
+Date: 2026-06-18
+
+Source: user in-app browser review of the Task Center date filter picker after
+CR-063.
+
+Module: formal console global filter date controls
+
+Type: Regression Fix
+
+Status: Verified
+
+Background:
+
+CR-063 made the date menu readable and anchored, but browser review still found
+the right-side `结束日期` dropdown visually offset. The root cause was that the
+fixed-position menu used the content/visual viewport for edge safety, so the
+right-side date control was treated as too close to the scrollbar. The menu
+then right-aligned to the trigger, which stayed in bounds but made the calendar
+look detached from the clicked field.
+
+Purpose:
+
+Keep readable page-filter date menus visually attached to the clicked date
+filter even near the right edge. When the menu is only slightly wider than the
+remaining space, reduce its width within a readable lower bound and keep its
+left edge attached to the trigger before falling back to right alignment.
+
+Requirements:
+
+- Keep the CR-058 custom date menu scoped only to `.page-filter-region
+  input[type="date"]`.
+- Prefer aligning the menu left edge to the clicked trigger's left edge.
+- Use the visual viewport width for fixed-position edge checks.
+- Near the right edge, slightly shrink the readable menu when doing so keeps
+  the menu attached and all seven date columns readable.
+- Use right-edge alignment or viewport clamping only when the attached width
+  would become too narrow.
+- Preserve the top anchor marker, original hidden date input, value,
+  `change` event, date selection, clearing, reset synchronization, weekday/day
+  grid, and ordinary form/configuration date input behavior.
+
+Scope boundary:
+
+- Frontend-only regression fix linked to CR-058 through CR-063.
+- No backend API, database, run lifecycle, AI trace, report, email, permission,
+  scheduler, deployment, or system-setting changes.
+
+Non-goals:
+
+- Do not add a new date-picker dependency.
+- Do not redesign the Task Center filter toolbar or field set.
+- Do not replace non-filter date inputs.
+
+Related tasks:
+
+- CR-064 Filter Date Picker Trigger-Attached Edge Shrink Regression Fix in
+  `TASKS.md`
+- CR-063 Filter Date Picker Readable Anchored Popover Regression Fix in
+  `TASKS.md`
+
+Acceptance:
+
+- `开始日期` and `结束日期` menus read as attached to their own clicked field at
+  desktop, tablet, and mobile widths.
+- Right-side date menus may shrink within the readable lower bound instead of
+  drifting left through premature right alignment.
+- The menu stays inside the visual viewport with no horizontal page overflow.
+- Weekday/day grids show all seven columns without clipped day numbers.
+- Selecting and clearing dates still update the underlying original input and
+  existing filter behavior.
+
+Verification:
+
+- Verified on 2026-06-18 with syntax checks, targeted frontend regression
+  tests, inline script parse check, docs check, and browser coordinate
+  inspection of the local `/monitor` Task Center date filters.
+- Desktop effective viewport `1383x874`: `开始日期` left edge aligned to the
+  trigger within about `0.4px`; `结束日期` left edge aligned within about
+  `0.4px` after shrinking to about `221px`; both menus had zero overflowing
+  date cells and no visual-viewport overflow.
+- Tablet effective viewport `980x746`: `结束日期` left edge aligned within
+  about `0.4px` after shrinking to about `198px`, with zero overflowing date
+  cells and no visual-viewport overflow.
+- Mobile effective viewport `364x819`: both date menus used the mobile trigger
+  width, stayed attached to the field, and had zero overflowing date cells.
+
+## CR-065 - Filter Date Picker Center-Anchored Visual Alignment Regression Fix
+
+Date: 2026-06-18
+
+Source: user in-app browser review of the Task Center date filter picker after
+CR-064.
+
+Module: formal console global filter date controls
+
+Type: Regression Fix
+
+Status: Verified
+
+Background:
+
+CR-064 kept the right-side date menu inside the visual viewport and attached
+its left edge to the `结束日期` trigger, but browser review at `1440x900` still
+found the dropdown visually offset because the readable calendar remained wider
+than the trigger and extended noticeably to the right.
+
+Purpose:
+
+Make page-level date filter menus read as naturally attached to their clicked
+field by aligning the menu's visual center to the trigger center, while keeping
+the readable compact calendar, top anchor marker, viewport safety, and existing
+date-filter behavior.
+
+Requirements:
+
+- Keep the CR-058 custom date menu scoped only to `.page-filter-region
+  input[type="date"]`.
+- Use the visual viewport width for fixed-position date-menu edge checks.
+- Use a compact readable calendar width, but position it from the clicked
+  trigger center rather than from the trigger left or right edge.
+- Clamp inward only when center alignment would overflow the visual viewport.
+- Keep the top anchor marker aligned to the clicked trigger center after any
+  viewport clamp.
+- Preserve the original hidden date input, value, `change` event, date
+  selection, clearing, reset synchronization, weekday/day grid, and ordinary
+  form/configuration date input behavior.
+
+Scope boundary:
+
+- Frontend-only regression fix linked to CR-058 through CR-064.
+- No backend API, database, run lifecycle, AI trace, report, email, permission,
+  scheduler, deployment, or system-setting changes.
+
+Non-goals:
+
+- Do not add a new date-picker dependency.
+- Do not redesign the Task Center filter toolbar or field set.
+- Do not replace non-filter date inputs.
+
+Related tasks:
+
+- CR-065 Filter Date Picker Center-Anchored Visual Alignment Regression Fix in
+  `TASKS.md`
+- CR-064 Filter Date Picker Trigger-Attached Edge Shrink Regression Fix in
+  `TASKS.md`
+
+Acceptance:
+
+- `开始日期` and `结束日期` menus align their center line to the clicked trigger
+  center when the menu can fit inside the visual viewport.
+- Near the viewport edge, the menu clamps inward without losing the visible top
+  anchor marker connection to the clicked trigger.
+- The menu stays inside the visual viewport with no horizontal page overflow.
+- Weekday/day grids show all seven columns without clipped day numbers.
+- Selecting and clearing dates still update the underlying original input and
+  existing filter behavior.
+
+Verification:
+
+- Verified on 2026-06-18 with targeted frontend regression coverage, syntax
+  checks, inline script parse check, docs check, and browser coordinate
+  inspection of the local `/monitor` Task Center date filters.
+- Desktop effective viewport `1383x874`: `结束日期` opened at about `236px`
+  wide, center-aligned to the trigger within about `0.1px`, stayed inside the
+  visual viewport, and had zero overflowing date cells.
+
+## CR-066 - Filter Date Picker Trigger-Attached Dropdown Alignment Regression Fix
+
+Date: 2026-06-18
+
+Source: user in-app browser review of the Task Center date filter picker after
+CR-065.
+
+Module: formal console global filter date controls
+
+Type: Regression Fix
+
+Background:
+
+CR-065 made the date menu mathematically centered on the clicked field, but
+browser review at `1440x900` still read the wider calendar as visually
+detached from the filter input because the left edge no longer felt anchored to
+the trigger.
+
+Purpose:
+
+Make page-level date filter menus read like a normal attached dropdown by
+anchoring the visible menu to the clicked field's left edge when room allows,
+while still keeping the readable compact calendar, top anchor marker, viewport
+safety, and existing date-filter behavior.
+
+Requirements:
+
+- Keep the CR-058 custom date menu scoped only to `.page-filter-region
+  input[type="date"]`.
+- Use the visual viewport width for fixed-position date-menu edge checks.
+- Use a compact readable calendar width, but position the menu from the clicked
+  trigger's left edge when the viewport can accommodate it.
+- If the menu would overflow the visual viewport on the right, shrink the
+  width first before falling back to clamping.
+- Keep the top anchor marker aligned to the clicked trigger center after any
+  width adjustment or viewport clamp.
+- Preserve the original hidden date input, value, `change` event, date
+  selection, clearing, reset synchronization, weekday/day grid, and ordinary
+  form/configuration date input behavior.
+
+Scope boundary:
+
+- Frontend-only regression fix linked to CR-058 through CR-065.
+- No backend API, database, run lifecycle, AI trace, report, email, permission,
+  scheduler, deployment, or system-setting changes.
+
+Non-goals:
+
+- Do not add a new date-picker dependency.
+- Do not redesign the Task Center filter toolbar or field set.
+- Do not replace non-filter date inputs.
+
+Related tasks:
+
+- CR-066 Filter Date Picker Trigger-Attached Dropdown Alignment Regression Fix
+  in `TASKS.md`
+- CR-065 Filter Date Picker Center-Anchored Visual Alignment Regression Fix in
+  `TASKS.md`
+
+Acceptance:
+
+- `开始日期` and `结束日期` menus align their left edge to the clicked trigger
+  when the viewport can accommodate the readable width.
+- Near the viewport edge, the menu shrinks within a readable lower bound before
+  clamping inward.
+- The menu stays inside the visual viewport with no horizontal page overflow.
+- Weekday/day grids show all seven columns without clipped day numbers.
+- Selecting and clearing dates still update the underlying original input and
+  existing filter behavior.
+
+Verification:
+
+- Verified on 2026-06-18 with targeted frontend regression coverage, syntax
+  checks, inline script parse check, docs check, and browser coordinate
+  inspection of the local `/monitor` Task Center date filters.
+- Desktop effective viewport `1383x874`: `开始日期` and `结束日期` menus opened
+  at about `236px` wide and aligned their left edge to the clicked trigger
+  within about `0.4px`, while staying inside the visual viewport with zero
+  overflowing date cells.
+
+## CR-067 - Filter Date Picker Trigger-Width Visual Attachment Regression Fix
+
+Date: 2026-06-18
+
+Source: user in-app browser review of the Task Center date filter picker after
+CR-066.
+
+Module: formal console global filter date controls
+
+Type: Regression Fix
+
+Status: Verified
+
+Background:
+
+CR-066 attached the date menu's left edge to the clicked trigger, but browser
+review at the desktop review viewport still found the right-side `结束日期`
+dropdown visually offset. The remaining issue was that the menu could still be
+noticeably wider than the date trigger, so even correct left-edge alignment
+looked like a detached calendar block.
+
+Purpose:
+
+Make page-level date filter menus read as ordinary attached dropdowns by
+matching the clicked trigger width whenever that width is usable, while keeping
+the fixed-position portal menu, trigger-center anchor marker, viewport safety,
+and existing date-filter behavior.
+
+Requirements:
+
+- Keep the CR-058 custom date menu scoped only to `.page-filter-region
+  input[type="date"]`.
+- Use the visual viewport width for fixed-position date-menu edge checks.
+- Match the visible date menu width to the clicked trigger width whenever the
+  trigger is wide enough for the seven-column grid.
+- Use a small minimum readable width only for unusually narrow trigger fields.
+- Clamp or shrink only when the attached menu would overflow the visual
+  viewport.
+- Keep the top anchor marker aligned to the clicked trigger center after any
+  width adjustment or viewport clamp.
+- Preserve the original hidden date input, value, `change` event, date
+  selection, clearing, reset synchronization, weekday/day grid, and ordinary
+  form/configuration date input behavior.
+
+Scope boundary:
+
+- Frontend-only regression fix linked to CR-058 through CR-066.
+- No backend API, database, run lifecycle, AI trace, report, email, permission,
+  scheduler, deployment, or system-setting changes.
+
+Non-goals:
+
+- Do not add a new date-picker dependency.
+- Do not redesign the Task Center filter toolbar or field set.
+- Do not replace non-filter date inputs.
+
+Related tasks:
+
+- CR-067 Filter Date Picker Trigger-Width Visual Attachment Regression Fix in
+  `TASKS.md`
+- CR-066 Filter Date Picker Trigger-Attached Dropdown Alignment Regression Fix
+  in `TASKS.md`
+
+Acceptance:
+
+- `开始日期` and `结束日期` menus match the clicked trigger width within browser
+  sub-pixel tolerance when the trigger is wide enough.
+- The menu left edge aligns to the clicked trigger left edge within browser
+  sub-pixel tolerance.
+- The top anchor marker remains tied to the clicked trigger center.
+- The menu stays inside the visual viewport with no horizontal page overflow.
+- Weekday/day grids show all seven columns without clipped day numbers.
+- Selecting and clearing dates still update the underlying original input and
+  existing filter behavior.
+
+Verification:
+
+- Verified on 2026-06-18 with targeted frontend regression coverage, syntax
+  checks, inline script parse check, docs check, and browser coordinate
+  inspection of the local `/monitor` Task Center date filters.
+- Desktop effective viewport `1383x874`: `开始日期` and `结束日期` menus matched
+  the trigger width within about `0.04px`, aligned left edges within about
+  `0.4px`, kept the top anchor marker aligned to the trigger center within
+  about `0.12px`, stayed inside the visual viewport, and had zero overflowing
+  date cells.
+
+## CR-068 - Filter Date Picker Local Attached Menu Regression Fix
+
+Date: 2026-06-18
+
+Source: user in-app browser review of the Task Center date filter picker after
+CR-067.
+
+Module: formal console global filter date controls
+
+Type: Regression Fix
+
+Status: Verified
+
+Background:
+
+CR-067 made the date menu mathematically match the clicked trigger width and
+left edge, but browser review at `1440x900` still found the date dropdown
+visually offset. The remaining weakness was that the date menu still used a
+document-body fixed-position portal and viewport math, so the control could be
+coordinate-correct while still reading as detached from the field.
+
+Purpose:
+
+Make page-level date filter menus behave like ordinary attached dropdowns by
+mounting the active date menu inside the clicked date control wrapper and
+positioning it from that wrapper rather than from page-level viewport
+coordinates.
+
+Requirements:
+
+- Keep the CR-058 custom date menu scoped only to `.page-filter-region
+  input[type="date"]`.
+- Move the active date menu into the clicked `.filter-date-enhanced` wrapper
+  before positioning.
+- Use wrapper-local absolute positioning with `left: 0` and `top: calc(100% +
+  4px)` so the menu opens directly under the clicked field.
+- Keep the visible menu width equal to the clicked trigger width.
+- Keep the top anchor marker centered within the attached menu.
+- Preserve the original hidden date input, value, `change` event, date
+  selection, clearing, reset synchronization, weekday/day grid, and ordinary
+  form/configuration date input behavior.
+
+Scope boundary:
+
+- Frontend-only regression fix linked to CR-058 through CR-067.
+- No backend API, database, run lifecycle, AI trace, report, email, permission,
+  scheduler, deployment, or system-setting changes.
+
+Non-goals:
+
+- Do not add a new date-picker dependency.
+- Do not redesign the Task Center filter toolbar or field set.
+- Do not replace non-filter date inputs.
+
+Related tasks:
+
+- CR-068 Filter Date Picker Local Attached Menu Regression Fix in `TASKS.md`
+- CR-067 Filter Date Picker Trigger-Width Visual Attachment Regression Fix in
+  `TASKS.md`
+
+Acceptance:
+
+- `开始日期` and `结束日期` menus are children of their clicked
+  `.filter-date-enhanced` wrapper while open.
+- The menu uses wrapper-local `position: absolute`, `left: 0`, and
+  `top: calc(100% + 4px)` rather than document-body fixed-position viewport
+  coordinates.
+- The menu left edge aligns to the clicked field and the visible gap below the
+  field is stable at the desktop review viewport.
+- The menu width matches the clicked trigger width within browser sub-pixel
+  tolerance.
+- Selecting and clearing dates still update the underlying original input and
+  existing filter behavior.
+
+Verification:
+
+- Verified on 2026-06-18 with targeted frontend regression coverage, syntax
+  checks, inline script parse check, docs check, and browser coordinate
+  inspection of the local `/monitor` Task Center date filters.
+- Desktop effective viewport `1383x874`: `开始日期` and `结束日期` menus were
+  mounted inside their clicked date wrappers, used `position: absolute`, had
+  left-edge delta `0px`, top gap about `4px`, and width delta about `0.03px`.
+
+## CR-069 - Run Detail AI Evaluation Lead Entry Consolidation
+
+Date: 2026-06-18
+
+Source: user in-app browser acceptance of Task Center / Run Detail.
+
+Module: Task Center, Run Detail, report leads, AI evaluation traceability
+
+Type: Existing Feature Optimization
+
+Status: Verified
+
+Background:
+
+After CR-051 consolidated Run Center and Report Center into Task Center, Run
+Detail became the main lifecycle surface with `AI 评估`, `报告`, and
+`邮件交付` sections. Manual acceptance found that the report `查看线索` drawer
+and the Run Detail `AI 评估` list carried very similar content, creating a
+duplicated drilldown path.
+
+Purpose:
+
+Make Run Detail's `AI 评估` section the single primary lead/evaluation detail
+surface. Report lead inspection becomes a filtered AI-evaluation view rather
+than a second table or drawer.
+
+Requirements:
+
+- Add a report-scope filter to the Run Detail AI evaluation list.
+- Keep existing AI evaluation filters for status, risk, platform, keyword, and
+  title.
+- From a report row, `查看线索` should switch to Run Detail's `AI 评估` tab and
+  apply the selected report filter instead of opening a separate lead drawer.
+- Remove the standalone report-lead drawer/table from the current UI surface.
+- Keep report preview, downloads, delivery history, and resend actions inside
+  Run Detail's `报告` and `邮件交付` areas.
+- Preserve normal-user owner scope, administrator redacted debug scope,
+  limited-context old evaluations, and sensitive-field redaction.
+
+Scope boundary:
+
+- Frontend information architecture plus the minimal Run Detail API
+  `report_id` filter needed for the unified AI Evaluation view.
+- No data-model, report-generation, AI-classification, trace-retention, email,
+  crawler, scheduler, deployment, or permission-model change.
+
+Non-goals:
+
+- Do not introduce a standalone global lead workbench.
+- Do not recreate the old top-level Report Center.
+- Do not rewrite CR-048/CR-051 historical verification.
+- Do not repair or backfill old report/evaluation data.
+
+Related tasks:
+
+- CR-069 Run Detail AI Evaluation Lead Entry Consolidation in `TASKS.md`
+- CR-034 Run Detail And AI Evaluation Traceability in `TRACEABILITY.md`
+- CR-051 Task Center And Report Grouping Consolidation in `TRACEABILITY.md`
+
+Acceptance:
+
+- Run Detail `AI 评估` shows the current run's AI candidates by default.
+- Report `查看线索` opens the same AI Evaluation tab with `report_id` filter
+  applied and a visible report scope.
+- AI Evaluation filters support report, status, risk, platform, keyword, and
+  title.
+- The report filter is rendered as a selectable `报告范围` control only when the
+  selected run has multiple reports; runs with zero or one report show a
+  read-only scope note instead.
+- The current UI no longer renders the duplicate report-lead drawer/table.
+- Existing report preview, downloads, delivery history, resend, AI trace
+  detail, limited-context rows, and role-safe redaction remain available.
+
+Verification:
+
+- Verified on 2026-06-18 with targeted Phase 20 / CR-048 / CR-051 regression
+  coverage, the full `tests/test_monitoring_mvp.py` suite, syntax checks,
+  inline monitor script parse, docs consistency, and administrator browser
+  inspection of local `/monitor`.
+- Browser inspection confirmed Run Detail `AI 评估` uses the same enhanced
+  page-filter dropdown treatment as first-level Task Center filters, and a run
+  with no generated report shows `报告范围` as a read-only scope note rather than
+  a dropdown.
+
+## CR-071 - Drawer And Modal Select Dropdown Consistency
+
+Date: 2026-06-19
+
+Source: user in-app browser review of dropdown consistency inside secondary
+drawers and modals.
+
+Module: formal console secondary drawers/modals, select dropdown interaction
+
+Type: Existing Feature Optimization
+
+Status: Verified
+
+Background:
+
+CR-056 introduced the enhanced `.page-filter-region select` dropdown mechanism
+for page-level filter bars after native browser dropdowns appeared misaligned
+inside the console shell. Later browser review found that several secondary
+drawers and modals still used native select dropdowns, so the same console
+could show two visibly different dropdown interaction patterns.
+
+Purpose:
+
+Reuse the existing Task Center filter dropdown mechanism for accepted
+drawer/modal select fields without introducing a second custom select
+component or changing the underlying form values, change events, save behavior,
+permissions, or data model.
+
+Requirements:
+
+- In the following secondary surfaces, select fields should opt into the
+  existing `.page-filter-region select` enhancement and render through
+  `.filter-select-enhanced`, `.filter-select-button`,
+  `.filter-select-menu`, and `.filter-select-option.is-selected`:
+  - Monitoring task edit drawer;
+  - Platform account detail drawer;
+  - Proxy edit drawer;
+  - AI Access edit drawer;
+  - AI Evaluation Rule edit modal;
+  - Mail Configuration edit drawer;
+  - Mail Template edit drawer.
+- The AI Access `模型名称` combobox must keep its existing free-text/model-list
+  interaction and must not be converted to the filter dropdown mechanism.
+- Task edit drawer custom date inputs must remain ordinary form date inputs;
+  CR-068's enhanced date menu remains limited to intentionally marked
+  `.page-filter-region` date inputs.
+- Dynamic option refreshes for account, proxy, AI profile, and email template
+  selects must keep the visible enhanced button label synchronized with the
+  underlying select value and disabled state.
+- Drawer/modal opt-in regions should not inherit the heavy page-filter panel
+  background or border; only the select dropdown interaction should be shared.
+
+Scope boundary:
+
+- Frontend-only interaction consistency for the listed secondary surfaces.
+- No backend API, database schema, permission, crawler, AI provider, SMTP,
+  scheduler, account environment, report, or trace behavior changes.
+
+Non-goals:
+
+- Do not introduce a new select component.
+- Do not enhance every form/configuration select globally.
+- Do not change AI Access model-name search/list behavior.
+- Do not change date-picker behavior beyond preserving the existing CR-068
+  boundaries.
+
+Related tasks:
+
+- CR-071 Drawer And Modal Select Dropdown Consistency in `TASKS.md`
+- CR-056 Filter Dropdown Alignment Regression Fix in `TRACEABILITY.md`
+- CR-068 Filter Date Picker Local Attached Menu Regression Fix in
+  `TRACEABILITY.md`
+
+Acceptance:
+
+- The listed drawer/modal selects render with the same enhanced dropdown
+  classes and menu behavior as Task Center filters.
+- The original select values and `change` semantics remain intact.
+- Dynamic option refreshes update the visible enhanced button labels.
+- AI Access `模型名称` remains the existing combobox and is not enhanced.
+- Task edit custom date inputs remain native form date inputs.
+- Existing Task Center, Run Detail AI Evaluation, and CR-056/CR-068 dropdown
+  behavior remains unchanged.
+
+Verification:
+
+- Verified on 2026-06-19 with targeted frontend static regression tests,
+  syntax checks, inline monitor script parse, docs consistency check, and
+  local browser inspection of representative drawer/modal selects.
+
+## CR-072 - Task Edit Custom Date Picker Consistency
+
+Date: 2026-06-19
+
+Source: user in-app browser review of Monitoring -> More -> Edit Task custom
+date controls.
+
+Module: Monitoring task edit drawer, custom crawl date controls
+
+Type: Existing Feature Optimization
+
+Status: Verified
+
+Background:
+
+CR-071 intentionally kept task edit custom start/end date fields native while
+only unifying drawer/modal select controls. The user later clarified that, for
+the Monitoring task edit drawer, `自定义开始日期` and `自定义结束日期` should use
+the same local attached calendar interaction as Task Center's page-level
+`开始日期 / 结束日期` date filters.
+
+Purpose:
+
+Make the two task edit custom date fields visually and behaviorally consistent
+with the existing `.page-filter-region input[type="date"]` enhancement while
+preserving the underlying task form date values, save payload, and change
+semantics.
+
+Requirements:
+
+- In the Monitoring task edit drawer, `custom_start` and `custom_end` must opt
+  into the existing date enhancement and render through
+  `.filter-date-enhanced`, `.filter-select-button.filter-date-button`, and
+  `.filter-date-menu`.
+- The visible trigger should match the Task Center date-filter select-style
+  button.
+- Clicking the trigger should open the calendar menu directly under that
+  button, mounted inside the clicked wrapper rather than using the browser
+  native date picker.
+- The menu must include month title, previous/next month controls, weekday row,
+  date grid, `今天`, and `清空`.
+- The menu width must match the trigger and stay locally attached without
+  drifting or floating away.
+- The original hidden date input must keep the stored value and dispatch the
+  same `change` behavior when a date is selected or cleared.
+
+Scope boundary:
+
+- Frontend-only interaction consistency for the Monitoring task edit drawer's
+  two custom crawl date fields.
+- This is a focused exception to CR-071's original native-date boundary.
+- No backend API, database schema, task-save payload, scheduler, crawler, AI,
+  report, email, permission, deployment, or system-setting change.
+
+Non-goals:
+
+- Do not convert every ordinary edit/configuration date field globally.
+- Do not add a new date-picker dependency.
+- Do not change Task Center, Run Detail AI Evaluation, or CR-068 date filter
+  behavior beyond reusing the existing mechanism.
+
+Related tasks:
+
+- CR-072 Task Edit Custom Date Picker Consistency in `TASKS.md`
+- CR-068 Filter Date Picker Local Attached Menu Regression Fix in
+  `TRACEABILITY.md`
+- CR-071 Drawer And Modal Select Dropdown Consistency in `TRACEABILITY.md`
+
+Acceptance:
+
+- `custom_start` and `custom_end` sit inside an explicit
+  `.page-filter-region.modal-filter-region` opt-in scope.
+- Both fields are enhanced into `.filter-date-enhanced` wrappers with
+  `.filter-select-button.filter-date-button` triggers.
+- Opening either date control shows the existing `.filter-date-menu` locally
+  attached below the clicked trigger, with one selected-day state when a value
+  exists.
+- Selecting `今天`, selecting a date, or clearing updates the original input
+  value and dispatches the existing `change` event.
+- AI Access `模型名称`, drawer/modal selects, and unrelated form fields keep
+  their current behavior.
+
+Verification:
+
+- Verified on 2026-06-19 with targeted frontend regression coverage, syntax
+  checks, inline monitor script parse, docs consistency check, and local
+  browser inspection of task edit custom date controls.
+
+## CR-073 - Scrollable Drawer Corner Radius Regression Fix
+
+Date: 2026-06-19
+
+Source: user in-app browser review of scrollable secondary drawers/modals.
+
+Module: formal console secondary drawers/modals, scrollable drawer chrome
+
+Type: Regression Fix
+
+Status: Verified
+
+Background:
+
+After the shared sticky drawer header and drawer/modal select/date consistency
+work, browser review found that secondary drawers with vertical scrollbars can
+visually lose the top-right radius because the scrollbar track paints into the
+rounded corner. Moving the close button inward would preserve reachability but
+would make the drawer chrome feel off-center and is not accepted.
+
+Purpose:
+
+Preserve the shared drawer/modal top-right rounded corner when content is
+scrollable, while keeping the close button in the top-right header position and
+without changing drawer information architecture or business behavior.
+
+Requirements:
+
+- Scrollable drawers/modals must keep a rounded top-right corner even when a
+  vertical scrollbar is present.
+- The outer drawer shell must not be the vertical scroll container; content
+  after `.drawer-head` / `.modal-head` should scroll inside a shared
+  `.drawer-scroll-body` so the scrollbar starts below the header area.
+- The close button must remain in the top-right header position and stay
+  reachable while content scrolls.
+- The fix should apply through shared drawer/modal chrome styles so task edit,
+  run detail, account detail, AI rule, mail configuration, mail template, run
+  log, report preview, and delivery-history surfaces stay consistent.
+- The fix must preserve CR-038 sticky close behavior and CR-071/CR-072
+  drawer/modal dropdown/date interactions.
+
+Scope boundary:
+
+- Frontend-only visual regression fix for existing secondary drawers/modals.
+- No backend API, database schema, permission, crawler, AI provider, SMTP,
+  scheduler, deployment, report, or trace behavior changes.
+
+Non-goals:
+
+- Do not redesign drawer layout or move the close button away from the
+  top-right header position.
+- Do not introduce a new drawer component, framework, or dependency.
+- Do not change Task Center, Run Detail, report, email, AI trace, or
+  permission semantics.
+
+Related tasks:
+
+- CR-073 Scrollable Drawer Corner Radius Regression Fix in `TASKS.md`
+- CR-038 Sticky Close Controls For Scrollable Drawers in `TRACEABILITY.md`
+- CR-071 Drawer And Modal Select Dropdown Consistency in `TRACEABILITY.md`
+- CR-072 Task Edit Custom Date Picker Consistency in `TRACEABILITY.md`
+
+Acceptance:
+
+- A scrollable shared drawer keeps the top-right rounded corner visually intact
+  with the scrollbar visible.
+- The scrollbar track/thumb must not start at the drawer's absolute top edge;
+  it should belong to `.drawer-scroll-body` below the header so it reads like a
+  content scrollbar, not a full-height outer-frame scrollbar.
+- The close button remains at the top-right and is not moved toward the center.
+- Sticky header, close handlers, backdrop/Escape closing, enhanced select
+  menus, and task edit custom date menus keep their accepted behavior.
+- Static regression coverage verifies the shared inner-scroll structure,
+  scrollbar/radius styling, and representative drawer surfaces.
+
+Verification:
+
+- Verified on 2026-06-19 with targeted frontend regression coverage, syntax
+  checks, inline monitor script parse, docs consistency check, and local
+  browser inspection of a long Monitoring task drawer.
+
+## CR-074 - Console Refresh Action Deduplication And Icon Loading
+
+Date: 2026-06-19
+
+Source: user in-app browser review of duplicate refresh buttons across console
+pages.
+
+Module: formal console page headers, Task Center, resource pages, secondary
+refresh actions
+
+Type: Existing Feature Optimization
+
+Status: Verified
+
+Background:
+
+After Task Center consolidation and the recent drawer/filter refinements, many
+formal console pages showed both the shared top-bar refresh control and a
+page-local refresh button such as refresh home, refresh accounts, refresh
+proxies, refresh AI access, refresh templates, refresh runtime strategy, or
+refresh Task Center. These controls mostly reloaded the same current page data,
+creating visual noise and making the page header feel like it had two equal
+refresh actions.
+
+Purpose:
+
+Make refresh behavior easier to scan by keeping one page-level current-page
+refresh control and rendering refresh affordances as a refresh icon with a
+loading spin state instead of visible Chinese button text.
+
+Requirements:
+
+- The top bar must provide the single page-level refresh entry for the active
+  first-level page.
+- Page-local refresh buttons that only duplicate the current page load should
+  be removed from Overview, Platform Accounts, Proxy Resources, AI Access, AI
+  Evaluation Rules, Mail Configuration, Mail Templates, Runtime Strategy, and
+  Task Center.
+- Page filter toolbars must not repeat another generic refresh button when the
+  top-bar current-page refresh already reloads that same list.
+- Refresh controls must render as icon-only SVG buttons without visible
+  Chinese refresh labels.
+- While a refresh is running, the refresh icon must show a loading/spinning
+  state and the clicked button must be disabled until the associated refresh
+  work finishes.
+- Semantically different scoped actions may remain, but must use the same
+  icon-only refresh treatment when they are refresh actions:
+  schedule-time recomputation, delivery-history refresh, email-template
+  preview refresh, run-log refresh, and run-detail refresh.
+- The Monitoring page's schedule-time recomputation remains because it calls
+  a mutation endpoint and is not the same as reloading the Monitoring list.
+- System Diagnostics `重新诊断` and `运行系统诊断` remain diagnostic actions
+  rather than generic page refresh duplicates.
+
+Scope boundary:
+
+- Frontend-only information-density and interaction-feedback optimization.
+- No backend API, database schema, permission, crawler, scheduler, AI provider,
+  SMTP, report, run lifecycle, or deployment behavior changes.
+
+Non-goals:
+
+- Do not remove scoped refresh actions that operate on a drawer, log,
+  preview, delivery history, or run detail.
+- Do not rename or redesign non-refresh diagnostic actions.
+- Do not introduce a new icon library, frontend framework, or build step.
+
+Related tasks:
+
+- CR-074 Console Refresh Action Deduplication And Icon Loading in `TASKS.md`
+- CR-053 Task Center Field Priority And Global Select Alignment in
+  `TRACEABILITY.md`
+- CR-073 Scrollable Drawer Corner Radius Regression Fix in `TRACEABILITY.md`
+
+Acceptance:
+
+- The visible first-level console has one page-level current-page refresh icon
+  in the top bar.
+- Redundant page-header and filter-toolbar refresh buttons for the same page
+  are absent.
+- The refresh icon spins while the refresh promise is pending and restores when
+  the work completes.
+- Icon-only refresh buttons keep accessible labels/tooltips for current page
+  refresh and scoped refresh actions.
+- Task Center grouping, filters, Run Detail, report preview, log refresh,
+  delivery-history refresh, template preview, and diagnostics remain reachable.
+
+Verification:
+
+- Verified on 2026-06-19 with targeted frontend regression coverage, inline
+  monitor script parse, docs consistency check, and local browser inspection.
+  Browser verification confirmed the current-page refresh is icon-only, no
+  visible button text starts with `刷新`, six scoped refresh icon buttons remain
+  where they refresh different local scopes, and the top-bar refresh button
+  enters disabled/loading state before restoring.
+
+## CR-070 - Account Environment Export And Import Package
+
+Date: 2026-06-19
+
+Source: user requirement that login state, full account identity, and platform
+account information should be exportable and importable into another
+deployment in one operation.
+
+Module: platform accounts, account identity, login state, profile storage,
+deployment migration, sensitive-data governance
+
+Type: New Capability
+
+Status: Accepted
+
+Background:
+
+CR-047 defines one platform account as one `profile_key` plus one stable
+account identity. That is enough to make login and crawling consistent inside
+one deployment, but it does not yet define how to move a usable account
+environment to another deployment.
+
+The new requirement is broader than exporting visible account fields. The
+operator wants an account package that can carry login state, necessary browser
+profile state, CR-047 identity fields, and the platform-account metadata the
+system has learned, so a new deployment can import the package and continue
+from the same account environment where possible. The migration package should
+be slim: it should include configuration, login/session state, and required
+profile state, not raw whole-profile cache and temporary browser artifacts.
+
+Purpose:
+
+Add an administrator-only account environment export/import capability for
+moving a platform account between deployments without manually recreating every
+identity, profile, login, and platform-account metadata field.
+
+Requirements:
+
+- Support two package modes:
+  - metadata-only package: exports account identity and platform-account
+    metadata, but no cookies or browser profile traces; import requires
+    re-login before use. If the metadata package contains real identity
+    details such as fingerprint seed, runtime snapshot summary, recognized
+    platform account ID, or profile-derived metadata, the recommended V1
+    default is the same encrypted `.maepkg` envelope rather than plaintext.
+  - slim login-state migration package: exports account identity, encrypted
+    login material, proxy endpoint hint without credentials, and the necessary
+    profile state needed to attempt login-state reuse.
+- A slim login-state migration package must include:
+  - a manifest with package version, source app/schema identity version,
+    package type, created time, source workspace/account/platform, source
+    `profile_key`, platform, account display name, login type, status, and
+    redacted package checksum evidence;
+  - CR-047 identity fields such as environment region, browser platform,
+    identity template, fingerprint seed, UA, timezone, locale,
+    accept-language, screen/viewport/device flags, generator metadata,
+    lock/re-login state, and redacted runtime snapshot summary;
+  - slim profile state under the account `profile_key`, including provider-
+    owned cookies, localStorage, IndexedDB, preferences, login-relevant
+    service-worker/session records, and session state where the active
+    provider stores them;
+  - encrypted Cookie/login material stored by the project, if present;
+  - platform account metadata captured by the project, such as recognized
+    platform account ID/name/display name, avatar metadata, latest login and
+    check timestamps, customer-safe status, and last customer-safe error;
+  - proxy binding metadata as a target-side mapping requirement, redacted
+    region snapshot, and encrypted host/IP plus port hint, but no proxy
+    username, password, token, authentication header, or provider secret.
+- V1 migration packages use passphrase-based encryption. They must not rely
+  only on the source deployment encryption key because the target deployment
+  may not have that key. Target-deployment public-key encryption is future
+  scope.
+- Import must be administrator-only and must verify package integrity,
+  package version, manifest schema, checksum, platform, provider compatibility,
+  identity environment version, profile path safety, and target proxy mapping
+  before writing any account as active.
+- Import creates a new target account/profile by default, with a new target
+  `profile_key` based on the target deployment's account ID. Preserving or
+  overwriting an existing account requires an explicit conflict policy.
+- Export and import must have explicit operation states, terminal states,
+  timeouts, cancellation/interruption cleanup, operation locks, and idempotent
+  finalization so a package operation cannot leave an account/profile lock
+  stuck.
+- After import, the system must run a login-state verification for the account.
+  If verification fails, the imported account is marked `requires_relogin` or
+  equivalent and must not be silently used for crawling.
+- Export and import actions must be audited without recording raw cookies,
+  profile paths, proxy credentials, proxy endpoint hints, CDP endpoints, noVNC
+  tokens, or package passphrases.
+
+Scope boundary:
+
+- This is an account-environment migration capability, not a general database
+  backup/restore feature.
+- It covers the Platform Accounts resource and the account's browser profile
+  environment. Monitoring tasks, crawl runs, reports, AI traces, email
+  delivery logs, users, runtime settings, full database backup content, and
+  customer business data remain outside the default account package unless a
+  later export product requirement explicitly adds them.
+- It builds on CR-047 account identity fields and the existing server-side
+  profile root. It must not bypass CR-047 identity validation, locks,
+  re-login rules, or proxy consistency.
+
+Non-goals:
+
+- Do not promise that an imported login state will always remain valid on a
+  different server, IP, browser build, or time window; platforms may invalidate
+  sessions after migration.
+- Do not export plaintext cookies, proxy credentials, platform tokens, local
+  profile paths, server command lines, CDP endpoints, noVNC tokens, or
+  deployment encryption keys.
+- Do not export a raw whole browser profile by default. Cache, GPU cache, code
+  cache, media cache, crash reports, downloads, screenshots, temporary files,
+  and regenerable browser artifacts are excluded unless a later provider-
+  specific review explicitly requires one of them.
+- Do not bypass captcha, SMS, slider, device verification, or platform risk
+  checks.
+- Do not turn this into gray account trading, shared account marketplace, or
+  bulk account rotation behavior.
+- Do not overwrite an existing target account or profile directory without an
+  explicit administrator conflict decision and audit record.
+- Do not include cached avatar image bytes in V1; export avatar metadata only.
+- Do not leave package artifacts as long-term application storage by default.
+  Generated package bytes are runtime artifacts with short retention and
+  cleanup behavior.
+
+Confirmed V1 decisions:
+
+- V1 supports metadata-only export and slim encrypted login-state migration
+  package.
+- V1 uses passphrase-based package encryption.
+- V1 may include source proxy host/IP plus port as an encrypted endpoint hint,
+  but must not export proxy username, password, token, authentication header,
+  or provider secret.
+- V1 imports create a new target account/profile by default; replace, merge,
+  and overwrite are future scope.
+- V1 exports avatar metadata only, not cached avatar image bytes.
+
+Related tasks:
+
+- CR-070 Account Environment Export And Import Package in `TASKS.md`
+- CR-047 Account Identity Fidelity in `TASKS.md`
+- Account Environment Export And Import Tests in `TEST_PLAN.md`
+
+Acceptance:
+
+- Administrator can export a metadata-only package without cookies or profile
+  traces.
+- Administrator can export a slim encrypted login-state migration package
+  containing account identity, login/session material, necessary profile state,
+  proxy endpoint hint without credentials, and platform-account metadata needed
+  for target-side import.
+- The package manifest is versioned, checksummed, and redacted.
+- Package generation and import follow explicit state machines and terminate as
+  ready/completed, failed, cancelled, expired, active, requires-relogin, or
+  rolled-back without leaving locks stuck.
+- Import validates integrity, compatibility, target profile safety, and proxy
+  mapping before activation.
+- Imported accounts use a target deployment `profile_key` and never write
+  outside the configured profile root.
+- Import runs login-state verification. Verified accounts may become active;
+  failed accounts become `requires_relogin` and are not used silently.
+- Export/import audit logs are present and contain no raw secrets or paths.
+- Normal users cannot export or import account environment packages.
+- Tests fail if an export package or log contains raw cookies, proxy
+  credentials, proxy endpoint hints outside the encrypted payload, profile
+  paths, package secrets, CDP endpoints, noVNC tokens, raw whole-profile cache,
+  or traversal paths.
+
+## CR-055 - Task Center Status Column Visual Refinement
+
+Date: 2026-06-18
+
+Source: user in-app browser review of Task Center status column
+
+Module: formal console Task Center run table
+
+Type: Existing Feature Optimization
+
+Status: Verified
+
+Background:
+
+After CR-054 shortened the status text, the Task Center status cell still
+looked visually heavy because it reused the global `.status` pill treatment and
+the table did not have a dedicated status-column class. This made the first-
+level status cell feel like a status bar instead of a small lifecycle marker.
+
+Purpose:
+
+Keep the Task Center first-level table easy to scan: task/run identifiers remain
+prominent, while status is a short, stable visual marker.
+
+Requirements:
+
+- The Task Center table helper must mark `状态` columns with a stable
+  `col-status` class instead of relying on column position.
+- The first-level run status badge must use Task Center-specific styling, not
+  the global `.status` pill class.
+- The badge should be visually compact with a small state dot and short label.
+- The status column must stay narrow in grouped and flat modes.
+- Existing grouping, field order, single `详情` action, Run Detail entry, and
+  progress semantics must remain unchanged.
+
+Scope boundary:
+
+- Frontend-only visual refinement linked to CR-053 and CR-054.
+- No backend API, data model, run lifecycle, AI trace, report, email, permission,
+  or scheduler changes.
+
+Non-goals:
+
+- Do not redesign Task Center.
+- Do not hide required run fields.
+- Do not reintroduce report center or duplicate row actions.
+
+Related tasks:
+
+- CR-055 Task Center Status Column Visual Refinement in `TASKS.md`
+- CR-054 Task Center Status Badge Compactness Regression Fix in `TASKS.md`
+
+Acceptance:
+
+- Status cells render as a narrow small badge, not a full-width or heavy pill.
+- `任务 ID` / `运行 ID` keep priority before status in flat mode, while grouped
+  mode keeps duplicated task identity hidden.
+- Active progress remains a short helper line below the badge only when needed.
+- Desktop, tablet, and mobile browser checks show no severe overlap, truncation,
+  or hidden `详情` action caused by the status column.
+
+Verification:
+
+- Verified on 2026-06-18 with targeted frontend regression coverage, syntax
+  checks, docs check, and browser inspection of the local `/monitor` page.

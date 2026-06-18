@@ -116,9 +116,12 @@ Production-like acceptance must prove that:
 - The system can use a server-side account profile for crawling.
 - Multiple accounts on the same platform do not share profiles.
 - The same account/profile cannot be used concurrently.
-- Proxy priority is task proxy, account proxy, then default network.
+- Before CR-047 locked account identity is active, proxy priority is task
+  proxy, account proxy, then default network.
+- After CR-047 locks an account identity, task-level proxy overrides are
+  rejected for that locked account environment; proxy changes require explicit
+  reset/re-login.
 - AI failure does not block collection or report generation.
 - Email failure does not block collection or report generation.
 - Sensitive values are encrypted or masked.
 - Runtime settings can be managed without code changes.
-

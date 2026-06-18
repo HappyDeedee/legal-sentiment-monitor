@@ -64,6 +64,9 @@ retention:
   # Retain generated reports for this many days.
   report_days: 180
 
+  # Retain redacted AI evaluation trace snapshots for this many days.
+  ai_trace_days: 30
+
 # Deployment-level values should be configured through environment variables
 # or deployment secrets instead of this file:
 #

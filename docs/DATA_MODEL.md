@@ -53,6 +53,8 @@ V1 should support:
 - reports.
 - Phase 10-18 console governance for run visibility, report grouping, and
   email delivery history.
+- accepted CR-070 account-environment export/import packages for
+  administrator-only account migration.
 
 ## Workspace Strategy
 
@@ -139,15 +141,30 @@ status
 profile_key
 profile_path_legacy
 proxy_id
+environment_region
 browser_platform
+identity_template
 fingerprint_seed
 user_agent
 timezone
 locale
+accept_language
 screen_width
 screen_height
+viewport_width
+viewport_height
+device_scale_factor
+is_mobile
+has_touch
+identity_generator_name
+identity_generator_version
+identity_environment_version
+proxy_region_snapshot
 browser_environment_locked_at
 browser_environment_lock_reason
+requires_relogin
+identity_state
+identity_runtime_snapshot_json
 cookies_encrypted
 notes
 last_login_at
@@ -167,28 +184,81 @@ direction is to use new `profile_key` profiles and require old low-volume
 accounts to re-login instead of preserving long-term legacy path compatibility.
 The inline lock fields protect both the account and its `profile_key`.
 
-CR-047 account browser-environment fields are accepted for future
-implementation, not yet active in the current schema unless the Phase 5.1
-migration has run. The fields make the browser identity inputs for a platform
-account explicit and persistent:
+CR-047 account identity fields are accepted for future implementation, not yet
+active in the current schema unless the Phase 5.1 migration has run. The
+fields make the browser identity inputs for a platform account explicit and
+persistent:
 
+- `environment_region`: customer-safe region bucket used for consistency
+  checks, such as `CN_MAINLAND`, `HK`, or `SG`;
 - `browser_platform`: the browser platform fingerprint family such as
-  `windows`, `macos`, or `linux`;
+  `windows`, `macos`, `linux`, or `android`;
+- `identity_template`: final stable device/browser template identifier such as
+  `CN_WIN_CHROME_1920`, selected automatically by the generator or from an
+  administrator's advanced pre-login template-family choice;
 - `fingerprint_seed`: deterministic seed used by a browser-environment
   provider where supported;
 - `user_agent`: the account's stable user-agent string;
-- `timezone` and `locale`: stable browser context timezone and language;
-- `screen_width` and `screen_height`: stable viewport/screen dimensions;
+- `timezone`, `locale`, and `accept_language`: stable browser context
+  timezone and language inputs;
+- `screen_width`, `screen_height`, `viewport_width`, `viewport_height`,
+  `device_scale_factor`, `is_mobile`, and `has_touch`: stable screen,
+  viewport, and device-class inputs;
+- `identity_generator_name`, `identity_generator_version`, and
+  `identity_environment_version`: metadata for stable regeneration,
+  compatibility checks, and future migration decisions;
+- `proxy_region_snapshot`: redacted/customer-safe proxy region evidence used
+  by the validator, not a proxy URL or credential store;
 - `browser_environment_locked_at`: set after successful QR login or accepted
   Cookie login validation;
 - `browser_environment_lock_reason`: customer-safe reason such as
-  `qrcode_login_success` or `cookie_validation_success`.
+  `qrcode_login_success` or `cookie_validation_success`;
+- `requires_relogin`: marks locked accounts whose identity template or proxy
+  region changed in a way that requires explicit administrator reset/re-login.
+- `identity_state`: lifecycle state for the CR-047 account identity, such as
+  `draft`, `generated`, `validated`, `login_in_progress`, `locked`, `active`,
+  `requires_relogin`, or `resetting`;
+- `identity_runtime_snapshot_json`: customer-safe requested/effective runtime
+  snapshot for Playwright/CDP launches, including provider metadata, effective
+  UA/timezone/locale/viewport/screen/device/proxy-region values, unsupported
+  field list, and `fallback_used` flag. It must not contain cookies, proxy
+  credentials, raw profile paths, CDP endpoints, or noVNC tokens.
 
-`proxy_id` remains the account-bound stable proxy policy field. CR-047 must
-settle how task-level proxy overrides interact with fixed account environments
-before implementation. The migration should be additive, should keep existing
-accounts readable, and should not expose raw profile paths or fingerprint-debug
-internals through normal-user APIs.
+`proxy_id` remains the account-bound stable proxy policy field. After CR-047
+locks an account identity, task-level proxy overrides are rejected for that
+locked account environment; changing the proxy requires explicit reset/re-login.
+`proxy_region_snapshot` must use a customer-safe region bucket such as
+`CN_MAINLAND`, `HK`, `SG`, `TW`, `JP`, `US`, or `EU`, not an IP address, city,
+province, proxy URL, or credential value. The generator and validator
+specification lives in `docs/ACCOUNT_ENVIRONMENT.md` and is the source of
+truth for deterministic seed derivation, template expansion, state transitions,
+fail-closed rules, provider mapping, and runtime snapshot shape.
+The migration should be additive, should keep existing accounts readable, and
+should not expose raw profile paths, cookies, proxy
+credentials, CDP endpoints, noVNC sessions, or fingerprint-debug internals
+through normal-user APIs.
+
+CR-070 adds an accepted account-environment export/import capability. The
+account row remains the source of truth after import, but package creation and
+import need audit-safe metadata. The package manifest may contain the selected
+account fields above plus redacted platform-account metadata and compatibility
+evidence. It must not contain plaintext cookies, proxy credentials, profile
+paths, CDP endpoints, noVNC tokens, package passphrases, or deployment
+encryption keys.
+
+The package is scoped to one selected platform account environment. It does
+not include monitoring tasks, crawl runs, reports, AI traces, email delivery
+logs, users, runtime settings, or full database backup content by default. If
+a later product requirement expands package scope, update this data model and
+the test plan before implementation.
+
+CR-070 V1 uses a slim login-state migration package, not a raw full profile
+copy. Package metadata may describe slim profile-state sections, but the
+package should exclude cache, GPU cache, code cache, media cache, crash dumps,
+downloads, screenshots, temporary files, and duplicated or regenerable browser
+artifacts by default. The encrypted payload may contain a source proxy
+host/IP plus port hint for target-side mapping, but it must not contain proxy
+username, password, token, authentication header, or provider secret.
 
 ### proxy_profiles
 
@@ -270,6 +340,147 @@ created_at
 ```
 
 Audit logs are required for security-sensitive administrator actions in MVP.
+
+CR-070 export/import audit actions:
+
+```text
+account_package_export_requested
+account_package_export_ready
+account_package_export_completed
+account_package_export_failed
+account_package_export_cancelled
+account_package_export_expired
+account_package_import_preflight
+account_package_import_completed
+account_package_import_failed
+account_package_import_requires_relogin
+account_package_import_rolled_back
+```
+
+Audit `details_json` should include only redacted metadata:
+
+```text
+package_mode
+package_version
+source_platform
+source_account_id
+target_account_id
+identity_environment_version
+provider_name
+compatibility_result
+login_verification_result
+redacted_checksum
+failure_reason
+operation_status
+trigger_source
+```
+
+It must not include raw cookies, raw profile keys or paths, proxy credentials,
+proxy endpoint hints, package passphrases, CDP endpoints, noVNC tokens,
+command lines, or deployment encryption keys. Metadata-only export audit is
+still treated as sensitive when the package contains CR-047 identity details
+such as `fingerprint_seed`, recognized platform account IDs, or runtime
+snapshot summaries.
+
+### account_environment_packages
+
+CR-070 accepted optional metadata table. Implementation may choose a temporary
+download-only artifact for V1, but if package history is persisted, use an
+audit-safe table such as:
+
+```text
+id
+workspace_id
+account_id
+platform
+package_mode
+package_version
+identity_environment_version
+provider_name
+status
+redacted_checksum
+manifest_summary_json
+operation_type
+failure_reason
+artifact_path_redacted
+created_by
+created_at
+updated_at
+expires_at
+downloaded_at
+deleted_at
+```
+
+Rules:
+
+- do not store package plaintext in the database;
+- if encrypted package bytes are stored at all, store only in runtime artifact
+  storage with retention and cleanup rules, not in Git;
+- `manifest_summary_json` must be redacted and customer-safe;
+- package rows should support audit, cleanup, and operator diagnostics, not
+  long-term secret storage.
+- `artifact_path_redacted` may hold an opaque artifact ID or redacted storage
+  reference only, not a local filesystem path;
+- metadata-only and slim-login-state package rows use the same allowed
+  operation-state vocabulary so cleanup and recovery can be generic.
+
+Allowed `operation_type` values:
+
+```text
+export
+import
+```
+
+Allowed export `status` values:
+
+```text
+preflight
+locked
+reading_metadata
+snapshotting_profile
+building_payload
+encrypting
+ready_for_download
+completed
+failed
+cancelled
+expired
+deleted
+```
+
+Allowed import `status` values:
+
+```text
+preflight
+preflight_failed
+decrypting
+extracting_profile
+writing_database
+verifying_login
+active
+requires_relogin
+failed
+rolled_back
+```
+
+Terminal statuses:
+
+```text
+ready_for_download
+completed
+failed
+cancelled
+expired
+deleted
+preflight_failed
+active
+requires_relogin
+rolled_back
+```
+
+The implementation may split export and import operations into separate tables
+later if the state volume grows, but the same redaction, retention,
+operation-lock, and terminal-finalization rules remain required.
 
 ### crawl_runs
 
@@ -358,7 +569,7 @@ workspace_id + platform + content_id
 
 ### ai_evaluation_traces
 
-Status: Accepted for CR-034 / Phase 20, not implemented yet.
+Status: Implemented and verified for CR-034 / Phase 20B-E.
 
 Purpose:
 
@@ -393,8 +604,9 @@ created_at
 Confirmed rules:
 
 - trace retention must be controlled by the administrator runtime setting
-  `ai_trace_retention_days`, defaulting to 30 days. Phase 20 must not hard-code
-  the retention window in the trace persistence layer;
+  `ai_trace_retention_days`, defaulting to 30 days. Phase 20B implements this
+  runtime setting and must not hard-code the retention window in the trace
+  persistence layer;
 - normal-user trace APIs must return only business-safe input/output summaries
   for the user's own runs. They must not return full prompt snapshots, request
   payload snapshots, administrator debug metadata, or raw model responses;
@@ -424,6 +636,17 @@ Additional rules:
   generation, or final run status;
 - old evaluations without trace snapshots remain readable through
   `ai_evaluations` and should display a limited-context message.
+
+Implementation status:
+
+- Phase 20B creates `ai_evaluation_traces`, writes redacted/capped trace
+  snapshots for successful, failed, and fallback evaluations, and provides a
+  trace-only cleanup helper using `ai_trace_retention_days`;
+- Phase 20C exposes these snapshots through role-safe Run Detail and
+  per-evaluation detail APIs;
+- Phase 20D exposes the run-scoped frontend detail surface, and Phase 20E
+  links report leads with `run_id` back to the originating run detail while
+  preserving limited-context display for old/no-run data.
 
 ### reports
 

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +33,7 @@ from ..monitoring.database import (
     get_active_ai_key_profile,
     get_active_email_template,
     get_ai_key_profile,
+    get_ai_evaluation_detail,
     get_ai_rule_profile,
     get_job,
     get_login_session,
@@ -39,11 +41,13 @@ from ..monitoring.database import (
     get_proxy_profile,
     get_report,
     get_run,
+    get_run_detail_bundle,
     get_social_account,
     has_running_run_for_job,
     init_db,
     list_jobs,
     list_leads,
+    list_run_collection_logs,
     list_ai_key_profiles,
     list_ai_rule_profiles,
     list_email_templates,
@@ -1309,12 +1313,65 @@ async def run_logs(run_id: int, user: dict[str, Any] = CurrentUser):
     run = get_run(run_id, actor=actor)
     if not run or (run.get("visibility") == "archived" and not is_administrator(actor)):
         raise HTTPException(status_code=404, detail="run not found")
-    run_root = MONITOR_DATA_DIR / "runs"
-    logs = []
-    for path in run_root.glob(f"**/run_{run_id}_*/**/crawler.log"):
-        content = customer_safe_text(path.read_text(encoding="utf-8", errors="ignore"))[-20000:]
-        logs.append({"path": "运行日志", "content": content})
+    logs = list_run_collection_logs(run_id)
     return {"logs": logs}
+
+
+@router.get("/runs/{run_id}/detail")
+async def run_detail(
+    run_id: int,
+    ai_page: int = Query(1, ge=1),
+    ai_limit: int = Query(50, ge=0, le=200),
+    report_id: int | None = None,
+    ai_status: str = "",
+    risk: str = Query("", description="high|negative|pending|unrelated|none|unevaluated"),
+    platform: str = "",
+    keyword: str = "",
+    title: str = "",
+    user: dict[str, Any] = CurrentUser,
+):
+    actor = _route_actor(user)
+    run = get_run(run_id, actor=actor)
+    if not run or (run.get("visibility") == "archived" and not is_administrator(actor)):
+        raise HTTPException(status_code=404, detail="run not found")
+    if report_id:
+        report = get_report(report_id, actor=actor)
+        if not report or int(report.get("run_id") or 0) != int(run_id):
+            raise HTTPException(status_code=404, detail="report not found")
+    detail = get_run_detail_bundle(
+        run_id,
+        actor=actor,
+        ai_filters={
+            "report_id": report_id,
+            "status": ai_status,
+            "risk": risk,
+            "platform": platform,
+            "keyword": keyword,
+            "title": title,
+        },
+        page=ai_page,
+        per_page=ai_limit,
+    )
+    if not detail:
+        raise HTTPException(status_code=404, detail="run not found")
+    return {"detail": _customer_view_run_detail(detail)}
+
+
+@router.get("/runs/{run_id}/ai-evaluations/{evaluation_id}")
+async def run_ai_evaluation_detail(run_id: int, evaluation_id: int, user: dict[str, Any] = CurrentUser):
+    actor = _route_actor(user)
+    run = get_run(run_id, actor=actor)
+    if not run or (run.get("visibility") == "archived" and not is_administrator(actor)):
+        raise HTTPException(status_code=404, detail="run not found")
+    item = get_ai_evaluation_detail(
+        evaluation_id,
+        run_id=run_id,
+        actor=actor,
+        admin_debug=is_administrator(actor),
+    )
+    if not item:
+        raise HTTPException(status_code=404, detail="evaluation not found")
+    return {"evaluation": _customer_view_ai_evaluation_detail(item, admin=is_administrator(actor))}
 
 
 @router.get("/reports")
@@ -1712,6 +1769,10 @@ def _customer_view_run(item: dict[str, Any]) -> dict[str, Any]:
         "run_type",
         "archived_at",
         "archived_by",
+        "collection_progress",
+        "progress_message",
+        "progress_updated_at",
+        "ai_progress",
     }
     view = {key: _customer_safe_value(value) for key, value in item.items() if key in allowed}
     view["error_message"] = customer_safe_text(item.get("error_message"))
@@ -1764,7 +1825,7 @@ def _customer_view_email_delivery_log(item: dict[str, Any]) -> dict[str, Any]:
 
 
 def _customer_safe_delivery_error(value: Any) -> str:
-    text = customer_safe_text(value)
+    text = _remove_sensitive_markers(customer_safe_text(value))
     for label in [
         "smtp_password",
         "smtp-password",
@@ -1784,7 +1845,19 @@ def _customer_safe_delivery_error(value: Any) -> str:
     ]:
         text = text.replace(f"{label}=[REDACTED]", "敏感信息已隐藏")
         text = text.replace(f"{label}: [REDACTED]", "敏感信息已隐藏")
-    return text
+    return _remove_sensitive_markers(text)
+
+
+def _remove_sensitive_markers(value: Any) -> str:
+    text = customer_safe_text(str(value or ""))
+    patterns = (
+        r"(?i)\b(?:authorization|x-api-key|api[_-]?key|api-key|cookie|cookies?[_-]?encrypted|password|smtp[_-]?password|smtp-password|token|secret|proxy[_-]?url|proxy-url|proxy[_-]?password|profile_path|profile_dir|server_path|local_path)\b\s*(?:[:=]\s*(?:bearer\s+)?)?[^\s,;，；\"'<>]*",
+        r"(?i)['\"](?:authorization|x-api-key|api[_-]?key|api-key|cookie|cookies?[_-]?encrypted|password|smtp[_-]?password|smtp-password|token|secret|proxy[_-]?url|proxy-url|proxy[_-]?password|profile_path|profile_dir|server_path|local_path)['\"]\s*:\s*['\"][^'\"]*['\"]",
+    )
+    for pattern in patterns:
+        text = re.sub(pattern, "敏感信息已隐藏", text)
+    text = re.sub(r"\s{2,}", " ", text)
+    return text.strip()
 
 
 def _customer_view_lead(item: dict[str, Any]) -> dict[str, Any]:
@@ -1828,6 +1901,107 @@ def _customer_view_lead(item: dict[str, Any]) -> dict[str, Any]:
     content_id = str(item.get("content_id") or "")
     if "self" + "test" in content_id.lower():
         view["content_id"] = f"system-check-{item.get('run_id') or item.get('id') or ''}".rstrip("-")
+    return view
+
+
+def _customer_view_run_detail(detail: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "run": _customer_view_run(detail.get("run") or {}),
+        "overview": _customer_safe_value(detail.get("overview") or {}),
+        "collection_logs": [
+            {"path": "运行日志", "content": customer_safe_text(item.get("content"))}
+            for item in (detail.get("collection_logs") or [])
+            if isinstance(item, dict)
+        ],
+        "collected_contents": [_customer_view_collected_content(item) for item in detail.get("collected_contents") or []],
+        "ai_evaluations": [_customer_view_ai_evaluation_summary(item) for item in detail.get("ai_evaluations") or []],
+        "ai_pagination": _customer_safe_value(detail.get("ai_pagination") or {}),
+        "ai_filters": _customer_safe_value(detail.get("ai_filters") or {}),
+        "reports": [_customer_view_report(item) for item in detail.get("reports") or []],
+        "email_delivery_logs": [_customer_view_email_delivery_log(item) for item in detail.get("email_delivery_logs") or []],
+    }
+
+
+def _customer_view_collected_content(item: dict[str, Any]) -> dict[str, Any]:
+    allowed = {
+        "id",
+        "platform",
+        "content_id",
+        "job_id",
+        "run_id",
+        "law_firm_name",
+        "source_keyword",
+        "title",
+        "description",
+        "author_name",
+        "content_url",
+        "cover_url",
+        "publish_time",
+        "comment_count",
+        "first_seen_at",
+        "last_seen_at",
+    }
+    return {key: _customer_safe_value(value) for key, value in item.items() if key in allowed}
+
+
+def _customer_view_ai_evaluation_summary(item: dict[str, Any]) -> dict[str, Any]:
+    allowed = {
+        "id",
+        "platform",
+        "content_id",
+        "job_id",
+        "run_id",
+        "law_firm_name",
+        "source_keyword",
+        "title",
+        "description",
+        "author_name",
+        "content_url",
+        "cover_url",
+        "publish_time",
+        "comment_count",
+        "first_seen_at",
+        "last_seen_at",
+        "run_status",
+        "evaluation_id",
+        "evaluation_missing",
+        "lead_status",
+        "lead_status_label",
+        "limited_context",
+        "eval_status",
+        "is_related",
+        "is_negative",
+        "risk_level",
+        "reason",
+        "evidence_quotes",
+        "recommended_action",
+        "evaluated_at",
+        "trace_state",
+    }
+    return {key: _customer_safe_value(value) for key, value in item.items() if key in allowed}
+
+
+def _customer_view_ai_evaluation_detail(item: dict[str, Any], *, admin: bool = False) -> dict[str, Any]:
+    view = _customer_view_ai_evaluation_summary(item)
+    trace = item.get("trace") if isinstance(item.get("trace"), dict) else {}
+    allowed_trace = {
+        "status",
+        "limited_context",
+        "trace_id",
+        "message",
+        "business_input",
+        "structured_output",
+        "provider",
+        "model",
+        "duration_ms",
+        "started_at",
+        "finished_at",
+        "created_at",
+        "error_message",
+    }
+    view["trace"] = {key: _customer_safe_value(value) for key, value in trace.items() if key in allowed_trace}
+    if admin and isinstance(trace.get("debug"), dict):
+        view["trace"]["debug"] = _customer_safe_value(trace["debug"])
     return view
 
 

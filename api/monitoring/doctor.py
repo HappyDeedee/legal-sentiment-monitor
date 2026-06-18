@@ -152,10 +152,11 @@ def _check_retention_settings() -> dict[str, Any]:
     try:
         run_log_days = int(get_runtime_setting_value("run_log_retention_days") or 0)
         report_days = int(get_runtime_setting_value("report_retention_days") or 0)
+        ai_trace_days = int(get_runtime_setting_value("ai_trace_retention_days") or 0)
     except Exception as exc:
         return _check("retention_settings", "保留策略", False, f"保留策略读取失败：{type(exc).__name__}")
-    ok = run_log_days > 0 and report_days > 0
-    message = f"运行日志保留 {run_log_days} 天，报告保留 {report_days} 天"
+    ok = run_log_days > 0 and report_days > 0 and ai_trace_days > 0
+    message = f"运行日志保留 {run_log_days} 天，报告保留 {report_days} 天，AI 追溯保留 {ai_trace_days} 天"
     return _check("retention_settings", "保留策略", ok, message)
 
 

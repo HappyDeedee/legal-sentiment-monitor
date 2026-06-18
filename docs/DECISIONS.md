@@ -295,3 +295,203 @@ short `Superseded by` note rather than deleting history.
 - Confirmed for CR-049: Report Center delivery history is scoped secondary
   detail opened from a report row/status action; it should not dominate the
   initial report archive layout.
+
+## 2026-06-18
+
+- Confirmed refinement for CR-047: the accepted Phase 5.1 direction is now
+  Account Identity Fidelity rather than only Account Browser Environment
+  Consistency. The target is account identity lifecycle management: profile
+  traces plus browser environment plus proxy region plus runtime binding plus
+  lock/audit consistency.
+- Confirmed refinement for CR-047: the profile folder stores browser traces
+  such as cookies, local storage, IndexedDB, cache, history, preferences,
+  service workers, and session state, while the database stores account
+  identity launch rules such as user agent, browser platform, timezone,
+  locale, accept-language, screen/viewport/device flags, fingerprint seed,
+  proxy policy, region, generator metadata, lock state, and re-login state.
+- Confirmed refinement for CR-047: Phase 5.1 should include an Account
+  Identity Generator and Account Identity Validator. The generator must be
+  stable, differentiated, self-consistent, and explainable. The validator must
+  fail closed for missing fields, region/timezone/locale mismatches, UA/device
+  contradictions, proxy-policy conflicts, and hidden Playwright/process-default
+  fallback.
+- Confirmed refinement for CR-047: for China mainland proxy identities, use a
+  coherent default region bundle such as `environment_region = CN_MAINLAND`,
+  `timezone = Asia/Shanghai`, `locale = zh-CN`, and `accept_language =
+  zh-CN,zh;q=0.9`, while avoiding province-level browser overfitting.
+- Confirmed for CR-047: adopt the strict proxy policy for V1 account identity
+  fidelity. After an account identity is locked, task-level proxy overrides are
+  rejected for that locked account environment. To change proxy policy, an
+  administrator must reset the account identity and re-login under the new
+  proxy.
+- Confirmed for CR-047: existing logged-in accounts do not need compatibility
+  preservation or guessed identity backfill. They should remain readable and be
+  re-logged in under the CR-047 identity rules when the feature is implemented.
+- Confirmed for CR-047: V1 does not introduce CloakBrowser or
+  CloakBrowser-Manager. The first implementation should use the existing
+  Playwright/CDP provider path, with a provider boundary for future expansion.
+- Confirmed for CR-047: V1 does not promise full management of Canvas, WebGL,
+  font inventory, `navigator.plugins`, browser extensions, or long-term
+  browsing history. These are future/provider-dependent because they depend on
+  browser build, OS/fonts, graphics stack, installed extensions, profile
+  history, and runtime JavaScript probes rather than simple launch options.
+- Confirmed for CR-047: if later accepted, high-fidelity browser-persona work
+  should be estimated as a separate provider project: about 1-2 days for
+  provider/license/deployment review, 3-5 days for a local one-platform
+  prototype, 1-2 weeks for optional provider integration, and 3-6+ weeks for a
+  production-grade browser-pool/profile-history capability.
+- Confirmed for CR-047: the CR-047 identity lifecycle uses persisted
+  `identity_state` plus `identity_runtime_snapshot_json` so generation,
+  validation, login, lock, relogin, and reset states are explicit rather than
+  implicit.
+- Confirmed for CR-047: the deterministic generator uses a canonical input
+  tuple with HMAC-SHA256 seed derivation and template-specific field rows; it
+  must not improvise random values or process-default fallback for locked
+  identities.
+- Confirmed for CR-047: tests and local diagnostics default to real-profile,
+  real-proxy, and real-platform-login tripwires off. Real account identity
+  access requires explicit opt-in environment flags.
+- Confirmed for CR-047: account identity template selection is automatic by
+  default. Normal users cannot choose templates or field-level browser
+  identity values. Administrators may only use an advanced pre-login override
+  to select a template family, and any change to a locked identity requires
+  explicit reset/re-login.
+- Confirmed for CR-051: the former top-level Run Center and Report Center
+  execution/report surfaces are consolidated into one top-level `任务中心`.
+  The first-level view uses the existing report-by-monitoring-task grouping so
+  operators can see which law-firm monitoring task each report and public
+  opinion result belongs to.
+- Confirmed for CR-051: the former run-record table fields such as run ID,
+  task ID, type, visibility, duration, and failure reason remain available in
+  the `运行记录` subview and Run Detail, but the task-group first view should
+  prioritize business identification and result summaries: task/law firm,
+  platforms, keyword summary, latest/report status, collection/new counts,
+  suspected negative, high risk, manual review, unevaluated, and the `运行详情`
+  drilldown.
+- Confirmed for CR-051: the separate top-level Report Center navigation entry
+  and page section are removed. Report preview, report-scoped lead inspection,
+  delivery history, resend, and downloads remain reachable from the
+  task-group surface, mostly as secondary row actions or the `更多` menu.
+- Confirmed for CR-052: after Task Center consolidation, row-level actions
+  should not duplicate capabilities already available in Run Detail. The
+  run-record row no longer exposes `查看日志`; operators use Run Detail's
+  `采集日志` section for the same log content plus copy/download. The
+  task-group report row no longer exposes `预览`; operators preview a report
+  from Run Detail's `报告` section, while `更多` continues to hold
+  report-scoped leads, delivery history, resend, and downloads.
+- Confirmed for CR-053: Task Center run tables should prioritize identifiers
+  before state. Flat mode begins with `任务 ID`, `运行 ID`, and compact `状态`.
+  Grouped mode hides the duplicated `任务 ID` column because the group header
+  already identifies the monitoring task; group rows begin with `运行 ID` and
+  compact `状态`.
+- Confirmed for CR-053: first-level status cells stay compact. Completed rows
+  show terminal state only, while active rows may show one short progress cue;
+  full progress, logs, report, AI evaluation, and delivery evidence remain in
+  Run Detail.
+- Confirmed for CR-053: Task Center has one page-level refresh entry. The
+  filter toolbar keeps `筛选` and `清空`; it does not repeat a second refresh
+  button.
+- Confirmed for CR-053: native select/dropdown controls must not be clipped or
+  shifted by the main content container. Console-wide layout should leave
+  vertical overflow visible while table-local horizontal scrolling remains
+  inside table wrappers.
+- Confirmed for CR-057: grouped Task Center run summaries should read as
+  compact labeled metrics, not as a long slash-separated sentence and not as
+  large nested cards. The task identity remains in the group title; aggregate
+  run, collection, new-content, risk, review, and unevaluated counts appear as
+  small chips, while limited-context or deleted-task context stays as a short
+  note.
+- Confirmed for CR-058: page-level filter date inputs may use the same
+  fixed-position in-page floating menu pattern as filter selects when native
+  browser date pickers misalign. The original date input must remain in place,
+  keep its value and `change` semantics, and ordinary form/configuration date
+  inputs must remain native unless a later focused requirement changes them.
+- Confirmed for CR-059: when a page-level filter date menu is wider than its
+  trigger, edge anchoring is preferred over center anchoring. The menu should
+  align its left edge with the trigger when space allows, align its right edge
+  with the trigger near the right viewport edge, and use viewport clamping only
+  as an overflow fallback.
+- Confirmed for CR-060: the CR-059 edge-anchoring attempt is retained as
+  historical verification, but the current accepted visual rule for page-level
+  filter date menus is compact trigger-center alignment. If the calendar menu
+  would otherwise be much wider than the date trigger, reduce the calendar
+  width first, align its center line to the trigger center line, and clamp only
+  as the final viewport-safety fallback.
+- Confirmed for CR-061: CR-060 is retained as historical verification, but the
+  current accepted visual rule for page-level filter date menus is
+  trigger-width anchoring. The visible date menu should match the clicked
+  trigger's width and align to its left edge when viewport space allows,
+  because that reads more like a normal filter dropdown than a wider centered
+  calendar surface. Viewport clamping remains only the final safety fallback.
+- Confirmed for CR-062: trigger-width date menus must also protect the internal
+  calendar grid. Date cells should reset browser-default button padding and
+  automatic minimum width so all seven weekday/day columns remain readable
+  inside the anchored menu.
+- Confirmed for CR-063: CR-061/CR-062 remain historical verification, but the
+  current accepted visual rule for page-level filter date menus is a readable
+  compact calendar popover. Narrow desktop date triggers should not force a
+  cramped trigger-width calendar; instead the menu uses a compact readable
+  width, a top anchor marker aligned to the clicked trigger center, right-edge
+  alignment near the viewport edge, and viewport clamping as the final safety
+  fallback.
+- Confirmed for CR-064: CR-063's readable popover remains the baseline, but
+  the current accepted right-edge rule is trigger-attached shrink before
+  right-align. Page-level date menus should use the visual viewport for
+  fixed-position edge checks, prefer left-edge attachment to the clicked
+  trigger, slightly reduce the readable width near the right edge when that
+  keeps the menu attached and the seven-day grid readable, and fall back to
+  right alignment or clamping only when the attached width would be too narrow.
+- Confirmed for CR-065: CR-064 remains historical verification, but the current
+  accepted visual rule for page-level filter date menus is trigger-center
+  anchoring. A readable compact calendar may be wider than the date trigger,
+  but its center line and top anchor marker should align to the clicked
+  trigger center whenever the visual viewport can accommodate it; viewport
+  clamping is the final safety fallback.
+- Confirmed for CR-066: CR-065 remains historical verification, but the current
+  accepted visual rule for page-level filter date menus is trigger-attached
+  dropdown alignment. A readable compact calendar should open from the clicked
+  trigger's left edge when space allows, shrink before clamping if the readable
+  width would overflow the visual viewport, and keep the top anchor marker
+  tied to the clicked trigger center.
+- Confirmed for CR-067: CR-066 remains historical verification, but the current
+  accepted visual rule for page-level filter date menus is trigger-width visual
+  attachment. The visible date menu should match the clicked trigger width when
+  the trigger is usable, align its left edge to the trigger, keep the top
+  anchor marker tied to the trigger center, and use a small minimum readable
+  width only for unusually narrow triggers before viewport clamping.
+- Confirmed for CR-068: CR-067 remains historical verification, but the current
+  accepted visual rule for page-level filter date menus is local attached menu
+  positioning. The active date menu should be mounted inside the clicked
+  `.filter-date-enhanced` wrapper and positioned with local absolute
+  coordinates so it opens directly under that field, while preserving the
+  original date input value and `change` semantics.
+- Confirmed for CR-070: Account Environment Export And Import Package is
+  accepted as a Phase 5.2 new capability for moving one selected platform
+  account environment between deployments. It is not a full database
+  backup/restore feature and does not include monitoring tasks, crawl runs,
+  reports, AI traces, email logs, users, runtime settings, or customer
+  business history by default.
+- Confirmed for CR-070: V1 supports metadata-only export and a slim encrypted
+  login-state migration package. The migration package should include account
+  configuration, CR-047 identity metadata, platform-account metadata, login/
+  session state, and necessary profile state, not a raw whole browser profile
+  copy. Cache, GPU cache, code cache, media cache, crash dumps, downloads,
+  screenshots, temporary files, and other duplicated or regenerable browser
+  artifacts are excluded by default.
+- Confirmed for CR-070: V1 package encryption uses a passphrase-based
+  encrypted package envelope. Target-deployment public-key encryption is future
+  scope.
+- Confirmed for CR-070: V1 may include source proxy host/IP plus port as an
+  encrypted endpoint hint to help target-side proxy mapping, but must not
+  export proxy username, password, token, authentication header, or provider
+  secret. Audit logs, manifest summaries, and ordinary API responses must not
+  expose the endpoint hint.
+- Confirmed for CR-070: imports create a new target account/profile by
+  default. Replace, merge, and overwrite behavior is future scope.
+- Confirmed for CR-070: V1 exports avatar metadata only. Cached avatar image
+  bytes are future scope.
+- Confirmed for CR-072: the Monitoring task edit drawer's
+  `自定义开始日期` and `自定义结束日期` are a focused exception to the ordinary
+  form-date-native rule. They should reuse the existing CR-068 local attached
+  date-picker mechanism, while unrelated edit/configuration date inputs remain
+  native unless separately accepted.

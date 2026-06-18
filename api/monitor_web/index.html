@@ -17,7 +17,7 @@
     }
     * { box-sizing: border-box; }
     body { margin:0; font-family:"Inter","Microsoft YaHei",Arial,sans-serif; background:var(--bg); color:var(--text); font-size:14px; }
-    .content { min-width:0; overflow:hidden; }
+    .content { min-width:0; overflow:visible; }
     section { display:none; padding:22px 24px 34px; }
     section.active { display:block; }
     .page-head { display:flex; align-items:flex-start; justify-content:space-between; gap:16px; margin-bottom:16px; }
@@ -487,6 +487,12 @@
     .page-filter-region {
       background:linear-gradient(180deg, rgba(252,253,255,.98), rgba(246,248,251,.98));
     }
+    .modal-filter-region.page-filter-region {
+      padding:0;
+      border:0;
+      border-radius:0;
+      background:transparent;
+    }
     .table-wrap {
       border:1px solid var(--line);
       border-radius:12px;
@@ -825,6 +831,25 @@
       .operations-resource-panel { padding:12px !important; }
       .operations-drilldown { min-height:62px; }
       .operations-drilldown span { display:none; }
+      .detail-tabs.run-detail-tabs {
+        display:grid;
+        grid-template-columns:repeat(2, minmax(0,1fr));
+        gap:8px;
+        overflow:visible;
+        border-bottom:0;
+      }
+      .detail-tabs.run-detail-tabs button {
+        width:100%;
+        min-height:36px;
+        border:1px solid var(--line);
+        border-radius:6px;
+        background:#fff;
+        white-space:nowrap;
+      }
+      .detail-tabs.run-detail-tabs button.active {
+        border-color:var(--primary);
+        background:var(--primary-weak);
+      }
       .header-actions { width:100%; justify-content:flex-start; }
     }
   </style>
@@ -872,10 +897,7 @@
           <button data-tab="jobs" data-menu-key="monitoring"><span class="ui-icon"><svg><use href="#icon-monitor"></use></svg></span>舆情监控</button>
         </div>
         <div class="nav-group">
-          <button data-tab="runs" data-menu-key="run_center"><span class="ui-icon"><svg><use href="#icon-run"></use></svg></span>运行中心</button>
-        </div>
-        <div class="nav-group">
-          <button data-tab="reports" data-menu-key="report_center"><span class="ui-icon"><svg><use href="#icon-report"></use></svg></span>报告中心</button>
+          <button data-tab="runs" data-menu-key="run_center"><span class="ui-icon"><svg><use href="#icon-run"></use></svg></span>任务中心</button>
         </div>
         <div class="nav-group nav-group-collapsible" data-nav-group="resources">
           <button class="nav-group-toggle" type="button" data-nav-group-toggle="resources" data-default-tab="accounts" data-menu-key="platform_accounts" aria-controls="nav_group_resources" aria-expanded="true"><span class="ui-icon"><svg><use href="#icon-resource"></use></svg></span><span>资源管理</span><span class="nav-caret" aria-hidden="true"></span></button>
@@ -909,7 +931,7 @@
         </div>
         <div class="row header-actions">
           <div id="top_status" class="small"></div>
-          <button class="secondary" onclick="refreshActiveSection()">刷新当前页面</button>
+          <button id="global_refresh_button" class="secondary btn-icon refresh-icon-button" type="button" data-feedback-bound="1" onclick="refreshActiveSection(this)" aria-label="Refresh current page" title="Refresh current page"><span class="ui-icon refresh-icon" aria-hidden="true"><svg><use href="#icon-refresh"></use></svg></span></button>
           <div class="account-area">
             <div id="current_user_badge" class="small"></div>
             <button class="secondary" onclick="logout()">退出</button>
@@ -921,15 +943,13 @@
           <div class="page-title-block"><span class="page-kicker">运营首页</span><h2>运营首页</h2><p>围绕监控任务、运行记录、报告和邮件交付查看当前运营状态。</p></div>
           <div class="page-actions">
             <button class="primary" data-shortcut-tab="jobs" data-shortcut-action="new-job" data-menu-key="monitoring">新建监控任务</button>
-            <button class="secondary" onclick="refreshActiveSection()">刷新首页</button>
           </div>
         </div>
         <div id="task_loop_shortcuts" class="task-loop-shortcuts" aria-label="监控任务流快捷入口">
           <button class="shortcut-card shortcut-primary" type="button" data-shortcut-tab="jobs" data-shortcut-action="new-job" data-menu-key="monitoring"><span>01</span><strong>创建监控任务</strong><em>填写律所、平台搜索词、调度和收件人。</em></button>
-          <button class="shortcut-card" type="button" data-shortcut-tab="runs" data-menu-key="run_center"><span>02</span><strong>查看运行中心</strong><em>跟进采集状态、失败原因和运行日志。</em></button>
-          <button class="shortcut-card" type="button" data-shortcut-tab="reports" data-menu-key="report_center"><span>03</span><strong>查看报告中心</strong><em>预览报告正文、线索明细和下载归档。</em></button>
-          <button class="shortcut-card" type="button" data-shortcut-tab="reports" data-shortcut-target="email_delivery_status_entry" data-menu-key="report_center"><span>04</span><strong>检查邮件交付</strong><em>查看报告邮件状态，并按需手动重发。</em></button>
-          <button class="shortcut-card admin-entry" type="button" data-shortcut-tab="accounts" data-menu-key="platform_accounts"><span>05</span><strong>处理资源问题</strong><em>维护账号登录态、代理、AI 接入和邮件配置。</em></button>
+          <button class="shortcut-card" type="button" data-shortcut-tab="runs" data-shortcut-grouped="1" data-shortcut-target="task_center_panel" data-menu-key="run_center"><span>02</span><strong>查看任务中心</strong><em>按舆情监控任务分组查看运行、风险计数和详情。</em></button>
+          <button class="shortcut-card" type="button" data-shortcut-tab="runs" data-shortcut-grouped="0" data-shortcut-target="task_center_panel" data-menu-key="run_center"><span>03</span><strong>查看运行记录</strong><em>按任务 ID 顺序跟进采集状态、失败原因和详情。</em></button>
+          <button class="shortcut-card admin-entry" type="button" data-shortcut-tab="accounts" data-menu-key="platform_accounts"><span>04</span><strong>处理资源问题</strong><em>维护账号登录态、代理、AI 接入和邮件配置。</em></button>
         </div>
         <div class="operations-home" aria-label="运营指标">
           <div id="operations_home_meta" class="operations-home-meta"></div>
@@ -947,8 +967,8 @@
           <div class="page-title-block"><span class="page-kicker">任务监控</span><h2>舆情监控</h2><p>配置律所舆情任务，把平台采集、过滤去重、AI 评估和报告发送串联起来。</p></div>
           <div class="page-actions">
             <button class="primary" onclick="openNewJobDrawer()">新建任务</button>
-            <button class="secondary" onclick="refreshJobSchedule()">刷新调度时间</button>
-            <button class="secondary" data-shortcut-tab="runs" data-menu-key="run_center">查看运行中心</button>
+            <button class="secondary btn-icon refresh-icon-button" type="button" data-feedback-bound="1" onclick="refreshJobSchedule(this)" aria-label="Refresh schedule times" title="Refresh schedule times"><span class="ui-icon refresh-icon" aria-hidden="true"><svg><use href="#icon-refresh"></use></svg></span></button>
+            <button class="secondary" data-shortcut-tab="runs" data-shortcut-grouped="1" data-shortcut-target="task_center_panel" data-menu-key="run_center">查看任务中心</button>
           </div>
         </div>
         <div class="panel">
@@ -1032,13 +1052,13 @@
           <div class="config-section admin-advanced-section admin-only-job-field">
             <h3>管理员高级采集设置</h3>
             <p class="section-note">仅管理员可绑定账号、代理和采集技术参数；普通用户任务会使用系统自动选择的资源。</p>
-            <div class="row">
+            <div class="row page-filter-region modal-filter-region">
               <div><label>绑定平台账号</label><select id="job_account_id"><option value="">自动选择可用账号</option></select></div>
               <div><label>绑定代理资源</label><select id="job_proxy_id"><option value="">跟随账号设置</option></select></div>
             </div>
             <details class="advanced">
               <summary>采集参数</summary>
-              <div class="grid-3">
+              <div class="grid-3 page-filter-region modal-filter-region">
                 <div><label>采集目标类型</label><select id="job_target_type"><option value="search">关键词搜索</option></select></div>
                 <div><label>输出方式</label><select id="job_output_mode"><option value="internal">系统内部存储</option><option value="json">JSON 归档</option><option value="excel">Excel 归档</option></select></div>
                 <div><label>登录方式</label><select id="job_browser_mode"><option value="server_qrcode">网页登录态 / 扫码</option><option value="profile">已有网页登录态</option><option value="local_window">本地登录窗口</option></select></div>
@@ -1050,7 +1070,7 @@
           <div class="config-section wizard-section" data-wizard-step="schedule">
             <h3>3. 调度</h3>
             <p class="section-note">设置任务是否启用、多久运行一次，以及每次只处理哪个时间范围内的新内容。</p>
-            <div class="row">
+            <div class="row page-filter-region modal-filter-region">
               <div>
                 <label>采集范围</label>
                 <select id="time_window_type">
@@ -1063,7 +1083,7 @@
               <div><label>抓取频率</label><select id="frequency"><option value="daily">每天</option><option value="12h">每 12 小时</option><option value="6h">每 6 小时</option><option value="cron">自定义 cron</option></select></div>
               <div><label>邮件发送时间</label><input id="email_time" value="09:00"></div>
             </div>
-            <div class="row">
+            <div class="row page-filter-region modal-filter-region">
               <div><label>自定义开始日期</label><input id="custom_start" type="date"></div>
               <div><label>自定义结束日期</label><input id="custom_end" type="date"></div>
               <div><label>自定义 cron</label><input id="cron_expr" placeholder="例如：0 9 * * *"></div>
@@ -1074,7 +1094,7 @@
           <div class="config-section admin-advanced-section admin-only-job-field">
             <h3>AI 评估</h3>
             <p class="section-note">选择用于本任务的 AI 接入资源。未选择或接入异常时，采集仍会运行，内容进入待人工复核。</p>
-            <div class="grid">
+            <div class="grid page-filter-region modal-filter-region">
               <div><label>AI 接入</label><select id="job_ai_profile_id"><option value="">使用默认 AI 接入</option></select></div>
               <div><label>评估规则</label><input value="使用系统配置中的 AI 评估规则" disabled></div>
             </div>
@@ -1085,7 +1105,7 @@
             <p class="section-note">设置报告收件人和本任务使用的邮件模板。任务收件人优先；留空才使用邮件配置里的全局默认收件人。发件人只代表 SMTP 身份，不会自动成为收件人。</p>
             <label>收件邮箱（多行）</label><textarea id="recipients" placeholder="a@example.com&#10;b@example.com"></textarea>
             <div class="field-hint">未填写任务收件人时，系统会尝试使用全局默认收件人；两者都为空时只生成报告，不发送邮件。未配置邮件也可以采集和生成报告，只是不发送邮件。</div>
-            <div class="grid admin-only-job-field">
+            <div class="grid admin-only-job-field page-filter-region modal-filter-region">
               <div><label>邮件模板</label><select id="job_email_template_id"><option value="">使用当前启用模板</option></select></div>
             </div>
           </div>
@@ -1103,7 +1123,6 @@
           <div class="page-title-block"><span class="page-kicker">资源支撑</span><h2>平台账号</h2><p>维护抖音、快手、小红书账号资源、登录状态和代理绑定。任务只选择账号，不在任务里修改账号资料。</p></div>
           <div class="page-actions">
             <button class="primary" onclick="openNewSocialAccountModal()">新增账号</button>
-            <button class="secondary" onclick="loadAccountsPool()">刷新账号</button>
             <button class="secondary" data-shortcut-tab="jobs" data-menu-key="monitoring">返回任务</button>
           </div>
         </div>
@@ -1154,7 +1173,7 @@
               <div class="account-section">
                 <details class="advanced" open>
                 <summary>1. 基础资料</summary>
-                <div class="grid-3">
+                <div class="grid-3 page-filter-region modal-filter-region">
                   <div><label>账号名称</label><input id="social_account_name" placeholder="例如：抖音主号"></div>
                   <div>
                     <label>平台</label>
@@ -1235,7 +1254,6 @@
           <div class="page-title-block"><span class="page-kicker">资源支撑</span><h2>代理资源</h2><p>维护代理来源、并发上限和可用状态。代理可绑定到账号或任务，采集时按绑定关系使用。</p></div>
           <div class="page-actions">
             <button class="primary" onclick="openProxyDrawer()">新增代理</button>
-            <button class="secondary" onclick="loadProxyPool()">刷新代理</button>
             <button class="secondary" data-shortcut-tab="accounts" data-menu-key="platform_accounts">查看账号</button>
           </div>
         </div>
@@ -1253,7 +1271,6 @@
             <div><label>状态</label><select id="proxy_status_filter"><option value="">全部状态</option><option value="active">可用</option><option value="standby">待机</option><option value="limited">受限</option><option value="disabled">停用</option></select></div>
             <div class="toolbar-actions">
               <button class="secondary" onclick="clearProxyFilters()">清空筛选</button>
-              <button class="secondary" onclick="loadProxyPool()">刷新</button>
             </div>
           </div>
           <div id="proxy_profiles_table"></div>
@@ -1272,7 +1289,7 @@
         <div class="panel">
           <h3>新增 / 编辑代理</h3>
           <input type="hidden" id="proxy_id">
-          <div class="grid-3">
+          <div class="grid-3 page-filter-region modal-filter-region">
             <div><label>代理名称</label><input id="proxy_name" placeholder="例如：华东住宅代理"></div>
             <div><label>供应商</label><input id="proxy_provider" value="manual"></div>
             <div><label>状态</label><select id="proxy_status"><option value="standby">待机</option><option value="active">可用</option><option value="limited">受限</option><option value="disabled">停用</option></select></div>
@@ -1296,7 +1313,6 @@
           <div class="page-title-block"><span class="page-kicker">资源支撑</span><h2>AI 接入</h2><p>维护 OpenAI-compatible / Anthropic-compatible 协议的模型连接资源，可被监控任务绑定。</p></div>
           <div class="page-actions">
             <button class="primary" onclick="openAIProfileDrawer()">新增 AI 接入</button>
-            <button class="secondary" onclick="loadAIProfiles()">刷新 AI 接入</button>
             <button class="secondary" data-shortcut-tab="ai_rules" data-menu-key="ai_rules">查看评估规则</button>
           </div>
         </div>
@@ -1315,7 +1331,6 @@
             <div><label>测试状态</label><select id="ai_profile_test_filter"><option value="">全部状态</option><option value="success">最近通过</option><option value="failed">最近失败</option><option value="untested">尚未测试</option></select></div>
             <div class="toolbar-actions">
               <button class="secondary" onclick="clearAIProfileFilters()">清空筛选</button>
-              <button class="secondary" onclick="loadAIProfiles()">刷新</button>
             </div>
           </div>
           <div id="ai_profiles_table" style="margin-top:12px"></div>
@@ -1367,7 +1382,7 @@
         </div>
         <div class="panel">
           <input type="hidden" id="ai_profile_id">
-          <div class="grid-3">
+          <div class="grid-3 page-filter-region modal-filter-region">
             <div><label>接入名称</label><input id="ai_profile_name" placeholder="例如：DeepSeek 主账号"></div>
             <div><label>接口协议</label><select id="ai_profile_provider"><option value="openai">OpenAI-compatible</option><option value="anthropic">Anthropic-compatible</option></select></div>
             <div>
@@ -1409,7 +1424,6 @@
           <div class="page-title-block"><span class="page-kicker">系统配置</span><h2>AI 评估规则</h2><p>维护可复用的舆情判断规则。当前默认规则会用于任务采集后的 AI 初筛。</p></div>
           <div class="page-actions">
             <button class="primary" onclick="openNewAIRuleModal()">新增评估规则</button>
-            <button class="secondary" onclick="loadAIRuleProfiles()">刷新规则</button>
             <button class="secondary" data-shortcut-tab="ai" data-menu-key="ai_access">查看 AI 接入</button>
           </div>
         </div>
@@ -1489,7 +1503,7 @@
               <h3>测试样例</h3>
               <div class="small">手动填写一条采集内容和评论样本，用来验证规则是否符合预期；平台只作为样例上下文，不会触发采集或导入数据。</div>
               <div class="sample-box">
-                <div class="grid">
+                <div class="grid page-filter-region modal-filter-region">
                   <div><label>样例律所</label><input id="ai_sample_law_firm_name" value="海安律所"></div>
                   <div><label>平台</label><select id="ai_sample_platform"><option value="dy">抖音</option><option value="ks">快手</option><option value="xhs">小红书</option></select></div>
                 </div>
@@ -1522,8 +1536,7 @@
           <div class="page-actions">
             <button class="primary" onclick="openMailConfigModal()">编辑邮件配置</button>
             <button class="secondary" onclick="openMailTestModal()">发送测试邮件</button>
-            <button class="secondary" onclick="loadEmail()">刷新配置</button>
-            <button class="secondary" data-shortcut-tab="reports" data-shortcut-target="email_delivery_status_entry" data-menu-key="report_center">查看交付状态</button>
+            <button class="secondary" data-shortcut-tab="runs" data-shortcut-grouped="1" data-shortcut-target="task_center_panel" data-menu-key="run_center">查看任务中心</button>
             <label class="setting-switch email-toolbar-switch" title="开启后测试邮件、手动重发和自动交付会真实提交 SMTP">
               <input id="real_email_delivery_toggle" type="checkbox" onchange="setRealEmailDelivery(this.checked)">
               <span class="setting-switch-track" aria-hidden="true"><span></span></span>
@@ -1552,7 +1565,7 @@
           <div class="settings-panel-grid">
             <div class="settings-card">
               <h3>SMTP 连接</h3>
-              <div class="grid-3">
+              <div class="grid-3 page-filter-region modal-filter-region">
                 <div><label>SMTP Host</label><input id="smtp_host"></div>
                 <div><label>SMTP Port</label><input id="smtp_port" value="465"></div>
                 <div><label>加密方式</label><select id="encryption"><option value="ssl">SSL</option><option value="starttls">STARTTLS</option><option value="none">None</option></select></div>
@@ -1602,7 +1615,6 @@
           <div class="page-title-block"><span class="page-kicker">邮件交付</span><h2>邮件模板</h2><p>管理报告邮件标题和样式。HTML 模板必须保留 {report_html} 或 {report_body}，真实发送时由系统插入本次运行生成的报告正文。</p></div>
           <div class="page-actions">
             <button class="primary" onclick="openEmailTemplateDrawer()">新增邮件模板</button>
-            <button class="secondary" onclick="loadEmailTemplates()">刷新模板</button>
             <button class="secondary" data-shortcut-tab="email" data-menu-key="mail_config">查看邮件配置</button>
           </div>
         </div>
@@ -1620,7 +1632,6 @@
             <div><label>状态</label><select id="email_template_status_filter"><option value="">全部模板</option><option value="active">当前使用</option><option value="standby">备用</option></select></div>
             <div class="toolbar-actions">
               <button class="secondary" onclick="clearEmailTemplateFilters()">清空筛选</button>
-              <button class="secondary" onclick="loadEmailTemplates()">刷新</button>
             </div>
           </div>
           <div id="email_templates_table"></div>
@@ -1631,7 +1642,6 @@
         <div class="page-head page-entry" data-page-entry="runtime">
           <div class="page-title-block"><span class="page-kicker">系统配置</span><h2>运行策略</h2><p>配置采集并发、运行超时、登录会话、调度间隔和保留周期。</p></div>
           <div class="page-actions">
-            <button class="secondary" onclick="loadRuntimeSettings()">刷新策略</button>
             <button class="primary" onclick="saveRuntimeSettings()">保存策略</button>
             <button class="secondary" data-shortcut-tab="doctor" data-menu-key="system_diagnostics">查看系统诊断</button>
           </div>
@@ -1643,26 +1653,36 @@
 
       <section id="runs">
         <div class="page-head page-entry" data-page-entry="runs">
-          <div class="page-title-block"><span class="page-kicker">运行中心</span><h2>运行中心</h2><p>查看每次采集运行状态、失败原因和日志。运行记录会保留，即使原任务已删除。</p></div>
+          <div class="page-title-block"><span class="page-kicker">任务中心</span><h2>任务中心</h2><p>用同一套运行记录查看采集、AI 评估、报告和交付；打开分组时按舆情监控任务汇总。</p></div>
           <div class="page-actions">
             <button class="primary" data-shortcut-tab="jobs" data-shortcut-action="new-job" data-menu-key="monitoring">新建任务</button>
-            <button class="secondary" onclick="loadRuns()">刷新运行记录</button>
-            <button class="secondary" data-shortcut-tab="reports" data-menu-key="report_center">查看报告</button>
           </div>
         </div>
-        <div id="running_summary"></div>
-        <div class="panel">
+        <div id="task_center_panel" class="panel task-center-panel">
+          <div class="account-ledger-head">
+            <div>
+              <h3>运行记录</h3>
+              <p class="small">字段口径保持一致；分组模式会隐藏组标题已展示的任务身份，不改变可查看的详情。</p>
+            </div>
+            <div class="task-center-mode">
+              <label class="switch-control" title="打开后按舆情监控任务分组展示；关闭后按任务 ID 和运行 ID 顺序展示。">
+                <input id="task_group_toggle" type="checkbox" checked onchange="setTaskCenterGrouped(this.checked)">
+                <span>按舆情任务分组</span>
+              </label>
+            </div>
+          </div>
+          <div id="running_summary"></div>
           <div class="page-toolbar page-filter-region" data-filter-region="runs">
             <div>
               <label>任务 / 律所</label>
               <input id="run_task_filter" placeholder="任务 ID 或律所名称" onkeydown="if(event.key==='Enter') applyRunFilters()">
             </div>
-            <div><label>状态</label><select id="run_status_filter" onchange="applyRunFilters()"><option value="">全部状态</option><option value="running">运行中</option><option value="success">成功</option><option value="partial_failed">部分失败</option><option value="failed">失败</option><option value="timeout">超时</option><option value="cancelled">已停止</option><option value="skipped">已跳过</option><option value="diagnostic">诊断记录</option></select></div>
+            <div><label>状态</label><select id="run_status_filter" onchange="applyRunFilters()"><option value="">全部状态</option><option value="running">运行中</option><option value="success">已完成</option><option value="partial_failed">部分失败</option><option value="failed">失败</option><option value="timeout">运行超时</option><option value="cancelled">已取消</option><option value="interrupted">执行中断</option><option value="skipped">已跳过</option><option value="diagnostic">诊断记录</option></select></div>
             <div><label>平台</label><select id="run_platform_filter" onchange="applyRunFilters()"><option value="">全部平台</option><option value="dy">抖音</option><option value="ks">快手</option><option value="xhs">小红书</option></select></div>
-            <div><label>运行类型</label><select id="run_type_filter" onchange="applyRunFilters()"><option value="operational" selected>运营记录</option><option value="">全部类型</option><option value="scheduled">自动调度</option><option value="manual">手动运行</option><option value="test">测试/诊断</option></select></div>
-            <div class="run-admin-control"><label>可见性</label><select id="run_visibility_filter" onchange="applyRunFilters()"><option value="visible">默认可见</option><option value="archived">已归档</option><option value="all">全部记录</option></select></div>
             <div><label>开始日期</label><input id="run_date_from" type="date" onchange="applyRunFilters()"></div>
             <div><label>结束日期</label><input id="run_date_to" type="date" onchange="applyRunFilters()"></div>
+            <div class="task-filter-secondary"><label>运行类型</label><select id="run_type_filter" onchange="applyRunFilters()"><option value="operational" selected>运营记录</option><option value="">全部类型</option><option value="scheduled">自动调度</option><option value="manual">手动运行</option><option value="test">测试/诊断</option></select></div>
+            <div class="task-filter-secondary run-admin-control"><label>可见性</label><select id="run_visibility_filter" onchange="applyRunFilters()"><option value="visible">默认可见</option><option value="archived">已归档</option><option value="all">全部记录</option></select></div>
             <div>
               <label>每页数量</label>
               <select id="run_limit" onchange="applyRunFilters()">
@@ -1673,43 +1693,11 @@
                 <option value="0">全部运行记录</option>
               </select>
             </div>
-            <div class="toolbar-actions"><button class="secondary" onclick="applyRunFilters()">筛选</button><button class="secondary" onclick="clearRunFilters()">清空</button><button class="secondary" onclick="loadRuns()">刷新</button></div>
+            <div class="toolbar-actions"><button class="secondary" onclick="applyRunFilters()">筛选</button><button class="secondary" onclick="clearRunFilters()">清空</button></div>
           </div>
           <div id="run_filter_summary" class="run-center-meta"></div>
           <div id="runs_table"></div>
           <div id="run_pagination" class="run-pagination"></div>
-        </div>
-      </section>
-      <section id="reports">
-        <div class="page-head page-entry" data-page-entry="reports">
-          <div class="page-title-block"><span class="page-kicker">报告中心</span><h2>报告中心</h2><p>筛选报告、预览邮件正文、查看线索明细，并按需下载归档文件。</p></div>
-          <div class="page-actions">
-            <button class="primary" data-shortcut-tab="jobs" data-shortcut-action="new-job" data-menu-key="monitoring">新建任务</button>
-            <button class="secondary" onclick="loadReports()">刷新报告</button>
-            <button class="secondary" data-shortcut-tab="runs" data-menu-key="run_center">查看运行</button>
-          </div>
-        </div>
-        <div id="email_delivery_status_entry" class="email-delivery-entry">
-          <div>
-            <span class="status">邮件交付</span>
-            <strong>报告邮件状态与交付历史</strong>
-            <p>报告列表展示最新邮件状态；点击报告行的邮件状态或“更多 > 查看交付历史”会打开悬浮窗。</p>
-          </div>
-          <button class="secondary" type="button" onclick="loadReports()">刷新报告邮件状态</button>
-        </div>
-        <div class="panel">
-          <div class="page-toolbar page-filter-region" data-filter-region="reports">
-            <div><label>律所</label><input id="report_law_firm" placeholder="输入律所名称"></div>
-            <div><label>平台</label><select id="report_platform"><option value="">全部</option><option value="dy">抖音</option><option value="ks">快手</option><option value="xhs">小红书</option></select></div>
-            <div><label>开始日期</label><input id="report_date_from" type="date"></div>
-            <div><label>结束日期</label><input id="report_date_to" type="date"></div>
-            <div><label>报告范围</label><select id="report_limit"><option value="100" selected>最近 100 条</option><option value="200">最近 200 条</option><option value="500">最近 500 条</option><option value="0">全部报告</option></select></div>
-            <div class="toolbar-actions"><button class="secondary" onclick="loadReports()">筛选</button></div>
-          </div>
-        </div>
-        <div class="panel">
-          <h3>报告列表</h3>
-          <div id="reports_table"></div>
         </div>
       </section>
       <section id="doctor">
@@ -1756,32 +1744,12 @@
   <div id="account_action_menu" class="account-action-menu"></div>
   <div id="job_action_menu" class="action-menu"></div>
   <div id="ai_rule_action_menu" class="action-menu"></div>
-  <div id="report_action_menu" class="report-action-menu"></div>
-  <div id="report_leads_backdrop" class="drawer-backdrop" onclick="closeReportLeadsDrawer()"></div>
-  <div id="report_leads_drawer" class="drawer template-modal report-leads-drawer" role="dialog" aria-modal="true" aria-label="线索明细" data-report-lead-panel>
-    <div class="drawer-head">
-      <div>
-        <h3 id="report_leads_title">线索明细</h3>
-        <div id="leads_scope" class="small">从报告中心或运行中心点击“查看线索”后，在这里展示对应范围内的线索和筛选条件。</div>
-      </div>
-      <button class="modal-close" onclick="closeReportLeadsDrawer()" title="关闭">×</button>
-    </div>
-    <div class="report-leads-toolbar">
-      <span id="leads_scope_count" class="status">未选择范围</span>
-      <span id="leads_scope_hint" class="small">请选择一份报告或一条运行记录后查看。</span>
-    </div>
-    <div class="page-toolbar page-filter-region report-leads-filter" data-filter-region="report-leads">
-      <div><label>线索状态</label><select id="lead_status_filter" title="只筛选当前悬浮窗范围内的线索"><option value="">全部线索</option><option value="high">高风险</option><option value="negative">疑似负面</option><option value="pending">待人工复核</option><option value="unrelated">不相关</option><option value="none">已评估无风险</option><option value="unevaluated">未评估/上下文有限</option></select></div>
-      <div class="toolbar-actions"><button class="secondary" type="button" onclick="reloadCurrentLeadDrawer()">筛选线索</button></div>
-    </div>
-    <div id="leads_table" class="report-leads-content"></div>
-  </div>
   <div id="email_delivery_history_backdrop" class="drawer-backdrop" onclick="closeEmailDeliveryHistoryDrawer()"></div>
   <div id="email_delivery_history_drawer" class="drawer template-modal email-delivery-history-drawer" role="dialog" aria-modal="true" aria-label="邮件交付历史" data-report-delivery-panel>
     <div class="drawer-head">
       <div>
         <h3 id="email_delivery_history_title">邮件交付历史</h3>
-        <div id="email_delivery_history_scope" class="small">从报告列表点击邮件状态或“更多 > 查看交付历史”后，在这里展示对应记录。</div>
+        <div id="email_delivery_history_scope" class="small">从运行详情的邮件交付区域进入后，在这里展示对应记录。</div>
       </div>
       <button class="modal-close" onclick="closeEmailDeliveryHistoryDrawer()" title="关闭">×</button>
     </div>
@@ -1790,7 +1758,7 @@
       <span class="small">交付历史限定在当前报告，SMTP 接受不代表收件箱已收到。</span>
     </div>
     <div class="drawer-actions">
-      <button class="secondary" type="button" onclick="refreshSelectedEmailDeliveryHistory()">刷新历史</button>
+      <button class="secondary btn-icon refresh-icon-button" type="button" data-feedback-bound="1" onclick="refreshSelectedEmailDeliveryHistory(this)" aria-label="Refresh delivery history" title="Refresh delivery history"><span class="ui-icon refresh-icon" aria-hidden="true"><svg><use href="#icon-refresh"></use></svg></span></button>
     </div>
     <div id="email_delivery_history" class="email-delivery-history-content"></div>
   </div>
@@ -1810,7 +1778,7 @@
           <div><label>模板名称</label><input id="email_template_name" placeholder="例如：企业日报模板"></div>
           <div><label>邮件标题模板</label><input id="email_template_subject" value="【律所舆情日报】{law_firm_name} - {date}"></div>
         </div>
-        <div class="grid">
+        <div class="grid page-filter-region modal-filter-region">
           <div>
             <label>样式预设</label>
             <select id="email_template_preset" onchange="applyEmailTemplatePreset(this.value)">
@@ -1831,7 +1799,7 @@
         <label><input type="checkbox" id="email_template_active"> 设为当前邮件模板</label>
         <div class="form-actions">
           <button id="email_template_save_button" class="primary" type="button" data-feedback-bound="1" onclick="saveEmailTemplate()">保存模板</button>
-          <button id="email_template_preview_button" class="secondary" type="button" data-feedback-bound="1" onclick="previewEmailTemplate(true, this)">刷新预览</button>
+          <button id="email_template_preview_button" class="secondary btn-icon refresh-icon-button" type="button" data-feedback-bound="1" onclick="previewEmailTemplate(true, this)" aria-label="Refresh preview" title="Refresh preview"><span class="ui-icon refresh-icon" aria-hidden="true"><svg><use href="#icon-refresh"></use></svg></span></button>
           <button class="secondary" onclick="resetEmailTemplateForm()">清空</button>
         </div>
       </div>
@@ -1853,11 +1821,37 @@
       <button class="modal-close" onclick="closeRunLogDrawer()" title="关闭">×</button>
     </div>
     <div class="drawer-actions">
-      <button class="secondary" onclick="refreshCurrentRunLogs()">刷新日志</button>
+      <button class="secondary btn-icon refresh-icon-button" type="button" data-feedback-bound="1" onclick="refreshCurrentRunLogs(this)" aria-label="Refresh logs" title="Refresh logs"><span class="ui-icon refresh-icon" aria-hidden="true"><svg><use href="#icon-refresh"></use></svg></span></button>
       <button class="secondary" onclick="copyCurrentRunLogs()">复制</button>
       <button class="secondary" onclick="downloadCurrentRunLogs()">下载</button>
     </div>
     <pre id="run_logs" class="logbox">选择一条运行记录查看日志。</pre>
+  </div>
+  <div id="run_detail_backdrop" class="drawer-backdrop" onclick="closeRunDetailDrawer()"></div>
+  <div id="run_detail_drawer" class="drawer run-detail-drawer" role="dialog" aria-modal="true" aria-label="运行详情" data-run-detail-panel>
+    <div class="drawer-head">
+      <div>
+        <h3 id="run_detail_title">运行详情</h3>
+        <div id="run_detail_subtitle" class="small">选择一条运行记录后查看详情。</div>
+      </div>
+      <button class="modal-close" onclick="closeRunDetailDrawer()" title="关闭">×</button>
+    </div>
+    <div class="run-detail-toolbar">
+      <span id="run_detail_status" class="status">未选择运行</span>
+      <span id="run_detail_scope" class="small">详情限定在当前运行记录。</span>
+      <button class="secondary btn-icon refresh-icon-button" type="button" data-feedback-bound="1" onclick="refreshRunDetail(this)" aria-label="Refresh run detail" title="Refresh run detail"><span class="ui-icon refresh-icon" aria-hidden="true"><svg><use href="#icon-refresh"></use></svg></span></button>
+      <button class="secondary" type="button" onclick="closeRunDetailDrawer()">返回列表</button>
+      <span id="run_detail_actions" class="run-detail-action-slot"></span>
+    </div>
+    <div class="detail-tabs run-detail-tabs" role="tablist" aria-label="运行详情分区">
+      <button type="button" class="active" data-run-detail-tab="overview" onclick="switchRunDetailTab('overview')">概览</button>
+      <button type="button" data-run-detail-tab="logs" onclick="switchRunDetailTab('logs')">采集日志</button>
+      <button type="button" data-run-detail-tab="contents" onclick="switchRunDetailTab('contents')">采集内容</button>
+      <button type="button" data-run-detail-tab="ai" onclick="switchRunDetailTab('ai')">AI 评估</button>
+      <button type="button" data-run-detail-tab="reports" onclick="switchRunDetailTab('reports')">报告</button>
+      <button type="button" data-run-detail-tab="email" onclick="switchRunDetailTab('email')">邮件交付</button>
+    </div>
+    <div id="run_detail_body" class="run-detail-content"></div>
   </div>
   <div id="report_preview_backdrop" class="drawer-backdrop" onclick="closeReportPreviewDrawer()"></div>
   <div id="report_preview_drawer" class="drawer template-modal" role="dialog" aria-modal="true" aria-label="报告预览">
@@ -1903,24 +1897,29 @@
     let platformLoginConfigCache = [];
     let platformLoginCapabilityCache = [];
     let runPollTimer = null;
+    let runPollInFlight = false;
     let loginSessionPollTimer = null;
     let activeLoginSessionId = null;
     let emailPreviewTimer = null;
-    let openReportMenuId = null;
-    let reportMenuAnchor = null;
     let openJobMenuId = null;
     let openAIRuleMenuId = null;
-    let currentReports = [];
+    let currentTaskCenterRuns = [];
+    let taskCenterGrouped = true;
     let selectedEmailDeliveryReportId = null;
-    let selectedLeadReportId = null;
-    let selectedLeadRunId = null;
-    let selectedLeadSource = '';
     let emailValidationWindowState = null;
     let defaultAIPrompt = '';
     let currentRunLogId = null;
     let currentRunLogText = '';
+    let currentRunDetailId = null;
+    let currentRunDetailTab = 'overview';
+    let currentRunAiFilters = {};
     let accountAttentionOnly = false;
     let openAccountMenuId = null;
+    let activeFilterSelect = null;
+    let activeFilterSelectButton = null;
+    let activeFilterDateInput = null;
+    let activeFilterDateButton = null;
+    let activeFilterDateMonth = null;
     const runListState = {page: 1, totalPages: 1};
     const NAV_GROUPS = {
       resources: ['accounts', 'proxies', 'ai'],
@@ -1930,7 +1929,6 @@
       dashboard: 'overview',
       jobs: 'monitoring',
       runs: 'run_center',
-      reports: 'report_center',
       accounts: 'platform_accounts',
       proxies: 'proxy_resources',
       ai: 'ai_access',
@@ -1951,9 +1949,9 @@
     };
     let aiOutputSchema = [
       {field:'is_related', type:'boolean', description:'内容是否与目标律所或其别名相关。', used_for:'决定是否进入相关线索范围。'},
-      {field:'is_negative', type:'boolean', description:'内容是否属于疑似负面舆情线索。', used_for:'统计疑似负面数，并进入报告线索列表。'},
-      {field:'risk_level', type:'high | medium | low | irrelevant', description:'线索风险等级，只能使用固定枚举。', used_for:'统计高风险数、排序报告线索和筛选风险等级。'},
-      {field:'reason', type:'string', description:'简要说明判断依据，避免事实定性。', used_for:'展示在报告线索明细中。'},
+      {field:'is_negative', type:'boolean', description:'内容是否属于疑似负面舆情线索。', used_for:'统计疑似负面数，并进入 AI 评估和报告风险摘要。'},
+      {field:'risk_level', type:'high | medium | low | irrelevant', description:'线索风险等级，只能使用固定枚举。', used_for:'统计高风险数、排序 AI 评估风险项和筛选风险等级。'},
+      {field:'reason', type:'string', description:'简要说明判断依据，避免事实定性。', used_for:'展示在 AI 评估详情和报告摘要中。'},
       {field:'evidence_quotes', type:'string[]', description:'从标题、正文或评论中摘录的关键证据短句。', used_for:'报告中的证据摘录。'},
       {field:'recommended_action', type:'string', description:'建议运营人员下一步如何复核或处理。', used_for:'报告中的处理建议。'}
     ];
@@ -1996,11 +1994,371 @@
       menuEl.style.visibility='';
       return {left, top, width:menuWidth, height:menuHeight};
     }
+    function filterSelectMenuEl(){
+      let menu=document.getElementById('filter_select_menu');
+      if(!menu){
+        menu=document.createElement('div');
+        menu.id='filter_select_menu';
+        menu.className='filter-select-menu';
+        menu.setAttribute('role','listbox');
+        document.body.appendChild(menu);
+        menu.addEventListener('click', event=>{
+          const option=event.target.closest('button[data-filter-option-value]');
+          if(!option || !activeFilterSelect || option.disabled) return;
+          event.preventDefault();
+          event.stopPropagation();
+          const previous=activeFilterSelect.value;
+          activeFilterSelect.value=option.dataset.filterOptionValue || '';
+          syncFilterSelectButton(activeFilterSelect);
+          closeFilterSelectMenu();
+          if(previous !== activeFilterSelect.value){
+            activeFilterSelect.dispatchEvent(new Event('change', {bubbles:true}));
+          }
+        });
+      }
+      return menu;
+    }
+    function filterSelectButtonFor(select){
+      if(!select) return null;
+      const id=select.id || select.dataset.filterSelectId || '';
+      return id ? document.querySelector(`button[data-filter-select-for="${CSS.escape(id)}"]`) : null;
+    }
+    function syncFilterSelectButton(select){
+      if(!select) return;
+      const button=filterSelectButtonFor(select);
+      if(!button) return;
+      const selected=select.options[select.selectedIndex] || select.options[0];
+      const valueEl=button.querySelector('.filter-select-value');
+      if(valueEl) valueEl.textContent=selected ? selected.textContent : '';
+      button.title=selected ? selected.textContent : '';
+      button.disabled=!!select.disabled;
+    }
+    function syncAllFilterSelectButtons(){
+      document.querySelectorAll('.page-filter-region select[data-filter-select-enhanced="1"]').forEach(syncFilterSelectButton);
+    }
+    function closeFilterSelectMenu(){
+      if(activeFilterSelectButton){
+        activeFilterSelectButton.classList.remove('is-open');
+        activeFilterSelectButton.setAttribute('aria-expanded','false');
+      }
+      const menu=document.getElementById('filter_select_menu');
+      if(menu){
+        menu.classList.remove('active');
+        menu.innerHTML='';
+      }
+      activeFilterSelect=null;
+      activeFilterSelectButton=null;
+    }
+    function positionFilterSelectMenu(){
+      if(!activeFilterSelect || !activeFilterSelectButton) return;
+      const menu=document.getElementById('filter_select_menu');
+      if(!menu || !menu.classList.contains('active')) return;
+      const width=Math.max(150, Math.round(activeFilterSelectButton.getBoundingClientRect().width));
+      menu.style.minWidth=width+'px';
+      menu.style.maxWidth=`min(${Math.max(width, 220)}px, calc(100vw - 24px))`;
+      positionFloatingMenu(activeFilterSelectButton, menu, {align:'left', width, height:Math.min(menu.scrollHeight || 260, 280), gap:4});
+    }
+    function renderFilterSelectMenu(select){
+      const menu=filterSelectMenuEl();
+      const current=select.value;
+      menu.innerHTML=Array.from(select.options).map(option=>{
+        const selected=option.value===current;
+        const disabled=option.disabled ? ' disabled' : '';
+        return `<button type="button" role="option" data-filter-option-value="${esc(option.value)}" class="filter-select-option${selected?' is-selected':''}" aria-selected="${selected?'true':'false'}"${disabled}>${esc(option.textContent)}</button>`;
+      }).join('');
+      return menu;
+    }
+    function openFilterSelectMenu(select){
+      if(!select || select.disabled) return;
+      closeFloatingMenus();
+      activeFilterSelect=select;
+      activeFilterSelectButton=filterSelectButtonFor(select);
+      if(!activeFilterSelectButton) return;
+      const menu=renderFilterSelectMenu(select);
+      menu.classList.add('active');
+      activeFilterSelectButton.classList.add('is-open');
+      activeFilterSelectButton.setAttribute('aria-expanded','true');
+      positionFilterSelectMenu();
+    }
+    function toggleFilterSelectMenu(select){
+      if(activeFilterSelect === select){
+        closeFilterSelectMenu();
+        return;
+      }
+      openFilterSelectMenu(select);
+    }
+    function enhanceFilterSelects(root=document){
+      root.querySelectorAll('.page-filter-region select:not([data-filter-select-enhanced])').forEach(select=>{
+        if(!select.id) select.id=`filter_select_${Math.random().toString(36).slice(2)}`;
+        const wrapper=document.createElement('div');
+        wrapper.className='filter-select-enhanced';
+        select.parentNode.insertBefore(wrapper, select);
+        wrapper.appendChild(select);
+        select.dataset.filterSelectEnhanced='1';
+        select.classList.add('filter-select-native');
+        select.setAttribute('aria-hidden','true');
+        select.tabIndex=-1;
+        const button=document.createElement('button');
+        button.type='button';
+        button.className='filter-select-button';
+        button.dataset.filterSelectFor=select.id;
+        button.setAttribute('aria-haspopup','listbox');
+        button.setAttribute('aria-expanded','false');
+        button.innerHTML='<span class="filter-select-value"></span>';
+        wrapper.appendChild(button);
+        button.addEventListener('click', event=>{
+          event.preventDefault();
+          event.stopPropagation();
+          toggleFilterSelectMenu(select);
+        });
+        button.addEventListener('keydown', event=>{
+          if(['Enter',' ','ArrowDown'].includes(event.key)){
+            event.preventDefault();
+            openFilterSelectMenu(select);
+          } else if(event.key==='Escape'){
+            closeFilterSelectMenu();
+          }
+        });
+        select.addEventListener('change', ()=>syncFilterSelectButton(select));
+        syncFilterSelectButton(select);
+      });
+    }
+    function refreshEnhancedFilterSelects(root=document){
+      enhanceFilterSelects(root);
+      syncAllFilterSelectButtons();
+    }
+    function filterDateMenuEl(){
+      let menu=document.getElementById('filter_date_menu');
+      if(!menu){
+        menu=document.createElement('div');
+        menu.id='filter_date_menu';
+        menu.className='filter-date-menu';
+        menu.setAttribute('role','dialog');
+        document.body.appendChild(menu);
+        menu.addEventListener('click', event=>{
+          if(!activeFilterDateInput) return;
+          const day=event.target.closest('button[data-filter-date-value]');
+          const action=event.target.closest('button[data-filter-date-action]');
+          if(!day && !action) return;
+          event.preventDefault();
+          event.stopPropagation();
+          if(day){
+            setFilterDateValue(day.dataset.filterDateValue || '');
+            return;
+          }
+          const type=action.dataset.filterDateAction || '';
+          if(type==='prev' || type==='next'){
+            const base=activeFilterDateMonth || monthStart(new Date());
+            const offset=type==='prev' ? -1 : 1;
+            activeFilterDateMonth=monthStart(new Date(base.getFullYear(), base.getMonth()+offset, 1));
+            renderFilterDateMenu(activeFilterDateInput);
+            positionFilterDateMenu();
+            return;
+          }
+          if(type==='today'){
+            setFilterDateValue(localDateValue(new Date()));
+            return;
+          }
+          if(type==='clear'){
+            setFilterDateValue('');
+          }
+        });
+      }
+      return menu;
+    }
+    function filterDateButtonFor(input){
+      if(!input) return null;
+      const id=input.id || input.dataset.filterDateId || '';
+      return id ? document.querySelector(`button[data-filter-date-for="${CSS.escape(id)}"]`) : null;
+    }
+    function padDatePart(value){
+      return String(value).padStart(2,'0');
+    }
+    function localDateValue(date){
+      return `${date.getFullYear()}-${padDatePart(date.getMonth()+1)}-${padDatePart(date.getDate())}`;
+    }
+    function parseFilterDateValue(value){
+      const match=String(value||'').match(/^(\d{4})-(\d{2})-(\d{2})$/);
+      if(!match) return null;
+      const date=new Date(Number(match[1]), Number(match[2])-1, Number(match[3]));
+      return localDateValue(date)===value ? date : null;
+    }
+    function monthStart(date){
+      return new Date(date.getFullYear(), date.getMonth(), 1);
+    }
+    function filterDatePlaceholder(input){
+      const label=input?.closest('.filter-date-enhanced')?.parentElement?.querySelector('label')
+        || input?.closest('div')?.querySelector('label');
+      return (label?.textContent || input?.placeholder || '选择日期').trim();
+    }
+    function filterDateLabel(input){
+      const parsed=parseFilterDateValue(input?.value);
+      return parsed ? `${parsed.getFullYear()}/${padDatePart(parsed.getMonth()+1)}/${padDatePart(parsed.getDate())}` : filterDatePlaceholder(input);
+    }
+    function syncFilterDateButton(input){
+      if(!input) return;
+      const button=filterDateButtonFor(input);
+      if(!button) return;
+      const text=filterDateLabel(input);
+      const valueEl=button.querySelector('.filter-select-value');
+      if(valueEl) valueEl.textContent=text;
+      button.title=text;
+      button.disabled=!!input.disabled;
+      button.classList.toggle('is-empty', !input.value);
+    }
+    function syncAllFilterDateButtons(){
+      document.querySelectorAll('.page-filter-region input[type="date"][data-filter-date-enhanced="1"]').forEach(syncFilterDateButton);
+    }
+    function setFilterDateValue(value){
+      if(!activeFilterDateInput) return;
+      const input=activeFilterDateInput;
+      const previous=input.value;
+      input.value=value || '';
+      syncFilterDateButton(input);
+      closeFilterDateMenu();
+      if(previous !== input.value){
+        input.dispatchEvent(new Event('change', {bubbles:true}));
+      }
+    }
+    function closeFilterDateMenu(){
+      if(activeFilterDateButton){
+        activeFilterDateButton.classList.remove('is-open');
+        activeFilterDateButton.setAttribute('aria-expanded','false');
+      }
+      const menu=document.getElementById('filter_date_menu');
+      if(menu){
+        menu.classList.remove('active');
+        menu.innerHTML='';
+      }
+      activeFilterDateInput=null;
+      activeFilterDateButton=null;
+      activeFilterDateMonth=null;
+    }
+    function positionFilterDateMenu(){
+      if(!activeFilterDateInput || !activeFilterDateButton) return;
+      const menu=document.getElementById('filter_date_menu');
+      if(!menu || !menu.classList.contains('active')) return;
+      const wrapper=activeFilterDateButton.closest('.filter-date-enhanced');
+      if(wrapper && menu.parentElement !== wrapper){
+        wrapper.appendChild(menu);
+      }
+      const triggerWidth=Math.max(0, Math.round(activeFilterDateButton.getBoundingClientRect().width));
+      menu.style.width=`${triggerWidth}px`;
+      menu.style.setProperty('--filter-date-anchor-x', '50%');
+      menu.style.position='absolute';
+      menu.style.right='auto';
+      menu.style.bottom='auto';
+      menu.style.left='0';
+      menu.style.top='calc(100% + 4px)';
+    }
+    function renderFilterDateMenu(input){
+      const menu=filterDateMenuEl();
+      const selected=parseFilterDateValue(input.value);
+      const today=new Date();
+      const currentMonth=activeFilterDateMonth || monthStart(selected || today);
+      activeFilterDateMonth=currentMonth;
+      const year=currentMonth.getFullYear();
+      const month=currentMonth.getMonth();
+      const firstDay=new Date(year, month, 1);
+      const leading=(firstDay.getDay()+6)%7;
+      const daysInMonth=new Date(year, month+1, 0).getDate();
+      const selectedValue=selected ? localDateValue(selected) : '';
+      const todayValue=localDateValue(today);
+      const cells=[];
+      for(let i=0;i<leading;i+=1){
+        cells.push('<button type="button" class="filter-date-day is-empty" disabled aria-hidden="true"></button>');
+      }
+      for(let day=1;day<=daysInMonth;day+=1){
+        const dateValue=`${year}-${padDatePart(month+1)}-${padDatePart(day)}`;
+        const classes=['filter-date-day'];
+        if(dateValue===selectedValue) classes.push('is-selected');
+        if(dateValue===todayValue) classes.push('is-today');
+        cells.push(`<button type="button" class="${classes.join(' ')}" data-filter-date-value="${dateValue}" aria-pressed="${dateValue===selectedValue?'true':'false'}">${day}</button>`);
+      }
+      while(cells.length % 7 !== 0){
+        cells.push('<button type="button" class="filter-date-day is-empty" disabled aria-hidden="true"></button>');
+      }
+      menu.innerHTML=`
+        <div class="filter-date-head">
+          <button type="button" class="filter-date-nav" data-filter-date-action="prev" aria-label="上个月">&lt;</button>
+          <div class="filter-date-title">${esc(filterDatePlaceholder(input))}<span>${year} 年 ${padDatePart(month+1)} 月</span></div>
+          <button type="button" class="filter-date-nav" data-filter-date-action="next" aria-label="下个月">&gt;</button>
+        </div>
+        <div class="filter-date-weekdays" aria-hidden="true"><span>一</span><span>二</span><span>三</span><span>四</span><span>五</span><span>六</span><span>日</span></div>
+        <div class="filter-date-grid">${cells.join('')}</div>
+        <div class="filter-date-quick">
+          <button type="button" data-filter-date-action="today">今天</button>
+          <button type="button" data-filter-date-action="clear">清空</button>
+        </div>`;
+      return menu;
+    }
+    function openFilterDateMenu(input){
+      if(!input || input.disabled) return;
+      closeFloatingMenus();
+      activeFilterDateInput=input;
+      activeFilterDateButton=filterDateButtonFor(input);
+      if(!activeFilterDateButton) return;
+      const selected=parseFilterDateValue(input.value);
+      activeFilterDateMonth=monthStart(selected || new Date());
+      const menu=renderFilterDateMenu(input);
+      menu.classList.add('active');
+      activeFilterDateButton.classList.add('is-open');
+      activeFilterDateButton.setAttribute('aria-expanded','true');
+      positionFilterDateMenu();
+    }
+    function toggleFilterDateMenu(input){
+      if(activeFilterDateInput === input){
+        closeFilterDateMenu();
+        return;
+      }
+      openFilterDateMenu(input);
+    }
+    function enhanceFilterDateInputs(root=document){
+      root.querySelectorAll('.page-filter-region input[type="date"]:not([data-filter-date-enhanced])').forEach(input=>{
+        if(!input.id) input.id=`filter_date_${Math.random().toString(36).slice(2)}`;
+        const wrapper=document.createElement('div');
+        wrapper.className='filter-date-enhanced';
+        input.parentNode.insertBefore(wrapper, input);
+        wrapper.appendChild(input);
+        input.dataset.filterDateEnhanced='1';
+        input.classList.add('filter-date-native');
+        input.setAttribute('aria-hidden','true');
+        input.tabIndex=-1;
+        const button=document.createElement('button');
+        button.type='button';
+        button.className='filter-select-button filter-date-button';
+        button.dataset.filterDateFor=input.id;
+        button.setAttribute('aria-haspopup','dialog');
+        button.setAttribute('aria-expanded','false');
+        button.innerHTML='<span class="filter-select-value"></span>';
+        wrapper.appendChild(button);
+        button.addEventListener('click', event=>{
+          event.preventDefault();
+          event.stopPropagation();
+          toggleFilterDateMenu(input);
+        });
+        button.addEventListener('keydown', event=>{
+          if(['Enter',' ','ArrowDown'].includes(event.key)){
+            event.preventDefault();
+            openFilterDateMenu(input);
+          } else if(event.key==='Escape'){
+            closeFilterDateMenu();
+          }
+        });
+        input.addEventListener('change', ()=>syncFilterDateButton(input));
+        syncFilterDateButton(input);
+      });
+    }
+    function refreshEnhancedFilterDateInputs(root=document){
+      enhanceFilterDateInputs(root);
+      syncAllFilterDateButtons();
+    }
     function closeFloatingMenus(){
+      closeFilterSelectMenu();
+      closeFilterDateMenu();
       openAccountMenuId=null;
       openJobMenuId=null;
       openAIRuleMenuId=null;
-      closeReportActionMenu();
       renderAccountActionMenu();
       renderJobActionMenu();
       renderAIRuleActionMenu();
@@ -2017,9 +2375,25 @@
       closeMailTestModal();
       closeEmailTemplateDrawer();
       closeRunLogDrawer();
+      closeRunDetailDrawer();
       closeReportPreviewDrawer();
-      closeReportLeadsDrawer();
       closeEmailDeliveryHistoryDrawer();
+    }
+    function normalizeDrawerScrollBodies(root=document){
+      root.querySelectorAll('.drawer').forEach(drawer=>{
+        if(drawer.querySelector(':scope > .drawer-scroll-body')) return;
+        const head=drawer.querySelector(':scope > .drawer-head, :scope > .modal-head');
+        if(!head) return;
+        const body=document.createElement('div');
+        body.className='drawer-scroll-body';
+        let node=head.nextSibling;
+        while(node){
+          const next=node.nextSibling;
+          body.appendChild(node);
+          node=next;
+        }
+        drawer.appendChild(body);
+      });
     }
     function positionAccountActionMenu(){
       if(openAccountMenuId===null) return;
@@ -2040,10 +2414,11 @@
       if(menu && anchor) positionFloatingMenu(anchor, menu, {width:172, height:132});
     }
     function positionActiveFloatingMenus(){
+      positionFilterSelectMenu();
+      positionFilterDateMenu();
       positionAccountActionMenu();
       positionJobActionMenu();
       positionAIRuleActionMenu();
-      positionReportActionMenu();
     }
     function setMobileNavOpen(open){
       document.body.classList.toggle('mobile-nav-open', !!open);
@@ -2111,8 +2486,7 @@
       const admin=isAdminUser();
       document.querySelectorAll('.run-admin-control').forEach(el=>{ el.style.display=admin ? '' : 'none'; });
       if(!admin){
-        const visibility=document.getElementById('run_visibility_filter');
-        if(visibility) visibility.value='visible';
+        set('run_visibility_filter','visible');
       }
     }
     function applyJobFormRoleMode(){
@@ -2193,7 +2567,9 @@
       btn.dataset.loadingActive='1';
       btn.disabled=true;
       btn.classList.add('is-loading');
-      btn.innerHTML=`<span class="monitor-spinner" aria-hidden="true"></span><span>${esc(label)}</span>`;
+      if(!btn.classList.contains('refresh-icon-button')){
+        btn.innerHTML=`<span class="monitor-spinner" aria-hidden="true"></span><span>${esc(label)}</span>`;
+      }
       return btn;
     }
     function clearActionButtonLoading(button, finalHtml=null){
@@ -2210,9 +2586,14 @@
     }
     async function withActionButtonLoading(button, label, work, finalHtml=null){
       const btn=setActionButtonLoading(button, label);
+      const startedAt=Date.now();
       try {
         return await work();
       } finally {
+        if(btn && btn.classList.contains('refresh-icon-button')){
+          const remaining=650 - (Date.now() - startedAt);
+          if(remaining > 0) await new Promise(resolve=>setTimeout(resolve, remaining));
+        }
         clearActionButtonLoading(btn, finalHtml);
       }
     }
@@ -2247,6 +2628,12 @@
       activateNavTab(btn);
     });
     document.addEventListener('click', event => {
+      if(!event.target.closest('.filter-select-enhanced') && !event.target.closest('#filter_select_menu')){
+        closeFilterSelectMenu();
+      }
+      if(!event.target.closest('.filter-date-enhanced') && !event.target.closest('#filter_date_menu')){
+        closeFilterDateMenu();
+      }
       if(!event.target.closest('.account-actions') && !event.target.closest('#account_action_menu')){
         if(openAccountMenuId !== null){
           openAccountMenuId = null;
@@ -2258,9 +2645,6 @@
       }
       if(!event.target.closest('.action-menu-host') && !event.target.closest('#ai_rule_action_menu')){
         if(openAIRuleMenuId !== null){ openAIRuleMenuId = null; renderAIRuleActionMenu(); }
-      }
-      if(!event.target.closest('.report-action-menu') && !event.target.closest('[data-report-menu-button]')){
-        closeReportActionMenu();
       }
     });
     document.addEventListener('keydown', event => {
@@ -2307,17 +2691,25 @@
     function activeTabId(){
       return document.querySelector('section.active')?.id || 'dashboard';
     }
-    function refreshActiveSection(){
+    async function refreshActiveSection(button=null){
       const tab=activeTabId();
-      loadSectionData(tab);
-      toast(tab==='dashboard' ? '运营首页已刷新' : '当前页面已刷新');
+      await withActionButtonLoading(button || document.getElementById('global_refresh_button'), '', async ()=>{
+        await loadSectionData(tab);
+        toast(tab==='dashboard' ? '运营首页已刷新' : '当前页面已刷新');
+      });
+    }
+    function normalizeConsoleTab(tab){
+      return tab==='reports' ? 'runs' : tab;
     }
     function navigateShortcut(tab, options={}){
-      if(!canOpenTab(tab)){
+      const targetTab=normalizeConsoleTab(tab);
+      const targetSubview=options.subview || '';
+      const groupedOption=normalizeGroupedOption(options.grouped);
+      if(!canOpenTab(targetTab)){
         toast('当前账号没有访问该页面的权限');
         return;
       }
-      switchTab(tab);
+      switchTab(targetTab, {subview: targetSubview, grouped: groupedOption});
       if(options.target){
         setTimeout(()=>{
           const target=document.getElementById(options.target);
@@ -2336,7 +2728,9 @@
           event.preventDefault();
           navigateShortcut(btn.dataset.shortcutTab, {
             target: btn.dataset.shortcutTarget || '',
-            action: btn.dataset.shortcutAction || ''
+            action: btn.dataset.shortcutAction || '',
+            subview: btn.dataset.shortcutSubview || '',
+            grouped: btn.dataset.shortcutGrouped || ''
           });
         });
       });
@@ -2354,31 +2748,32 @@
       btn.classList.add('active');
       const section=document.getElementById(btn.dataset.tab);
       if(section) section.classList.add('active');
-      if(btn.dataset.subview) switchSubview(btn.dataset.tab, btn.dataset.subview);
-      else ensureDefaultSubview(btn.dataset.tab);
+      if(btn.dataset.tab!=='runs') stopRunPolling();
       if(!options.skipLoad) loadSectionData(btn.dataset.tab);
       closeMobileNav();
     }
     function loadSectionData(tab){
       if(!canOpenTab(tab)) return;
       if(tab==='dashboard') {
-        loadDashboard();
+        return loadDashboard();
       }
-      if(tab==='accounts') { loadProxyPool(); loadAccountsPool(); }
-      if(tab==='proxies') loadProxyPool();
-      if(tab==='ai') loadAIProfiles();
-      if(tab==='ai_rules') loadAIRuleProfiles();
-      if(tab==='email') loadEmail();
-      if(tab==='email_templates') loadEmailTemplates();
-      if(tab==='runtime') loadRuntimeSettings();
-      if(tab==='runs') loadRuns();
-      if(tab==='reports') loadReports();
+      if(tab==='jobs') return loadJobs();
+      if(tab==='accounts') return Promise.all([loadProxyPool(), loadAccountsPool()]);
+      if(tab==='proxies') return loadProxyPool();
+      if(tab==='ai') return loadAIProfiles();
+      if(tab==='ai_rules') return loadAIRuleProfiles();
+      if(tab==='email') return loadEmail();
+      if(tab==='email_templates') return loadEmailTemplates();
+      if(tab==='runtime') return loadRuntimeSettings();
+      if(tab==='runs') return loadTaskCenter();
       if(tab==='doctor') {
-        loadDoctor();
-        loadReadiness();
-        loadSchedulerStatus();
-        loadPlatformStatus();
-        loadSystemChecklist();
+        return Promise.all([
+          loadDoctor(),
+          loadReadiness(),
+          loadSchedulerStatus(),
+          loadPlatformStatus(),
+          loadSystemChecklist()
+        ]);
       }
     }
 
@@ -2417,18 +2812,32 @@
       }
     }
 
-    function switchSubview(sectionId, viewId){
-      const section=document.getElementById(sectionId);
-      if(!section) return;
-      section.querySelectorAll('.subview').forEach(view=>view.classList.toggle('active', view.id===viewId));
-      section.querySelectorAll('.section-tabs button').forEach(btn=>btn.classList.toggle('active', btn.dataset.subview===viewId));
+    function loadTaskCenter(){
+      return loadRuns();
     }
-    function ensureDefaultSubview(sectionId){
-      const section=document.getElementById(sectionId);
-      if(!section || !section.querySelector('.subview')) return;
-      if(section.querySelector('.subview.active')) return;
-      const first=section.querySelector('.subview');
-      if(first) switchSubview(sectionId, first.id);
+    function normalizeGroupedOption(value){
+      if(value === true || value === false) return value;
+      if(value === '1' || value === 'true') return true;
+      if(value === '0' || value === 'false') return false;
+      return '';
+    }
+    function refreshTaskCenter(){
+      return loadRuns();
+    }
+    function switchRunCenterView(viewId, options={}){
+      const grouped = viewId !== 'run_records_view';
+      setTaskCenterGrouped(grouped, {skipLoad: true});
+      if(!options.skipLoad) return loadRuns();
+    }
+    function activeRunCenterView(){
+      return taskCenterGrouped ? 'task_grouped' : 'run_records';
+    }
+    function setTaskCenterGrouped(checked, options={}){
+      taskCenterGrouped = !!checked;
+      const toggle=document.getElementById('task_group_toggle');
+      if(toggle) toggle.checked = taskCenterGrouped;
+      if(!options.skipRender) renderCurrentRuns();
+      if(!options.skipLoad && !currentTaskCenterRuns.length) loadRuns();
     }
     async function safeLoad(label, work){
       try {
@@ -2446,8 +2855,7 @@
       if(!authReady) return;
       const loads = [
         safeLoad('总览', loadDashboard),
-        safeLoad('运行记录', loadRuns),
-        safeLoad('报告中心', loadReports)
+        safeLoad('任务中心', loadRuns)
       ];
       addPermittedLoad(loads, '系统状态', 'system_diagnostics', loadSystemChecklist);
       addPermittedLoad(loads, '运行状态', 'system_diagnostics', loadReadiness);
@@ -2525,6 +2933,8 @@
             detail: `近 20 次失败 ${home.run_activity?.failed_recent||0}，预检拦截/登录态/配置阻断 ${home.run_activity?.skipped_recent||0}`,
             tab: 'runs',
             menuKey: 'run_center',
+            grouped: false,
+            target: 'task_center_panel',
             actionLabel: '查看运行'
           }),
           operationsMetricCard({
@@ -2533,9 +2943,10 @@
             value: home.report_activity?.total||0,
             note: `已生成 ${home.report_activity?.generated||0} 份`,
             detail: `${home.report_activity?.manual_review||0} 条线索待人工复核`,
-            tab: 'reports',
-            menuKey: 'report_center',
-            actionLabel: '查看报告'
+            tab: 'runs',
+            menuKey: 'run_center',
+            grouped: true,
+            actionLabel: '查看任务'
           }),
           operationsMetricCard({
             tone: (home.email_delivery?.failed||0) ? 'attention' : ((home.email_delivery?.unsent||0) ? 'review' : 'ok'),
@@ -2543,10 +2954,11 @@
             value: home.email_delivery?.sent||0,
             note: `失败 ${home.email_delivery?.failed||0} / 未发送 ${home.email_delivery?.unsent||0}`,
             detail: home.email_delivery?.history_available ? '交付历史可查看' : '当前展示报告最新交付状态',
-            tab: 'reports',
-            menuKey: 'report_center',
-            target: 'email_delivery_status_entry',
-            actionLabel: '检查交付'
+            tab: 'runs',
+            menuKey: 'run_center',
+            grouped: true,
+            target: 'task_center_panel',
+            actionLabel: '查看任务'
           }),
           operationsMetricCard({
             tone: (home.lead_metrics?.high_risk||0) ? 'risk' : ((home.lead_metrics?.suspected_negative||0) ? 'review' : ''),
@@ -2554,9 +2966,10 @@
             value: home.lead_metrics?.suspected_negative||0,
             note: `高风险 ${home.lead_metrics?.high_risk||0} / 待复核 ${home.lead_metrics?.pending_review||0}`,
             detail: `采集内容 ${home.lead_metrics?.contents_total||0} 条`,
-            tab: 'reports',
-            menuKey: 'report_center',
-            actionLabel: '查看线索'
+            tab: 'runs',
+            menuKey: 'run_center',
+            grouped: true,
+            actionLabel: '查看任务'
           })
         ].join('');
       }
@@ -2581,22 +2994,23 @@
     function operationsMetricCard(card){
       const tone=card.tone ? ` is-${card.tone}` : '';
       const target=card.target ? ` data-shortcut-target="${esc(card.target)}"` : '';
+      const subview=card.subview ? ` data-shortcut-subview="${esc(card.subview)}"` : '';
+      const grouped=card.grouped === true || card.grouped === false ? ` data-shortcut-grouped="${card.grouped ? '1' : '0'}"` : '';
       return `<article class="operations-metric-card${tone}">
         <div class="operations-metric-head"><span>${esc(card.label)}</span><i></i></div>
         <strong>${esc(card.value)}</strong>
         <p>${esc(card.note)}</p>
         <div class="operations-metric-foot">
           <span>${esc(card.detail)}</span>
-          <button class="ghost btn-compact" type="button" data-shortcut-tab="${esc(card.tab)}" data-menu-key="${esc(card.menuKey)}"${target}>${esc(card.actionLabel)}</button>
+          <button class="ghost btn-compact" type="button" data-shortcut-tab="${esc(card.tab)}" data-menu-key="${esc(card.menuKey)}"${target}${subview}${grouped}>${esc(card.actionLabel)}</button>
         </div>
       </article>`;
     }
     function renderOperationsDrilldowns(home){
       const items=[
         {label: '新建监控任务', note: `${home.task_health?.active||0} 个任务启用中`, tab: 'jobs', menuKey: 'monitoring', action: 'new-job'},
-        {label: '运行中心', note: `${home.run_activity?.running||0} 个运行中，今日 ${home.run_activity?.today||0} 次`, tab: 'runs', menuKey: 'run_center'},
-        {label: '报告中心', note: `${home.report_activity?.total||0} 份报告，${home.lead_metrics?.pending_review||0} 条待复核`, tab: 'reports', menuKey: 'report_center'},
-        {label: '邮件交付', note: `${home.email_delivery?.failed||0} 个失败，${home.email_delivery?.unsent||0} 个未发送`, tab: 'reports', menuKey: 'report_center', target: 'email_delivery_status_entry'}
+        {label: '任务中心', note: `${home.report_activity?.total||0} 份报告，${home.lead_metrics?.pending_review||0} 条待复核`, tab: 'runs', menuKey: 'run_center', grouped: true, target: 'task_center_panel'},
+        {label: '运行记录', note: `${home.run_activity?.running||0} 个运行中，今日 ${home.run_activity?.today||0} 次`, tab: 'runs', menuKey: 'run_center', grouped: false, target: 'task_center_panel'}
       ];
       if((home.resource_health||{}).scope === 'workspace'){
         items.push({label: '资源支撑', note: resourceHealthSummary(home.resource_health), tab: 'accounts', menuKey: 'platform_accounts'});
@@ -2604,7 +3018,9 @@
       return `<div class="operations-section-head"><div><span>钻取入口</span><strong>按任务流继续处理</strong></div></div><div class="operations-drilldown-list">${items.map(item=>{
         const target=item.target ? ` data-shortcut-target="${esc(item.target)}"` : '';
         const action=item.action ? ` data-shortcut-action="${esc(item.action)}"` : '';
-        return `<button class="operations-drilldown" type="button" data-shortcut-tab="${esc(item.tab)}" data-menu-key="${esc(item.menuKey)}"${target}${action}>
+        const subview=item.subview ? ` data-shortcut-subview="${esc(item.subview)}"` : '';
+        const grouped=item.grouped === true || item.grouped === false ? ` data-shortcut-grouped="${item.grouped ? '1' : '0'}"` : '';
+        return `<button class="operations-drilldown" type="button" data-shortcut-tab="${esc(item.tab)}" data-menu-key="${esc(item.menuKey)}"${target}${action}${subview}${grouped}>
           <strong>${esc(item.label)}</strong><span>${esc(item.note)}</span>
         </button>`;
       }).join('')}</div>`;
@@ -2762,10 +3178,10 @@
       }
       if(failed.has('real_report') || (readiness.missing_real_platforms||[]).length || (readiness.empty_real_platforms||[]).length){
         cards.push(actionCard('运行抖音采集', '优先使用海安律所平台搜索词完成抖音采集、AI 初筛和报告闭环。', 'jobs'));
-        cards.push(actionCard('查看报告和线索', '确认 HTML 邮件预览、Excel/Markdown 附件和线索明细。', 'reports'));
+        cards.push(actionCard('查看任务中心', '确认报告预览、风险计数和对应详情。', 'runs', '', true));
       }
       if(!cards.length){
-        cards.push(actionCard('查看报告中心', '系统运行正常，可复查最近报告和线索明细。', 'reports'));
+        cards.push(actionCard('查看任务中心', '系统运行正常，可复查最近任务报告和风险线索。', 'runs', '', true));
       }
       return `<div class="action-grid">${cards.join('')}</div>`;
     }
@@ -2782,12 +3198,23 @@
       if(missingCookie.length) parts.push('补充 Cookie：' + formatPlatforms(missingCookie));
       return parts.length ? parts.join('；') : '检查任务绑定账号和各平台登录状态。';
     }
-    function actionCard(title, note, tab){
-      return `<button class="action-card" onclick="switchTab('${esc(tab)}')"><strong>${esc(title)}</strong><span>${esc(note)}</span></button>`;
+    function actionCard(title, note, tab, subview='', grouped=''){
+      const opts=[];
+      if(subview) opts.push(`subview:'${esc(subview)}'`);
+      if(grouped === true || grouped === false) opts.push(`grouped:${grouped ? 'true' : 'false'}`);
+      const options=opts.length ? `, {${opts.join(',')}}` : '';
+      return `<button class="action-card" onclick="switchTab('${esc(tab)}'${options})"><strong>${esc(title)}</strong><span>${esc(note)}</span></button>`;
     }
-    function switchTab(tab){
-      const btn=[...document.querySelectorAll('nav button')].find(item=>item.dataset.tab===tab);
-      if(btn) btn.click();
+    function switchTab(tab, options={}){
+      const targetTab=normalizeConsoleTab(tab);
+      const btn=[...document.querySelectorAll('nav button')].find(item=>item.dataset.tab===targetTab);
+      if(!btn) return;
+      const groupedOption=normalizeGroupedOption(options.grouped);
+      const shouldDelayRunLoad = targetTab==='runs' && (groupedOption === true || groupedOption === false) && !options.skipLoad;
+      activateNavTab(btn, {skipLoad: options.skipLoad || shouldDelayRunLoad});
+      if(targetTab==='runs' && (groupedOption === true || groupedOption === false)) setTaskCenterGrouped(groupedOption, {skipLoad: true});
+      if(targetTab==='runs' && options.subview) switchRunCenterView(options.subview, {skipLoad: options.skipLoad});
+      else if(shouldDelayRunLoad) loadRuns();
     }
     async function loadPlatformStatus(){ const data=await (await api('/platform-status')).json(); const html=platformStatusTable(data.platforms); document.getElementById('platform_status_table').innerHTML=html; }
     async function loadPlatformLoginConfigs(){
@@ -3120,12 +3547,14 @@
       if(!canMenu('platform_accounts')){
         select.innerHTML='<option value="">自动选择可用账号</option>';
         select.value='';
+        syncFilterSelectButton(select);
         return;
       }
       const current=select.value || '';
       const formal=(accounts||[]).filter(a=>!a.is_draft);
       select.innerHTML=['<option value="">自动选择可用账号</option>'].concat(formal.map(a=>`<option value="${esc(a.id)}">${esc(a.name)}（${esc(formatPlatforms([a.platform]))} / ${esc(poolStatusText(a.status))}）</option>`)).join('');
       if(current && formal.some(a=>String(a.id)===String(current))) select.value=current;
+      syncFilterSelectButton(select);
     }
     function renderAccountMetrics(accounts){
       const counts={active:0,standby:0,limited:0,disabled:0};
@@ -3343,7 +3772,6 @@
       openAccountMenuId = openAccountMenuId===Number(id) ? null : Number(id);
       openJobMenuId=null;
       openAIRuleMenuId=null;
-      closeReportActionMenu();
       renderJobActionMenu();
       renderAIRuleActionMenu();
       renderAccountActionMenu();
@@ -3636,6 +4064,7 @@
       const select=document.getElementById('social_account_platform');
       const hint=document.getElementById('social_account_platform_hint');
       if(select) select.disabled=!!locked;
+      if(select) syncFilterSelectButton(select);
       if(hint) hint.textContent = locked
         ? `当前账号已归属 ${formatPlatforms([platform])}，平台不可变更；如需其它平台请新建账号。`
         : '新建账号时选择平台；保存后平台不可变更。';
@@ -3679,6 +4108,7 @@
         allowLocal ? '<option value="local_window">本地登录窗口</option>' : ''
       ].join('');
       select.value=(current==='local_window' && !allowLocal) ? 'server_qrcode' : current;
+      syncFilterSelectButton(select);
     }
     function supportedSocialLoginTypes(platform){
       const cfg=platformLoginConfig(platform);
@@ -3775,6 +4205,7 @@
       if(!backdrop || !dialog) return;
       backdrop.classList.add('active');
       dialog.classList.add('active');
+      refreshEnhancedFilterSelects(dialog);
       document.body.style.overflow='hidden';
     }
     function closeSocialAccountModal(event){
@@ -3814,6 +4245,7 @@
       const current=select.value;
       select.innerHTML=supported.map(t=>`<option value="${esc(t)}">${esc(loginTypeLabel(t))}</option>`).join('');
       select.value=supported.includes(current)?current:supported[0];
+      syncFilterSelectButton(select);
       renderLoginModePanel();
     }
     async function loadProxyPool(){
@@ -3889,12 +4321,14 @@
         if(id==='job_proxy_id' && !canMenu('proxy_resources')){
           select.innerHTML='<option value="">跟随账号设置</option>';
           select.value='';
+          syncFilterSelectButton(select);
           return;
         }
         const current=select.value || '';
         select.innerHTML=options.join('');
         if(current && proxies.some(p=>String(p.id)===String(current))) select.value=current;
         else select.value='';
+        syncFilterSelectButton(select);
       });
     }
     async function saveProxyProfile(){
@@ -3942,6 +4376,7 @@
       document.getElementById('proxy_drawer_title').textContent=title;
       document.getElementById('proxy_drawer_backdrop').classList.add('active');
       document.getElementById('proxy_drawer').classList.add('active');
+      refreshEnhancedFilterSelects(document.getElementById('proxy_drawer'));
       document.body.style.overflow='hidden';
     }
     function closeProxyDrawer(){
@@ -4047,12 +4482,18 @@
       openJobMenuId = openJobMenuId===Number(id) ? null : Number(id);
       openAccountMenuId=null;
       openAIRuleMenuId=null;
-      closeReportActionMenu();
       renderAccountActionMenu();
       renderAIRuleActionMenu();
       renderJobActionMenu();
     }
-    async function refreshJobSchedule(){ const res=await api('/jobs/refresh-schedule',{method:'POST'}); if(!res.ok){toast(await err(res));return;} toast('调度时间已刷新'); await Promise.all([loadJobs(), loadSchedulerStatus(), loadDashboard()]); }
+    async function refreshJobSchedule(button=null){
+      await withActionButtonLoading(button, '', async ()=>{
+        const res=await api('/jobs/refresh-schedule',{method:'POST'});
+        if(!res.ok){toast(await err(res));return;}
+        toast('调度时间已刷新');
+        await Promise.all([loadJobs(), loadSchedulerStatus(), loadDashboard()]);
+      });
+    }
     function editJob(id){
       const j = jobCache.get(Number(id));
       if(!j){ toast('任务数据已刷新，请重新点击编辑'); loadJobs(); return; }
@@ -4116,6 +4557,8 @@
       applyJobFormRoleMode();
       document.getElementById('job_drawer_backdrop').classList.add('active');
       document.getElementById('job_drawer').classList.add('active');
+      refreshEnhancedFilterSelects(document.getElementById('job_drawer'));
+      refreshEnhancedFilterDateInputs(document.getElementById('job_drawer'));
       document.body.style.overflow='hidden';
     }
     function openNewJobDrawer(){
@@ -4142,7 +4585,7 @@
           : `当前任务使用“${labels[targetType]||targetType}”。请确认平台搜索词区域填写的是平台可识别的内容 ID 或主页 ID。`;
       }
     }
-    function resetJobForm(){ ['job_id','law_firm_name','aliases','exclude_words','keywords','recipients','custom_start','custom_end','cron_expr'].forEach(id=>set(id,'')); set('time_window_type','recent_1d'); set('frequency','daily'); set('email_time','09:00'); document.querySelectorAll('input[name=platform]').forEach(x=>x.checked=x.value==='dy'); document.getElementById('enabled').checked=true; document.getElementById('enable_comments').checked=true; set('job_ai_profile_id',''); set('job_email_template_id',''); set('job_account_id',''); set('job_proxy_id',''); setJobTargetType('search'); set('job_max_pages','1'); set('job_max_items','50'); set('job_start_page','1'); set('job_output_mode','internal'); set('job_browser_mode','server_qrcode'); document.getElementById('enable_sub_comments').checked=false; document.getElementById('job_drawer_title').textContent='新建任务'; applyJobFormRoleMode(); }
+    function resetJobForm(){ ['job_id','law_firm_name','aliases','exclude_words','keywords','recipients','custom_start','custom_end','cron_expr'].forEach(id=>set(id,'')); set('time_window_type','recent_1d'); set('frequency','daily'); set('email_time','09:00'); document.querySelectorAll('input[name=platform]').forEach(x=>x.checked=x.value==='dy'); document.getElementById('enabled').checked=true; document.getElementById('enable_comments').checked=true; set('job_ai_profile_id',''); set('job_email_template_id',''); set('job_account_id',''); set('job_proxy_id',''); setJobTargetType('search'); set('job_max_pages','1'); set('job_max_items','50'); set('job_start_page','1'); set('job_output_mode','internal'); set('job_browser_mode','server_qrcode'); document.getElementById('enable_sub_comments').checked=false; document.getElementById('job_drawer_title').textContent='新建任务'; applyJobFormRoleMode(); refreshEnhancedFilterDateInputs(document.getElementById('job_drawer')); }
     function fillSampleJobTemplate(){
       set('job_id',''); set('law_firm_name','海安律所'); set('aliases','海安律师事务所\n海安律师'); set('exclude_words','招聘\n无关同名\n广告合作');
       set('keywords','海安律所避雷\n海安律所退费\n海安律所投诉');
@@ -4151,6 +4594,7 @@
       document.getElementById('enabled').checked=true; document.getElementById('enable_comments').checked=true;
       document.getElementById('enable_sub_comments').checked=false;
       setJobTargetType('search'); set('job_max_pages','1'); set('job_max_items','50'); set('job_start_page','1'); set('job_output_mode','internal'); set('job_browser_mode','server_qrcode');
+      refreshEnhancedFilterDateInputs(document.getElementById('job_drawer'));
       toast('已填入海安律所样例。默认选择抖音，可按需要勾选其他平台。');
     }
     window.fillSampleJobTemplate = fillSampleJobTemplate;
@@ -4327,7 +4771,6 @@
       openAIRuleMenuId = openAIRuleMenuId===Number(id) ? null : Number(id);
       openAccountMenuId=null;
       openJobMenuId=null;
-      closeReportActionMenu();
       renderAccountActionMenu();
       renderJobActionMenu();
       renderAIRuleActionMenu();
@@ -4357,6 +4800,7 @@
     function openAIRuleModal(){
       document.getElementById('ai_rule_modal_backdrop').classList.add('active');
       document.getElementById('ai_rule_modal').classList.add('active');
+      refreshEnhancedFilterSelects(document.getElementById('ai_rule_modal'));
       document.body.style.overflow='hidden';
     }
     function closeAIRuleModal(){
@@ -4526,12 +4970,14 @@
       if(!canMenu('ai_access')){
         select.innerHTML='<option value="">使用默认 AI 接入</option>';
         select.value='';
+        syncFilterSelectButton(select);
         return;
       }
       const current=select.value || '';
       const profiles=[...aiProfileCache.values()];
       select.innerHTML=['<option value="">使用默认 AI 接入</option>'].concat(profiles.map(p=>`<option value="${esc(p.id)}">${esc(p.name)}${p.is_active?'（默认）':''}</option>`)).join('');
       if(current && profiles.some(p=>String(p.id)===String(current))) select.value=current;
+      syncFilterSelectButton(select);
     }
     async function loadAIProfileModels(button){
       await withActionButtonLoading(button, '获取中...', async ()=>{
@@ -4755,6 +5201,7 @@
       document.getElementById('ai_profile_drawer_title').textContent=title;
       document.getElementById('ai_profile_drawer_backdrop').classList.add('active');
       document.getElementById('ai_profile_drawer').classList.add('active');
+      refreshEnhancedFilterSelects(document.getElementById('ai_profile_drawer'));
       document.body.style.overflow='hidden';
     }
     function closeAIProfileDrawer(){
@@ -4921,6 +5368,7 @@
     function openMailConfigModal(){
       document.getElementById('mail_config_backdrop').classList.add('active');
       document.getElementById('mail_config_modal').classList.add('active');
+      refreshEnhancedFilterSelects(document.getElementById('mail_config_modal'));
       document.body.style.overflow='hidden';
     }
     function closeMailConfigModal(){
@@ -5014,12 +5462,14 @@
       if(!canMenu('mail_templates')){
         select.innerHTML='<option value="">使用当前默认</option>';
         select.value='';
+        syncFilterSelectButton(select);
         return;
       }
       const current=select.value || '';
       const templates=[...emailTemplateCache.values()];
       select.innerHTML=['<option value="">使用当前默认</option>'].concat(templates.map(t=>`<option value="${esc(t.id)}">${esc(t.name)}${t.is_active?'（当前）':''}</option>`)).join('');
       if(current && templates.some(t=>String(t.id)===String(current))) select.value=current;
+      syncFilterSelectButton(select);
     }
     async function loadRuntimeSettings(){
       if(!canMenu('runtime_strategy')) return;
@@ -5142,6 +5592,7 @@
       document.getElementById('email_template_drawer_title').textContent=title;
       document.getElementById('email_template_drawer_backdrop').classList.add('active');
       document.getElementById('email_template_drawer').classList.add('active');
+      refreshEnhancedFilterSelects(document.getElementById('email_template_drawer'));
       document.body.style.overflow='hidden';
       scheduleEmailPreview();
     }
@@ -5230,11 +5681,14 @@
       return defaultEmailTemplateHtml();
     }
 
-    async function loadRuns(){
+    async function loadRuns(options={}){
+      const silent=!!options.silent;
       const qs=runQueryParams();
-      setLoadingText('run_filter_summary', '正在读取运行记录...');
-      setLoadingMarkup('runs_table', tableSkeleton(5, 8));
-      setLoadingText('run_pagination', '正在计算分页...');
+      if(!silent){
+        setLoadingText('run_filter_summary', '正在读取运行记录...');
+        setLoadingMarkup('runs_table', tableSkeleton(5, 8));
+        setLoadingText('run_pagination', '正在计算分页...');
+      }
       const res=await api('/runs?'+qs.toString());
       if(!res.ok){ toast(await err(res)); return false; }
       const data=await res.json();
@@ -5243,15 +5697,159 @@
       running.forEach(id=>runningJobIds.add(Number(id)));
       document.getElementById('running_summary').innerHTML = running.length ? `<div class="notice">正在运行的任务 ID：${esc(running.join(', '))}<div class="small">运行 ID 是单次执行记录，任务 ID 是任务管理里的配置编号。</div></div>` : '';
       const runs=data.runs||[];
+      currentTaskCenterRuns=runs;
+      if(!options.silent){
+        const toggle=document.getElementById('task_group_toggle');
+        if(toggle) toggle.checked = taskCenterGrouped;
+      }
       const pagination=data.pagination||{page:runListState.page,per_page:Number(val('run_limit')||100),total:runs.length,total_pages:1};
       runListState.page=Number(pagination.page||1);
       runListState.totalPages=Number(pagination.total_pages||1);
       renderRunFilterSummary(data.filters||{}, pagination);
-      document.getElementById('runs_table').innerHTML=runs.length
-        ? table(['运行 ID','任务 ID','任务名称 / 律所','平台','关键词摘要','类型','可见性','状态','开始时间','耗时','采集数','新增数','疑似负面数','高风险数','待复核数','未评估数','失败原因','操作'], runs.map(runRow))
-        : '<div class="empty run-empty-state"><strong>暂无运行记录</strong><span>请调整筛选条件，或从监控任务发起一次运行。</span></div>';
+      renderCurrentRuns();
       renderRunPagination(pagination);
-      return running.length > 0;
+      syncRunPolling(runs);
+      return runs.some(run=>run.status==='running');
+    }
+    function renderCurrentRuns(){
+      const target=document.getElementById('runs_table');
+      const runs=currentTaskCenterRuns||[];
+      if(!target) return;
+      if(!runs.length){
+        target.innerHTML='<div class="empty run-empty-state"><strong>暂无运行记录</strong><span>请调整筛选条件，或从监控任务发起一次运行。</span></div>';
+        return;
+      }
+      target.innerHTML=taskCenterGrouped ? renderGroupedTaskRuns(runs) : renderFlatTaskRuns(runs);
+    }
+    function renderFlatTaskRuns(runs){
+      const headers=runTableHeaders('flat');
+      return table(headers, runs.map(r=>runRow(r, headers)), {className:'run-record-table run-record-table-flat', minWidth:1720});
+    }
+    function renderGroupedTaskRuns(runs){
+      const groups=groupRunsByTask(runs);
+      return `<div class="task-run-groups">${groups.map(renderTaskRunGroup).join('')}</div>`;
+    }
+    function groupRunsByTask(runs){
+      const groups=[];
+      const byKey=new Map();
+      (runs||[]).forEach((run, index)=>{
+        const context=runGroupingContext(run);
+        const key=runGroupKey(context, run);
+        if(!byKey.has(key)){
+          const group={key, context, runs:[], order:index, totals:{runs:0, raw:0, newContents:0, negative:0, high:0, pending:0, unevaluated:0, failures:0}, flags:{active:false, deleted:false, limited:false, historical:false}};
+          byKey.set(key, group);
+          groups.push(group);
+        }
+        const group=byKey.get(key);
+        const summary=run.summary||{};
+        group.runs.push(run);
+        group.totals.runs += 1;
+        group.totals.raw += Number(summary.raw_contents||0);
+        group.totals.newContents += Number(summary.new_contents||0);
+        group.totals.negative += Number(summary.suspected_negative_count||summary.negative_count||0);
+        group.totals.high += Number(summary.high_count||0);
+        group.totals.pending += Number(summary.pending_review_count||0);
+        group.totals.unevaluated += Number(summary.unevaluated_count||0);
+        group.totals.failures += Number(summary.failed_platforms?.length||0) + Number(summary.cancelled_platforms?.length||0);
+        group.flags.active = group.flags.active || (!!context.jobId && !run.job_deleted && !run.legacy_without_job_snapshot);
+        group.flags.deleted = group.flags.deleted || !!run.job_deleted;
+        group.flags.limited = group.flags.limited || !!run.legacy_without_job_snapshot;
+        group.flags.historical = group.flags.historical || (!context.jobId && !run.legacy_without_job_snapshot);
+      });
+      return groups;
+    }
+    function runGroupingContext(run){
+      const summary=run.summary||{};
+      const jobId=Number(run.job_id || summary.job_id || 0) || null;
+      const lawFirm=cleanCustomerText(run.display_law_firm_name || run.law_firm_name || summary.law_firm_name || '历史运行');
+      const platforms=(summary.platforms||[]).filter(Boolean);
+      const keywords=(summary.keywords||[]).filter(Boolean);
+      return {
+        jobId,
+        lawFirm,
+        platforms,
+        keywords,
+        frequency: summary.frequency || '',
+        deletedAt: run.archived_at || ''
+      };
+    }
+    function runGroupKey(context, run){
+      if(context.jobId) return `job:${context.jobId}`;
+      const fingerprint=[context.lawFirm, context.platforms.join(','), context.keywords.join(','), context.frequency].join('|').replace(/\s+/g,' ').trim().toLowerCase();
+      return fingerprint ? `run:${fingerprint}` : `run:${run.id}`;
+    }
+    function renderTaskRunGroup(group){
+      const context=group.context;
+      const headers=runTableHeaders('grouped');
+      return `<details class="report-task-group task-run-group ${group.flags.deleted?'is-deleted':''} ${group.flags.limited?'is-limited':''}" data-task-run-group-key="${esc(group.key)}" open>
+        <summary class="report-task-group-head">
+          <div class="report-task-group-title">
+            <div class="report-task-group-title-row">
+              <strong>${esc(context.lawFirm)}</strong>
+              <span class="report-task-group-badges">${runGroupBadges(group)}</span>
+            </div>
+            <div class="report-task-group-summary">
+              <div class="report-task-group-metrics" aria-label="运行分组汇总">${runGroupMetricChips(group).join('')}</div>
+              ${runGroupContextNote(group) ? `<p class="report-task-group-note">${esc(runGroupContextNote(group))}</p>` : ''}
+            </div>
+          </div>
+          <span class="report-task-group-count">${esc(group.runs.length)} 条运行</span>
+        </summary>
+        <div class="report-task-group-body">
+          <div class="report-task-group-meta">${runGroupMetaChips(group).join('')}</div>
+          ${table(headers, group.runs.map(r=>runRow(r, headers)), {className:'run-record-table run-record-table-grouped', minWidth:1320})}
+        </div>
+      </details>`;
+    }
+    function runTableHeaders(mode='flat'){
+      if(mode==='grouped'){
+        return ['运行 ID','状态','开始时间','耗时','采集数','新增数','疑似负面数','高风险数','待复核数','未评估数','类型','可见性','失败原因','详情'];
+      }
+      return ['任务 ID','运行 ID','状态','任务名称 / 律所','平台','关键词摘要','开始时间','耗时','采集数','新增数','疑似负面数','高风险数','待复核数','未评估数','类型','可见性','失败原因','详情'];
+    }
+    function runGroupBadges(group){
+      const badges=[];
+      if(group.flags.limited) badges.push('<span class="status warn">上下文有限</span>');
+      else if(group.flags.deleted) badges.push('<span class="status warn">原任务已删除</span>');
+      else if(group.flags.active) badges.push('<span class="status ok">舆情任务</span>');
+      else badges.push('<span class="status">历史快照</span>');
+      if(group.context.jobId) badges.push(`<span class="status">任务 #${esc(group.context.jobId)}</span>`);
+      return badges.join('');
+    }
+    function runGroupMetricChips(group){
+      const totals=group.totals;
+      const metrics=[
+        {label:'运行', value:totals.runs},
+        {label:'采集', value:totals.raw},
+        {label:'新增', value:totals.newContents},
+        {label:'疑似负面', value:totals.negative, tone: totals.negative ? 'warn' : 'muted'},
+        {label:'高风险', value:totals.high, tone: totals.high ? 'danger' : 'muted'},
+        {label:'待复核', value:totals.pending, tone: totals.pending ? 'warn' : 'muted'},
+        {label:'未评估', value:totals.unevaluated, tone: totals.unevaluated ? 'warn' : 'muted'},
+      ];
+      return metrics.map(metric=>{
+        const tone=metric.tone ? ` is-${metric.tone}` : '';
+        return `<span class="report-task-group-metric${tone}"><span>${esc(metric.label)}</span><strong>${esc(Number(metric.value||0))}</strong></span>`;
+      });
+    }
+    function runGroupContextNote(group){
+      if(group.flags.limited) return '旧运行缺少完整任务快照，可逐条进入详情。';
+      if(group.flags.deleted) return '原任务已删除，使用运行记录保存的任务快照展示历史上下文。';
+      if(group.flags.historical) return '历史记录未解析到任务 ID，按运行快照聚合。';
+      return '';
+    }
+    function runGroupMetaChips(group){
+      const context=group.context;
+      const platformText=context.platforms.length ? formatPlatforms(context.platforms) : '未记录';
+      const keywordText=context.keywords.length ? context.keywords.join(' / ') : '未记录';
+      const chips=[
+        `<span title="${esc(platformText)}">平台：${esc(platformText)}</span>`,
+        `<span title="${esc(keywordText)}">关键词：${esc(keywordText)}</span>`,
+      ];
+      if(context.frequency) chips.push(`<span>频率：${esc(formatReportFrequency(context.frequency))}</span>`);
+      if(context.deletedAt) chips.push(`<span>归档时间：${esc(formatTime(context.deletedAt))}</span>`);
+      if(group.flags.limited) chips.push('<span>历史运行：任务上下文有限</span>');
+      return chips;
     }
     function runQueryParams(){
       const qs=new URLSearchParams();
@@ -5313,40 +5911,116 @@
       const label=perPage>0 ? `第 ${page} / ${totalPages} 页，共 ${total} 条` : `共 ${total} 条`;
       document.getElementById('run_pagination').innerHTML=`<div class="small">${esc(label)}</div><div class="toolbar-actions"><button class="secondary" ${page<=1?'disabled':''} onclick="changeRunPage(${page-1})">上一页</button><button class="secondary" ${page>=totalPages?'disabled':''} onclick="changeRunPage(${page+1})">下一页</button></div>`;
     }
-    function runRow(r){
+    function runCollectionCountCell(summary, progress, key){
+      const finalKey=key==='raw' ? 'raw_contents' : 'new_contents';
+      const progressKey=key==='raw' ? 'raw_items_seen' : 'final_new_contents';
+      const finalValue=Number(summary[finalKey]||0);
+      const progressValue=Number(progress[progressKey] ?? (key==='new' ? summary.new_contents : 0) ?? 0);
+      if(progress && progress.provisional && !progress.final && progressValue){
+        return `<span>${esc(finalValue)}</span><div class="run-progress-note">临时 ${esc(progressValue)}</div>`;
+      }
+      return esc(finalValue);
+    }
+    function runAiCountCell(summary, progress, key, fallbackKey=''){
+      const finalValue=Number(summary[fallbackKey||key]||0);
+      const progressValue=Number(progress[key] ?? (fallbackKey ? progress[fallbackKey] : undefined) ?? finalValue);
+      if(progress && !progress.final && Number(progress.total_candidates||0)>0){
+        return `<span>${esc(progressValue)}</span><div class="run-progress-note">评估中</div>`;
+      }
+      return esc(finalValue);
+    }
+    function runAiUnevaluatedCell(summary, progress){
+      const finalValue=Number(summary.unevaluated_count||summary.ai_unresolved_items||0);
+      if(progress && !progress.final && Number(progress.total_candidates||0)>0){
+        return `<span>${esc(Number(progress.unresolved_items||0))}</span><div class="run-progress-note">${esc(Number(progress.evaluated_items||0))}/${esc(Number(progress.total_candidates||0))}</div>`;
+      }
+      return esc(finalValue);
+    }
+    function runProgressDetails(run){
+      const summary=run.summary||{};
+      if(run.status!=='running') return [];
+      const phase=String(summary.phase||'');
+      const collection=run.collection_progress || summary.collection_progress || {};
+      const ai=run.ai_progress || summary.ai_progress || {};
+      const parts=[];
+      const collectionText=runCollectionProgressText(collection);
+      const aiText=runAiProgressText(ai);
+      if(collectionText) parts.push(collectionText);
+      if(aiText) parts.push(aiText);
+      if(phase.includes('report_generating')) parts.push('报告生成中');
+      if(phase.includes('email_sending')) parts.push('邮件发送中');
+      if(summary.progress_message && run.status==='running') parts.push(cleanCustomerText(summary.progress_message));
+      return parts.filter(Boolean).slice(0, 3);
+    }
+    function compactRunProgressText(run, details=[]){
+      const summary=run.summary||{};
+      const phase=String(summary.phase||'');
+      const collection=run.collection_progress || summary.collection_progress || {};
+      const ai=run.ai_progress || summary.ai_progress || {};
+      if(run.status==='success') return '';
+      if(phase.includes('report_generating')) return '报告生成中';
+      if(phase.includes('email_sending')) return '邮件发送中';
+      if(ai && !ai.final && Number(ai.total_candidates||0)>0) return `AI ${Number(ai.evaluated_items||0)}/${Number(ai.total_candidates||0)}`;
+      if(run.status==='running' && collection && collection.provisional && !collection.final) return `采集中 ${Number(collection.raw_items_seen||0)}（临时）`;
+      if(run.status==='timeout') return '已超时';
+      if(run.status==='partial_failed') return '部分失败';
+      if(run.status==='failed') return '查看原因';
+      if(run.status==='skipped') return '预检跳过';
+      return run.status==='running' ? ((details||[])[0] || '') : '';
+    }
+    function runCollectionProgressText(progress){
+      if(!progress || typeof progress!=='object') return '';
+      if(progress.final) return `采集入库完成：新增 ${Number(progress.final_new_contents||0)}`;
+      if(progress.provisional){
+        const raw=Number(progress.raw_items_seen||0);
+        const malformed=Number(progress.malformed_files||0);
+        const suffix=malformed ? `，异常片段 ${malformed}` : '';
+        return `采集中：已观察 ${raw} 条临时输出${suffix}`;
+      }
+      return '';
+    }
+    function runAiProgressText(progress){
+      if(!progress || typeof progress!=='object') return '';
+      const total=Number(progress.total_candidates||0);
+      if(!total) return '';
+      const done=Number(progress.evaluated_items||0);
+      const negative=Number(progress.negative_count||0);
+      const high=Number(progress.high_count||0);
+      const manual=Number(progress.manual_review_count ?? progress.pending_review_items ?? 0);
+      return `AI ${progress.final?'完成':'评估中'}：${done}/${total}，疑似 ${negative}，高危 ${high}，复核 ${manual}`;
+    }
+    function runRow(r, headers){
       const s=r.summary||{};
       const jobLabel=`${r.law_firm_name||r.display_law_firm_name||'原任务已删除'}${r.job_deleted?'（原任务已删除）':''}`;
       const actions=[
-        `<button class="secondary" onclick="loadRunLogs(${Number(r.id)})">查看日志</button>`,
-        `<button class="secondary" onclick="viewRunLeads(${Number(r.id)})">查看线索</button>`
+        `<button class="secondary" onclick="openRunDetail(${Number(r.id)})">详情</button>`
       ];
-      if(r.status==='running') actions.push(`<button class="danger" onclick="stopRun(${Number(r.id)})">停止</button>`);
-      if(isAdminUser()){
-        if(r.visibility==='archived') actions.push(`<button class="secondary" onclick="restoreRun(${Number(r.id)})">恢复</button>`);
-        else actions.push(`<button class="secondary" onclick="archiveRun(${Number(r.id)})">归档</button>`);
-      }
       const failureText=runDisplayError(r, s);
       const keywords=(s.keywords||[]).join(' / ');
-      return [
-        r.id,
-        r.job_id || '-',
-        esc(jobLabel),
-        esc(formatPlatforms(s.platforms)),
-        `<div class="truncate" title="${esc(keywords)}">${esc(keywords||'-')}</div>`,
-        runTypeBadge(r.run_type),
-        runVisibilityBadge(r.visibility),
-        runStatusBadge(r),
-        esc(formatTime(r.started_at)),
-        esc(formatDuration(s.duration_seconds)),
-        esc(s.raw_contents||0),
-        esc(s.new_contents||0),
-        esc(s.negative_count||0),
-        esc(s.high_count||0),
-        esc(s.pending_review_count||0),
-        esc(s.unevaluated_count||0),
-        failureText ? esc(cleanCustomerText(failureText)) : formatFailures(s),
-        `<div class="wide-actions run-actions">${actions.join(' ')}</div>`
-      ];
+      const collection=r.collection_progress || s.collection_progress || {};
+      const ai=r.ai_progress || s.ai_progress || {};
+      const failureHtml=failureText ? esc(cleanCustomerText(failureText)) : formatFailures(s);
+      const cells={
+        '状态': runStatusBadge(r),
+        '任务名称 / 律所': esc(jobLabel),
+        '平台': esc(formatPlatforms(s.platforms) || '-'),
+        '关键词摘要': `<div class="truncate" title="${esc(keywords)}">${esc(keywords||'-')}</div>`,
+        '开始时间': esc(formatTime(r.started_at)),
+        '耗时': esc(formatDuration(s.duration_seconds)),
+        '采集数': runCollectionCountCell(s, collection, 'raw'),
+        '新增数': runCollectionCountCell(s, collection, 'new'),
+        '疑似负面数': runAiCountCell(s, ai, 'negative_count'),
+        '高风险数': runAiCountCell(s, ai, 'high_count'),
+        '待复核数': runAiCountCell(s, ai, 'manual_review_count', 'pending_review_count'),
+        '未评估数': runAiUnevaluatedCell(s, ai),
+        '类型': runTypeBadge(r.run_type),
+        '可见性': runVisibilityBadge(r.visibility),
+        '运行 ID': r.id,
+        '任务 ID': r.job_id || '-',
+        '失败原因': failureHtml ? `<div class="run-failure-cell">${failureHtml}</div>` : '-',
+        '详情': `<div class="wide-actions run-actions">${actions.join(' ')}</div>`
+      };
+      return (headers||runTableHeaders()).map(header=>cells[header] ?? '');
     }
     async function archiveRun(id){
       if(!confirm('确认归档这条运行记录？归档后默认列表将不再显示它。')) return;
@@ -5391,7 +6065,392 @@
       document.getElementById('run_log_drawer').classList.remove('active');
       document.body.style.overflow='';
     }
-    function refreshCurrentRunLogs(){ if(currentRunLogId) loadRunLogs(currentRunLogId); else toast('请先选择一条运行记录'); }
+    async function openRunDetail(id){
+      currentRunDetailId=Number(id);
+      currentRunDetailTab='overview';
+      currentRunAiFilters = {};
+      document.getElementById('run_detail_backdrop').classList.add('active');
+      document.getElementById('run_detail_drawer').classList.add('active');
+      document.body.style.overflow='hidden';
+      await loadRunDetail(currentRunDetailId);
+    }
+    function closeRunDetailDrawer(){
+      document.getElementById('run_detail_backdrop').classList.remove('active');
+      document.getElementById('run_detail_drawer').classList.remove('active');
+      document.body.style.overflow='';
+    }
+    async function refreshRunDetail(button=null){
+      if(!currentRunDetailId){ toast('请先选择一条运行记录'); return; }
+      return withActionButtonLoading(button, '', async ()=>loadRunDetail(currentRunDetailId));
+    }
+    function setRunDetailAiFilters(filters={}, options={}){
+      currentRunAiFilters = {
+        report_id: filters.report_id ? String(filters.report_id) : '',
+        status: filters.status ? String(filters.status) : '',
+        risk: filters.risk ? String(filters.risk) : '',
+        platform: filters.platform ? String(filters.platform) : '',
+        keyword: filters.keyword ? String(filters.keyword) : '',
+        title: filters.title ? String(filters.title) : '',
+      };
+      if(options.switchTab !== false) currentRunDetailTab = 'ai';
+      if(currentRunDetailId) return loadRunDetail(currentRunDetailId);
+      return Promise.resolve(null);
+    }
+    function syncRunDetailTabs(){
+      document.querySelectorAll('[data-run-detail-tab]').forEach(btn=>btn.classList.toggle('active', btn.getAttribute('data-run-detail-tab')===currentRunDetailTab));
+    }
+    function switchRunDetailTab(tab){
+      currentRunDetailTab=tab || 'overview';
+      syncRunDetailTabs();
+      renderRunDetailBody(currentRunDetailState);
+    }
+    let currentRunDetailState = null;
+    async function loadRunDetail(id){
+      const body=document.getElementById('run_detail_body');
+      const status=document.getElementById('run_detail_status');
+      const subtitle=document.getElementById('run_detail_subtitle');
+      const scope=document.getElementById('run_detail_scope');
+      if(body) body.innerHTML=tableSkeleton(4, 5);
+      if(status) status.textContent='读取中';
+      if(subtitle) subtitle.textContent=`运行 #${Number(id)} 的生命周期、日志、内容和 AI 评估详情。`;
+      if(scope) scope.textContent=`运行详情限定在当前运行 #${Number(id)}，日志和 AI 详情在同一面板内可达。`;
+      const qs=new URLSearchParams({ai_page:'1', ai_limit:'50'});
+      const filters=currentRunAiFilters || {};
+      if(filters.report_id) qs.set('report_id', filters.report_id);
+      if(filters.status) qs.set('ai_status', filters.status);
+      if(filters.risk) qs.set('risk', filters.risk);
+      if(filters.platform) qs.set('platform', filters.platform);
+      if(filters.keyword) qs.set('keyword', filters.keyword);
+      if(filters.title) qs.set('title', filters.title);
+      const res=await api(`/runs/${Number(id)}/detail?${qs.toString()}`);
+      if(!res.ok){
+        const message=await err(res);
+        currentRunDetailState = {run: {id}, error: true, message};
+        if(body) body.innerHTML=`<div class="empty">运行详情读取失败：${esc(cleanCustomerText(message))}</div>`;
+        if(status) status.textContent='读取失败';
+        toast(message);
+        return null;
+      }
+      const data=(await res.json()).detail || {};
+      currentRunDetailState = data;
+      renderRunDetailBody(data);
+      return data;
+    }
+    function renderRunDetailBody(detail){
+      const body=document.getElementById('run_detail_body');
+      if(!body) return;
+      syncRunDetailTabs();
+      const run=detail?.run || {};
+      const overview=detail?.overview || {};
+      const logs=detail?.collection_logs || [];
+      const contents=detail?.collected_contents || [];
+      const aiItems=detail?.ai_evaluations || [];
+      const reports=detail?.reports || [];
+      const emailLogs=detail?.email_delivery_logs || [];
+      renderRunDetailActions(run, overview);
+      const statusText=run.display_status || formatRunStatus(run.status || overview.status || '');
+      const summary=run.summary || overview.summary || {};
+      const collection=summary.collection_progress || {};
+      const ai=summary.ai_progress || {};
+      const summaryAi=summary.ai_evaluation || {};
+      const finalRawCount=Number(collection.final_raw_contents ?? summary.raw_contents ?? contents.length ?? 0);
+      const seenRawCount=Number(collection.raw_items_seen ?? summary.raw_contents ?? contents.length ?? 0);
+      const hasFinalCollection=!!collection.final || summary.raw_contents !== undefined || run.status !== 'running';
+      const aiTotal=Number(ai.total_candidates ?? summaryAi.total_candidates ?? (detail?.ai_pagination||{}).total ?? aiItems.length ?? 0);
+      const aiEvaluated=Number(ai.evaluated_items ?? summaryAi.evaluated ?? aiItems.filter(item=>item.evaluation_id).length ?? 0);
+      const aiNegative=Number(ai.negative_count ?? summary.suspected_negative_count ?? summary.negative_count ?? aiItems.filter(item=>item.lead_status==='suspected_negative').length ?? 0);
+      const aiHigh=Number(ai.high_count ?? summary.high_count ?? aiItems.filter(item=>item.lead_status==='high_risk').length ?? 0);
+      const aiManual=Number(ai.manual_review_count ?? summary.manual_review_count ?? summary.pending_review_count ?? aiItems.filter(item=>item.lead_status==='pending_review').length ?? 0);
+      const aiFinal=!!ai.final || run.status !== 'running';
+      const aiAppliedFilters = detail?.ai_filters || {};
+      const aiFilterSummary = aiFilterSummaryText(aiAppliedFilters);
+      const tabs = {
+        overview: () => `
+          <div class="run-detail-section">
+            <div class="run-detail-grid">
+              ${detailStat('运行 ID', run.id || overview.run_id || '-')}
+              ${detailStat('任务 ID', run.job_id || overview.job_id || '-')}
+              ${detailStat('任务 / 律所', cleanCustomerText(run.display_law_firm_name || overview.law_firm_name || run.law_firm_name || '-'))}
+              ${detailStat('状态', statusText)}
+              ${detailStat('开始时间', formatTime(run.started_at))}
+              ${detailStat('耗时', formatDuration(summary.duration_seconds))}
+              ${detailStat('采集', hasFinalCollection ? `已采集 ${finalRawCount}` : `临时 ${seenRawCount}`)}
+              ${detailStat('AI 评估', aiTotal ? `${aiEvaluated} / ${aiTotal}` : '暂无')}
+            </div>
+            <div class="run-detail-note">${esc(cleanCustomerText(summary.progress_message || '运行详情展示本次执行的生命周期、采集日志、AI 评估和交付结果。'))}</div>
+          </div>
+        `,
+        logs: () => `
+          <div class="run-detail-section">
+            <div class="small">采集日志与运行日志共用同一运行详情面板，便于排查执行过程。</div>
+            <div class="drawer-actions run-detail-log-actions">
+              <button class="secondary" type="button" onclick="copyCurrentRunLogs()">复制日志</button>
+              <button class="secondary" type="button" onclick="downloadCurrentRunLogs()">下载日志</button>
+            </div>
+            ${logs.length ? logs.map(log => `<div class="run-detail-log"><strong>${esc(log.path || '运行日志')}</strong><pre class="logbox">${esc(cleanCustomerText(log.content || ''))}</pre></div>`).join('') : '<div class="empty">暂无采集日志。</div>'}
+          </div>
+        `,
+        contents: () => `
+          <div class="run-detail-section">
+            ${contents.length ? table(['平台','内容 ID','律所','标题','关键词','作者','链接'], contents.map(item=>[
+              esc(formatPlatforms([item.platform])),
+              esc(item.content_id || '-'),
+              esc(cleanCustomerText(item.law_firm_name || '')),
+              esc(cleanCustomerText(item.title || '')),
+              esc(cleanCustomerText(item.source_keyword || '')),
+              esc(cleanCustomerText(item.author_name || '')),
+              item.content_url ? `<a href="${esc(item.content_url)}" target="_blank">打开</a>` : '-'
+            ])) : '<div class="empty">暂无采集内容。</div>'}
+          </div>
+        `,
+        ai: () => `
+          <div class="run-detail-section">
+            <div class="run-detail-subhead">
+              <span class="status ${aiTotal ? (aiFinal ? 'ok' : 'warn') : ''}">${esc(aiTotal ? `${aiEvaluated} / ${aiTotal}` : '暂无 AI 评估')}</span>
+              <span class="small">${esc(aiTotal ? `疑似 ${aiNegative} / 高风险 ${aiHigh} / 待复核 ${aiManual}` : 'AI 评估列表按当前运行展示候选和结果。')}</span>
+            </div>
+            <div class="run-detail-ai-toolbar page-filter-region" data-filter-region="run-detail-ai">
+              <div class="run-detail-ai-filters">
+                ${reports.length > 1 ? `
+                <div>
+                  <label>报告范围</label>
+                  <select id="run_detail_report_filter" onchange="setRunDetailAiFilters({report_id:this.value, status:val('run_detail_ai_status_filter'), risk:val('run_detail_ai_risk_filter'), platform:val('run_detail_ai_platform_filter'), keyword:val('run_detail_ai_keyword_filter'), title:val('run_detail_ai_title_filter')})">
+                    <option value="">全部 AI 候选</option>
+                    ${reports.map(report => `<option value="${esc(report.id)}" ${String(aiAppliedFilters.report_id || '')===String(report.id) ? 'selected' : ''}>报告 #${esc(report.id)}</option>`).join('')}
+                  </select>
+                </div>` : `
+                <div class="run-detail-ai-scope">
+                  <input id="run_detail_report_filter" type="hidden" value="${esc(aiAppliedFilters.report_id || '')}">
+                  <label>报告范围</label>
+                  <div class="run-detail-ai-scope-note">${esc(aiAppliedFilters.report_id ? `仅看报告 #${aiAppliedFilters.report_id} 包含的 AI 候选。` : (reports.length ? `当前运行关联报告 #${reports[0].id}，默认显示本运行全部 AI 候选。` : '当前运行未生成报告，显示全部 AI 候选。'))}</div>
+                </div>`}
+                <div>
+                  <label>状态</label>
+                  <select id="run_detail_ai_status_filter" onchange="setRunDetailAiFilters({report_id:val('run_detail_report_filter'), status:this.value, risk:val('run_detail_ai_risk_filter'), platform:val('run_detail_ai_platform_filter'), keyword:val('run_detail_ai_keyword_filter'), title:val('run_detail_ai_title_filter')})">
+                    <option value="">全部状态</option>
+                    <option value="pending_review" ${String(aiAppliedFilters.status || '')==='pending_review' ? 'selected' : ''}>待人工复核</option>
+                    <option value="ok" ${String(aiAppliedFilters.status || '')==='ok' ? 'selected' : ''}>已评估</option>
+                    <option value="unevaluated" ${String(aiAppliedFilters.status || '')==='unevaluated' ? 'selected' : ''}>未评估</option>
+                    <option value="limited_context" ${String(aiAppliedFilters.status || '')==='limited_context' ? 'selected' : ''}>上下文有限</option>
+                  </select>
+                </div>
+                <div>
+                  <label>风险</label>
+                  <select id="run_detail_ai_risk_filter" onchange="setRunDetailAiFilters({report_id:val('run_detail_report_filter'), status:val('run_detail_ai_status_filter'), risk:this.value, platform:val('run_detail_ai_platform_filter'), keyword:val('run_detail_ai_keyword_filter'), title:val('run_detail_ai_title_filter')})">
+                    <option value="">全部风险</option>
+                    <option value="high" ${String(aiAppliedFilters.risk || '')==='high' ? 'selected' : ''}>高风险</option>
+                    <option value="negative" ${String(aiAppliedFilters.risk || '')==='negative' ? 'selected' : ''}>疑似负面</option>
+                    <option value="pending" ${String(aiAppliedFilters.risk || '')==='pending' ? 'selected' : ''}>待人工复核</option>
+                    <option value="unrelated" ${String(aiAppliedFilters.risk || '')==='unrelated' ? 'selected' : ''}>不相关</option>
+                    <option value="none" ${String(aiAppliedFilters.risk || '')==='none' ? 'selected' : ''}>无风险</option>
+                    <option value="unevaluated" ${String(aiAppliedFilters.risk || '')==='unevaluated' ? 'selected' : ''}>未评估/上下文有限</option>
+                  </select>
+                </div>
+                <div>
+                  <label>平台</label>
+                  <select id="run_detail_ai_platform_filter" onchange="setRunDetailAiFilters({report_id:val('run_detail_report_filter'), status:val('run_detail_ai_status_filter'), risk:val('run_detail_ai_risk_filter'), platform:this.value, keyword:val('run_detail_ai_keyword_filter'), title:val('run_detail_ai_title_filter')})">
+                    <option value="">全部平台</option>
+                    <option value="dy" ${String(aiAppliedFilters.platform || '')==='dy' ? 'selected' : ''}>抖音</option>
+                    <option value="ks" ${String(aiAppliedFilters.platform || '')==='ks' ? 'selected' : ''}>快手</option>
+                    <option value="xhs" ${String(aiAppliedFilters.platform || '')==='xhs' ? 'selected' : ''}>小红书</option>
+                  </select>
+                </div>
+                <div>
+                  <label>关键词</label>
+                  <input id="run_detail_ai_keyword_filter" value="${esc(aiAppliedFilters.keyword || '')}" placeholder="输入关键词" onkeydown="if(event.key==='Enter') setRunDetailAiFilters({report_id:val('run_detail_report_filter'), status:val('run_detail_ai_status_filter'), risk:val('run_detail_ai_risk_filter'), platform:val('run_detail_ai_platform_filter'), keyword:this.value, title:val('run_detail_ai_title_filter')})">
+                </div>
+                <div>
+                  <label>标题</label>
+                  <input id="run_detail_ai_title_filter" value="${esc(aiAppliedFilters.title || '')}" placeholder="输入标题关键词" onkeydown="if(event.key==='Enter') setRunDetailAiFilters({report_id:val('run_detail_report_filter'), status:val('run_detail_ai_status_filter'), risk:val('run_detail_ai_risk_filter'), platform:val('run_detail_ai_platform_filter'), keyword:val('run_detail_ai_keyword_filter'), title:this.value})">
+                </div>
+              </div>
+              <div class="toolbar-actions run-detail-ai-filter-actions">
+                <button class="secondary" type="button" onclick="setRunDetailAiFilters({report_id:val('run_detail_report_filter'), status:val('run_detail_ai_status_filter'), risk:val('run_detail_ai_risk_filter'), platform:val('run_detail_ai_platform_filter'), keyword:val('run_detail_ai_keyword_filter'), title:val('run_detail_ai_title_filter')})">筛选 AI 评估</button>
+                <button class="secondary" type="button" onclick="setRunDetailAiFilters({})">清空筛选</button>
+              </div>
+              <div class="small run-detail-ai-note">${esc(aiFilterSummary || '默认展示当前运行全部 AI 候选和评估结果。')}</div>
+            </div>
+            ${renderRunAiEvaluations(detail)}
+          </div>
+        `,
+        reports: () => `
+          <div class="run-detail-section">
+            ${reports.length ? reports.map(report=>`
+              <div class="run-detail-report">
+                <div class="run-detail-report-head">
+                  <strong>报告 #${esc(report.id)}</strong>
+                  <span class="status">${esc(report.email_status || 'pending')}</span>
+                </div>
+                <div class="run-detail-report-meta small">
+                  <span>新增 ${esc((report.summary||{}).new_contents||0)}</span>
+                  <span>疑似负面 ${esc((report.summary||{}).negative_count||0)}</span>
+                  <span>高风险 ${esc((report.summary||{}).high_count||0)}</span>
+                  <span>待复核 ${esc((report.summary||{}).pending_review_count||0)}</span>
+                </div>
+                <div class="wide-actions run-detail-report-actions">
+                  <button class="secondary" onclick="previewReport(${Number(report.id)})">预览</button>
+                  <button class="secondary" onclick="jumpToReportAiEvaluations(${Number(report.id)})">查看线索</button>
+                  <button class="secondary" onclick="loadEmailDeliveryHistory(${Number(report.id)})">交付历史</button>
+                  <button class="secondary" onclick="resendReportEmail(${Number(report.id)})">重发邮件</button>
+                  <a href="/api/monitor/reports/${Number(report.id)}/download?type=html" target="_blank">下载 HTML</a>
+                  <a href="/api/monitor/reports/${Number(report.id)}/download?type=excel" target="_blank">下载 Excel</a>
+                  <a href="/api/monitor/reports/${Number(report.id)}/download?type=markdown" target="_blank">下载 Markdown</a>
+                </div>
+              </div>`).join('') : '<div class="empty">暂无报告。</div>'}
+          </div>
+        `,
+        email: () => `
+          <div class="run-detail-section">
+            ${emailLogs.length ? emailLogs.map(log=>`
+              <div class="run-detail-email">
+                <div class="run-detail-email-head">
+                  <strong>${esc(emailDeliveryStatusLabel(log.status || 'pending'))}</strong>
+                  <span>${esc(formatTime(log.sent_at || log.created_at))}</span>
+                </div>
+                <div class="small">发送类型：${esc(log.send_type === 'manual_resend' ? '手动重发' : '自动发送')} · 收件人：${esc((log.effective_recipients || []).join(' / ') || '-')}</div>
+                ${log.error_message ? `<div class="small warn">${esc(cleanCustomerText(log.error_message))}</div>` : ''}
+              </div>
+            `).join('') : '<div class="empty">暂无邮件交付记录。</div>'}
+          </div>
+        `
+      };
+      if(currentRunDetailTab === 'logs'){
+        currentRunLogId = Number(run.id || overview.run_id || currentRunDetailId || 0);
+        currentRunLogText = runDetailLogsText(logs);
+      }
+      body.innerHTML = tabs[currentRunDetailTab] ? tabs[currentRunDetailTab]() : tabs.overview();
+      enhanceFilterSelects(body);
+      syncAllFilterSelectButtons();
+      if(document.getElementById('run_detail_status')) document.getElementById('run_detail_status').textContent = statusText;
+    }
+    function renderRunDetailActions(run={}, overview={}){
+      const target=document.getElementById('run_detail_actions');
+      if(!target) return;
+      const runId=Number(run.id || overview.run_id || currentRunDetailId || 0);
+      const actions=[];
+      if(runId && run.status==='running') actions.push(`<button class="danger" type="button" onclick="stopRunFromDetail(${runId})">停止</button>`);
+      if(runId && isAdminUser()){
+        if(run.visibility==='archived') actions.push(`<button class="secondary" type="button" onclick="restoreRunFromDetail(${runId})">恢复</button>`);
+        else actions.push(`<button class="secondary" type="button" onclick="archiveRunFromDetail(${runId})">归档</button>`);
+      }
+      target.innerHTML=actions.join('');
+    }
+    async function stopRunFromDetail(id){
+      await stopRun(id);
+      if(currentRunDetailId) await loadRunDetail(currentRunDetailId);
+    }
+    async function archiveRunFromDetail(id){
+      await archiveRun(id);
+      closeRunDetailDrawer();
+    }
+    async function restoreRunFromDetail(id){
+      await restoreRun(id);
+      if(currentRunDetailId) await loadRunDetail(currentRunDetailId);
+    }
+    function runDetailLogsText(logs=[]){
+      return (logs||[]).map(x=>`# ${x.path || '运行日志'}\n${cleanCustomerText(x.content || '')}`).join('\n\n') || '暂无日志；如果任务刚启动，请稍后刷新。';
+    }
+    function detailStat(label, value){
+      return `<div class="run-detail-stat"><strong>${esc(label)}</strong><span>${esc(value ?? '-')}</span></div>`;
+    }
+    function renderRunAiEvaluations(detail){
+      const items=detail?.ai_evaluations || [];
+      const pagination=detail?.ai_pagination || {};
+      const filters=detail?.ai_filters || {};
+      const reports=detail?.reports || [];
+      const selectedReportId=Number(filters.report_id || 0);
+      const runHasReport=reports.length > 0;
+      if(!items.length){
+        return '<div class="empty">暂无 AI 评估记录。</div>';
+      }
+      const header = `<div class="small run-detail-ai-meta">筛选：${esc(Object.entries(filters).filter(([_,v])=>String(v||'').trim()).map(([k,v])=>`${k}=${v}`).join(' / ') || '无')} · 共 ${esc(pagination.total || items.length)} 条</div>`;
+      const tableHtml = table(['平台','内容 ID','标题','关键词','状态','风险','理由 / 证据','进入报告','评估时间','详情'], items.map(item=>[
+        esc(formatPlatforms([item.platform])),
+        esc(item.content_id || '-'),
+        `<div class="truncate" title="${esc(cleanCustomerText(item.title || ''))}">${esc(cleanCustomerText(item.title || ''))}</div>`,
+        `<div class="truncate" title="${esc(cleanCustomerText(item.source_keyword || ''))}">${esc(cleanCustomerText(item.source_keyword || ''))}</div>`,
+        esc(formatLeadStatus(item)),
+        esc(item.risk_level || '-'),
+        `<div class="truncate" title="${esc(cleanCustomerText((item.reason || '') + (item.evidence_quotes?.length ? ' / ' + item.evidence_quotes.join(' / ') : '')))}">${esc(cleanCustomerText(item.reason || ''))}${item.evidence_quotes?.length ? `<div class="small">${esc(cleanCustomerText((item.evidence_quotes || []).join(' / ')))}</div>` : ''}</div>`,
+        selectedReportId || runHasReport ? `<span class="status ok">${selectedReportId ? `报告 #${esc(selectedReportId)}` : '是'}</span>` : '<span class="status">否</span>',
+        esc(formatTime(item.evaluated_at)),
+        `<button class="secondary" type="button" onclick="openRunEvaluationDetail(${Number(detail?.run?.id || 0)}, ${Number(item.evaluation_id || 0)})">查看</button>`
+      ]));
+      return header + tableHtml;
+    }
+    function aiFilterSummaryText(filters={}){
+      const parts=[];
+      if(filters.report_id) parts.push(`报告 #${filters.report_id}`);
+      if(filters.status) parts.push(`状态：${({pending_review:'待人工复核', ok:'已评估', unevaluated:'未评估', limited_context:'上下文有限'}[filters.status] || filters.status)}`);
+      if(filters.risk) parts.push(`风险：${({high:'高风险', negative:'疑似负面', pending:'待人工复核', unrelated:'不相关', none:'已评估无风险', unevaluated:'未评估/上下文有限'}[filters.risk] || filters.risk)}`);
+      if(filters.platform) parts.push(`平台：${formatPlatforms([filters.platform])}`);
+      if(filters.keyword) parts.push(`关键词：${filters.keyword}`);
+      if(filters.title) parts.push(`标题：${filters.title}`);
+      return parts.join(' / ');
+    }
+    function jumpToReportAiEvaluations(reportId){
+      const reportFilter = document.getElementById('run_detail_report_filter');
+      if(reportFilter) reportFilter.value = String(reportId);
+      const existing=currentRunAiFilters || {};
+      currentRunDetailTab='ai';
+      setRunDetailAiFilters({
+        report_id: reportId,
+        status: existing.status || '',
+        risk: existing.risk || '',
+        platform: existing.platform || '',
+        keyword: existing.keyword || '',
+        title: existing.title || '',
+      });
+    }
+    async function openRunEvaluationDetail(runId, evaluationId){
+      const res=await api(`/runs/${Number(runId)}/ai-evaluations/${Number(evaluationId)}`);
+      if(!res.ok){ toast(await err(res)); return; }
+      const payload=(await res.json()).evaluation || {};
+      const trace=payload.trace || {};
+      const html = `
+        <div class="run-detail-evaluation">
+          <div class="drawer-actions">
+            <button class="secondary" type="button" onclick="renderRunDetailBody(currentRunDetailState)">返回 AI 评估列表</button>
+          </div>
+          <div class="run-detail-section">
+            <div class="run-detail-grid">
+              ${detailStat('内容 ID', payload.content_id || '-')}
+              ${detailStat('标题', cleanCustomerText(payload.title || '-'))}
+              ${detailStat('平台', formatPlatforms([payload.platform]))}
+              ${detailStat('状态', formatLeadStatus(payload))}
+              ${detailStat('风险', payload.risk_level || '-')}
+              ${detailStat('评估时间', formatTime(payload.evaluated_at))}
+            </div>
+          </div>
+          <div class="run-detail-section">
+            <h4>业务输入</h4>
+            <pre class="run-detail-code">${esc(JSON.stringify(trace.business_input || {}, null, 2))}</pre>
+          </div>
+          <div class="run-detail-section">
+            <h4>结构化输出</h4>
+            <pre class="run-detail-code">${esc(JSON.stringify(trace.structured_output || {}, null, 2))}</pre>
+          </div>
+          <div class="run-detail-section">
+            <h4>追溯信息</h4>
+            <div class="small">${esc(trace.limited_context ? 'limited-context' : (trace.status || 'available'))} · ${esc(trace.message || '')}</div>
+            ${trace.debug ? `<pre class="run-detail-code">${esc(JSON.stringify(trace.debug, null, 2))}</pre>` : ''}
+          </div>
+        </div>`;
+      const panel = document.getElementById('run_detail_body');
+      if(panel) panel.innerHTML = html;
+      const tabs = document.querySelectorAll('[data-run-detail-tab]');
+      tabs.forEach(btn=>btn.classList.remove('active'));
+      currentRunDetailTab='ai';
+      if(!document.querySelector('[data-run-detail-tab="ai"]')) return;
+      const aiTab = document.querySelector('[data-run-detail-tab="ai"]');
+      if(aiTab) aiTab.classList.add('active');
+    }
+    async function refreshCurrentRunLogs(button=null){
+      if(!currentRunLogId){ toast('请先选择一条运行记录'); return; }
+      await withActionButtonLoading(button, '', async ()=>{
+        await loadRunLogs(currentRunLogId);
+      });
+    }
     async function copyCurrentRunLogs(){
       if(!currentRunLogText){ toast('当前没有可复制的日志'); return; }
       await navigator.clipboard.writeText(currentRunLogText);
@@ -5406,212 +6465,7 @@
       a.click();
       setTimeout(()=>URL.revokeObjectURL(a.href), 500);
     }
-    async function loadReports(){
-      const qs = new URLSearchParams({law_firm:val('report_law_firm'), platform:val('report_platform'), date_from:val('report_date_from'), date_to:val('report_date_to'), limit:val('report_limit') || '100'});
-      setLoadingMarkup('reports_table', listSkeleton(4));
-      selectedLeadReportId=null;
-      selectedLeadRunId=null;
-      selectedLeadSource='';
-      selectedEmailDeliveryReportId=null;
-      closeReportLeadsDrawer();
-      closeEmailDeliveryHistoryDrawer();
-      renderLeads([], {
-        type: 'none_selected',
-        label: '未选择范围',
-        detail: '从报告中心或运行中心点击“查看线索”后，在悬浮窗中展示对应范围内的线索和筛选条件。',
-        count: 0
-      });
-      const data=await (await api('/reports?'+qs.toString())).json();
-      currentReports=data.reports||[];
-      renderReportsTable();
-    }
-    function renderReportsTable(){
-      const target=document.getElementById('reports_table');
-      if(!target) return;
-      const reports=currentReports||[];
-      if(!reports.length){
-        target.innerHTML='<div class="empty">暂无报告。调整筛选条件后可重新查看。</div>';
-        return;
-      }
-      target.innerHTML=`<div class="report-task-groups">${groupReportsByTask(reports).map(renderReportTaskGroup).join('')}</div>`;
-      positionReportActionMenu();
-    }
-    function groupReportsByTask(reports){
-      const groups=[];
-      const byKey=new Map();
-      (reports||[]).forEach((report, index)=>{
-        const context=reportGroupingContext(report);
-        const key=reportGroupKey(context, report);
-        if(!byKey.has(key)){
-          const group={key, context, reports:[], order:index, totals:{newContents:0, negative:0, high:0, pending:0, unevaluated:0, unrelated:0, noRisk:0}, flags:{active:false, deleted:false, limited:false, historical:false}};
-          byKey.set(key, group);
-          groups.push(group);
-        }
-        const group=byKey.get(key);
-        const summary=report.summary||{};
-        group.reports.push(report);
-        group.totals.newContents += Number(summary.new_contents||0);
-        group.totals.negative += Number(summary.negative_count||0);
-        group.totals.high += Number(summary.high_count||0);
-        group.totals.pending += Number(summary.pending_review_count||0);
-        group.totals.unevaluated += Number(summary.unevaluated_count||0);
-        group.totals.unrelated += Number(summary.unrelated_count||0);
-        group.totals.noRisk += Number(summary.no_risk_count||0);
-        group.flags.active = group.flags.active || (!report.job_deleted && !report.limited_context && !!context.jobId);
-        group.flags.deleted = group.flags.deleted || !!report.job_deleted;
-        group.flags.limited = group.flags.limited || !!report.limited_context;
-        group.flags.historical = group.flags.historical || (!context.jobId && !report.limited_context);
-      });
-      return groups;
-    }
-    function reportGroupingContext(report){
-      const snapshot=(report && report.job_snapshot && typeof report.job_snapshot==='object' && !Array.isArray(report.job_snapshot)) ? report.job_snapshot : {};
-      const summary=(report && report.summary && typeof report.summary==='object' && !Array.isArray(report.summary)) ? report.summary : {};
-      const platformResults=(summary.platform_results && typeof summary.platform_results==='object' && !Array.isArray(summary.platform_results)) ? summary.platform_results : {};
-      const snapshotPlatforms=normalizedReportList(snapshot.platforms);
-      const summaryPlatforms=normalizedReportList(summary.platforms);
-      const platforms=snapshotPlatforms.length ? snapshotPlatforms : (summaryPlatforms.length ? summaryPlatforms : Object.keys(platformResults));
-      const keywords=normalizedReportList(snapshot.keywords).length ? normalizedReportList(snapshot.keywords) : normalizedReportList(summary.keywords);
-      const jobId=safeReportInt(snapshot.job_id) || safeReportInt(report?.job_id) || safeReportInt(summary.job_id);
-      const lawFirm=cleanCustomerText(report?.display_law_firm_name || report?.law_firm_name || snapshot.law_firm_name || summary.law_firm_name || '历史报告');
-      return {
-        jobId,
-        lawFirm,
-        platforms,
-        keywords,
-        frequency: snapshot.frequency || summary.frequency || '',
-        deletedAt: snapshot.deleted_at || '',
-      };
-    }
-    function safeReportInt(value){
-      const n=Number(value);
-      return Number.isFinite(n) && n>0 ? n : null;
-    }
-    function normalizedReportList(value){
-      if(Array.isArray(value)) return value.map(item=>String(item||'').trim()).filter(Boolean);
-      if(typeof value==='string') return value.split(/[,，、/]/).map(item=>item.trim()).filter(Boolean);
-      return [];
-    }
-    function reportGroupKey(context, report){
-      if(report?.limited_context) return 'limited:historical';
-      if(!report?.job_deleted && context.jobId) return `active:${context.jobId}`;
-      if(context.jobId) return `snapshot:${context.jobId}`;
-      const fingerprint=[context.lawFirm, context.platforms.join(','), context.keywords.join(','), context.frequency].join('|').replace(/\s+/g,' ').trim().toLowerCase();
-      return fingerprint ? `snapshot:${fingerprint}` : 'limited:historical';
-    }
-    function renderReportTaskGroup(group){
-      const context=group.context;
-      return `<details class="report-task-group ${group.flags.deleted?'is-deleted':''} ${group.flags.limited?'is-limited':''}" data-report-group-key="${esc(group.key)}" open>
-        <summary class="report-task-group-head">
-          <div class="report-task-group-title">
-            <div class="report-task-group-title-row">
-              <strong>${esc(context.lawFirm)}</strong>
-              <span class="report-task-group-badges">${reportGroupBadges(group)}</span>
-            </div>
-            <p>${esc(reportGroupSummaryText(group))}</p>
-          </div>
-          <span class="report-task-group-count">${esc(group.reports.length)} 份报告</span>
-        </summary>
-        <div class="report-task-group-body">
-          <div class="report-task-group-meta">${reportGroupMetaChips(group).join('')}</div>
-          ${table(['报告 ID','律所','新增','疑似负面','高风险','待复核','邮件','创建时间','操作'], group.reports.map(reportRow))}
-        </div>
-      </details>`;
-    }
-    function reportGroupBadges(group){
-      const badges=[];
-      if(group.flags.limited) badges.push('<span class="status warn">上下文有限</span>');
-      else if(group.flags.deleted) badges.push('<span class="status warn">原任务已删除</span>');
-      else if(group.flags.active) badges.push('<span class="status ok">活跃任务</span>');
-      else badges.push('<span class="status">历史快照</span>');
-      if(group.context.jobId) badges.push(`<span class="status">任务 #${esc(group.context.jobId)}</span>`);
-      return badges.join('');
-    }
-    function reportGroupSummaryText(group){
-      const totals=group.totals;
-      const base=`新增 ${totals.newContents} / 疑似负面 ${totals.negative} / 高风险 ${totals.high} / 待复核 ${totals.pending} / 未评估 ${totals.unevaluated}`;
-      if(group.flags.limited) return `${base}；旧报告缺少任务快照，仍可逐份预览、下载和查看线索。`;
-      if(group.flags.deleted) return `${base}；使用报告保存的任务快照展示历史上下文。`;
-      return `${base}；按监控任务汇总报告记录。`;
-    }
-    function reportGroupMetaChips(group){
-      const context=group.context;
-      const platformText=context.platforms.length ? formatPlatforms(context.platforms) : '未记录';
-      const keywordText=context.keywords.length ? context.keywords.join(' / ') : '未记录';
-      const chips=[
-        `<span title="${esc(platformText)}">平台：${esc(platformText)}</span>`,
-        `<span title="${esc(keywordText)}">关键词：${esc(keywordText)}</span>`,
-      ];
-      if(context.frequency) chips.push(`<span>频率：${esc(formatReportFrequency(context.frequency))}</span>`);
-      if(context.deletedAt) chips.push(`<span>删除时间：${esc(formatTime(context.deletedAt))}</span>`);
-      if(group.flags.limited) chips.push('<span>历史报告：任务上下文有限</span>');
-      return chips;
-    }
-    function formatReportFrequency(frequency){
-      const labels={daily:'每天','12h':'每 12 小时','6h':'每 6 小时',cron:'自定义计划'};
-      return labels[frequency] || frequency || '未记录';
-    }
-    function reportRow(r){
-      return [
-        r.id,
-        esc(reportGroupingContext(r).lawFirm),
-        esc((r.summary||{}).new_contents||0),
-        esc((r.summary||{}).negative_count||0),
-        esc((r.summary||{}).high_count||0),
-        esc((r.summary||{}).pending_review_count||0),
-        reportEmailStatusCell(r),
-        esc(formatTime(r.created_at)),
-        reportActions(r.id)
-      ];
-    }
-    function reportActions(id){
-      const reportId=Number(id);
-      return `<div class="wide-actions">
-        <button class="secondary" onclick="previewReport(${reportId})">预览</button>
-        <button class="secondary" onclick="viewReportLeads(${reportId})">查看线索</button>
-        <button class="secondary" data-report-menu-button="${reportId}" onclick="toggleReportActionMenu(${reportId}, this)">更多</button>
-      </div>`;
-    }
-    function reportFloatingMenu(id){
-      return `
-        <button type="button" onclick="viewReportLeads(${Number(id)}); closeReportActionMenu();">查看线索</button>
-        <button type="button" onclick="loadEmailDeliveryHistory(${Number(id)}); closeReportActionMenu();">查看交付历史</button>
-        <button type="button" onclick="resendReportEmail(${Number(id)}); closeReportActionMenu();">重发邮件</button>
-        <a href="/api/monitor/reports/${Number(id)}/download?type=html" target="_blank" onclick="closeReportActionMenu()">下载 HTML</a>
-        <a href="/api/monitor/reports/${Number(id)}/download?type=excel" target="_blank" onclick="closeReportActionMenu()">下载 Excel</a>
-        <a href="/api/monitor/reports/${Number(id)}/download?type=markdown" target="_blank" onclick="closeReportActionMenu()">下载 Markdown</a>`;
-    }
-    function toggleReportActionMenu(id, anchor){
-      openReportMenuId = openReportMenuId===Number(id) ? null : Number(id);
-      reportMenuAnchor = openReportMenuId ? anchor : null;
-      renderReportActionMenu();
-    }
-    function closeReportActionMenu(){
-      if(openReportMenuId===null) return;
-      openReportMenuId=null;
-      reportMenuAnchor=null;
-      renderReportActionMenu();
-    }
-    function renderReportActionMenu(){
-      const menu=document.getElementById('report_action_menu');
-      if(!menu) return;
-      if(openReportMenuId===null){
-        menu.classList.remove('active');
-        menu.innerHTML='';
-        return;
-      }
-      menu.innerHTML=reportFloatingMenu(openReportMenuId);
-      menu.classList.add('active');
-      positionReportActionMenu();
-    }
-    function positionReportActionMenu(){
-      if(openReportMenuId===null) return;
-      const menu=document.getElementById('report_action_menu');
-      const anchor=(reportMenuAnchor && document.contains(reportMenuAnchor)) ? reportMenuAnchor : document.querySelector(`[data-report-menu-button="${openReportMenuId}"]`);
-      if(!menu || !anchor) return;
-      positionFloatingMenu(anchor, menu, {width:204, height:196});
-    }
-    async function createSystemCheckReport(){ const res=await api('/reports/system-check',{method:'POST'}); if(!res.ok){toast(await err(res));return;} toast('系统诊断报告已生成'); await Promise.all([loadReports(), loadRuns(), loadReadiness(), loadDoctor(), loadDashboard()]); }
+    async function createSystemCheckReport(){ const res=await api('/reports/system-check',{method:'POST'}); if(!res.ok){toast(await err(res));return;} toast('系统诊断报告已生成'); await Promise.all([loadRuns(), loadReadiness(), loadDoctor(), loadDashboard()]); }
     async function previewReport(id){
       openReportPreviewDrawer(id);
       document.getElementById('report_preview').srcdoc = '正在加载报告...';
@@ -5633,119 +6487,14 @@
       document.getElementById('report_preview_drawer').classList.remove('active');
       document.body.style.overflow='';
     }
-    async function viewReportLeads(id){
-      selectedLeadReportId=Number(id);
-      selectedLeadRunId=null;
-      selectedLeadSource='report';
-      openReportLeadsDrawer(id);
-      renderLeads([], {type:'selected_report', label:`报告 #${Number(id)} 的线索明细`, detail:'正在读取该报告范围内的线索...', count:0, loading:true});
-      const qs = new URLSearchParams({report_id:String(id), limit:'0', risk:val('lead_status_filter'), platform:val('report_platform'), date_from:val('report_date_from'), date_to:val('report_date_to')});
-      const leadsRes=await api('/leads?'+qs.toString());
-      if(!leadsRes.ok){ toast(await err(leadsRes)); renderLeads([], {type:'selected_report', label:`报告 #${Number(id)} 的线索明细`, detail:'线索读取失败，请稍后重试。', count:0, error:true}); return; }
-      const leadsData=await leadsRes.json();
-      renderLeads(leadsData.leads||[], leadScopeForReport(id, leadsData.leads||[]));
-    }
-    async function viewRunLeads(id){
-      selectedLeadReportId=null;
-      selectedLeadRunId=Number(id);
-      selectedLeadSource='run';
-      openReportLeadsDrawer(id, {source:'run'});
-      renderLeads([], {type:'selected_run', label:`运行 #${Number(id)} 的线索明细`, detail:'正在读取该运行范围内的线索...', count:0, loading:true});
-      const qs = new URLSearchParams({run_id:String(id), limit:'0', risk:val('lead_status_filter')});
-      const leadsRes=await api('/leads?'+qs.toString());
-      if(!leadsRes.ok){ toast(await err(leadsRes)); renderLeads([], {type:'selected_run', label:`运行 #${Number(id)} 的线索明细`, detail:'线索读取失败，请稍后重试。', count:0, error:true}); return; }
-      const leadsData=await leadsRes.json();
-      renderLeads(leadsData.leads||[], leadScopeForRun(id, leadsData.leads||[]));
-    }
-    function reloadCurrentLeadDrawer(){
-      if(selectedLeadSource==='report' && selectedLeadReportId) return viewReportLeads(selectedLeadReportId);
-      if(selectedLeadSource==='run' && selectedLeadRunId) return viewRunLeads(selectedLeadRunId);
-      renderLeads([], {type:'none_selected', label:'未选择线索范围', detail:'请先从报告列表或运行列表点击“查看线索”。', count:0});
-    }
-    function openReportLeadsDrawer(id, options={}){
-      closeEmailDeliveryHistoryDrawer();
-      const title=document.getElementById('report_leads_title');
-      if(title) title.textContent=options.source==='run' ? `运行 #${Number(id)} 线索明细` : `报告线索明细 #${Number(id)}`;
-      document.getElementById('report_leads_backdrop').classList.add('active');
-      document.getElementById('report_leads_drawer').classList.add('active');
-      document.body.style.overflow='hidden';
-    }
-    function closeReportLeadsDrawer(){
-      document.getElementById('report_leads_backdrop').classList.remove('active');
-      document.getElementById('report_leads_drawer').classList.remove('active');
-      document.body.style.overflow='';
-    }
-    function leadScopeForReport(id, leads){
-      const filters=activeReportFilterSummary();
-      const detail=filters.length
-        ? `报告 #${Number(id)} 范围，已应用筛选：${filters.join(' / ')}。`
-        : `报告 #${Number(id)} 范围。`;
-      return {type:'selected_report', label:`报告 #${Number(id)} 的线索明细`, detail, count:(leads||[]).length};
-    }
-    function leadScopeForRun(id, leads){
-      return {type:'selected_run', label:`运行 #${Number(id)} 的线索明细`, detail:`运行 #${Number(id)} 范围。运行级入口用于查看该次执行产生的线索；完整 AI 评估详情仍属于后续运行详情。`, count:(leads||[]).length};
-    }
-    function activeReportFilterSummary(){
-      const filters=[];
-      const risk=val('lead_status_filter');
-      const platform=val('report_platform');
-      const dateFrom=val('report_date_from');
-      const dateTo=val('report_date_to');
-      if(risk) filters.push('线索状态：' + ({high:'高风险', negative:'疑似负面', pending:'待人工复核', unrelated:'不相关', none:'已评估无风险', unevaluated:'未评估/上下文有限'}[risk] || risk));
-      if(platform) filters.push('平台：' + formatPlatforms([platform]));
-      if(dateFrom || dateTo) filters.push(`日期：${dateFrom || '不限'} 至 ${dateTo || '不限'}`);
-      return filters;
-    }
-    function renderLeads(leads, scope){
-      const scopeInfo = typeof scope === 'string' ? {type:'selected_report', label:scope, detail:'', count:(leads||[]).length} : (scope || {});
-      const scopeEl=document.getElementById('leads_scope');
-      const countEl=document.getElementById('leads_scope_count');
-      const hintEl=document.getElementById('leads_scope_hint');
-      const tableEl=document.getElementById('leads_table');
-      if(scopeEl) scopeEl.textContent = [scopeInfo.label, scopeInfo.detail].filter(Boolean).join('：');
-      if(countEl){
-        countEl.textContent = scopeInfo.type==='none_selected' ? '未选择范围' : `${Number(scopeInfo.count || (leads||[]).length || 0)} 条线索`;
-        countEl.className = 'status ' + (scopeInfo.error ? 'warn' : (scopeInfo.type==='none_selected' ? '' : 'ok'));
-      }
-      if(hintEl){
-        hintEl.textContent = scopeInfo.type==='selected_run'
-          ? '线索限定在当前运行，不作为全局线索工作台。'
-          : (scopeInfo.type==='selected_report' ? '线索限定在当前报告，不作为全局线索工作台。' : '请选择一份报告或一条运行记录后查看。');
-      }
-      if(!tableEl) return;
-      if(scopeInfo.loading){
-        tableEl.innerHTML=tableSkeleton(4, 6);
-        return;
-      }
-      if(scopeInfo.type==='none_selected'){
-        tableEl.innerHTML='<div class="empty">未选择范围。请从报告中心或运行中心点击“查看线索”。</div>';
-        return;
-      }
-      if(!leads.length){
-        const emptyText=scopeInfo.type==='selected_run' ? '当前运行没有线索。' : '当前报告在所选筛选条件下没有线索。';
-        tableEl.innerHTML=`<div class="empty">${esc(emptyText)}</div>`;
-        return;
-      }
-      tableEl.innerHTML=table(['律所','平台','状态','标题','关键词','AI 理由','证据','链接 / 封面'], leads.map(x=>[
-        esc(cleanCustomerText(x.law_firm_name||'')), esc(formatPlatforms([x.platform])), esc(formatLeadStatus(x)), esc(cleanCustomerText(x.title||'')), esc(cleanCustomerText(x.source_keyword||'')), esc(cleanCustomerText(x.reason||'')), esc(cleanCustomerText((x.evidence_quotes||[]).join(' / '))), leadLinks(x)
-      ]));
-    }
-    function reportEmailStatusCell(report){
-      const status=report?.email_status || '';
-      const error=report?.email_error || '';
-      const tone=status==='sent' ? 'ok' : (status==='failed' ? 'warn' : '');
-      return `<button class="email-status-button ${tone}" type="button" onclick="loadEmailDeliveryHistory(${Number(report.id)})">
-        <span>${esc(emailStatusLabel(status))}</span>
-        ${error ? `<small>${esc(cleanCustomerText(error))}</small>` : ''}
-      </button>`;
-    }
     async function loadEmailDeliveryHistory(id, options={}){
       selectedEmailDeliveryReportId=Number(id);
       openEmailDeliveryHistoryDrawer(id);
       const scope=document.getElementById('email_delivery_history_scope');
       const target=document.getElementById('email_delivery_history');
       const count=document.getElementById('email_delivery_history_count');
-      const report=(currentReports||[]).find(item=>Number(item.id)===Number(id)) || {};
+      const detailReports=(currentRunDetailState?.reports || []);
+      const report=detailReports.find(item=>Number(item.id)===Number(id)) || {};
       const title=document.getElementById('email_delivery_history_title');
       if(title) title.textContent=`邮件交付历史 #${Number(id)}`;
       if(scope) scope.textContent=`报告 ID ${id} 的邮件交付历史`;
@@ -5762,7 +6511,6 @@
       renderEmailDeliveryHistory(data.delivery_logs||[], data.report || report);
     }
     function openEmailDeliveryHistoryDrawer(id){
-      closeReportLeadsDrawer();
       const title=document.getElementById('email_delivery_history_title');
       if(title) title.textContent=`邮件交付历史 #${Number(id)}`;
       document.getElementById('email_delivery_history_backdrop').classList.add('active');
@@ -5774,9 +6522,11 @@
       document.getElementById('email_delivery_history_drawer').classList.remove('active');
       document.body.style.overflow='';
     }
-    function refreshSelectedEmailDeliveryHistory(){
+    async function refreshSelectedEmailDeliveryHistory(button=null){
       if(!selectedEmailDeliveryReportId){ toast('请先选择一份报告'); return; }
-      loadEmailDeliveryHistory(selectedEmailDeliveryReportId);
+      await withActionButtonLoading(button, '', async ()=>{
+        await loadEmailDeliveryHistory(selectedEmailDeliveryReportId);
+      });
     }
     function renderEmailDeliveryHistory(logs, report={}){
       const target=document.getElementById('email_delivery_history');
@@ -5784,7 +6534,7 @@
       if(!target) return;
       if(!report){
         if(count) count.textContent='未选择报告';
-        target.innerHTML='<div class="empty">未选择报告。请从报告列表的邮件状态或“更多 > 查看交付历史”打开。</div>';
+        target.innerHTML='<div class="empty">未选择报告。请从运行详情的邮件交付区域打开。</div>';
         return;
       }
       if(count) count.textContent=`${Number((logs||[]).length)} 条记录`;
@@ -5836,7 +6586,7 @@
       emailValidationWindowState=data.validation_window||emailValidationWindowState;
       renderEmailValidationWindow(emailValidationWindowState);
       toast(data.ok?'邮件已提交 SMTP，请人工确认收件箱或垃圾箱':'重发失败：'+(data.error||'请检查邮件配置'));
-      await loadReports();
+      await loadRuns();
       await loadEmailDeliveryHistory(id, {silent:true});
     }
     async function loadDoctor(){
@@ -5871,7 +6621,7 @@
       const data=(await res.json()).result || {};
       mount.innerHTML=renderSmokeResult(data);
       toast(data.ok ? '系统诊断通过' : '系统诊断完成，但仍有产物异常');
-      await Promise.all([loadReports(), loadRuns(), loadReadiness(), loadDoctor()]);
+      await Promise.all([loadRuns(), loadReadiness(), loadDoctor()]);
     }
     function renderSmokeResult(data){
       const systemCheck=data.system_check||{};
@@ -5893,21 +6643,45 @@
     }
     function startRunPolling(){
       if(runPollTimer) clearInterval(runPollTimer);
-      let rounds=40;
       runPollTimer=setInterval(async ()=>{
-        const running=await loadRuns();
-        rounds -= 1;
-        if(!running || rounds <= 0){
-          clearInterval(runPollTimer);
-          runPollTimer=null;
-          await Promise.all([loadJobs(), loadReports(), loadReadiness(), loadPlatformStatus(), loadDoctor()]);
+        if(runPollInFlight) return;
+        if(!isRunsPageActive()){ stopRunPolling(); return; }
+        runPollInFlight=true;
+        try {
+          const running=await loadRuns({silent:true});
+          if(!running){
+            stopRunPolling();
+            await Promise.all([loadJobs(), loadRuns(), loadReadiness(), loadPlatformStatus(), loadDoctor()]);
+          }
+        } finally {
+          runPollInFlight=false;
         }
       }, 3000);
     }
+    function stopRunPolling(){
+      if(runPollTimer) clearInterval(runPollTimer);
+      runPollTimer=null;
+    }
+    function syncRunPolling(runs=[]){
+      const hasActive=(runs||[]).some(run=>run.status==='running');
+      if(hasActive && isRunsPageActive() && !runPollTimer) startRunPolling();
+      if(!hasActive && runPollTimer) stopRunPolling();
+    }
+    function isRunsPageActive(){
+      const section=document.getElementById('runs');
+      return !!(section && section.classList.contains('active'));
+    }
 
-    function table(headers, rows){
-      const minWidth=Math.max(920, (headers||[]).length * 112);
-      return `<div class="table-wrap"><table style="min-width:${minWidth}px"><thead><tr>${headers.map(h=>`<th class="${h==='操作'?'col-actions':''}">${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map((c,i)=>`<td class="${headers[i]==='操作'?'col-actions':''}">${c??''}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
+    function tableColumnClass(header){
+      const classes=[];
+      if(['操作','详情'].includes(header)) classes.push('col-actions');
+      if(header==='状态') classes.push('col-status');
+      return classes.join(' ');
+    }
+    function table(headers, rows, options={}){
+      const minWidth=Math.max(Number(options.minWidth||0) || 920, (headers||[]).length * 112);
+      const className=options.className ? ` ${esc(options.className)}` : '';
+      return `<div class="table-wrap${className}"><table style="min-width:${minWidth}px"><thead><tr>${headers.map(h=>`<th class="${esc(tableColumnClass(h))}">${h}</th>`).join('')}</tr></thead><tbody>${rows.map(r=>`<tr>${r.map((c,i)=>`<td class="${esc(tableColumnClass(headers[i]))}">${c??''}</td>`).join('')}</tr>`).join('')}</tbody></table></div>`;
     }
     function resourceStat(label, value){ return `<div class="resource-stat"><strong>${esc(label)}</strong><span>${esc(value)}</span></div>`; }
     function formatPlatforms(platforms){ const labels={dy:'抖音',ks:'快手',xhs:'小红书'}; return (platforms||[]).map(p=>labels[p]||p).join(' / '); }
@@ -5981,8 +6755,24 @@
   </div>
 </div>`; }
     function formatDuration(seconds){ const n=Number(seconds||0); if(n<60) return `${n}s`; return `${Math.floor(n/60)}m ${n%60}s`; }
-    function formatRunStatus(status){ const diagnostic='self'+'test'; const labels={running:'运行中',success:'成功',partial_failed:'部分失败',failed:'失败',timeout:'超时',cancelled:'已停止',skipped:'已跳过',[diagnostic]:'诊断记录'}; return labels[status]||status||''; }
-    function runStatusBadge(run){ const status=run.status||''; const cls=status==='success'?'ok':(status==='failed'||status==='partial_failed'?'bad':(status==='running'?'warn':(status==='skipped'?'warn':''))); return `<span class="status ${cls}">${esc(run.display_status || formatRunStatus(status))}</span>`; }
+    function formatRunStatus(status){ const diagnostic='self'+'test'; const labels={running:'运行中',success:'已完成',partial_failed:'部分失败',failed:'失败',timeout:'运行超时',cancelled:'已取消',interrupted:'执行中断',skipped:'已跳过',[diagnostic]:'诊断记录'}; return labels[status]||status||''; }
+    function compactRunStatusLabel(run){
+      const status=String(run?.status||'');
+      const fixed=formatRunStatus(status);
+      if(['running','success','partial_failed','failed','timeout','cancelled','interrupted'].includes(status)) return fixed || status || '-';
+      const display=cleanCustomerText(run?.display_status || fixed || status || '').trim();
+      if(status==='skipped') return display && display.length<=8 ? display : '已跳过';
+      const firstLine=display.split(/[\n\r：:；;]/)[0].trim();
+      return firstLine.length>8 ? `${firstLine.slice(0,8)}...` : (firstLine || '-');
+    }
+    function runStatusBadge(run){
+      const status=run.status||'';
+      const cls=status==='success'?'ok':(status==='failed'||status==='partial_failed'?'bad':(status==='running'?'warn':(status==='skipped'||status==='timeout'||status==='cancelled'||status==='interrupted'?'warn':'')));
+      const details=runProgressDetails(run);
+      const compact=compactRunProgressText(run, details);
+      const title=details.length ? ` title="${esc(details.join(' / '))}"` : '';
+      return `<div class="run-status-stack"${title}><span class="run-status-badge ${cls}"><span aria-hidden="true"></span>${esc(compactRunStatusLabel(run))}</span>${compact?`<div class="run-progress-lines"><span>${esc(compact)}</span></div>`:''}</div>`;
+    }
     function formatRunTypeText(type){ return {operational:'运营记录',scheduled:'自动调度',manual:'手动运行',test:'测试/诊断'}[type] || type || '全部类型'; }
     function runTypeBadge(type){ const value=type||'scheduled'; return `<span class="status ${value==='test'?'warn':''}">${esc(formatRunTypeText(value))}</span>`; }
     function formatRunVisibilityText(visibility){ return visibility==='archived'?'已归档':(visibility==='all'?'全部记录':'默认可见'); }
@@ -6002,10 +6792,12 @@
       if(item.is_related) return '已评估无风险';
       return '不相关';
     }
-    function leadLinks(item){ const links=[]; if(item.content_url) links.push(`<a href="${esc(item.content_url)}" target="_blank">内容</a>`); if(item.cover_url) links.push(`<a href="${esc(item.cover_url)}" target="_blank">封面</a>`); return links.length ? `<div class="wide-actions">${links.join(' ')}</div>` : '-'; }
-    function val(id){ return document.getElementById(id).value; } function set(id,v){ document.getElementById(id).value = v ?? ''; }
+    function val(id){ const el=document.getElementById(id); return el ? el.value : ''; } function set(id,v){ const el=document.getElementById(id); if(!el) return; el.value = v ?? ''; if(el.matches && el.matches('.page-filter-region select[data-filter-select-enhanced="1"]')) syncFilterSelectButton(el); if(el.matches && el.matches('.page-filter-region input[type="date"][data-filter-date-enhanced="1"]')) syncFilterDateButton(el); }
     function esc(s){ return String(s??'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
     async function err(res){ try { return (await res.json()).detail || res.statusText; } catch { return res.statusText; } }
+    normalizeDrawerScrollBodies();
+    enhanceFilterSelects();
+    enhanceFilterDateInputs();
     document.getElementById('save_job_btn').addEventListener('click', saveJob);
     document.getElementById('login_form').addEventListener('submit', loginWithForm);
     document.getElementById('fill_sample_job_btn').addEventListener('click', fillSampleJobTemplate);

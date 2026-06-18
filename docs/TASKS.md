@@ -117,7 +117,7 @@ and permission work.
       locks.
 - [x] Ensure login and crawling use the same account proxy when configured.
 
-## Phase 5.1 - Account Browser Environment Consistency
+## Phase 5.1 - Account Identity Fidelity
 
 Planning status:
 
@@ -125,49 +125,116 @@ CR-047 is an accepted existing-feature optimization for the completed Phase 5
 account-environment responsibility area. It does not rewrite Phase 5's
 historical completion record. It extends the existing
 `profile_key = workspace/platform/account` model with a persisted, locked
-browser-environment configuration so the same platform account logs in and
-crawls through the same profile, browser platform, user agent, timezone,
-locale, screen size, fingerprint seed, and proxy policy.
+account identity configuration so the same platform account logs in and crawls
+through the same profile traces, browser environment, proxy region/policy, run
+binding, and lock/audit state.
+
+The Phase 5.1 goal is account identity fidelity, not a new anti-verification
+product. The profile folder stores browser traces such as cookies, local
+storage, IndexedDB, cache, history, preferences, service workers, and session
+state. The database stores the launch and consistency rules: browser platform,
+user agent, timezone, locale, accept-language, viewport/screen/device flags,
+fingerprint seed, proxy policy, region, generator metadata, validation state,
+lock state, and re-login state.
 
 CloakBrowser-Manager is a reference for the profile-environment idea only:
 stable per-profile fields, CDP automation access, and noVNC viewing. Do not
 copy its standalone account manager, database, frontend, auth model, or
 deployment shape into this project without a separate provider decision.
+V1 uses the existing Playwright/CDP provider path and does not introduce
+CloakBrowser. Canvas, WebGL, font inventory, plugins, extensions, and long
+browsing history are future/provider-dependent, not V1 commitments.
 
-### Phase 5.1A - Account Browser Environment Data Model
+### Phase 5.1A - Account Identity Data Model
 
-- [ ] Confirm and record the fixed-environment proxy override policy before
-      code implementation: task-level proxy overrides must either be blocked
-      for locked account environments or treated as an explicit visible
-      exception with audit/customer-safe explanation.
-- [ ] Add additive browser-environment fields for platform accounts:
-      `browser_platform`, `fingerprint_seed`, `user_agent`, `timezone`,
-      `locale`, `screen_width`, `screen_height`, environment lock status, and
-      lock timestamp/reason.
+- [x] The fixed-environment proxy override policy is confirmed and recorded:
+      after CR-047 locks an account identity, task-level proxy overrides are
+      rejected for that locked account environment. Changing the proxy requires
+      explicit reset/re-login.
+- [ ] Add additive account identity fields for platform accounts:
+      `environment_region`, `browser_platform`, `identity_template`,
+      `fingerprint_seed`, `user_agent`, `timezone`, `locale`,
+      `accept_language`, `screen_width`, `screen_height`, `viewport_width`,
+      `viewport_height`, `device_scale_factor`, `is_mobile`, `has_touch`,
+      identity generator metadata, identity environment version,
+      `requires_relogin`, `identity_state`,
+      `identity_runtime_snapshot_json`, environment lock status, and lock
+      timestamp/reason.
 - [ ] Keep `proxy_id` as the account-bound stable proxy policy field and
-      document how it interacts with any task-level proxy override before
-      implementation.
+      add a customer-safe proxy region snapshot so identity validation can
+      detect region/timezone/locale drift without exposing proxy secrets.
 - [ ] Add negative tests proving locked environments reject hidden proxy or
       process-default fallback, or surface the override as an explicit audited
       exception under the confirmed policy.
-- [ ] Backfill existing active accounts with a customer-safe default or mark
-      them as needing environment confirmation/re-login without moving old
-      profile directories.
+- [ ] Keep existing active accounts readable, do not silently backfill guessed
+      identity values, and require environment confirmation/re-login without
+      moving old profile directories.
 - [ ] Keep old accounts readable and avoid exposing raw `profile_path`.
 
-### Phase 5.1B - Environment Generation And Locking
+### Phase 5.1B - Account Identity Generation And Validation
 
-- [ ] Generate or assign browser-environment values before first QR login or
-      Cookie validation.
+- [ ] Add an Account Identity Generator that uses workspace, platform,
+      account, proxy/region policy, automatic template selection or a
+      pre-login administrator template-family choice, and seed salt to produce
+      stable account identity output before first QR login or Cookie
+      validation.
+- [ ] Ensure the generator is stable, differentiated, self-consistent, and
+      explainable: same input produces the same identity, different accounts
+      normally differ, and each output can be traced to a customer-safe
+      template/version.
+- [ ] Make automatic template selection the default: normal users cannot choose
+      identity templates, ordinary administrator account creation does not
+      require template choice, and administrators may only choose a template
+      family before first login through an advanced path.
+- [ ] Do not expose field-level identity editing for UA, viewport, screen,
+      timezone, locale, accept-language, device scale factor, mobile flag, or
+      touch flag; these fields must come from the selected catalog template and
+      region bundle.
+- [ ] Add China mainland generation rules: `environment_region =
+      CN_MAINLAND`, `timezone = Asia/Shanghai`, `locale = zh-CN`,
+      `accept_language = zh-CN,zh;q=0.9`, and a coherent desktop/mobile
+      device template instead of province-level overfitting.
+- [ ] Support a small template catalog such as `CN_WIN_CHROME_1920`,
+      `CN_WIN_CHROME_1536`, `CN_MAC_CHROME_1440`, `CN_ANDROID_CHROME`,
+      `HK_DESKTOP_CHROME`, and `SG_DESKTOP_CHROME`, with generator metadata
+      persisted on each account.
+- [ ] Implement the deterministic generation algorithm from
+      `ACCOUNT_ENVIRONMENT.md`: deterministic template-selection seed,
+      documented catalog-order selection from eligible templates, HMAC-SHA256
+      fingerprint seed derivation from workspace, platform, account, region,
+      selected template, and salt; exact template expansion; no random or
+      process-default fallback.
+- [ ] Add an Account Identity Validator that fails closed when proxy region,
+      timezone, locale, accept-language, UA, browser platform, viewport/screen,
+      mobile/touch flags, or locked fields are missing or contradictory.
+- [ ] Reject silent fallback to Playwright/process defaults when a locked
+      identity exists.
+- [ ] Add test safety tripwires so automated tests and local diagnostics cannot
+      touch real profile roots, cookies, proxy credentials, or real platform
+      login sessions without explicit opt-in environment variables.
+
+### Phase 5.1C - Account Identity Locking And Re-Login
+
+- [ ] Implement the persisted `identity_state` lifecycle from
+      `ACCOUNT_ENVIRONMENT.md`: `draft`, `generated`, `validated`,
+      `login_in_progress`, `locked`, `active`, `requires_relogin`, and
+      `resetting`.
+- [ ] Implement the template-family change transitions from
+      `ACCOUNT_ENVIRONMENT.md`: `draft` can regenerate, `generated` and
+      `validated` return to `draft`, `login_in_progress` rejects changes, and
+      `locked` or `active` requires `requires_relogin` plus reset/re-login.
 - [ ] Lock the browser-environment configuration after successful QR login or
       accepted Cookie validation.
 - [ ] Block silent edits to locked environment fields.
 - [ ] Add an explicit administrator reset/re-login path for changing a locked
       environment, with audit logging and clear consequences.
+- [ ] Mark identity-template or proxy-region changes that invalidate an
+      existing locked identity as `requires_relogin` instead of silently
+      changing future crawl launches.
 - [ ] Preserve one account/profile concurrency locks and server-side QR login
       behavior.
 
-### Phase 5.1C - Login And Crawl Runtime Binding
+### Phase 5.1D - Login And Crawl Runtime Binding
 
 - [ ] Ensure QR login launch options use the persisted environment values
       rather than process defaults for user agent, viewport/screen, locale,
@@ -176,15 +243,26 @@ deployment shape into this project without a separate provider decision.
 - [ ] Ensure crawler/CDP launch and reconnect paths use the same persisted
       account environment as login.
 - [ ] Add a browser-environment provider boundary so existing Playwright/CDP
-      remains the default provider while CloakBrowser-style providers can be
-      evaluated later.
+      remains the V1 provider and unsupported high-fidelity surfaces are
+      reported as future/provider-dependent rather than silently claimed.
+- [ ] Map persisted identity values to Playwright context options and runtime
+      probes exactly as specified in `ACCOUNT_ENVIRONMENT.md`, and fail closed
+      if a required value cannot be honored.
+- [ ] Persist `identity_runtime_snapshot_json` with requested versus effective
+      values, provider metadata, unsupported field list, and `fallback_used`
+      evidence after successful login/crawl launches.
 - [ ] Verify service restart, scheduler run, and manual run paths do not change
       the stored account browser environment.
+- [ ] Ensure MediaCrawler integration receives the higher-priority account
+      identity input when present, while preserving current MediaCrawler
+      defaults only for accounts that do not yet have a Phase 5.1 identity.
 
-### Phase 5.1D - Optional CloakBrowser-Style Provider Evaluation
+### Phase 5.1E - Optional CloakBrowser-Style Provider Evaluation
 
-- [ ] Evaluate whether CloakBrowser or CloakBrowser-Manager-style CDP/noVNC
-      management should become an optional provider.
+- [ ] Keep CloakBrowser and CloakBrowser-Manager out of V1 implementation.
+- [ ] If future high-fidelity browser-persona work is accepted, first evaluate
+      whether CloakBrowser or CloakBrowser-Manager-style CDP/noVNC management
+      should become an optional provider.
 - [ ] Review license, deployment, authentication, noVNC access-control,
       profile storage, server resource use, and sensitive-data redaction before
       any provider is enabled.
@@ -192,6 +270,202 @@ deployment shape into this project without a separate provider decision.
       existing account/profile/proxy locks.
 - [ ] Record a separate decision before making CloakBrowser or
       CloakBrowser-Manager a required production dependency.
+- [ ] Use the current planning estimate for future high-fidelity work: 1-2
+      days for provider/license/deployment review, 3-5 days for a local
+      one-platform prototype, 1-2 weeks for optional provider integration, and
+      3-6+ weeks for production-grade browser-pool/profile-history capability.
+
+## Phase 5.2 - Account Environment Export And Import Package
+
+Planning status:
+
+CR-070 is an accepted new capability for account-environment migration. It does
+not reopen Phase 5 or CR-047. It depends on the `profile_key` account model and
+should reuse CR-047 identity fields when they are implemented. Because the
+capability can move cookies, browser profile traces, and platform account
+metadata between deployments, implementation must remain administrator-only,
+encrypted, audited, and fail-closed.
+
+The package moves one selected platform account environment. It is not a
+general database backup/restore feature. Monitoring tasks, crawl runs, reports,
+AI traces, email delivery logs, users, runtime settings, and customer business
+history remain outside the default package unless a later export requirement
+explicitly adds them.
+
+Confirmed V1 decisions:
+
+- [x] V1 supports metadata-only export and a slim encrypted login-state
+      migration package. The migration package should export configuration,
+      login/session state, and necessary profile state, not a raw whole
+      browser profile copy.
+- [x] V1 uses passphrase-based package encryption. Target-deployment public-key
+      encryption is future scope.
+- [x] V1 may include the source proxy endpoint hint such as host/IP and port
+      inside the encrypted package payload, but must not export proxy username,
+      password, token, authentication header, or provider secret. Audit logs,
+      manifest summaries, and ordinary API responses must not expose the
+      endpoint hint.
+- [x] V1 imports create a new target account/profile by default. Replace,
+      merge, and overwrite are future scope.
+- [x] V1 exports avatar metadata only. Cached avatar image bytes are future
+      scope.
+
+### Phase 5.2A - Package Contract And Security Model
+
+- [ ] Define the account package manifest schema, package version,
+      compatibility fields, checksum/signature fields, redaction rules, and
+      package modes.
+- [ ] Define the exact package file structure from
+      `ACCOUNT_ENVIRONMENT.md`: encrypted `.maepkg` outer envelope,
+      `manifest.json`, `account/account.json`,
+      `account/identity_runtime_snapshot_redacted.json`,
+      optional `profile/slim_profile.zip`, and `checksums/sha256.json`.
+- [ ] Define allowed and forbidden package contents, including account identity
+      fields, encrypted login material, slim profile state, platform-account
+      metadata, and proxy mapping metadata.
+- [ ] Define slim profile state rules: include provider-owned login/session
+      files and profile configuration needed for login-state reuse; exclude
+      cache, GPU cache, code cache, media cache, crash dumps, downloads,
+      screenshots, temporary files, and other duplicated or regenerable
+      browser artifacts.
+- [ ] Keep package scope to the selected platform account environment and
+      explicitly exclude tasks, runs, reports, AI traces, mail delivery logs,
+      users, runtime settings, and full database backup content.
+- [ ] Treat metadata-only packages as sensitive by default when they contain
+      real identity fields such as `fingerprint_seed`, runtime snapshot
+      summaries, or recognized platform account IDs; use the same encrypted
+      package envelope unless a later redacted diagnostic export is confirmed.
+- [ ] Define package encryption/decryption and secret-handling rules so export
+      files never contain plaintext cookies, proxy credentials, package
+      passphrases, profile paths, CDP endpoints, noVNC tokens, or deployment
+      encryption keys.
+- [ ] Specify and implement V1 passphrase encryption details:
+      library-based encryption, Argon2id KDF, AES-256-GCM, authenticated clear
+      header, no persisted passphrase, and tested failure behavior for missing
+      KDF support.
+- [ ] Define package retention and storage behavior: generated packages are
+      operator-download artifacts, not committed runtime data, and cleanup
+      guidance is visible to administrators.
+- [ ] Define safe package audit fields and forbidden audit fields using the
+      examples in `ACCOUNT_ENVIRONMENT.md`.
+
+### Phase 5.2B - Export Flow
+
+- [ ] Add administrator-only metadata export for account identity and
+      platform-account metadata without cookies or profile traces.
+- [ ] Add administrator-only slim login-state migration export that packages
+      encrypted login material and the necessary profile state under
+      `profile_key`, without raw whole-profile cache and temporary artifacts.
+- [ ] Ensure export is blocked or marked incomplete when the account is
+      currently locked by a run, login session, or reset workflow.
+- [ ] Implement the export operation state machine from
+      `ACCOUNT_ENVIRONMENT.md`, including preflight, account package operation
+      lock, metadata read, optional slim profile state, payload build,
+      encryption, ready-for-download, failure, cancellation, expiry, and
+      deletion states.
+- [ ] Ensure export finalization releases locks and deletes staged files on
+      failure, cancellation, timeout, interruption recovery, or expiry.
+- [ ] Fail export with `account_package_state_changed` if account identity,
+      login state, profile lock, or proxy binding changes after preflight and
+      before package completion.
+- [ ] Write export audit logs with package type, account, platform, version,
+      and redacted checksum evidence, without raw secrets or paths.
+- [ ] Enforce package retention: package bytes are runtime artifacts only,
+      recommended temporary expiry is 24 hours after generation/download, and
+      optional persisted metadata uses `expires_at`.
+
+### Phase 5.2C - Import Flow
+
+- [ ] Add administrator-only import preflight that validates package integrity,
+      manifest schema, package version, source/target compatibility, provider
+      compatibility, identity environment version, and path safety before any
+      write.
+- [ ] Validate package encryption metadata, KDF parameters, checksum manifest,
+      required JSON sections, and unknown package modes before decrypting into
+      a staging workspace.
+- [ ] Import into a new target account/profile by default, deriving the target
+      `profile_key` from the target workspace/platform/account ID instead of
+      trusting the source filesystem path.
+- [ ] Reject replace, merge, or in-place profile overwrite in V1 unless a
+      later explicit conflict policy is confirmed; duplicate detection may warn
+      administrators but must not overwrite target records.
+- [ ] Require target-side proxy mapping when the package references a proxy
+      policy or region; do not silently fall back to no proxy or a mismatched
+      proxy.
+- [ ] Use decrypted source proxy endpoint hints only to help the administrator
+      choose a target proxy; never treat host/IP/port hints as usable proxy
+      credentials and never log or expose them through ordinary APIs.
+- [ ] Validate target proxy existence, workspace ownership, active status, and
+      region compatibility before an imported account can become active.
+- [ ] Preserve CR-047 identity state and runtime snapshot metadata only when
+      compatible; otherwise mark the imported account as needing reset/re-login.
+- [ ] Implement the import operation state machine from
+      `ACCOUNT_ENVIRONMENT.md`, including preflight, decrypting,
+      extracting_profile, writing_database, verifying_login, active,
+      requires_relogin, failed, and rolled_back.
+- [ ] Add package and target-account/profile operation locks so the same
+      package or target account cannot be imported concurrently.
+- [ ] Write import audit logs with source package metadata, target account ID,
+      compatibility result, login verification result, and redacted failure
+      reasons.
+
+### Phase 5.2D - Post-Import Verification And Recovery
+
+- [ ] Run login-state verification after import before allowing crawl use.
+- [ ] Mark successful imports active only after the imported profile and
+      login material pass the same platform account check used by server login
+      reconciliation.
+- [ ] Mark failed or incompatible imports `requires_relogin` and prevent
+      silent crawl launch until an administrator re-logins under the target
+      deployment.
+- [ ] Keep imported profile writes under the configured profile root and add
+      traversal/corrupt-archive rollback behavior.
+- [ ] Validate slim profile-state archive quotas and safety before extraction:
+      no absolute paths, drive-letter paths, UNC paths, traversal, symlinks,
+      hardlinks, junctions, unsafe Windows device names, duplicate conflicting
+      entries, unsupported compression, corrupt archives, or profile format
+      mismatch.
+- [ ] Enforce V1 package safety limits from `ACCOUNT_ENVIRONMENT.md`:
+      512 MiB encrypted package size by default, 20,000 profile files by
+      default, and at least twice declared uncompressed size plus 256 MiB free
+      disk before extraction.
+- [ ] Make import/export cleanup idempotent so repeated recovery cannot reopen
+      terminal states, recreate package bytes, or leave locks stuck.
+- [ ] Add clear administrator diagnostics for import success, partial import,
+      requires-relogin state, proxy mapping mismatch, provider mismatch, and
+      package integrity failure.
+
+### Phase 5.2E - Test Safety And Verification
+
+- [ ] Add fixture-based package export/import tests that use disposable
+      profile roots and fake cookies.
+- [ ] Add tripwires so automated tests cannot export real profiles, cookies,
+      proxy credentials, or live account packages without explicit opt-in.
+- [ ] Add CR-070-specific tripwire environment gates:
+      `TEST_ALLOW_REAL_ACCOUNT_PACKAGE_EXPORT=true` and
+      `TEST_ALLOW_REAL_ACCOUNT_PACKAGE_IMPORT=true`; tests must still use fake
+      cookies, fake proxy references, disposable profile roots, and fixture
+      packages by default.
+- [ ] Add negative tests for plaintext secret leakage in package files, audit
+      logs, API responses, and diagnostic messages.
+- [ ] Add tests for exact package schema, encrypted envelope metadata, KDF
+      rules, checksum validation, package retention cleanup, and redacted audit
+      examples.
+- [ ] Add export-state tests for active-account lock rejection, state-change
+      failure, cancellation, timeout, interruption cleanup, lock release, and
+      staged-file deletion.
+- [ ] Add import-state tests for preflight failure, decrypt failure,
+      extraction rollback, database-write failure, login verification failure,
+      terminal-state idempotency, and stuck-lock recovery.
+- [ ] Add proxy-mapping tests for missing mapping, wrong workspace, inactive
+      target proxy, region mismatch, and no silent direct/default-network
+      fallback.
+- [ ] Add compatibility tests for metadata-only import requiring re-login,
+      slim login-state package import with verified login state, and slim
+      login-state package import that fails verification and becomes
+      `requires_relogin`.
+- [ ] Verify docs consistency after the implementation and record results in
+      `docs/TEST_RESULTS.md`.
 
 ## Phase 6 - Server Login Flow
 
@@ -1098,70 +1372,69 @@ heartbeat, terminal `interrupted` state, and AI progress fallback behavior.
 
 ### Phase 19B - Run Center Progress Data Layer
 
-- [ ] Treat Phase 7.1 lifecycle fields as the preferred dependency for active
+- [x] Treat Phase 7.1 lifecycle fields as the preferred dependency for active
       progress storage: `phase`, `phase_started_at`, `progress_updated_at`,
       retry state, last safe result, and progress snapshots in
       `crawl_runs.summary`.
-- [ ] If Phase 19B is deliberately implemented before Phase 7.1, use only a
+- [x] If Phase 19B is deliberately implemented before Phase 7.1, use only a
       small compatible provisional-progress shape and document how it will
       merge into the Phase 7.1 summary structure. Do not add a conflicting
       second progress model.
-- [ ] Add a safe progress snapshot mechanism for running crawler attempts,
+- [x] Add a safe progress snapshot mechanism for running crawler attempts,
       using MediaCrawler output files or equivalent progress signals while the
       subprocess is still alive.
-- [ ] Store provisional progress in `crawl_runs.summary` without marking it as
+- [x] Store provisional progress in `crawl_runs.summary` without marking it as
       final ingested counts.
-- [ ] Tolerate missing, in-flight, partially written, or malformed JSON/JSONL
+- [x] Tolerate missing, in-flight, partially written, or malformed JSON/JSONL
       output files without crashing the run.
-- [ ] Preserve the existing final collect-and-ingest semantics for
+- [x] Preserve the existing final collect-and-ingest semantics for
       `raw_contents`, `filtered_contents`, `excluded_contents`, and
       `new_contents`.
-- [ ] Preserve owner/workspace scope, logs, stop action, archive/restore,
+- [x] Preserve owner/workspace scope, logs, stop action, archive/restore,
       timeout handling, and customer-safe wording.
-- [ ] Prove that a disappearing crawler subprocess or repeated finalization
+- [x] Prove that a disappearing crawler subprocess or repeated finalization
       still converges to one terminal run state and never leaves a run stuck in
       a provisional-progress state.
 
 ### Phase 19C - AI Evaluation Progress Updates
 
-- [ ] Update AI evaluation progress in batches or time intervals while the
+- [x] Update AI evaluation progress in batches or time intervals while the
       evaluation loop is running.
-- [ ] Track evaluated count, total evaluation candidates, suspected negative
+- [x] Track evaluated count, total evaluation candidates, suspected negative
       count, high-risk count, and manual-review count without waiting for the
       full AI batch to finish.
-- [ ] Preserve AI-failure fallback to manual review and report generation.
-- [ ] Ensure final AI counts remain exact after the evaluation loop completes.
-- [ ] Prove late or repeated progress writes cannot regress a terminal run or
+- [x] Preserve AI-failure fallback to manual review and report generation.
+- [x] Ensure final AI counts remain exact after the evaluation loop completes.
+- [x] Prove late or repeated progress writes cannot regress a terminal run or
       alter final counts after completion.
 
 ### Phase 19D - Run Center Frontend Progress Display And Polling
 
-- [ ] Keep Run Center polling active while visible runs remain active instead
+- [x] Keep Run Center polling active while visible runs remain active instead
       of stopping after a short fixed polling window.
-- [ ] Display active collection, ingestion, AI evaluation, report generation,
+- [x] Display active collection, ingestion, AI evaluation, report generation,
       email delivery, timeout, and completion states clearly.
-- [ ] Distinguish provisional collection progress from final ingested counts.
-- [ ] Keep desktop, tablet, and mobile layouts usable without overlap, clipped
+- [x] Distinguish provisional collection progress from final ingested counts.
+- [x] Keep desktop, tablet, and mobile layouts usable without overlap, clipped
       actions, or hidden stop/log controls.
-- [ ] Verify normal users only see own scoped progress and administrators keep
+- [x] Verify normal users only see own scoped progress and administrators keep
       workspace-wide visibility.
 
 ## Phase 20 - Run Detail And AI Evaluation Traceability
 
-**ACCEPTED - NOT IMPLEMENTED**
+**IN PROGRESS**
 
 Planning status:
 
-Phase 20 is accepted for future implementation after CR-034 confirmation items
-were resolved. Trace retention must be an administrator-configurable runtime
-setting with a 30-day default, not a hard-coded value. Permission visibility is
-confirmed: normal users see only business-safe summaries for their own runs,
-administrators may see redacted prompt/request/response debug snapshots, and
-unredacted raw responses must not be exposed to any role. Trace storage uses a
-new `ai_evaluation_traces` table with capped/redacted JSON fields. This
-phase is
-separate from Phase 19 because it adds historical AI traceability and likely
-requires data-model and API changes, while Phase 19 focuses on run progress
+Phase 20 is being implemented after CR-034 confirmation items were resolved.
+Trace retention is an administrator-configurable runtime setting with a 30-day
+default, not a hard-coded value. Permission visibility is confirmed: normal
+users see only business-safe summaries for their own runs, administrators may
+see redacted prompt/request/response debug snapshots, and unredacted raw
+responses must not be exposed to any role. Trace storage uses a new
+`ai_evaluation_traces` table with capped/redacted JSON fields. Phase 20 remains
+separate from Phase 19 because it adds historical AI traceability, run-detail
+APIs, and run-detail frontend surfaces, while Phase 19 focuses on run progress
 visibility.
 
 ### Phase 20A - Traceability Confirmation And Data Model Design
@@ -1186,45 +1459,48 @@ visibility.
 
 ### Phase 20B - AI Evaluation Trace Persistence
 
-- [ ] Persist new AI evaluation trace snapshots at evaluation time, including
+- [x] Persist new AI evaluation trace snapshots at evaluation time, including
       business input payload, prompt/request snapshot, provider/model metadata,
       structured output, raw/redacted response, fallback/error detail, duration,
       and timestamps.
-- [ ] Preserve existing `ai_evaluations` final-result behavior and keep
+- [x] Preserve existing `ai_evaluations` final-result behavior and keep
       historical rows readable.
-- [ ] Show an explicit limited-context state for old evaluations that do not
+- [x] Show an explicit limited-context state for old evaluations that do not
       have trace snapshots.
-- [ ] Ensure trace persistence redacts secrets, authorization headers, cookies,
+- [x] Ensure trace persistence redacts secrets, authorization headers, cookies,
       proxy credentials, profile paths, and server-local paths.
 
 ### Phase 20C - Run Detail And AI Evaluation API
 
-- [ ] Add or extend run-detail APIs so a run can return lifecycle summary,
+- [x] Add or extend run-detail APIs so a run can return lifecycle summary,
       crawler logs, content list, AI evaluation list, and report/email links in
       one scoped response.
-- [ ] Add paginated/filterable AI evaluation detail reads by `run_id`, status,
+- [x] Add paginated/filterable AI evaluation detail reads by `run_id`, status,
       risk level, platform, keyword, and content title.
-- [ ] Add a per-evaluation detail endpoint for input/output trace snapshots
+- [x] Add a per-evaluation detail endpoint for input/output trace snapshots
       with role-safe field filtering.
-- [ ] Preserve owner/workspace scope and administrator-only access to confirmed
+- [x] Preserve owner/workspace scope and administrator-only access to confirmed
       debug fields.
-- [ ] Ensure trace-write failure or retention cleanup cannot block report
+- [x] Ensure run-detail collection logs and trace text redact server-local
+      paths, including Windows paths with spaces and residual path fragments,
+      without exposing implementation field names such as `profile_path`.
+- [x] Ensure trace-write failure or retention cleanup cannot block report
       generation or mutate `ai_evaluations`, reports, or delivery logs.
 
 ### Phase 20D - Run Detail Frontend
 
-- [ ] Add a Run Center "详情" action that opens a per-run detail drawer or
+- [x] Add a Run Center "详情" action that opens a per-run detail drawer or
       page grouped by `run_id`.
-- [ ] Treat Run Detail as the primary operational entry for run-scoped leads
+- [x] Treat Run Detail as the primary operational entry for run-scoped leads
       and AI evaluation records, including records that exist before report
       generation.
-- [ ] Show tabs or sections for Overview, Collection Logs, Collected Contents,
+- [x] Show tabs or sections for Overview, Collection Logs, Collected Contents,
       AI Evaluation, Report, and Email Delivery.
-- [ ] In the AI Evaluation tab, list every evaluation candidate/result for the
+- [x] In the AI Evaluation tab, list every evaluation candidate/result for the
       run and allow opening a single evaluation's input/output detail.
-- [ ] Keep crawler logs visible in the same run-detail surface instead of
+- [x] Keep crawler logs visible in the same run-detail surface instead of
       making operators choose between logs and AI details.
-- [ ] Verify desktop, tablet, and mobile layouts keep the run detail readable
+- [x] Verify desktop, tablet, and mobile layouts keep the run detail readable
       without hiding stop/log/detail actions.
 
 ### Phase 20E - Report Center Lead Detail Clarity
@@ -1240,7 +1516,7 @@ inspection; Report Center provides report-scoped shortcuts.
 
 - [x] Add an explicit "view leads" action to report rows or report groups so
       line details are not hidden behind the report preview action.
-- [ ] Link report leads back to the originating run detail when `run_id` is
+- [x] Link report leads back to the originating run detail when `run_id` is
       available.
 - [x] Show a visible lead-detail scope label, count, and applied filter summary
       for selected report, selected group, originating run, or drawer-local
@@ -1509,6 +1785,577 @@ implementation baseline is the latest formal `/monitor` console.
 - [x] Add a browser/layout regression test that fails if lead detail or
       delivery history renders as an unlabeled global table or default-dominant
       panel.
+
+## CR-051 - Task Center And Report Grouping Consolidation
+
+Planning status:
+
+CR-051 is a verified frontend information-architecture optimization after
+Run Detail, report grouping, and scoped lead/delivery drawers were already in
+place. It consolidates the former top-level Run Center and Report Center entry
+points into one `任务中心` without changing backend APIs, data model,
+permissions, crawler behavior, AI behavior, SMTP behavior, or report
+generation semantics.
+
+- [x] Rename the primary run/report navigation entry to `任务中心`.
+- [x] Remove the separate top-level Report Center nav entry and `<section
+      id="reports">` page section from the formal console.
+- [x] Reuse the existing report-by-monitoring-task grouping inside Task Center
+      as the default first view.
+- [x] Add a `运行记录` subview inside Task Center for the old run-record table,
+      filters, pagination, stop, archive, restore, and Run Detail actions.
+- [x] Keep Task Center's first-level task grouping focused on monitoring-task
+      identity and result summary instead of copying every old run-record
+      column.
+- [x] Keep run ID, task ID, type, visibility, duration, and full failure reason
+      available in `运行记录` and Run Detail.
+- [x] Keep Run Detail as the deep drilldown for lifecycle, logs, AI
+      evaluation, per-run report, and email delivery inspection.
+- [x] Keep report preview, report-scoped lead inspection, delivery history,
+      resend, and downloads reachable from the task-group row secondary
+      actions or `更多` menu.
+- [x] Preserve CR-048 / CR-049 scoped drawer behavior and avoid reintroducing
+      a first-level global lead or delivery-history panel.
+- [x] Add a CR-051 regression test proving there is one Task Center entry,
+      grouped reports live inside it, run records are a subview, and legacy
+      report shortcuts normalize to the task-group view.
+
+## CR-052 - Task Center Row Action Deduplication
+
+Planning status:
+
+CR-052 is a verified frontend information-architecture cleanup after CR-051.
+It removes first-level row actions that duplicate Run Detail content while
+preserving the underlying log and report preview capabilities.
+
+- [x] Remove the run-record row-level `查看日志` button.
+- [x] Keep run logs available in Run Detail's `采集日志` section.
+- [x] Preserve log copy and download actions from the Run Detail log section.
+- [x] Remove the task-group report row-level `预览` button.
+- [x] Keep report preview available in Run Detail's `报告` section.
+- [x] Keep task-group report rows focused on `运行详情` and `更多`, with
+      `更多` retaining report-scoped leads, delivery history, resend, and
+      downloads.
+- [x] Add regression checks preventing the duplicate row-level actions from
+      returning.
+
+## CR-053 - Task Center Field Priority And Global Select Alignment
+
+Planning status:
+
+CR-053 is a verified frontend information-density and interaction-stability
+follow-up after CR-051/CR-052. It keeps Task Center as the single entry while
+making the run table easier to scan and fixing global select/dropdown
+alignment.
+
+- [x] Put `任务 ID`, `运行 ID`, and compact `状态` at the beginning of flat
+      Task Center run tables.
+- [x] In grouped mode, hide duplicated `任务 ID` inside the group table and
+      start group rows with `运行 ID` followed by compact `状态`.
+- [x] Keep terminal success rows short and move full progress detail to Run
+      Detail instead of the first-level status cell.
+- [x] Keep grouped mode on the same run-row field mapping while using the
+      group header for task ID, task name, platform, and keyword context.
+- [x] Remove the duplicate filter-toolbar refresh button and keep the page
+      header refresh as the single Task Center refresh entry.
+- [x] Reorder the filter toolbar so task/law firm, status, platform, and date
+      range come before secondary run type, visibility, and page size.
+- [x] Fix global native select/dropdown visual alignment by preventing the
+      main content container from clipping vertical overflow.
+- [x] Add targeted regression checks for field order, compact status, single
+      refresh, and dropdown-safe content overflow.
+
+## CR-054 - Task Center Status Badge Compactness Regression Fix
+
+Planning status:
+
+CR-054 is a verified frontend regression fix for the CR-053 compact-status
+contract. It prevents long backend display/progress text from becoming the
+first-level Task Center status badge.
+
+- [x] Normalize Task Center status badge labels to short lifecycle states such
+      as `已完成`, `运行中`, `运行超时`, `已取消`, and `执行中断`.
+- [x] Prevent long `display_status` or progress text from rendering inside the
+      first-level status badge.
+- [x] Keep active-run short progress cues below the badge while leaving full
+      progress detail in Run Detail.
+- [x] Strengthen Task Center CSS so status badges remain text-sized and do not
+      stretch into full-width bars.
+- [x] Add targeted regression checks for compact status labels and badge
+      width rules.
+- [x] Verify syntax, targeted frontend tests, docs consistency, and local
+      browser behavior.
+
+## CR-055 - Task Center Status Column Visual Refinement
+
+Planning status:
+
+CR-055 is a verified frontend-only follow-up to CR-054. It reduces the visual
+weight of the Task Center status column without changing grouping, field order,
+run lifecycle wording, Run Detail, reports, AI traceability, or email delivery.
+
+- [x] Add a stable `col-status` table class for `状态` headers and cells.
+- [x] Stop rendering first-level Task Center run status badges with the global
+      `.status` pill class.
+- [x] Restyle run status badges as narrow state-dot labels and constrain the
+      status column width in grouped and flat modes.
+- [x] Preserve compact lifecycle labels, short active progress helper text, and
+      all existing Task Center row/detail behavior.
+- [x] Update regression tests and documentation for the refined status column.
+- [x] Verify syntax, targeted frontend tests, docs consistency, and local
+      browser behavior.
+
+## CR-056 - Filter Dropdown Alignment Regression Fix
+
+Planning status:
+
+CR-056 is a verified frontend-only regression fix after browser review found
+that the CR-053 native-select overflow fix was still insufficient at
+`1440x900`. It keeps existing filter values and page logic while replacing the
+visible dropdown surface for filter-region selects with a fixed-position
+in-page floating menu.
+
+- [x] Enhance only `.page-filter-region select` controls, leaving ordinary
+      form/configuration selects native.
+- [x] Keep each original select element in place so existing `val(...)`,
+      inline `onchange`, and event-listener filter logic still reads the same
+      value.
+- [x] Render the visible filter dropdown as a button plus fixed-position menu
+      appended to the document body.
+- [x] Close the filter menu on outside click, Escape, scroll, resize, and
+      selection.
+- [x] Synchronize visible button text when code paths such as clear filters or
+      role mode update the underlying select value.
+- [x] Add regression coverage for filter-region scope, fixed menu positioning,
+      original change-event dispatch, and Task Center filter preservation.
+- [x] Verify syntax, targeted frontend tests, docs consistency, and browser
+      behavior at `1440x900`.
+
+## CR-057 - Task Center Group Summary Metric Chips
+
+Planning status:
+
+CR-057 is a verified frontend-only Task Center density refinement after browser
+review found the grouped-run header summary too copy-like. It preserves
+grouping, counts, filters, Run Detail, and role behavior while making the
+aggregate values scannable.
+
+- [x] Replace the grouped-run header's long slash-separated aggregate sentence
+      with compact labeled metric chips.
+- [x] Keep run count, collected count, new count, suspected negative, high risk,
+      manual-review, and unevaluated values visible in the group header.
+- [x] Keep limited-context, deleted-task, and historical-context explanations as
+      a short note only when needed.
+- [x] Preserve the grouped table, flat table, filters, single `详情` row action,
+      Run Detail entry, and CR-056 filter dropdown behavior.
+- [x] Verify syntax, targeted frontend tests, docs consistency, and browser
+      behavior at `1440x900`.
+
+## CR-058 - Filter Date Picker Alignment Regression Fix
+
+Planning status:
+
+CR-058 is a verified frontend-only regression fix after browser review found
+that Task Center date filters could still misalign after CR-056. CR-056 covered
+filter-region selects; this follow-up keeps page-level date filter behavior
+stable by replacing only the visible date-picker surface inside
+`.page-filter-region` with a fixed-position in-page menu.
+
+- [x] Enhance only `.page-filter-region input[type="date"]` controls, leaving
+      ordinary form/configuration date inputs native.
+- [x] Keep each original date input in place so existing `val(...)`, inline
+      `onchange`, and event-listener filter logic still reads the same value.
+- [x] Render the visible date picker as a button plus fixed-position date menu
+      appended to the document body.
+- [x] Selecting or clearing a date updates the original input value and
+      dispatches the same `change` event existing filters use.
+- [x] Synchronize visible date button text when code paths such as
+      `clearRunFilters()` update the underlying date value.
+- [x] Keep date filter menus visually anchored to the trigger by centering the
+      wider menu on the trigger by default and clamping inward only as needed
+      to stay inside the viewport.
+- [x] Add regression coverage for filter-date scope, fixed menu positioning,
+      original change-event dispatch, and Task Center filter preservation.
+- [x] Verify syntax, targeted frontend tests, docs consistency, and browser
+      behavior at the desktop review viewport.
+
+## CR-059 - Filter Date Picker Edge Anchoring Regression Fix
+
+Planning status:
+
+CR-059 is a verified frontend-only regression fix after browser review found
+CR-058's centered wider date menu could still look visually offset in the Task
+Center date filters. It keeps the same custom date menu, original input values,
+and filter semantics, but changes the position rule to edge anchoring.
+
+- [x] Keep CR-058's scope limited to `.page-filter-region input[type="date"]`.
+- [x] Align the date menu's left edge to the clicked trigger when there is
+      enough room.
+- [x] Align the date menu's right edge to the clicked trigger near the right
+      viewport edge when needed to avoid overflow.
+- [x] Keep viewport clamping as a final fallback.
+- [x] Preserve date selection, clear/reset synchronization, original
+      `change` events, and ordinary form/configuration date inputs.
+- [x] Verify syntax, targeted frontend tests, docs consistency, and browser
+      coordinate behavior at the desktop review viewport.
+
+## CR-060 - Filter Date Picker Compact Center Alignment Regression Fix
+
+Planning status:
+
+CR-060 is a verified frontend-only regression fix after browser review found
+CR-059's edge-aligned date menu still felt visually offset because the calendar
+surface was much wider than the date trigger. It keeps the same custom date
+menu, original input values, and filter semantics, but changes the visual rule
+to a compact calendar width with trigger-center alignment.
+
+- [x] Keep CR-058's scope limited to `.page-filter-region input[type="date"]`.
+- [x] Reduce the date menu's minimum visual width so it stays close to narrow
+      date filter buttons.
+- [x] Align the date menu center line to the clicked trigger center line when
+      space allows.
+- [x] Keep viewport clamping as a final fallback.
+- [x] Preserve date selection, clear/reset synchronization, original
+      `change` events, and ordinary form/configuration date inputs.
+- [x] Verify syntax, targeted frontend tests, docs consistency, and browser
+      coordinate behavior at the desktop review viewport.
+
+## CR-061 - Filter Date Picker Trigger-Width Anchoring Regression Fix
+
+Planning status:
+
+CR-061 is a verified frontend-only regression fix after browser review found
+CR-060's mathematically centered date menu still felt visually offset because
+the menu was wider than the date trigger. It keeps the same custom date menu,
+original input values, and filter semantics, but changes the visual rule to a
+trigger-width menu aligned to the trigger's left edge.
+
+- [x] Keep CR-058's scope limited to `.page-filter-region input[type="date"]`.
+- [x] Match the date menu width to the clicked date trigger when viewport
+      space allows.
+- [x] Align the date menu left edge to the clicked trigger left edge so it
+      reads as attached to the filter box.
+- [x] Compact the month grid, navigation, and quick actions so the calendar
+      remains readable inside the trigger-width menu.
+- [x] Keep viewport clamping as a final fallback.
+- [x] Preserve date selection, clear/reset synchronization, original
+      `change` events, and ordinary form/configuration date inputs.
+- [x] Verify syntax, targeted frontend tests, and browser coordinate behavior
+      at the desktop review viewport.
+
+## CR-062 - Filter Date Picker Grid Compression Regression Fix
+
+Planning status:
+
+CR-062 is a verified frontend-only regression fix after browser review found
+CR-061's trigger-width date menu shell was aligned, but the internal calendar
+grid could still look wrong because browser button padding and auto minimum
+width compressed or clipped the last day columns.
+
+- [x] Keep CR-061's trigger-width menu and left-edge anchoring behavior.
+- [x] Reset date-cell minimum width and padding so the seven day columns share
+      the available grid width without overflow.
+- [x] Preserve weekdays, day cells, selected-day state, today state, quick
+      actions, date selection, clearing, original `change` events, and ordinary
+      form/configuration date input behavior.
+- [x] Add regression coverage for readable non-overflowing date cells inside
+      the trigger-width menu.
+- [x] Verify targeted frontend tests and browser visual/coordinate behavior at
+      the desktop review viewport.
+
+## CR-063 - Filter Date Picker Readable Anchored Popover Regression Fix
+
+Planning status:
+
+CR-063 is a verified frontend-only regression fix after browser review found
+that CR-062's trigger-width date menu was coordinate-correct but still felt
+visually wrong because the calendar was too cramped. It keeps the same scoped
+custom date menu and original date-input semantics, but makes the calendar a
+readable compact popover with a trigger-aligned anchor marker.
+
+- [x] Keep `.page-filter-region input[type="date"]` as the only enhanced date
+      input scope; ordinary form/configuration date inputs remain native.
+- [x] Use a readable compact calendar width for narrow desktop date triggers
+      instead of forcing the menu to the trigger width.
+- [x] Add a top anchor marker aligned to the clicked trigger center so the
+      wider calendar still reads as attached.
+- [x] Right-align near the viewport edge and clamp only as a final overflow
+      fallback.
+- [x] Preserve date selection, clearing, reset synchronization, original
+      `change` events, weekday/day grid, and existing filtering behavior.
+- [x] Add regression coverage for the readable anchored popover rule.
+- [x] Verify targeted frontend tests, inline script parse, docs consistency,
+      and browser behavior at desktop, tablet, and mobile widths.
+
+## CR-064 - Filter Date Picker Trigger-Attached Edge Shrink Regression Fix
+
+Planning status:
+
+CR-064 is a verified frontend-only regression fix after browser review found
+that CR-063's right-edge alignment still made the right-side date menu look
+offset. It keeps the readable custom date menu and original date-input
+semantics, but changes edge handling so the menu stays attached to the clicked
+date field whenever a slight readable-width shrink can keep it inside the
+visual viewport.
+
+- [x] Keep `.page-filter-region input[type="date"]` as the only enhanced date
+      input scope; ordinary form/configuration date inputs remain native.
+- [x] Prefer trigger-left attachment for both left-side and right-side date
+      filters.
+- [x] Use visual viewport width for fixed-position date-menu edge checks.
+- [x] Near the right edge, shrink the readable menu within a safe lower bound
+      before falling back to right alignment or viewport clamping.
+- [x] Preserve the top anchor marker, date selection, clearing, reset
+      synchronization, original `change` events, weekday/day grid, and existing
+      filtering behavior.
+- [x] Add regression coverage for the trigger-attached shrink rule.
+- [x] Verify targeted frontend tests, inline script parse, docs consistency,
+      and browser behavior at desktop, tablet, and mobile widths.
+
+## CR-065 - Filter Date Picker Center-Anchored Visual Alignment Regression Fix
+
+Planning status:
+
+CR-065 is a verified historical frontend-only regression fix after browser review found
+that CR-064 still made the right-side date menu read as offset at desktop
+review width. It keeps the same scoped custom date menu and original date-input
+semantics, but changes the visual rule so the floating menu is centered on the
+clicked trigger when the viewport can accommodate it. It is superseded by
+CR-066 after browser review found the centered readable menu still looked
+detached from the date field.
+
+- [x] Keep `.page-filter-region input[type="date"]` as the only enhanced date
+      input scope; ordinary form/configuration date inputs remain native.
+- [x] Use visual viewport width for fixed-position date-menu edge checks.
+- [x] Use a compact readable calendar width while centering the menu on the
+      clicked trigger.
+- [x] Clamp inward only when center alignment would overflow the visual
+      viewport.
+- [x] Preserve the top anchor marker, date selection, clearing, reset
+      synchronization, original `change` events, weekday/day grid, and existing
+      filtering behavior.
+- [x] Add regression coverage for the center-anchored visual rule.
+- [x] Verify targeted frontend tests, inline script parse, docs consistency,
+      and browser behavior at desktop, tablet, and mobile widths.
+
+## CR-066 - Filter Date Picker Trigger-Attached Dropdown Alignment Regression Fix
+
+Planning status:
+
+CR-066 is a verified historical frontend-only regression fix after browser review found
+that CR-065's mathematically centered readable calendar still looked detached
+from the date input at desktop review width. It keeps the same scoped custom
+date menu and original date-input semantics, but changes the visual rule so the
+floating menu opens from the clicked trigger's left edge, like the other filter
+dropdowns, while shrinking near the right edge before clamping. It is
+superseded by CR-067 after browser review found that a wider-than-trigger menu
+could still look visually detached even when its left edge was aligned.
+
+- [x] Keep `.page-filter-region input[type="date"]` as the only enhanced date
+      input scope; ordinary form/configuration date inputs remain native.
+- [x] Use visual viewport width for fixed-position date-menu edge checks.
+- [x] Use a compact readable calendar width while aligning the menu's left edge
+      to the clicked trigger when space allows.
+- [x] Shrink the menu first when the readable width would overflow the visual
+      viewport on the right, then clamp only as the final fallback.
+- [x] Preserve the top anchor marker, date selection, clearing, reset
+      synchronization, original `change` events, weekday/day grid, and existing
+      filtering behavior.
+- [x] Add regression coverage for the trigger-attached dropdown rule.
+- [x] Verify targeted frontend tests, inline script parse, docs consistency,
+      and browser behavior at desktop review width.
+
+## CR-067 - Filter Date Picker Trigger-Width Visual Attachment Regression Fix
+
+Planning status:
+
+CR-067 is a verified frontend-only regression fix after browser review found
+that CR-066's left-attached menu could still look offset because the right-side
+date menu remained wider than the clicked trigger. It keeps the same scoped
+custom date menu and original date-input semantics, but changes the current
+visual rule so the menu matches the clicked trigger width whenever that width
+is usable.
+
+- [x] Keep `.page-filter-region input[type="date"]` as the only enhanced date
+      input scope; ordinary form/configuration date inputs remain native.
+- [x] Use visual viewport width for fixed-position date-menu edge checks.
+- [x] Match the visible date menu width to the clicked trigger width when the
+      trigger is wide enough for the seven-column grid.
+- [x] Use a small minimum readable width only for unusually narrow trigger
+      fields.
+- [x] Clamp or shrink only when the attached menu would overflow the visual
+      viewport.
+- [x] Preserve the top anchor marker, date selection, clearing, reset
+      synchronization, original `change` events, weekday/day grid, and existing
+      filtering behavior.
+- [x] Add regression coverage for the trigger-width visual attachment rule.
+- [x] Verify targeted frontend tests, inline script parse, docs consistency,
+      and browser behavior at desktop review width.
+
+## CR-068 - Filter Date Picker Local Attached Menu Regression Fix
+
+Planning status:
+
+CR-068 is a verified frontend-only regression fix after browser review found
+that CR-067's trigger-width fixed-position date menu could still read as
+visually offset at `1440x900`. It keeps the same scoped custom date menu and
+original date-input semantics, but changes the current visual rule so the
+active menu is mounted inside the clicked date control wrapper and positioned
+locally under that field.
+
+- [x] Keep `.page-filter-region input[type="date"]` as the only enhanced date
+      input scope; ordinary form/configuration date inputs remain native.
+- [x] Move the active date menu into the clicked `.filter-date-enhanced`
+      wrapper before positioning.
+- [x] Use wrapper-local `position: absolute`, `left: 0`, and
+      `top: calc(100% + 4px)` so the date menu opens directly below the
+      clicked field.
+- [x] Keep the visible date menu width equal to the clicked trigger width.
+- [x] Preserve the top anchor marker, date selection, clearing, reset
+      synchronization, original `change` events, weekday/day grid, and
+      existing filtering behavior.
+- [x] Add regression coverage for the local attached menu rule.
+- [x] Verify targeted frontend tests, inline script parse, docs consistency,
+      and browser behavior at desktop review width.
+
+## CR-069 - Run Detail AI Evaluation Lead Entry Consolidation
+
+Planning status:
+
+CR-069 is a verified information-architecture optimization after Task
+Center acceptance found that report `查看线索` and Run Detail `AI 评估`
+duplicated the same lead/evaluation detail path. The intended current rule is
+that `AI 评估` is the single primary lead/evaluation table, while report
+`查看线索` is only a report-scoped filter shortcut into that table.
+
+- [x] Record CR-069 as an existing-feature optimization without rewriting
+      CR-048/CR-051 historical verification.
+- [x] Add Run Detail API support for `report_id` AI-evaluation filtering with
+      existing owner scope and role-safe redaction preserved.
+- [x] Add Run Detail `AI 评估` filters for report, status, risk, platform,
+      keyword, and title.
+- [x] Change report `查看线索` to switch to the same `AI 评估` tab with the
+      selected report filter applied.
+- [x] Remove the duplicate report-lead drawer/table from the current UI
+      surface while keeping `/leads` compatibility for old API paths.
+- [x] Keep report preview, downloads, delivery history, resend, per-evaluation
+      AI trace detail, and limited-context old rows available.
+- [x] Keep the `报告范围` selector visible only when a run has multiple reports;
+      use a read-only scope note for runs with zero or one report.
+- [x] Keep Run Detail `AI 评估` filter dropdowns visually consistent with
+      first-level Task Center page-filter dropdowns.
+- [x] Run targeted Phase 20/CR-048/CR-051 regression tests, syntax checks,
+      docs check, and browser acceptance.
+
+## CR-071 - Drawer And Modal Select Dropdown Consistency
+
+Planning status:
+
+CR-071 is a verified frontend-only interaction consistency optimization after
+browser review found that selected drawer/modal form dropdowns still used
+native select rendering while Task Center filters and Run Detail AI filters
+used the enhanced `.page-filter-region select` dropdown mechanism.
+
+- [x] Record CR-071 as an existing-feature optimization without rewriting
+      CR-056 or CR-068 historical verification.
+- [x] Opt the accepted secondary surfaces into the existing
+      `.page-filter-region select` enhancement: task edit drawer, platform
+      account detail drawer, proxy edit drawer, AI access edit drawer, AI rule
+      edit modal, mail configuration edit drawer, and mail template edit
+      drawer.
+- [x] Keep AI Access `模型名称` on its existing combobox interaction and out of
+      the filter dropdown enhancement.
+- [x] Keep task edit drawer custom date inputs native and preserve CR-068's
+      date-picker scope.
+- [x] Synchronize enhanced button labels after dynamic account, proxy, AI
+      profile, email template, platform-login, and disabled-state option
+      updates.
+- [x] Keep modal opt-in regions visually neutral while reusing the same
+      `.filter-select-*` dropdown classes and menu.
+- [x] Add static regression coverage for the drawer/modal opt-in surfaces,
+      dynamic sync hooks, AI model-name exclusion, and native date-input
+      boundary.
+- [x] Verify targeted frontend tests, syntax checks, inline script parse, docs
+      consistency, and browser behavior on representative drawer/modal
+      dropdowns.
+
+## CR-072 - Task Edit Custom Date Picker Consistency
+
+Planning status:
+
+CR-072 is a verified frontend-only interaction consistency follow-up to
+CR-071. It does not rewrite CR-071's historical verification, but supersedes
+the task-edit-date exception for exactly the Monitoring task edit drawer's
+`custom_start` and `custom_end` fields.
+
+- [x] Record CR-072 as an existing-feature optimization linked to CR-068 and
+      CR-071.
+- [x] Opt `custom_start` and `custom_end` into the existing
+      `.page-filter-region input[type="date"]` enhancement by placing them in
+      a neutral `.page-filter-region.modal-filter-region` scope.
+- [x] Reuse the existing `.filter-date-enhanced`,
+      `.filter-select-button.filter-date-button`, and `.filter-date-menu`
+      local attached date-picker mechanism.
+- [x] Preserve the original date input values, form save payload, and `change`
+      event behavior when selecting or clearing dates.
+- [x] Keep unrelated ordinary business date fields native unless separately
+      accepted.
+- [x] Add regression coverage for the task edit custom date opt-in, date-menu
+      local attachment, and CR-071 preserved exclusions.
+- [x] Verify targeted frontend tests, syntax checks, inline script parse, docs
+      consistency, and browser behavior for both task edit custom date fields.
+
+## CR-073 - Scrollable Drawer Corner Radius Regression Fix
+
+Planning status:
+
+CR-073 is a verified frontend-only visual regression fix after browser review
+found that scrollable drawers could show a full-height scrollbar starting at
+the absolute top edge, visually flattening the top-right rounded corner. It
+does not reopen CR-038, CR-071, or CR-072.
+
+- [x] Record CR-073 as a regression fix linked to CR-038 scrollable drawer
+      close controls and CR-071/CR-072 drawer/modal interaction consistency.
+- [x] Keep shared drawers scrollable by moving content scrolling into a
+      normalized `.drawer-scroll-body`, while the outer drawer shell keeps the
+      rounded chrome and header controls outside the scrollbar.
+- [x] Keep the top-right close button in the header's top-right position; do
+      not move it toward the center as the corner-radius workaround.
+- [x] Preserve sticky header, backdrop/Escape close behavior, enhanced select
+      dropdowns, and task edit custom date picker behavior.
+- [x] Add static regression coverage for shared drawer inner-scroll structure,
+      scrollbar/radius styling, and representative drawer surfaces.
+- [x] Verify targeted frontend tests, syntax checks, inline script parse, docs
+      consistency, and browser behavior on a long Monitoring task drawer.
+
+## CR-074 - Console Refresh Action Deduplication And Icon Loading
+
+Planning status:
+
+CR-074 is a verified frontend-only existing-feature optimization after
+browser review found that many formal console pages still had duplicate
+refresh actions: the shared top-bar current-page refresh plus a page-local
+button that reloaded the same data. It keeps scoped refresh actions when they
+operate on a drawer, preview, log, delivery history, schedule recomputation, or
+run detail.
+
+- [x] Record CR-074 as an existing-feature optimization without changing
+      backend APIs, data model, permissions, crawler, AI, SMTP, reports,
+      scheduler, or deployment behavior.
+- [x] Keep one top-bar page-level refresh entry for the active first-level
+      page.
+- [x] Remove redundant page-header and filter-toolbar refresh buttons that
+      merely duplicate the active page reload.
+- [x] Render refresh actions as icon-only SVG buttons with accessible labels
+      rather than visible Chinese refresh text.
+- [x] Add loading/spinning state to refresh icons while their associated work
+      is pending and restore the button after completion.
+- [x] Preserve semantically scoped refresh actions for schedule recomputation,
+      delivery history, email-template preview, run logs, and Run Detail.
+- [x] Add static regression coverage for refresh-action deduplication,
+      icon-only rendering, and loading-state hooks.
+- [x] Verify targeted frontend tests, syntax checks, inline script parse, docs
+      consistency, and browser behavior on representative pages.
 
 ### Phase 21N - System Diagnostics
 

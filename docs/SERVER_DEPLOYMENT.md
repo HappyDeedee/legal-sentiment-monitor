@@ -169,6 +169,59 @@ Restore validation must include:
 - System Diagnostics shows acceptable database, disk-space, backup-set,
   retention-setting, account-alert, and proxy-alert checks before pilot use.
 
+## Account Environment Migration Packages
+
+CR-070 defines an account-level migration path that is narrower than full
+backup/restore. Backup/restore moves an entire deployment. An account
+environment package moves one selected platform account environment to another
+deployment.
+
+Package scope:
+
+- account identity metadata;
+- platform account metadata captured by the project;
+- optional encrypted login material;
+- optional encrypted slim profile state rooted at `profile_key`;
+- proxy mapping requirement and redacted region snapshot.
+- optional encrypted source proxy host/IP plus port hint for target-side
+  mapping, without proxy username, password, token, authentication header, or
+  provider secret.
+
+Deployment operators should treat slim login-state migration packages as
+sensitive runtime artifacts:
+
+- store them outside Git;
+- encrypt them with a package passphrase before transfer;
+- transfer them only through an operator-approved channel;
+- delete or archive them according to a short retention policy after import;
+- never paste package passphrases, raw cookies, proxy endpoint hints, proxy
+  credentials, or local profile paths into issue trackers, chat logs,
+  screenshots, or project documents.
+
+Slim package boundary:
+
+- export login/session state and provider profile configuration needed to
+  attempt account reuse;
+- exclude raw browser cache, GPU cache, code cache, media cache, crash dumps,
+  downloads, screenshots, temporary files, and duplicated or regenerable
+  browser artifacts by default;
+- export avatar metadata only, not cached avatar image bytes.
+
+Target deployment import requirements:
+
+1. verify package integrity and manifest version;
+2. verify browser/provider and identity-environment compatibility;
+3. map any source proxy policy to a target-side proxy or mark the account as
+   needing re-login;
+4. write slim profile-state files only under the configured account profile root;
+5. run login-state verification before allowing crawl use;
+6. audit the import result without raw secrets or paths.
+
+Import success means the target deployment restored the package safely and the
+platform login-state check passed. If the platform rejects the migrated
+session, the account should remain imported for diagnosis but marked
+`requires_relogin`.
+
 ## Email Delivery Evidence Management
 
 Unexpected report emails, orphan delivery logs, and detached report artifacts

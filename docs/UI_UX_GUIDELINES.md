@@ -61,7 +61,9 @@ Phase 10-18 layout requirements:
 - user identity and logout are grouped at the top right on desktop;
 - vague global banners such as generic scheduler/configuration status should be
   removed or rewritten into specific actionable state;
-- page refresh controls should be page-specific and show what was refreshed;
+- page-level refresh should use one shared top-bar current-page refresh icon;
+  first-level pages should not repeat another refresh button when it reloads
+  the same data;
 - page headers should keep title, summary, primary action, and user controls in
   predictable positions.
 
@@ -71,8 +73,7 @@ Administrator:
 
 - Overview
 - Monitoring
-- Run Center
-- Report Center
+- Task Center
 - Resource Management
   - Platform Accounts
   - Proxy Resources
@@ -89,13 +90,15 @@ Normal user:
 
 - Overview
 - Monitoring
-- Run Center
-- Report Center
+- Task Center
 
 Phase 10-18 menu behavior:
 
 - Overview should be renamed or treated as Operations Home in user-facing
   structure;
+- Task Center is the single top-level entry for the former run/report surfaces.
+  It opens on task/report grouping and offers a `运行记录` subview for
+  operational troubleshooting;
 - Resource Management and System Configuration use expanded navigation groups,
   not detached hover-only popovers;
 - mobile navigation must work by tap, not hover;
@@ -161,6 +164,39 @@ Interaction rules:
 - more menus close on outside click, escape, successful action, and navigation
   change;
 - row action menus must not be clipped by table or scroll containers.
+- first-level page filter dropdowns should render through a fixed or portal
+  style in-page menu when native browser dropdowns misalign in the console
+  shell; keep the underlying select value and filter semantics unchanged.
+- first-level page filter date pickers may use the same fixed or portal style
+  in-page menu when native browser date pickers misalign; keep the underlying
+  date input value and change semantics unchanged.
+- when a date picker menu would otherwise look detached from its trigger, make
+  it behave like the other page filter dropdowns: match the clicked trigger
+  width when usable, align the menu's left edge to the trigger, keep the top
+  anchor marker aligned to the trigger center, and use a small minimum readable
+  width only for unusually narrow triggers before viewport clamping.
+- date menus must render the internal calendar as a stable seven-column grid;
+  day cells should not inherit browser-default padding or automatic minimum
+  widths that clip two-digit dates.
+- do not replace ordinary form/configuration selects or date inputs with custom
+  controls unless a focused requirement accepts that form interaction change.
+- CR-071 accepts a focused exception for selected secondary drawer/modal
+  `select` fields: they should reuse the existing `.page-filter-region select`
+  enhancement so dropdowns match Task Center filters. Keep opt-in regions
+  visually neutral, keep underlying select values/change behavior unchanged,
+  and do not convert AI Access `模型名称`.
+- CR-072 accepts a focused date exception for Monitoring task edit
+  `自定义开始日期` and `自定义结束日期`: they should reuse the existing
+  `.page-filter-region input[type="date"]` enhancement, render the same
+  select-style date trigger, and open the local attached `.filter-date-menu`
+  directly below the clicked button while preserving the original input value
+  and `change` semantics.
+- CR-074 standardizes refresh affordances: the first-level current-page refresh
+  lives in the top bar as an icon-only SVG button with an accessible label,
+  while scoped refresh actions such as schedule recomputation, log refresh,
+  preview refresh, delivery-history refresh, and Run Detail refresh may remain
+  only when they refresh a different local scope. All refresh icons should show
+  a loading/spinning state while their associated work is pending.
 
 ## Responsive Layout
 
@@ -206,14 +242,44 @@ Responsive acceptance:
 Desktop tables may show dense operational information, but mobile should not
 inherit every column.
 
-Run Center:
+Task Center:
 
-- desktop: table with pagination and filters;
-- tablet: hide secondary columns and keep status/actions visible;
-- mobile: cards or summary rows with status, task, platform, time, and actions.
+- desktop: task-grouped report/result rows first, with a secondary run-record
+  table for pagination and filters;
+- tablet: grouped task/report lists wrap before action buttons hide; the run
+  record subview may hide secondary operational columns but must keep
+  status/actions visible;
+- mobile: task groups become expandable sections; run records become summary
+  rows with status, task, platform, time, and actions.
+- flat run rows should front-load task ID, run ID, and compact status;
+- grouped run rows should hide the duplicated task ID column because the
+  group header already carries task identity, then show run ID and compact
+  status first;
+- grouped run headers should show aggregate values as compact metric chips
+  rather than one long slash-separated sentence; use labels such as `运行`,
+  `采集`, `新增`, `疑似负面`, `高风险`, `待复核`, and `未评估`.
+- non-zero risk/review/unevaluated group metrics may use restrained warning or
+  danger emphasis, while zero values stay visually quiet.
+- limited-context, deleted-task, or historical-context explanations should be a
+  short note under the group metrics, not part of the metric chip text.
+- the default task-group view should prioritize monitoring-task identity and
+  result summary: task/law firm, platforms, keyword summary, latest status,
+  collected/new counts, suspected negative, high risk, manual review,
+  unevaluated, and Run Detail.
+- run ID, task ID, run type, visibility, duration, and full failure reason
+  belong in the `运行记录` subview and Run Detail instead of crowding the
+  default task-group list.
 - active runs should show compact progress states such as collecting,
   ingesting, AI evaluating, report generating, email sending, timed out, or
   complete without forcing operators to open logs.
+- Task Center table status should render as a compact text-sized badge, not as
+  a full-width pill or progress bar.
+- Task Center status badges should show normalized short lifecycle labels only;
+  long backend display/progress text belongs in Run Detail or a short helper
+  line, not in the badge itself.
+- Task Center first-level run status badges should use a lightweight
+  state-dot label style scoped to the run table, not the global heavy status
+  pill style used in other console surfaces.
 - interrupted runs should use a distinct terminal state label and business-safe
   helper text. Do not display them as ordinary running rows.
 - provisional counts must be visually distinguishable from final counts using
@@ -236,36 +302,47 @@ Run Center:
 - proposed Phase 20 run detail should use a drawer or page-level detail surface
   rather than adding a large nested table directly inside the run list.
 - Run Detail should be the primary place for run-scoped leads and AI
-  evaluation records; a Run Center row can open the detail as a drawer or page.
+  evaluation records; a Task Center row can open the detail as a drawer or page.
+- Run Detail should also be the primary place for run-scoped logs and
+  run-scoped report preview. Do not add first-level row buttons that duplicate
+  Run Detail's `采集日志` or `报告` sections.
 - AI evaluation detail should use a compact list plus a separate detail panel
   for input/output snapshots so long prompt, request, response, and evidence
   text do not overwhelm the run list.
+- Run Detail AI Evaluation filter selects should use the same enhanced
+  page-filter dropdown treatment as first-level Task Center filters. Show
+  `报告范围` as a dropdown only when the current run has multiple reports; use a
+  read-only scope note for zero-report and single-report runs.
 - debug-only fields must be visually separated from business-safe evaluation
   fields and must not appear for roles that are not allowed to inspect them.
 
-Report Center:
+Task-Grouped Reports:
 
-- desktop: grouped task/report table and preview area;
+- desktop: grouped task/report table embedded in Task Center, with report
+  preview reached from Run Detail's report section;
 - tablet: grouped list with report detail panel;
 - mobile: task groups as expandable sections, report preview in a modal or
   separate detail view.
-- report lead details should have an explicit "view leads" entry, not only be
-  triggered as a side effect of report preview.
-- the Report Center "view leads" entry is a report-scoped shortcut; it should
-  not be presented as the main lead/evaluation center.
+- task-group report and run rows should prioritize a single `详情` action;
+  report preview, lead details, delivery history, resend, and downloads belong
+  inside Run Detail.
+- report lead details should be reached from Run Detail's `报告` and
+  `AI 评估` areas, not from a first-level report-row button.
+- the lead drawer should not present itself as a main lead/evaluation center;
+  it is a scoped secondary surface opened from Run Detail.
 - lead detail needs a visible scope label and count, such as selected report,
   selected report group, originating run, or drawer-local filters.
 - lead-status filtering belongs inside the scoped lead drawer, not in the
-  first-level Report Center toolbar; the first-level report toolbar should stay
+  first-level Task Center toolbar; the first-level report toolbar should stay
   on report dimensions such as law firm, platform, date, and report range.
-- do not present an unlabeled flat lead table in Report Center; if filtered
+- do not present an unlabeled flat lead table in Task Center; if filtered
   aggregate leads are shown, label them as filtered aggregate rather than
   selected-report detail.
 - empty states should say whether no report is selected, the selected report
   has no leads, or the drawer-local filters have no matches.
-- email delivery history should open as scoped secondary detail from a report
-  row/status action and should not visually dominate the initial report list,
-  preview, or lead-detail hierarchy.
+- email delivery history should open as scoped secondary detail from Run
+  Detail and should not visually dominate the task center list, preview, or
+  lead-detail hierarchy.
 
 Mail Configuration:
 
@@ -299,12 +376,38 @@ Action menus:
 - keep a minimum touch target;
 - never depend on the table row height changing after menu open.
 
+Filter dropdowns:
+
+- page filter dropdown menus should stay aligned to the clicked control at
+  desktop, tablet, and mobile widths;
+- filter menus must not be clipped by table wrappers, drawer bodies, or the
+  main content container;
+- selecting a filter option must trigger the same filtering behavior as the
+  original select control;
+- clear/reset paths must update both the stored filter value and the visible
+  filter label.
+- page filter date menus follow the same alignment, clipping, selection, and
+  reset rules while preserving the original date input value.
+- page filter date menus should read as attached to the trigger through
+  visible anchoring, but their day grid must remain readable; the seven day
+  columns must not clip weekday labels or two-digit dates at desktop, tablet,
+  or mobile widths. The current first-level filter pattern is a local attached
+  menu: mount the active date menu inside the clicked date control wrapper,
+  position it directly below that field, and match the clicked trigger width.
+
 Scrollable drawers and modals:
 
 - long drawer headers should remain sticky within the drawer so the close
   button stays reachable while content scrolls;
 - sticky headers need a solid background and border or shadow separation so
   form content does not show through;
+- scrollable drawer scrollbars should read as content scrollbars, not as
+  full-height outer-frame rails: keep the outer drawer shell clipped to its
+  rounded chrome, keep header controls outside the scroll container, and place
+  content scrolling inside `.drawer-scroll-body` below the header;
+- preserving the top-right rounded corner must not be solved by moving the
+  close button toward the center; the close button stays in the top-right
+  header position;
 - z-index layering inside a drawer should keep the sticky header above normal
   form content but below in-drawer floating menus or dropdown overlays;
 - bottom action bars should remain reachable and must not overlap the sticky

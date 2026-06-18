@@ -5,16 +5,22 @@ import json
 import os
 import subprocess
 import threading
+import time
 from collections import defaultdict
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
 
-from .ai import evaluate_content
+from .ai import (
+    _build_trace_snapshot,
+    _job_ai_config,
+    evaluate_content,
+)
 from .database import (
     acquire_account_lock,
     acquire_proxy_lock,
     create_run,
+    save_ai_evaluation_trace,
     finish_run,
     get_conn,
     get_job,
@@ -53,6 +59,7 @@ DEFAULT_CRAWLER_MAX_RETRIES = 1
 DEFAULT_CRAWLER_RETRY_DELAY_SECONDS = 3.0
 DEFAULT_AI_ITEM_TIMEOUT_SECONDS = 120
 DEFAULT_AI_ITEM_RETRY_COUNT = 1
+CRAWLER_PROGRESS_POLL_SECONDS = 2.0
 STOP_REQUESTS: set[int] = set()
 RUN_PROCESSES: dict[int, set[subprocess.Popen]] = defaultdict(set)
 PROCESS_LOCK = threading.Lock()
@@ -206,6 +213,7 @@ async def _run_job_locked(job_id: int, source: str = "manual") -> dict[str, Any]
             summary["excluded_contents"] += result.get("excluded_contents", 0)
             summary["new_contents"] += result.get("new_contents", 0)
             content_ids_for_eval.extend(result.get("content_db_ids", []))
+        _sync_progress_from_stored_summary(run_id, summary, finalize=not timed_out and not stopped)
         _mark_phase(run_id, summary, "collected", last_safe_result={"new_contents": summary["new_contents"], "failed_platforms": summary["failed_platforms"]})
 
         if timed_out:
@@ -364,12 +372,15 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
                     try:
                         _raise_if_stop_requested(job["id"])
                         attempt_timeout = _remaining_run_seconds(run_id)
-                        attempt_job = {**job, "_crawler_timeout_seconds": attempt_timeout}
+                        attempt_job = {**job, "_crawler_timeout_seconds": attempt_timeout, "_run_id": run_id}
+                        _update_collection_progress(run_id, platform, attempt_out, phase="collecting")
                         await asyncio.to_thread(_run_crawler_attempt, attempt_job, platform, attempt_out, account_binding)
                         _raise_if_stop_requested(job["id"])
                         _raise_if_deadline_passed(run_id)
+                        _update_collection_progress(run_id, platform, attempt_out, phase="ingesting")
                         contents, comments = collect_platform_outputs(attempt_out, platform)
                         result = ingest_outputs(job, run_id, platform, contents, comments)
+                        _finalize_collection_progress(run_id, platform, result)
                         result["attempts"] = attempt
                         result["max_retries"] = max_retries
                         result["timeout_seconds"] = _run_timeout_seconds(run_id)
@@ -379,12 +390,15 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
                         if account_binding and account_binding.get("proxy_id"):
                             result["proxy"] = _proxy_summary(account_binding)
                         return result
-                    except CrawlerStopped:
+                    except CrawlerStopped as exc:
+                        _update_collection_progress(run_id, platform, attempt_out, phase="collecting", error=str(exc))
                         raise
-                    except CrawlerTimedOut:
+                    except CrawlerTimedOut as exc:
+                        _update_collection_progress(run_id, platform, attempt_out, phase="collecting", error=str(exc))
                         raise
                     except RuntimeError as exc:
                         last_error = redact_sensitive(str(exc))
+                        _update_collection_progress(run_id, platform, attempt_out, phase="collecting", error=last_error)
                         if not _should_retry_crawler_error(last_error) or attempt >= total_attempts:
                             break
                         _raise_if_stop_requested(job["id"])
@@ -406,6 +420,7 @@ def _run_crawler_attempt(
     account_binding: dict[str, Any] | None = None,
 ) -> None:
     _raise_if_stop_requested(job["id"])
+    run_id = _safe_int(job.get("_run_id"))
     cmd = _build_crawler_cmd(job, platform, out_dir, account_binding)
     env = _build_crawler_env(account_binding)
     log_path = out_dir / "crawler.log"
@@ -439,17 +454,33 @@ def _run_crawler_attempt(
                 creationflags=creationflags,
             )
             _register_process(job["id"], process)
-            try:
-                process.wait(timeout=timeout_seconds)
-            except subprocess.TimeoutExpired as exc:
-                _terminate_process(process)
+            deadline = datetime.now(timezone.utc) + timedelta(seconds=timeout_seconds)
+            while True:
+                _raise_if_stop_requested(job["id"])
                 try:
-                    process.wait(timeout=10)
-                except subprocess.TimeoutExpired:
-                    pass
-                log_file.write(f"\n[monitor] MediaCrawler timed out after {timeout_seconds}s\n")
-                log_file.flush()
-                raise CrawlerTimedOut(f"任务达到系统运行时间上限，已停止未完成的采集进程；see {log_path}") from exc
+                    process.wait(timeout=CRAWLER_PROGRESS_POLL_SECONDS if run_id else timeout_seconds)
+                    break
+                except subprocess.TimeoutExpired as exc:
+                    if run_id:
+                        _update_collection_progress(run_id, platform, out_dir, phase="collecting")
+                    if datetime.now(timezone.utc) < deadline:
+                        continue
+                    _terminate_process(process)
+                    try:
+                        process.wait(timeout=10)
+                    except subprocess.TimeoutExpired:
+                        pass
+                    log_file.write(f"\n[monitor] MediaCrawler timed out after {timeout_seconds}s\n")
+                    log_file.flush()
+                    if run_id:
+                        _update_collection_progress(
+                            run_id,
+                            platform,
+                            out_dir,
+                            phase="collecting",
+                            error=f"timeout after {timeout_seconds}s",
+                        )
+                    raise CrawlerTimedOut(f"任务达到系统运行时间上限，已停止未完成的采集进程；see {log_path}") from exc
     except subprocess.TimeoutExpired as exc:
         raise CrawlerTimedOut(f"任务达到系统运行时间上限，已停止未完成的采集进程；see {log_path}") from exc
     except RuntimeError:
@@ -468,9 +499,13 @@ def _run_crawler_attempt(
     if log_text != raw_log_text:
         log_path.write_text(log_text, encoding="utf-8", errors="ignore")
     if is_stop_requested(job["id"]):
+        if run_id:
+            _update_collection_progress(run_id, platform, out_dir, phase="collecting", error="stopped")
         raise CrawlerStopped(f"任务已手动停止；see {log_path}")
     if process.returncode != 0:
         hint = "；检测到登录态失效，请先重新登录该平台账号" if _looks_like_login_required(log_text) else ""
+        if run_id:
+            _update_collection_progress(run_id, platform, out_dir, phase="collecting", error=f"exit {process.returncode}")
         raise RuntimeError(f"MediaCrawler exited with {process.returncode}{hint}; see {log_path}")
 
 
@@ -480,6 +515,252 @@ def _ensure_login_window_closed(platform: str) -> None:
     if status.get("login_window_open"):
         label = {"dy": "抖音", "ks": "快手", "xhs": "小红书"}.get(platform, platform)
         raise RuntimeError(f"{label}登录窗口未关闭，请关闭窗口后再运行采集")
+
+
+def _update_collection_progress(
+    run_id: int,
+    platform: str,
+    out_dir: Path,
+    *,
+    phase: str,
+    error: str | None = None,
+) -> dict[str, Any]:
+    snapshot = _collection_progress_snapshot(platform, out_dir)
+    if error:
+        snapshot["last_error"] = redact_sensitive(error)
+    snapshot["updated_at"] = utc_now()
+    with get_conn() as conn:
+        row = conn.execute("SELECT summary FROM crawl_runs WHERE id=? AND status='running'", (run_id,)).fetchone()
+        if not row:
+            return {}
+        try:
+            summary = json.loads(row["summary"] or "{}")
+        except (TypeError, ValueError):
+            summary = {}
+        if not isinstance(summary, dict):
+            summary = {}
+        collection_progress = summary.get("collection_progress") if isinstance(summary.get("collection_progress"), dict) else {}
+        platforms = collection_progress.get("platforms") if isinstance(collection_progress.get("platforms"), dict) else {}
+        previous = platforms.get(platform) if isinstance(platforms.get(platform), dict) else {}
+        if (_safe_int(snapshot.get("raw_items_seen")) or 0) < (_safe_int(previous.get("raw_items_seen")) or 0):
+            snapshot["raw_items_seen"] = _safe_int(previous.get("raw_items_seen")) or 0
+        if (_safe_int(snapshot.get("comment_items_seen")) or 0) < (_safe_int(previous.get("comment_items_seen")) or 0):
+            snapshot["comment_items_seen"] = _safe_int(previous.get("comment_items_seen")) or 0
+        if (_safe_int(snapshot.get("files_seen")) or 0) < (_safe_int(previous.get("files_seen")) or 0):
+            snapshot["files_seen"] = _safe_int(previous.get("files_seen")) or 0
+        platforms[platform] = snapshot
+        total_raw = sum(_safe_int(item.get("raw_items_seen")) or 0 for item in platforms.values() if isinstance(item, dict))
+        total_comments = sum(_safe_int(item.get("comment_items_seen")) or 0 for item in platforms.values() if isinstance(item, dict))
+        malformed = sum(_safe_int(item.get("malformed_files")) or 0 for item in platforms.values() if isinstance(item, dict))
+        now = utc_now()
+        summary.update(
+            {
+                "phase_19b_progress": True,
+                "phase": phase,
+                "progress_updated_at": now,
+                "progress_message": f"{platform} 临时采集进度：已观察到 {total_raw} 条内容输出",
+                "collection_progress": {
+                    "provisional": True,
+                    "final": False,
+                    "raw_items_seen": total_raw,
+                    "comment_items_seen": total_comments,
+                    "malformed_files": malformed,
+                    "updated_at": now,
+                    "platforms": platforms,
+                },
+            }
+        )
+        conn.execute(
+            "UPDATE crawl_runs SET summary=? WHERE id=? AND status='running'",
+            (json.dumps(_redact_summary(summary), ensure_ascii=False), run_id),
+        )
+    return summary
+
+
+def _finalize_collection_progress(run_id: int, platform: str, result: dict[str, Any]) -> dict[str, Any]:
+    with get_conn() as conn:
+        row = conn.execute("SELECT summary FROM crawl_runs WHERE id=? AND status='running'", (run_id,)).fetchone()
+        if not row:
+            return {}
+        try:
+            summary = json.loads(row["summary"] or "{}")
+        except (TypeError, ValueError):
+            summary = {}
+        if not isinstance(summary, dict):
+            summary = {}
+        collection_progress = summary.get("collection_progress") if isinstance(summary.get("collection_progress"), dict) else {}
+        platforms = collection_progress.get("platforms") if isinstance(collection_progress.get("platforms"), dict) else {}
+        previous = platforms.get(platform) if isinstance(platforms.get(platform), dict) else {}
+        finalized = {
+            **previous,
+            "platform": platform,
+            "provisional": False,
+            "final": True,
+            "final_raw_contents": _safe_int(result.get("raw_contents")) or 0,
+            "final_filtered_contents": _safe_int(result.get("filtered_contents")) or 0,
+            "final_excluded_contents": _safe_int(result.get("excluded_contents")) or 0,
+            "final_new_contents": _safe_int(result.get("new_contents")) or 0,
+            "updated_at": utc_now(),
+        }
+        platforms[platform] = finalized
+        summary["collection_progress"] = {
+            **collection_progress,
+            "provisional": True,
+            "final": False,
+            "platforms": platforms,
+            "updated_at": finalized["updated_at"],
+        }
+        summary["progress_updated_at"] = finalized["updated_at"]
+        summary["progress_message"] = f"{platform} 已完成入库统计：新增 {finalized['final_new_contents']} 条"
+        conn.execute(
+            "UPDATE crawl_runs SET summary=? WHERE id=? AND status='running'",
+            (json.dumps(_redact_summary(summary), ensure_ascii=False), run_id),
+        )
+    return summary
+
+
+def _sync_progress_from_stored_summary(run_id: int, summary: dict[str, Any], *, finalize: bool = False) -> None:
+    with get_conn() as conn:
+        row = conn.execute("SELECT summary FROM crawl_runs WHERE id=?", (run_id,)).fetchone()
+    if not row:
+        return
+    try:
+        stored = json.loads(row["summary"] or "{}")
+    except (TypeError, ValueError):
+        stored = {}
+    if not isinstance(stored, dict):
+        return
+    for key in ("collection_progress", "progress_message", "progress_updated_at", "phase_19b_progress"):
+        if key in stored:
+            summary[key] = stored[key]
+    progress = summary.get("collection_progress")
+    if isinstance(progress, dict):
+        if not finalize:
+            return
+        progress["provisional"] = False
+        progress["final"] = True
+        progress["final_raw_contents"] = _safe_int(summary.get("raw_contents")) or 0
+        progress["final_filtered_contents"] = _safe_int(summary.get("filtered_contents")) or 0
+        progress["final_excluded_contents"] = _safe_int(summary.get("excluded_contents")) or 0
+        progress["final_new_contents"] = _safe_int(summary.get("new_contents")) or 0
+        progress["updated_at"] = utc_now()
+        for item in (progress.get("platforms") or {}).values():
+            if isinstance(item, dict) and item.get("final"):
+                continue
+            if isinstance(item, dict):
+                item["provisional"] = False
+        summary["collection_progress"] = progress
+
+
+def _collection_progress_snapshot(platform: str, out_dir: Path) -> dict[str, Any]:
+    contents, content_errors = _safe_collect_progress_items(out_dir, platform, "contents")
+    comments, comment_errors = _safe_collect_progress_items(out_dir, platform, "comments")
+    return {
+        "platform": platform,
+        "provisional": True,
+        "final": False,
+        "raw_items_seen": len(contents),
+        "comment_items_seen": len(comments),
+        "files_seen": content_errors["files_seen"] + comment_errors["files_seen"],
+        "empty_files": content_errors["empty_files"] + comment_errors["empty_files"],
+        "malformed_files": content_errors["malformed_files"] + comment_errors["malformed_files"],
+        "missing_output": content_errors["files_seen"] + comment_errors["files_seen"] == 0,
+    }
+
+
+def _safe_collect_progress_items(out_dir: Path, platform: str, item_type: str) -> tuple[list[dict[str, Any]], dict[str, int]]:
+    output_names = [platform]
+    canonical = {"dy": "douyin", "ks": "kuaishou", "xhs": "xhs"}.get(platform)
+    if canonical and canonical not in output_names:
+        output_names.insert(0, canonical)
+    candidate_roots = []
+    for name in output_names:
+        candidate_roots.append(out_dir / name)
+    candidate_roots.append(out_dir)
+    patterns = [
+        ("json", f"*_{item_type}_*.json"),
+        ("jsonl", f"*_{item_type}_*.jsonl"),
+    ]
+    items: list[dict[str, Any]] = []
+    seen_keys: set[str] = set()
+    stats = {"files_seen": 0, "empty_files": 0, "malformed_files": 0}
+    for root in candidate_roots:
+        for folder, pattern in patterns:
+            target_dir = root / folder
+            if not target_dir.exists():
+                continue
+            for path in target_dir.glob(pattern):
+                stats["files_seen"] += 1
+                try:
+                    if path.stat().st_size == 0:
+                        stats["empty_files"] += 1
+                        continue
+                except OSError:
+                    stats["malformed_files"] += 1
+                    continue
+                parsed, malformed = _read_progress_file(path, folder)
+                if malformed:
+                    stats["malformed_files"] += 1
+                if not parsed:
+                    continue
+                for item in parsed:
+                    key = _progress_item_key(item_type, platform, item)
+                    if key in seen_keys:
+                        continue
+                    seen_keys.add(key)
+                    items.append(item)
+    return items, stats
+
+
+def _read_progress_file(path: Path, folder: str) -> tuple[list[dict[str, Any]], bool]:
+    try:
+        text = path.read_text(encoding="utf-8", errors="ignore")
+    except OSError:
+        return [], True
+    if not text.strip():
+        return [], False
+    if folder == "jsonl":
+        items: list[dict[str, Any]] = []
+        malformed = False
+        for line in text.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                data = json.loads(line)
+            except json.JSONDecodeError:
+                malformed = True
+                continue
+            if isinstance(data, dict):
+                items.append(data)
+            else:
+                malformed = True
+        return items, malformed
+    try:
+        data = json.loads(text)
+    except json.JSONDecodeError:
+        return [], True
+    if isinstance(data, list):
+        return [item for item in data if isinstance(item, dict)], False
+    if isinstance(data, dict):
+        return [data], False
+    return [], True
+
+
+def _progress_item_key(item_type: str, platform: str, item: dict[str, Any]) -> str:
+    if item_type == "comments":
+        key = item.get("comment_id") or item.get("cid") or item.get("id")
+    elif platform == "dy":
+        key = item.get("aweme_id") or item.get("content_id") or item.get("id")
+    elif platform == "ks":
+        key = item.get("video_id") or item.get("content_id") or item.get("id")
+    elif platform == "xhs":
+        key = item.get("note_id") or item.get("content_id") or item.get("id")
+    else:
+        key = item.get("content_id") or item.get("id")
+    if key:
+        return f"{item_type}:{platform}:{key}"
+    return f"{item_type}:{platform}:{json.dumps(item, ensure_ascii=False, sort_keys=True)[:500]}"
 
 
 def ingest_outputs(
@@ -590,17 +871,19 @@ async def evaluate_new_contents(job: dict[str, Any], run_id: int, content_ids: l
         "successful_evaluations": 0,
         "failed_fallback_evaluations": 0,
         "pending_review_items": 0,
+        "manual_review_count": 0,
+        "negative_count": 0,
+        "high_count": 0,
         "unresolved_items": len(rows),
         "evaluated_items": 0,
+        "final": False,
     }
-    _merge_run_summary(
+    _merge_ai_progress_summary(
         run_id,
-        {
-            "phase_7_1_lifecycle": True,
-            "phase": "ai_evaluating",
-            "ai_progress": ai_progress,
-            "progress_updated_at": utc_now(),
-        },
+        ai_progress,
+        negative_count=negative_count,
+        high_count=high_count,
+        pending_review_count=pending_review_count,
     )
     for index, row in enumerate(rows, start=1):
         _raise_if_stop_requested(int(job.get("id") or 0))
@@ -612,7 +895,11 @@ async def evaluate_new_contents(job: dict[str, Any], run_id: int, content_ids: l
             fallback_count += 1
         else:
             successful_count += 1
-        is_related_negative = bool(evaluation["is_related"] and evaluation["is_negative"])
+        is_related_negative = bool(
+            evaluation["status"] != "pending_review"
+            and evaluation["is_related"]
+            and evaluation["is_negative"]
+        )
         if is_related_negative:
             negative_count += 1
         if is_related_negative and evaluation["risk_level"] == "high":
@@ -624,19 +911,41 @@ async def evaluate_new_contents(job: dict[str, Any], run_id: int, content_ids: l
             "successful_evaluations": successful_count,
             "failed_fallback_evaluations": fallback_count,
             "pending_review_items": pending_review_count,
+            "manual_review_count": pending_review_count,
+            "negative_count": negative_count,
+            "high_count": high_count,
             "unresolved_items": unresolved_count,
             "evaluated_items": index,
+            "final": False,
         }
-        _merge_run_summary(
+        _merge_ai_progress_summary(
             run_id,
-            {
-                "phase_7_1_lifecycle": True,
-                "phase": "ai_evaluating",
-                "progress_updated_at": utc_now(),
-                "last_safe_result": {"content_id": row.get("content_id"), "ai_progress": ai_progress},
-                "ai_progress": ai_progress,
-            },
+            ai_progress,
+            negative_count=negative_count,
+            high_count=high_count,
+            pending_review_count=pending_review_count,
+            last_content_id=row.get("content_id"),
         )
+    final_progress = {
+        "total_candidates": len(rows),
+        "successful_evaluations": successful_count,
+        "failed_fallback_evaluations": fallback_count,
+        "pending_review_items": pending_review_count,
+        "manual_review_count": pending_review_count,
+        "negative_count": negative_count,
+        "high_count": high_count,
+        "unresolved_items": unresolved_count,
+        "evaluated_items": len(rows),
+        "final": True,
+    }
+    _merge_ai_progress_summary(
+        run_id,
+        final_progress,
+        negative_count=negative_count,
+        high_count=high_count,
+        pending_review_count=pending_review_count,
+        final=True,
+    )
     return {
         "negative_count": negative_count,
         "high_count": high_count,
@@ -646,13 +955,107 @@ async def evaluate_new_contents(job: dict[str, Any], run_id: int, content_ids: l
         "ai_failed_fallback_evaluations": fallback_count,
         "ai_pending_review_items": pending_review_count,
         "ai_unresolved_items": unresolved_count,
-        "ai_progress": ai_progress,
+        "ai_progress": final_progress,
+        "ai_progress_final": True,
     }
+
+
+AI_PROGRESS_COUNT_KEYS = {
+    "total_candidates",
+    "successful_evaluations",
+    "failed_fallback_evaluations",
+    "pending_review_items",
+    "manual_review_count",
+    "negative_count",
+    "high_count",
+    "evaluated_items",
+    "limited_context_items",
+}
+
+
+def _merge_ai_progress_summary(
+    run_id: int,
+    progress: dict[str, Any],
+    *,
+    negative_count: int | None = None,
+    high_count: int | None = None,
+    pending_review_count: int | None = None,
+    last_content_id: Any | None = None,
+    final: bool = False,
+) -> dict[str, Any]:
+    now = utc_now()
+    with get_conn() as conn:
+        row = conn.execute("SELECT summary FROM crawl_runs WHERE id=? AND status='running'", (run_id,)).fetchone()
+        if not row:
+            return {}
+        try:
+            summary = json.loads(row["summary"] or "{}")
+        except (TypeError, ValueError):
+            summary = {}
+        if not isinstance(summary, dict):
+            summary = {}
+        existing = summary.get("ai_progress") if isinstance(summary.get("ai_progress"), dict) else {}
+        if summary.get("ai_progress_final") or existing.get("final"):
+            return summary
+        merged_progress = _monotonic_ai_progress(existing, progress, final=final)
+        summary.update(
+            {
+                "phase_7_1_lifecycle": True,
+                "phase_19c_progress": True,
+                "phase": "ai_evaluating",
+                "progress_updated_at": now,
+                "progress_message": _ai_progress_message(merged_progress),
+                "ai_progress": merged_progress,
+            }
+        )
+        if last_content_id is not None:
+            summary["last_safe_result"] = _redact_summary({"content_id": last_content_id, "ai_progress": merged_progress})
+        if negative_count is not None:
+            summary["negative_count"] = int(negative_count or 0)
+        if high_count is not None:
+            summary["high_count"] = int(high_count or 0)
+        if pending_review_count is not None:
+            summary["pending_review_count"] = int(pending_review_count or 0)
+        if final:
+            summary["ai_progress_final"] = True
+        conn.execute(
+            "UPDATE crawl_runs SET summary=? WHERE id=? AND status='running'",
+            (json.dumps(_redact_summary(summary), ensure_ascii=False), run_id),
+        )
+    return summary
+
+
+def _monotonic_ai_progress(existing: dict[str, Any], progress: dict[str, Any], *, final: bool) -> dict[str, Any]:
+    merged = dict(progress or {})
+    if final:
+        merged["final"] = True
+        return merged
+    for key in AI_PROGRESS_COUNT_KEYS:
+        incoming = _safe_int(merged.get(key))
+        previous = _safe_int(existing.get(key))
+        if previous is not None and (incoming is None or incoming < previous):
+            merged[key] = previous
+    incoming_unresolved = _safe_int(merged.get("unresolved_items"))
+    previous_unresolved = _safe_int(existing.get("unresolved_items"))
+    if previous_unresolved is not None and (incoming_unresolved is None or incoming_unresolved > previous_unresolved):
+        merged["unresolved_items"] = previous_unresolved
+    merged["final"] = False
+    return merged
+
+
+def _ai_progress_message(progress: dict[str, Any]) -> str:
+    evaluated = _safe_int(progress.get("evaluated_items")) or 0
+    total = _safe_int(progress.get("total_candidates")) or 0
+    negative = _safe_int(progress.get("negative_count")) or 0
+    high = _safe_int(progress.get("high_count")) or 0
+    manual = _safe_int(progress.get("manual_review_count") or progress.get("pending_review_items")) or 0
+    state = "已完成" if progress.get("final") else "进行中"
+    return f"AI 评估{state}：{evaluated}/{total}，疑似负面 {negative}，高风险 {high}，待人工复核 {manual}"
 
 
 def _save_evaluation(content_db_id: int, run_id: int, evaluation: dict[str, Any]) -> None:
     with get_conn() as conn:
-        conn.execute(
+        cur = conn.execute(
             """
             INSERT OR REPLACE INTO ai_evaluations (
                 workspace_id, raw_content_id, run_id, status, is_related, is_negative, risk_level, reason,
@@ -681,6 +1084,19 @@ def _save_evaluation(content_db_id: int, run_id: int, evaluation: dict[str, Any]
                 content_db_id,
             ),
         )
+        evaluation_id = int(cur.lastrowid or 0)
+    trace = evaluation.get("_ai_trace")
+    if isinstance(trace, dict):
+        trace_payload = dict(trace)
+        trace_payload["ai_evaluation_id"] = evaluation_id or None
+        trace_payload["run_id"] = run_id
+        trace_payload["raw_content_id"] = content_db_id
+        trace_payload["status"] = str(evaluation.get("status") or trace_payload.get("status") or "pending_review")
+        trace_payload["finished_at"] = trace_payload.get("finished_at") or utc_now()
+        try:
+            save_ai_evaluation_trace(trace_payload)
+        except Exception:
+            pass
 
 
 async def _evaluate_content_with_fallback(
@@ -691,11 +1107,29 @@ async def _evaluate_content_with_fallback(
 ) -> dict[str, Any]:
     max_attempts = max(1, _ai_item_retry_count() + 1)
     last_error = ""
+    cfg = _job_ai_config(job)
+    prompt = cfg.get("prompt") or ""
     for attempt in range(1, max_attempts + 1):
+        attempt_started_at = utc_now()
+        attempt_started_perf = time.perf_counter()
         _raise_if_deadline_passed(run_id)
         try:
             timeout_seconds = _ai_item_timeout_seconds(run_id)
             evaluation = await asyncio.wait_for(evaluate_content(job, content, comments), timeout=timeout_seconds)
+            if not isinstance(evaluation.get("_ai_trace"), dict):
+                evaluation["_ai_trace"] = _build_trace_snapshot(
+                    job,
+                    content,
+                    comments,
+                    cfg=cfg,
+                    prompt=prompt,
+                    status=str(evaluation.get("status") or "pending_review"),
+                    started_at=attempt_started_at,
+                    start_time=attempt_started_perf,
+                    parsed_result=dict(evaluation),
+                    response_snapshot=evaluation.get("raw_response") or "",
+                )
+            evaluation["_ai_trace"]["attempt_index"] = attempt
             return _normalize_evaluation_result(evaluation, content)
         except CrawlerTimedOut:
             raise
@@ -704,6 +1138,20 @@ async def _evaluate_content_with_fallback(
             if task and task.cancelling():
                 raise
             last_error = f"CancelledError: {redact_sensitive(str(exc))}"
+            fallback = _pending_review_evaluation(f"AI 评估失败，已转人工复核：{last_error}", content)
+            fallback["_ai_trace"] = _build_trace_snapshot(
+                job,
+                content,
+                comments,
+                cfg=cfg,
+                prompt=prompt,
+                status="pending_review",
+                started_at=attempt_started_at,
+                start_time=attempt_started_perf,
+                error_message=last_error,
+                parsed_result=dict(fallback),
+            )
+            fallback["_ai_trace"]["attempt_index"] = attempt
             _merge_run_summary(
                 run_id,
                 {
@@ -716,8 +1164,23 @@ async def _evaluate_content_with_fallback(
             )
             if attempt < max_attempts:
                 continue
+            return fallback
         except Exception as exc:
             last_error = f"{type(exc).__name__}: {redact_sensitive(str(exc))}"
+            fallback = _pending_review_evaluation(f"AI 评估失败，已转人工复核：{last_error}", content)
+            fallback["_ai_trace"] = _build_trace_snapshot(
+                job,
+                content,
+                comments,
+                cfg=cfg,
+                prompt=prompt,
+                status="pending_review",
+                started_at=attempt_started_at,
+                start_time=attempt_started_perf,
+                error_message=last_error,
+                parsed_result=dict(fallback),
+            )
+            fallback["_ai_trace"]["attempt_index"] = attempt
             _merge_run_summary(
                 run_id,
                 {
@@ -730,7 +1193,21 @@ async def _evaluate_content_with_fallback(
             )
             if attempt < max_attempts:
                 continue
-    return _pending_review_evaluation(f"AI 评估失败，已转人工复核：{last_error}", content)
+            return fallback
+    fallback = _pending_review_evaluation(f"AI 评估失败，已转人工复核：{last_error}", content)
+    fallback["_ai_trace"] = _build_trace_snapshot(
+        job,
+        content,
+        comments,
+        cfg=cfg,
+        prompt=prompt,
+        status="pending_review",
+        started_at=utc_now(),
+        error_message=last_error,
+        parsed_result=dict(fallback),
+    )
+    fallback["_ai_trace"]["attempt_index"] = max_attempts
+    return fallback
 
 
 def _normalize_evaluation_result(evaluation: dict[str, Any], content: dict[str, Any]) -> dict[str, Any]:
@@ -738,7 +1215,7 @@ def _normalize_evaluation_result(evaluation: dict[str, Any], content: dict[str, 
         status = str(evaluation.get("status") or "")
         if status not in {"ok", "pending_review"}:
             raise ValueError("invalid evaluation status")
-        return {
+        result = {
             "status": status,
             "is_related": bool(evaluation.get("is_related")),
             "is_negative": bool(evaluation.get("is_negative")),
@@ -748,8 +1225,21 @@ def _normalize_evaluation_result(evaluation: dict[str, Any], content: dict[str, 
             "recommended_action": str(evaluation.get("recommended_action") or ""),
             "raw_response": str(evaluation.get("raw_response") or ""),
         }
+        if isinstance(evaluation.get("_ai_trace"), dict):
+            result["_ai_trace"] = evaluation["_ai_trace"]
+        return result
     except Exception as exc:
-        return _pending_review_evaluation(f"AI 返回结构无效，已转人工复核：{type(exc).__name__}", content)
+        fallback = _pending_review_evaluation(f"AI 返回结构无效，已转人工复核：{type(exc).__name__}", content)
+        fallback["_ai_trace"] = {
+            "status": "pending_review",
+            "error_message": f"AI 返回结构无效，已转人工复核：{type(exc).__name__}",
+            "input_payload": {"content_id": content.get("content_id")},
+            "request_snapshot": {},
+            "response_snapshot": "",
+            "parsed_result": dict(fallback),
+            "attempt_index": 1,
+        }
+        return fallback
 
 
 def _pending_review_evaluation(reason: str, content: dict[str, Any]) -> dict[str, Any]:
@@ -791,21 +1281,29 @@ def _apply_unresolved_ai_fallback_summary(run_id: int, summary: dict[str, Any], 
         "successful_evaluations": int(summary.get("ai_successful_evaluations") or 0),
         "failed_fallback_evaluations": int(summary.get("ai_failed_fallback_evaluations") or 0),
         "pending_review_items": int(summary.get("pending_review_count") or 0),
+        "manual_review_count": int(summary.get("pending_review_count") or 0),
+        "negative_count": int(summary.get("negative_count") or 0),
+        "high_count": int(summary.get("high_count") or 0),
         "unresolved_items": unresolved_after,
         "limited_context_items": limited_context_left,
         "evaluated_items": max(0, known_candidates - unresolved_after),
+        "final": True,
     }
     _merge_run_summary(
         run_id,
         {
             "phase_7_2_lifecycle": True,
+            "phase_19c_progress": True,
             "ai_progress": summary["ai_progress"],
             "ai_finalization_fallback": summary["ai_finalization_fallback"],
             "pending_review_count": summary.get("pending_review_count"),
+            "negative_count": summary.get("negative_count", 0),
+            "high_count": summary.get("high_count", 0),
             "ai_failed_fallback_evaluations": summary.get("ai_failed_fallback_evaluations", 0),
             "ai_pending_review_items": summary.get("ai_pending_review_items", 0),
             "ai_unresolved_items": unresolved_after,
             "ai_limited_context_items": limited_context_left,
+            "ai_progress_final": True,
             "progress_updated_at": utc_now(),
         },
     )

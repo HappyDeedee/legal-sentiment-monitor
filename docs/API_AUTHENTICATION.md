@@ -141,11 +141,19 @@ Record minimal audit logs for:
 
 - user create, disable, role change, and password reset;
 - platform account create, delete, login, and reset;
+- platform account environment package export, import, cancellation, expiry,
+  failed import, and requires-relogin import result;
 - proxy create, delete, and credential update;
 - AI/mail/runtime setting updates;
 - administrator-triggered report resend.
 
 Audit logs must not contain plaintext secrets.
+
+CR-070 account package endpoints are administrator-only resource APIs. They
+must reject normal users at the authorization dependency layer, not only hide
+frontend actions. Responses and audit logs must not include raw cookies, raw
+profile keys or paths, proxy credentials, package passphrases, CDP endpoints,
+noVNC tokens, command lines, or deployment encryption keys.
 
 ## Implementation Order
 

@@ -47,6 +47,7 @@ RUNTIME_SETTING_DEFINITIONS: tuple[RuntimeSettingDefinition, ...] = (
     RuntimeSettingDefinition("real_email_delivery", "Email", "真实邮件发送", "boolean", False, None, None, "immediate", "", ""),
     RuntimeSettingDefinition("run_log_retention_days", "Retention", "运行日志保留天数", "integer", 90, 1, 3650, "cleanup job", "retention.run_log_days", "MONITOR_RUN_LOG_RETENTION_DAYS"),
     RuntimeSettingDefinition("report_retention_days", "Retention", "报告保留天数", "integer", 180, 1, 3650, "cleanup job", "retention.report_days", "MONITOR_REPORT_RETENTION_DAYS"),
+    RuntimeSettingDefinition("ai_trace_retention_days", "Retention", "AI 追溯保留天数", "integer", 30, 1, 3650, "cleanup job", "retention.ai_trace_days", "MONITOR_AI_TRACE_RETENTION_DAYS"),
 )
 
 DEFINITIONS_BY_KEY = {item.key: item for item in RUNTIME_SETTING_DEFINITIONS}

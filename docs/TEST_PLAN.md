@@ -50,7 +50,7 @@ the operator's computer is not a valid acceptance path.
   `MONITOR_ADMIN_PASSWORD` when no administrator exists.
 - Bootstrap administrator can log in with the configured credentials.
 - Administrator can see all menus.
-- Normal user sees only overview, monitoring, run center, and report center.
+- Normal user sees only overview, monitoring, and Task Center.
 - Normal user cannot access account pool, proxy resources, AI access, mail
   configuration, runtime strategy, or system diagnostics.
 - Normal user can only view own workspace tasks, runs, and reports.
@@ -137,42 +137,227 @@ Use the standard permission test data:
 - Scheduler recovery marks stale running runs as `timeout` or `interrupted`
   before releasing locks.
 
-### Account Browser Environment Consistency Tests
+### Account Identity Fidelity Tests
 
-CR-047 / Phase 5.1 must verify that account profile identity is paired with a
-stable browser environment instead of relying on changing process defaults.
+CR-047 / Phase 5.1 must verify that account profile traces are paired with a
+stable, self-consistent account identity instead of relying on changing process
+defaults.
 
 - New platform accounts receive a deterministic `profile_key` and persisted
-  browser-environment fields before first QR login or accepted Cookie
+  account identity fields before first QR login or accepted Cookie
   validation.
+- The Account Identity Generator is deterministic for the same workspace,
+  platform, account, proxy/region policy, automatic template selection or
+  pre-login administrator template-family choice, and seed salt.
+- Generator tests prove that automatic template selection uses the documented
+  template-selection seed and catalog order, not runtime randomness or
+  Playwright/process defaults.
+- Normal-user API/UI tests prove normal users cannot choose identity templates
+  or browser-environment fields.
+- Administrator UI/API tests prove ordinary account creation can leave
+  template selection automatic, while the advanced pre-login path can select
+  only a template family and cannot edit individual UA, viewport, screen,
+  timezone, locale, accept-language, device-scale, mobile, or touch fields.
+- Generator tests cover exact template expansion for `CN_WIN_CHROME_1920`,
+  `CN_WIN_CHROME_1536`, `CN_MAC_CHROME_1440`, `CN_ANDROID_CHROME`,
+  `HK_DESKTOP_CHROME`, and `SG_DESKTOP_CHROME`, including exact UA,
+  screen/viewport, scale factor, mobile/touch, timezone, locale, and
+  accept-language values.
+- Generator tests prove that the HMAC-SHA256 seed derivation in
+  `ACCOUNT_ENVIRONMENT.md` is stable: same canonical input plus salt produces
+  identical `fingerprint_seed`, while different account IDs normally differ.
+- Same-platform accounts normally receive different fingerprint seeds and
+  identity values unless an administrator explicitly clones a safe template
+  before first login.
+- Generated identity values are self-consistent: browser platform, UA,
+  timezone, locale, accept-language, screen, viewport, device scale factor,
+  mobile flag, touch flag, and proxy region describe the same plausible device
+  and region.
+- China mainland proxy identities default to `environment_region =
+  CN_MAINLAND`, `timezone = Asia/Shanghai`, `locale = zh-CN`, and
+  `accept_language = zh-CN,zh;q=0.9`, with coherent desktop or mobile device
+  templates.
+- The Account Identity Validator rejects missing or contradictory identity
+  fields and does not let locked accounts fall back to Playwright or process
+  defaults.
+- Validation tests treat NULL and empty strings as missing required fields for
+  locked identities.
+- Validation tests reject missing or invalid template IDs, missing proxy region
+  snapshots, missing account-bound proxy records, contradictory desktop/mobile
+  UA and touch flags, and mismatched region/timezone/locale bundles.
 - Successful QR login or accepted Cookie validation locks the account browser
   environment.
+- State-machine tests cover `draft -> generated -> validated ->
+  login_in_progress -> locked -> active`, `locked -> requires_relogin`, and
+  `requires_relogin -> resetting -> draft`.
+- State-machine tests cover template-family changes: allowed in `draft`,
+  returning `generated` and `validated` accounts to `draft`, rejected during
+  `login_in_progress`, and requiring `requires_relogin` plus reset/re-login
+  after `locked` or `active`.
 - Repeated login-state checks and crawl runs for the same account use the same
   stored `profile_key`, `browser_platform`, `fingerprint_seed`, `user_agent`,
-  `timezone`, `locale`, `screen_width`, `screen_height`, and effective proxy
-  policy.
-- Same-platform accounts have separate profile keys and separate browser
-  environment values unless an administrator explicitly clones a safe template
-  before first login.
+  `timezone`, `locale`, `accept_language`, screen/viewport/device fields, and
+  effective proxy policy.
+- Provider-boundary tests verify requested versus effective Playwright/CDP
+  values for `navigator.userAgent`, `navigator.language`,
+  `navigator.languages`, `Intl.DateTimeFormat().resolvedOptions().timeZone`,
+  `window.screen`, `window.innerWidth/innerHeight`,
+  `window.devicePixelRatio`, and `navigator.maxTouchPoints` where available.
+- Runtime snapshot tests verify that `identity_runtime_snapshot_json` records
+  requested/effective values, provider metadata, unsupported fields, and
+  `fallback_used = false`, without cookies, proxy credentials, raw profile
+  paths, CDP endpoints, or noVNC tokens.
 - Attempts to silently edit a locked browser environment are rejected; the
   explicit reset/re-login path records an audit log and makes consequences
   visible to the administrator.
 - Task-level proxy override handling follows the confirmed policy exactly:
-  locked environments either reject the override or surface it as an explicit
-  audited exception; the test fails if a hidden process-default fallback or
-  silent proxy swap is used.
-- Empty or partially configured persisted browser-environment values fail
+  locked account environments reject the override; the test fails if a hidden
+  process-default fallback, explicit exception path, or silent proxy swap is
+  used.
+- Empty or partially configured persisted account identity values fail
   closed before login/crawl launch instead of being auto-filled from process
   defaults.
+- Test tripwires fail if automated tests or local diagnostics touch real
+  profile roots, real cookies, real proxy credentials, or real platform login
+  sessions without `TEST_ALLOW_REAL_ACCOUNT_IDENTITY=true`,
+  `TEST_ALLOW_REAL_PROXY=true`, or `TEST_ALLOW_REAL_PLATFORM_LOGIN=true`.
 - Service restart, scheduler run, and manual run paths do not change the stored
-  account browser environment.
-- Platform Accounts UI/API show only customer-safe browser environment
-  summaries and never expose raw profile paths, cookies, proxy credentials, CDP
-  endpoints, noVNC sessions, or fingerprint-debug output.
-- If a CloakBrowser-style provider is evaluated, tests or review evidence must
-  cover license/deployment fit, authentication, noVNC access control,
-  sensitive-data redaction, and compatibility with existing account/profile/proxy
-  locks before the provider can be enabled.
+  account identity.
+- Changing identity template, proxy region, or locked identity inputs marks the
+  account as needing explicit reset/re-login instead of silently changing
+  future crawl launches.
+- Changing the template family after the account identity is locked is rejected
+  or moves through the explicit reset/re-login flow with audit evidence; it
+  must not silently regenerate future launch fields.
+- Platform Accounts UI/API show only customer-safe account identity summaries
+  and never expose raw profile paths, cookies, proxy credentials, CDP endpoints,
+  noVNC sessions, or fingerprint-debug output.
+- V1 tests must verify that Canvas, WebGL, font inventory, plugins, extensions,
+  and long browsing history are not claimed as fully managed by the
+  Playwright/CDP provider. They may be recorded as unsupported,
+  not-managed, or future/provider-dependent.
+- If a CloakBrowser-style provider or other high-fidelity browser-persona
+  provider is evaluated later, tests or review evidence must cover
+  license/deployment fit, authentication, noVNC access control,
+  sensitive-data redaction, effective-value probes, runtime snapshots, and
+  compatibility with existing account/profile/proxy locks before the provider
+  can be enabled.
+
+### Account Environment Export And Import Tests
+
+CR-070 must verify that account migration packages are controlled sensitive
+artifacts, not raw profile-folder copies.
+
+- Metadata-only export contains manifest, account identity fields, and
+  platform-account metadata, but no cookies, localStorage, IndexedDB, browser
+  profile traces, proxy credentials, profile paths, or login tokens.
+- Metadata-only export is treated as sensitive when it contains
+  `fingerprint_seed`, detailed identity runtime snapshots, recognized platform
+  account IDs, or profile-derived metadata. Tests should expect the default V1
+  `.maepkg` encrypted envelope unless a later redacted diagnostic export is
+  explicitly confirmed.
+- Slim login-state migration export is administrator-only and produces a
+  passphrase-encrypted package containing the account identity, encrypted login
+  material, necessary profile state, proxy endpoint hint without credentials,
+  and platform-account metadata for one selected account environment.
+- Slim package tests verify whole-profile cache and temporary browser artifacts
+  are excluded by default, including cache, GPU cache, code cache, media cache,
+  crash dumps, downloads, screenshots, and temporary files.
+- Account package tests prove package scope is limited to one selected
+  platform account environment and excludes monitoring tasks, crawl runs,
+  reports, AI traces, email delivery logs, users, runtime settings, full
+  database backup content, and customer business history.
+- Export is rejected or delayed when the account is locked by an active run,
+  login session, or reset workflow.
+- Export is rejected when another package operation owns the same account.
+- Export state-machine tests cover preflight, locked, reading_metadata,
+  snapshotting_profile, building_payload, encrypting, ready_for_download,
+  failed, cancelled, expired, and deleted states.
+- Export finalization tests prove locks are released and staged files are
+  deleted after failure, cancellation, timeout, process interruption recovery,
+  expiry, or deletion.
+- Export detects account state changes after preflight and fails with a
+  customer-safe `account_package_state_changed` reason instead of producing an
+  inconsistent package.
+- Package manifest tests verify package version, package mode, source
+  platform/account, source `profile_key`, identity environment version,
+  provider compatibility fields, redacted checksum evidence, and platform
+  account metadata summary.
+- Exact schema tests verify the decrypted logical package structure:
+  `manifest.json`, `account/account.json`,
+  `account/identity_runtime_snapshot_redacted.json`, optional
+  `profile/slim_profile.zip`, and `checksums/sha256.json`.
+- Encryption tests verify package outer header, encryption mode, KDF metadata,
+  Argon2id parameters when passphrase mode is used, AES-256-GCM authentication,
+  random salt/nonce behavior, wrong-passphrase failure, and the absence of
+  stored package passphrases.
+- Package integrity tests reject corrupted manifests, mismatched checksums,
+  unsupported package versions, missing required sections, and unknown package
+  modes.
+- Package retention tests verify package bytes are runtime artifacts only,
+  temporary files expire or are deleted after download, and persisted metadata
+  rows use `expires_at` without storing plaintext content.
+- Secret-leakage tests inspect package metadata, audit logs, API responses, and
+  diagnostics and fail on plaintext cookies, platform tokens, proxy
+  credentials, proxy endpoint hints outside the encrypted payload, profile
+  paths, package passphrases, CDP endpoints, noVNC tokens, command lines, or
+  deployment encryption keys.
+- Import preflight rejects traversal paths, absolute paths, corrupt archives,
+  source profile paths outside the package root, and profile writes outside the
+  configured target profile root.
+- Profile snapshot safety tests also reject drive-letter paths, UNC paths,
+  empty path components, Windows alternate data streams, reserved device names,
+  symlinks, junctions, hardlinks, duplicate paths with conflicting checksums,
+  unsupported compression, unknown snapshot versions, over-quota package size,
+  over-quota file count, and insufficient disk space.
+- Import creates a target-side account/profile by default and derives a target
+  `profile_key` from target workspace/platform/account ID rather than copying
+  the source raw path.
+- Import conflict tests prove V1 does not replace, merge, or overwrite an
+  existing target account/profile. Duplicate detection may warn but must stop
+  or create a new account according to the confirmed V1 policy.
+- Import state-machine tests cover preflight, preflight_failed, decrypting,
+  extracting_profile, writing_database, verifying_login, active,
+  requires_relogin, failed, and rolled_back states.
+- Import rollback/idempotency tests prove repeated cleanup cannot reopen an
+  active, requires_relogin, failed, or rolled_back terminal result and cannot
+  leave package/profile locks stuck.
+- Metadata-only import results in an account that requires login before crawl
+  use.
+- Slim login-state package import runs login-state verification before
+  activation.
+- If login-state verification succeeds, the imported account can become active
+  under target deployment locks and identity validation.
+- If login-state verification fails, the imported account is marked
+  `requires_relogin` or equivalent and scheduler/manual runs cannot silently
+  use it.
+- Import requires target-side proxy mapping when the package references a
+  proxy policy. Missing or mismatched mapping fails closed or marks the account
+  as needing re-login; it must not fall back silently to no proxy.
+- Proxy mapping tests cover missing target proxy, target proxy in another
+  workspace, inactive target proxy, region mismatch, and silent fallback to
+  direct/default network.
+- Proxy endpoint hint tests verify source host/IP plus port can be read only
+  from the decrypted package preflight, cannot be used as a credential, and is
+  absent from audit logs, manifest summaries, ordinary API responses, and
+  diagnostics.
+- Import preserves CR-047 identity fields only when provider and identity
+  environment compatibility pass; otherwise it requires reset/re-login.
+- Normal users cannot call export or import endpoints or see package actions.
+- Audit tests verify export/import events include actor, account, package mode,
+  version, redacted checksum, compatibility result, operation status, trigger
+  source, and login verification result without raw secrets.
+- Audit example tests prove safe audit details match the redacted shape in
+  `ACCOUNT_ENVIRONMENT.md` and reject raw cookies, raw profile keys or paths,
+  proxy credentials, proxy endpoint hints, package passphrases, CDP endpoints,
+  noVNC tokens, command lines, and deployment encryption keys.
+- Test tripwires fail if automated tests access real account packages, real
+  profile roots, real cookies, real proxy credentials, or live platform login
+  sessions without explicit opt-in.
+- CR-070 tripwire tests require
+  `TEST_ALLOW_REAL_ACCOUNT_PACKAGE_EXPORT=true` before any test exports a real
+  account package and `TEST_ALLOW_REAL_ACCOUNT_PACKAGE_IMPORT=true` before any
+  test imports into a non-disposable workspace.
 
 ### Platform Account Avatar Safety Tests
 
@@ -609,7 +794,7 @@ Run the relevant parts of this checklist after each Phase 11 batch:
   - confirmation dialogs;
   - toast notifications.
 - end-to-end smoke paths:
-  - create task entry -> run center -> report center;
+  - create task entry -> Task Center task grouping -> run records / Run Detail;
   - administrator account login entry -> account status;
   - mail test entry -> result feedback.
 
@@ -662,8 +847,8 @@ Run the relevant parts of this checklist after each Phase 11 batch:
 
 - Login success opens the operations home.
 - Session restore opens an allowed page and can return to operations home.
-- Administrator navigation includes operations home, monitoring, run center,
-  report center, resource management, and system configuration.
+- Administrator navigation includes operations home, monitoring, Task Center,
+  resource management, and system configuration.
 - Normal-user navigation includes only permitted user-facing pages.
 - Resource Management and System Configuration use expandable navigation
   groups instead of detached hover-only popovers.
@@ -676,8 +861,8 @@ Run the relevant parts of this checklist after each Phase 11 batch:
 
 - Page title, description, primary action, and toolbar structure are consistent
   across core pages.
-- Task-loop shortcuts lead to create task, run center, report center, email
-  delivery status, and relevant resource issue pages.
+- Task-loop shortcuts lead to create task, Task Center task grouping, Task
+  Center run records, and relevant resource issue pages.
 - Administrator and normal-user paths are tested separately.
 - Normal users do not see hidden administrator resource details through page
   entries, shortcuts, or empty states.
@@ -703,8 +888,8 @@ Run the relevant parts of this checklist after each Phase 11 batch:
   delivery status, suspected lead metrics, and resource health summary.
 - Long scheduler, platform, browser, or deployment diagnostic blocks do not
   dominate the home page.
-- Metrics provide drilldown links to Monitoring, Run Center, Report Center, or
-  administrator resource pages.
+- Metrics provide drilldown links to Monitoring, Task Center task grouping,
+  Task Center run records, or administrator resource pages.
 - Page-level refresh updates operations-home data and shows last-updated time.
 
 ### Phase 13C Operations Home Responsive And Role Tests
@@ -950,12 +1135,198 @@ CR-037 is deferred and should not block CR-036/Phase 17.1.
 - Desktop, tablet, and mobile grouped-report layouts keep report selection and
   primary actions reachable.
 
+## CR-051 Task Center Consolidation Tests
+
+- The formal console exposes one top-level `任务中心` navigation entry for the
+  former run/report operational surface.
+- The separate top-level Report Center section and `report_center` menu key do
+  not render in the current console.
+- Legacy `reports` shortcut calls normalize to Task Center's task-group view.
+- Task Center opens on task/report grouping and keeps grouped report rows
+  visible by monitoring task.
+- Task Center has a `运行记录` subview that preserves run filters, pagination,
+  stop, log, archive, restore, and Run Detail actions.
+- The first-level task-group view prioritizes monitoring-task identity and
+  result summary rather than displaying every run-record field.
+- Run ID, task ID, run type, visibility, duration, and full failure reason
+  remain available in the run-record subview or Run Detail.
+- Report preview, report-scoped lead inspection, delivery history, resend, and
+  downloads remain reachable from task-group row actions or the `更多` menu.
+- CR-048/CR-049 scoped lead and delivery-history drawers remain secondary
+  detail and do not become first-level global panels.
+- After CR-069, report-scoped lead inspection is reached by switching into Run
+  Detail's `AI 评估` tab with a report filter, not by opening a second lead
+  table.
+
+## CR-053 Task Center Field Priority And Select Alignment Tests
+
+- Flat Task Center run rows begin with `任务 ID`, `运行 ID`, and compact
+  `状态`.
+- Grouped Task Center run rows hide duplicated `任务 ID` and begin with
+  `运行 ID`, then compact `状态`, because task identity is already visible in
+  the group header.
+- Completed rows do not append long ingestion/progress text inside the status
+  cell; active rows may show one short progress cue.
+- Status badges in Task Center are compact and text-sized, not full-width bars.
+- Task Center exposes only one page-level refresh button; the filter toolbar
+  keeps `筛选` and `清空`.
+- The main content container keeps native select/dropdown overlays aligned and
+  unclipped across console pages.
+
+## CR-054 Task Center Status Badge Compactness Regression Tests
+
+- Task Center status badges must render normalized short lifecycle labels, not
+  raw long `display_status` strings.
+- Completed rows must stay `已完成` even when backend summary text contains
+  ingestion detail.
+- Active rows may show one short progress cue below the badge, but the badge
+  itself must remain compact and text-sized.
+- Browser inspection should confirm the first-level status cell does not read
+  like a full-width progress bar.
+
+## CR-055 Task Center Status Column Visual Refinement Tests
+
+- Task Center table rendering adds a stable `col-status` class to `状态`
+  headers and cells.
+- First-level run status badges do not reuse the global `.status` pill class.
+- Status badges render as narrow state-dot labels, with active progress limited
+  to one short helper line below the badge.
+- Flat mode keeps `任务 ID`, `运行 ID`, then status priority; grouped mode keeps
+  duplicated task identity hidden and starts rows with run ID then status.
+- Browser inspection at desktop, tablet, and mobile widths confirms the status
+  column does not dominate the first-level table or hide the `详情` action.
+
+## CR-056 Filter Dropdown Alignment Regression Tests
+
+- Filter-region selects are enhanced only inside `.page-filter-region`; ordinary
+  form/configuration selects remain native.
+- The visible filter dropdown menu uses fixed positioning and is appended
+  outside table or drawer scroll containers.
+- Selecting an option updates the original select value and dispatches the same
+  `change` event that existing filters use.
+- Programmatic value updates such as `clearRunFilters()` or normal-user
+  visibility enforcement update the visible filter button text.
+- Browser inspection at `1440x900` confirms Task Center filter dropdowns align
+  with their trigger control and stay within the viewport.
+- Browser inspection at `1440x900` confirms at least one non-Task-Center page
+  filter dropdown follows the same alignment behavior.
+
+## CR-057 Task Center Group Summary Metric Chip Tests
+
+- Grouped Task Center headers render aggregate run values as compact labeled
+  metric chips rather than a long slash-separated summary sentence.
+- Metric chips preserve run count, collected count, new count, suspected
+  negative, high risk, manual-review, and unevaluated values.
+- Non-zero risk/review/unevaluated chips use restrained warning or danger
+  emphasis; zero values remain visually quiet.
+- Limited-context, deleted-task, and historical-context explanations remain as
+  short notes and do not replace the metric chips.
+- Browser inspection at `1440x900` confirms grouped headers remain readable and
+  do not collide with the table or CR-056 filter dropdown menus.
+
+## CR-058 Filter Date Picker Alignment Regression Tests
+
+- Filter-region date inputs are enhanced only inside `.page-filter-region`;
+  ordinary form/configuration date inputs remain native.
+- The visible date picker menu uses fixed positioning and is appended outside
+  table or drawer scroll containers.
+- Selecting a date updates the original date input value and dispatches the
+  same `change` event that existing filters use.
+- Clearing a date resets both the original date input value and visible filter
+  date label.
+- Programmatic value updates such as `clearRunFilters()` update the visible
+  date button text.
+- Browser inspection at the desktop review viewport confirms Task Center date
+  picker menus align with their trigger control and stay within the viewport.
+- Browser inspection must cover both left-side and right-side date filters:
+  current date menus should match the clicked trigger width when usable, show a
+  top anchor marker aligned to the clicked trigger center, and use viewport
+  clamping only as the final overflow fallback.
+- Browser inspection and CSS regression coverage must confirm the calendar
+  grid does not clip weekday labels or two-digit day numbers; date cells should
+  not horizontally overflow their grid cells at desktop, tablet, or mobile
+  widths.
+
+## CR-066 Filter Date Picker Trigger-Attached Dropdown Alignment Regression Tests
+
+- Filter-region date inputs are enhanced only inside `.page-filter-region`;
+  ordinary form/configuration date inputs remain native.
+- The visible date picker menu uses fixed positioning and is appended outside
+  table or drawer scroll containers.
+- Selecting a date updates the original date input value and dispatches the
+  same `change` event that existing filters use.
+- Clearing a date resets both the original date input value and visible filter
+  date label.
+- Programmatic value updates such as `clearRunFilters()` update the visible
+  date button text.
+- Browser inspection at the desktop review viewport confirms Task Center date
+  picker menus read like normal attached dropdowns.
+- Browser inspection must cover both left-side and right-side date filters:
+  date menus should use a readable compact calendar width, keep the top anchor
+  marker aligned to the clicked trigger center, open from the clicked trigger's
+  left edge when space allows, and shrink before clamping only when the
+  readable width would overflow the visual viewport.
+- Browser inspection and CSS regression coverage must confirm the calendar
+  grid does not clip weekday labels or two-digit day numbers; date cells should
+  not horizontally overflow their grid cells at desktop, tablet, or mobile
+  widths.
+
+## CR-067 Filter Date Picker Trigger-Width Visual Attachment Regression Tests
+
+- Filter-region date inputs are enhanced only inside `.page-filter-region`;
+  ordinary form/configuration date inputs remain native.
+- The CR-067 historical visible date picker menu used fixed positioning and
+  matched the clicked trigger width; this is superseded by CR-068's local
+  attached menu rule.
+- Selecting a date updates the original date input value and dispatches the
+  same `change` event that existing filters use.
+- Clearing a date resets both the original date input value and visible filter
+  date label.
+- Programmatic value updates such as `clearRunFilters()` update the visible
+  date button text.
+- Browser inspection at the desktop review viewport confirms Task Center date
+  picker menus match the clicked trigger width when the trigger is wide enough,
+  align the menu left edge to the trigger left edge, and keep the top anchor
+  marker aligned to the trigger center.
+- Browser inspection must cover both left-side and right-side date filters:
+  the right-side `结束日期` menu must not extend beyond the trigger width at the
+  desktop review viewport unless a much narrower trigger requires the minimum
+  readable width fallback.
+- Browser inspection and CSS regression coverage must confirm the calendar
+  grid does not clip weekday labels or two-digit day numbers; date cells should
+  not horizontally overflow their grid cells at desktop, tablet, or mobile
+  widths.
+
+## CR-068 Filter Date Picker Local Attached Menu Regression Tests
+
+- Filter-region date inputs are enhanced only inside `.page-filter-region`;
+  ordinary form/configuration date inputs remain native.
+- The active date menu is mounted inside the clicked `.filter-date-enhanced`
+  wrapper while open.
+- The menu uses wrapper-local `position: absolute`, `left: 0`, and
+  `top: calc(100% + 4px)` rather than document-body fixed-position viewport
+  coordinates.
+- Selecting a date updates the original date input value and dispatches the
+  same `change` event that existing filters use.
+- Clearing a date resets both the original date input value and visible filter
+  date label.
+- Programmatic value updates such as `clearRunFilters()` update the visible
+  date button text.
+- Browser inspection at the desktop review viewport confirms both `开始日期`
+  and `结束日期` menus are children of their clicked wrapper, align to the
+  wrapper left edge, keep a stable small top gap below the field, and match
+  the clicked trigger width within browser sub-pixel tolerance.
+- Browser inspection and CSS regression coverage must confirm the calendar
+  grid does not clip weekday labels or two-digit day numbers; date cells should
+  not horizontally overflow their grid cells at desktop, tablet, or mobile
+  widths.
+
 ## Formal Console Full-Coverage Positive UI Optimization Tests
 
 - All formal logged-in pages remain reachable: dashboard, monitoring tasks,
   platform accounts, proxies, AI access, AI evaluation rules, mail
-  configuration, mail templates, runtime strategy, run center, report center,
-  and system diagnostics.
+  configuration, mail templates, runtime strategy, Task Center, and system
+  diagnostics.
 - Desktop 1440px page sweep has no browser console errors and no horizontal
   page overflow.
 - Tablet 1024px and mobile 390px navigation can open, select pages, and close
@@ -1036,8 +1407,9 @@ CR-037 is deferred and should not block CR-036/Phase 17.1.
 
 ## Phase 20 Run Detail And AI Evaluation Traceability Tests
 
-Phase 20 is accepted but not implemented. Use the following tests as the
-implementation gate when Phase 20 becomes the active execution batch.
+Phase 20B-E is implemented and verified. Keep the following tests as the
+regression gate for future changes to AI trace persistence, run-detail APIs,
+run-detail frontend, and report-to-run backlinks.
 
 ### Phase 20A Confirmation And Data Model Tests
 
@@ -1094,6 +1466,9 @@ implementation gate when Phase 20 becomes the active execution batch.
 - Administrator evaluation detail responses may include redacted raw model
   response fields, but never unredacted raw responses, API keys, authorization
   headers, cookies, proxy credentials, profile paths, or server-local paths.
+- Collection logs and trace text redact Windows paths with spaces, Unix
+  absolute paths, residual path fragments, and implementation field names such
+  as `profile_path`.
 
 ### Phase 20D Run Detail Frontend Tests
 
@@ -1113,27 +1488,133 @@ implementation gate when Phase 20 becomes the active execution batch.
 ### Phase 20E Report Center Lead Entry Tests
 
 - Report rows or report groups expose an explicit "view leads" action separate
-  from report preview.
-- Report Center "view leads" behaves as a report-scoped shortcut and does not
-  replace the Run Center / Run Detail entry for run-scoped lead and AI
-  evaluation inspection.
-- Report lead detail can link back to the originating run detail when `run_id`
-  is available.
-- Lead detail shows a visible scope label, count, and applied filter summary
-  for selected report, selected group, originating run, or drawer-local
-  filters.
-- Default Report Center loading does not present an unlabeled flat lead table
+  from report preview when the report artifact needs a shortcut.
+- After CR-069, the report "view leads" action switches to Run Detail's
+  `AI 评估` tab and applies the selected `report_id` filter instead of opening
+  a standalone lead drawer.
+- Run Detail `AI 评估` supports report, status, risk, platform, keyword, and
+  title filters while preserving pagination and role scope.
+- The visible AI Evaluation scope distinguishes all-run candidates from a
+  selected-report filter.
+- The `报告范围` control is selectable only when the selected run has multiple
+  reports; zero-report and single-report runs show a read-only scope note.
+- Run Detail AI Evaluation dropdown filters use the same page-filter enhanced
+  dropdown behavior as Task Center first-level filters.
+- Default Task Center report grouping does not present an unlabeled flat lead table
   that could be mistaken for all leads.
-- Default Report Center loading fails validation if the lead table is rendered
-  without a visible scope label and count; a flat unlabeled list is not an
-  acceptable default.
-- Lead-state filtering is drawer-local after a selected report or run scope is
-  opened; the first-level Report Center toolbar must not become a global lead
-  workbench filter surface.
-- Empty states distinguish no selected report, selected report has no leads,
-  and drawer-local filters have no matching leads.
-- Report Center remains focused on final report artifacts, downloads, email
-  delivery history, and report-scoped leads.
+- Default Task Center loading fails validation if an unlabeled lead table is
+  rendered outside Run Detail's AI Evaluation scope.
+- Lead-state filtering belongs inside Run Detail `AI 评估`; the first-level
+  Task Center toolbar must not become a global lead workbench filter surface.
+- Empty states distinguish no AI candidates from no matches for the current AI
+  Evaluation filters.
+- Task Center's task-group view remains focused on final report artifacts,
+  downloads, email delivery history, and report-scoped leads.
+
+## CR-069 Run Detail AI Evaluation Lead Entry Consolidation Tests
+
+- Run Detail API accepts `report_id` with existing AI filters and rejects a
+  report outside the selected run or actor scope.
+- Report `查看线索` in Run Detail's `报告` section switches to `AI 评估` with
+  the report filter applied.
+- Run Detail `AI 评估` shows report scope as a dropdown only for multi-report
+  runs and as a read-only scope note for zero-report or single-report runs.
+- The current UI does not render a separate report-lead drawer/table or legacy
+  report-lead filter controls.
+- `AI 评估` keeps per-evaluation details, limited-context labels, and
+  sensitive-field redaction unchanged for administrator and normal-user roles.
+
+## CR-071 Drawer And Modal Select Dropdown Consistency Tests
+
+- Monitoring task edit drawer select fields for schedule, advanced collection,
+  account binding, proxy binding, AI access, and email template opt into the
+  existing `.page-filter-region select` enhancement.
+- Platform account detail drawer select fields for platform, account status,
+  and proxy binding opt into the same enhancement while preserving locked
+  platform disabled state for existing accounts.
+- Proxy edit drawer, AI Access edit drawer, AI Evaluation Rule edit modal,
+  Mail Configuration edit drawer, and Mail Template edit drawer select fields
+  opt into the same `.filter-select-*` classes and menu behavior.
+- AI Access `模型名称` remains the existing free-text/model-list combobox and
+  is not converted into a filter dropdown.
+- Task edit drawer custom start/end date fields remain native form date inputs
+  and are not accidentally converted by the select consistency work.
+- Dynamic option refreshes for account, proxy, AI profile, email template, and
+  platform login choices update the visible enhanced button labels and disabled
+  state.
+- Drawer/modal opt-in regions do not inherit the heavy page-filter toolbar
+  panel background or border.
+- Selecting a drawer/modal dropdown option keeps the original select value and
+  dispatches the same `change` behavior as the native select.
+- Browser checks should open representative surfaces at desktop, tablet, and
+  mobile widths and confirm dropdown menus stay aligned, visible, and usable:
+  Monitoring task edit, Platform Account detail, Proxy edit, AI Access edit,
+  AI Rule edit, Mail Configuration edit, and Mail Template edit.
+
+## CR-072 Task Edit Custom Date Picker Consistency Tests
+
+- Monitoring task edit drawer `custom_start` and `custom_end` opt into the
+  existing `.page-filter-region input[type="date"]` enhancement.
+- Both custom date fields render with `.filter-date-enhanced` wrappers and
+  `.filter-select-button.filter-date-button` triggers.
+- Clicking each trigger opens the existing `.filter-date-menu` locally attached
+  below the clicked trigger, with width matching the trigger.
+- The date menu includes month title, previous/next month buttons, weekday row,
+  date grid, `今天`, and `清空`.
+- Selecting a day, selecting `今天`, or clearing updates the underlying
+  original input value and dispatches the existing `change` behavior.
+- Opening an existing task with saved `custom_start` / `custom_end` values
+  synchronizes the visible date-button labels.
+- Resetting or sample-filling the task form synchronizes the visible
+  date-button labels back to placeholders.
+- CR-071 preserved exclusions remain intact: AI Access `模型名称` keeps its
+  combobox and selected drawer/modal selects keep the enhanced select menu.
+- Ordinary edit/configuration date fields outside explicit opt-in scopes remain
+  native unless separately accepted.
+
+## CR-073 Scrollable Drawer Corner Radius Regression Tests
+
+- Shared `.drawer` surfaces keep top-right `border-radius` on the outer shell
+  and use `overflow: hidden` so browser scrollbar chrome cannot paint into the
+  rounded corner.
+- Content after `.drawer-head` / `.modal-head` is normalized into
+  `.drawer-scroll-body`, which owns vertical scrolling and begins below the
+  header area.
+- Scrollbar thumbs remain rounded inside `.drawer-scroll-body` and read as a
+  content scrollbar, not a full-height outer-frame rail.
+- The close button remains in the top-right header position and is not moved
+  inward or toward the center as a workaround.
+- Sticky header, backdrop close, Escape close, enhanced drawer/modal selects,
+  and task edit custom date picker behavior remain unchanged.
+- Browser checks should open a long Monitoring task drawer and at least one
+  run/detail or report-style drawer and confirm the visible scrollbar begins
+  below the header, the rounded corner remains intact, and the close button is
+  reachable.
+
+## CR-074 Console Refresh Action Deduplication Tests
+
+- The authenticated console top bar exposes one current-page refresh icon with
+  an accessible label and no visible Chinese refresh text.
+- Overview, Platform Accounts, Proxy Resources, AI Access, AI Evaluation Rules,
+  Mail Configuration, Mail Templates, Runtime Strategy, and Task Center do not
+  render duplicate page-header refresh buttons that reload the same current
+  page data.
+- First-level filter toolbars do not repeat generic list refresh buttons when
+  the top-bar current-page refresh already reloads the same list.
+- Icon-only refresh buttons use the shared `#icon-refresh` SVG symbol and
+  `.refresh-icon-button` styling.
+- Clicking the top-bar current-page refresh disables that button, keeps the
+  icon visible, applies the loading class, and spins the icon until
+  `loadSectionData(activeTabId())` completes.
+- Scoped refresh actions remain available for schedule-time recomputation,
+  delivery-history refresh, email-template preview refresh, run-log refresh,
+  and run-detail refresh, and they use the same icon-only loading treatment.
+- System Diagnostics diagnostic actions remain explicit diagnostic actions and
+  are not treated as redundant generic refresh buttons.
+- Browser checks should cover at least Overview, Task Center, a resource page,
+  Run Detail, run-log drawer, email-template drawer, and delivery-history
+  drawer to confirm the icon is visible, spins on click, and does not create a
+  second page-level refresh control.
 
 ## CR-038 Sticky Drawer Close Control Tests
 
@@ -1172,7 +1653,7 @@ smoke checks, then finalized through Phase 21P cross-page verification.
 - The plan covers every existing formal page:
   login, dashboard, monitoring tasks, platform accounts, proxies, AI access,
   AI evaluation rules, mail configuration, mail templates, runtime strategy,
-  run center, report center, and system diagnostics.
+  Task Center, and system diagnostics.
 - The plan covers major secondary surfaces:
   task drawer, account dialog, proxy drawer, AI connection-test modal, AI
   profile drawer, AI rule modal, mail config modal, mail test modal, email
@@ -1195,8 +1676,8 @@ smoke checks, then finalized through Phase 21P cross-page verification.
 
 - All formal logged-in pages remain reachable:
   dashboard, monitoring tasks, platform accounts, proxies, AI access, AI
-  evaluation rules, mail configuration, mail templates, runtime strategy, run
-  center, report center, and system diagnostics.
+  evaluation rules, mail configuration, mail templates, runtime strategy, Task
+  Center, and system diagnostics.
 - Login page preserves email, password, login, loading, and failed-login
   feedback.
 - Operations Home preserves all five shortcuts while prioritizing operational
@@ -1229,17 +1710,17 @@ smoke checks, then finalized through Phase 21P cross-page verification.
   and close.
 - Runtime Strategy preserves grouped tables, current value, input, range, apply
   scope, lock state, refresh, save, and diagnostics shortcut.
-- Run Center preserves all filters, pagination, log drawer, stop, archive,
-  restore, refresh logs, copy logs, download logs, and close.
-- Report Center preserves filters, grouping, preview, lead detail, delivery
-  history, resend, HTML/Excel/Markdown downloads, refresh status, refresh
-  history, and report preview drawer.
-- Report Center delivery history opens as scoped secondary detail from the
-  selected report row/status action and does not dominate the initial report
-  archive layout.
-- Report Center lead detail tests fail if the page renders an unlabeled global
+- Task Center preserves task-group filters, grouping, preview, lead detail,
+  delivery history, resend, HTML/Excel/Markdown downloads, refresh actions,
+  report preview drawer, and the run-record subview.
+- Task Center run records preserve all run filters, pagination, log drawer,
+  stop, archive, restore, refresh logs, copy logs, download logs, and close.
+- Task Center delivery history opens as scoped secondary detail from the
+  selected report row or `更多` action and does not dominate the initial
+  task-group layout.
+- Task Center lead detail tests fail if the page renders an unlabeled global
   lead table, omits the selected-report/selected-run scope label, or exposes
-  lead-state filters as first-level Report Center controls.
+  lead-state filters as first-level Task Center controls.
 - System Diagnostics preserves rerun diagnosis, run system diagnosis, handle
   account resources, readiness/action cards, runtime state, scheduler state,
   and platform state.
@@ -1304,7 +1785,8 @@ Layout stress inputs:
   screenshots or review notes.
 - Operations Home reads as a daily operations cockpit rather than onboarding.
 - Platform Accounts remains a complete account-maintenance workflow.
-- Run Center and Report Center remain usable under dense operational data.
+- Task Center remains usable under dense operational data, including grouped
+  reports, run records, run detail, and secondary scoped drawers.
 - Dashboard, run/report, resource, and overlay screenshots demonstrate layout
   resilience: readable text, stable card widths, reachable buttons, no text
   collapse, and no horizontal overflow at `1440x900`, `1024x768`, and

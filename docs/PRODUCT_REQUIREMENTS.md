@@ -62,8 +62,9 @@ Rules:
   grouped summaries, and drilldown links;
 - labels such as "configuration incomplete" must identify the affected area or
   be removed;
-- "refresh global status" should be replaced by page-specific refresh controls
-  with a last-updated time.
+- global refresh wording should not appear as a second command surface. The
+  active page is refreshed through the shared top-bar icon, while pages may
+  keep only scoped refresh actions that do different work.
 
 Acceptance:
 
@@ -167,8 +168,10 @@ Purpose:
 
 Navigation rules:
 
-- page order should emphasize Operations Home, Monitoring, Run Center, and
-  Report Center;
+- page order should emphasize Operations Home, Monitoring, and Task Center;
+- Task Center replaces the former separate top-level Run Center and Report
+  Center entries. It contains task/report grouping as the default first view
+  and run records as a secondary troubleshooting view;
 - Resource Management and System Configuration should appear as expandable
   navigation groups;
 - primary navigation must not rely on hover-only popovers;
@@ -184,7 +187,7 @@ Acceptance:
 - normal users see only their allowed pages;
 - mobile users can reach nested pages without precision hover or clipped menus.
 
-## 3. Run Center
+## 3. Task Center
 
 Roles:
 
@@ -193,17 +196,35 @@ Roles:
 
 Purpose:
 
-- inspect execution status, logs, counts, failures, and stop actions.
+- make the monitoring task-to-public-opinion relationship clear in one place;
+- group reports and public-opinion result summaries by monitoring task;
+- inspect execution status, logs, counts, failures, and stop actions through
+  the run-record subview and Run Detail;
 - filter, page, archive, and restore run records without losing history.
 
-Table columns:
+Default task-group fields:
 
-- run ID;
+- monitoring task / law firm;
+- platforms;
+- keyword summary;
+- latest task/report state;
+- latest run or report time where available;
+- collected count;
+- new count;
+- suspected negative count;
+- high-risk count;
+- manual-review count;
+- unevaluated count;
+- actions, especially Run Detail.
+
+Run-record subview fields:
+
 - task ID;
+- run ID;
+- status;
 - task name/law firm;
 - platform;
 - search term summary;
-- status;
 - start time;
 - duration;
 - collected count;
@@ -217,10 +238,32 @@ Table columns:
 Rules:
 
 - run ID and task ID must be clearly distinct;
+- flat Task Center rows show task ID, run ID, and compact status first;
+- grouped Task Center rows hide the duplicated task ID because the group header
+  already identifies the monitoring task; group rows show run ID and compact
+  status first;
+- grouped Task Center headers show aggregate run metrics as compact labeled
+  chips instead of one long slash-separated sentence. The chips preserve run
+  count, collected count, new count, suspected negative, high risk,
+  manual-review, and unevaluated values, with limited-context notes shown only
+  when needed;
+- completed status cells stay short and do not include long ingestion detail;
+  full progress remains available in Run Detail;
+- status cells render as compact text-sized badges rather than full-width
+  progress-like bars;
+- status badges show only normalized short lifecycle labels; backend
+  `display_status` or progress text must not become the visible badge label;
+- first-level run status badges should be lightweight state-dot labels scoped to
+  Task Center tables so task ID and run ID remain visually prioritized;
 - deleted task history remains visible as original task deleted;
 - running processes can still be stopped even if the task was deleted;
-- logs open in a large modal, auto-positioned at the latest content;
-- logs support refresh, copy, and download.
+- run-record rows do not duplicate the log button; operators open Run Detail
+  and use the `采集日志` section for the same log content;
+- logs support refresh through Run Detail and copy/download from the Run Detail
+  log section.
+- Task Center uses the shared top-bar current-page refresh icon for page-level
+  reloads; the first-level Task Center header and filter toolbar should not
+  repeat a second generic refresh button.
 - the default list should prioritize `visibility = visible` records;
 - archived records are hidden from the default list but remain available to
   administrators through filters;
@@ -276,6 +319,38 @@ Required controls:
 - date range filter;
 - archive/restore action where permitted.
 
+Filter interaction requirements:
+
+- page-level filter dropdowns must open aligned to their trigger controls in
+  the console shell at `1440x900`, `1024x768`, and `390x844`;
+- filter dropdowns may use an in-page floating menu to avoid native browser
+  dropdown misalignment, but the stored select value and existing filtering
+  semantics must remain unchanged;
+- page-level date range filters may use an in-page floating date menu to avoid
+  native browser date-picker misalignment, but the stored date value and
+  existing filtering semantics must remain unchanged;
+- date filter menus must stay visually anchored to their trigger while keeping
+  the calendar readable. Current date filters behave like ordinary attached
+  dropdowns: mount the active menu inside the clicked date control wrapper,
+  position it directly below that field, match the clicked trigger width, and
+  keep the top anchor marker centered;
+- date filter menus must keep all seven weekday/day columns readable; browser
+  button padding or automatic minimum widths must not clip day numbers in
+  narrow filter menus;
+- ordinary edit/configuration form selects and date inputs are not part of the
+  Task Center filter dropdown/date-picker behavior unless a later accepted
+  requirement changes them.
+- CR-071 is the accepted exception for selected drawer/modal `select` fields:
+  Monitoring task edit, Platform Account detail, Proxy edit, AI Access edit,
+  AI Evaluation Rule edit, Mail Configuration edit, and Mail Template edit
+  reuse the same enhanced `.page-filter-region select` mechanism for visual
+  consistency. AI Access `模型名称` remains its own combobox.
+- CR-072 is the accepted focused exception for Monitoring task edit
+  `自定义开始日期` and `自定义结束日期`: these two fields reuse the existing
+  `.page-filter-region input[type="date"]` local attached date-picker
+  mechanism, while unrelated ordinary business date fields remain native unless
+  separately accepted.
+
 Acceptance:
 
 - status refresh works while a run is active;
@@ -292,38 +367,45 @@ Acceptance:
 
 ### 3.1 Run Detail And AI Evaluation Traceability
 
-Status: Accepted for CR-034 / Phase 20, not implemented yet.
+Status: Implemented and verified for CR-034 / Phase 20B-E.
 
 Purpose:
 
 - make one run record the primary place to inspect the full execution
   lifecycle;
-- avoid forcing operators to switch from Run Center to Report Center to
+- avoid forcing operators to switch between separate run and report centers to
   understand AI evaluation progress or per-item evaluation evidence.
-- make Run Center / Run Detail the primary operational home for run-scoped
+- make Task Center / Run Detail the primary operational home for run-scoped
   leads and AI evaluation records, including records that exist before report
   generation.
 
-Proposed rules:
+Implemented rules:
 
-- Run Center should provide a per-run detail surface grouped by `run_id`.
-- Run detail should show collection, ingestion, AI evaluation, report
+- Task Center provides a per-run detail surface grouped by `run_id`.
+- Run detail shows collection, ingestion, AI evaluation, report
   generation, and email delivery in one lifecycle view.
-- The AI Evaluation section should list every evaluation candidate/result for
+- The AI Evaluation section lists every evaluation candidate/result for
   the run, including items evaluated before a report exists.
-- Evaluation detail should distinguish business-safe input/output summaries
+- Evaluation detail distinguishes business-safe input/output summaries
   from administrator-only debug fields.
-- Exact AI request/response traceability requires new trace snapshots for new
+- Exact AI request/response traceability uses trace snapshots for new
   evaluations. Old evaluations without snapshots should be labeled as
   limited-context history.
-- Report Center should retain final report, report leads, downloads, and email
-  delivery history, but should expose explicit "view leads" actions and link
-  back to run detail where possible.
-- Report Center lead detail must show whether the visible list is scoped to a
-  selected report, selected report group, originating run, or current filters;
-  it must not appear as an unlabeled global lead workbench.
-- Report Center "view leads" is a report-scoped shortcut, not the primary
-  lead/evaluation workbench.
+- Task Center retains final report, report leads, downloads, and email delivery
+  history through Run Detail, not through first-level task or run row actions.
+- Task Center lead detail is consolidated into Run Detail's `AI 评估` section:
+  by default it shows the current run's candidates, and report `查看线索`
+  applies a report-scope filter to that same table instead of opening a second
+  lead drawer.
+- AI Evaluation filters include report, status, risk, platform, keyword, and
+  title; the active scope must remain visible so the list does not appear as an
+  unlabeled global lead workbench.
+- The report filter is only a visible selectable `报告范围` dropdown when the
+  current run has multiple reports. If the run has zero reports or exactly one
+  report, show a scope note instead of a redundant dropdown.
+- Task Center rows expose one action, `详情`. Report preview, lead inspection,
+  delivery history, resend, and downloads belong inside Run Detail's `报告` and
+  `邮件交付` sections.
 
 Confirmed:
 
@@ -387,10 +469,10 @@ Acceptance:
 - target-law-firm or alias mentions in title, description, author, or comments
   can still produce suspected-negative/high-risk leads when negative signals
   are present;
-- Report Center and future Run Detail views never label missing AI evaluation
+- Task Center and Run Detail views never label missing AI evaluation
   records as no-risk.
 
-## 4. Report Center
+## 4. Task-Grouped Reports
 
 Roles:
 
@@ -399,7 +481,9 @@ Roles:
 
 Purpose:
 
-- view reports, lead details, and email sending records.
+- define the report grouping behavior now embedded in Task Center;
+- view reports, lead details, and email sending records from a task-scoped
+  surface;
 - group report history by monitoring task and preserve deleted-task context.
 
 Features:
@@ -431,13 +515,13 @@ Rules:
   leads without a scope label.
 - if a current-filter aggregate lead list is kept, label it as a filtered
   aggregate and keep it visually distinct from selected-report lead detail.
-- Report Center is not the primary surface for every AI evaluation record;
+- Task Center report grouping is not the primary surface for every AI evaluation record;
   per-run lifecycle and per-evaluation evidence belong to Run Detail.
 - if operators need to inspect lead/evaluation evidence before a report exists
-  or after a partial/failed run, the entry point is Run Center / Run Detail.
+  or after a partial/failed run, the entry point is Task Center / Run Detail.
 - Lead-state filtering should live inside the scoped lead drawer, not as a
-  first-level Report Center filter. It filters only the currently selected
-  report or run lead scope and should not make the Report Center read like a
+  first-level Task Center filter. It filters only the currently selected
+  report or run lead scope and should not make Task Center read like a
   global lead workbench.
 
 Acceptance:
@@ -470,8 +554,8 @@ Rules:
 - delivery history should show send type, status, time, recipient summary, and
   error message when failed;
 - delivery history should be opened as scoped secondary detail from a selected
-  report row/status action and should not dominate the initial Report Center
-  archive layout.
+  report row/status action and should not dominate the initial Task Center
+  task-group layout.
 - real email sends must be understandable after the fact: delivery history
   should show whether the send was automatic, manual resend, or an explicit
   validation send, plus the related task/report/run context and effective
@@ -536,16 +620,26 @@ Fields:
 - latest error.
 - recognized platform identity, including display name and avatar when
   available.
-- accepted future CR-047 browser-environment summary: browser platform,
-  timezone/locale, screen size, environment lock state, and proxy binding state
-  after Phase 5.1 is implemented.
+- accepted future CR-047 account-identity summary: browser platform, identity
+  template, region, timezone/locale, screen/viewport/device class, environment
+  lock state, re-login state, and proxy binding state after Phase 5.1 is
+  implemented.
+- accepted future CR-047 pre-login advanced option: administrators may choose
+  only a template family before first login; ordinary account creation uses
+  automatic template selection.
+- proposed future CR-070 account package actions: administrator-only
+  metadata-only export, slim encrypted login-state migration export, import
+  preflight, import result, and post-import login verification state.
+- proposed future CR-070 package operation status: export/import in progress,
+  ready for download, failed, cancelled, expired, deleted, active after import,
+  or requires re-login after import.
 
 Rules:
 
 - one platform account maps to one profile;
 - profile path is not shown to users;
 - future CR-047 implementation must keep one platform account mapped to one
-  `profile_key` and one fixed browser environment;
+  `profile_key` and one stable account identity;
 - account name is display-only and not profile identity;
 - login sessions are scoped to the current account;
 - no phone-login UI is shown unless a complete supported chain exists;
@@ -553,9 +647,52 @@ Rules:
 - platform avatar display must not expose signed external image URLs or query
   parameters to the frontend; use a same-origin server-side cache endpoint and
   fall back to the placeholder when the avatar cannot be fetched safely.
-- browser-environment summaries must not expose raw profile paths, cookies,
+- account-identity summaries must not expose raw profile paths, cookies,
   proxy credentials, local command lines, CDP endpoints, noVNC sessions, or
-  fingerprint-debug output.
+    fingerprint-debug output.
+- normal users must not choose account identity templates or browser
+  environment fields; administrators must not edit individual UA, viewport,
+  screen, timezone, locale, accept-language, device-scale, mobile, or touch
+  fields directly.
+- after CR-047 selects a template, the UI/API may show a customer-safe summary
+  but must treat the generated fields as system-owned identity values.
+- after CR-047 locks an account identity, task-level proxy overrides are
+  rejected for that account, and proxy changes require explicit audited
+  reset/re-login.
+- CR-070 export/import is administrator-only and must be hidden from
+  normal users.
+- metadata-only account package export contains no login state and imported
+  accounts require login before use. If it contains real identity details such
+  as fingerprint seed, runtime snapshot summaries, or recognized platform
+  account IDs, it is still treated as a sensitive package and should use the
+  encrypted package envelope by default.
+- slim login-state migration package export contains encrypted login/session
+  material, necessary profile state, and platform-account metadata. It must
+  require explicit administrator confirmation and must not export raw whole
+  browser profile cache or temporary artifacts by default.
+- account packages move only the selected platform account environment. They
+  do not move monitoring tasks, crawl runs, reports, AI traces, email delivery
+  logs, users, runtime settings, or customer business history by default.
+- importing a slim login-state package does not guarantee platform acceptance.
+  The system must verify login state after import before allowing crawl use.
+- imported accounts use a target deployment `profile_key`; the source raw
+  profile path is never trusted or shown.
+- import must not silently use a missing or mismatched target proxy. The
+  administrator must map the imported proxy policy to a target-side proxy or
+  re-login under the target deployment's proxy rules.
+- the encrypted package may show an administrator the source proxy host/IP and
+  port as a mapping hint after decryption, but it must not include or display
+  proxy username, password, token, authentication header, or provider secret.
+- import creates a new target account/profile by default. Replace, merge, or
+  overwrite behavior requires a later explicit conflict policy.
+- avatar handling in V1 exports metadata only, not cached avatar image bytes.
+- export/import surfaces must not show raw cookies, profile paths, proxy
+  credentials, proxy endpoint hints outside the decrypted import preflight,
+  package passphrases, CDP endpoints, noVNC tokens, or deployment encryption
+  keys.
+- export/import operations must show a terminal result to the administrator:
+  success/ready, failed, cancelled, expired, active after import, or requires
+  re-login. A package operation must not remain silently in progress.
 
 Acceptance:
 
@@ -564,9 +701,18 @@ Acceptance:
 - adding a second same-platform account does not reuse the first profile;
 - recognized account avatars render from a customer-safe same-origin URL and
   do not expose platform signatures, cookies, profile paths, or proxy secrets.
+- CR-047 account creation can proceed without manual template selection; if an
+  administrator uses the advanced path, only the template family is selectable
+  before first login.
 - after CR-047 is implemented, repeated login-state checks and crawl runs for
-  the same platform account reuse the same locked browser environment unless
-  an administrator performs an explicit audited reset/re-login flow.
+  the same platform account reuse the same locked account identity unless an
+  administrator performs an explicit audited reset/re-login flow.
+- after CR-070 is implemented, administrators can move an account environment
+  to another deployment through a versioned, encrypted, audited package. Import
+  succeeds as usable only after compatibility checks and login-state
+  verification pass; otherwise the account is retained as needing re-login.
+- normal users never see package export/import actions, package operation
+  states, package download links, or package diagnostics.
 
 ### 5.2 Proxy Resources
 
@@ -588,7 +734,10 @@ Fields:
 Rules:
 
 - proxy URLs are encrypted and masked;
-- task proxy overrides account proxy;
+- before CR-047 locked account identity is active, task proxy overrides account
+  proxy;
+- after CR-047 locks an account identity, task proxy overrides are rejected for
+  that locked account environment;
 - account proxy overrides default network;
 - no dynamic proxy rotation is included in V1.
 

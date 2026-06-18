@@ -39,23 +39,18 @@ Confirmed V1 direction:
 | scheduler_disabled | boolean | false | true/false | restart or scheduler reload |
 | run_log_retention_days | integer | 90 | 1-3650 | cleanup job |
 | report_retention_days | integer | 180 | 1-3650 | cleanup job |
+| ai_trace_retention_days | integer | 30 | 1-3650 | cleanup job |
 
 Single-account and single-profile concurrency are fixed safety rules and should
 not be editable in V1.
 
-Planned for CR-034 / Phase 20:
+Implemented in CR-034 / Phase 20B:
 
-| Setting | Type | Default | Range | Apply |
-| --- | --- | --- | --- | --- |
-| ai_trace_retention_days | integer | 30 | 1-3650 | cleanup job |
-
-`ai_trace_retention_days` is not part of the current implemented runtime
-settings set. When Phase 20 implements AI evaluation trace snapshots, this
-setting must be added to the runtime settings defaults, database-backed
-administrator UI, safe example configuration, validation tests, and diagnostics
-or cleanup visibility in the same synchronized change. It controls how long
-stored AI trace snapshots are retained; it must not be hard-coded in the trace
-persistence layer.
+`ai_trace_retention_days` controls how long stored AI trace snapshots are
+retained. It is part of the runtime settings defaults, database-backed
+administrator setting set, safe example configuration, validation tests, and
+diagnostics/cleanup visibility. The trace persistence layer must read this
+setting instead of hard-coding a retention window.
 
 ## Task Timeout And Lock Recovery
 

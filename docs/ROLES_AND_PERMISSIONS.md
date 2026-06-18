@@ -61,6 +61,7 @@ Confirmed V1 strategy:
 | View all reports | yes | no |
 | Resend report email | yes | own reports only |
 | Manage platform accounts | yes | no |
+| Export/import account environment packages | yes | no |
 | Manage proxies | yes | no |
 | Manage AI access | yes | no |
 | Manage SMTP | yes | no |
@@ -111,6 +112,7 @@ Endpoint groups:
 | runs | yes, all workspace | own task runs |
 | reports | yes, all workspace | own task reports |
 | platform accounts | yes | no |
+| account environment packages | yes | no |
 | proxies | yes | no |
 | AI access | yes | no |
 | mail config/templates | yes | no |
