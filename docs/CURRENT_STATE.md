@@ -204,17 +204,27 @@ Email Delivery Governance And Quotas is deferred as a future capability for
 administrator-managed normal-user send/resend policy and quotas. CR-040 Formal
 Console Page-Level UI/UX Refinement is accepted as Phase 21, a frontend-only
 implementation phase with `docs/FORMAL_CONSOLE_UI_REFINEMENT_PLAN.md` as the
-execution-plan reference; Phase 21 code work has not started yet and no
-production frontend code has been changed for CR-040 in the planning update.
-The Phase 21 plan now explicitly treats prototype-observed layout collapse as
-a hard production verification risk rather than confirmed current production
-breakage: dashboard cards, closed-loop tracks, dense status cards, resource
-cards, run/report cards, and secondary overlays must not squeeze text into
-one-character vertical columns, overlap content, hide primary actions, or
-create horizontal overflow at `1440x900`, `1024x768`, or `390x844`. Phase 21
-also explicitly excludes the currently unrendered
-`Users And Permissions` page; implementing that page would require a separate
-new-capability CR. CR-041 Minimum Usable Pilot Acceptance Gate is now satisfied
+execution-plan reference. The Phase 21 plan was rebaselined on 2026-06-19
+against the current formal `/monitor` console after CR-051, CR-053, CR-069,
+CR-071, CR-072, CR-073, and CR-074. Broad CR-040 page-level visual refinement
+remains open, but the current Task Center / Run Detail behavior is now the
+baseline: one top-level `任务中心`, default task/report grouping, `运行记录`
+as the run-record subview, Run Detail's six sections, enhanced select/date
+menus, `.drawer-scroll-body`, and the shared top-bar refresh icon must not be
+undone by Phase 21. Phase 21 may refine colors, contrast, spacing, density,
+status styling, loading/empty/error/focus states, and responsive wrapping, but
+must not restore separate top-level Run Center / Report Center pages or change
+Task Center, Run Detail, drawer, modal, row-menu, select/date, close, scroll,
+or routing logic without a separate accepted CR. The Phase 21 plan now
+explicitly treats prototype-observed layout collapse as a hard production
+verification risk rather than confirmed current production breakage: dashboard
+cards, closed-loop tracks, dense status cards, resource cards, Task Center /
+Run Detail surfaces, and secondary overlays must not squeeze text into one-
+character vertical columns, overlap content, hide primary actions, or create
+horizontal overflow at `1440x900`, `1024x768`, or `390x844`. Phase 21 also
+explicitly excludes the currently unrendered `Users And Permissions` page;
+implementing that page would require a separate new-capability CR. CR-041
+Minimum Usable Pilot Acceptance Gate is now satisfied
 for the current "system can be used first" readiness standard:
 hidden-real-email safety and stuck-run lifecycle safety have both been
 implemented, locally verified, and externally reviewed; automated server-like
@@ -495,12 +505,15 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   a global lead workbench.
 - Phase 21 - Formal Console Page-Level UI/UX Refinement: accepted but not
   fully implemented. The focused CR-048/CR-049 frontend information-
-  architecture subset for Mail Configuration and Report Center is implemented
-  and verified, but the broader Phase 21 page-level visual refinement
-  workstreams for global shell/design tokens, navigation hierarchy, Operations
-  Home, Monitoring, Platform Accounts, Proxies, AI Access, AI Rules, Mail
-  Templates, Runtime Strategy, Run Center, System Diagnostics, Login, and
-  cross-page verification remain open.
+  architecture subset and later CR-051/CR-053/CR-069/CR-071/CR-072/CR-073/
+  CR-074 Task Center, Run Detail, dropdown/date, drawer-scroll, and refresh
+  refinements are verified and now form the current Phase 21 baseline. The
+  broader Phase 21 page-level visual refinement workstreams for global
+  shell/design tokens, navigation hierarchy, Operations Home, Monitoring,
+  Platform Accounts, Proxies, AI Access, AI Rules, Mail Templates, Runtime
+  Strategy, conservative Task Center visual polish, overlay/Run Detail freeze
+  verification, System Diagnostics, Login, and cross-page verification remain
+  open.
 - Minimum Usable Pilot Acceptance Gate: satisfied for first usable pilot. CR-036 /
   Phase 17.1A-B email side-effect safety and CR-035/Phase 7.1A-C run
   lifecycle/AI fallback/partial-report safety are implemented, locally
@@ -794,10 +807,13 @@ separate follow-up work.
   fix.
 - CR-040 Formal Console Page-Level UI/UX Refinement has been accepted as Phase
   21. The standalone execution plan defines per-page preservation rules,
-  allowed visual changes, testing, verification, and acceptance criteria. The
-  focused CR-048/CR-049 Report Center and Mail Configuration information-
-  architecture subset is implemented and verified, but the broader Phase 21
-  page-level visual refinement remains open and does not reopen CR-033.
+  allowed visual changes, testing, verification, and acceptance criteria. It is
+  now rebaselined on the current Task Center / Run Detail console rather than
+  the older separate Run Center / Report Center structure. The focused CR-048/
+  CR-049 information-architecture subset plus the verified CR-051, CR-053,
+  CR-069, CR-071, CR-072, CR-073, and CR-074 frontend refinements are baseline
+  behavior; the broader Phase 21 page-level visual refinement remains open and
+  does not reopen CR-033.
 - CR-034 Run Detail And AI Evaluation Traceability has been accepted as a
   run-center optimization with data-model implications. Phase 20B-D plus the
   remaining Phase 20E backlink are implemented and verified: new AI

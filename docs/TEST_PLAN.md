@@ -1639,17 +1639,30 @@ Phase 21 is an accepted frontend-only refinement phase for the formal
 Before making Phase 21 code changes, implementers must read
 `docs/FORMAL_CONSOLE_UI_REFINEMENT_PLAN.md`; it defines the per-page
 preservation rules, allowed refinements, forbidden changes, and acceptance
-standards. Phase 21 must be implemented as small workstreams A-O with local
-smoke checks, then finalized through Phase 21P cross-page verification.
+standards. As of the 2026-06-19 rebaseline, Phase 21 uses the current Task
+Center / Run Detail console as the baseline, not the older separate Run Center
+and Report Center layout. Phase 21 must be implemented as small workstreams
+A-O with local smoke checks, then finalized through Phase 21P cross-page
+verification.
 
 ### Phase 21 Planning Document Tests
 
 - `docs/FORMAL_CONSOLE_UI_REFINEMENT_PLAN.md` exists.
 - The plan identifies the formal frontend baseline files.
+- The plan identifies the current behavior baseline: one top-level `任务中心`,
+  default task/report grouping, `运行记录` subview, Run Detail six sections,
+  enhanced drawer/modal selects, task edit date picker, `.drawer-scroll-body`,
+  and shared top-bar refresh.
 - The plan states that the static prototype is visual reference only.
 - The plan lists hard boundaries: no backend API, database, permission,
   crawler, AI-provider, SMTP, scheduler, deployment, framework, or build-step
   changes.
+- The plan explicitly forbids restoring separate top-level Run Center or
+  Report Center pages during Phase 21.
+- The plan states that Task Center, Run Detail, drawers, modals, row menus,
+  enhanced selects, local date menus, close behavior, scroll containers, and
+  routing logic are structure-frozen for Phase 21 unless a separate accepted CR
+  changes them.
 - The plan covers every existing formal page:
   login, dashboard, monitoring tasks, platform accounts, proxies, AI access,
   AI evaluation rules, mail configuration, mail templates, runtime strategy,
@@ -1710,17 +1723,26 @@ smoke checks, then finalized through Phase 21P cross-page verification.
   and close.
 - Runtime Strategy preserves grouped tables, current value, input, range, apply
   scope, lock state, refresh, save, and diagnostics shortcut.
-- Task Center preserves task-group filters, grouping, preview, lead detail,
-  delivery history, resend, HTML/Excel/Markdown downloads, refresh actions,
-  report preview drawer, and the run-record subview.
-- Task Center run records preserve all run filters, pagination, log drawer,
-  stop, archive, restore, refresh logs, copy logs, download logs, and close.
-- Task Center delivery history opens as scoped secondary detail from the
-  selected report row or `更多` action and does not dominate the initial
-  task-group layout.
+- Task Center preserves task-group filters, grouping, grouped metric chips,
+  compact statuses, one top-bar page refresh, one first-level `详情` action,
+  and the `运行记录` run-record subview.
+- Task Center run records preserve all current run filters, pagination, stop,
+  archive, restore, compact status, full failure/troubleshooting fields in the
+  accepted subview, and Run Detail routing.
+- Run Detail preserves the six sections `概览`, `采集日志`, `采集内容`,
+  `AI 评估`, `报告`, and `邮件交付`.
+- Report preview, report-scoped lead inspection, delivery history, resend,
+  HTML/Excel/Markdown downloads, run logs, copy/download log actions, scoped
+  refresh actions, and report/email evidence remain reachable from Run Detail
+  or the accepted scoped secondary surfaces.
 - Task Center lead detail tests fail if the page renders an unlabeled global
-  lead table, omits the selected-report/selected-run scope label, or exposes
-  lead-state filters as first-level Task Center controls.
+  lead table, omits the selected-report/selected-run scope label, exposes
+  lead-state filters as first-level Task Center controls, or reintroduces a
+  separate first-level report-lead drawer/table outside Run Detail.
+- Overlay freeze tests fail if Run Detail tabs, task drawer sections, account/
+  proxy/AI/mail/template drawer or modal categories, enhanced select/date
+  controls, `.drawer-scroll-body`, close/backdrop/Escape behavior, or bottom
+  action reachability changes as part of a visual polish batch.
 - System Diagnostics preserves rerun diagnosis, run system diagnosis, handle
   account resources, readiness/action cards, runtime state, scheduler state,
   and platform state.
@@ -1734,6 +1756,9 @@ Desktop `1440x900`:
 - no browser console errors;
 - no horizontal page overflow;
 - row more menus are not clipped;
+- Task Center default grouping, `运行记录`, Run Detail, and scoped secondary
+  surfaces remain reachable without restoring separate top-level Run Center or
+  Report Center pages;
 - dashboard closed-loop, shortcut, metric, and resource-health cards do not
   squeeze labels into one-character vertical columns, overlap content, or hide
   primary actions.
@@ -1754,6 +1779,7 @@ Mobile `390x844`:
 - task drawer, account dialog, run log drawer, and report preview drawer can
   scroll and close;
 - report preview and delivery history remain readable;
+- Task Center and Run Detail remain usable without horizontal overflow;
 - no overlapping text, one-character-per-line wrapping, unreachable action
   buttons, or horizontal overflow.
 
@@ -1781,12 +1807,14 @@ Layout stress inputs:
 - No page, button, drawer, modal, floating menu, filter, batch action, row
   action, confirmation flow, or download action is removed without a separate
   accepted CR.
+- Phase 21 does not restore the older separate Run Center / Report Center IA
+  and does not change the current Task Center / Run Detail structure.
 - Visual hierarchy is measurably clearer than the CR-033 baseline in browser
   screenshots or review notes.
 - Operations Home reads as a daily operations cockpit rather than onboarding.
 - Platform Accounts remains a complete account-maintenance workflow.
 - Task Center remains usable under dense operational data, including grouped
-  reports, run records, run detail, and secondary scoped drawers.
+  reports, `运行记录`, Run Detail, and secondary scoped drawers.
 - Dashboard, run/report, resource, and overlay screenshots demonstrate layout
   resilience: readable text, stable card widths, reachable buttons, no text
   collapse, and no horizontal overflow at `1440x900`, `1024x768`, and

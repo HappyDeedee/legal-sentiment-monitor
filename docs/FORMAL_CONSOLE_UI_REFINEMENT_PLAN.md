@@ -1,8 +1,11 @@
 # Formal Console UI Refinement Execution Plan
 
-Status: Accepted Phase 21 execution plan. Phase 21 implementation code has not
-started yet. Use this document as the required implementation reference before
-editing the formal console frontend.
+Status: Accepted Phase 21 execution plan, rebaselined on 2026-06-19 against
+the current formal `/monitor` console after Task Center and Run Detail
+consolidation. Broad CR-040 page-level visual refinement remains open, while
+verified CR-051, CR-053, CR-069, CR-071, CR-072, CR-073, and CR-074 behavior is
+the current baseline and must not be undone. Use this document as the required
+implementation reference before editing the formal console frontend.
 
 ## Purpose
 
@@ -21,6 +24,24 @@ Formal frontend baseline:
 - `api/monitor_web/index.html`
 - `api/webui/monitor/monitor.css`
 - `api/webui/monitor/monitor.js`
+
+Current behavior baseline:
+
+- one top-level `任务中心` entry replaces the former separate Run Center and
+  Report Center entries;
+- Task Center opens on monitoring-task/report grouping and keeps `运行记录` as
+  the secondary run-record troubleshooting subview;
+- each first-level Task Center task/report or run row prioritizes one `详情`
+  entry into Run Detail rather than duplicated report/log/lead row actions;
+- Run Detail is the preserved run-scoped surface with `概览`, `采集日志`,
+  `采集内容`, `AI 评估`, `报告`, and `邮件交付` sections;
+- report preview, lead inspection, delivery history, resend, downloads, run
+  logs, and scoped refresh actions remain reachable inside Run Detail or the
+  accepted secondary scoped surfaces;
+- selected drawer/modal selects reuse the accepted enhanced select mechanism,
+  Monitoring task custom start/end dates reuse the accepted local attached date
+  picker, drawer scrollbars live inside `.drawer-scroll-body`, and page-level
+  refresh uses the shared top-bar icon.
 
 Reference prototype:
 
@@ -51,9 +72,15 @@ Not allowed:
 - no new frontend framework, build step, Tailwind, React, Vue, Alpine, or
   Petite-Vue;
 - no merging Resource Management or System Configuration pages;
+- no restoring separate top-level Run Center or Report Center pages;
+- no replacing Task Center's current grouping, `运行记录` subview, or Run Detail
+  tab routing with a new information architecture;
 - no replacing floating menus with side business drawers;
 - no deleting buttons, filters, batch actions, row actions, drawers, modals,
   download actions, or confirmation flows;
+- no changing existing drawer, modal, action-menu, enhanced-select, date-menu,
+  close, backdrop, Escape, scroll, or `.drawer-scroll-body` workflow
+  categories;
 - no new dashboard metrics that require new backend fields.
 - no implementing the currently unrendered `Users And Permissions` page in
   this phase. That surface is named in role documentation as a V1 permission
@@ -132,7 +159,9 @@ Always require a separate user confirmation or CR before:
 
 Implement Phase 21 as small frontend batches, not as one broad visual rewrite:
 
-- Workstreams A-O may be implemented and smoke-checked independently.
+- Workstreams A-O may be implemented and smoke-checked independently, but the
+  current Task Center and overlay structure is frozen unless a separate
+  accepted CR explicitly changes it.
 - Each workstream must preserve its listed fields, buttons, overlays, menus,
   role boundaries, and visible states before moving to the next workstream.
 - Phase 21P is the final cross-page verification gate after A-O are complete.
@@ -193,6 +222,11 @@ Implement Phase 21 as small frontend batches, not as one broad visual rewrite:
 
 - Existing drawers, modals, and floating menus stay in the same workflow
   category.
+- Task Center, Run Detail, and every existing secondary drawer/modal are
+  structure-frozen for Phase 21 visual refinement: Phase 21 may improve color,
+  contrast, density, spacing, typography, status styling, shadows, focus,
+  loading, empty, and error states, but must not move core fields/actions into
+  different workflow categories or change open/close/scroll/routing logic.
 - Long drawers must keep close controls reachable, following CR-038 where
   applicable.
 - Standard close behavior:
@@ -225,8 +259,9 @@ Layout resilience must be checked at every accepted viewport:
   column became too narrow;
 - dashboard closed-loop, trajectory, shortcut, metric, and resource-health
   sections must degrade before they squeeze content;
-- dense Run Center and Report Center cards/tables must keep status, primary
-  action, and secondary action readable and reachable;
+- dense Task Center task/report groups, `运行记录` rows, Run Detail sections,
+  and accepted secondary scoped drawers must keep status, primary action, and
+  secondary action readable and reachable;
 - loading, empty, and error states must preserve the same safe width behavior
   as loaded content.
 
@@ -269,7 +304,7 @@ Do not:
 
 Acceptance:
 
-- all 12 logged-in formal pages plus login remain reachable;
+- all currently rendered logged-in formal pages plus login remain reachable;
 - no button text becomes unreadable;
 - no browser console errors;
 - no horizontal overflow at 1440, 1024, or 390 widths.
@@ -286,7 +321,10 @@ Do:
 
 - visually distinguish top-level pages from `Resource Management` and
   `System Configuration` subpages;
-- keep `dashboard`, `jobs`, `runs`, and `reports` as the main task loop;
+- keep `dashboard`, `jobs`, and the current Task Center entry backed by the
+  existing `runs` route/tab identity as the main task loop; legacy `reports`
+  shortcut calls may normalize into Task Center but must not become a separate
+  top-level page again;
 - keep `accounts`, `proxies`, and `ai` under resources;
 - keep `ai_rules`, `email`, `email_templates`, `runtime`, and `doctor` under
   system configuration;
@@ -351,7 +389,7 @@ Files:
 
 Must preserve:
 
-- `New Task`, schedule refresh, Run Center shortcut, search, platform filter,
+- `New Task`, schedule refresh, Task Center shortcut, search, platform filter,
   status filter, clear filters;
 - row `Run`, `Stop`, and `More`;
 - row menu: edit task, pause/resume, delete task;
@@ -558,7 +596,8 @@ Acceptance:
 - testing and saving have visible loading/success/failure states;
 - SMTP/defaults summary does not duplicate page-header edit/test actions;
 - the real-email switch state is visible, compact, and intentional;
-- email delivery shortcut still routes to reports.
+- email delivery shortcut still routes to the current Task Center / Run Detail
+  delivery surface.
 
 ### J. Mail Templates
 
@@ -624,99 +663,129 @@ Acceptance:
 - administrators can still inspect and edit settings in grouped tables;
 - locked values are visibly read-only and explain why.
 
-### L. Run Center
+### L. Task Center Conservative Visual Pass
 
 Files:
 
 - `api/monitor_web/index.html`
 - `api/webui/monitor/monitor.css`
-- `api/webui/monitor/monitor.js` only if polling or shared feedback UI changes
-  are needed without API changes
+- `api/webui/monitor/monitor.js` only if visual feedback hooks must be reused
+  without API, routing, or data-flow changes
 
 Must preserve:
 
-- new task, refresh runs, view reports;
-- filters:
-  task/law firm, status, platform, run type, visibility, start date, end date,
-  page size, filter, clear, refresh;
-- pagination;
-- row actions: view logs, stop, archive, restore;
-- run log drawer with title, metadata, refresh, copy, download, close.
+- the single top-level `任务中心` navigation entry;
+- default task/report grouping by monitoring task;
+- `运行记录` subview with existing filters, pagination, stop, archive,
+  restore, and Run Detail entry;
+- flat run rows beginning with task ID, run ID, and compact status;
+- grouped run rows hiding duplicated task ID and beginning with run ID plus
+  compact status;
+- grouped metric chips for run, collected, new, suspected negative, high-risk,
+  manual-review, and unevaluated counts;
+- one page-level top-bar refresh icon, with scoped refresh actions kept only
+  where they refresh a local scope;
+- one first-level `详情` action that opens the current Run Detail surface;
+- report preview, report-scoped lead inspection, delivery history, resend,
+  HTML/Excel/Markdown downloads, run logs, copy/download log actions, and
+  report/email evidence through Run Detail or the accepted scoped secondary
+  surfaces.
 
 Do:
 
-- make filters easier to scan and collapse/wrap cleanly;
-- make status, failure reason, and action columns easier to compare;
-- keep stop/log actions stable during refresh;
-- keep Run Center / Run Detail as the primary operational entry for
-  run-scoped leads and AI evaluation records when Phase 20 is implemented;
-- align visual language with Phase 19 future progress states without adding
-  new progress data in this pass.
+- refine only visual hierarchy, color, spacing, table density, status contrast,
+  metric-chip styling, focus states, loading/empty/error states, and responsive
+  wrapping on the current Task Center structure;
+- keep task identity and result summaries prominent in the default grouped
+  view;
+- keep run ID, task ID, type, visibility, duration, full failure reason,
+  archive/restore, and troubleshooting controls in `运行记录` and Run Detail;
+- keep active and terminal status labels compact, with full progress and
+  evidence remaining in Run Detail;
+- verify that top-bar refresh, filters, enhanced select/date menus, `详情`, Run
+  Detail, and scoped refresh actions still behave exactly as the current
+  baseline.
 
 Do not:
 
-- add real-time progress fields that require Phase 19 backend work;
-- remove pagination or archive/restore governance controls.
+- restore standalone top-level Run Center or Report Center pages;
+- reintroduce duplicate first-level log, preview, lead, delivery-history,
+  resend, or download row actions when the accepted current path is Run Detail;
+- move lead-state filters into the first-level Task Center toolbar;
+- change grouping logic, `运行记录` routing, Run Detail tab names/order, owner
+  scope, report scope filtering, or pagination/filter semantics;
+- make Task Center look better by hiding dense operational fields or removing
+  troubleshooting affordances.
 
 Acceptance:
 
-- all filters still work;
-- pagination remains reachable;
-- log drawer opens, refreshes, copies, downloads, and closes at all viewport
-  sizes.
+- the current Task Center baseline remains recognizable and all accepted paths
+  stay reachable;
+- visual polish improves scanability without changing page logic;
+- no first-level Task Center text collapses into one-character columns or
+  hides `详情` at `1440x900`, `1024x768`, or `390x844`;
+- regression checks cover CR-051, CR-053, CR-057, CR-069, CR-071, CR-072,
+  CR-073, and CR-074 behavior.
 
-### M. Report Center
+### M. Overlay And Run Detail Freeze Gate
 
 Files:
 
 - `api/monitor_web/index.html`
 - `api/webui/monitor/monitor.css`
+- `api/webui/monitor/monitor.js` only if existing visual feedback hooks require
+  a narrowly scoped update
 
 Must preserve:
 
-- new task, refresh report, view run center;
-- refresh report email status and refresh history;
-- filters:
-  law firm, platform, risk, start date, end date, display range, filter;
-- grouped report list;
-- row preview and more;
-- report more menu:
-  view delivery history, resend email, download HTML, download Excel, download
-  Markdown;
-- delivery history area;
-- lead detail area;
-- explicit report/group "view leads" entry when CR-048 is implemented;
-- report preview drawer with source link/cover hint, mail-title notice, iframe,
-  and standard close behavior.
+- Run Detail drawer and its six sections: `概览`, `采集日志`, `采集内容`,
+  `AI 评估`, `报告`, and `邮件交付`;
+- task create/edit drawer, platform account dialog/drawer, proxy edit drawer,
+  AI Access edit drawer and connection-test modal, AI Evaluation Rule modal,
+  Mail Configuration edit/test drawers or modals, Mail Template drawer, report
+  preview surface, delivery-history surface, run-log/log section, row more
+  menus, enhanced select menus, local attached date menus, backdrop close,
+  Escape close, top-right close button, bottom action bars, and
+  `.drawer-scroll-body`;
+- report scope behavior in Run Detail `AI 评估`: `报告范围` is selectable only
+  for multi-report runs and is a read-only note for zero-report or one-report
+  runs;
+- copy, download, resend, refresh, preview, trace-detail, and delivery-history
+  actions where they currently exist.
 
 Do:
 
-- make the page read as report archive plus delivery history;
-- make selected report, lead detail, and delivery history relationship clear;
-- show lead-detail scope, count, and filters so the area cannot be mistaken for
-  an unlabeled global lead list;
-- present "view leads" as a report-scoped shortcut, not as the main
-  run/evaluation workbench;
-- keep delivery history as scoped secondary detail opened from a report
-  row/status action instead of a dominant default panel;
-- make download actions visible but not dominant;
-- make resend feel like an external-impact action with confirmation and clear
-  result.
+- refine overlay chrome only where it does not change workflow: header/footer
+  separation, close-button focus state, scrollbar styling, shadow/elevation,
+  section dividers, status colors, loading/empty/error states, and responsive
+  spacing;
+- keep overlay text and controls readable without moving actions into new
+  surfaces;
+- verify long drawers keep the rounded shell, header controls outside the
+  scroll container, and content scrolling inside `.drawer-scroll-body`;
+- verify enhanced dropdown/date menus stay aligned and remain above drawer
+  content without covering close controls when closed.
 
 Do not:
 
-- hide downloads inside inaccessible UI;
-- make preview the only way to inspect leads;
-- present Report Center as a global lead workbench unless a separate future CR
-  explicitly adds that capability;
-- remove delivery history.
+- replace drawers with first-level pages or cards;
+- move close buttons, relocate bottom actions, or change backdrop/Escape/page-
+  switch close behavior;
+- change Run Detail tabs, task drawer sections, report preview routing, AI
+  evaluation filtering, delivery-history scope, row menu workflow category, or
+  any underlying API/data call;
+- introduce a new overlay component system or dependency for this visual pass;
+- solve visual polish by simplifying away existing operational fields.
 
 Acceptance:
 
-- selecting a report or choosing "view leads" updates preview context or lead
-  detail with an explicit scope label;
-- delivery status button loads and scrolls or reveals history;
-- resend confirmation and result feedback remain clear.
+- every existing drawer, modal, Run Detail tab, row menu, enhanced select, and
+  date menu opens, closes, scrolls, and routes as before;
+- overlays look visually cleaner but keep the same information architecture and
+  page logic;
+- desktop, tablet, and mobile checks show no clipped close controls, hidden
+  bottom actions, scrollbar/radius regression, dropdown clipping, or horizontal
+  overflow.
 
 ### N. System Diagnostics
 
@@ -828,9 +897,10 @@ Desktop `1440x900`:
 - AI rule modal;
 - mail config/test modal;
 - mail-template drawer;
-- run log drawer;
-- report preview drawer;
-- report more menu;
+- Task Center default grouping and `运行记录` subview;
+- Run Detail drawer with all six sections;
+- representative scoped report preview, delivery-history, run-log/log, and
+  row-menu surfaces;
 - no console errors;
 - no horizontal page overflow.
 
@@ -844,11 +914,12 @@ Tablet `1024x768`:
 Mobile `390x844`:
 
 - first screen of Operations Home shows status and urgent action;
-- navigation can reach Monitoring, Run Center, Report Center, and allowed
-  administrator pages;
+- navigation can reach Monitoring, Task Center, and allowed administrator
+  pages;
 - task drawer can scroll and close;
 - account login dialog can show QR/Cookie state and close;
-- run log and report preview are readable and closable;
+- Run Detail, run logs, report preview, and delivery history are readable and
+  closable;
 - no horizontal overflow or overlapping text.
 
 ### Role Checks
@@ -860,7 +931,7 @@ Administrator:
 
 Normal user:
 
-- sees only operations home, monitoring tasks, run center, and report center;
+- sees only operations home, monitoring tasks, and Task Center;
 - does not see account/proxy/AI/mail/runtime/diagnostics administrator
   controls;
 - task creation stays simplified and does not expose administrator advanced
@@ -877,6 +948,9 @@ The implementation is not acceptable if any of these regress:
 - task drawer loses fields;
 - report downloads disappear;
 - run logs lose refresh/copy/download;
+- Task Center is split back into separate top-level run/report pages;
+- Run Detail tabs, overlay categories, enhanced selects, local date menus, or
+  `.drawer-scroll-body` behavior change without a separate accepted CR;
 - row more menus become clipped;
 - mobile navigation requires hover;
 - console has browser errors;
@@ -893,8 +967,8 @@ The work is accepted only when:
 - visual hierarchy is clearer than CR-033 baseline;
 - Operations Home feels like a daily operations cockpit, not onboarding;
 - Platform Accounts remains a complete account-maintenance workflow;
-- Run Center and Report Center are easier to scan under real operational
-  density;
+- Task Center remains easier to scan under real operational density while
+  preserving current grouping, `运行记录`, and Run Detail paths;
 - secondary drawers and menus remain usable at desktop, tablet, and mobile
   sizes;
 - screenshots at `1440x900`, `1024x768`, and `390x844` prove that dashboard

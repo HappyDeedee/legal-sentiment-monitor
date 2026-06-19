@@ -495,3 +495,20 @@ short `Superseded by` note rather than deleting history.
   form-date-native rule. They should reuse the existing CR-068 local attached
   date-picker mechanism, while unrelated edit/configuration date inputs remain
   native unless separately accepted.
+
+## 2026-06-19
+
+- Confirmed for CR-040 / Phase 21: Phase 21 is rebaselined on the current
+  formal `/monitor` console after Task Center and Run Detail consolidation,
+  not on the older separate Run Center / Report Center structure.
+- Confirmed for CR-040 / Phase 21: the current `任务中心` information
+  architecture is frozen for the Phase 21 visual pass. Phase 21 may refine
+  colors, contrast, density, spacing, typography, status styling, loading,
+  empty, error, focus, shadow, and responsive wrapping, but it must not restore
+  separate top-level Run Center or Report Center pages.
+- Confirmed for CR-040 / Phase 21: Task Center grouping, the `运行记录`
+  subview, one first-level `详情` route, Run Detail's six sections, report
+  scope filtering, enhanced select/date controls, `.drawer-scroll-body`,
+  top-bar refresh, drawer/modal/menu categories, close/backdrop/Escape
+  behavior, and overlay scroll/routing logic must not be changed for visual
+  neatness without a separate accepted CR.

@@ -1636,7 +1636,15 @@ CR-040 is an accepted frontend-only page-level UI/UX refinement phase for the
 formal `/monitor` console. This phase must not reopen CR-033, must not replace
 the formal console with the static prototype, and must not mark any UI code
 work complete until implementation and verification are actually done. The
-implementation baseline is the latest formal `/monitor` console.
+implementation baseline is the latest formal `/monitor` console on `main`:
+one top-level `任务中心`, default task/report grouping, `运行记录` as the
+run-record subview, Run Detail with `概览` / `采集日志` / `采集内容` /
+`AI 评估` / `报告` / `邮件交付`, CR-071/CR-072 enhanced controls,
+CR-073 drawer scroll normalization, and CR-074 top-bar refresh behavior.
+Phase 21 may refine visual hierarchy, color, density, spacing, contrast, and
+state feedback, but it must not restore the old separate Run Center / Report
+Center structure or change Task Center, Run Detail, drawer, modal, menu,
+select/date, close, scroll, or routing logic without a separate accepted CR.
 
 - [x] Create `docs/FORMAL_CONSOLE_UI_REFINEMENT_PLAN.md` with complete
       execution guidance for what to do, where to do it, how to test it, how to
@@ -1646,6 +1654,9 @@ implementation baseline is the latest formal `/monitor` console.
 - [x] Confirm that the currently unrendered `Users And Permissions` surface is
       out of Phase 21 scope. If the user wants it implemented later, record a
       separate new-capability CR instead of treating it as visual refinement.
+- [x] Rebaseline Phase 21 planning docs on 2026-06-19 against the current Task
+      Center / Run Detail frontend after CR-051, CR-053, CR-069, CR-071,
+      CR-072, CR-073, and CR-074.
 - [ ] Implement Phase 21 in small frontend workstreams A-O with local
       smoke-checks before the final Phase 21P cross-page verification gate.
 
@@ -1759,18 +1770,39 @@ implementation baseline is the latest formal `/monitor` console.
       tables, current values, inputs, valid ranges, apply scopes, and lock
       states.
 
-### Phase 21L - Run Center
+### Phase 21L - Task Center Conservative Visual Pass
 
-- [ ] Refine Run Center filters, pagination, table density, status/failure
-      scanning, and log drawer visual structure without adding Phase 19 data
-      requirements.
-- [ ] Preserve all filters, filter summary, pagination, view logs, stop,
-      archive, restore, refresh logs, copy logs, download logs, and close.
+- [ ] Refine the current Task Center only as a conservative visual pass:
+      colors, contrast, density, metric-chip styling, table separators, status
+      treatment, loading/empty/error states, focus states, and responsive
+      wrapping.
+- [ ] Preserve the single top-level `任务中心`, default task/report grouping,
+      `运行记录` subview, filters, pagination, top-bar page refresh, scoped
+      refresh actions, compact status badges, grouped metric chips, and one
+      first-level `详情` route into Run Detail.
+- [ ] Preserve report preview, report-scoped lead inspection, delivery history,
+      resend, downloads, run logs, copy/download log actions, and report/email
+      evidence through Run Detail or the accepted scoped secondary surfaces.
+- [ ] Do not restore separate top-level Run Center / Report Center pages,
+      reintroduce duplicate first-level log/preview/lead/delivery/download row
+      actions, move lead-state filters into the first-level Task Center
+      toolbar, or change grouping, `运行记录`, Run Detail tab, pagination,
+      filter, owner-scope, or report-scope semantics.
 
-### Phase 21M - Report Center
+### Phase 21M - Overlay And Run Detail Freeze Gate
 
-- [ ] Refine grouped report archive, selected report relationship, lead detail,
-      delivery history, preview drawer, and row more menu visual hierarchy.
+- [ ] Refine only overlay chrome and visual states for existing drawers,
+      modals, row menus, Run Detail, report preview, delivery history, run/log
+      surfaces, enhanced select menus, and local attached date menus.
+- [ ] Preserve Run Detail's six sections, task drawer structure, account/proxy/
+      AI/mail/template drawer and modal categories, close buttons, backdrop and
+      Escape behavior, bottom actions, `.drawer-scroll-body`, enhanced select
+      labels/values, task edit date-picker behavior, report scope behavior, and
+      all existing copy/download/resend/refresh/preview/detail actions.
+- [ ] Do not move fields/actions into a different workflow category, replace
+      drawers with new pages/cards, change Run Detail routing, change AI
+      evaluation filtering, alter delivery-history scope, move close buttons,
+      or simplify away operational fields for visual neatness.
 - [x] Apply CR-048 scope clarity so lead detail reads as selected-report or
       clearly labeled filtered-aggregate detail, not an unlabeled global lead
       table.
