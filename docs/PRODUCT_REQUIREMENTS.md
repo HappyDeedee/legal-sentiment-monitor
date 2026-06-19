@@ -17,6 +17,15 @@ Monitor web console. It is the product reference for UI, API, and testing work.
 - Global or vague status language should be replaced with page-specific,
   action-specific language that tells the user what changed and what needs
   attention.
+- MediaCrawler is an internal collection engine for the product, not a public
+  cockpit. Public product flows should speak in Legal Sentiment Monitor terms
+  and should not expose raw crawler/data routes, command-line concepts, local
+  files, profile paths, cookies, proxy credentials, or provider debug details
+  outside trusted administrator diagnostics.
+- Future `/monitor-next` planning under CR-078 is not a change to the current
+  `/monitor` product flow. Current Task Center, Run Detail, drawer/modal,
+  select/date, report/email, routing, permission, and scroll behavior remain
+  the baseline until an explicit replacement gate is accepted and verified.
 
 ## 1. Overview
 

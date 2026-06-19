@@ -315,6 +315,37 @@ mail logs, users, runtime settings, or business history. V1 creates a new
 target account/profile on import and exports avatar metadata only. This is
 documentation planning only; no export/import code, schema migration, package
 artifact, real profile, cookie, proxy, or login state has been changed.
+CR-075 Open Todo MECE Rebaseline And Phase 5.1 Preflight Gate is accepted as a
+documentation-governance batch. The current open work is now explicitly
+separated into an active Phase 21 frontend visual lane, a Phase 5.1 Preflight
+documentation/read-only compatibility lane, the later Phase 5.1 account
+identity implementation body, the Phase 5.1 acceptance lane, Phase 5.2 /
+CR-070 after CR-047 provider/effective snapshot verification, and independent
+deferred items such as CR-037, the unrendered Users And Permissions page, and
+Phase 7.1D historical repair. This batch changes task sequencing only; it does
+not change code, UI, database schema, runtime data, account profiles, cookies,
+proxy configuration, crawler behavior, or deployment configuration.
+CR-078, CR-079, and CR-080 are added as future independent backlog lanes after
+the CR-075 rebaseline. CR-078 covers future `/monitor-next` frontend stack
+migration planning in `docs/MONITOR_NEXT_FRONTEND_PLAN.md` and is not a Phase
+21 task. CR-079 covers MediaCrawler internalization and public exposure
+boundary planning; its product boundary is accepted, but exact route/mount and
+reverse-proxy behavior still needs confirmation after read-only audit. CR-080
+covers future crawler provider architecture in
+`docs/CRAWLER_PROVIDER_ARCHITECTURE.md` and is separate from Phase 5.1P, which
+remains only the current MediaCrawler/CDP/BrowserEnvironmentProvider
+compatibility preflight. These three backlog lanes do not block Phase 21,
+Phase 5.1P, CR-047/Phase 5.1, or CR-070/Phase 5.2, and they do not change
+code, UI, schema, runtime data, routes, crawler behavior, account profiles,
+cookies, proxies, or deployment configuration.
+CR-081 Atomic Goal Execution Governance And Readiness Gate is accepted as a
+documentation-governance layer on top of the CR-075 lane separation. It adds
+`docs/GOAL_EXECUTION_GUIDELINES.md` as the source for goal packet structure,
+atomicity rules, current execution lanes, test iteration loop, acceptance
+standards, and stop conditions. This does not change the current roadmap
+priority and does not implement code, UI, schema, runtime data, routes,
+crawler behavior, account profiles, cookies, proxies, deployment
+configuration, or production changes.
 CR-048 Report Center Lead Detail Information Architecture is implemented and
 verified for the focused Phase 20E/21M frontend information-architecture
 batch. Report Center no longer renders lead detail as a first-level flat
@@ -618,7 +649,18 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   implementation-level gates for deterministic generation, exact template
   expansion, provider requested/effective probes, runtime snapshots,
   `identity_state`, audit events, and test tripwires; implementation remains
-  pending until cross-validation finds no P0/P1 gaps.
+  pending until Phase 5.1P preflight confirms the container/server-like,
+  BrowserEnvironmentProvider, MediaCrawler CDP, QR login, Cookie validation,
+  login-state check, manual run, scheduler run, runner, and requested/effective
+  snapshot compatibility boundary.
+- CR-075 - Open Todo MECE Rebaseline And Phase 5.1 Preflight Gate: accepted as
+  a documentation-governance sequencing update. It keeps Phase 21 separate as a
+  frontend visual-only lane, makes Phase 5.1P the next account-environment
+  gate before schema/code implementation, moves container/server-like and
+  BrowserEnvironmentProvider work into the Phase 5.1 development/acceptance
+  baseline rather than a separate parallel big task, and delays CR-070 /
+  Phase 5.2 until CR-047 provider binding plus effective runtime snapshot are
+  verified.
 - CR-048 - Report Center Lead Detail Information Architecture: focused
   frontend batch complete and verified. Report Center uses explicit
   report-scoped "查看线索" actions and a scoped lead drawer; Run Center also
@@ -828,9 +870,11 @@ separate follow-up work.
   documentation governance is complete, and Phase 19B-19D run-center realtime
   progress is implemented and verified. Phase 7.1A-C, Phase 7.2A-D, CR-043,
   CR-044, CR-045, CR-050, and Phase 20B-E are implemented and verified; Phase
-  7.1D remains gated. Phase 21 is accepted but not fully implemented; only the
-  focused CR-048/CR-049 Report Center and Mail Configuration information-
-  architecture subset is verified. CR-037 is deferred.
+  7.1D remains gated. Phase 21 is accepted but not fully implemented; the
+  verified CR-048/CR-049/CR-051/CR-053/CR-069/CR-071/CR-072/CR-073/CR-074
+  frontend behavior is the current baseline. CR-075 is accepted as the
+  documentation-only MECE sequencing update for the next open work. CR-037 is
+  deferred.
 
 ## Known Risks
 
@@ -993,25 +1037,54 @@ separate follow-up work.
 
 Next allowed implementation order:
 
-1. implement Phase 21 formal console page-level UI/UX refinement as
-   frontend-only workstreams with the Phase 21P cross-page layout-resilience
-   gate. Do not run multiple Phase 21/UI worktrees that edit
-   `api/monitor_web/index.html`, `api/webui/monitor/monitor.css`, or
-   `api/webui/monitor/monitor.js` at the same time unless the split is
-   deliberately coordinated;
-2. implement CR-047/Phase 5.1 account identity fidelity using the confirmed
-   policy that locked account environments reject task-level proxy overrides;
-   do this on the existing Playwright/CDP provider path before considering any
-   optional CloakBrowser-style CDP/noVNC provider or expanding platform account
-   environment controls;
-3. keep Phase 17.1D historical orphan email evidence closed as read-only
+Before opening any non-trivial item below, create or confirm the CR-081 goal
+packet from `docs/GOAL_EXECUTION_GUIDELINES.md`: owner CR/phase, baseline,
+scope, out-of-scope, hard boundaries, start gate, expected touch surface,
+execution steps, tests, acceptance, rollback/recovery, documentation updates,
+and stop conditions.
+
+1. finish and merge the active Phase 21 worktree as frontend-only visual
+   refinement on the current Task Center / Run Detail baseline. Do not run
+   multiple Phase 21/UI worktrees that edit `api/monitor_web/index.html`,
+   `api/webui/monitor/monitor.css`, or `api/webui/monitor/monitor.js` at the
+   same time unless the split is deliberately coordinated;
+2. run Phase 5.1P Preflight as a documentation/read-only compatibility goal
+   before Phase 5.1 schema or code work. It must map QR login, Cookie
+   validation, login-state checks, manual run, scheduler run, runner behavior,
+   and MediaCrawler CDP launch/reconnect to one BrowserEnvironmentProvider
+   output and one requested/effective snapshot contract. It must not create or
+   change schema, code, provider implementation, runtime data, profiles,
+   cookies, proxies, crawler behavior, deployment configuration, or database
+   state; if any current path cannot be mapped to that provider/snapshot
+   contract, stop Phase 5.1 and record the ambiguity instead of starting Phase
+   5.1A-D;
+3. implement CR-047/Phase 5.1 account identity fidelity only after the
+   preflight passes, using the confirmed policy that locked account
+   environments reject task-level proxy overrides and using container/server-
+   like execution as the development and acceptance baseline;
+4. implement CR-070/Phase 5.2 account-environment export/import only after
+   CR-047 provider binding and requested/effective runtime snapshot behavior
+   are implemented and verified;
+5. keep CR-078 `/monitor-next` planning, CR-079 MediaCrawler public exposure
+   boundary, and CR-080 crawler provider architecture as future independent
+   backlog lanes. They may receive read-only planning or documentation
+   refinement, but they must not be treated as current implementation work,
+   Phase 21 work, Phase 5.1P prerequisites, or CR-070 prerequisites without a
+   later accepted decision;
+6. after the active Phase 21 worktree is merged, run a small documentation
+   cleanup pass to verify CR numbering, duplicate/overlapping Phase21 boundary
+   wording, and whether any Phase21-completed visual or wording items should
+   be referenced rather than repeated in CR-078/079/080;
+7. keep Phase 17.1D historical orphan email evidence closed as read-only
    dry-run/checklist/runbook work unless the operator explicitly approves a
    backup, rollback, and mutation path;
-4. handle CR-035/Phase 7.1D historical run remediation only when the operator
+8. handle CR-035/Phase 7.1D historical run remediation only when the operator
    explicitly approves the dry-run, backup, rollback, and repair path; it is a
    conditional operations task, not a normal feature batch;
-5. prepare broader production pilot handoff and deployment-specific validation
-    for additional live credentials after the first usable pilot baseline.
+9. keep CR-037 role-based email governance and the currently unrendered Users
+   And Permissions page as separate future/new-capability work until confirmed;
+10. prepare broader production pilot handoff and deployment-specific validation
+   for additional live credentials after the first usable pilot baseline.
 
 Test gate hardening recorded:
 
@@ -1020,8 +1093,10 @@ Test gate hardening recorded:
   self-consistency validation tests, and fail-closed browser-environment tests.
   It also has a V1 provider boundary: unsupported high-fidelity surfaces must
   be reported as not-managed or future/provider-dependent, not silently claimed.
-  A focused re-review is required after the newly added generation/provider/
-  lifecycle/snapshot/test-safety specifications.
+  Phase 5.1P preflight is now required before implementation so QR login,
+  Cookie validation, login-state checks, manual runs, scheduler runs, and
+  MediaCrawler CDP launch/reconnect share one provider output and the same
+  requested/effective snapshot contract.
 - CR-045 now requires a noisy-positive model override fixture so keyword-only
   evidence cannot backdoor target-related negative classification.
 - Phase 17.1D now requires dry-run no-op proof plus backup/approval gates
@@ -1032,17 +1107,32 @@ Test gate hardening recorded:
   finalization cannot be blocked or mutate business rows.
 - CR-048 and CR-049 now require UI tripwires for unlabeled lead tables and
   duplicated mail edit/test actions.
+- CR-078, CR-079, and CR-080 are intentionally separate from Phase 21 and
+  Phase 5.1P. `/monitor-next` planning cannot modify the current `/monitor`
+  console; MediaCrawler public exposure work cannot be treated as frontend
+  visual polish; and crawler provider architecture cannot become the
+  Phase 5.1P prerequisite unless a later accepted decision changes the
+  roadmap.
+- CR-081 requires atomic goal packets and the iteration rule before future
+  non-trivial work starts. A goal should not advance while targeted tests,
+  required broader checks, documentation consistency, acceptance gates, or
+  blocking cross-review findings remain open.
 
 Lowest-risk parallel execution lane:
 
-1. Phase 21 frontend-only page-level refinement may proceed after this focused
-   email/template batch, but it should remain separate from Phase 19 and Phase
-   20 because those add runtime progress and traceability surfaces.
+1. Phase 21 frontend-only page-level refinement may proceed in its existing
+   worktree. Phase 5.1P can be prepared only as read-only document/code-path
+   mapping after Phase 21 merge or in a deliberately coordinated non-UI
+   worktree; it must not create schema, code, provider, runtime, profile,
+   cookie, proxy, crawler, deployment, or database changes before the preflight
+   is explicitly accepted. Phase 5.1 code/schema implementation should wait for
+   the preflight result.
 
 Do not run Phase 19 and Phase 20 in parallel, and do not run more than one
 frontend worktree that edits the formal console shell at the same time.
-CR-038, CR-045, and CR-050 are already verified follow-ups and should remain
-historical closed items rather than next implementation tasks.
+CR-038, CR-045, CR-050, and CR-074 are already verified follow-ups and should
+remain historical closed items rather than next implementation tasks. CR-070
+must not start before CR-047 provider/effective snapshot verification.
 
 ## Latest Verification
 

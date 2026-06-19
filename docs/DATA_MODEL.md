@@ -260,6 +260,13 @@ artifacts by default. The encrypted payload may contain a source proxy
 host/IP plus port hint for target-side mapping, but it must not contain proxy
 username, password, token, authentication header, or provider secret.
 
+CR-080 provider architecture is future planning only. The current data model
+does not add provider tables, provider-profile binding tables, capability
+tables, or provider-specific account fields for CR-080. Any future provider
+schema must be introduced through a separate accepted data model and migration
+CR, and it must preserve `profile_key` as the upper-layer account identity
+instead of creating a parallel account/profile system.
+
 ### proxy_profiles
 
 Target fields:

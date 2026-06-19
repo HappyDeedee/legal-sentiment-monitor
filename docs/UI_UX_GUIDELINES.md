@@ -43,6 +43,13 @@ Accepted Phase 10-18 direction:
 Do not introduce a new UI framework or component library only for a single page
 without a change request and decision.
 
+CR-078 future `/monitor-next` planning may evaluate Vite, TypeScript, Vue,
+React, and component-library options, but it does not change the current
+`/monitor` UI stack or Phase 21 visual scope. The current formal console
+interaction baseline remains Task Center, Run Detail, drawers, modals,
+enhanced select/date controls, close behavior, scroll ownership, and routing
+until a later replacement gate proves equivalence.
+
 ## Global Layout
 
 Use a consistent admin layout:

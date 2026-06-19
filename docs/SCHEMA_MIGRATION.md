@@ -257,6 +257,24 @@ Compatibility and safety:
   states, overwrite an existing target account, or leave package/profile locks
   stuck.
 
+### Future CR-080 - Crawler Provider Architecture Schema Boundary
+
+Status: Needs Confirmation for CR-080 planning. No schema migration is accepted
+for CR-080 in the current documentation-governance batch.
+
+Rules:
+
+- do not add provider tables, provider-profile binding tables, capability
+  tables, provider-runtime snapshot tables, or provider-specific account fields
+  as part of CR-080 planning;
+- do not fold CR-080 schema work into Phase 5.1P, because Phase 5.1P is the
+  read-only current MediaCrawler/CDP compatibility preflight for CR-047;
+- if a future provider implementation needs schema, record a separate data
+  model/migration CR before coding;
+- future schema must preserve `profile_key`, monitor-owned account/profile/
+  proxy locks, audit redaction, and the existing task/report/Run Detail model
+  instead of creating parallel provider-specific product systems.
+
 ### Step 4 - Add Runtime Settings
 
 Create `system_settings` table. Recommended flexible shape:

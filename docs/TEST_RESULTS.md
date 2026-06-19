@@ -11,6 +11,141 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
 `docs/TRACEABILITY.md` for final current-state decisions.
 
+## 2026-06-19 - CR-081 Atomic Goal Execution Governance Documentation Gate
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Added `docs/GOAL_EXECUTION_GUIDELINES.md` as the source for goal packet
+  structure, atomicity rules, current execution lanes, test iteration loop,
+  acceptance standards, and stop conditions.
+- Confirmed CR-075 owns MECE open-todo lane separation while CR-081 owns how
+  those lanes become executable atomic goals.
+- Synchronized `CHANGE_REQUESTS.md`, `TASKS.md`, `CURRENT_STATE.md`,
+  `AGENT_WORKFLOW.md`, `DOCUMENTATION_CHECKS.md`, `TEST_PLAN.md`,
+  `TRACEABILITY.md`, and `DECISIONS.md`.
+- Confirmed the current execution order remains Phase 21 merge, Phase 5.1P
+  read-only preflight, Phase 5.1A-D implementation, Phase 5.1 acceptance, then
+  CR-070 / Phase 5.2 after CR-047 provider/effective snapshot verification.
+- Added a Phase 5.1 acceptance-gate task block and clarified that Phase 5.1E
+  optional CloakBrowser-style provider evaluation is not part of the current
+  Phase 5.1A-D implementation path or Phase 5.1 acceptance gate.
+- No code, UI, database schema, runtime data, account profile, cookie, proxy,
+  crawler, route exposure, deployment configuration, production state, or
+  Phase 21 worktree was changed.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- `git diff --check`
+- Result: PASS whitespace check. Git emitted Windows LF-to-CRLF working-copy
+  warnings only.
+- Duplicate CR heading/index self-check
+- Result: no duplicate CR headings and no missing Quick Index entries.
+- Plan-cross-validation read-only subagent review
+- Result: READY AFTER SMALL REFINEMENTS, with no blocking findings. The review
+  confirmed CR-075 lane separation and CR-081 execution governance are not
+  confused; Phase 21 remains `/monitor` frontend visual-only; Phase 5.1P
+  remains read-only; Phase 5.1A-D and acceptance are serially gated; CR-070
+  waits for CR-047 provider/effective snapshot proof; CR-078/079/080 stay
+  future independent; and `Needs Confirmation` items are not treated as ready
+  implementation work. The two suggested refinements were applied in this
+  entry, in the Phase 5.1 acceptance-gate task block, and in the Phase 5.1E
+  task boundary wording.
+
+## 2026-06-19 - CR-078 To CR-080 Future Backlog MECE Documentation Gate
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Added CR-078, CR-079, and CR-080 as future independent backlog lanes.
+- Created `docs/MONITOR_NEXT_FRONTEND_PLAN.md` for future `/monitor-next`
+  frontend migration planning.
+- Created `docs/CRAWLER_PROVIDER_ARCHITECTURE.md` for future crawler provider
+  architecture planning.
+- Synchronized `TASKS.md`, `CURRENT_STATE.md`, `TEST_PLAN.md`, and
+  `TRACEABILITY.md` so each new CR has a task block, test gate, and
+  traceability row.
+- Synchronized specialist docs for frontend architecture, server deployment,
+  API authorization, account environment, data model, schema migration, roles
+  and permissions, product requirements, and UI/UX guidelines.
+- Recorded the CR-079 decision split in `DECISIONS.md`: MediaCrawler internal
+  engine boundary is accepted, while exact production route/mount/
+  reverse-proxy/404-vs-403-vs-unmounted behavior remains pending route audit.
+- No code, UI, database schema, runtime data, account profile, cookie, proxy,
+  crawler, deployment configuration, or Phase 21 worktree was changed.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- `git diff --check`
+- Result: PASS whitespace check. Git emitted Windows LF-to-CRLF working-copy
+  warnings only.
+- Local full open-todo cross-check
+- Result: no blocking findings. CR-078 remains future `/monitor-next`
+  planning and does not touch current `/monitor` or Phase 21; CR-079 remains
+  public exposure and product-boundary planning without choosing 404/403/
+  unmount behavior; CR-080 remains future provider architecture and is not a
+  Phase 5.1P prerequisite; CR-070 remains after CR-047 provider/effective
+  snapshot verification; no duplicate CR headings were found; both new source
+  documents exist.
+- Plan-cross-validation read-only subagent review
+- Result: READY AFTER SMALL REFINEMENTS, with no blocking findings. The review
+  confirmed CR-078/079/080 are present in tasks, CRs, traceability, and test
+  plan; CR-078 does not touch Phase 21; CR-079 is not a frontend visual task
+  and does not prematurely choose route behavior; CR-080 is separate from
+  Phase 5.1P and has no schema/code task; CR-078 and CR-080 remain Needs
+  Confirmation; CR-070 remains correctly delayed.
+
+Follow-up:
+
+- After the active Phase 21 worktree is merged, run a small documentation
+  cleanup pass for CR numbering, overlapping Phase 21 wording, and any
+  Phase21-completed visual or wording items that should be referenced rather
+  than repeated in CR-078/079/080.
+
+## 2026-06-19 - CR-075 Open Todo MECE Rebaseline Documentation Gate
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Reorganized the current open roadmap in documentation only.
+- Added CR-075 as the owner for the MECE todo rebaseline and Phase 5.1
+  preflight gate.
+- Kept Phase 21 as the active frontend visual-only lane on the current Task
+  Center / Run Detail baseline.
+- Added Phase 5.1P as the required documentation/read-only compatibility gate
+  before Phase 5.1 schema/code implementation.
+- Made container/server-like execution and BrowserEnvironmentProvider
+  requested/effective snapshot behavior part of the Phase 5.1
+  development/acceptance baseline, not a separate parallel big task.
+- Marked CR-070 / Phase 5.2 as dependent on CR-047 provider binding and
+  effective runtime snapshot verification.
+- Kept CR-037, the unrendered Users And Permissions page, and Phase 7.1D
+  historical repair outside the Phase 21 and Phase 5.1 implementation lanes.
+- No code, UI, database schema, runtime data, account profile, cookie, proxy,
+  crawler, or deployment configuration was changed.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- Plan-cross-validation read-only subagent review
+- Result: READY AFTER SMALL REFINEMENTS, with no blocking findings. The review
+  confirmed the open todos are MECE enough for execution, Phase 5.1 hidden
+  coupling is exposed through the preflight/provider/snapshot gate, CR-070 is
+  delayed until CR-047 provider/effective snapshot verification, and Phase 21
+  preserves the current Task Center / Run Detail visual-only boundary.
+- Follow-up refinements from review were applied: Phase 5.1P is explicitly
+  read-only mapping only, and local Chrome/Edge auto-detection, local-window
+  login, CDP connect-existing, process defaults, and default-network fallback
+  are diagnostic fallbacks only for Phase 5.1 acceptance.
+
 ## 2026-06-19 - CR-074 Console Refresh Action Deduplication And Icon Loading
 
 Environment: local worktree `E:\myproject\MediaCrawler`, local `/monitor`

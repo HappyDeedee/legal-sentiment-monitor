@@ -49,6 +49,17 @@ The command should be safe to run locally and in CI. It should not modify files.
     classification and enough background, purpose, boundary, task, and
     acceptance context for future agents to distinguish new capabilities from
     existing feature optimizations or regression fixes.
+16. For non-trivial open goals after CR-081, the governing documents define a
+    goal packet with owner CR/phase, baseline, scope, out-of-scope, hard
+    boundaries, dependencies, touch surface, execution steps, test loop,
+    acceptance, rollback or recovery, documentation updates, and stop
+    conditions.
+17. Goal-ready roadmap docs preserve the current execution order unless a later
+    accepted decision changes it, and they do not describe `Needs Confirmation`
+    CRs as ready for implementation.
+18. Goal-ready docs distinguish lane separation from execution governance:
+    CR-075 owns open-todo MECE lane separation, while CR-081 owns atomic goal
+    execution, iteration, and acceptance rules.
 
 ## Suggested Output
 

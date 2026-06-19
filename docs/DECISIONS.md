@@ -512,3 +512,16 @@ short `Superseded by` note rather than deleting history.
   top-bar refresh, drawer/modal/menu categories, close/backdrop/Escape
   behavior, and overlay scroll/routing logic must not be changed for visual
   neatness without a separate accepted CR.
+- Confirmed for CR-079: MediaCrawler is an internal collection engine for the
+  Legal Sentiment Monitor product, not the public product cockpit. The exact
+  production route, mount, reverse-proxy, and 404-vs-403-vs-unmounted strategy
+  remains pending until a read-only route audit confirms current dependencies
+  and the user accepts the implementation strategy.
+- Confirmed for CR-081: future non-trivial work should start from an atomic
+  goal packet before implementation. The packet must name the owner CR/phase,
+  baseline, scope, out-of-scope, hard boundaries, start gate, touch surface,
+  test loop, acceptance criteria, rollback or recovery, documentation updates,
+  and stop conditions. The accepted execution rhythm remains Phase 21 merge,
+  Phase 5.1P read-only preflight, Phase 5.1A-D implementation, Phase 5.1
+  acceptance, then CR-070 / Phase 5.2 after CR-047 provider/effective snapshot
+  verification.

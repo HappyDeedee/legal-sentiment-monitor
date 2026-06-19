@@ -150,6 +150,33 @@ Required behavior:
 - restrict CORS to trusted origins;
 - avoid exposing internal diagnostic routes publicly.
 
+## Public Exposure Boundary
+
+CR-079 accepts the product boundary that MediaCrawler is an internal collection
+engine, not the public product cockpit. The exact route, mount, reverse-proxy,
+and 404-vs-403 strategy still needs confirmation after a read-only route audit.
+
+Default production exposure should be designed around:
+
+- `/monitor`;
+- `/api/auth/...`;
+- `/api/monitor/...`;
+- monitor-specific static assets;
+- necessary authenticated report/download/avatar cache resources.
+
+Old MediaCrawler WebUI surfaces, raw crawler/data APIs, websocket diagnostics,
+direct crawler-control paths, raw file browsing/preview/download paths, generic
+old static/logo paths, local command lines, profile paths, cookies, and proxy
+credentials must not be publicly exposed as product surfaces. If the current
+formal monitor workflow still depends on an old route, that dependency must be
+recorded with a replacement path before the route is denied, unmounted, or
+hidden behind administrator-only diagnostics.
+
+CR-080 provider architecture is a future planning lane. Production crawler
+providers must still satisfy the server-like/container admission rule here:
+they cannot require the operator's local desktop browser as the production
+runtime.
+
 ## Backup And Restore
 
 Minimum backup set:

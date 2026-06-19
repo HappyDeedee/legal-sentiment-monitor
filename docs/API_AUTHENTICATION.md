@@ -155,6 +155,19 @@ frontend actions. Responses and audit logs must not include raw cookies, raw
 profile keys or paths, proxy credentials, package passphrases, CDP endpoints,
 noVNC tokens, command lines, or deployment encryption keys.
 
+CR-079 public exposure hardening must treat raw MediaCrawler, crawler/data,
+websocket, direct control, and raw-file surfaces as non-product APIs unless a
+later route audit classifies a specific endpoint as a formal monitor dependency
+or trusted administrator diagnostic. Normal users must not be able to access
+raw crawler controls, raw platform outputs, local files, command-line
+diagnostics, profile material, cookies, proxy credentials, CDP endpoints, or
+provider debug fields. The exact 404, 403, or unmounted behavior is a pending
+implementation decision and must not be guessed before the route audit.
+
+CR-080 provider architecture must preserve this authorization boundary. Future
+providers cannot create parallel public auth, task, account, profile, report,
+permission, or frontend API systems outside the monitor authorization layer.
+
 ## Implementation Order
 
 1. Complete Phase 0.5 schema foundation.

@@ -63,6 +63,20 @@ Confirmed direction:
 - optional lightweight libraries may be considered only for focused needs:
   charts, date handling, or floating menu positioning.
 
+Future planning boundary:
+
+- CR-078 records a future `/monitor-next` frontend migration evaluation in
+  `MONITOR_NEXT_FRONTEND_PLAN.md`. It does not change the accepted current
+  `/monitor` Vanilla/no-build stack, Phase 21 visual work, or existing monitor
+  API contracts.
+- Future `/monitor-next` candidates may evaluate Vite, TypeScript, Vue, React,
+  and ToB component libraries only as a separate confirmed architecture lane.
+  They must coexist with `/monitor` until page, permission, interaction,
+  responsive, test, and rollback equivalence are proven.
+- Any future frontend must use the formal monitor API boundary by default:
+  `/api/auth/...` and `/api/monitor/...`. It must not call raw MediaCrawler,
+  crawler/data, websocket, or direct control surfaces as product APIs.
+
 Optional library rules:
 
 - a chart library may be used for the operations home only if native HTML/CSS

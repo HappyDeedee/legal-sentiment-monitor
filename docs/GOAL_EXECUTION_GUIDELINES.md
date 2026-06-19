@@ -1,0 +1,153 @@
+# Goal Execution Guidelines
+
+This document defines how open todos become executable goals after CR-081. It
+does not add product scope, reopen completed phases, or replace
+`CURRENT_STATE.md` as the source for the next allowed implementation order.
+
+## Purpose
+
+Every future implementation or documentation-governance goal must be small
+enough to finish, test, review, and document without guessing boundaries. A
+goal is ready only when it has one owner, one primary risk area, clear start
+and stop gates, and tests that prove both intended behavior and forbidden
+side effects.
+
+## Goal Packet Template
+
+Before starting a non-trivial goal, write or confirm a compact packet with:
+
+- Goal name and owner CR or phase.
+- Current baseline from source documents and, when relevant, current code.
+- In scope.
+- Out of scope.
+- Hard boundaries and must-not-change behavior.
+- Start gate and dependencies.
+- Expected file, module, data, or document touch surface.
+- Execution steps.
+- Test iteration loop.
+- Acceptance criteria.
+- Rollback or recovery path.
+- Documentation updates.
+- Stop conditions.
+
+If any required field cannot be answered from the current documents, stop and
+record the ambiguity instead of starting a later or broader task.
+
+## Atomicity Rules
+
+- One goal owns one boundary and one primary risk area.
+- A planning or preflight goal must not include implementation changes.
+- A UI visual goal must not change backend APIs, schema, permissions, runtime
+  behavior, crawler behavior, scheduler behavior, account identity, or
+  deployment behavior unless a separate accepted CR says so.
+- A backend, schema, or provider goal must not use visual cleanup as a reason
+  to change Task Center, Run Detail, drawer, modal, select/date, scroll, close,
+  route, or permission behavior.
+- A `Needs Confirmation` CR can receive read-only analysis or planning, but it
+  cannot become implementation-ready until the required decision is accepted.
+- A completed historical phase stays historical. New defects or structural
+  issues become follow-up CRs or explicitly named follow-up phases.
+- External side effects such as real email, real crawling, real platform login,
+  real proxy use, profile export/import, file deletion, or production route
+  exposure require explicit gates and tests or tripwires.
+
+## Current Execution Lanes
+
+Use this serial rhythm unless `CURRENT_STATE.md` is updated by a later accepted
+decision:
+
+1. Finish and merge the active Phase 21 worktree. Scope is current `/monitor`
+   frontend visual refinement only. It must preserve the current Task Center,
+   Run Detail, drawer, modal, enhanced select/date, close, scroll, refresh, and
+   routing logic.
+2. Run Phase 5.1P as a documentation/read-only compatibility preflight. It maps
+   QR login, Cookie validation, login-state checks, manual runs, scheduler
+   runs, runner behavior, and MediaCrawler CDP launch/reconnect to one
+   BrowserEnvironmentProvider output and one requested/effective snapshot
+   contract.
+3. Implement Phase 5.1A only after Phase 5.1P passes. Scope is additive account
+   identity data model and confirmed locked-account proxy policy.
+4. Implement Phase 5.1B only after Phase 5.1A passes. Scope is identity
+   generation and validation.
+5. Implement Phase 5.1C only after Phase 5.1B passes. Scope is locking,
+   reset, re-login, audit, and state transitions.
+6. Implement Phase 5.1D only after Phase 5.1C passes. Scope is login and crawl
+   runtime binding to the same provider output.
+7. Close Phase 5.1 only after the acceptance gate proves requested/effective
+   runtime snapshots, provider metadata, proxy effect proof or fail-closed
+   behavior, manual/scheduler reuse, MediaCrawler CDP binding, and
+   container/server-like validation.
+8. Start CR-070 / Phase 5.2 only after CR-047 provider binding and effective
+   runtime snapshots are implemented and verified. Execute Phase 5.2A-E in
+   order: package contract/security, export flow, import flow,
+   post-import/recovery, then test safety and verification.
+9. Keep CR-078, CR-079, and CR-080 as future independent backlog lanes. They do
+   not block Phase 21, Phase 5.1P, Phase 5.1, or CR-070, and they cannot be
+   treated as hidden prerequisites without a later accepted decision.
+10. Keep CR-037, Users And Permissions page work, and Phase 7.1D historical
+    remediation as separate deferred or operator-gated items.
+
+## Test Iteration Loop
+
+Each implementation goal uses this loop:
+
+1. Pre-check: read the required source documents and confirm the first
+   unblocked item.
+2. Implement only the goal packet.
+3. Run targeted checks for the changed area.
+4. Fix failures and rerun the targeted checks until clean.
+5. Run broader checks proportional to the blast radius.
+6. Update `TASKS.md`, `CURRENT_STATE.md`, `TEST_RESULTS.md`, and
+   `TRACEABILITY.md` when requirements, tasks, or tests changed.
+7. Run documentation consistency checks.
+8. For roadmap, acceptance, provider, deployment, permission, account, or
+   external-side-effect goals, run a read-only cross-review before calling the
+   goal ready.
+
+Do not advance to the next goal while any targeted check, required broader
+check, documentation check, acceptance gate, or blocking review finding is
+still open.
+
+## Acceptance Standards
+
+A documentation-only governance goal is complete only when:
+
+- the owning CR, task block, current-state note, test-plan entry, traceability
+  row, and test-result entry agree;
+- `uv run python scripts/check_docs.py` passes;
+- `git diff --check` passes or reports only known Windows line-ending warnings;
+- a final MECE and boundary review finds no blocking issue.
+
+A code or UI implementation goal is complete only when:
+
+- code, tests, and documents agree;
+- the accepted behavior is verified through targeted tests;
+- broader regression checks match the blast radius;
+- customer-facing surfaces avoid secrets, raw paths, debug wording, and
+  implementation-only language;
+- `docs/TEST_RESULTS.md` records what was proved and what was not proved.
+
+Phase 21 goals must include browser verification for administrator and
+normal-user paths at `1440x900`, `1024x768`, and `390x844`, and must fail on
+one-character vertical text, overlap, hidden primary actions, broken
+drawer/modal/menu behavior, or horizontal page overflow.
+
+Phase 5.1 and CR-070 goals must use container/server-like validation as the
+acceptance baseline. Local Chrome, local-window login, CDP connect-existing,
+process defaults, and default-network fallback are development diagnostics
+only unless a later accepted decision changes that rule.
+
+## Stop Conditions
+
+Stop the current goal and record the blocker when:
+
+- the next allowed item is unclear;
+- two open goals would edit the same critical files or product surface without
+  coordination;
+- a `Needs Confirmation` item is being treated as implementation-ready;
+- a required provider, route, permission, proxy, deployment, or data-model
+  decision is missing;
+- tests cannot prove a required negative guarantee or forbidden side effect;
+- implementation would touch code, UI, schema, runtime data, account profiles,
+  cookies, proxies, crawler behavior, deployment configuration, or production
+  state outside the accepted boundary.

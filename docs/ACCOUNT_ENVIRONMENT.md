@@ -1108,6 +1108,22 @@ CloakBrowser.
   separate decision with its own security, deployment, verification, and
   maintenance review.
 
+CR-080 records a future crawler-provider architecture planning lane in
+`CRAWLER_PROVIDER_ARCHITECTURE.md`. It is not the same as Phase 5.1P:
+Phase 5.1P maps the current MediaCrawler/CDP/BrowserEnvironmentProvider paths
+for CR-047 account identity fidelity, while CR-080 is future extensibility
+planning. CR-080 must not add provider bindings, provider tables, profile
+material, account fields, runtime behavior, or crawler changes without a later
+accepted implementation CR and, where needed, a separate data model/migration
+CR.
+
+Provider-specific profile material such as local profile directories, remote
+profile ids, cookie stores, CDP context ids, or provider-owned references must
+remain behind controlled bindings. The upper-layer account identity remains
+`profile_key`, and future providers must not bypass the monitor system's
+account/profile/proxy locks, reset/re-login rules, redaction rules, or
+server-like acceptance boundary.
+
 Estimated future cost if high-fidelity browser-persona work is later accepted:
 
 - read-only provider evaluation and license/deployment review: about 1-2 days;

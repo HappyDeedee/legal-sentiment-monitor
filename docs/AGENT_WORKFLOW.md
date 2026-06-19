@@ -32,6 +32,8 @@ Specialist document routing:
 - runtime setting work: `docs/SYSTEM_SETTINGS.md`
 - data-model work: `docs/DATA_MODEL.md` and `docs/SCHEMA_MIGRATION.md`
 - documentation consistency tooling: `docs/DOCUMENTATION_CHECKS.md`
+- goal execution, atomic task split, and acceptance gates:
+  `docs/GOAL_EXECUTION_GUIDELINES.md`
 
 If documents conflict, follow this priority:
 
@@ -66,6 +68,52 @@ The review must answer:
 Only after the global review is complete should the agent generate or approve a
 phase-specific execution goal such as a Phase 11A goal. A phase-specific goal
 is an execution gate, not a substitute for the global roadmap review.
+
+## Goal Readiness Gate
+
+Before starting or approving a non-trivial implementation or documentation
+governance goal, read `docs/GOAL_EXECUTION_GUIDELINES.md` and confirm the goal
+packet is complete.
+
+The packet must state:
+
+- owner CR or phase;
+- current baseline;
+- in scope and out of scope;
+- hard boundaries and must-not-change behavior;
+- dependencies and start gate;
+- expected file, module, data, or document touch surface;
+- execution steps;
+- test iteration loop;
+- acceptance criteria;
+- rollback or recovery path;
+- documentation updates;
+- stop conditions.
+
+Do not start a goal if it mixes separate lanes such as Phase 21 visual work,
+Phase 5.1P read-only preflight, Phase 5.1 implementation, CR-070 export/import,
+CR-078 `/monitor-next`, CR-079 public exposure, or CR-080 provider architecture
+without a later accepted decision that deliberately merges those boundaries.
+
+Current goal rhythm:
+
+1. Phase 21 worktree merge.
+2. Phase 5.1P documentation/read-only compatibility preflight.
+3. Phase 5.1A-D implementation in order.
+4. Phase 5.1 acceptance gate.
+5. CR-070 / Phase 5.2A-E only after CR-047 provider/effective snapshot
+   verification.
+6. CR-078, CR-079, and CR-080 remain future independent backlog lanes.
+
+Use the iteration rule from `docs/GOAL_EXECUTION_GUIDELINES.md`:
+pre-check, implement only the packet, run targeted checks, fix and rerun, run
+broader checks proportional to blast radius, update documents, run docs
+consistency, and use read-only cross-review for roadmap, acceptance, provider,
+deployment, permission, account, or external-side-effect goals.
+
+If the next item is unclear, a `Needs Confirmation` item is being treated as
+ready, or the tests cannot prove a required negative guarantee, stop and record
+the blocker instead of widening the goal.
 
 ## New Requirement Intake
 

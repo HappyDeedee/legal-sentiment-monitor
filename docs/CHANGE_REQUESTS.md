@@ -91,6 +91,11 @@ Status values:
 - CR-072: Task Edit Custom Date Picker Consistency
 - CR-073: Scrollable Drawer Corner Radius Regression Fix
 - CR-074: Console Refresh Action Deduplication And Icon Loading
+- CR-075: Open Todo MECE Rebaseline And Phase 5.1 Preflight Gate
+- CR-078: Frontend Stack Migration Evaluation And Monitor Next Plan
+- CR-079: MediaCrawler Internalization And Public Exposure Boundary
+- CR-080: Crawler Engine Provider Architecture
+- CR-081: Atomic Goal Execution Governance And Readiness Gate
 
 ## Entry Classification Rule
 
@@ -5393,6 +5398,542 @@ Acceptance:
   credentials, proxy endpoint hints outside the encrypted payload, profile
   paths, package secrets, CDP endpoints, noVNC tokens, raw whole-profile cache,
   or traversal paths.
+
+## CR-075 - Open Todo MECE Rebaseline And Phase 5.1 Preflight Gate
+
+Date: 2026-06-19
+
+Source: user request to reorganize the current open todo set before starting
+Phase 5.1 implementation, with Phase 21 already running in a separate
+worktree.
+
+Module: documentation governance, roadmap sequencing, account-environment
+planning
+
+Type: Documentation Governance
+
+Status: Accepted
+
+Background:
+
+The current open work has several nearby but different concerns: Phase 21
+frontend visual refinement, CR-047 / Phase 5.1 account identity fidelity,
+container/server-like validation, BrowserEnvironmentProvider compatibility,
+MediaCrawler CDP integration, and CR-070 account-environment export/import.
+Those items must not be merged into one broad task because they have different
+owners, risk profiles, tests, and rollback boundaries.
+
+Purpose:
+
+Rebaseline the active todo list into a MECE execution sequence before starting
+Phase 5.1 code work. The immediate goal is to make Phase 5.1 begin with a
+read-only runtime compatibility preflight, then proceed to account identity
+implementation only after the current login/crawl/MediaCrawler/CDP paths can
+share one provider boundary and one requested/effective runtime snapshot
+contract.
+
+Requirements:
+
+- Keep Phase 21 as the current frontend visual-only lane. It may refine
+  colors, contrast, spacing, density, loading/empty/error/focus states, and
+  responsive wrapping, but it must not change the current Task Center, Run
+  Detail, drawer, modal, select/date, close, scroll, or routing logic without a
+  separate accepted CR.
+- Add a Phase 5.1 Preflight lane before Phase 5.1 implementation. The preflight
+  is documentation/read-only compatibility work that maps current QR login,
+  Cookie validation, login-state checks, manual run, scheduler run, runner, and
+  MediaCrawler CDP launch/reconnect entry points.
+- Treat BrowserEnvironmentProvider as the Phase 5.1 provider boundary, not as a
+  separate parallel product line. QR login, Cookie validation, login-state
+  checks, manual runs, scheduler runs, and MediaCrawler CDP launch/reconnect
+  must use the same provider output before Phase 5.1 can be accepted.
+- Treat container/server-like validation as the Phase 5.1 development and
+  acceptance baseline. Local Chrome auto-detection, local-window login, and
+  CDP connect-existing are development fallbacks only and cannot prove locked
+  or active account identity.
+- Keep Phase 5.1 implementation scoped to account identity fields, generator,
+  validator, state machine, locking, reset/re-login, and runtime binding after
+  preflight passes.
+- Keep Phase 5.1 acceptance scoped to requested/effective runtime snapshot,
+  provider metadata, proxy effect proof or fail-closed behavior, and
+  server-like/container verification.
+- Defer CR-070 / Phase 5.2 until CR-047 provider binding and effective runtime
+  snapshot are implemented and verified.
+- Keep CR-037 role-based email governance, the unrendered Users And
+  Permissions page, and Phase 7.1D historical repair as separate deferred or
+  operator-gated items.
+
+Scope boundary:
+
+- Documentation-only roadmap and task sequencing update.
+- Update `TASKS.md`, `CURRENT_STATE.md`, `TEST_PLAN.md`, and
+  `TRACEABILITY.md` to reflect the new ordering and gates.
+- Do not change code, UI, database schema, runtime data, account profiles,
+  cookies, proxy configuration, crawler behavior, deployment configuration, or
+  production state.
+
+Non-goals:
+
+- Do not implement Phase 21, Phase 5.1, BrowserEnvironmentProvider, container
+  packaging, MediaCrawler integration changes, or CR-070 export/import code in
+  this batch.
+- Do not redefine Phase 21 as backend, deployment, or account-environment work.
+- Do not start CR-070 before CR-047 provider/effective snapshot verification.
+- Do not turn containerization into an independent parallel big task; it is the
+  Phase 5.1 development and acceptance baseline.
+- Do not reopen completed historical phases. New structure issues are owned by
+  this documentation-governance CR.
+
+Related tasks:
+
+- CR-075 Open Todo MECE Rebaseline in `TASKS.md`
+- CR-047 Account Identity Fidelity in `TASKS.md`
+- CR-070 Account Environment Export And Import Package in `TASKS.md`
+
+Acceptance:
+
+- `TASKS.md` separates the active Phase 21 visual lane, Phase 5.1 Preflight,
+  Phase 5.1 implementation, Phase 5.1 acceptance, Phase 5.2 / CR-070, and
+  deferred independent items.
+- `CURRENT_STATE.md` lists the next allowed implementation order as Phase 21
+  merge, Phase 5.1 Preflight, Phase 5.1 implementation, then CR-070 /
+  Phase 5.2 only after Phase 5.1 provider/effective snapshot verification.
+- `TEST_PLAN.md` states that Phase 5.1 cannot be accepted by database fields
+  alone and must validate QR login, Cookie validation, login-state checks,
+  manual run, scheduler run, and MediaCrawler CDP launch/reconnect against one
+  provider output in a container/server-like baseline.
+- `TRACEABILITY.md` links CR-047 to Phase 5.1 Preflight and links CR-070 to
+  CR-047 provider/effective snapshot completion.
+- Documentation consistency and plan-cross-validation review pass without
+  blocking findings.
+
+## CR-078 - Frontend Stack Migration Evaluation And Monitor Next Plan
+
+Date: 2026-06-19
+
+Source: user requirement to record a future frontend technology migration and
+gradual rebuild plan without changing the active Phase 21 worktree.
+
+Module: frontend architecture, monitor console migration planning
+
+Type: Existing Feature Optimization / Architecture Planning
+
+Status: Needs Confirmation
+
+Background:
+
+The current formal `/monitor` console is still implemented through the
+existing no-build Vanilla JavaScript path, mainly `api/monitor_web/index.html`
+plus local monitor CSS/JS assets. That path remains the accepted baseline for
+Phase 21 visual refinement, but it is not the preferred long-term shape for a
+more complex product if future work needs stronger typing, component
+boundaries, route guards, API-client structure, and test isolation.
+
+Purpose:
+
+Record a future architecture planning lane for evaluating and gradually
+rebuilding the monitor console under an independent entry such as
+`/monitor-next`, while keeping the current `/monitor` product stable until a
+separate replacement gate is satisfied.
+
+Requirements:
+
+- Keep the current `/monitor` and Phase 21 workstreams on the existing
+  Vanilla/no-build baseline until a later accepted CR changes that.
+- Evaluate Vite plus TypeScript before implementation starts.
+- Treat Vue 3 and React, plus suitable Chinese ToB component libraries or
+  headless component options, as candidates only until a technology decision
+  is confirmed.
+- Plan `/monitor-next` or an equivalent independent frontend entry that can
+  coexist with the existing `/monitor`.
+- Default the new frontend to the existing `/api/auth/...` and
+  `/api/monitor/...` backend contracts.
+- Prohibit direct frontend calls to MediaCrawler raw surfaces such as
+  `/api/crawler/...`, `/api/data/...`, old websocket endpoints, or any crawler
+  control plane outside the monitor API boundary.
+- Require a frontend architecture document before page migration begins. It
+  must cover entry/deployment boundary, technology choice, directory layering,
+  route and permission matrix, API client, state boundaries, component
+  layering, design tokens, responsive strategy, migration compatibility,
+  replacement gate, rollback, and tests.
+- Preserve the current Task Center, Run Detail, drawer, modal, enhanced
+  select/date, report download, email delivery, routing, owner-scope, and
+  permission behavior until explicit page-equivalence migration work verifies
+  replacement.
+
+Scope boundary:
+
+- Documentation and future architecture planning only.
+- No frontend project, Node build pipeline, package dependency, route, API,
+  UI, schema, permission, crawler, or deployment change is part of this CR.
+- This CR does not block Phase 21, Phase 5.1P, CR-047, CR-070, CR-079, or
+  CR-080.
+
+Non-goals:
+
+- Do not implement `/monitor-next` in this CR.
+- Do not replace `/monitor`.
+- Do not select Vue, React, a component library, Tailwind, or any build tool as
+  final without a later accepted decision.
+- Do not restore the older separate top-level Run Center or Report Center
+  information architecture.
+- Do not use frontend migration to change backend APIs implicitly. Missing
+  monitor API support must be recorded as a separate API CR.
+
+Dependencies:
+
+- CR-078 depends on no current implementation task.
+- Any later implementation must coordinate with the active Phase 21 baseline
+  and must not edit the same `/monitor` files in parallel unless explicitly
+  coordinated.
+
+Implementation steps:
+
+- Create and maintain `MONITOR_NEXT_FRONTEND_PLAN.md` as the planning source.
+- Compare candidate stacks and component libraries against Chinese ToB console
+  needs, testing, deployment complexity, accessibility, table/form/drawer/modal
+  maturity, and dependency weight.
+- Define route/permission, API-client, component, state, design-token,
+  responsive, testing, compatibility, replacement, and rollback requirements.
+- Split future page migration into separate page or feature CRs only after the
+  planning document and stack decision are accepted.
+
+Acceptance:
+
+- The future frontend plan is recorded without changing current `/monitor`.
+- The plan states that `/monitor-next` must coexist with `/monitor` until
+  functional, permission, interaction, responsive, and regression equivalence
+  are proven.
+- The plan states that replacing `/monitor` requires a later replacement gate
+  and rollback path.
+- The plan does not mark a frontend stack as decided.
+
+Tests:
+
+- Frontend migration tests in `TEST_PLAN.md`.
+- Traceability row for CR-078 in `TRACEABILITY.md`.
+
+## CR-079 - MediaCrawler Internalization And Public Exposure Boundary
+
+Date: 2026-06-19
+
+Source: user requirement to treat MediaCrawler as an internal engine rather
+than a public product cockpit.
+
+Module: product boundary, deployment exposure, API authorization, route
+governance
+
+Type: Existing Feature Optimization / Security And Product Boundary Hardening
+
+Status: Accepted
+
+Pending decisions:
+
+The product boundary is accepted. The exact production mount strategy, reverse
+proxy deny rules, and whether old routes return 404, 403, or are not mounted
+need confirmation after a read-only route audit.
+
+Background:
+
+The product has grown from a MediaCrawler-based project into a law-firm public
+opinion monitoring system. MediaCrawler remains an important internal source
+of collection, login, account-check, and output-parsing capability, but the
+formal product should not expose raw MediaCrawler WebUI, raw crawler APIs,
+raw data files, old websocket diagnostics, command-line concepts, debug logs,
+local paths, or MediaCrawler branding to public users.
+
+Purpose:
+
+Define a future product-boundary and security-hardening lane that keeps
+MediaCrawler as an internal engine while the public product surface remains
+the Legal Sentiment Monitor web UI and monitor APIs.
+
+Requirements:
+
+- Public product entry points should be limited to `/monitor`,
+  `/api/auth/...`, `/api/monitor/...`, monitor-specific static assets, and
+  necessary authenticated downloads or same-origin cached resources.
+- Audit current FastAPI routers and static mounts before changing any route.
+- Classify routes as formal product, administrator diagnostic, internal
+  dependency, historical/development, or production-disabled.
+- Production exposure must default to not exposing old MediaCrawler WebUI,
+  `/api/crawler/...`, `/api/data/...`, old websocket log/status endpoints,
+  old generic assets/logos/static paths, raw file browsing/download/preview,
+  and direct crawler start/stop/control surfaces.
+- If a formal monitor workflow still depends on an old route, record the
+  dependency and replacement path before disabling it.
+- User-visible product text must avoid MediaCrawler, Command Center,
+  command-line, local path, environment variable, debug, self-test, mock, and
+  prototype wording except in trusted administrator diagnostics where needed.
+- Preserve current task running, platform login, account checks, output
+  parsing, Task Center, Run Detail, permissions, drawer/dropdown/date, and
+  scroll behavior.
+
+Scope boundary:
+
+- Documentation, route-audit planning, and future exposure governance only.
+- No route, mount, reverse proxy, API, UI, schema, crawler, deployment, or
+  runtime configuration change is part of this CR.
+- This CR does not block Phase 21, Phase 5.1P, CR-047, CR-070, CR-078, or
+  CR-080.
+
+Non-goals:
+
+- Do not delete MediaCrawler code.
+- Do not replace the crawler implementation.
+- Do not change task running, login, account checks, output parsing, report
+  generation, email delivery, or permission behavior.
+- Do not hide or remove a route that the formal monitor UI/API still depends
+  on without a replacement plan and a later implementation CR.
+
+Dependencies:
+
+- A future implementation must start with a read-only route and mount audit.
+- Production deny/not-mounted behavior requires deployment strategy
+  confirmation before implementation.
+
+Implementation steps:
+
+- Audit all FastAPI routers and static mounts.
+- Classify every public path and websocket/static surface.
+- Define the formal public allowlist and authentication/administrator
+  requirements.
+- Design development-only or internal-only behavior for old crawler/data/ws
+  surfaces.
+- Define reverse proxy deny/not-mounted rules for production.
+- Search and clean formal user-facing wording only within a later accepted
+  implementation CR.
+- Add route exposure, regression, and product-wording tests.
+
+Acceptance:
+
+- Documentation clearly states that MediaCrawler is the internal collection
+  engine, not the public product cockpit.
+- Future implementation cannot disable old routes until dependency and
+  replacement paths are documented.
+- Production exposure tests specify which old routes must be unavailable and
+  what the fixed expected result is after the implementation strategy is
+  confirmed.
+- Existing monitor workflows remain protected as must-not-break behavior.
+
+Tests:
+
+- Public exposure boundary tests in `TEST_PLAN.md`.
+- Traceability row for CR-079 in `TRACEABILITY.md`.
+
+## CR-080 - Crawler Engine Provider Architecture
+
+Date: 2026-06-19
+
+Source: user requirement to plan a future crawler-engine abstraction without
+letting new engines bypass current task, account, proxy, profile, report, or
+Run Detail systems.
+
+Module: crawler architecture, provider contract, account/profile boundary,
+server-like runtime
+
+Type: Architecture Planning / Future Extensibility
+
+Status: Needs Confirmation
+
+Background:
+
+The current collection capability mainly comes from MediaCrawler and the
+existing Playwright/CDP provider path. CR-047 / Phase 5.1P already owns the
+near-term compatibility check for current QR login, Cookie validation,
+login-state checks, manual runs, scheduler runs, runner behavior, and
+MediaCrawler CDP launch/reconnect. A broader multi-engine provider
+architecture is a separate future concern.
+
+Purpose:
+
+Record a future architecture lane for a Crawler Engine Provider contract so
+MediaCrawler can remain the current default provider while future engines can
+be evaluated without creating parallel task, account, proxy, report, or
+frontend systems.
+
+Requirements:
+
+- Treat MediaCrawler as the current default provider, not as the permanent only
+  possible provider.
+- Define provider declarations for provider id/name, supported platforms,
+  login types, account checks, comments, time filters, proxy support, account
+  binding, container/server-like support, output version, error version, and
+  capability limits.
+- Map existing monitoring tasks into provider input without changing the
+  upper-layer task model.
+- Normalize provider output into the existing content, AI evaluation, report,
+  Task Center, and Run Detail model.
+- Normalize provider errors and lifecycle states such as unavailable, launch
+  failed, login expired, verification required, proxy failed, timeout,
+  cancelled, interrupted, partial success, no result, output parse failed,
+  unsupported capability, rate limited, platform changed, and unknown error.
+- Preserve `profile_key` as the upper-layer account identity while allowing
+  provider-specific profile material under controlled bindings.
+- Require production providers to be server-like/container-compatible,
+  observable, stoppable, persistent where needed, resource-cleaning, and
+  governed by existing account/profile/proxy locks.
+- Forbid new providers from adding parallel task, account, profile, report,
+  permission, or frontend entry systems.
+
+Scope boundary:
+
+- Documentation and architecture planning only.
+- No provider abstraction, schema, code, UI, runtime data, crawler, profile,
+  account, proxy, or deployment change is part of this CR.
+- This CR is not part of Phase 5.1P. Phase 5.1P remains the current
+  MediaCrawler/CDP/BrowserEnvironmentProvider compatibility preflight only.
+- This CR does not block Phase 21, Phase 5.1P, CR-047, CR-070, CR-078, or
+  CR-079.
+
+Non-goals:
+
+- Do not replace MediaCrawler.
+- Do not implement a new provider.
+- Do not introduce provider tables, profile-binding tables, or capability
+  schema without a later accepted data-model/migration CR.
+- Do not expose provider-private profile material, cookies, proxy credentials,
+  raw paths, CDP endpoints, command lines, or debug fields to normal users.
+
+Dependencies:
+
+- A future implementation must first complete or explicitly coordinate with
+  CR-047 provider/effective snapshot behavior.
+- Any schema change requires a separate data model and migration CR.
+
+Implementation steps:
+
+- Maintain `CRAWLER_PROVIDER_ARCHITECTURE.md` as the planning source.
+- Audit the existing MediaCrawler login, account check, task run, output
+  parsing, error, profile, proxy, and Run Detail chains.
+- Draft provider input, output, capability, profile-binding, error, lifecycle,
+  security, and server-like acceptance contracts.
+- Plan how a future `MediaCrawlerProvider` would map current behavior into the
+  contract without changing current runtime behavior.
+- Add provider-architecture tests before any implementation starts.
+
+Acceptance:
+
+- Documentation clearly separates CR-080 from Phase 5.1P.
+- Documentation states that new providers cannot bypass the existing monitor
+  task/account/proxy/profile/report/Run Detail/permission systems.
+- Documentation states that formal providers must be server-like and cannot
+  rely on an operator's local desktop browser for production.
+- Tests and traceability are connected before implementation.
+
+Tests:
+
+- Crawler provider architecture tests in `TEST_PLAN.md`.
+- Traceability row for CR-080 in `TRACEABILITY.md`.
+
+## CR-081 - Atomic Goal Execution Governance And Readiness Gate
+
+Date: 2026-06-19
+
+Source: user request to audit and optimize the current todo system in goal
+mode so open work is boundary-clear, atomic, MECE, ordered, testable, and
+acceptance-ready.
+
+Module: documentation governance, agent workflow, roadmap execution, test
+iteration, acceptance standards
+
+Type: Documentation Governance
+
+Status: Accepted
+
+Background:
+
+CR-075 separated the current open roadmap into Phase 21, Phase 5.1P,
+Phase 5.1, CR-070 / Phase 5.2, future CR-078 through CR-080, and deferred
+operator-gated items. The next risk is not only whether the lanes are MECE, but
+whether each lane can be opened as a small executable goal without drifting
+into neighboring scope.
+
+Purpose:
+
+Add a goal-readiness and execution-governance layer that turns the open todo
+roadmap into atomic, serial, reviewable goal packets. The rule is:
+one goal owns one boundary, one risk area, one test loop, and one acceptance
+gate before the next goal starts.
+
+Requirements:
+
+- Add `docs/GOAL_EXECUTION_GUIDELINES.md` as the source for goal packet
+  structure, atomicity rules, current execution lanes, test iteration loop,
+  acceptance standards, and stop conditions.
+- Keep CR-075 as the owner of MECE open-todo lane separation. CR-081 owns how
+  those lanes become executable goals.
+- Require every non-trivial future goal to state owner CR/phase, current
+  baseline, in scope, out of scope, hard boundaries, dependencies, expected
+  touch surface, execution steps, test loop, acceptance criteria, rollback or
+  recovery, documentation updates, and stop conditions.
+- Preserve the current execution order: Phase 21 merge, Phase 5.1P read-only
+  preflight, Phase 5.1A-D implementation, Phase 5.1 acceptance, then CR-070 /
+  Phase 5.2 only after CR-047 provider/effective snapshot verification.
+- Split Phase 5.1 into goal-ready serial units: preflight, data model,
+  generator/validator, locking/re-login, runtime binding, and acceptance gate.
+- Split CR-070 / Phase 5.2 into goal-ready serial units: package contract and
+  security model, export flow, import flow, post-import verification/recovery,
+  and test-safety verification.
+- Keep Phase 21 visual-only work from touching backend APIs, schema,
+  permissions, runtime behavior, crawler behavior, account identity, deployment,
+  Task Center structure, Run Detail structure, drawer/modal behavior,
+  select/date behavior, close behavior, scroll ownership, refresh logic, or
+  routing without a separate accepted CR.
+- Keep CR-078, CR-079, and CR-080 as future independent backlog lanes, not
+  hidden prerequisites for Phase 21, Phase 5.1P, Phase 5.1, or CR-070.
+- Define the test iteration loop as pre-check, implementation, targeted tests,
+  fix/rerun, broader checks, documentation sync, documentation consistency
+  check, and read-only cross-review when risk warrants it.
+
+Scope boundary:
+
+- Documentation-only governance update.
+- No code, UI, database schema, runtime data, account profile, cookie, proxy,
+  crawler, route, deployment, production, or worktree state change is part of
+  this CR.
+- This CR may update `CHANGE_REQUESTS.md`, `TASKS.md`, `CURRENT_STATE.md`,
+  `AGENT_WORKFLOW.md`, `DOCUMENTATION_CHECKS.md`, `TEST_PLAN.md`,
+  `TRACEABILITY.md`, `TEST_RESULTS.md`, and add
+  `GOAL_EXECUTION_GUIDELINES.md`.
+
+Non-goals:
+
+- Do not implement Phase 21, Phase 5.1P, Phase 5.1, CR-070, CR-078, CR-079,
+  or CR-080.
+- Do not reopen completed historical phases.
+- Do not turn `Needs Confirmation` items into implementation-ready tasks.
+- Do not create a new branch, worktree, runtime package, provider abstraction,
+  container strategy, frontend stack, route exposure change, or schema change.
+
+Related tasks:
+
+- CR-081 Atomic Goal Execution Governance in `TASKS.md`
+- Goal execution guidance in `AGENT_WORKFLOW.md`
+- Goal readiness tests in `TEST_PLAN.md`
+
+Acceptance:
+
+- `GOAL_EXECUTION_GUIDELINES.md` defines the goal packet template, atomicity
+  rules, current execution lanes, test loop, acceptance standards, and stop
+  conditions.
+- `TASKS.md` records CR-081 as a documentation-governance batch and keeps the
+  current open lanes in the same priority order.
+- `CURRENT_STATE.md` states that future open work must be opened with the
+  CR-081 goal packet and must not skip the documented order.
+- `AGENT_WORKFLOW.md` points agents to the goal execution guidelines before
+  approving or starting a non-trivial goal.
+- `TEST_PLAN.md` contains goal-readiness and execution-governance tests.
+- `TRACEABILITY.md` links CR-081 to its task and test areas.
+- Documentation consistency, whitespace check, and full open-todo
+  cross-review finish with no blocking findings.
+
+Tests:
+
+- Goal readiness and execution governance tests in `TEST_PLAN.md`.
+- `uv run python scripts/check_docs.py`.
+- `git diff --check`.
+- Read-only full open-todo cross-review.
 
 ## CR-055 - Task Center Status Column Visual Refinement
 

@@ -117,6 +117,167 @@ and permission work.
       locks.
 - [x] Ensure login and crawling use the same account proxy when configured.
 
+## CR-075 - Open Todo MECE Rebaseline And Phase 5.1 Preflight Gate
+
+Planning status:
+
+CR-075 is a documentation-governance batch for reorganizing the currently open
+todo set before Phase 5.1 code work starts. It does not reopen completed
+historical phases and does not implement code, UI, schema, runtime data,
+account profiles, cookies, proxies, crawler behavior, or deployment changes.
+
+Open todo layers:
+
+- [x] Keep the active UI lane as Phase 21 only: frontend visual refinement on
+      the current `main` formal console baseline, with Task Center, Run Detail,
+      drawers, modals, enhanced select/date controls, close behavior,
+      `.drawer-scroll-body`, top-bar refresh, scroll logic, and routing frozen
+      unless a separate accepted CR changes them.
+- [x] Add Phase 5.1 Preflight as the next account-environment lane before any
+      Phase 5.1 schema or code work. This lane is documentation/read-only
+      compatibility review of container/server-like runtime, provider
+      boundaries, QR login, Cookie validation, login-state checks, manual runs,
+      scheduler runs, runner behavior, and MediaCrawler CDP launch/reconnect.
+- [x] Keep Phase 5.1 implementation as the account identity fidelity body:
+      additive fields, generator, validator, `identity_state`, locking,
+      reset/re-login, and runtime binding after preflight passes.
+- [x] Keep Phase 5.1 acceptance separate from implementation: requested versus
+      effective runtime snapshot, provider metadata, unsupported-field list,
+      proxy effect proof or fail-closed behavior, manual/scheduler run reuse,
+      and container/server-like validation are required before Phase 5.1 is
+      considered complete.
+- [x] Defer Phase 5.2 / CR-070 until CR-047's provider binding and effective
+      runtime snapshot are implemented and verified.
+- [x] Keep CR-037 role-based email governance, the currently unrendered Users
+      And Permissions page, and Phase 7.1D historical repair as independent
+      deferred or operator-gated items, not part of Phase 21 or Phase 5.1.
+
+## CR-081 - Atomic Goal Execution Governance And Readiness Gate
+
+Planning status:
+
+CR-081 is a documentation-governance batch for turning the CR-075 open todo
+lanes into executable goal packets. It does not reopen completed phases and
+does not implement code, UI, schema, runtime data, account profiles, cookies,
+proxies, crawler behavior, route exposure, deployment configuration, or
+production changes.
+
+Goal readiness tasks:
+
+- [x] Add `docs/GOAL_EXECUTION_GUIDELINES.md` as the goal-readiness source for
+      packet structure, atomicity rules, current execution lanes, test
+      iteration loop, acceptance standards, and stop conditions.
+- [x] Keep CR-075 as the MECE lane-separation owner and CR-081 as the execution
+      governance owner, so task boundaries and goal mechanics do not collapse
+      into one mixed concern.
+- [x] Require every non-trivial future goal to state owner CR/phase, baseline,
+      in scope, out of scope, hard boundaries, start gate, dependencies,
+      expected touch surface, execution steps, test loop, acceptance criteria,
+      rollback or recovery, documentation updates, and stop conditions.
+- [x] Record the current serial execution rhythm: Phase 21 merge, Phase 5.1P
+      read-only preflight, Phase 5.1A-D implementation, Phase 5.1 acceptance,
+      then CR-070 / Phase 5.2 after CR-047 provider/effective snapshot
+      verification.
+- [x] Make Phase 5.1 goal-ready as serial units: preflight, data model,
+      generator/validator, locking/re-login, runtime binding, and acceptance
+      gate.
+- [x] Make CR-070 / Phase 5.2 goal-ready as serial units: package contract and
+      security model, export flow, import flow, post-import
+      verification/recovery, and test-safety verification.
+- [x] Keep CR-078, CR-079, and CR-080 as future independent backlog lanes that
+      cannot become hidden prerequisites for Phase 21, Phase 5.1P, Phase 5.1,
+      or CR-070 without a later accepted decision.
+- [x] Add goal-readiness checks to workflow, documentation-check guidance,
+      test plan, traceability, and test results.
+
+## Future Independent Architecture And Boundary Backlog
+
+Planning status:
+
+These items are future independent lanes introduced after the CR-075 MECE
+rebaseline. They are not part of Phase 21, Phase 5.1P, CR-047, or CR-070.
+They must not change code, UI, schema, runtime data, account profiles, cookies,
+proxies, crawler behavior, or deployment configuration until a later
+implementation CR is explicitly accepted.
+
+Numbering note:
+
+CR-076 and CR-077 are intentionally not used in this mainline batch because
+the active Phase 21 worktree may already use them for focused responsive
+navigation/mobile-header fixes. If that worktree is merged, keep these future
+items as CR-078 through CR-080. If another target branch already uses those
+numbers, use the next available numbers and update all references together.
+
+### CR-078 - Frontend Stack Migration Evaluation And Monitor Next Plan
+
+- [ ] Keep CR-078 as future planning only. It must not create a frontend
+      project, introduce a Node build pipeline, add package dependencies,
+      change `/monitor`, change monitor APIs, change permissions, or modify
+      Phase 21 work.
+- [ ] Maintain `docs/MONITOR_NEXT_FRONTEND_PLAN.md` as the source document for
+      future `/monitor-next` architecture.
+- [ ] Compare Vite + TypeScript options before implementation starts,
+      including Vue 3 and React candidates plus suitable Chinese ToB component
+      libraries or headless component options.
+- [ ] Define `/monitor-next` coexistence with `/monitor`, monitor-specific
+      static asset namespace, API client boundary, route/permission matrix,
+      component/state layering, design tokens, responsive strategy, testing,
+      replacement gate, and rollback plan.
+- [ ] State that `/monitor-next` may call only `/api/auth/...` and
+      `/api/monitor/...` by default, not raw MediaCrawler or old crawler/data
+      endpoints.
+- [ ] Require future page migration CRs only after the architecture plan and
+      technology decision are confirmed.
+- [ ] Preserve current Task Center, Run Detail, drawer, modal, enhanced
+      select/date, report download, email delivery, routing, owner-scope, and
+      permission behavior until replacement equivalence is verified.
+
+### CR-079 - MediaCrawler Internalization And Public Exposure Boundary
+
+- [ ] Keep CR-079 as product-boundary and security-hardening planning until a
+      route/mount audit confirms the implementation strategy. It must not
+      delete MediaCrawler code or disable routes in this documentation batch.
+- [ ] Audit FastAPI routers and static mounts before implementation, including
+      `/monitor`, `/api/auth`, `/api/monitor`, `/api/crawler`, `/api/data`,
+      websocket routes, old WebUI, old assets/logos/static paths, raw file
+      browsing/download/preview, and direct crawler control routes.
+- [ ] Classify each route as formal product, administrator diagnostic,
+      internal dependency, historical/development, or production-disabled.
+- [ ] Define the formal public allowlist and authentication/administrator
+      requirements.
+- [ ] Confirm whether production-disabled paths should return 404, 403, or be
+      unmounted before implementation.
+- [ ] Design reverse proxy and application-mount boundaries so production does
+      not publicly expose old crawler/data/ws/raw-file surfaces.
+- [ ] Preserve current task running, platform login, account checks, output
+      parsing, Task Center, Run Detail, permissions, drawer/dropdown/date, and
+      scroll behavior.
+- [ ] Add user-visible wording cleanup only in a later implementation CR and
+      keep trusted administrator diagnostics separate.
+
+### CR-080 - Crawler Engine Provider Architecture
+
+- [ ] Keep CR-080 as future architecture planning only. It must not implement
+      provider abstraction, schema, runtime, profile, account, proxy, crawler,
+      UI, or deployment changes in this documentation batch.
+- [ ] Maintain `docs/CRAWLER_PROVIDER_ARCHITECTURE.md` as the source document
+      for provider contract planning.
+- [ ] Audit existing MediaCrawler login, account check, task run, output
+      parsing, error handling, profile use, proxy injection, and Run Detail
+      chains before future implementation.
+- [ ] Draft provider declarations, task input, output normalization,
+      capability/preflight, profile binding, error normalization, lifecycle,
+      server-like acceptance, and security/redaction contracts.
+- [ ] Preserve `profile_key` as the upper-layer account identity while allowing
+      provider-specific profile material only through controlled bindings.
+- [ ] State that future providers cannot create parallel task, account,
+      profile, report, permission, or frontend entry systems.
+- [ ] Require a separate data model and migration CR before adding provider
+      tables, profile-binding tables, or capability schema.
+- [ ] Keep CR-080 separate from Phase 5.1P; Phase 5.1P remains only the
+      current MediaCrawler/CDP/BrowserEnvironmentProvider compatibility
+      preflight.
+
 ## Phase 5.1 - Account Identity Fidelity
 
 Planning status:
@@ -145,8 +306,59 @@ V1 uses the existing Playwright/CDP provider path and does not introduce
 CloakBrowser. Canvas, WebGL, font inventory, plugins, extensions, and long
 browsing history are future/provider-dependent, not V1 commitments.
 
+Execution order:
+
+Phase 5.1 must start with Phase 5.1P Preflight. Do not begin Phase 5.1A-D
+schema/code implementation until the preflight has mapped the current runtime
+entry points and confirmed how one BrowserEnvironmentProvider output can be
+shared by QR login, Cookie validation, login-state checks, manual runs,
+scheduler runs, runner behavior, and MediaCrawler CDP launch/reconnect.
+
+### Phase 5.1P - Runtime Compatibility And Provider Preflight
+
+- [ ] Keep Phase 5.1P as read-only mapping only. It must not create or change
+      schema, code, provider implementation, runtime data, profiles, cookies,
+      proxies, crawler behavior, deployment configuration, or database state.
+      If any current path cannot be mapped to one BrowserEnvironmentProvider
+      output and one requested/effective runtime snapshot contract, stop Phase
+      5.1 and record the ambiguity instead of starting Phase 5.1A-D.
+- [ ] Map the current QR login, Cookie validation, login-state check, manual
+      run, scheduler run, runner, and MediaCrawler CDP launch/reconnect
+      entrypoints without changing code.
+- [ ] Document which current paths launch a server-side browser, attach to an
+      existing CDP endpoint, reuse a profile, validate login state, or fall
+      back to MediaCrawler defaults.
+- [ ] Define the BrowserEnvironmentProvider contract that Phase 5.1
+      implementation must use for all login and crawl entrypoints.
+- [ ] Confirm which identity fields the existing Playwright/CDP provider can
+      honor and prove in V1: `profile_key`, proxy policy, user agent,
+      timezone, locale, accept-language, viewport/screen, device scale factor,
+      mobile/touch flags, provider mode, and runtime snapshot probes.
+- [ ] Mark unsupported or not-managed high-fidelity surfaces explicitly:
+      Canvas, WebGL, font inventory, plugins, extensions, long browsing
+      history, noVNC, and provider-specific fingerprint internals.
+- [ ] Define fail-closed behavior when a required identity value cannot be
+      honored, when requested and effective values differ, or when a locked
+      account would fall back to process defaults.
+- [ ] Confirm container/server-like execution as the Phase 5.1 development and
+      acceptance baseline. Local Chrome/Edge auto-detection, local-window
+      login, and CDP connect-existing are development fallbacks only and cannot
+      prove locked or active account identity.
+- [ ] Treat local Chrome/Edge auto-detection, local-window login, CDP
+      connect-existing, process defaults, and default-network fallback as
+      diagnostic fallbacks only. They cannot prove Phase 5.1 locked or active
+      account identity.
+- [ ] Define how proxy effect will be proven or marked fail-closed before a
+      locked account is called active, including the rule that hidden task
+      proxy overrides and default-network fallback are rejected.
+- [ ] Produce a preflight review note or goal output that future Phase 5.1A-D
+      work can follow without guessing provider, MediaCrawler, or deployment
+      compatibility.
+
 ### Phase 5.1A - Account Identity Data Model
 
+- [ ] Start only after Phase 5.1P is complete and confirms the provider,
+      MediaCrawler, and container/server-like compatibility boundary.
 - [x] The fixed-environment proxy override policy is confirmed and recorded:
       after CR-047 locks an account identity, task-level proxy overrides are
       rejected for that locked account environment. Changing the proxy requires
@@ -257,7 +469,34 @@ browsing history are future/provider-dependent, not V1 commitments.
       identity input when present, while preserving current MediaCrawler
       defaults only for accounts that do not yet have a Phase 5.1 identity.
 
+### Phase 5.1 Acceptance Gate - Runtime Snapshot And Server-Like Verification
+
+- [ ] Start only after Phase 5.1P and Phase 5.1A-D are complete and verified.
+- [ ] Verify QR login, Cookie validation, login-state checks, manual runs,
+      scheduler runs, runner behavior, and MediaCrawler CDP launch/reconnect
+      resolve the same BrowserEnvironmentProvider output.
+- [ ] Verify requested versus effective runtime snapshots include provider
+      metadata, supported values, unsupported/not-managed fields, mismatch
+      evidence, and `fallback_used = false` for locked active identities.
+- [ ] Verify proxy effect is proven for the resolved account proxy policy, or
+      the account fails closed. Hidden task-level proxy override,
+      process-default fallback, and default-network fallback must not mark the
+      identity active.
+- [ ] Verify container/server-like execution is the acceptance baseline. Local
+      Chrome/Edge auto-detection, local-window login, and CDP connect-existing
+      remain diagnostic fallbacks only.
+- [ ] Verify Platform Accounts UI/API expose only customer-safe identity and
+      provider summaries, without cookies, proxy credentials, raw profile
+      paths, CDP endpoints, noVNC tokens, or fingerprint-debug output.
+- [ ] Record the Phase 5.1 acceptance evidence in `docs/TEST_RESULTS.md`
+      before CR-070 / Phase 5.2 can start.
+
 ### Phase 5.1E - Optional CloakBrowser-Style Provider Evaluation
+
+This optional provider-evaluation block is not part of the current
+Phase 5.1A-D implementation path or Phase 5.1 acceptance gate. It must not
+start before a separate accepted provider decision or future CR explicitly
+makes it current work.
 
 - [ ] Keep CloakBrowser and CloakBrowser-Manager out of V1 implementation.
 - [ ] If future high-fidelity browser-persona work is accepted, first evaluate
@@ -281,10 +520,12 @@ Planning status:
 
 CR-070 is an accepted new capability for account-environment migration. It does
 not reopen Phase 5 or CR-047. It depends on the `profile_key` account model and
-should reuse CR-047 identity fields when they are implemented. Because the
-capability can move cookies, browser profile traces, and platform account
-metadata between deployments, implementation must remain administrator-only,
-encrypted, audited, and fail-closed.
+must not start until CR-047 provider binding and requested/effective runtime
+snapshot behavior are implemented and verified. It should reuse CR-047
+identity fields only after they exist. Because the capability can move cookies,
+browser profile traces, and platform account metadata between deployments,
+implementation must remain administrator-only, encrypted, audited, and
+fail-closed.
 
 The package moves one selected platform account environment. It is not a
 general database backup/restore feature. Monitoring tasks, crawl runs, reports,

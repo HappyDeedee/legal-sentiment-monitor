@@ -5,6 +5,54 @@
 Production acceptance must run in a server-like environment. Local Chrome on
 the operator's computer is not a valid acceptance path.
 
+## Goal Readiness And Execution Governance Tests
+
+CR-081 governs how open todos become executable goals. These tests apply before
+starting or approving any non-trivial implementation or documentation
+governance goal.
+
+- A goal packet exists or is explicitly confirmed from
+  `docs/GOAL_EXECUTION_GUIDELINES.md`.
+- The packet names one owner CR or phase and one primary risk area.
+- The packet states current baseline, in scope, out of scope, hard boundaries,
+  start gate, dependencies, expected touch surface, execution steps, test loop,
+  acceptance criteria, rollback or recovery, documentation updates, and stop
+  conditions.
+- The packet follows the current execution order unless a later accepted
+  decision changes it: Phase 21 merge, Phase 5.1P preflight, Phase 5.1A-D,
+  Phase 5.1 acceptance, then CR-070 / Phase 5.2 after CR-047 provider/
+  effective snapshot verification.
+- Phase 21 packets remain frontend-visual only and preserve Task Center, Run
+  Detail, drawer, modal, row-menu, select/date, close, scroll, refresh,
+  routing, owner-scope, and permission behavior unless a separate accepted CR
+  changes those surfaces.
+- Phase 5.1P packets are read-only compatibility mapping only. They must not
+  create or change code, schema, provider implementation, runtime data,
+  profiles, cookies, proxies, crawler behavior, deployment configuration, or
+  database state.
+- Phase 5.1 implementation packets run in order and do not start until
+  Phase 5.1P confirms the BrowserEnvironmentProvider and requested/effective
+  snapshot boundary.
+- CR-070 / Phase 5.2 packets do not start before CR-047 provider binding and
+  effective runtime snapshot behavior are implemented and verified.
+- CR-078, CR-079, and CR-080 packets remain future independent backlog work and
+  are not treated as hidden prerequisites for Phase 21, Phase 5.1P, Phase 5.1,
+  or CR-070.
+- `Needs Confirmation` CRs can receive read-only planning or review only; tests
+  fail if they are described as ready for implementation.
+- External side-effect packets identify email, crawler, platform login, proxy,
+  account profile, package export/import, file deletion, production route, AI
+  provider, webhook, or other durable exits, and define opt-in gates or
+  tripwires before implementation.
+- The required iteration loop is documented and followed: pre-check, implement
+  only the packet, targeted checks, fix and rerun, broader checks proportional
+  to blast radius, documentation sync, documentation consistency, and read-only
+  cross-review for roadmap, acceptance, provider, deployment, permission,
+  account, or external-side-effect goals.
+- Documentation-only governance goals pass
+  `uv run python scripts/check_docs.py`, `git diff --check`, and a read-only
+  full open-todo cross-review with no blocking findings before completion.
+
 ## Phase 0 Documentation Review Tests
 
 - Governance documents exist and can be followed from `AGENTS.md`.
@@ -143,6 +191,34 @@ CR-047 / Phase 5.1 must verify that account profile traces are paired with a
 stable, self-consistent account identity instead of relying on changing process
 defaults.
 
+Phase 5.1 cannot be accepted by database fields, UI summaries, requested launch
+options, or isolated generator tests alone. The first acceptance gate is a
+runtime compatibility preflight: QR login, Cookie validation, login-state
+checks, manual runs, scheduler runs, runner behavior, and MediaCrawler CDP
+launch/reconnect must share one BrowserEnvironmentProvider output and one
+requested/effective runtime snapshot contract.
+
+- Phase 5.1P preflight tests or review evidence map every current login and
+  crawl entrypoint before schema/code implementation starts.
+- QR login, Cookie validation, and login-state checks resolve the same
+  `profile_key`, account identity, proxy policy, user agent, timezone, locale,
+  accept-language, viewport/screen, device flags, and provider mode.
+- Manual run and scheduler run paths resolve the same provider output as the
+  login paths and do not rebuild identity values from process defaults.
+- MediaCrawler CDP launch/reconnect receives the provider-resolved account
+  environment when Phase 5.1 identity exists, while pre-Phase-5.1 accounts can
+  keep existing MediaCrawler defaults until re-login or identity generation.
+- Container/server-like execution is the Phase 5.1 development and acceptance
+  baseline. Local Chrome/Edge auto-detection, local-window login, and CDP
+  connect-existing are development fallbacks only and cannot prove locked or
+  active account identity.
+- Provider preflight records which Playwright/CDP fields can be honored and
+  probed in V1, which surfaces are unsupported or not-managed, and which
+  mismatches fail closed.
+- Proxy acceptance requires proof that the provider used the resolved account
+  proxy policy, or a fail-closed result. A hidden task-level proxy override,
+  default-network fallback, or unproven proxy effect must not mark an account
+  identity as locked or active.
 - New platform accounts receive a deterministic `profile_key` and persisted
   account identity fields before first QR login or accepted Cookie
   validation.
@@ -242,6 +318,93 @@ defaults.
   sensitive-data redaction, effective-value probes, runtime snapshots, and
   compatibility with existing account/profile/proxy locks before the provider
   can be enabled.
+
+### Future Frontend Migration Tests
+
+CR-078 tests are planning gates for a future `/monitor-next` lane. They are
+not Phase 21 tests and must not be used to change the current `/monitor`
+console.
+
+- `/monitor-next` must coexist with `/monitor` until a later replacement gate
+  is accepted.
+- The new frontend must default to `/api/auth/...` and `/api/monitor/...` and
+  must not call `/api/crawler/...`, `/api/data/...`, old websocket endpoints,
+  or raw MediaCrawler control surfaces.
+- Technology selection tests or review evidence must compare TypeScript/Vite
+  candidates and selected component libraries against Chinese ToB console
+  needs, table/form/drawer/modal maturity, accessibility, testing, deployment
+  complexity, and dependency weight.
+- Route tests must prove menu visibility and direct-route authorization use
+  the same permission source.
+- Migration-equivalence tests must cover login, Operations Home, Monitoring,
+  Platform Accounts, Proxy Resources, AI Access, AI Evaluation Rules, Mail
+  Configuration, Mail Templates, Runtime Strategy, System Diagnostics, Task
+  Center default grouping, the `运行记录` subview, Run Detail six sections,
+  report downloads, and email delivery.
+- Responsive tests must cover `1440x900`, `1024x768`, and `390x844`.
+- Replacement cannot be accepted until current buttons, filters, drawers,
+  modals, enhanced selects, date pickers, scroll ownership, permission scope,
+  downloads, and delivery actions have equivalent behavior or an explicit
+  accepted change request.
+- Rollback tests must prove the old `/monitor` or a deploy rollback remains
+  available during the replacement window.
+
+### Public Exposure Boundary Tests
+
+CR-079 tests are planning gates for future MediaCrawler internalization and
+production exposure hardening.
+
+- A route audit must list every FastAPI router and static mount before any
+  route is disabled.
+- Production public allowlist tests must cover `/monitor`, `/api/auth/...`,
+  `/api/monitor/...`, monitor-specific static assets, and necessary
+  authenticated downloads or same-origin cached resources.
+- Production deny/not-mounted tests must cover old MediaCrawler WebUI,
+  `/api/crawler/...`, `/api/data/...`, old websocket log/status routes, old
+  assets/logos/static paths, raw file browsing/download/preview, and direct
+  crawler start/stop/control routes. The expected result must be fixed as 404,
+  403, or unmounted after the implementation strategy is confirmed.
+- Regression tests must prove login, task creation, task run, platform login,
+  account check, output parsing, report generation, Run Detail, Task Center,
+  report download, and email delivery still work through monitor APIs.
+- Permission tests must prove normal users cannot access administrator
+  resources, diagnostics, old crawler controls, or raw data surfaces.
+- User-visible wording checks must fail if formal product surfaces expose
+  MediaCrawler, Command Center, command-line, local path, environment variable,
+  debug, self-test, mock, or prototype wording outside trusted administrator
+  diagnostics.
+- Internal engine tests must prove MediaCrawler can still be invoked by the
+  monitor backend as an internal dependency after public exposure is narrowed.
+
+### Crawler Provider Architecture Tests
+
+CR-080 tests are planning gates for future provider architecture. They are not
+Phase 5.1P tests; Phase 5.1P remains the current MediaCrawler/CDP compatibility
+preflight.
+
+- Provider contract tests must cover provider id/name, supported platforms,
+  login types, account checks, comment support, time filtering, proxy support,
+  account binding, container/server-like support, output version, error
+  version, and capability limits.
+- Provider input tests must prove existing monitoring task fields map into the
+  provider without creating a parallel task system.
+- Output normalization tests must prove provider results become the existing
+  content, AI evaluation, report, Task Center, and Run Detail model.
+- Error normalization tests must cover unavailable, launch failed, login
+  expired, verification required, proxy failed, timeout, cancelled,
+  interrupted, partial success, no result, output parse failed, unsupported
+  capability, rate limited, platform changed, and unknown error states.
+- Profile binding tests must prove `profile_key` remains the upper-layer
+  account identity and provider-specific profile material is hidden from
+  normal users.
+- Lock tests must prove a provider cannot bypass account/profile/proxy locks.
+- Server-like tests must prove production providers can run without relying on
+  an operator's local desktop browser.
+- Redaction tests must fail if provider outputs, logs, APIs, UI, reports, or
+  Run Detail expose raw cookies, proxy credentials, profile paths, CDP
+  endpoints, command lines, provider secrets, or private debug fields.
+- Architecture review must confirm no provider introduces parallel task,
+  account, profile, report, permission, or frontend entry systems.
 
 ### Account Environment Export And Import Tests
 
