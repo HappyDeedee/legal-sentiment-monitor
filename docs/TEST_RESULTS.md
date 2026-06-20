@@ -2,6 +2,254 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-06-20 - CR-090 AI Rule List And Modal Field Width Compactness
+
+Environment: local worktree
+`C:\Users\Administrator\.codex\worktrees\a84e\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19221/monitor#ai_rules`.
+
+Result:
+
+- Kept the tighter `AI 评估规则` desktop list density so the rule name,
+  recent-test, update-time, and action columns do not read as over-wide.
+- Rebalanced the rule modal to a more compact editor-versus-test split while
+  preserving the existing basic information, six rule sections, prompt
+  preview, fixed output fields, sample inputs, result area, and footer
+  actions.
+- Preserved row `详情` / `更多`, row-menu actions, `测试评估规则`,
+  `恢复默认规则`, `保存规则`, close behavior, `.drawer-scroll-body`,
+  and the responsive single-column fallback below desktop widths.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_21h or cr074 or phase_17_1c_17_2bc"`
+- Result: PASS, 3 passed, 325 deselected, 1 warning.
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- Browser verification on the live `/monitor#ai_rules` page
+- Result: desktop `1440x900` kept the denser list and balanced modal split;
+  tablet `1024x768` fell back to a readable single-column modal layout; phone
+  `390x844` kept label widths readable without horizontal overflow or
+  one-character Chinese text columns; browser console error/warn logs were
+  empty for all three checks.
+
+## 2026-06-20 - CR-088 AI Rule Modal Residual Helper Text Removal
+
+Environment: local worktree
+`C:\Users\Administrator\.codex\worktrees\a84e\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19221/monitor#ai_rules`.
+
+Result:
+
+- Removed the remaining always-visible helper text from the `AI 评估规则`
+  modal: the `AI 状态` line, the legacy-prompt notice, and the default result
+  hint.
+- Preserved rule sections, sample inputs, `测试评估规则`, `恢复默认规则`,
+  `保存规则`, and rendered test output.
+- The modal now opens as a cleaner edit-and-test surface without losing the
+  rule editor or result panel.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline script parse for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script block parsed.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- Browser verification on the live `/monitor#ai_rules` page
+- Result: `AI 状态` helper line removed, default result hint removed, and the
+  `AI 评估规则` modal remained readable at desktop, tablet, and mobile widths.
+
+## 2026-06-20 - CR-089 Mail Template Row Helper Text And Update-Time Compactness
+
+Environment: local worktree
+`C:\Users\Administrator\.codex\worktrees\a84e\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19221/monitor#email_templates`.
+
+Result:
+
+- Removed the visible mail-template row helper sentence `正文占位符已保留`
+  from the template list while keeping the editor-side placeholder guardrail.
+- Replaced the mail-template `更新时间` cell with a compact timestamp block
+  that uses the same short date/time treatment as the AI rule update-time
+  display.
+- The template row stays dense without changing add/edit/delete/save/preview
+  actions.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "cr089 or phase_21j or phase_21 or cr074 or phase_17_1c_17_2bc"`
+- Result: PASS, 18 passed.
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- Browser verification on the live `/monitor#email_templates` page
+- Result: the table no longer shows the row helper sentence, the new compact
+  update-time cell renders, and desktop/tablet/mobile checks reported no
+  console errors or horizontal overflow.
+
+## 2026-06-20 - CR-087 Helper Tooltip Removal
+
+Environment: local worktree
+`C:\Users\Administrator\.codex\worktrees\a84e\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Removed the CR-086 `?` helper-tooltip affordance from the formal console and
+  did not restore the removed explanatory small helper copy.
+- Operational state, errors, warnings, empty/loading feedback, counts, login
+  prompts, password state, buttons, filters, row actions, downloads, refresh,
+  save/test, and confirmation flows remain visible or reachable.
+- Task Center, Run Detail six sections, enhanced select/date behavior,
+  `.drawer-scroll-body`, close behavior, owner/report scope, and top-bar
+  refresh semantics remain preserved.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "cr087 or phase_21 or cr074 or phase_17_1c_17_2bc"`
+- Result: PASS, 19 passed, 309 deselected, 1 warning.
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline script parse for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script block parsed.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- In-app browser checks at `1440x900`, `1024x768`, and `390x844`
+- Result: no console errors, no horizontal overflow, no helper question marks, no `account_login_prereq_hint`, and no `email_preview_note`.
+
+## 2026-06-20 - CR-086 Helper Tooltip Consolidation Verified
+
+Environment: local worktree
+`C:\Users\Administrator\.codex\worktrees\a84e\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Targeted explanatory helper text in page headers, labels, resource headers,
+  account cells, Task Center, Monitoring, and representative overlays now uses
+  the shared `?` tooltip affordance instead of always-visible small helper
+  copy.
+- Operational state, errors, warnings, empty/loading feedback, counts, buttons,
+  filters, row actions, downloads, refresh, save/test, and confirmation flows
+  remain visible or reachable.
+- Task Center, Run Detail six sections, enhanced select/date behavior,
+  `.drawer-scroll-body`, close behavior, owner/report scope, and top-bar
+  refresh semantics were preserved.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "cr086_explanatory_helper_copy_moves_to_question_tooltips"`
+- Result: PASS, 1 passed, 327 deselected, 1 warning.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_21d or phase_21e or phase_21f or phase_21g or phase_21h or phase_21i or phase_21j or phase_21l or phase_21m or cr086 or cr074"`
+- Result: PASS, 11 passed, 317 deselected, 1 warning.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_21 or cr074 or cr086"`
+- Result: PASS, 18 passed, 310 deselected, 1 warning.
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- `uv run python scripts/check_docs.py`
+- Result: PASS.
+- Browser verification:
+  - administrator-visible pages opened through real navigation; representative
+    `?` tooltips opened by click, page-title helper paragraphs were absent,
+    and browser console error/warn logs were empty;
+  - desktop `1440x900`: no document horizontal overflow, sidebar remained
+    fixed at the left, and tooltip copy opened on the Monitoring page;
+  - tablet `1024x768`: no document horizontal overflow, collapsed icon rail
+    stayed fixed, and tooltip copy opened on Platform Accounts;
+  - phone `390x844`: mobile navigation opened, selected Monitoring, closed
+    after page selection, tooltip copy opened, and no horizontal overflow or
+    one-character Chinese text columns were detected.
+
+Limitations:
+
+- Browser checks used the local seeded/admin-visible console state and did not
+  exercise real SMTP, real platform login, crawler execution, or external AI
+  provider calls.
+
+## 2026-06-20 - CR-085 Narrow Tablet Inline Cascade Side Rail Regression Fix
+
+Environment: local worktree
+`C:\Users\Administrator\.codex\worktrees\a84e\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Fixed the narrower in-app tablet panel side-rail cascade regression.
+- Preserved the current navigation information architecture, Task Center,
+  Run Detail, enhanced select/date behavior, `.drawer-scroll-body`, desktop
+  collapse button, and mobile drawer open/close model.
+- Mirrored the accepted `768px - 1279px` collapsed icon-rail contract into the
+  final inline style layer so later inline `max-width:1279px` rules cannot
+  reserve the wrong shell grid track.
+
+Verification:
+
+- Red test: `uv run python -m pytest tests/test_monitoring_mvp.py -k
+  "phase_21b_mobile_header_and_tablet_side_rail_resilience"`
+- Result before the fix: FAIL, missing inline `768px - 1279px` tablet side-rail
+  cascade block.
+- Green test: `uv run python -m pytest tests/test_monitoring_mvp.py -k
+  "phase_21b_mobile_header_and_tablet_side_rail_resilience"`
+- Result after the fix: PASS, 1 passed, 326 deselected, 1 warning.
+- Browser verification:
+  - observed in-app panel width around `809px`: after reload and stabilization,
+    `bodyClasses` included `sidebar-collapsed`, the shell grid computed to
+    about `68px 726px`, the sidebar width was about `68px`, the mobile trigger
+    was not painted, the collapse button was painted, and horizontal overflow
+    was `0`;
+  - tablet `1024x768`: persistent collapsed icon rail stayed around `68px`,
+    the mobile trigger stayed hidden, the collapse button stayed visible, and
+    horizontal overflow was `0`;
+  - phone `390x844`: mobile trigger stayed visible, desktop collapse control
+    stayed hidden, the shell stayed single-column, and horizontal overflow was
+    `0`.
+
+## 2026-06-20 - CR-084 Tablet Side Rail Narrow-Width Collapse Regression Fix
+
+Environment: local worktree
+`C:\Users\Administrator\.codex\worktrees\a84e\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Fixed the narrow-width collapse regression in the formal console sidebar.
+- Preserved the current navigation information architecture, Task Center,
+  Run Detail, enhanced select/date behavior, `.drawer-scroll-body`, desktop
+  collapse button, and mobile drawer open/close model.
+- Corrected the final CSS cascade so the tablet/narrow-desktop
+  `sidebar-collapsed` rail renders as the intended narrow icon rail instead of
+  still reading visually like the expanded fixed sidebar.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- `uv run python scripts/check_docs.py`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_12a_navigation_groups_and_login_landing or phase_21b_navigation_hierarchy_keeps_task_loop_and_subpages_distinct or phase_21b_mobile_header_and_tablet_side_rail_resilience"`
+- Result: PASS, 3 passed, 324 deselected, 1 warning.
+- Browser verification:
+  - desktop `1440x900`: sidebar opened at `272px`, collapse control remained
+    visible, and collapse reduced the rail to `68px` with no horizontal
+    overflow or console errors;
+  - tablet `1024x768`: page loaded in `sidebar-collapsed` state, the rail width
+    remained `68px`, the mobile trigger stayed hidden, the collapse button
+    stayed visible, and the document had no horizontal overflow or
+    one-character Chinese text columns;
+  - phone `390x844`: mobile trigger remained visible, desktop collapse control
+    stayed hidden, drawer open/Escape-close behavior still worked, and no
+    horizontal overflow or console errors were detected.
+
+
 How to read this file:
 
 - entries are reverse chronological, newest first;
@@ -145,6 +393,1034 @@ Verification:
   read-only mapping only, and local Chrome/Edge auto-detection, local-window
   login, CDP connect-existing, process defaults, and default-network fallback
   are diagnostic fallbacks only for Phase 5.1 acceptance.
+## 2026-06-20 - Phase 21O Login Page And Phase 21P Cross-Page Verification
+
+Environment: local worktree
+`C:\Users\Administrator\.codex\worktrees\a84e\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Refined the login page into a formal card-style surface with brand block,
+  title, email/password inputs, error feedback, and loading state while
+  preserving session authentication and route-to-Operations Home behavior.
+- Completed the final cross-page Phase 21 verification gate for the formal
+  console, with the current Task Center / Run Detail baseline, overlay
+  surfaces, enhanced selects/date pickers, and responsive shell preserved.
+- Did not change Task Center IA, Run Detail's six tabs, `.drawer-scroll-body`,
+  dropdown/date selection semantics, drawer/modal close behavior, owner/report
+  scope, backend APIs, database, crawler, AI, SMTP, or scheduling.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- `uv run python scripts/check_docs.py`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_21d or phase_21e or phase_21f or phase_21o or cr074 or cr071 or cr072 or cr073 or cr081 or cr082 or cr083"`
+- Result: PASS, 8 passed, 319 deselected, 1 warning.
+- In-app browser verification:
+  - administrator `1440x900`, `1024x768`, `390x844`: login success and
+    logout/re-login worked, Operations Home opened, Task Center, Run Detail,
+    resource pages, overlays, responsive navigation, and mobile/desktop/tablet
+    layouts stayed within the viewport with no console errors, document
+    horizontal overflow, or one-character Chinese text columns;
+  - normal user `1440x900`, `1024x768`, `390x844`: login success worked,
+    admin menus stayed hidden, and the permitted navigation/pages remained
+    reachable without console errors or horizontal overflow.
+
+## 2026-06-20 - Phase 21N System Diagnostics
+
+Environment: local worktree
+`C:\Users\Administrator\.codex\worktrees\a84e\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Refined System Diagnostics as a visual-only Phase 21N pass.
+- Preserved rerun diagnosis, run system diagnosis, process account resources,
+  readiness summary, readiness action cards, system runtime state, scheduler
+  state, platform state, generated system-diagnosis artifacts, customer-safe
+  diagnostic wording, and existing permission checks.
+- Improved section headers, status summary cards, impact/next-action hierarchy,
+  recommendation cards, scheduler status card, diagnostic item spacing, and
+  responsive wrapping.
+- Did not change `/doctor`, `/readiness`, `/scheduler-status`, `/smoke`,
+  platform status APIs, account-resource routing, backend diagnostics,
+  permissions, Task Center, Run Detail, enhanced select/date behavior,
+  `.drawer-scroll-body`, owner scope, report scope, or top-bar refresh
+  semantics.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- `python -m py_compile tests/test_monitoring_mvp.py`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_21n or doctor or readiness or cr074"`
+- Result: PASS, 23 passed, 303 deselected, 1 warning.
+- In-app browser verification:
+  - desktop `1440x900`: System Diagnostics opened, required buttons and mount
+    points were present, rerun diagnosis updated the summary, run system
+    diagnosis rendered generated artifacts, and process-account routing opened
+    Platform Accounts;
+  - tablet `1024x768`: diagnostic panels wrapped without document overflow;
+    dense diagnostic tables scrolled inside `.table-wrap`;
+  - phone `390x844`: mobile navigation reached System Diagnostics, required
+    actions remained visible, diagnostic/action cards stayed readable, and no
+    console errors, document horizontal overflow, or one-character Chinese text
+    columns were detected.
+
+## 2026-06-20 - Phase 21M Overlay And Run Detail Freeze Gate
+
+Environment: local worktree
+`C:\Users\Administrator\.codex\worktrees\a84e\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Refined overlay chrome and Run Detail visual states as a visual-only Phase
+  21M pass.
+- Preserved Run Detail's six sections in order: `概览`, `采集日志`, `采集内容`,
+  `AI 评估`, `报告`, and `邮件交付`.
+- Preserved task drawer, proxy drawer, AI Access drawer, Mail Configuration
+  drawer, Mail Template drawer, report/delivery/log secondary surfaces,
+  enhanced drawer/modal selects, task edit date picker, `.drawer-scroll-body`,
+  fixed footer action bars, close buttons, backdrop/Escape/page-switch close
+  behavior, copy/download/resend/refresh/preview/detail actions, owner scope,
+  report scope, and top-bar refresh semantics.
+- Improved overlay shadows, border separation, focus states, scrollbar visuals,
+  Run Detail tab chrome, code/log surfaces, and empty/loading/error treatment
+  without moving actions into new workflow categories.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- `python -m py_compile tests/test_monitoring_mvp.py`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_21m or cr082 or cr081 or cr073 or cr038 or cr071 or cr072 or phase_20d or phase_20e"`
+- Result: PASS, 8 passed.
+- In-app browser verification:
+  - desktop `1440x900`: Task Center and Run Detail opened, all six Run Detail
+    tabs switched, `采集日志` kept copy/download actions, `AI 评估` enhanced
+    selects were present, and representative task/proxy/AI/mail/template
+    fixed-footer overlays measured zero header/body and body/footer gaps;
+  - tablet `1024x768`: Run Detail tabs remained readable, task and mail-template
+    drawers kept fixed footer boundaries, and no console errors or document
+    overflow were found;
+  - phone `390x844`: mobile navigation reached Task Center, `详情` opened Run
+    Detail, all six tabs switched, AI Evaluation enhanced select and task edit
+    date menu opened, task and mail-template drawers kept `.drawer-scroll-body`
+    as the middle scroll owner with footer actions outside it, and no
+    one-character Chinese text columns, console errors, or document horizontal
+    overflow were detected.
+
+## 2026-06-20 - Phase 21L Task Center Conservative Visual Pass
+
+Environment: local worktree
+`C:\Users\Administrator\.codex\worktrees\a84e\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Refined Task Center as a conservative visual-only Phase 21L pass.
+- Preserved the single top-level `任务中心`, default task/report grouping,
+  `运行记录` subview, filters, pagination, top-bar page refresh, compact status
+  badges, grouped metric chips, and one first-level `详情` entry into Run
+  Detail.
+- Preserved report preview, report-scoped lead inspection, delivery history,
+  resend, downloads, run logs, copy/download log actions, and report/email
+  evidence through Run Detail or accepted scoped secondary surfaces.
+- Improved panel density, filter-toolbar chrome, filter summary, grouped metric
+  chips, table separators, status contrast, hover/focus states, empty/loading
+  surfaces, and responsive wrapping.
+- Did not restore separate Run Center / Report Center pages, add a top-level
+  reports page, add duplicate first-level log/preview/lead/delivery/download
+  actions, move lead-state filters into Task Center toolbar, or change
+  grouping, `运行记录`, Run Detail tabs, pagination, filter semantics,
+  owner-scope, report-scope, enhanced select/date behavior, or
+  `.drawer-scroll-body`.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- `python -m py_compile tests/test_monitoring_mvp.py`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_21l or cr051 or task_center_single_grouping or cr074 or cr071 or cr072 or cr073 or cr069 or phase_20d or phase_20e"`
+- Result: PASS, 9 passed, 315 deselected, 1 warning.
+- In-app browser verification:
+  - desktop `1440x900`: Task Center opened on grouped mode, filters and
+    pagination were present, `详情` remained the first-level route, switching to
+    `运行记录` worked, and no duplicate page-local refresh appeared;
+  - tablet `1024x768`: grouped and flat modes both remained reachable, dense
+    tables scrolled inside `.table-wrap`, and no document overflow or console
+    errors were found;
+  - phone `390x844`: grouped and flat modes remained usable with table-local
+    scrolling, required buttons stayed visible, and no one-character Chinese
+    text columns were detected.
+
+## 2026-06-20 - Phase 21K Runtime Strategy
+
+Environment: local worktree
+`C:\Users\Administrator\.codex\worktrees\a84e\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Refined Runtime Strategy as a visual-only Phase 21K pass.
+- Preserved the grouped Crawling/Login/Scheduler/Retention runtime-setting
+  table structure, current values, editable inputs, valid ranges, apply scopes,
+  lock states, save strategy action, diagnostics shortcut, and CR-074 top-bar
+  current-page refresh.
+- Improved group headers, current-value/source readability, apply-scope chips,
+  lock-state presentation, input density, and the save-strategy risk cue.
+- Replaced raw/internal runtime source and lock-reason display with
+  administrator-facing labels such as `默认值`, `后台保存`, `部署配置`, and
+  `由部署配置控制` without changing API payload keys or save behavior.
+- Did not add a duplicate page-local refresh button and did not change backend
+  API, database, permission, scheduler, crawler, AI, SMTP, Task Center, Run
+  Detail, enhanced select/date, owner-scope, report-scope, or overlay logic.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- `python -m py_compile tests/test_monitoring_mvp.py`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_21k or phase_21j or phase_21i or cr074"`
+- Result: PASS, 4 passed, 319 deselected, 1 warning.
+- In-app browser verification:
+  - desktop `1440x900`: Runtime Strategy opened with save strategy and system
+    diagnostics actions visible, four grouped tables rendered, 16 runtime
+    controls remained present, and no console errors, document horizontal
+    overflow, or one-character Chinese text columns were found;
+  - tablet `1024x768`: same checks passed, with dense tables scrolling inside
+    `.table-wrap` rather than widening the document;
+  - phone `390x844`: same checks passed, with the page constrained to the
+    viewport and the runtime table remaining reachable through table-local
+    scrolling.
+
+## 2026-06-20 - Phase 21J Mail Templates
+
+Environment: local worktree
+`C:\Users\Administrator\.codex\worktrees\a84e\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Refined Mail Templates as a visual-only Phase 21J pass.
+- Tightened the template list, subject column, active-state chip, variable
+  buttons, HTML editor, subject field, and iframe preview styling.
+- Shortened layout-heavy helper copy while preserving the CR-039
+  `{report_html}` / `{report_body}` guardrail and sample-data preview meaning.
+- Added variable-copy feedback and kept the local preview refresh as the
+  scoped CR-074 refresh action inside the template drawer.
+- Preserved add template, view mail config, search/status filters, clear
+  filters, row edit/delete, set-current checkbox, save template, refresh
+  preview, clear, close, iframe preview, enhanced select behavior,
+  `.drawer-scroll-body`, fixed footer boundaries, and top-bar-only page-level
+  refresh.
+- Did not implement CR-039 preset/provenance product changes and did not remove
+  free-form HTML editing.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- `python -m py_compile tests/test_monitoring_mvp.py`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_21j or phase_21i or cr082 or cr081"`
+- Result: PASS, 3 passed, 319 deselected, 1 warning.
+- In-app browser verification:
+  - desktop `1440x900`: Mail Templates page and template drawer opened with no
+    console errors, no document horizontal overflow, no one-character Chinese
+    text columns, all required page/drawer actions visible, no duplicate
+    page-local refresh, and header/body plus body/footer gaps were `0`;
+  - tablet `1024x768`: same checks passed; the dense template table scrolled
+    inside `.table-wrap` and the drawer kept `.drawer-scroll-body` as the
+    scroll owner;
+  - phone `390x844`: same checks passed with drawer width constrained to the
+    viewport, save/preview/clear/close controls present, and no document
+    overflow;
+  - interaction smoke: variable copy showed `变量已复制`, local preview refresh
+    showed `邮件模板预览已刷新`, status filtering and clear filters worked, and
+    closing the drawer restored body scrolling.
+
+## 2026-06-20 - CR-083 AI Access Model Helper Copy Removal
+
+Environment: local worktree
+`C:\Users\Administrator\.codex\worktrees\a84e\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Removed the persistent helper sentence under the AI Access model combobox:
+  `部分服务不提供模型列表；获取失败时仍可手动填写模型名称。`
+- Preserved the model-name input, `获取模型列表` button, manual-entry
+  placeholder, model selection list, clear/save/close controls, fixed footer,
+  `.drawer-scroll-body`, and connection-test workflow.
+- No backend API, permission, AI provider, SMTP, scheduler, deployment, Task
+  Center, Run Detail, enhanced select/date, owner-scope, or report-scope logic
+  was changed.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_21g or cr081 or cr082"`
+- Result: PASS, 2 passed, 319 deselected, 1 warning.
+- `uv run python scripts/check_docs.py`
+- Result: PASS.
+- In-app browser verification:
+  - desktop `1440x900`: opened AI Access drawer had no removed helper copy, no
+    console errors, no horizontal overflow, no one-character Chinese text
+    columns, model input and `获取模型列表` remained visible, and header/body plus
+    body/footer gaps were `0`;
+  - tablet `1024x768`: same checks passed with the fixed footer remaining a
+    direct drawer child and `.drawer-scroll-body` remaining the scroll owner;
+  - phone `390x844`: same checks passed with drawer width constrained to the
+    viewport, clear/save/close controls present, and no document overflow.
+
+## 2026-06-19 - Phase 21I Mail Configuration
+
+Environment: local worktree
+`C:\Users\Administrator\.codex\worktrees\a84e\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Refined Mail Configuration as a visual-only Phase 21I pass.
+- Kept CR-049 action hierarchy: one page-level action group for editing mail
+  configuration, sending a test mail, opening Task Center, and controlling the
+  compact real-email switch.
+- Improved summary-card scanability for test status, sender identity, fallback
+  default recipients, and subject template.
+- Improved fallback-recipient wording, masked password readability,
+  SMTP/defaults form density, and mail-test console scanability.
+- Preserved SMTP APIs, real-email switch confirmation, delivery behavior,
+  delivery-history access through Run Detail/Task Center, save/cancel/close,
+  start-test, enhanced select behavior, `.drawer-scroll-body`, and fixed
+  header/body/footer drawer boundaries.
+- Did not add a page-local duplicate refresh button; the shared top-bar refresh
+  remains the page-level refresh entry.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- `python -m py_compile tests/test_monitoring_mvp.py`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_21i"`
+- Result: PASS, 1 passed, 320 deselected, 1 warning.
+- In-app browser verification:
+  - desktop effective `1398x874`: Mail Configuration opened, required actions
+    remained visible, summary cards did not collapse into one-character text,
+    no console errors, and document horizontal overflow was `0`;
+  - desktop mail configuration drawer: header/body gap `0`, body/footer gap
+    `0`, `.drawer-scroll-body` had `data-scroll-owner="drawer-content"`,
+    footer actions were outside the scroll body, and `取消` / `保存配置`
+    remained visible;
+  - desktop mail test drawer: header/body gap `0`, body/footer gap `0`, console
+    stayed in the middle scroll body, and `关闭` / `开始测试` remained visible;
+  - tablet effective `994x744`: Mail Configuration opened with action row and
+    summary cards wrapped to two columns, no console errors, no horizontal
+    overflow, and no one-character Chinese text columns;
+  - phone effective `379x819`: using the visible mobile navigation entry, Mail
+    Configuration opened with complete actions and single-column summary cards,
+    no console errors, no horizontal overflow, and no one-character Chinese text
+    columns;
+  - phone mail configuration and test drawers both kept scroll-body boundaries
+    between fixed header and footer with required footer buttons visible.
+
+## 2026-06-19 - CR-082 Drawer Scrollbar Header Footer Boundary Recheck
+
+Environment: local worktree
+`C:\Users\Administrator\.codex\worktrees\a84e\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Rechecked the CR-081 overlay boundary after user browser review clarified
+  that scrollbars must not visually continue through either the fixed header or
+  fixed footer.
+- Kept the CR-081 shared structure: direct fixed header, middle
+  `.drawer-scroll-body`, and direct `.drawer-fixed-footer` where footer actions
+  exist.
+- Kept `.drawer-scroll-body` as the only content scroll owner with
+  `data-scroll-owner="drawer-content"` and `has-fixed-footer` on drawers that
+  have fixed bottom action chrome.
+- Preserved close buttons, footer actions, backdrop/Escape/page-switch close
+  behavior, enhanced select/date behavior, Run Detail tabs, Task Center,
+  owner/report scope, and top-bar refresh semantics.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- `python -m py_compile tests/test_monitoring_mvp.py`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "cr082 or cr081 or cr073 or cr038"`
+- Result: PASS, 3 passed, 317 deselected, 1 warning.
+- In-app browser geometry checks:
+  - desktop effective `1398x874`: opened Monitoring task drawer and Mail
+    Template drawer; both had `head/body` gap `0`, `body/footer` gap `0`, no
+    footer actions inside `.drawer-scroll-body`, and preserved footer buttons;
+  - phone effective `379x819`: opened Mail Configuration and Monitoring task
+    drawer; both had `head/body` gap `0`, `body/footer` gap `0`, no footer
+    actions inside `.drawer-scroll-body`, document horizontal overflow `0`,
+    and visible footer actions including save/cancel/clear/close.
+
+## 2026-06-19 - Phase 21H AI Evaluation Rules
+
+Environment: local worktree `C:\Users\Administrator\.codex\worktrees\a84e\MediaCrawler`,
+local `/monitor` served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Refined AI Evaluation Rules as a rule-maintenance surface without changing
+  rule semantics or backend behavior.
+- Tightened the rules table with compact rule-name, default-state, test-state,
+  and stable action-column treatment so `详情` and `更多` do not collapse into
+  one-character columns on narrow viewports.
+- Kept the rule editor's existing information architecture while improving
+  scanability: basic information, rule configuration sections, prompt preview,
+  fixed output fields, test sample, and test result remain present.
+- Added visual states for the rule test result panel: idle, loading, success,
+  and failure.
+- Preserved add rule, view AI access, row detail, row more menu, test rule, set
+  default for non-default rules, delete, restore default, test evaluation rule,
+  save rule, close, enhanced select behavior, `.drawer-scroll-body`, and fixed
+  drawer footer boundaries.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- `python -m py_compile tests/test_monitoring_mvp.py`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_21h or phase_21g or cr073 or cr038 or monitor_page_uses_consistent_buttons"`
+- Result: PASS, 5 passed, 314 deselected, 1 warning.
+- In-app browser verification:
+  - desktop `1440x900`: opened AI Evaluation Rules, confirmed add/view AI
+    access actions, table, row more menu, and rule drawer; rule drawer used the
+    two-column editor/test layout, preserved bottom actions, and had no
+    document horizontal overflow or one-character Chinese text columns;
+  - tablet `1024x768`: AI Evaluation Rules opened with page actions visible,
+    the table scrolling inside `.table-wrap`, the row more menu within the
+    viewport, and the rule drawer switching to a single-column layout without
+    losing fields or actions;
+  - phone `390x844`: opened the mobile navigation, selected AI Evaluation
+    Rules, confirmed the drawer trigger closed after navigation, page actions
+    remained visible, the table scrolled only inside `.table-wrap`, the row
+    more menu stayed within the viewport, and the rule drawer preserved fields,
+    close, test, restore default, and save actions with no document horizontal
+    overflow.
+
+## 2026-06-19 - CR-081 Scrollable Drawer Fixed Footer Boundary Regression Fix
+
+Environment: local worktree `C:\Users\Administrator\.codex\worktrees\a84e\MediaCrawler`,
+local `/monitor` served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Added a focused shared drawer/footer regression fix during Phase 21G review.
+- Kept `.drawer-scroll-body` as the middle content scroll owner while moving
+  `.form-actions`, `.resource-modal-actions`, `.account-flow-actions`,
+  `.ai-test-actions`, and `.rule-modal-actions` out to direct drawer footer
+  chrome with `.drawer-fixed-footer`.
+- Removed the old in-scroll sticky footer boundary so scrollbars no longer read
+  as if they run through the fixed bottom action bar.
+- Preserved close buttons, backdrop/Escape behavior, enhanced select/date
+  behavior, Task Center, Run Detail, owner/report scope, and top-bar refresh
+  semantics at the static regression layer.
+- In browser, verified the overlay boundary contract at desktop, tablet, and
+  phone widths: drawers with footer action bars keep a direct three-part
+  structure of fixed header, `.drawer-scroll-body`, and `.drawer-fixed-footer`;
+  the measured header-to-body and body-to-footer gaps were `0`, and footer
+  buttons were not contained by `.drawer-scroll-body`.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- `python -m py_compile tests/test_monitoring_mvp.py`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "cr073 or cr038 or phase_21f or phase_21g or monitor_page_uses_consistent_buttons"`
+- Result: PASS, 5 passed, 313 deselected, 1 warning.
+- In-app browser verification:
+  - desktop `1440x900`: opened representative scrollable overlays including
+    Monitoring task drawer, AI evaluation rule modal, and email template drawer;
+    each kept the scrollbar inside the middle content region and preserved
+    fixed footer actions;
+  - tablet `1024x768`: opened Monitoring task, Proxy Resources, Mail
+    Configuration, AI rule, email template, and report preview drawers; no
+    document horizontal overflow or one-character Chinese text columns were
+    found;
+  - phone `390x844`: opened Monitoring task, Proxy Resources, Mail
+    Configuration, AI rule, and email template drawers; footer actions remained
+    outside the scroll body, close controls stayed reachable, and no horizontal
+    overflow or one-character Chinese text columns were found.
+
+## 2026-06-19 - Phase 21F Proxy Resources
+
+Environment: local worktree `C:\Users\Administrator\.codex\worktrees\a84e\MediaCrawler`,
+local `/monitor` served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Refined the Proxy Resources page as a dense administrator resource table:
+  proxy URL masks use a readable monospace chip, latest error text is visually
+  separated for scanning, table density is tighter, and the proxy drawer is
+  constrained across desktop/tablet/phone widths.
+- Preserved proxy actions and controls: add proxy, view accounts, search,
+  status filter, clear filters, row edit, row delete with confirmation, drawer
+  clear, save proxy, and close.
+- Preserved CR-074 refresh semantics: Proxy Resources relies on the top-bar
+  current-page refresh and does not reintroduce a page-local `刷新代理` button.
+- Preserved masked-secret behavior: saved proxy credentials are not shown in the
+  list, and editing a proxy still leaves the proxy URL field blank unless the
+  operator intentionally changes it.
+- Preserved Task Center, Run Detail, enhanced select/date controls,
+  `.drawer-scroll-body`, owner/report scope, role visibility, overlay close
+  behavior, and top-bar refresh semantics.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_21f"`
+- Result: PASS, 1 passed with one SQLAlchemy deprecation warning.
+- In-app browser verification:
+  - administrator desktop: opened `代理资源`, confirmed add proxy, view
+    accounts, search, status filter, clear filters, top-bar refresh, and no
+    page-local proxy refresh button; created a temporary proxy, verified the
+    saved row masked credentials, rendered status/error markers, and exposed
+    edit/delete actions; opened edit drawer and confirmed proxy URL did not
+    reappear, clear/save/close were present, and `.drawer-scroll-body` remained;
+  - administrator `1024x768`: proxy page kept actions and filters visible,
+    table scrolled inside `.table-wrap`, document and side rail had no
+    horizontal overflow, the sidebar collapse button remained visible, and no
+    one-character Chinese text columns were detected;
+  - administrator `390x844`: proxy page kept actions and filters visible, table
+    scrolled inside `.table-wrap`, document/body had no horizontal overflow,
+    masked proxy/error markers stayed readable, and no one-character Chinese
+    text columns were detected;
+  - administrator phone drawer: edit drawer stayed within viewport safe margins,
+    close, clear, save, and bottom action area remained reachable, and
+    `.drawer-scroll-body` remained the scroll owner without horizontal overflow;
+  - final browser log read showed no `/monitor` application console errors after
+    filtering unrelated browser-extension telemetry logs;
+  - normal user desktop: login as `phase21-user@example.com` showed only
+    `总览`, `舆情监控`, and `任务中心`; Proxy Resources, Platform Accounts, and AI
+    Access navigation entries were hidden, with no document horizontal overflow
+    and no application console errors;
+  - temporary Phase 21F browser-verification proxy records were removed with
+    project data cleanup after validation.
+
+## 2026-06-19 - Phase 21E Platform Accounts
+
+Environment: local worktree `C:\Users\Administrator\.codex\worktrees\a84e\MediaCrawler`,
+local `/monitor` served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Refined the Platform Accounts page and account dialog as a complete
+  administrator account-maintenance workflow rather than a generic resource
+  form.
+- Preserved page actions and controls: add account, return to tasks, account
+  metrics, search, platform/status/login-type filters, attention-only filter,
+  batch check, batch disable, batch enable, batch delete, account list, row
+  detail hooks, and row action-menu hooks.
+- Preserved account dialog workflow: basic profile, platform/status/proxy
+  fields, login source, notes, exception summary, advanced exception record,
+  login method options, QR login, local-window fallback where allowed, Cookie
+  login, login result areas, login records, save account, delete account, and
+  close.
+- Tightened the account dialog's mobile overflow containment while preserving
+  `.drawer-scroll-body` as the vertical scroll owner and keeping the close
+  button and bottom account actions in their existing positions.
+- Preserved normal-user role safety: normal users do not see Platform Accounts
+  navigation or administrator resource shortcuts.
+- Preserved Task Center, Run Detail, enhanced select/date controls,
+  `.drawer-scroll-body`, owner/report scope, role visibility, overlay close
+  behavior, and top-bar refresh semantics.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- `uv run python scripts/check_docs.py`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_21e or phase_21d or phase_21b or phase_21a"`
+- Result: PASS, 5 passed. The run emitted only a local `.pytest_cache`
+  permission warning.
+- In-app browser verification:
+  - administrator desktop: opened `平台账号`, confirmed add/return actions,
+    filters, attention-only filter, batch actions, list area, and account
+    dialog controls were present; opened `新增账号` and confirmed QR login,
+    local-window fallback, Cookie login, login records, save/delete/close, and
+    `.drawer-scroll-body` were present; no document horizontal overflow or
+    one-character text columns;
+  - administrator `1024x768`: account dialog stayed active and within viewport
+    safe margins; close button, save/delete, QR login, Cookie login, and login
+    records remained present; `.drawer-scroll-body` remained the scroll owner;
+    no document horizontal overflow or one-character text columns;
+  - administrator `390x844`: account dialog remained closable and vertically
+    scrollable; save/delete, QR login, Cookie login, and login records remained
+    present; account dialog horizontal scrollbar was visually suppressed while
+    vertical scrolling stayed on `.drawer-scroll-body`; no document horizontal
+    overflow or one-character text columns;
+  - normal user desktop: login as `phase21-user@example.com` showed only
+    `总览`, `舆情监控`, and `任务中心`; Platform Accounts navigation and
+    administrator shortcuts were hidden; no document horizontal overflow.
+
+## 2026-06-19 - Phase 21D Monitoring Tasks And Task Drawer
+
+Environment: local worktree `C:\Users\Administrator\.codex\worktrees\a84e\MediaCrawler`,
+local `/monitor` served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Refined the Monitoring page and task drawer visual hierarchy with a clearer
+  task-toolbar surface, stronger drawer section markers, lighter advanced
+  administrator grouping, and steadier drawer action chrome.
+- Preserved task page actions and filters: new task, schedule refresh, Task
+  Center shortcut, search, platform filter, status filter, clear filter, task
+  table, run, stop, more-menu edit, pause/resume, and delete.
+- Preserved task drawer fields and actions: target, aliases, platform search
+  terms, platforms, crawl limits, comments, exclude words, administrator
+  account/proxy/technical settings, schedule, custom dates, cron, enabled flag,
+  AI access, recipients, email template, save, sample fill, clear, and close.
+- Preserved normal-user simplified wizard and administrator advanced settings:
+  normal users still see the simplified task fields and wizard hint while
+  administrator-only fields remain hidden; administrators still see advanced
+  resource and technical controls.
+- Preserved Task Center, Run Detail, enhanced select/date controls,
+  `.drawer-scroll-body`, owner/report scope, role visibility, overlay close
+  behavior, and top-bar refresh semantics.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- `uv run python scripts/check_docs.py`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_21d or phase_21a or phase_21b or phase_12b"`
+- Result: PASS, 5 passed. The run emitted only a local `.pytest_cache`
+  permission warning.
+- In-app browser verification:
+  - administrator desktop: opened `舆情监控`, opened the new-task drawer,
+    confirmed required task page controls, drawer fields, administrator
+    advanced fields, `.drawer-scroll-body`, and close button were present;
+    close button closed the drawer; no console errors or document horizontal
+    overflow;
+  - administrator `1024x768` and `390x844`: task page and drawer remained
+    usable, administrator fields stayed visible, close button/action area were
+    reachable, no console errors, horizontal overflow, or one-character text
+    columns;
+  - normal user `1440x900`, `1024x768`, and `390x844`: simplified wizard hint
+    and steps remained visible, all normal task fields and save/sample/clear
+    actions remained visible, administrator-only fields were hidden, and there
+    were no console errors, horizontal overflow, or one-character text columns.
+
+## 2026-06-19 - Phase 21C Operations Home Refinement
+
+Environment: local worktree `C:\Users\Administrator\.codex\worktrees\a84e\MediaCrawler`,
+local `/monitor` served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Reduced the Operations Home shortcut block from large onboarding-style cards
+  to compact operational entries while preserving all five administrator
+  shortcuts: `新建任务`, `任务中心`, `运行记录`, `资源处理`, and `系统诊断`.
+- Prioritized operational metrics, attention queue, resource health, and
+  system-health signals before shortcuts.
+- Removed redundant dashboard explanatory copy from the attention queue and
+  system-health summary while preserving the business meaning and existing
+  targets.
+- Preserved normal-user role safety: normal users still see only
+  `新建任务`, `任务中心`, and `运行记录`; administrator-only resource and
+  system-diagnostics entries remain hidden.
+- Preserved Task Center, Run Detail, enhanced select/date controls,
+  `.drawer-scroll-body`, owner/report scope, role visibility, and top-bar
+  refresh semantics.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- `uv run python scripts/check_docs.py`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_13b or phase_13c or phase_21a or phase_21b or cr051"`
+- Result: PASS, 6 passed. The run emitted only a local `.pytest_cache`
+  permission warning.
+- In-app browser verification:
+  - administrator `1440x900`, `1024x768`, and `390x844`: all five Operations
+    Home shortcuts remained visible, duplicate explanatory copy was absent,
+    the dashboard stayed horizontally within the viewport, no narrow
+    one-character text columns were detected, and console errors were empty;
+  - normal-user `1440x900`, `1024x768`, and `390x844`: only the three permitted
+    shortcuts remained visible, administrator-only health/actions were hidden,
+    the dashboard stayed horizontally within the viewport, no narrow
+    one-character text columns were detected, and console errors were empty.
+
+## 2026-06-19 - Phase 21A/B Shell And Navigation Closure
+
+Environment: local worktree `C:\Users\Administrator\.codex\worktrees\a84e\MediaCrawler`,
+local `/monitor` served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Closed Phase 21A global shell/design-token verification for the current
+  no-build Vanilla JavaScript plus CSS custom-property frontend.
+- Closed Phase 21B navigation hierarchy verification, including first-level
+  task-loop versus Resource Management/System Configuration visual separation,
+  administrator/normal-user menu visibility, responsive navigation behavior,
+  and CR-080's side-rail horizontal-scrollbar cleanup.
+- Preserved the single top-level `任务中心`, default task/report grouping,
+  `运行记录`, Run Detail six sections, enhanced select/date behavior,
+  `.drawer-scroll-body`, owner/report scope, role visibility, and top-bar
+  refresh semantics.
+- Confirmed the CR-080 correction boundary: the sidebar collapse button remains;
+  the removed artifact is the bottom horizontal scrollbar in the side navigation
+  rail.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- `uv run python scripts/check_docs.py`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_21a or phase_21b or phase_12a or phase_13c or phase_21_header_account_menu"`
+- Result: PASS, 6 passed. The run emitted only a local `.pytest_cache`
+  permission warning.
+- In-app browser verification:
+  - current observed tablet/narrow-desktop viewport `innerWidth≈1169`: collapse
+    control visible, mobile trigger hidden, side-rail `overflow-x: hidden`,
+    navigation `scrollWidth == clientWidth`, document width equaled client
+    width, and console errors were empty;
+  - normal-user path: login succeeded as a normal user, visible navigation was
+    limited to `总览`, `舆情监控`, and `任务中心`, administrator entries were not
+    visible, and desktop/tablet/phone checks found no console errors,
+    horizontal document overflow, or narrow one-character text columns;
+  - administrator path: login succeeded as an administrator, all expected
+    navigation entries were visible, and desktop/tablet/phone checks found no
+    console errors, horizontal document overflow, or narrow one-character text
+    columns;
+  - administrator page-open sweep at desktop width opened `dashboard`, `jobs`,
+    `runs`, `accounts`, `proxies`, `ai`, `ai_rules`, `email`,
+    `email_templates`, `runtime`, and `doctor` through existing navigation;
+    each section became active and none produced document horizontal overflow
+    or console errors.
+
+## 2026-06-19 - CR-080 Tablet Side Rail Horizontal Scrollbar Cleanup
+
+Environment: local worktree `C:\Users\Administrator\.codex\worktrees\a84e\MediaCrawler`,
+local `/monitor` served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Removed the bottom horizontal scrollbar from the tablet/narrow-desktop
+  `768px - 1279px` persistent icon rail by preventing horizontal overflow in
+  the rail navigation area.
+- Kept the existing sidebar collapse button visible and kept the side-rail
+  navigation vertically scrollable so permitted entries remain reachable.
+- Preserved the desktop expanded/collapsible sidebar and true-mobile drawer
+  navigation model.
+- Preserved Task Center, Run Detail, enhanced select/date controls,
+  `.drawer-scroll-body`, owner/report scope, role visibility, and top-bar
+  refresh semantics.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_11d or phase_21b or phase_12a or phase_13c or phase_21_header_account_menu"`
+- Result: PASS, 6 passed.
+- In-app browser verification on local `/monitor` at the observed
+  tablet/narrow-desktop width:
+  - effective `innerWidth≈1169`;
+  - `sidebar-collapsed` icon rail active;
+  - collapse control remained visible;
+  - side-rail navigation used vertical scrolling with horizontal overflow
+    hidden;
+  - navigation scroll width no longer exceeded its client width;
+  - `系统诊断` center hit-tested to the `doctor` navigation button;
+  - document width equaled client width, with no horizontal overflow.
+
+## 2026-06-19 - CR-079 Mobile Header Compact Rail Regression Fix
+
+Environment: local worktree `C:\Users\Administrator\.codex\worktrees\a84e\MediaCrawler`,
+local `/monitor` served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Reworked the mobile header grid so the phone first row is compact navigation
+  icon, title, refresh, and account, followed by a full-width status row.
+- Hid the visible `导航` label only at phone width while preserving the same
+  accessible mobile navigation trigger and drawer behavior.
+- Preserved Task Center, Run Detail, enhanced select/date controls,
+  `.drawer-scroll-body`, owner/report scope, mobile drawer close behavior, and
+  top-bar refresh semantics.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_11d or phase_21b or phase_12a or phase_13c or phase_21_header_account_menu"`
+- Result: PASS, 6 passed.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- `uv run python scripts/check_docs.py`
+- Result: PASS.
+- Browser verification on local `/monitor`:
+  - mobile effective width: `innerWidth≈379`, header grid measured as
+    `nav title refresh account` plus a full-width status row, visible `导航`
+    label hidden, trigger width `40px`, title horizontal, and no narrow Chinese
+    text columns detected.
+  - mobile `代理资源`: drawer navigation selected the page and closed; document
+    width equaled client width, page title and actions remained horizontal, and
+    no document-level overflow was detected.
+  - `1024x768`: top-left mobile trigger hidden; collapsed side rail remained
+    active and `系统诊断` navigation stayed clickable.
+  - `1440x900`: desktop sidebar remained visible and the collapse button still
+    toggled the icon rail.
+
+## 2026-06-19 - CR-078 Mobile And Tablet Navigation Layout Resilience Regression Fix
+
+Environment: local worktree `C:\Users\Administrator\.codex\worktrees\a84e\MediaCrawler`,
+local `/monitor` served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Strengthened the final mobile header and resource-page responsive rules so the
+  title remains horizontal, closed mobile drawer width stays off-canvas, and
+  representative resource pages keep page width inside the phone viewport.
+- Tightened the tablet collapsed side rail so navigation scrolls in its own grid
+  row and the final `系统诊断` icon does not overlap the bottom collapse button.
+- Preserved Task Center, Run Detail, enhanced select/date controls,
+  `.drawer-scroll-body`, owner/report scope, mobile drawer close behavior, and
+  top-bar refresh semantics.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_21a or phase_21b or phase_11d or phase_12a or phase_13c or phase_21_header_account_menu"`
+- Result: PASS, 7 passed.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- `uv run python scripts/check_docs.py`
+- Result: PASS.
+- Browser verification on local `/monitor`:
+  - effective mobile breakpoint: `innerWidth≈379`, `matchMobile=true`;
+    `代理资源` title stayed horizontal, document/client widths matched, and the
+    closed drawer remained off-canvas.
+  - `1024x768`: top-left mobile trigger hidden; `系统诊断` hit-tested to the nav
+    button and clicking it activated `section#doctor` without toggling collapse.
+  - `1440x900`: full sidebar visible; collapse button still switched to the
+    icon rail; no `/monitor` console errors were reported.
+
+## 2026-06-19 - CR-077 Mobile Header Final Cascade Resilience Regression Fix
+
+Environment: local worktree `C:\Users\Administrator\.codex\worktrees\a84e\MediaCrawler`,
+local `/monitor` served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Added a final inline mobile header safeguard in `api/monitor_web/index.html`
+  so the accepted CR-076 header grid remains the browser's computed layout even
+  though the formal page has inline style blocks after `monitor.css`.
+- Updated regression coverage to inspect all inline `<style>` blocks, so tests
+  catch future cascade-order regressions instead of checking only the first
+  inline style block.
+- Preserved CR-075/CR-076 navigation behavior, Task Center, Run Detail,
+  enhanced select/date controls, `.drawer-scroll-body`, owner/report scope, and
+  top-bar refresh semantics.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_11d or phase_12a or phase_13c or phase_21_header_account_menu"`
+- Result: PASS, 4 passed.
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- `uv run python scripts/check_docs.py`
+- Result: PASS.
+- Browser verification on local `/monitor`:
+  - `390x844`: title rendered horizontally with a `336px` title row, status in
+    its own row, mobile trigger visible, no right-side content overflow.
+  - Mobile drawer: opened to `left: 0` with backdrop visible, then selecting
+    `代理资源` closed the drawer with `aria-expanded=false` and sidebar left at
+    `-340px`.
+  - `1024x768`: persistent collapsed icon side rail visible, top-left mobile
+    trigger hidden, no content overflow.
+  - `1440x900`: desktop/collapsed-sidebar state had no content overflow; the
+    desktop full/collapsible sidebar behavior remains the same user-controlled
+    interaction from CR-075.
+
+## 2026-06-19 - CR-076 Mobile Header Layout Resilience Regression Fix
+
+Environment: local worktree `C:\Users\Administrator\.codex\worktrees\a84e\MediaCrawler`,
+local `/monitor` served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Fixed the mobile header layout so the navigation trigger, refresh icon, and
+  compact account control stay in the top mobile row, while the title and
+  status chips each get their own readable rows.
+- Added a header-specific mobile override so generic `.row` wrapping rules
+  cannot stretch the account area and reintroduce title compression.
+- Preserved the CR-075 mobile drawer trigger, backdrop close, Escape close,
+  page-selection close behavior, tablet icon rail, desktop sidebar, Task
+  Center, Run Detail, enhanced select/date controls, `.drawer-scroll-body`,
+  and top-bar refresh semantics.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_11d or phase_13c"`
+- Result: PASS, 2 passed.
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- Local HTTP resource checks:
+  - `/monitor`: HTTP 200.
+  - `/static/monitor/monitor.css`: HTTP 200.
+- Browser verification on local `/monitor` at `390x844`:
+  - header grid areas were `nav spacer refresh account`, then `title`, then
+    `status`;
+  - title width measured `336px` and did not collapse into one-character
+    vertical wrapping;
+  - no horizontal overflow was reported;
+  - mobile trigger stayed visible;
+  - mobile drawer opened to `left: 0` with backdrop visible and closed back to
+    `left: -340px` through the backdrop.
+
+## 2026-06-19 - CR-075 Responsive Navigation Interaction Consistency
+
+Environment: local worktree `C:\Users\Administrator\.codex\worktrees\a84e\MediaCrawler`,
+local `/monitor` served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Split the responsive navigation behavior into desktop full/collapsible
+  sidebar, tablet/narrow desktop collapsed icon side rail, and true mobile
+  drawer navigation.
+- Removed the top-left `打开导航` trigger from tablet/narrow desktop widths such
+  as `1024x768` and the reviewed `1169px` viewport.
+- Fixed the mobile `390x844` header so the page title remains horizontal and
+  status, refresh, and account controls sit in a second row instead of
+  squeezing the title into one-character vertical text.
+- Kept mobile drawer open, backdrop close, Escape close, and page-selection
+  close behavior while stabilizing the drawer's visual position.
+- Preserved the current formal console structure: one top-level `任务中心`,
+  default task/report grouping, `运行记录`, Run Detail six sections, enhanced
+  select/date controls, `.drawer-scroll-body`, and top-bar refresh.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_11d or phase_12a or phase_13c or phase_21_header_account_menu"`
+- Result: PASS, 4 passed.
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- `uv run python scripts/check_docs.py`
+- Result: PASS.
+- Browser verification on local `/monitor`:
+  - `1440x900`: full sidebar visible, top-left mobile trigger hidden, no
+    horizontal overflow, no console errors.
+  - `1169px` and `1024x768`: persistent collapsed icon side rail visible,
+    top-left mobile trigger hidden, bottom expand/collapse control visible, no
+    horizontal overflow.
+  - `390x844`: title stays horizontal, top-left mobile trigger visible, mobile
+    drawer opens to `left: 0`, backdrop closes it back to `left: -340px`, no
+    horizontal overflow, no console errors.
+
+Limitations:
+
+- This entry covers CR-075 / Phase 21B responsive navigation consistency only.
+  Full Phase 21P cross-page verification and remaining Phase 21D-21O page
+  passes remain open.
+
+## 2026-06-19 - Phase 21 Focused Navigation Hover Refinement
+
+Environment: local worktree `C:\Users\Administrator\.codex\worktrees\a84e\MediaCrawler`,
+local `/monitor` served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Split first-level and second-level navigation hover styles from active styles.
+- Removed combined `active` + `hover` navigation selectors so hovering a
+  second-level item no longer reads as the selected teal state.
+- Kept the selected navigation state aligned to the Phase 21 teal palette while
+  first-level, second-level, and collapsed sidebar hover use pure neutral light
+  gray.
+- Preserved the current formal console structure: one top-level `任务中心`,
+  default task/report grouping, `运行记录`, Run Detail six sections, enhanced
+  select/date controls, `.drawer-scroll-body`, and top-bar refresh.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_12a or phase_21_header_account_menu or phase_13b or phase_13c or cr051"`
+- Result: PASS, 5 passed.
+- `node --check api/webui/monitor/monitor.js`
+- Result: PASS.
+- Inline monitor page script parse check for `api/monitor_web/index.html`
+- Result: PASS, 1 inline script parsed.
+- Browser CSS inspection on local `/monitor`:
+  - Confirmed no loaded navigation selector combines `active` and `hover`.
+  - Confirmed `nav button:hover:not(.active)`,
+    `.nav-sublist button:hover:not(.active)`, and
+    `body .nav-sublist button.sub:hover:not(.active)` use neutral
+    `rgb(237, 241, 245)`.
+  - Confirmed collapsed sidebar hover also uses the same neutral hover token
+    and no loaded navigation hover rule references the teal selected palette.
+  - Confirmed `nav button.active` and `.nav-sublist button.active` retain the
+    Phase 21 selected state.
+
+Limitations:
+
+- This entry covers the focused navigation hover regression only. Full Phase
+  21P cross-page verification, complete administrator/normal-user browser
+  checks at all required viewports, and remaining Phase 21D-21O page passes
+  are still open.
 
 ## 2026-06-19 - CR-074 Console Refresh Action Deduplication And Icon Loading
 

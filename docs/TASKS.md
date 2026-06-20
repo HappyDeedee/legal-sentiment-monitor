@@ -1903,82 +1903,142 @@ select/date, close, scroll, or routing logic without a separate accepted CR.
 
 ### Phase 21A - Global Shell And Design Tokens
 
-- [ ] Refine formal-console neutral, primary, border, background, text,
+- [x] Refine formal-console neutral, primary, border, background, text,
       status, focus, disabled, toast, empty-state, error-state, skeleton, and
       modal base styles in the formal frontend.
-- [ ] Keep the no-build Vanilla JavaScript plus CSS custom-property stack.
-- [ ] Verify login and all logged-in pages still render without console errors
+- [x] Keep the no-build Vanilla JavaScript plus CSS custom-property stack.
+- [x] Verify login and all logged-in pages still render without console errors
       or horizontal overflow.
 
 ### Phase 21B - Navigation Hierarchy
 
-- [ ] Strengthen the visual difference between first-level task-loop pages and
+- [x] Apply the focused navigation visual refinement for the current formal
+      console shell: light sidebar, compact icon-supported first/second-level
+      entries, desktop collapse-to-icon rail, compact top-right account menu,
+      and system-aligned teal active state.
+- [x] Split navigation hover and active styles so first-level and second-level
+      hover states use pure neutral light gray while selected entries keep the
+      restrained Phase 21 accent; add regression coverage so hover/active
+      combined selectors do not return and collapsed sidebar hover does not
+      reuse the teal selected palette.
+- [x] Implement CR-075 responsive navigation consistency: desktop keeps the
+      full/collapsible sidebar, tablet/narrow desktop defaults to the persistent
+      collapsed icon side rail without the top-left mobile trigger, and true
+      mobile keeps the drawer trigger/backdrop/Escape/page-selection close
+      behavior.
+- [x] Implement CR-076 mobile header layout resilience: on true mobile, keep
+      the drawer trigger while moving the title and status chips into their own
+      readable rows so status, refresh, and account controls cannot squeeze the
+      title into one-character vertical wrapping.
+- [x] Implement CR-077 mobile header final-cascade resilience: mirror the
+      accepted mobile header grid in the formal page's final inline style layer
+      and update regression coverage to inspect all inline style blocks, so
+      later inline rules cannot re-squeeze the title after `monitor.css` loads.
+- [x] Implement CR-078 mobile and tablet navigation layout resilience: keep the
+      final mobile header title horizontal, keep representative resource pages
+      inside the phone viewport, keep closed mobile drawer width off-canvas, and
+      keep the tablet collapsed side rail's final item out of the bottom
+      collapse-button hit area.
+- [x] Implement CR-079 mobile header compact rail resilience: keep the phone
+      header on a compact icon navigation trigger plus a stable title column,
+      move status chips to a wrapping row, and prevent resource pages such as
+      `代理资源` from squeezing Chinese text into one-character columns.
+- [x] Implement CR-080 tablet side-rail horizontal-scrollbar cleanup: prevent
+      the `768px - 1279px` collapsed icon rail from exposing a bottom
+      horizontal scrollbar while keeping the collapse button, vertical rail
+      scrolling, and administrator final navigation entries reachable.
+- [x] Implement CR-084 tablet side-rail narrow-width collapse regression fix:
+      keep the `768px - 1279px` collapsed icon rail contracted to the intended
+      narrow width in the final cascade at `1024x768`, while preserving the
+      collapse button and vertically scrollable navigation rail.
+- [x] Implement CR-085 narrow tablet inline-cascade side-rail regression fix:
+      mirror the accepted `768px - 1279px` icon-rail width, mobile-trigger
+      hiding, and collapse-button visibility in the final inline style layer so
+      an in-app panel around `809px` cannot reserve the wrong shell grid track.
+- [x] Strengthen the visual difference between first-level task-loop pages and
       second-level Resource Management/System Configuration pages.
-- [ ] Preserve administrator and normal-user menu visibility.
-- [ ] Verify desktop, tablet, and mobile navigation open, close, switch pages,
+- [x] Preserve administrator and normal-user menu visibility.
+- [x] Verify desktop, tablet, and mobile navigation open, close, switch pages,
       and preserve active state.
 
 ### Phase 21C - Operations Home Refinement
 
-- [ ] Reduce the onboarding feeling of the `01-05` quick-entry block while
+- [x] Reduce the onboarding feeling of the `01-05` quick-entry block while
       preserving all five shortcuts.
-- [ ] Prioritize operational data, urgent exceptions, report output, email
+- [x] Prioritize operational data, urgent exceptions, report output, email
       delivery, and resource impact before guidance content.
-- [ ] Add layout-resilience safeguards for Operations Home closed-loop,
+- [x] Add layout-resilience safeguards for Operations Home closed-loop,
       shortcut, metric, and resource-health sections so desktop, tablet, and
       mobile views wrap or collapse before text becomes one-character vertical
       columns.
-- [ ] Verify administrator and normal-user Operations Home views remain
+- [x] Verify administrator and normal-user Operations Home views remain
       role-safe and usable at `1440x900`, `1024x768`, and `390x844`.
-- [ ] Capture or record dashboard layout checks proving no text overlap,
+- [x] Capture or record dashboard layout checks proving no text overlap,
       unreadable card labels, hidden primary actions, horizontal overflow, or
       one-character-per-line wrapping.
 
 ### Phase 21D - Monitoring Tasks And Task Drawer
 
-- [ ] Refine the Monitoring page and task drawer hierarchy without removing
+- [x] Refine the Monitoring page and task drawer hierarchy without removing
       any formal fields, filters, row actions, more-menu actions, or drawer
       actions.
-- [ ] Preserve normal-user simplified task creation and administrator advanced
+- [x] Preserve normal-user simplified task creation and administrator advanced
       task settings.
-- [ ] Verify task create/edit, sample fill, clear, save, close, run, stop,
+- [x] Verify task create/edit, sample fill, clear, save, close, run, stop,
       pause/resume, and delete flows.
 
 ### Phase 21E - Platform Accounts
 
-- [ ] Refine the Platform Accounts page and account dialog as a complete
+- [x] Refine the Platform Accounts page and account dialog as a complete
       account-maintenance workflow, not a generic configuration modal.
-- [ ] Preserve QR login, local-window fallback where allowed, Cookie login,
+- [x] Preserve QR login, local-window fallback where allowed, Cookie login,
       login records, account identity/details, filters, attention filter,
       batch actions, row detail, and row more menu.
-- [ ] Verify every login status, batch action, row-menu action, save, delete,
+- [x] Verify every login status, batch action, row-menu action, save, delete,
       and close path at desktop, tablet, and mobile widths.
 
 ### Phase 21F - Proxy Resources
 
-- [ ] Refine proxy list density, masked-secret readability, health/error
+- [x] Refine proxy list density, masked-secret readability, health/error
       scanning, and proxy drawer layout.
-- [ ] Preserve add, refresh, view accounts, search, status filter, clear
-      filters, row edit/delete, clear, save, and close.
+- [x] Preserve add, CR-074 top-bar refresh, view accounts, search, status
+      filter, clear filters, row edit/delete, clear, save, and close.
 
 ### Phase 21G - AI Access
 
-- [ ] Refine AI Access resource layout, model selection, model-list loading,
+- [x] Refine AI Access resource layout, model selection, model-list loading,
       default state, delete action, and connection-test feedback.
-- [ ] Preserve add, refresh, view rules, search, protocol/test filters, clear
+- [x] Preserve add, refresh, view rules, search, protocol/test filters, clear
       filters, edit, test, set default, delete, model list, save, and close.
+- [x] Apply CR-081 during Phase 21G verification so AI Access, proxy, account,
+      mail, task, and test drawers keep fixed footer actions outside
+      `.drawer-scroll-body`, with the scrollbar limited to the middle content
+      region.
+
+### Phase 21G.1 - AI Access Model Helper Copy Removal Regression Fix
+
+- [x] Remove the persistent helper sentence under the AI Access model combobox
+      so the model section no longer occupies a full extra line.
+- [x] Preserve the `获取模型列表` button, manual model-name entry, selection
+      list, drawer layout, fixed footer, close behavior, and connection-test
+      flow.
+- [x] Update the AI Access regression test to stop requiring the removed helper
+      sentence and instead assert the combobox remains usable without the extra
+      copy.
+- [x] Run targeted frontend tests, inline script parse, syntax checks, docs
+      check, and browser verification at desktop, tablet, and phone widths.
 
 ### Phase 21H - AI Evaluation Rules
 
-- [ ] Refine the AI rule editor into clearer sections while preserving every
+- [x] Refine the AI rule editor into clearer sections while preserving every
       rule field, prompt preview, sample test field, result area, row action,
       and more-menu action.
-- [ ] Preserve rule testing, default switching, restore default, save, delete,
+- [x] Preserve rule testing, default switching, restore default, save, delete,
       and close flows.
 
 ### Phase 21I - Mail Configuration
 
-- [ ] Refine SMTP form layout, sender/recipient wording, default-recipient
+- [x] Refine SMTP form layout, sender/recipient wording, default-recipient
       explanation, masked password display, and mail-test feedback.
 - [x] Apply CR-049 action hierarchy: keep edit configuration, send test mail,
       refresh/status, delivery-status navigation, and compact real-email state
@@ -1992,39 +2052,70 @@ select/date, close, scroll, or routing logic without a separate accepted CR.
       status, save, cancel, close, and test-console behavior.
 - [x] Add a DOM regression test that fails if the SMTP/defaults summary repeats
       the primary edit/test actions already present in the header.
+- [x] Add Phase 21I static regression coverage for the mail summary cards,
+      compact real-email switch, mail configuration drawer, mail test drawer,
+      fixed footer boundaries, and CR-074 duplicate-refresh protection.
+- [x] Verify Mail Configuration at `1440x900`, `1024x768`, and `390x844`:
+      page opens, required actions remain present, no browser console error,
+      no horizontal overflow, no one-character Chinese text columns, and mail
+      config/test drawer scrollbars remain between the fixed header and footer.
 
 ### Phase 21J - Mail Templates
 
-- [ ] Refine mail-template list, variable hints, active/current state, raw HTML
+- [x] Refine mail-template list, variable hints, active/current state, raw HTML
       editor, subject field, and iframe preview stability.
-- [ ] Preserve add, refresh, view mail config, search/status filters, row edit,
+- [x] Preserve add, refresh, view mail config, search/status filters, row edit,
       set current where available, delete, save, refresh preview, clear, close,
       and iframe preview.
-- [ ] Keep CR-039 governed preset direction as future product work and do not
+- [x] Keep CR-039 governed preset direction as future product work and do not
       remove free-form HTML editing in this visual refinement batch.
+
+### CR-089 - Mail Template Row Helper Text And Update-Time Compactness
+
+- [x] Remove the visible `正文占位符已保留` row helper sentence from the mail
+      template list.
+- [x] Compact the `更新时间` cell with the same wrap-safe time treatment used
+      by the AI rule table so the row does not widen.
+- [x] Verify the mail template list still supports add, refresh, view mail
+      config, search/status filters, row edit, set current, delete, save,
+      refresh preview, clear, close, and iframe preview at desktop, tablet,
+      and mobile widths.
+
+### CR-090 - AI Rule List And Modal Field Width Compactness
+
+- [x] Narrow the `AI 评估规则` list table so the rule-name, last-test, update-
+      time, and action columns read as a denser configuration surface.
+- [x] Rebalance the `AI 评估规则` modal's internal grid and section spacing so
+      the basic info, rule configuration, schema, sample, and result regions
+      feel more proportional; the current narrow follow-up also needs the
+      basic-info card to keep `规则名称` as a single full-width field and the
+      sample/test split to read more evenly.
+- [x] Preserve rule workflow, test/save/restore/default actions, and modal
+      close behavior while keeping the layout readable at desktop, tablet, and
+      mobile widths.
 
 ### Phase 21K - Runtime Strategy
 
-- [ ] Refine grouped runtime-setting tables for scanability, locked-state
+- [x] Refine grouped runtime-setting tables for scanability, locked-state
       readability, valid range, apply scope, and save feedback.
-- [ ] Preserve refresh strategy, save strategy, view diagnostics, grouped
+- [x] Preserve refresh strategy, save strategy, view diagnostics, grouped
       tables, current values, inputs, valid ranges, apply scopes, and lock
       states.
 
 ### Phase 21L - Task Center Conservative Visual Pass
 
-- [ ] Refine the current Task Center only as a conservative visual pass:
+- [x] Refine the current Task Center only as a conservative visual pass:
       colors, contrast, density, metric-chip styling, table separators, status
       treatment, loading/empty/error states, focus states, and responsive
       wrapping.
-- [ ] Preserve the single top-level `任务中心`, default task/report grouping,
+- [x] Preserve the single top-level `任务中心`, default task/report grouping,
       `运行记录` subview, filters, pagination, top-bar page refresh, scoped
       refresh actions, compact status badges, grouped metric chips, and one
       first-level `详情` route into Run Detail.
-- [ ] Preserve report preview, report-scoped lead inspection, delivery history,
+- [x] Preserve report preview, report-scoped lead inspection, delivery history,
       resend, downloads, run logs, copy/download log actions, and report/email
       evidence through Run Detail or the accepted scoped secondary surfaces.
-- [ ] Do not restore separate top-level Run Center / Report Center pages,
+- [x] Do not restore separate top-level Run Center / Report Center pages,
       reintroduce duplicate first-level log/preview/lead/delivery/download row
       actions, move lead-state filters into the first-level Task Center
       toolbar, or change grouping, `运行记录`, Run Detail tab, pagination,
@@ -2032,18 +2123,24 @@ select/date, close, scroll, or routing logic without a separate accepted CR.
 
 ### Phase 21M - Overlay And Run Detail Freeze Gate
 
-- [ ] Refine only overlay chrome and visual states for existing drawers,
+- [x] Refine only overlay chrome and visual states for existing drawers,
       modals, row menus, Run Detail, report preview, delivery history, run/log
       surfaces, enhanced select menus, and local attached date menus.
-- [ ] Preserve Run Detail's six sections, task drawer structure, account/proxy/
+- [x] Preserve Run Detail's six sections, task drawer structure, account/proxy/
       AI/mail/template drawer and modal categories, close buttons, backdrop and
       Escape behavior, bottom actions, `.drawer-scroll-body`, enhanced select
       labels/values, task edit date-picker behavior, report scope behavior, and
       all existing copy/download/resend/refresh/preview/detail actions.
-- [ ] Do not move fields/actions into a different workflow category, replace
+- [x] Do not move fields/actions into a different workflow category, replace
       drawers with new pages/cards, change Run Detail routing, change AI
       evaluation filtering, alter delivery-history scope, move close buttons,
       or simplify away operational fields for visual neatness.
+- [x] Verify Phase 21M with static checks, targeted frontend regression tests,
+      and browser checks at `1440x900`, `1024x768`, and `390x844`, including
+      Run Detail six-tab switching, log copy/download actions, enhanced
+      select/date menus, representative fixed-footer drawers, no console
+      errors, no document horizontal overflow, and no one-character Chinese
+      text columns.
 - [x] Apply CR-048 scope clarity so lead detail reads as selected-report or
       clearly labeled filtered-aggregate detail, not an unlabeled global lead
       table.
@@ -2601,6 +2698,53 @@ does not reopen CR-038, CR-071, or CR-072.
 - [x] Verify targeted frontend tests, syntax checks, inline script parse, docs
       consistency, and browser behavior on a long Monitoring task drawer.
 
+## CR-081 - Scrollable Drawer Fixed Footer Boundary Regression Fix
+
+Planning status:
+
+CR-081 is a focused frontend regression fix raised during Phase 21G review after
+scrollable drawers showed footer action bars inside the scrolling content area.
+It extends the CR-073 `.drawer-scroll-body` structure without reopening the
+historical CR-073 completion state.
+
+- [x] Record CR-081 as a regression fix linked to CR-073 and Phase 21G.
+- [x] Keep `.drawer-scroll-body` as the content scroll owner while moving
+      `.form-actions`, `.resource-modal-actions`, `.account-flow-actions`,
+      `.ai-test-actions`, and `.rule-modal-actions` to direct drawer footer
+      chrome.
+- [x] Preserve close buttons, backdrop/Escape behavior, enhanced select/date
+      behavior, Run Detail tabs, Task Center, owner/report scope, and top-bar
+      refresh semantics.
+- [x] Add static regression coverage for footer extraction, `.drawer-fixed-footer`
+      CSS, and the absence of the old in-scroll sticky action boundary.
+- [x] Verify representative scrollable drawers/modals in browser at desktop,
+      tablet, and phone widths.
+
+## CR-082 - Drawer Scrollbar Header Footer Boundary Recheck
+
+Planning status:
+
+CR-082 is a focused frontend regression recheck raised after CR-081 when user
+browser review clarified that every scrollable overlay's visible scrollbar must
+stay between the fixed header and fixed footer, not merely keep footer buttons
+outside the scroll body.
+
+- [x] Record CR-082 as a regression fix linked to CR-081, CR-073, and Phase
+      21 overlay freeze requirements.
+- [x] Ensure all drawer/modal open paths call shared normalization through
+      `openDrawerChrome(...)` before activation.
+- [x] Keep `.drawer-scroll-body` as the content scroll owner and mark it with
+      `data-scroll-owner="drawer-content"` for verification.
+- [x] Keep fixed footer drawers marked with `has-fixed-footer`, with footer
+      action groups as direct `.drawer-fixed-footer` children.
+- [x] Preserve close buttons, backdrop/Escape/page-switch close behavior,
+      enhanced select/date behavior, Run Detail tabs, Task Center,
+      owner/report scope, top-bar refresh, and bottom action buttons.
+- [x] Verify Mail Configuration, Monitoring task drawer, and Mail Template
+      drawer browser geometry at desktop and phone widths: header/body/footer
+      gaps are zero, footer buttons are outside `.drawer-scroll-body`, and
+      document horizontal overflow is zero.
+
 ## CR-074 - Console Refresh Action Deduplication And Icon Loading
 
 Planning status:
@@ -2630,32 +2774,97 @@ run detail.
 - [x] Verify targeted frontend tests, syntax checks, inline script parse, docs
       consistency, and browser behavior on representative pages.
 
+## CR-086 - Explanatory Helper Copy Tooltip Consolidation
+
+Planning status:
+
+CR-086 is a focused frontend-only visual-density optimization raised after
+Phase 21P. It moves targeted explanatory helper copy out of always-visible
+small text and into consistent question-mark tooltips while preserving the
+original copy and all existing workflows.
+
+- [x] Record CR-086 as an existing-feature optimization linked to Phase 21
+      visual-density and overlay preservation rules.
+- [x] Add static regression coverage that locks the helper-tooltip component,
+      original tooltip copy, removed always-visible helper copy, and preserved
+      Task Center / Run Detail / overlay structure.
+- [x] Add a unified `?` helper tooltip affordance with hover, focus, and
+      click/focus access.
+- [x] Migrate the targeted account, proxy, AI, rule, mail-template, Task
+      Center, and Monitoring helper copy into adjacent label/title tooltips.
+- [x] Preserve operational state text, empty/error/loading feedback, status
+      values, buttons, filters, row actions, downloads, refresh, save/test, and
+      confirmation flows.
+- [x] Verify targeted frontend tests, syntax checks, docs consistency, and
+      browser behavior at representative desktop, tablet, and mobile widths.
+
+## CR-087 - Explanatory Helper Tooltip Removal
+
+Planning status:
+
+CR-087 is a focused frontend-only visual-density follow-up to CR-086 after
+acceptance review found that the `?` helper affordances still added noise. It
+removes the helper-tooltip layer entirely and does not restore the removed
+explanatory small text.
+
+- [x] Record CR-087 as an existing-feature optimization linked to CR-086 and
+      Phase 21 visual-density rules.
+- [x] Add static regression coverage that forbids helper-tooltip markup, CSS,
+      JavaScript helpers, `data-tooltip` content, and the removed explanatory
+      copy returning as visible text.
+- [x] Remove the `?` helper tooltip markup from formal console headers, labels,
+      account cells, resource lists, Task Center, Monitoring, and representative
+      overlays.
+- [x] Remove the helper-tooltip click/keyboard/open/close JavaScript and
+      helper-specific CSS.
+- [x] Preserve operational state text, empty/error/loading feedback, status
+      values, buttons, filters, row actions, downloads, refresh, save/test, and
+      confirmation flows.
+- [x] Verify targeted frontend tests, syntax checks, docs consistency, and
+      browser behavior at representative desktop, tablet, and mobile widths,
+      including the AI rule modal residual helper-text cleanup.
+
+### Phase 21Q - AI Rule Modal Residual Helper Text Removal
+
+- [x] Remove the `AI 状态` line, legacy-prompt notice, and default empty
+      result hint from the `AI 评估规则` modal.
+- [x] Preserve rule sections, sample inputs, test action, save action, and
+      rendered test output.
+- [x] Verify the modal remains reachable and readable at desktop, tablet, and
+      mobile widths without re-expanding the layout because of explanatory
+      helper text.
+
 ### Phase 21N - System Diagnostics
 
-- [ ] Refine diagnostics into clearer summary, impact, next action, runtime
+- [x] Refine diagnostics into clearer summary, impact, next action, runtime
       state, scheduler state, platform state, and action-card hierarchy.
-- [ ] Preserve rerun diagnosis, run system diagnosis, process account
+- [x] Preserve rerun diagnosis, run system diagnosis, process account
       resources, readiness/action cards, and customer-safe diagnostic wording.
+- [x] Verify System Diagnostics at `1440x900`, `1024x768`, and `390x844`,
+      including rerun diagnosis, run system diagnosis feedback, account-resource
+      routing, readiness/actions, scheduler state, platform state, no console
+      errors, no document horizontal overflow, and no one-character Chinese
+      text columns.
 
 ### Phase 21O - Login Page
 
-- [ ] Refine login trust, focus, loading, and error states without changing the
+- [x] Refine login trust, focus, loading, and error states without changing the
       session/authentication flow.
-- [ ] Preserve email, password, login, error feedback, and route-to-Operations
+- [x] Preserve email, password, login, error feedback, and route-to-Operations
       Home behavior after successful login.
 
 ### Phase 21P - Cross-Page Verification
 
-- [ ] Run static checks: `node --check api/webui/monitor/monitor.js`, inline
+- [x] Run static checks: `node --check api/webui/monitor/monitor.js`, inline
       script parse check for `api/monitor_web/index.html`, and
       `uv run python scripts/check_docs.py`.
-- [ ] Run targeted frontend regression tests covering CR-033, formal console
+- [x] Run targeted frontend regression tests covering CR-033, formal console
       pages, secondary overlays, loading feedback, and floating menus.
-- [ ] Run browser verification at `1440x900`, `1024x768`, and `390x844` for
+- [x] Run browser verification at `1440x900`, `1024x768`, and `390x844` for
       administrator and normal-user paths.
-- [ ] Stress-check card/grid layouts with long law-firm names, platform names,
+- [x] Stress-check card/grid layouts with long law-firm names, platform names,
       account labels, failure reasons, and status text across dashboard, runs,
       reports, resources, and secondary overlays; fail the batch if any module
       collapses text into one-character vertical columns or hides actions.
-- [ ] Record implementation verification in `docs/TEST_RESULTS.md` only after
+- [x] Record implementation verification in `docs/TEST_RESULTS.md` only after
       code changes are actually implemented and tested.

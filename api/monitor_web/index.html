@@ -76,7 +76,7 @@
     .ai-test-meta div { border:1px solid var(--line); border-radius:8px; background:#fff; padding:10px; min-height:64px; }
     .ai-test-meta strong { display:block; font-size:12px; color:var(--muted); margin-bottom:5px; }
     .ai-test-meta span { display:block; word-break:break-all; }
-    .ai-test-actions { position:sticky; bottom:-18px; z-index:5; display:flex; align-items:center; justify-content:space-between; gap:12px; border-top:1px solid var(--line); margin:16px -18px -18px; padding:14px 18px; background:#fff; }
+    .ai-test-actions { position:relative; bottom:auto; z-index:5; display:flex; align-items:center; justify-content:space-between; gap:12px; border-top:1px solid var(--line); margin:16px 0 0; padding:14px 18px; background:#fff; }
     .model-combobox { position:relative; display:flex; gap:6px; align-items:stretch; }
     .model-combobox input { flex:1; min-width:0; }
     .model-combobox button.combo-trigger { flex:0 0 72px; padding-left:8px; padding-right:8px; white-space:nowrap; }
@@ -114,7 +114,7 @@
     .rule-accordion summary { cursor:pointer; font-weight:700; color:var(--text); }
     .rule-accordion textarea { margin-top:8px; min-height:86px; background:#fff; }
     .rule-output-compact { max-height:256px; overflow:auto; }
-    .rule-modal-actions { position:sticky; bottom:-18px; margin:14px -18px -18px; padding:14px 18px; border-top:1px solid var(--line); background:#fff; display:flex; align-items:center; justify-content:space-between; gap:12px; z-index:5; }
+    .rule-modal-actions { position:relative; bottom:auto; margin:14px 0 0; padding:14px 18px; border-top:1px solid var(--line); background:#fff; display:flex; align-items:center; justify-content:space-between; gap:12px; z-index:5; }
     .readiness-summary { display:flex; gap:12px; align-items:flex-start; flex-wrap:wrap; margin:12px 0; padding:12px; border:1px solid var(--line); border-radius:8px; background:#fbfdff; }
     .readiness-summary.ready { border-color:#86efac; background:#f0fdf4; }
     .readiness-summary.pending { border-color:#fed7aa; background:#fff7ed; }
@@ -159,7 +159,7 @@
     .resource-stat { border:1px solid var(--line); border-radius:8px; background:#fbfdff; padding:10px; min-height:62px; }
     .resource-stat strong { display:block; color:var(--muted); font-size:12px; margin-bottom:5px; }
     .resource-stat span { display:block; color:var(--text); font-weight:750; word-break:break-word; }
-    .resource-modal-actions { position:sticky; bottom:-18px; margin:16px -18px -18px; padding:14px 18px; border-top:1px solid var(--line); background:#fff; display:flex; align-items:center; justify-content:space-between; gap:12px; z-index:5; flex-wrap:wrap; }
+    .resource-modal-actions { position:relative; bottom:auto; margin:16px 0 0; padding:14px 18px; border-top:1px solid var(--line); background:#fff; display:flex; align-items:center; justify-content:space-between; gap:12px; z-index:5; flex-wrap:wrap; }
     .resource-modal-actions .row { flex:0 0 auto; justify-content:flex-end; }
     .mail-test-modal { width:min(760px, calc(100% - 36px)); }
     .test-console { min-height:168px; max-height:360px; overflow:auto; background:#0f172a; color:#dbeafe; border-radius:8px; padding:12px; white-space:pre-wrap; font-family:Consolas,Menlo,monospace; line-height:1.6; }
@@ -230,7 +230,7 @@
     .account-section details.advanced { margin-top:0; border-top:0; padding-top:0; }
     .account-section details.advanced summary { color:var(--text); font-size:16px; margin-bottom:10px; }
     .account-section-actions { display:flex; justify-content:flex-end; gap:10px; flex-wrap:wrap; margin-top:12px; }
-    .account-flow-actions { position:sticky; bottom:-18px; z-index:5; border-top:1px solid var(--line); border-left:0; border-right:0; border-bottom:0; border-radius:0; background:#fff; padding:14px 18px; margin:16px -18px -18px; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
+    .account-flow-actions { position:relative; bottom:auto; z-index:5; border-top:1px solid var(--line); border-left:0; border-right:0; border-bottom:0; border-radius:0; background:#fff; padding:14px 18px; margin:16px 0 0; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
     .account-flow-actions .row { flex:0 0 auto; justify-content:flex-end; }
     .account-readonly-field { border:1px solid var(--line); border-radius:6px; background:#f8fafc; padding:9px 10px; min-height:38px; color:var(--muted); word-break:break-all; }
     .account-error-summary { border:1px solid var(--line); border-radius:8px; background:#fbfdff; padding:10px 12px; color:var(--muted); margin-top:8px; }
@@ -299,7 +299,7 @@
     .normal-wizard-hint { display:none; margin:0 0 14px; }
     .admin-advanced-section { border-color:#bfdbfe; background:#fbfdff; }
     .admin-advanced-section h3 { color:#1d4ed8; }
-    .form-actions { position:sticky; bottom:-18px; z-index:5; margin:16px -18px -18px; display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap; border-top:1px solid var(--line); padding:14px 18px; background:#fff; }
+    .form-actions { position:relative; bottom:auto; z-index:5; margin:16px 0 0; display:flex; justify-content:flex-end; gap:8px; flex-wrap:wrap; border-top:1px solid var(--line); padding:14px 18px; background:#fff; }
     .rule-modal-actions .row, .ai-test-actions .row, .account-flow-actions .row, .resource-modal-actions .row { width:auto; flex:0 0 auto; justify-content:flex-end; }
     .rule-modal-actions > .small, .ai-test-actions > .small, .account-flow-actions .small, .resource-modal-actions .small { max-width:620px; }
   </style>
@@ -352,10 +352,15 @@
       padding-left:12px;
     }
     .nav-sublist { padding-left:30px; }
-    .nav-sublist button.active,
-    .nav-sublist button:hover {
-      background:rgba(255,255,255,.085);
-      box-shadow:inset 2px 0 0 rgba(255,255,255,.42);
+    .nav-sublist button:hover:not(.active) {
+      background:#edf1f5;
+      color:var(--text);
+      box-shadow:none;
+    }
+    .nav-sublist button.active {
+      background:#e8fbf6;
+      color:#0f766e;
+      box-shadow:none;
     }
     header {
       min-height:72px;
@@ -553,17 +558,14 @@
     .operations-metric-card strong { font-size:36px; }
     .operations-home-lower {
       grid-area:lower;
-      grid-template-columns:minmax(320px,.94fr) minmax(0,1.68fr) minmax(320px,.94fr);
+      grid-template-columns:minmax(0,1.2fr) minmax(300px,.8fr);
       gap:12px;
+      align-items:start;
     }
     .operations-resource-panel { order:-1; }
-    .operations-drilldown-list {
-      grid-template-columns:repeat(2, minmax(0,1fr));
-    }
-    .operations-drilldown { min-height:80px; }
     .operations-command-rail {
       min-width:0;
-      padding:16px;
+      padding:14px;
       border:1px solid var(--line);
       border-radius:var(--radius);
       background:linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,250,252,.98));
@@ -574,7 +576,7 @@
       align-items:flex-start;
       justify-content:space-between;
       gap:12px;
-      margin-bottom:14px;
+      margin-bottom:12px;
     }
     .command-rail-head span {
       color:var(--muted);
@@ -593,62 +595,30 @@
       font-size:12px;
       line-height:1.6;
     }
-    .command-rail-track {
-      position:relative;
+    .command-rail-summary {
       display:grid;
       grid-template-columns:repeat(4, minmax(0,1fr));
-      gap:10px;
-      padding-top:10px;
-    }
-    .command-rail-track::before {
-      content:"";
-      position:absolute;
-      left:8%;
-      right:8%;
-      top:28px;
-      height:1px;
-      background:linear-gradient(90deg, rgba(188,201,216,.2), rgba(188,201,216,.95), rgba(188,201,216,.2));
-    }
-    .command-rail-step {
-      position:relative;
-      display:grid;
       gap:8px;
-      min-height:138px;
-      padding:10px 12px 12px;
+    }
+    .command-rail-chip {
+      min-width:0;
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:8px;
+      padding:8px 10px;
       border:1px solid var(--line);
-      border-radius:var(--radius);
+      border-radius:999px;
       background:var(--subtle);
     }
-    .command-rail-step::before {
-      content:"";
-      width:11px;
-      height:11px;
-      border-radius:999px;
-      background:#bcc9d8;
-      box-shadow:0 0 0 4px rgba(188,201,216,.2);
-      z-index:1;
-    }
-    .command-rail-step.is-ok::before {
-      background:var(--success);
-      box-shadow:0 0 0 4px rgba(23,99,71,.11);
-    }
-    .command-rail-step.is-review::before {
-      background:var(--warning);
-      box-shadow:0 0 0 4px rgba(138,75,17,.11);
-    }
-    .command-rail-step.is-attention::before {
-      background:var(--danger);
-      box-shadow:0 0 0 4px rgba(159,39,48,.11);
-    }
-    .command-rail-step strong { font-size:14px; }
-    .command-rail-step p,
-    .command-rail-step ul {
+    .command-rail-chip strong { font-size:13px; white-space:nowrap; }
+    .command-rail-chip span {
       margin:0;
       color:var(--muted);
       font-size:12px;
-      line-height:1.6;
+      line-height:1.3;
+      text-align:right;
     }
-    .command-rail-step ul { padding-left:16px; }
     .operations-admin-health-card {
       align-items:flex-start;
       gap:12px;
@@ -669,6 +639,46 @@
       border-color:var(--line);
       border-radius:14px;
       box-shadow:0 28px 70px rgba(10,18,32,.18);
+    }
+    .drawer {
+      min-height:0;
+      overflow:hidden;
+      isolation:isolate;
+    }
+    .drawer-scroll-body {
+      position:relative;
+      min-height:0;
+      overflow-x:hidden;
+      overflow-y:auto;
+      overscroll-behavior:contain;
+      scrollbar-gutter:stable;
+    }
+    .drawer > .drawer-fixed-toolbar {
+      position:relative;
+      flex:0 0 auto;
+      width:100%;
+      margin:0;
+      padding:10px var(--drawer-padding-x);
+      border-bottom:1px solid var(--line);
+      background:#fff;
+      z-index:25;
+    }
+    .drawer > .drawer-fixed-toolbar.drawer-actions {
+      margin:0;
+    }
+    .drawer > .drawer-fixed-toolbar.run-detail-toolbar,
+    .drawer > .drawer-fixed-toolbar.report-leads-toolbar {
+      border-left:0;
+      border-right:0;
+      border-radius:0;
+    }
+    .drawer > .drawer-fixed-toolbar.detail-tabs {
+      margin:0;
+      padding-top:8px;
+      padding-bottom:0;
+    }
+    .drawer.has-fixed-footer > .drawer-scroll-body {
+      border-bottom:0;
     }
     .auth-screen {
       background:
@@ -770,11 +780,25 @@
       .metric-skeleton-grid { grid-template-columns:repeat(2, minmax(0,1fr)); }
       .shortcut-card { grid-column:span 1; }
       .operations-home-lower,
-      .command-rail-track { grid-template-columns:minmax(0,1fr); }
+      .command-rail-summary { grid-template-columns:minmax(0,1fr); }
       .operations-resource-panel { order:0; }
       .command-rail-head,
       .operations-admin-health-card { flex-wrap:wrap; }
       .operations-admin-health-signals { justify-content:flex-start; }
+    }
+    @media (min-width:768px) and (max-width:1279px) {
+      body.sidebar-collapsed .shell { grid-template-columns:68px minmax(0,1fr) !important; }
+      body.sidebar-collapsed #primary_sidebar,
+      body.sidebar-collapsed .shell > aside {
+        width:68px !important;
+        max-width:68px !important;
+        padding:20px 8px !important;
+        overflow:hidden;
+      }
+      .mobile-nav-toggle,
+      .mobile-nav-backdrop,
+      body.mobile-nav-open .mobile-nav-backdrop { display:none !important; }
+      .sidebar-collapse-button { display:flex !important; }
     }
     @media (max-width:767px) {
       #dashboard.active {
@@ -802,35 +826,21 @@
         align-items:center;
         gap:8px;
       }
-      .operations-metric-foot button {
-        width:auto;
-        min-height:32px;
-        padding:6px 9px;
-        white-space:nowrap;
-      }
       .operations-home-lower { gap:10px; }
       .operations-command-rail { padding:12px; }
       .command-rail-head { margin-bottom:10px; }
       .command-rail-head strong { font-size:15px; }
       .command-rail-head p { display:none; }
-      .command-rail-track {
+      .command-rail-summary {
         grid-template-columns:repeat(2, minmax(0,1fr));
         gap:8px;
-        padding-top:0;
       }
-      .command-rail-track::before { display:none; }
-      .command-rail-step {
-        min-height:70px;
+      .command-rail-chip {
         padding:10px;
         gap:6px;
       }
-      .command-rail-step p,
-      .command-rail-step ul { display:none; }
-      .command-rail-step strong { font-size:13px; }
-      .operations-drilldowns,
+      .command-rail-chip strong { font-size:13px; }
       .operations-resource-panel { padding:12px !important; }
-      .operations-drilldown { min-height:62px; }
-      .operations-drilldown span { display:none; }
       .detail-tabs.run-detail-tabs {
         display:grid;
         grid-template-columns:repeat(2, minmax(0,1fr));
@@ -850,20 +860,120 @@
         border-color:var(--primary);
         background:var(--primary-weak);
       }
-      .header-actions { width:100%; justify-content:flex-start; }
+      body header {
+        min-height:auto;
+        display:grid !important;
+        grid-template-columns:40px minmax(0,1fr) 36px 44px;
+        grid-template-areas:
+          "nav title refresh account"
+          "status status status status";
+        align-items:center;
+        row-gap:8px;
+        column-gap:8px;
+        padding:12px var(--space-page-x);
+      }
+      body header .mobile-nav-toggle {
+        grid-area:nav;
+        min-width:40px;
+        width:40px;
+        height:40px;
+        padding:0;
+        justify-content:center;
+      }
+      body header .mobile-nav-toggle > span:not(.mobile-nav-icon) {
+        display:none;
+      }
+      body header .header-title {
+        grid-area:title;
+        display:block;
+        min-width:0;
+        width:100%;
+        max-width:100%;
+        writing-mode:horizontal-tb;
+      }
+      body header .header-title strong {
+        display:block;
+        white-space:nowrap;
+        overflow:hidden;
+        text-overflow:ellipsis;
+        word-break:keep-all;
+        overflow-wrap:normal;
+        writing-mode:horizontal-tb;
+      }
+      body header .header-title span {
+        display:block;
+        overflow:hidden;
+        text-overflow:ellipsis;
+        white-space:nowrap;
+        word-break:keep-all;
+        writing-mode:horizontal-tb;
+      }
+      body header .header-actions {
+        display:contents !important;
+        width:auto !important;
+        min-width:0 !important;
+        justify-content:initial;
+      }
+      body header #top_status {
+        grid-area:status;
+        width:100%;
+        display:flex !important;
+        align-items:center;
+        justify-content:flex-start;
+        gap:6px;
+        min-width:0;
+        overflow:visible;
+        flex-wrap:wrap;
+      }
+      body header #global_refresh_button {
+        grid-area:refresh;
+        justify-self:end;
+      }
+      body header .account-area {
+        grid-area:account;
+        justify-self:end;
+        width:auto;
+        min-width:0;
+        padding-left:0;
+        border-left:0;
+      }
+      body header .account-menu-button {
+        max-width:54px;
+        min-width:44px;
+        min-height:40px;
+        padding:4px;
+        border-radius:999px;
+        justify-content:center;
+      }
+      body header .account-menu-copy,
+      body header .account-menu-caret {
+        display:none;
+      }
+      body header .status {
+        max-width:100%;
+        white-space:nowrap;
+      }
     }
   </style>
 </head>
 <body>
   <div id="auth_screen" class="auth-screen">
-    <div class="auth-panel">
-      <h1>登录舆情监控后台</h1>
-      <p>使用管理员创建的账号进入系统。普通用户只会看到任务、运行和报告相关页面。</p>
+    <div class="auth-panel" role="dialog" aria-labelledby="auth_title" aria-describedby="auth_intro">
+      <div class="auth-panel-head">
+        <div class="auth-brand">
+          <div class="auth-brand-mark" aria-hidden="true">舆</div>
+          <div>
+            <span class="auth-kicker">Legal Sentiment Monitor</span>
+            <h1 id="auth_title">登录舆情监控后台</h1>
+          </div>
+        </div>
+        <p id="auth_intro">使用已开通账号进入系统，系统会按角色显示可用页面。</p>
+      </div>
       <form id="login_form">
-        <div><label>邮箱</label><input id="login_email" type="email" autocomplete="username" required></div>
-        <div><label>密码</label><input id="login_password" type="password" autocomplete="current-password" required></div>
-        <div id="login_error" class="auth-error"></div>
-        <button class="primary" type="submit">登录</button>
+        <div class="auth-field"><label for="login_email">邮箱</label><input id="login_email" type="email" autocomplete="username" required></div>
+        <div class="auth-field"><label for="login_password">密码</label><input id="login_password" type="password" autocomplete="current-password" required></div>
+        <div id="login_error" class="auth-error" role="alert" aria-live="polite"></div>
+        <button id="login_submit" class="primary auth-submit" type="submit"><span>登录</span></button>
       </form>
     </div>
   </div>
@@ -877,6 +987,15 @@
     <symbol id="icon-plus" viewBox="0 0 24 24"><path d="M12 5v14"></path><path d="M5 12h14"></path></symbol>
     <symbol id="icon-refresh" viewBox="0 0 24 24"><path d="M21 12a9 9 0 0 1-15.6 6"></path><path d="M3 12a9 9 0 0 1 15.6-6"></path><path d="M3 4v6h6"></path><path d="M21 20v-6h-6"></path></symbol>
     <symbol id="icon-more" viewBox="0 0 24 24"><path d="M12 12h.01"></path><path d="M19 12h.01"></path><path d="M5 12h.01"></path></symbol>
+    <symbol id="icon-account" viewBox="0 0 24 24"><path d="M20 21a8 8 0 0 0-16 0"></path><circle cx="12" cy="7" r="4"></circle></symbol>
+    <symbol id="icon-proxy" viewBox="0 0 24 24"><path d="M4 7h16"></path><path d="M4 17h16"></path><rect x="5" y="4" width="14" height="6" rx="2"></rect><rect x="5" y="14" width="14" height="6" rx="2"></rect></symbol>
+    <symbol id="icon-ai" viewBox="0 0 24 24"><path d="M12 3v3"></path><path d="M12 18v3"></path><path d="M3 12h3"></path><path d="M18 12h3"></path><rect x="7" y="7" width="10" height="10" rx="2"></rect><path d="M10 11h4"></path><path d="M10 14h2"></path></symbol>
+    <symbol id="icon-rules" viewBox="0 0 24 24"><path d="M8 4h8"></path><path d="M9 2h6v4H9z"></path><path d="M6 4h-.5A2.5 2.5 0 0 0 3 6.5v13A2.5 2.5 0 0 0 5.5 22h13a2.5 2.5 0 0 0 2.5-2.5v-13A2.5 2.5 0 0 0 18.5 4H18"></path><path d="m8 13 2 2 4-5"></path></symbol>
+    <symbol id="icon-mail" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="14" rx="2"></rect><path d="m3 7 9 6 9-6"></path></symbol>
+    <symbol id="icon-template" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M8 13h8"></path><path d="M8 17h5"></path></symbol>
+    <symbol id="icon-runtime" viewBox="0 0 24 24"><path d="M4 17V7"></path><path d="M12 17V3"></path><path d="M20 17v-7"></path><path d="M4 21v-4"></path><path d="M12 21v-4"></path><path d="M20 21v-4"></path></symbol>
+    <symbol id="icon-doctor" viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"></path><path d="M9 12h6"></path><path d="M12 9v6"></path></symbol>
+    <symbol id="icon-collapse" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"></path><path d="m21 18-6-6 6-6"></path></symbol>
   </svg>
   <div id="mobile_nav_backdrop" class="mobile-nav-backdrop" aria-hidden="true"></div>
   <div class="shell">
@@ -885,39 +1004,36 @@
         <strong>Legal Sentiment</strong>
         <span>企业级律所舆情监控</span>
       </div>
-      <div id="mobile_account_area" class="mobile-account-area">
-        <div id="mobile_current_user_badge" class="small"></div>
-        <button class="secondary" onclick="logout()">退出</button>
-      </div>
       <nav id="primary_navigation">
         <div class="nav-group">
-          <button class="active" data-tab="dashboard" data-menu-key="overview"><span class="ui-icon"><svg><use href="#icon-dashboard"></use></svg></span>总览</button>
+          <button class="active" data-tab="dashboard" data-menu-key="overview"><span class="ui-icon"><svg><use href="#icon-dashboard"></use></svg></span><span>总览</span></button>
         </div>
         <div class="nav-group">
-          <button data-tab="jobs" data-menu-key="monitoring"><span class="ui-icon"><svg><use href="#icon-monitor"></use></svg></span>舆情监控</button>
+          <button data-tab="jobs" data-menu-key="monitoring"><span class="ui-icon"><svg><use href="#icon-monitor"></use></svg></span><span>舆情监控</span></button>
         </div>
         <div class="nav-group">
-          <button data-tab="runs" data-menu-key="run_center"><span class="ui-icon"><svg><use href="#icon-run"></use></svg></span>任务中心</button>
+          <button data-tab="runs" data-menu-key="run_center"><span class="ui-icon"><svg><use href="#icon-run"></use></svg></span><span>任务中心</span></button>
         </div>
         <div class="nav-group nav-group-collapsible" data-nav-group="resources">
           <button class="nav-group-toggle" type="button" data-nav-group-toggle="resources" data-default-tab="accounts" data-menu-key="platform_accounts" aria-controls="nav_group_resources" aria-expanded="true"><span class="ui-icon"><svg><use href="#icon-resource"></use></svg></span><span>资源管理</span><span class="nav-caret" aria-hidden="true"></span></button>
           <div class="nav-sublist" id="nav_group_resources">
-            <button class="sub" data-tab="accounts" data-menu-key="platform_accounts">平台账号</button>
-            <button class="sub" data-tab="proxies" data-menu-key="proxy_resources">代理资源</button>
-            <button class="sub" data-tab="ai" data-menu-key="ai_access">AI 接入</button>
+            <button class="sub" data-tab="accounts" data-menu-key="platform_accounts"><span class="ui-icon"><svg><use href="#icon-account"></use></svg></span><span>平台账号</span></button>
+            <button class="sub" data-tab="proxies" data-menu-key="proxy_resources"><span class="ui-icon"><svg><use href="#icon-proxy"></use></svg></span><span>代理资源</span></button>
+            <button class="sub" data-tab="ai" data-menu-key="ai_access"><span class="ui-icon"><svg><use href="#icon-ai"></use></svg></span><span>AI 接入</span></button>
           </div>
         </div>
         <div class="nav-group nav-group-collapsible" data-nav-group="settings">
           <button class="nav-group-toggle" type="button" data-nav-group-toggle="settings" data-default-tab="ai_rules" data-menu-key="ai_rules" aria-controls="nav_group_settings" aria-expanded="true"><span class="ui-icon"><svg><use href="#icon-settings"></use></svg></span><span>系统配置</span><span class="nav-caret" aria-hidden="true"></span></button>
           <div class="nav-sublist" id="nav_group_settings">
-            <button class="sub" data-tab="ai_rules" data-menu-key="ai_rules">AI 评估规则</button>
-            <button class="sub" data-tab="email" data-menu-key="mail_config">邮件配置</button>
-            <button class="sub" data-tab="email_templates" data-menu-key="mail_templates">邮件模板</button>
-            <button class="sub" data-tab="runtime" data-menu-key="runtime_strategy">运行策略</button>
-            <button class="sub" data-tab="doctor" data-menu-key="system_diagnostics">系统诊断</button>
+            <button class="sub" data-tab="ai_rules" data-menu-key="ai_rules"><span class="ui-icon"><svg><use href="#icon-rules"></use></svg></span><span>AI 评估规则</span></button>
+            <button class="sub" data-tab="email" data-menu-key="mail_config"><span class="ui-icon"><svg><use href="#icon-mail"></use></svg></span><span>邮件配置</span></button>
+            <button class="sub" data-tab="email_templates" data-menu-key="mail_templates"><span class="ui-icon"><svg><use href="#icon-template"></use></svg></span><span>邮件模板</span></button>
+            <button class="sub" data-tab="runtime" data-menu-key="runtime_strategy"><span class="ui-icon"><svg><use href="#icon-runtime"></use></svg></span><span>运行策略</span></button>
+            <button class="sub" data-tab="doctor" data-menu-key="system_diagnostics"><span class="ui-icon"><svg><use href="#icon-doctor"></use></svg></span><span>系统诊断</span></button>
           </div>
         </div>
       </nav>
+      <button id="sidebar_collapse_button" class="sidebar-collapse-button" type="button" aria-controls="primary_sidebar" aria-expanded="true" aria-label="收起侧边导航" title="收起侧边导航"><span class="ui-icon" aria-hidden="true"><svg><use href="#icon-collapse"></use></svg></span><span>收起</span></button>
     </aside>
     <div class="content">
       <header>
@@ -927,35 +1043,53 @@
         </button>
         <div class="header-title">
           <strong>舆情监控运营后台</strong>
-          <span>抖音 / 快手 / 小红书 · 平台采集服务</span>
+          <span>多平台律所舆情监控</span>
         </div>
         <div class="row header-actions">
           <div id="top_status" class="small"></div>
           <button id="global_refresh_button" class="secondary btn-icon refresh-icon-button" type="button" data-feedback-bound="1" onclick="refreshActiveSection(this)" aria-label="Refresh current page" title="Refresh current page"><span class="ui-icon refresh-icon" aria-hidden="true"><svg><use href="#icon-refresh"></use></svg></span></button>
           <div class="account-area">
-            <div id="current_user_badge" class="small"></div>
-            <button class="secondary" onclick="logout()">退出</button>
+            <button id="account_menu_button" class="account-menu-button" type="button" data-feedback-bound="1" aria-haspopup="menu" aria-expanded="false" aria-controls="account_menu">
+              <span id="account_avatar" class="account-avatar" aria-hidden="true">--</span>
+              <span class="account-menu-copy">
+                <strong id="account_display_name">-</strong>
+                <span id="account_role_label">-</span>
+              </span>
+              <span class="account-menu-caret" aria-hidden="true"></span>
+            </button>
+            <div id="account_menu" class="account-menu" role="menu" aria-labelledby="account_menu_button">
+              <div class="account-menu-summary">
+                <span id="account_menu_avatar" class="account-avatar" aria-hidden="true">--</span>
+                <span>
+                  <strong id="account_menu_name">-</strong>
+                  <em id="account_menu_email">-</em>
+                </span>
+              </div>
+              <button type="button" role="menuitem" data-feedback-bound="1" onclick="refreshFromAccountMenu()"><span class="ui-icon"><svg><use href="#icon-refresh"></use></svg></span>刷新当前页</button>
+              <button type="button" role="menuitem" data-feedback-bound="1" onclick="returnToOperationsHomeFromAccountMenu()">返回运营首页</button>
+              <button class="account-menu-danger" type="button" role="menuitem" data-feedback-bound="1" onclick="logoutFromAccountMenu()">退出登录</button>
+            </div>
           </div>
         </div>
       </header>
       <section id="dashboard" class="active">
         <div class="page-head page-entry" data-page-entry="dashboard">
-          <div class="page-title-block"><span class="page-kicker">运营首页</span><h2>运营首页</h2><p>围绕监控任务、运行记录、报告和邮件交付查看当前运营状态。</p></div>
+          <div class="page-title-block"><span class="page-kicker">运营首页</span><h2>运营首页</h2></div>
           <div class="page-actions">
             <button class="primary" data-shortcut-tab="jobs" data-shortcut-action="new-job" data-menu-key="monitoring">新建监控任务</button>
           </div>
         </div>
         <div id="task_loop_shortcuts" class="task-loop-shortcuts" aria-label="监控任务流快捷入口">
-          <button class="shortcut-card shortcut-primary" type="button" data-shortcut-tab="jobs" data-shortcut-action="new-job" data-menu-key="monitoring"><span>01</span><strong>创建监控任务</strong><em>填写律所、平台搜索词、调度和收件人。</em></button>
-          <button class="shortcut-card" type="button" data-shortcut-tab="runs" data-shortcut-grouped="1" data-shortcut-target="task_center_panel" data-menu-key="run_center"><span>02</span><strong>查看任务中心</strong><em>按舆情监控任务分组查看运行、风险计数和详情。</em></button>
-          <button class="shortcut-card" type="button" data-shortcut-tab="runs" data-shortcut-grouped="0" data-shortcut-target="task_center_panel" data-menu-key="run_center"><span>03</span><strong>查看运行记录</strong><em>按任务 ID 顺序跟进采集状态、失败原因和详情。</em></button>
-          <button class="shortcut-card admin-entry" type="button" data-shortcut-tab="accounts" data-menu-key="platform_accounts"><span>04</span><strong>处理资源问题</strong><em>维护账号登录态、代理、AI 接入和邮件配置。</em></button>
+          <button class="shortcut-card shortcut-primary" type="button" data-shortcut-tab="jobs" data-shortcut-action="new-job" data-menu-key="monitoring"><span>01</span><strong>新建任务</strong></button>
+          <button class="shortcut-card" type="button" data-shortcut-tab="runs" data-shortcut-grouped="1" data-shortcut-target="task_center_panel" data-menu-key="run_center"><span>02</span><strong>任务中心</strong></button>
+          <button class="shortcut-card" type="button" data-shortcut-tab="runs" data-shortcut-grouped="0" data-shortcut-target="task_center_panel" data-menu-key="run_center"><span>03</span><strong>运行记录</strong></button>
+          <button class="shortcut-card admin-entry" type="button" data-shortcut-tab="accounts" data-menu-key="platform_accounts"><span>04</span><strong>资源处理</strong></button>
+          <button class="shortcut-card admin-entry" type="button" data-shortcut-tab="doctor" data-menu-key="system_diagnostics"><span>05</span><strong>系统诊断</strong></button>
         </div>
         <div class="operations-home" aria-label="运营指标">
           <div id="operations_home_meta" class="operations-home-meta"></div>
           <div id="dashboard_metrics" class="operations-metric-grid"></div>
           <div class="operations-home-lower">
-            <div id="operations_home_drilldowns" class="operations-drilldowns" aria-label="运营钻取入口"></div>
             <div id="operations_home_resource" class="operations-resource-panel"></div>
           </div>
         </div>
@@ -964,7 +1098,7 @@
 
       <section id="jobs">
         <div class="page-head page-entry" data-page-entry="jobs">
-          <div class="page-title-block"><span class="page-kicker">任务监控</span><h2>舆情监控</h2><p>配置律所舆情任务，把平台采集、过滤去重、AI 评估和报告发送串联起来。</p></div>
+          <div class="page-title-block"><span class="page-kicker">任务监控</span><h2>舆情监控</h2></div>
           <div class="page-actions">
             <button class="primary" onclick="openNewJobDrawer()">新建任务</button>
             <button class="secondary btn-icon refresh-icon-button" type="button" data-feedback-bound="1" onclick="refreshJobSchedule(this)" aria-label="Refresh schedule times" title="Refresh schedule times"><span class="ui-icon refresh-icon" aria-hidden="true"><svg><use href="#icon-refresh"></use></svg></span></button>
@@ -982,7 +1116,6 @@
         </div>
         <details class="advanced">
           <summary>采集规则说明</summary>
-          <div class="inline-help">当前首版以平台搜索词采集为主。平台搜索词会用于平台搜索；律所名称、别名和排除词用于评估、报告和采集后过滤。</div>
           <div id="job_capability_table" style="margin-top:12px"></div>
         </details>
       </section>
@@ -991,8 +1124,7 @@
       <div id="job_drawer" class="drawer form-drawer" role="dialog" aria-modal="true" aria-label="监控任务">
         <div class="drawer-head">
           <div>
-            <h3 id="job_drawer_title">新建任务</h3>
-            <div class="small">任务配置负责串联调度、平台采集、AI 评估和邮件发送；账号、代理、AI 接入、邮件模板在各自资源页独立维护。</div>
+            <h3><span id="job_drawer_title">新建任务</span></h3>
           </div>
           <button class="modal-close" onclick="closeJobDrawer()" title="关闭">×</button>
         </div>
@@ -1007,7 +1139,6 @@
           </div>
           <div class="config-section wizard-section" data-wizard-step="target">
             <h3>1. 目标</h3>
-            <p class="section-note">律所名称和别名用于 AI 判断、报告标题和线索归属，不会自动追加为平台搜索词。</p>
             <div class="grid">
               <div><label>律所名称</label><input id="law_firm_name" placeholder="例如：海安律所"></div>
               <div><label>律所别名（多行）</label><textarea id="aliases" placeholder="海安律师事务所&#10;海安律师"></textarea></div>
@@ -1016,10 +1147,8 @@
 
           <div class="config-section wizard-section" data-wizard-step="content">
             <h3>2. 采集内容</h3>
-            <p class="section-note">平台搜索词会逐行传入平台搜索。律所名称和别名只用于评估、报告和线索归属。</p>
             <label>平台搜索词（多行）</label>
             <textarea id="keywords" placeholder="海安律所避雷&#10;海安律所退费&#10;海安律所投诉"></textarea>
-            <div class="field-hint">这里的每一行才会用于平台搜索；律所别名不会自动参与搜索。</div>
             <div class="row">
               <div>
                 <label>平台</label>
@@ -1044,14 +1173,12 @@
 
           <div class="config-section">
             <h3>过滤与去重</h3>
-            <p class="section-note">排除词不参与平台搜索，只在内容采回后过滤标题、正文、作者和来源搜索词。系统最终按发布时间和内容 ID 去重。</p>
             <label>排除词（多行）</label>
             <textarea id="exclude_words" placeholder="招聘&#10;无关同名&#10;广告合作"></textarea>
           </div>
 
           <div class="config-section admin-advanced-section admin-only-job-field">
             <h3>管理员高级采集设置</h3>
-            <p class="section-note">仅管理员可绑定账号、代理和采集技术参数；普通用户任务会使用系统自动选择的资源。</p>
             <div class="row page-filter-region modal-filter-region">
               <div><label>绑定平台账号</label><select id="job_account_id"><option value="">自动选择可用账号</option></select></div>
               <div><label>绑定代理资源</label><select id="job_proxy_id"><option value="">跟随账号设置</option></select></div>
@@ -1069,7 +1196,6 @@
 
           <div class="config-section wizard-section" data-wizard-step="schedule">
             <h3>3. 调度</h3>
-            <p class="section-note">设置任务是否启用、多久运行一次，以及每次只处理哪个时间范围内的新内容。</p>
             <div class="row page-filter-region modal-filter-region">
               <div>
                 <label>采集范围</label>
@@ -1093,7 +1219,6 @@
 
           <div class="config-section admin-advanced-section admin-only-job-field">
             <h3>AI 评估</h3>
-            <p class="section-note">选择用于本任务的 AI 接入资源。未选择或接入异常时，采集仍会运行，内容进入待人工复核。</p>
             <div class="grid page-filter-region modal-filter-region">
               <div><label>AI 接入</label><select id="job_ai_profile_id"><option value="">使用默认 AI 接入</option></select></div>
               <div><label>评估规则</label><input value="使用系统配置中的 AI 评估规则" disabled></div>
@@ -1102,9 +1227,7 @@
 
           <div class="config-section wizard-section" data-wizard-step="report">
             <h3>4. 报告</h3>
-            <p class="section-note">设置报告收件人和本任务使用的邮件模板。任务收件人优先；留空才使用邮件配置里的全局默认收件人。发件人只代表 SMTP 身份，不会自动成为收件人。</p>
             <label>收件邮箱（多行）</label><textarea id="recipients" placeholder="a@example.com&#10;b@example.com"></textarea>
-            <div class="field-hint">未填写任务收件人时，系统会尝试使用全局默认收件人；两者都为空时只生成报告，不发送邮件。未配置邮件也可以采集和生成报告，只是不发送邮件。</div>
             <div class="grid admin-only-job-field page-filter-region modal-filter-region">
               <div><label>邮件模板</label><select id="job_email_template_id"><option value="">使用当前启用模板</option></select></div>
             </div>
@@ -1120,7 +1243,7 @@
 
       <section id="accounts">
         <div class="page-head page-entry" data-page-entry="accounts">
-          <div class="page-title-block"><span class="page-kicker">资源支撑</span><h2>平台账号</h2><p>维护抖音、快手、小红书账号资源、登录状态和代理绑定。任务只选择账号，不在任务里修改账号资料。</p></div>
+          <div class="page-title-block"><span class="page-kicker">资源支撑</span><h2>平台账号</h2></div>
           <div class="page-actions">
             <button class="primary" onclick="openNewSocialAccountModal()">新增账号</button>
             <button class="secondary" data-shortcut-tab="jobs" data-menu-key="monitoring">返回任务</button>
@@ -1132,7 +1255,6 @@
             <div class="account-ledger-head">
               <div>
                 <h3>账号列表</h3>
-                <p class="small">这里统一维护账号资源。点击“详情”进入单个账号的登录、Cookie、代理和状态维护。</p>
               </div>
               <div id="account_bulk_toolbar" class="account-bulk-toolbar">
                 <span id="account_bulk_count" class="account-bulk-count">未选择账号</span>
@@ -1161,8 +1283,7 @@
         <div id="account_dialog" class="drawer form-drawer account-detail-card" role="dialog" aria-modal="true" onclick="event.stopPropagation()" aria-label="平台账号">
             <div class="modal-head">
               <div>
-                <h3 id="account_detail_title">账号详情</h3>
-                <p id="account_detail_subtitle" class="small">填写当前账号信息后，通过扫码或 Cookie 完成登录维护。</p>
+                <h3><span id="account_detail_title">账号详情</span></h3>
               </div>
               <button class="modal-close" onclick="closeSocialAccountModal()" title="关闭">×</button>
             </div>
@@ -1178,7 +1299,6 @@
                   <div>
                     <label>平台</label>
                     <select id="social_account_platform"><option value="dy">抖音</option><option value="ks">快手</option><option value="xhs">小红书</option></select>
-                    <div id="social_account_platform_hint" class="small">新建账号时选择平台；保存后平台不可变更。</div>
                   </div>
                   <div><label>账号状态</label><select id="social_account_status"><option value="standby">待机</option><option value="active">可用</option><option value="limited">受限</option><option value="disabled">停用</option></select></div>
                   <div><label>绑定代理</label><select id="social_account_proxy_id"><option value="">不绑定代理</option></select></div>
@@ -1188,7 +1308,6 @@
                 <div id="social_account_error_summary" class="account-error-summary">最近暂无异常。</div>
                 <details class="advanced">
                   <summary>高级设置</summary>
-                  <div class="small">网页登录态由系统按账号自动创建和复用，不需要手动填写路径。</div>
                   <label>异常记录</label><textarea id="social_account_last_error" placeholder="最近一次登录或采集异常，可留空"></textarea>
                 </details>
                 </details>
@@ -1200,8 +1319,6 @@
                     <label>登录方式</label>
                     <select id="social_account_login_type" onchange="handleSocialLoginTypeChange()" style="display:none"><option value="qrcode">扫码登录</option><option value="cookie">Cookie</option></select>
                     <div id="social_login_method_options" class="login-method-options"></div>
-                    <p id="login_mode_hint" class="small">该登录方式只作用于当前账号，任务绑定此账号后会复用这里保存的登录态。</p>
-                    <div id="login_capability_hint" class="notice"></div>
                   </div>
                   <div>
                     <div id="login_panel_qrcode" class="login-mode-panel platform-login-panel active">
@@ -1209,7 +1326,6 @@
                         <button id="account_qrcode_button" class="primary" type="button" data-feedback-bound="1" onclick="startLoginSessionFromForm()">生成二维码并登录</button>
                         <button id="account_local_login_button" class="secondary" type="button" data-feedback-bound="1" onclick="openCurrentAccountLoginBrowser()">打开登录窗口</button>
                       </div>
-                      <div id="account_login_prereq_hint" class="small" style="margin-top:8px"></div>
                       <div id="login_session_result" class="login-result"><div class="small">点击“生成登录二维码”后在这里扫码。</div></div>
                     </div>
                     <div id="login_panel_cookie" class="login-mode-panel platform-login-panel">
@@ -1228,7 +1344,7 @@
                     <summary>3. 登录记录</summary>
                     <div class="account-ledger-head">
                       <div>
-                        <p class="small">这里只展示最近登录结果，登录和检测操作请在上方维护区或账号列表中完成。</p>
+                        <h3>最近登录结果</h3>
                       </div>
                     </div>
                     <div id="current_account_login_sessions"></div>
@@ -1239,7 +1355,6 @@
             <div id="account_modal_actions" class="account-flow-actions">
               <div>
                 <strong>4. 完成账号设置</strong>
-                <div class="small">保存账号会更新账号资料；登录是否可用以登录维护和账号检测结果为准。</div>
               </div>
               <div class="row">
                 <button id="account_save_button" class="primary" type="button" data-feedback-bound="1" onclick="saveSocialAccount()">保存账号</button>
@@ -1251,7 +1366,7 @@
 
       <section id="proxies">
         <div class="page-head page-entry" data-page-entry="proxies">
-          <div class="page-title-block"><span class="page-kicker">资源支撑</span><h2>代理资源</h2><p>维护代理来源、并发上限和可用状态。代理可绑定到账号或任务，采集时按绑定关系使用。</p></div>
+          <div class="page-title-block"><span class="page-kicker">资源支撑</span><h2>代理资源</h2></div>
           <div class="page-actions">
             <button class="primary" onclick="openProxyDrawer()">新增代理</button>
             <button class="secondary" data-shortcut-tab="accounts" data-menu-key="platform_accounts">查看账号</button>
@@ -1262,7 +1377,6 @@
           <div class="account-ledger-head">
             <div>
               <h3>代理列表</h3>
-              <p class="small">新增、编辑和删除都在弹窗内确认；代理 URL 保存后只显示掩码。</p>
             </div>
             <div class="inline-status"><span id="proxy_resource_count">-</span></div>
           </div>
@@ -1281,8 +1395,7 @@
       <div id="proxy_drawer" class="drawer form-drawer" role="dialog" aria-modal="true" aria-label="代理资源">
         <div class="drawer-head">
           <div>
-            <h3 id="proxy_drawer_title">新增代理</h3>
-            <div class="small">代理 URL 会加密保存，列表只显示掩码。</div>
+            <h3><span id="proxy_drawer_title">新增代理</span></h3>
           </div>
           <button class="modal-close" onclick="closeProxyDrawer()" title="关闭">×</button>
         </div>
@@ -1299,7 +1412,7 @@
           <label>备注</label><textarea id="proxy_notes" placeholder="记录供应商、地区、套餐、过期时间"></textarea>
           <label>错误信息</label><textarea id="proxy_last_error" placeholder="记录最近一次代理检测异常，可留空"></textarea>
           <div class="resource-modal-actions">
-            <div class="small">保存后任务和账号绑定会继续引用这个代理资源；删除前请确认没有正在使用的任务。</div>
+            <strong>保存代理</strong>
             <div class="row">
               <button class="secondary" onclick="resetProxyForm()">清空</button>
               <button id="proxy_save_button" class="primary" type="button" data-feedback-bound="1" onclick="saveProxyProfile()">保存代理</button>
@@ -1310,7 +1423,7 @@
 
       <section id="ai">
         <div class="page-head page-entry" data-page-entry="ai">
-          <div class="page-title-block"><span class="page-kicker">资源支撑</span><h2>AI 接入</h2><p>维护 OpenAI-compatible / Anthropic-compatible 协议的模型连接资源，可被监控任务绑定。</p></div>
+          <div class="page-title-block"><span class="page-kicker">资源支撑</span><h2>AI 接入</h2></div>
           <div class="page-actions">
             <button class="primary" onclick="openAIProfileDrawer()">新增 AI 接入</button>
             <button class="secondary" data-shortcut-tab="ai_rules" data-menu-key="ai_rules">查看评估规则</button>
@@ -1321,7 +1434,6 @@
           <div class="account-ledger-head">
             <div>
               <h3>AI 接入资源</h3>
-              <p class="small">API Key 保存后不回显；连接测试在独立弹窗中执行并记录最近状态。</p>
             </div>
             <div class="inline-status"><span id="ai_resource_count">-</span></div>
           </div>
@@ -1342,7 +1454,6 @@
         <div class="drawer-head">
           <div>
             <h3>测试 AI 接入</h3>
-            <div class="small">系统会发送一条最小测试消息，确认鉴权、接口、模型和文本返回是否正常。</div>
           </div>
           <button class="modal-close" onclick="closeAIConnectionTestModal()" title="关闭">×</button>
         </div>
@@ -1363,7 +1474,7 @@
         </div>
         <pre id="ai_test_console" class="test-console"><span class="muted-line">准备测试。点击“开始测试”后，系统会发送最小消息并等待模型返回文本。</span></pre>
         <div class="ai-test-actions">
-          <div class="small">连接测试只验证 API 是否能返回文本，不使用舆情评估 Prompt。</div>
+          <strong>连接测试</strong>
           <div class="row" style="flex:0 0 auto">
             <button class="secondary" onclick="closeAIConnectionTestModal()">关闭</button>
             <button class="primary" id="ai_test_start_btn" type="button" data-feedback-bound="1" onclick="runAIConnectionTest()">开始测试</button>
@@ -1375,8 +1486,7 @@
       <div id="ai_profile_drawer" class="drawer form-drawer" role="dialog" aria-modal="true" aria-label="AI 接入">
         <div class="drawer-head">
           <div>
-            <h3 id="ai_profile_drawer_title">新增 AI 接入</h3>
-            <div class="small">API Key 加密保存；连接测试只发送一条最简单消息确认服务可用。</div>
+            <h3><span id="ai_profile_drawer_title">新增 AI 接入</span></h3>
           </div>
           <button class="modal-close" onclick="closeAIProfileDrawer()" title="关闭">×</button>
         </div>
@@ -1389,28 +1499,23 @@
               <label>模型名称</label>
               <div class="model-combobox">
                 <input id="ai_profile_model" placeholder="可手动输入，或获取列表后选择">
-                <button type="button" id="ai_profile_model_toggle" class="secondary combo-trigger">选择</button>
+                <button type="button" id="ai_profile_model_load_btn" class="secondary combo-trigger model-load-trigger" data-feedback-bound="1" onclick="loadAIProfileModels(this)">获取模型列表</button>
                 <div id="ai_profile_model_options" class="model-options" role="listbox"></div>
               </div>
             </div>
             <div><label>Base URL</label><input id="ai_profile_base_url" placeholder="https://api.openai.com"></div>
             <div><label>API Key</label><input id="ai_profile_api_key" type="password" placeholder="留空不修改"></div>
           </div>
-          <div class="row" style="margin-top:8px">
-            <button id="ai_profile_model_load_btn" class="secondary" type="button" data-feedback-bound="1" onclick="loadAIProfileModels(this)">获取模型列表</button>
-            <span id="ai_profile_model_status" class="small">部分服务不提供模型列表；获取失败时仍可手动填写模型名称。</span>
-          </div>
           <details class="advanced ai-profile-advanced">
             <summary>高级参数</summary>
             <div class="grid-3">
               <div><label>评估随机性</label><input id="ai_profile_temperature" type="number" min="0" max="2" step="0.1" value="0"></div>
             </div>
-            <div class="small">仅影响后续舆情评估输出；连接测试固定使用稳定参数，方便判断接口是否可用。</div>
           </details>
           <input type="hidden" id="ai_profile_prompt">
           <label><input type="checkbox" id="ai_profile_active"> 设为默认 AI 接入</label>
           <div class="resource-modal-actions">
-            <div class="small">保存后可在列表中进行连接测试；API Key 留空时不会覆盖已保存密钥。</div>
+            <strong>保存 AI 接入</strong>
             <div class="row">
               <button class="secondary" onclick="resetAIProfileForm()">清空</button>
               <button id="ai_profile_save_button" class="primary" type="button" data-feedback-bound="1" onclick="saveAIProfile()">保存 AI 接入</button>
@@ -1421,20 +1526,19 @@
 
       <section id="ai_rules">
         <div class="page-head page-entry" data-page-entry="ai_rules">
-          <div class="page-title-block"><span class="page-kicker">系统配置</span><h2>AI 评估规则</h2><p>维护可复用的舆情判断规则。当前默认规则会用于任务采集后的 AI 初筛。</p></div>
+          <div class="page-title-block"><span class="page-kicker">系统配置</span><h2>AI 评估规则</h2></div>
           <div class="page-actions">
             <button class="primary" onclick="openNewAIRuleModal()">新增评估规则</button>
             <button class="secondary" data-shortcut-tab="ai" data-menu-key="ai_access">查看 AI 接入</button>
           </div>
         </div>
-        <div class="panel">
-          <div class="account-ledger-head">
+        <div class="panel ai-rule-panel">
+          <div class="account-ledger-head ai-rule-ledger-head">
             <div>
               <h3>评估规则列表</h3>
-              <div class="small">列表只管理规则资源；固定输出字段和样例测试在规则详情中维护。</div>
             </div>
             <div class="account-bulk-toolbar">
-              <span id="ai_rules_summary" class="account-bulk-count">-</span>
+              <span id="ai_rules_summary" class="account-bulk-count ai-rule-summary">-</span>
             </div>
           </div>
           <div id="ai_rules_table"></div>
@@ -1445,8 +1549,7 @@
       <div id="ai_rule_modal" class="drawer template-modal" role="dialog" aria-modal="true" aria-label="AI 评估规则">
         <div class="drawer-head">
           <div>
-            <h3 id="ai_rule_modal_title">新增评估规则</h3>
-            <div class="small">规则只影响模型如何判断和填写字段；输出字段由系统固定校验。</div>
+            <h3><span id="ai_rule_modal_title">新增评估规则</span></h3>
           </div>
           <button class="modal-close" onclick="closeAIRuleModal()" title="关闭">×</button>
         </div>
@@ -1460,24 +1563,21 @@
         <textarea id="ai_prompt" style="display:none"></textarea>
         <div class="rule-modal-flow">
           <div class="rule-editor-stack">
-            <div class="rule-section-card">
+            <div class="rule-section-card rule-section-card-basic">
               <div class="rule-section-head">
                 <div>
                   <h3>基础信息</h3>
-                  <div class="small">命名并确认当前状态。</div>
                 </div>
                 <span id="ai_rule_status_badge" class="status">未保存</span>
               </div>
               <div class="grid">
                 <div><label>规则名称</label><input id="ai_rule_name" placeholder="例如：律所舆情默认规则"></div>
               </div>
-              <div id="ai_status" class="small" style="margin-top:8px"></div>
             </div>
-            <div class="rule-section-card">
+            <div class="rule-section-card rule-section-card-config">
               <div class="rule-section-head">
                 <div>
                   <h3>规则配置</h3>
-                  <div class="small">按判断步骤填写；固定输出结构由系统校验。</div>
                 </div>
               </div>
               <div class="rule-accordion">
@@ -1493,19 +1593,18 @@
                 <pre id="ai_prompt_preview" class="prompt-preview"></pre>
               </details>
             </div>
-            <div class="rule-section-card">
+            <div class="rule-section-card rule-section-card-schema">
               <h3>固定输出字段</h3>
               <div id="ai_output_schema_table" class="schema-list rule-output-compact" style="margin-top:10px"></div>
             </div>
           </div>
           <div class="rule-test-stack">
-            <div class="rule-section-card">
+            <div class="rule-section-card rule-section-card-sample">
               <h3>测试样例</h3>
-              <div class="small">手动填写一条采集内容和评论样本，用来验证规则是否符合预期；平台只作为样例上下文，不会触发采集或导入数据。</div>
               <div class="sample-box">
                 <div class="grid page-filter-region modal-filter-region">
                   <div><label>样例律所</label><input id="ai_sample_law_firm_name" value="海安律所"></div>
-                  <div><label>平台</label><select id="ai_sample_platform"><option value="dy">抖音</option><option value="ks">快手</option><option value="xhs">小红书</option></select></div>
+                  <div><label>平台</label><select id="ai_sample_platform" class="modal-select-compact"><option value="dy">抖音</option><option value="ks">快手</option><option value="xhs">小红书</option></select></div>
                 </div>
                 <div><label>平台搜索词</label><input id="ai_sample_source_keyword" value="海安律所避雷"></div>
                 <div><label>样例标题</label><input id="ai_sample_title" value="海安律所避雷：退费拖了很久"></div>
@@ -1514,14 +1613,14 @@
 建议先保留沟通证据再投诉</textarea></div>
               </div>
             </div>
-            <div class="rule-section-card">
+            <div class="rule-section-card rule-section-card-result">
               <h3>测试结果</h3>
-              <pre id="ai_rules_result" class="resultbox" style="margin-top:8px">调整规则或样例内容后，点击“测试评估规则”查看模型返回的结构化结果。</pre>
+              <pre id="ai_rules_result" class="resultbox ai-rule-result is-idle" style="margin-top:8px"></pre>
             </div>
           </div>
         </div>
         <div class="rule-modal-actions">
-          <div class="small">保存后可设为默认规则；测试会使用当前样例内容，不影响真实任务。</div>
+          <strong>规则操作</strong>
           <div class="row" style="flex:0 0 auto">
             <button id="ai_rule_test_button" class="secondary" type="button" data-feedback-bound="1" onclick="testAIRuleFromModal()">测试评估规则</button>
             <button class="secondary" onclick="resetAIPrompt()">恢复默认规则</button>
@@ -1532,7 +1631,7 @@
 
       <section id="email">
         <div class="page-head page-entry" data-page-entry="email">
-          <div class="page-title-block"><span class="page-kicker">邮件交付</span><h2>邮件配置</h2><p>配置 SMTP、发件人和全局默认收件人。任务填写收件人时优先发送给任务收件人；默认收件人只在任务收件人为空时兜底。</p></div>
+          <div class="page-title-block"><span class="page-kicker">邮件交付</span><h2>邮件配置</h2></div>
           <div class="page-actions">
             <button class="primary" onclick="openMailConfigModal()">编辑邮件配置</button>
             <button class="secondary" onclick="openMailTestModal()">发送测试邮件</button>
@@ -1544,11 +1643,11 @@
             </label>
           </div>
         </div>
-        <div class="resource-summary-grid">
-            <div class="settings-stat"><strong>测试状态</strong><span id="email_status_label">未测试</span></div>
-            <div class="settings-stat"><strong>发件身份</strong><span id="email_sender_summary">-</span></div>
-            <div class="settings-stat"><strong>默认收件人</strong><span id="email_recipient_summary">0 个</span></div>
-            <div class="settings-stat"><strong>标题模板</strong><span id="email_subject_summary">-</span></div>
+        <div class="resource-summary-grid mail-config-summary-grid">
+            <div id="email_test_status_card" class="settings-stat mail-config-stat"><strong>测试状态</strong><span id="email_status_label">未测试</span></div>
+            <div class="settings-stat mail-config-stat"><strong>发件身份</strong><span id="email_sender_summary">-</span></div>
+            <div class="settings-stat mail-config-stat"><strong>默认收件人</strong><span id="email_recipient_summary">0 个兜底收件人</span></div>
+            <div class="settings-stat mail-config-stat"><strong>标题模板</strong><span id="email_subject_summary">-</span></div>
         </div>
       </section>
 
@@ -1557,13 +1656,12 @@
         <div class="drawer-head">
           <div>
             <h3>编辑邮件配置</h3>
-            <div class="small">SMTP 密码会加密保存；留空表示不修改已保存密码。</div>
           </div>
           <button class="modal-close" onclick="closeMailConfigModal()" title="关闭">×</button>
         </div>
-        <div class="panel">
+          <div class="panel mail-config-panel">
           <div class="settings-panel-grid">
-            <div class="settings-card">
+            <div class="settings-card mail-config-card">
               <h3>SMTP 连接</h3>
               <div class="grid-3 page-filter-region modal-filter-region">
                 <div><label>SMTP Host</label><input id="smtp_host"></div>
@@ -1574,15 +1672,14 @@
                 <div><label>密码</label><input id="smtp_password" type="password" placeholder="留空表示不修改"><div id="smtp_password_status" class="field-hint">未保存密码</div></div>
               </div>
             </div>
-            <div class="settings-card">
+            <div class="settings-card mail-config-card mail-default-card">
               <h3>发送默认值</h3>
               <label>默认收件人</label><textarea id="default_recipients" style="min-height:136px"></textarea>
-              <div class="field-hint">全局默认收件人只在任务没有填写收件邮箱时使用；SMTP 发件人不会自动加入收件人。</div>
               <label>标题模板</label><input id="subject_template" value="【律所舆情日报】{law_firm_name} - {date}">
             </div>
           </div>
           <div class="resource-modal-actions">
-            <div class="small">保存配置不会自动发送邮件；如需验证 SMTP，请使用“测试邮件”。</div>
+            <strong>保存配置</strong>
             <div class="row">
               <button class="secondary" onclick="closeMailConfigModal()">取消</button>
               <button id="mail_config_save_button" class="primary" type="button" data-feedback-bound="1" onclick="saveEmail()">保存配置</button>
@@ -1596,13 +1693,12 @@
         <div class="drawer-head">
           <div>
             <h3>发送测试邮件</h3>
-            <div class="small">测试会使用当前表单中的配置；如果刚修改过密码，请先保存或在配置弹窗中保持当前输入。</div>
           </div>
           <button class="modal-close" onclick="closeMailTestModal()" title="关闭">×</button>
         </div>
         <pre id="mail_test_console" class="test-console"><span class="muted-line">点击“开始测试”后，系统会尝试发送一封测试邮件并记录结果。</span></pre>
         <div class="resource-modal-actions">
-          <div class="small">测试失败不会阻断报告生成；系统仍会保留报告供下载和预览。</div>
+          <strong>测试结果</strong>
           <div class="row">
             <button class="secondary" onclick="closeMailTestModal()">关闭</button>
             <button id="mail_test_start_btn" class="primary" type="button" data-feedback-bound="1" onclick="testEmail()">开始测试</button>
@@ -1612,18 +1708,17 @@
 
       <section id="email_templates">
         <div class="page-head page-entry" data-page-entry="email_templates">
-          <div class="page-title-block"><span class="page-kicker">邮件交付</span><h2>邮件模板</h2><p>管理报告邮件标题和样式。HTML 模板必须保留 {report_html} 或 {report_body}，真实发送时由系统插入本次运行生成的报告正文。</p></div>
+          <div class="page-title-block"><span class="page-kicker">邮件交付</span><h2>邮件模板</h2></div>
           <div class="page-actions">
             <button class="primary" onclick="openEmailTemplateDrawer()">新增邮件模板</button>
             <button class="secondary" data-shortcut-tab="email" data-menu-key="mail_config">查看邮件配置</button>
           </div>
         </div>
         <div id="email_template_resource_summary" class="resource-summary-grid"></div>
-        <div class="panel">
+        <div class="panel email-template-panel">
           <div class="account-ledger-head">
             <div>
               <h3>HTML 邮件模板</h3>
-              <p class="small">报告发送时优先使用任务绑定模板，再使用当前启用模板；预览使用样例数据，不代表某次历史发送的实际正文。</p>
             </div>
             <div class="inline-status"><span id="email_template_summary">-</span></div>
           </div>
@@ -1640,20 +1735,24 @@
 
       <section id="runtime">
         <div class="page-head page-entry" data-page-entry="runtime">
-          <div class="page-title-block"><span class="page-kicker">系统配置</span><h2>运行策略</h2><p>配置采集并发、运行超时、登录会话、调度间隔和保留周期。</p></div>
+          <div class="page-title-block"><span class="page-kicker">系统配置</span><h2>运行策略</h2></div>
           <div class="page-actions">
-            <button class="primary" onclick="saveRuntimeSettings()">保存策略</button>
+            <button class="primary runtime-save-button" onclick="saveRuntimeSettings()">保存策略</button>
             <button class="secondary" data-shortcut-tab="doctor" data-menu-key="system_diagnostics">查看系统诊断</button>
           </div>
         </div>
         <div class="panel">
+          <div class="runtime-guardrail" aria-label="运行策略保存提示">
+            <strong>保存后会影响后续采集、登录会话、调度检查或清理任务。</strong>
+            <span>部署锁定项保持只读；其余设置按“生效”列的时间点应用。</span>
+          </div>
           <div id="runtime_settings_table"></div>
         </div>
       </section>
 
       <section id="runs">
         <div class="page-head page-entry" data-page-entry="runs">
-          <div class="page-title-block"><span class="page-kicker">任务中心</span><h2>任务中心</h2><p>用同一套运行记录查看采集、AI 评估、报告和交付；打开分组时按舆情监控任务汇总。</p></div>
+          <div class="page-title-block"><span class="page-kicker">任务中心</span><h2>任务中心</h2></div>
           <div class="page-actions">
             <button class="primary" data-shortcut-tab="jobs" data-shortcut-action="new-job" data-menu-key="monitoring">新建任务</button>
           </div>
@@ -1662,7 +1761,6 @@
           <div class="account-ledger-head">
             <div>
               <h3>运行记录</h3>
-              <p class="small">字段口径保持一致；分组模式会隐藏组标题已展示的任务身份，不改变可查看的详情。</p>
             </div>
             <div class="task-center-mode">
               <label class="switch-control" title="打开后按舆情监控任务分组展示；关闭后按任务 ID 和运行 ID 顺序展示。">
@@ -1702,39 +1800,40 @@
       </section>
       <section id="doctor">
         <div class="page-head page-entry" data-page-entry="doctor">
-          <div class="page-title-block"><span class="page-kicker">系统诊断</span><h2>系统诊断</h2><p>检查基础配置、运行状态和报告链路，便于管理员快速定位待处理项。</p></div>
+          <div class="page-title-block"><span class="page-kicker">系统诊断</span><h2>系统诊断</h2></div>
           <div class="page-actions">
             <button class="secondary" onclick="loadDoctor()">重新诊断</button>
             <button class="primary" onclick="runSmokeCheck()">运行系统诊断</button>
             <button class="secondary" data-shortcut-tab="accounts" data-menu-key="platform_accounts">处理账号资源</button>
           </div>
         </div>
-        <div class="diagnostic-layout">
-          <div class="panel">
+        <div class="diagnostic-layout diagnostic-overview-layout">
+          <div class="panel diagnostic-primary-panel">
+            <div class="diagnostic-section-title"><span>基础配置</span><strong>诊断结果</strong></div>
             <div id="doctor_summary"></div>
             <div id="smoke_result"></div>
             <div id="doctor_table"></div>
           </div>
-          <div class="panel">
-            <h3>下一步处理</h3>
+          <div class="panel diagnostic-next-panel">
+            <div class="diagnostic-section-title"><span>处理路径</span><strong>下一步处理</strong></div>
             <div id="doctor_recommendations"></div>
           </div>
         </div>
         <div class="grid">
-          <div class="panel">
-            <h3>系统运行状态</h3>
+          <div class="panel diagnostic-readiness-panel">
+            <div class="diagnostic-section-title"><span>运行就绪</span><strong>系统运行状态</strong></div>
             <div id="readiness_summary"></div>
             <div id="ops_checklist"></div>
             <div id="readiness_actions"></div>
             <div id="readiness_table"></div>
           </div>
-          <div class="panel">
-            <h3>调度器状态</h3>
+          <div class="panel diagnostic-scheduler-panel">
+            <div class="diagnostic-section-title"><span>自动调度</span><strong>调度器状态</strong></div>
             <div id="scheduler_status"></div>
           </div>
         </div>
-        <div class="panel">
-          <h3>平台状态</h3>
+        <div class="panel diagnostic-platform-panel">
+          <div class="diagnostic-section-title"><span>平台资源</span><strong>平台状态</strong></div>
           <div id="platform_status_table"></div>
         </div>
       </section>
@@ -1766,37 +1865,64 @@
   <div id="email_template_drawer" class="drawer template-modal email-template-modal" role="dialog" aria-modal="true" aria-label="邮件模板">
     <div class="drawer-head">
       <div>
-        <h3 id="email_template_drawer_title">新增邮件模板</h3>
-        <div class="small">编辑标题和 HTML 样式；预览使用样例数据，真实发送会替换为对应运行生成的报告 HTML。</div>
+        <h3><span id="email_template_drawer_title">新增邮件模板</span></h3>
       </div>
       <button class="modal-close" onclick="closeEmailTemplateDrawer()" title="关闭">×</button>
     </div>
     <div class="template-editor-layout">
-      <div>
+      <div class="template-editor-stack">
         <input type="hidden" id="email_template_id">
-        <div class="grid">
-          <div><label>模板名称</label><input id="email_template_name" placeholder="例如：企业日报模板"></div>
-          <div><label>邮件标题模板</label><input id="email_template_subject" value="【律所舆情日报】{law_firm_name} - {date}"></div>
-        </div>
-        <div class="grid page-filter-region modal-filter-region">
-          <div>
-            <label>样式预设</label>
-            <select id="email_template_preset" onchange="applyEmailTemplatePreset(this.value)">
-              <option value="standard">标准日报</option>
-              <option value="compact">紧凑摘要</option>
-              <option value="formal">正式简报</option>
-              <option value="custom">自定义 / 历史模板</option>
-            </select>
-            <div class="field-hint">选择预设会生成包含 {report_body} 的包装样式；旧模板仍可作为自定义模板读取和编辑。</div>
+        <div class="template-section-card template-section-card-basic">
+          <div class="template-section-head">
+            <div>
+              <h3>基础信息</h3>
+            </div>
+            <label class="template-active-toggle"><input type="checkbox" id="email_template_active"> 设为当前模板</label>
+          </div>
+          <div class="grid">
+            <div><label>模板名称</label><input id="email_template_name" placeholder="例如：企业日报模板"></div>
+            <div><label>邮件标题模板</label><input id="email_template_subject" value="【律所舆情日报】{law_firm_name} - {date}"></div>
           </div>
         </div>
-        <label>HTML 模板</label>
-        <textarea id="email_html_template" placeholder="<main>{report_body}</main>"></textarea>
-        <div id="email_template_guardrail" class="notice">HTML 模板必须包含 {report_html} 或 {report_body}，否则无法保存。</div>
-        <div class="template-variable-row">
-          <code>{law_firm_name}</code><code>{date}</code><code>{new_contents}</code><code>{negative_count}</code><code>{high_count}</code><code>{pending_review_count}</code><code>{platforms}</code><code>{report_body}</code><code>{report_html}</code>
+        <div class="template-section-card template-section-card-html">
+          <div class="template-section-head">
+            <div>
+              <h3>样式与正文</h3>
+            </div>
+          </div>
+          <div class="grid page-filter-region modal-filter-region">
+            <div>
+              <label>样式预设</label>
+              <select id="email_template_preset" onchange="applyEmailTemplatePreset(this.value)">
+                <option value="standard">标准日报</option>
+                <option value="compact">紧凑摘要</option>
+                <option value="formal">正式简报</option>
+                <option value="custom">自定义 / 历史模板</option>
+              </select>
+            </div>
+          </div>
+          <label>HTML 模板</label>
+          <textarea id="email_html_template" placeholder="<main>{report_body}</main>"></textarea>
+          <div id="email_template_guardrail" class="notice">HTML 模板必须包含 {report_html} 或 {report_body}，否则无法保存。</div>
         </div>
-        <label><input type="checkbox" id="email_template_active"> 设为当前邮件模板</label>
+        <div class="template-section-card template-section-card-variables">
+          <div class="template-section-head">
+            <div>
+              <h3>可用变量</h3>
+            </div>
+          </div>
+          <div class="template-variable-row">
+            <button type="button" data-feedback-bound="1" onclick="copyText('{law_firm_name}')"><code>{law_firm_name}</code><span>律所</span></button>
+            <button type="button" data-feedback-bound="1" onclick="copyText('{date}')"><code>{date}</code><span>日期</span></button>
+            <button type="button" data-feedback-bound="1" onclick="copyText('{new_contents}')"><code>{new_contents}</code><span>新增</span></button>
+            <button type="button" data-feedback-bound="1" onclick="copyText('{negative_count}')"><code>{negative_count}</code><span>疑似负面</span></button>
+            <button type="button" data-feedback-bound="1" onclick="copyText('{high_count}')"><code>{high_count}</code><span>高风险</span></button>
+            <button type="button" data-feedback-bound="1" onclick="copyText('{pending_review_count}')"><code>{pending_review_count}</code><span>待复核</span></button>
+            <button type="button" data-feedback-bound="1" onclick="copyText('{platforms}')"><code>{platforms}</code><span>平台</span></button>
+            <button type="button" data-feedback-bound="1" onclick="copyText('{report_body}')"><code>{report_body}</code><span>报告正文</span></button>
+            <button type="button" data-feedback-bound="1" onclick="copyText('{report_html}')"><code>{report_html}</code><span>报告 HTML</span></button>
+          </div>
+        </div>
         <div class="form-actions">
           <button id="email_template_save_button" class="primary" type="button" data-feedback-bound="1" onclick="saveEmailTemplate()">保存模板</button>
           <button id="email_template_preview_button" class="secondary btn-icon refresh-icon-button" type="button" data-feedback-bound="1" onclick="previewEmailTemplate(true, this)" aria-label="Refresh preview" title="Refresh preview"><span class="ui-icon refresh-icon" aria-hidden="true"><svg><use href="#icon-refresh"></use></svg></span></button>
@@ -1804,9 +1930,13 @@
         </div>
       </div>
       <div class="template-preview-panel">
-        <h3>实时预览</h3>
-        <div id="email_preview_subject" class="notice"></div>
-        <div id="email_preview_note" class="small">预览使用样例数据；真实发送会使用对应运行生成的报告 HTML。</div>
+        <div class="template-preview-head">
+          <div>
+            <h3>实时预览</h3>
+          </div>
+          <span class="status">样例</span>
+        </div>
+        <div id="email_preview_subject" class="notice template-preview-subject"></div>
         <iframe id="email_template_preview" class="preview-frame"></iframe>
       </div>
     </div>
@@ -2353,7 +2483,40 @@
       enhanceFilterDateInputs(root);
       syncAllFilterDateButtons();
     }
+    function closeSessionMenu(){
+      const button=document.getElementById('account_menu_button');
+      const menu=document.getElementById('account_menu');
+      if(button) button.setAttribute('aria-expanded','false');
+      if(menu) menu.classList.remove('active');
+    }
+    function toggleSessionMenu(event){
+      if(event){
+        event.preventDefault();
+        event.stopPropagation();
+      }
+      const button=document.getElementById('account_menu_button');
+      const menu=document.getElementById('account_menu');
+      if(!button || !menu) return;
+      const wasOpen=button.getAttribute('aria-expanded')==='true';
+      closeFloatingMenus();
+      if(wasOpen) return;
+      button.setAttribute('aria-expanded','true');
+      menu.classList.add('active');
+    }
+    function refreshFromAccountMenu(){
+      closeSessionMenu();
+      return refreshActiveSection(document.getElementById('global_refresh_button'));
+    }
+    function returnToOperationsHomeFromAccountMenu(){
+      closeSessionMenu();
+      switchTab('dashboard');
+    }
+    function logoutFromAccountMenu(){
+      closeSessionMenu();
+      return logout();
+    }
     function closeFloatingMenus(){
+      closeSessionMenu();
       closeFilterSelectMenu();
       closeFilterDateMenu();
       openAccountMenuId=null;
@@ -2380,20 +2543,56 @@
       closeEmailDeliveryHistoryDrawer();
     }
     function normalizeDrawerScrollBodies(root=document){
+      const footerSelector='.form-actions, .resource-modal-actions, .account-flow-actions, .ai-test-actions, .rule-modal-actions';
+      const topChromeSelector='.run-detail-toolbar, .detail-tabs.run-detail-tabs, .report-leads-toolbar, .drawer-actions';
       root.querySelectorAll('.drawer').forEach(drawer=>{
-        if(drawer.querySelector(':scope > .drawer-scroll-body')) return;
         const head=drawer.querySelector(':scope > .drawer-head, :scope > .modal-head');
         if(!head) return;
-        const body=document.createElement('div');
-        body.className='drawer-scroll-body';
-        let node=head.nextSibling;
-        while(node){
-          const next=node.nextSibling;
-          body.appendChild(node);
-          node=next;
+        let body=drawer.querySelector(':scope > .drawer-scroll-body');
+        if(!body){
+          body=document.createElement('div');
+          body.className='drawer-scroll-body';
+          let insertAfter=head;
+          let node=head.nextSibling;
+          while(node){
+            const next=node.nextSibling;
+            if(node.nodeType===1 && node.matches(topChromeSelector)){
+              node.classList.add('drawer-fixed-toolbar');
+              insertAfter=node;
+            } else if(node.nodeType===1 && node.matches(footerSelector)){
+              node.classList.add('drawer-fixed-footer');
+              drawer.appendChild(node);
+            } else {
+              body.appendChild(node);
+            }
+            node=next;
+          }
+          drawer.insertBefore(body, insertAfter.nextSibling);
         }
-        drawer.appendChild(body);
+        body.querySelectorAll(`:scope > ${topChromeSelector.split(',').join(', :scope > ')}`).forEach(chrome=>{
+          chrome.classList.add('drawer-fixed-toolbar');
+          drawer.insertBefore(chrome, body);
+        });
+        body.querySelectorAll(footerSelector).forEach(action=>{
+          action.classList.add('drawer-fixed-footer');
+          drawer.appendChild(action);
+        });
+        drawer.querySelectorAll(`:scope > ${topChromeSelector.split(',').join(', :scope > ')}`).forEach(chrome=>{
+          chrome.classList.add('drawer-fixed-toolbar');
+        });
+        drawer.classList.toggle('has-fixed-footer', !!drawer.querySelector(':scope > .drawer-fixed-footer'));
+        drawer.classList.toggle('has-fixed-toolbar', !!drawer.querySelector(':scope > .drawer-fixed-toolbar'));
+        body.setAttribute('data-scroll-owner', 'drawer-content');
       });
+    }
+    function openDrawerChrome(backdropId, drawerId, options={}){
+      normalizeDrawerScrollBodies();
+      const backdrop=document.getElementById(backdropId);
+      const drawer=document.getElementById(drawerId);
+      if(backdrop) backdrop.classList.add('active');
+      if(drawer) drawer.classList.add('active');
+      if(options.lockBody !== false) document.body.style.overflow='hidden';
+      return drawer;
     }
     function positionAccountActionMenu(){
       if(openAccountMenuId===null) return;
@@ -2421,14 +2620,25 @@
       positionAIRuleActionMenu();
     }
     function setMobileNavOpen(open){
+      if(open && window.innerWidth >= 768) open=false;
       document.body.classList.toggle('mobile-nav-open', !!open);
       const toggle=document.getElementById('mobile_nav_toggle');
       const backdrop=document.getElementById('mobile_nav_backdrop');
+      const sidebar=document.getElementById('primary_sidebar');
       if(toggle){
         toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
         toggle.setAttribute('aria-label', open ? '关闭导航' : '打开导航');
       }
       if(backdrop) backdrop.setAttribute('aria-hidden', open ? 'false' : 'true');
+      if(sidebar){
+        if(window.innerWidth < 768){
+          sidebar.style.setProperty('left', open ? '0px' : '-340px', 'important');
+          sidebar.style.setProperty('transform', 'none', 'important');
+        }else{
+          sidebar.style.removeProperty('left');
+          sidebar.style.removeProperty('transform');
+        }
+      }
     }
     function closeMobileNav(){
       setMobileNavOpen(false);
@@ -2475,10 +2685,20 @@
     function renderCurrentUser(){
       if(!currentSession) return;
       const role=currentSession.role==='administrator' ? '管理员' : '普通用户';
-      const html=`<span class="status ok">${esc(role)}</span> ${esc(currentSession.display_name || currentSession.email || '')}`;
-      ['current_user_badge','mobile_current_user_badge'].forEach(id=>{
+      const display=currentSession.display_name || currentSession.email || '当前账号';
+      const email=currentSession.email || display;
+      const initials=(display || email || '用户').trim().slice(0,2).toUpperCase();
+      const pairs=[
+        ['account_avatar', initials],
+        ['account_menu_avatar', initials],
+        ['account_display_name', display],
+        ['account_role_label', role],
+        ['account_menu_name', display],
+        ['account_menu_email', email],
+      ];
+      pairs.forEach(([id,value])=>{
         const el=document.getElementById(id);
-        if(el) el.innerHTML=html;
+        if(el) el.textContent=value;
       });
     }
     function isAdminUser(){ return currentSession && currentSession.role === 'administrator'; }
@@ -2510,12 +2730,19 @@
     async function loginWithForm(event){
       event.preventDefault();
       const button=event.submitter;
-      const oldText=button ? button.textContent : '';
-      if(button){ button.disabled=true; button.textContent='登录中...'; }
+      const oldHtml=button ? button.innerHTML : '';
+      const errorEl=document.getElementById('login_error');
+      if(errorEl) errorEl.textContent='';
+      if(button){
+        button.disabled=true;
+        button.classList.add('is-loading');
+        button.setAttribute('aria-busy','true');
+        button.innerHTML='<span class="auth-button-spinner" aria-hidden="true"></span><span>登录中</span>';
+      }
       try {
         const res=await authApi('/login',{method:'POST',body:JSON.stringify({email:val('login_email'),password:val('login_password')})});
         if(!res.ok){
-          document.getElementById('login_error').textContent=await err(res);
+          if(errorEl) errorEl.textContent=await err(res);
           return;
         }
         const data=await res.json();
@@ -2529,7 +2756,12 @@
         routeToOperationsHome();
         await loadAll();
       } finally {
-        if(button){ button.disabled=false; button.textContent=oldText; }
+        if(button){
+          button.disabled=false;
+          button.classList.remove('is-loading');
+          button.removeAttribute('aria-busy');
+          button.innerHTML=oldHtml;
+        }
       }
     }
     async function logout(){
@@ -2621,11 +2853,16 @@
     }, true);
     document.querySelectorAll('nav button').forEach(btn => btn.onclick = event => {
       event.stopPropagation();
+      if(btn.dataset.navGroupToggle && document.body.classList.contains('sidebar-collapsed')){
+        const target=document.querySelector(`nav button[data-tab="${btn.dataset.defaultTab}"]:not(.is-hidden)`);
+        if(target) activateNavTab(target);
+        return;
+      }
       if(btn.dataset.navGroupToggle){
         toggleNavGroup(btn.dataset.navGroupToggle);
         return;
       }
-      activateNavTab(btn);
+      if(btn.dataset.tab) activateNavTab(btn);
     });
     document.addEventListener('click', event => {
       if(!event.target.closest('.filter-select-enhanced') && !event.target.closest('#filter_select_menu')){
@@ -2633,6 +2870,9 @@
       }
       if(!event.target.closest('.filter-date-enhanced') && !event.target.closest('#filter_date_menu')){
         closeFilterDateMenu();
+      }
+      if(!event.target.closest('.account-area')){
+        closeSessionMenu();
       }
       if(!event.target.closest('.account-actions') && !event.target.closest('#account_action_menu')){
         if(openAccountMenuId !== null){
@@ -2656,7 +2896,7 @@
     document.addEventListener('monitor:close-floating-menus', closeFloatingMenus);
     window.addEventListener('resize', positionActiveFloatingMenus);
     window.addEventListener('resize', () => {
-      if(window.innerWidth >= 1280) closeMobileNav();
+      syncResponsiveNavigationState();
     });
     window.addEventListener('scroll', positionActiveFloatingMenus, true);
     document.getElementById('mobile_nav_toggle')?.addEventListener('click', event => {
@@ -2664,8 +2904,44 @@
       toggleMobileNav();
     });
     document.getElementById('mobile_nav_backdrop')?.addEventListener('click', closeMobileNav);
+    document.getElementById('sidebar_collapse_button')?.addEventListener('click', event => {
+      event.preventDefault();
+      event.stopPropagation();
+      setSidebarCollapsed(!document.body.classList.contains('sidebar-collapsed'));
+    });
     bindShortcutButtons();
 
+    function navButtonLabel(button){
+      return (button?.querySelector('span:not(.ui-icon):not(.nav-caret)')?.textContent || button?.textContent || '').trim();
+    }
+    function syncNavigationTooltips(){
+      document.querySelectorAll('#primary_navigation button').forEach(button=>{
+        const label=navButtonLabel(button);
+        if(!label) return;
+        button.setAttribute('aria-label', label);
+        button.setAttribute('title', label);
+      });
+    }
+    function setSidebarCollapsed(collapsed){
+      if(window.innerWidth < 768) collapsed=false;
+      document.body.classList.toggle('sidebar-collapsed', !!collapsed);
+      const button=document.getElementById('sidebar_collapse_button');
+      if(button){
+        button.setAttribute('aria-expanded', collapsed ? 'false' : 'true');
+        button.setAttribute('aria-label', collapsed ? '展开侧边导航' : '收起侧边导航');
+        button.setAttribute('title', collapsed ? '展开侧边导航' : '收起侧边导航');
+      }
+    }
+    function syncResponsiveNavigationState(){
+      if(window.innerWidth >= 768) closeMobileNav();
+      if(window.innerWidth >= 768 && window.innerWidth < 1280){
+        setSidebarCollapsed(true);
+      }
+      if(window.innerWidth < 768){
+        setSidebarCollapsed(false);
+        setMobileNavOpen(false);
+      }
+    }
     function toggleNavGroup(group){
       const wrapper=document.querySelector(`[data-nav-group="${group}"]`);
       if(!wrapper || wrapper.classList.contains('is-hidden')) return;
@@ -2878,7 +3154,6 @@
       setLoadingText('top_status', '正在刷新首页状态...');
       setLoadingText('operations_home_meta', '正在同步运营数据...');
       setLoadingMarkup('dashboard_metrics', metricSkeletonGrid(5));
-      setLoadingMarkup('operations_home_drilldowns', listSkeleton(3));
       setLoadingMarkup('operations_home_resource', listSkeleton(2));
       setLoadingMarkup('operations_home_admin_health', listSkeleton(2));
       const data=await (await api('/dashboard')).json();
@@ -2920,56 +3195,35 @@
             label: '任务健康',
             value: home.task_health?.total||0,
             note: `启用 ${home.task_health?.active||0} / 暂停 ${home.task_health?.paused||0}`,
-            detail: `${home.task_health?.needs_attention||0} 个待处理信号`,
-            tab: 'jobs',
-            menuKey: 'monitoring',
-            actionLabel: '查看任务'
+            detail: `${home.task_health?.needs_attention||0} 个待处理信号`
           }),
           operationsMetricCard({
             tone: (home.run_activity?.failed_recent||0) ? 'attention' : ((home.run_activity?.running||0) ? 'live' : ''),
             label: '运行活动',
             value: home.run_activity?.today||0,
             note: `运行中 ${home.run_activity?.running||0} / 累计 ${home.run_activity?.total||0}`,
-            detail: `近 20 次失败 ${home.run_activity?.failed_recent||0}，预检拦截/登录态/配置阻断 ${home.run_activity?.skipped_recent||0}`,
-            tab: 'runs',
-            menuKey: 'run_center',
-            grouped: false,
-            target: 'task_center_panel',
-            actionLabel: '查看运行'
+            detail: `近 20 次失败 ${home.run_activity?.failed_recent||0} / 预检拦截 ${home.run_activity?.skipped_recent||0}`
           }),
           operationsMetricCard({
             tone: (home.report_activity?.manual_review||0) ? 'review' : 'ok',
             label: '报告与复核',
             value: home.report_activity?.total||0,
             note: `已生成 ${home.report_activity?.generated||0} 份`,
-            detail: `${home.report_activity?.manual_review||0} 条线索待人工复核`,
-            tab: 'runs',
-            menuKey: 'run_center',
-            grouped: true,
-            actionLabel: '查看任务'
+            detail: `${home.report_activity?.manual_review||0} 条线索待人工复核`
           }),
           operationsMetricCard({
             tone: (home.email_delivery?.failed||0) ? 'attention' : ((home.email_delivery?.unsent||0) ? 'review' : 'ok'),
             label: '邮件交付',
             value: home.email_delivery?.sent||0,
             note: `失败 ${home.email_delivery?.failed||0} / 未发送 ${home.email_delivery?.unsent||0}`,
-            detail: home.email_delivery?.history_available ? '交付历史可查看' : '当前展示报告最新交付状态',
-            tab: 'runs',
-            menuKey: 'run_center',
-            grouped: true,
-            target: 'task_center_panel',
-            actionLabel: '查看任务'
+            detail: home.email_delivery?.history_available ? '交付历史可查看' : '报告最新交付状态'
           }),
           operationsMetricCard({
             tone: (home.lead_metrics?.high_risk||0) ? 'risk' : ((home.lead_metrics?.suspected_negative||0) ? 'review' : ''),
             label: '疑似负面线索',
             value: home.lead_metrics?.suspected_negative||0,
             note: `高风险 ${home.lead_metrics?.high_risk||0} / 待复核 ${home.lead_metrics?.pending_review||0}`,
-            detail: `采集内容 ${home.lead_metrics?.contents_total||0} 条`,
-            tab: 'runs',
-            menuKey: 'run_center',
-            grouped: true,
-            actionLabel: '查看任务'
+            detail: `采集内容 ${home.lead_metrics?.contents_total||0} 条`
           })
         ].join('');
       }
@@ -2978,10 +3232,8 @@
         const rail=document.createElement('div');
         rail.id='operations_home_command_rail';
         rail.className='operations-command-rail';
-        lower.insertBefore(rail, lower.children[1] || null);
+        lower.insertBefore(rail, lower.firstChild);
       }
-      const drilldowns=document.getElementById('operations_home_drilldowns');
-      if(drilldowns) drilldowns.innerHTML=renderOperationsDrilldowns(home);
       const commandRail=document.getElementById('operations_home_command_rail');
       if(commandRail) commandRail.innerHTML=renderOperationsCommandRail(home);
       const resource=document.getElementById('operations_home_resource');
@@ -2993,37 +3245,12 @@
     }
     function operationsMetricCard(card){
       const tone=card.tone ? ` is-${card.tone}` : '';
-      const target=card.target ? ` data-shortcut-target="${esc(card.target)}"` : '';
-      const subview=card.subview ? ` data-shortcut-subview="${esc(card.subview)}"` : '';
-      const grouped=card.grouped === true || card.grouped === false ? ` data-shortcut-grouped="${card.grouped ? '1' : '0'}"` : '';
       return `<article class="operations-metric-card${tone}">
         <div class="operations-metric-head"><span>${esc(card.label)}</span><i></i></div>
         <strong>${esc(card.value)}</strong>
         <p>${esc(card.note)}</p>
-        <div class="operations-metric-foot">
-          <span>${esc(card.detail)}</span>
-          <button class="ghost btn-compact" type="button" data-shortcut-tab="${esc(card.tab)}" data-menu-key="${esc(card.menuKey)}"${target}${subview}${grouped}>${esc(card.actionLabel)}</button>
-        </div>
+        <div class="operations-metric-foot"><span>${esc(card.detail)}</span></div>
       </article>`;
-    }
-    function renderOperationsDrilldowns(home){
-      const items=[
-        {label: '新建监控任务', note: `${home.task_health?.active||0} 个任务启用中`, tab: 'jobs', menuKey: 'monitoring', action: 'new-job'},
-        {label: '任务中心', note: `${home.report_activity?.total||0} 份报告，${home.lead_metrics?.pending_review||0} 条待复核`, tab: 'runs', menuKey: 'run_center', grouped: true, target: 'task_center_panel'},
-        {label: '运行记录', note: `${home.run_activity?.running||0} 个运行中，今日 ${home.run_activity?.today||0} 次`, tab: 'runs', menuKey: 'run_center', grouped: false, target: 'task_center_panel'}
-      ];
-      if((home.resource_health||{}).scope === 'workspace'){
-        items.push({label: '资源支撑', note: resourceHealthSummary(home.resource_health), tab: 'accounts', menuKey: 'platform_accounts'});
-      }
-      return `<div class="operations-section-head"><div><span>钻取入口</span><strong>按任务流继续处理</strong></div></div><div class="operations-drilldown-list">${items.map(item=>{
-        const target=item.target ? ` data-shortcut-target="${esc(item.target)}"` : '';
-        const action=item.action ? ` data-shortcut-action="${esc(item.action)}"` : '';
-        const subview=item.subview ? ` data-shortcut-subview="${esc(item.subview)}"` : '';
-        const grouped=item.grouped === true || item.grouped === false ? ` data-shortcut-grouped="${item.grouped ? '1' : '0'}"` : '';
-        return `<button class="operations-drilldown" type="button" data-shortcut-tab="${esc(item.tab)}" data-menu-key="${esc(item.menuKey)}"${target}${action}${subview}${grouped}>
-          <strong>${esc(item.label)}</strong><span>${esc(item.note)}</span>
-        </button>`;
-      }).join('')}</div>`;
     }
     function renderOperationsCommandRail(home){
       const taskAttention=home.task_health?.needs_attention||0;
@@ -3033,30 +3260,27 @@
       const steps=[
         {
           tone: taskAttention ? 'attention' : 'ok',
-          title: '任务配置',
-          text: taskAttention ? `${taskAttention} 项待处理任务影响今日调度。` : '今日任务配置稳定，可直接跟进运行状态。',
+          title: '任务',
           list: [`启用 ${home.task_health?.active||0} 个`, `暂停 ${home.task_health?.paused||0} 个`]
         },
         {
           tone: runAttention ? 'attention' : ((home.run_activity?.running||0) ? 'review' : 'ok'),
-          title: '运行执行',
-          text: runAttention ? '失败、预检拦截或登录态异常需要先处理。' : '运行节奏平稳，可继续关注完成结果。',
+          title: '运行',
           list: [`运行中 ${home.run_activity?.running||0}`, `今日 ${home.run_activity?.today||0} 次`]
         },
         {
           tone: reportAttention ? 'review' : 'ok',
-          title: '报告产出',
-          text: reportAttention ? '仍有内容等待人工复核再进入结论视图。' : '报告产出正常，可直接进入预览和下载。',
+          title: '报告',
           list: [`已生成 ${home.report_activity?.generated||0} 份`, `待复核 ${home.report_activity?.manual_review||0} 条`]
         },
         {
           tone: deliveryAttention ? 'attention' : 'ok',
-          title: '邮件交付',
-          text: deliveryAttention ? '存在失败或未发送记录，建议优先查看交付历史。' : '邮件交付已闭环，外发状态正常。',
+          title: '邮件',
           list: [`失败 ${home.email_delivery?.failed||0}`, `未发送 ${home.email_delivery?.unsent||0}`]
         }
       ];
-      return `<div class="command-rail-head"><div><span>任务闭环态势</span><strong>任务 -> 运行 -> 报告 -> 邮件</strong><p>首屏优先告诉你今天该盯什么，以及闭环卡在了哪一段。</p></div><span class="status ${deliveryAttention||runAttention||taskAttention?'warn':'ok'}">${deliveryAttention||runAttention||taskAttention?'存在待处理项':'闭环顺畅'}</span></div><div class="command-rail-track">${steps.map(step=>`<div class="command-rail-step is-${esc(step.tone)}"><strong>${esc(step.title)}</strong><p>${esc(step.text)}</p><ul>${step.list.map(item=>`<li>${esc(item)}</li>`).join('')}</ul></div>`).join('')}</div>`;
+      const attentionTotal=taskAttention + runAttention + reportAttention + deliveryAttention;
+      return `<div class="command-rail-head"><div><span>今日关注</span><strong>${attentionTotal ? `${attentionTotal} 项需要跟进` : '暂无待处理事项'}</strong><p>${attentionTotal ? '失败、预检拦截或登录态/配置阻断需要先处理。' : '闭环顺畅，先按任务、运行、报告、邮件的顺序巡检。'}</p></div><span class="status ${attentionTotal?'warn':'ok'}">${attentionTotal?'需要关注':'状态稳定'}</span></div><div class="command-rail-summary">${steps.map(step=>`<div class="command-rail-chip is-${esc(step.tone)}"><strong>${esc(step.title)}</strong><span>${step.list.map(item=>esc(item)).join(' / ')}</span></div>`).join('')}</div>`;
     }
     function renderOperationsResourceHealth(resource){
       const admin=resource.scope === 'workspace';
@@ -3087,7 +3311,7 @@
         <div>
           <span class="status ${tone}">${esc(resourceStatusText(status))}</span>
           <strong>系统健康摘要</strong>
-          <p>首页仅保留精简运营健康信号，详细运行状态、调度器和平台诊断请进入系统诊断查看。</p>
+          <p>${esc(resourceHealthSummary(resource))}</p>
         </div>
         <div class="operations-admin-health-signals" aria-label="系统健康摘要">
           <span>任务待处理 ${esc(taskAttention)}</span>
@@ -3155,8 +3379,21 @@
       if(notRunPlatforms.length){ pendingItems.push('尚未完成平台采集：' + formatPlatforms(notRunPlatforms)); }
       const actions=data.next_actions||pendingItems;
       document.getElementById('readiness_summary').innerHTML = data.ready
-        ? `<div class="readiness-summary ready"><div class="readiness-mark">运行正常</div><div class="readiness-list">关键配置和报告链路状态正常。</div></div>`
-        : `<div class="readiness-summary pending"><div class="readiness-mark">配置待完善</div><div class="readiness-list"><strong>下一步处理</strong><ul>${actions.map(x=>`<li>${esc(cleanCustomerText(x))}</li>`).join('')}</ul></div></div>`;
+        ? `<div class="readiness-summary ready diagnostic-summary-card">
+            <div class="readiness-mark">运行正常</div>
+            <div class="readiness-list">
+              <strong>关键配置和报告链路状态正常。</strong>
+              <span>可继续查看最近任务、报告和交付记录。</span>
+            </div>
+          </div>`
+        : `<div class="readiness-summary pending diagnostic-summary-card">
+            <div class="readiness-mark">配置待完善</div>
+            <div class="readiness-list">
+              <strong>${esc(actions.length)} 项需要处理</strong>
+              <span>影响任务采集、AI 初筛、报告生成或邮件交付链路。</span>
+              <ul>${actions.map(x=>`<li>${esc(cleanCustomerText(x))}</li>`).join('')}</ul>
+            </div>
+          </div>`;
       document.getElementById('readiness_actions').innerHTML = renderReadinessActions(data);
       const rows=data.checks.map(c=>[esc(c.label), c.ok ? '<span class="status">已就绪</span>' : '<span class="status">待处理</span>', esc(cleanCustomerText(c.message))]);
       if(emptyPlatforms.length){ rows.push(['采集无结果','<span class="status">待处理</span>', esc('已运行但未采到内容：' + formatPlatforms(emptyPlatforms))]); }
@@ -3171,7 +3408,7 @@
         cards.push(actionCard('去账号池处理登录', platformLoginActionNote(readiness), 'accounts'));
       }
       if(failed.has('ai_config')){
-        cards.push(actionCard('检查 AI 接入', '维护 OpenAI-compatible / Anthropic-compatible 协议的模型连接资源；未配置时采集不受影响，线索进入待人工复核。', 'ai'));
+        cards.push(actionCard('检查 AI 接入', '检查模型接入配置；未配置时采集不受影响，线索进入待人工复核。', 'ai'));
       }
       if(failed.has('email_config')){
         cards.push(actionCard('配置测试邮件', '填写 SMTP、发件人、默认收件人，并发送测试邮件。', 'email'));
@@ -3234,7 +3471,14 @@
       runningJobIds.clear();
       (data.running_job_ids||[]).forEach(id=>runningJobIds.add(Number(id)));
       const details=(data.running_jobs||[]).map(j=>`${j.job_id}${j.law_firm_name?' / '+j.law_firm_name:''}${j.job_deleted?'（任务已删除）':''}`).join('；') || '无';
-      document.getElementById('scheduler_status').innerHTML = `<div class="${data.enabled?'notice':'notice warn'}"><strong>${data.enabled?'自动调度已启用':'自动调度未启用'}</strong><div>${esc(data.message)}</div><div class="small">正在运行的任务：${esc(details)}</div></div>`;
+      document.getElementById('scheduler_status').innerHTML = `<div class="${data.enabled?'notice':'notice warn'} diagnostic-scheduler-card">
+        <div class="diagnostic-item-head">
+          <strong>${data.enabled?'自动调度已启用':'自动调度未启用'}</strong>
+          <span class="status ${data.enabled?'ok':'warn'}">${data.enabled?'运行中':'待处理'}</span>
+        </div>
+        <div>${esc(cleanCustomerText(data.message||''))}</div>
+        <div class="small">正在运行的任务：${esc(details)}</div>
+      </div>`;
     }
     function platformStatusTable(platforms){ return table(['平台','登录方式','登录材料','最近状态','更新时间','操作'], platforms.map(p=>[esc(p.platform_label), esc(p.login_type_label||p.login_type||'扫码登录'), loginMaterialCell(p), platformStatusCell(p), esc((p.profile_last_modified||'').replace('T',' ').slice(0,19)), `<div class="wide-actions"><button class="secondary" onclick="switchTab('accounts')">管理账号</button></div>`])); }
     function loginMaterialCell(p){
@@ -3269,7 +3513,7 @@
     }
     async function openPlatformLoginBrowser(platform, accountId=null, triggerButton=null){
       if(!localLoginWindowAllowed(platform)){
-        toast('生产模式已关闭本地登录窗口，请使用网页二维码完成登录');
+        toast('当前仅支持网页二维码登录，请使用网页二维码完成登录');
         return;
       }
       await withActionButtonLoading(triggerButton, '打开中...', async ()=>{
@@ -3361,7 +3605,7 @@
     }
     async function openLoginSessionBrowser(sessionId, platform, accountId=null, triggerButton=null){
       if(!localLoginWindowAllowed(platform)){
-        toast('生产模式已关闭本地登录窗口，请使用网页二维码完成登录');
+        toast('当前仅支持网页二维码登录，请使用网页二维码完成登录');
         return;
       }
       await openPlatformLoginBrowser(platform, accountId || null, triggerButton);
@@ -3562,7 +3806,7 @@
       const attention=(accounts||[]).filter(accountNeedsAttention).length;
       const collectable=(accounts||[]).filter(a=>accountAvailability(a).key==='collectable').length;
       document.getElementById('account_metrics').innerHTML=[
-        metricCard('账号总数', accounts.length, '抖音 / 快手 / 小红书'),
+        metricCard('账号总数', accounts.length, '多平台账号资源'),
         metricCard('可采集账号', collectable, `待检测 ${(accounts||[]).filter(a=>accountAvailability(a).key==='unchecked').length}`),
         metricCard('受限账号', counts.limited||0, `停用 ${counts.disabled||0}`),
         metricCard('需处理账号', attention, `异常 ${accounts.filter(a=>a.last_error).length}`)
@@ -3641,13 +3885,12 @@
       const active=id===selectedId?' class="active"':'';
       const checked=selectedSocialAccountIds.has(id) ? 'checked' : '';
       const proxy=accountProxyLabel(a);
-      const availability=accountAvailability(a);
       return `<tr${active} onclick="selectAccountRow(${id})">
         <td class="account-select-cell" onclick="event.stopPropagation()"><input type="checkbox" ${checked} onchange="toggleAccountSelection(${id}, this.checked)"></td>
         <td><div class="account-name-cell"><strong>${esc(a.name)}</strong><span>ID ${esc(id)}</span></div></td>
         <td>${accountIdentityCell(a)}</td>
         <td>${esc(formatPlatforms([a.platform]))}<div class="small">${esc(loginTypeLabel(a.login_type))}</div></td>
-        <td>${accountAvailabilityBadge(a)}<div class="small">${esc(availability.hint)}</div></td>
+        <td>${accountAvailabilityBadge(a)}</td>
         <td>${accountLoginSourceBadge(a)}</td>
         <td>${proxy}</td>
         <td>${accountBoundJobCount(id) ? `<span class="status">${accountBoundJobCount(id)} 个任务</span>` : '<span class="muted">未绑定</span>'}</td>
@@ -3708,7 +3951,7 @@
       const avatar=account.platform_avatar_url || '';
       const checkedAt=account.platform_identity_checked_at ? formatTime(account.platform_identity_checked_at) : '';
       if(!name && !uid && !home){
-        return `<span class="muted">未识别</span><div class="small">检测通过后自动刷新</div>`;
+        return '<span class="muted">未识别</span>';
       }
       const avatarHtml=avatar ? `<img class="account-avatar" src="${esc(avatar)}" alt="">` : '<span class="account-avatar placeholder"></span>';
       const title=name || uid || '已识别账号';
@@ -3972,7 +4215,7 @@
         return;
       }
       if(!localLoginWindowAllowed(account.platform)){
-        toast('生产模式已关闭本地登录窗口，请使用网页二维码完成登录');
+        toast('当前仅支持网页二维码登录，请使用网页二维码完成登录');
         return;
       }
       await openPlatformLoginBrowser(account.platform, Number(account.id), 'account_local_login_button');
@@ -3981,7 +4224,7 @@
       const account=socialAccountCache.get(Number(id));
       if(!account){ toast('账号池已刷新，请重新选择'); loadAccountsPool(); return; }
       if(!localLoginWindowAllowed(account.platform)){
-        toast('生产模式已关闭本地登录窗口，请使用网页二维码完成登录');
+        toast('当前仅支持网页二维码登录，请使用网页二维码完成登录');
         return;
       }
       editSocialAccount(id, true);
@@ -3994,10 +4237,8 @@
       await startLoginSessionForAccount(account);
     }
     function updateAccountDetailHeader(account){
-      document.getElementById('account_detail_title').textContent = account ? account.name : '新建账号';
-      document.getElementById('account_detail_subtitle').textContent = account
-        ? `${formatPlatforms([account.platform])} · ${loginTypeLabel(account.login_type)} · ${accountAvailability(account).label}`
-        : '先填写账号名称和平台，再通过扫码或 Cookie 完成登录。扫码成功后账号会自动进入账号池。';
+      const titleEl = document.getElementById('account_detail_title');
+      if(titleEl) titleEl.textContent = account ? account.name : '新建账号';
       const empty=document.getElementById('account_detail_empty');
       const summary=document.getElementById('account_detail_summary');
       if(empty) empty.style.display = account ? 'none' : 'block';
@@ -4048,26 +4289,15 @@
     function updateAccountLoginPrerequisites(){
       const nameReady=!!val('social_account_name').trim();
       const qrButton=document.getElementById('account_qrcode_button');
-      const hint=document.getElementById('account_login_prereq_hint');
       if(qrButton){
         qrButton.disabled=!nameReady;
         qrButton.title=nameReady?'':'请先填写账号名称';
       }
-      if(hint){
-        hint.textContent=nameReady
-          ? '账号名称已填写，可以生成二维码；扫码后系统会自动确认登录结果。'
-          : '请先填写账号名称。你可以先保存账号创建账号，再生成二维码登录。';
-        hint.className=nameReady?'small':'notice warn';
-      }
     }
     function setAccountPlatformLocked(locked, platform=''){
       const select=document.getElementById('social_account_platform');
-      const hint=document.getElementById('social_account_platform_hint');
       if(select) select.disabled=!!locked;
       if(select) syncFilterSelectButton(select);
-      if(hint) hint.textContent = locked
-        ? `当前账号已归属 ${formatPlatforms([platform])}，平台不可变更；如需其它平台请新建账号。`
-        : '新建账号时选择平台；保存后平台不可变更。';
     }
     function plainAccountProxyLabel(account){
       if(!account || !account.proxy_id) return '未绑定';
@@ -4152,20 +4382,8 @@
       const platform=val('social_account_platform') || 'dy';
       const cfg=platformLoginConfig(platform);
       const titles={qrcode:'扫码登录',cookie:'Cookie 登录'};
-      const hints={
-        qrcode:'先生成二维码完成扫码登录；登录成功后，系统会把账号保存到账号池。',
-        cookie: '粘贴当前账号 Cookie 后，绑定该账号的采集任务会使用这份 Cookie。页面不会回显原文。'
-      };
       const title=document.getElementById('login_mode_title');
-      const hint=document.getElementById('login_mode_hint');
       if(title) title.textContent=titles[loginType] || '登录';
-      if(hint) hint.textContent=hints[loginType] || '';
-      const capabilityHint=document.getElementById('login_capability_hint');
-      if(capabilityHint){
-        const supported=(cfg.supported_login_types||['qrcode','cookie']).filter(t=>['qrcode','cookie'].includes(t)).map(loginTypeLabel).join(' / ') || '扫码登录 / Cookie';
-        const localWindowText=localLoginWindowAllowed(platform) ? '开发环境可打开本地登录窗口辅助处理。' : '生产模式不显示本地登录窗口入口。';
-        capabilityHint.textContent=`当前账号可使用：${supported}。网页登录二维码是主流程；如平台需要额外确认，请按页面提示完成后继续确认。${localWindowText}`;
-      }
       renderSocialLoginMethodOptions(loginType, platform);
       ['qrcode','cookie'].forEach(type=>{
         const panel=document.getElementById('login_panel_'+type);
@@ -4200,13 +4418,11 @@
       if(loginType==='cookie') document.getElementById('social_account_cookie_input')?.focus();
     }
     function openSocialAccountModal(){
-      const backdrop=document.getElementById('account_modal');
-      const dialog=document.getElementById('account_dialog');
-      if(!backdrop || !dialog) return;
-      backdrop.classList.add('active');
-      dialog.classList.add('active');
+      const dialog=openDrawerChrome('account_modal', 'account_dialog');
+      if(!dialog) return;
       refreshEnhancedFilterSelects(dialog);
-      document.body.style.overflow='hidden';
+      refreshEnhancedFilterDateInputs(dialog);
+      refreshEnhancedFilterSelects(document.getElementById('account_dialog'));
     }
     function closeSocialAccountModal(event){
       if(event && event.target && event.target.id !== 'account_modal') return;
@@ -4287,6 +4503,11 @@
         return true;
       });
     }
+    function proxyIssueCell(proxy){
+      const notes=esc(proxy.notes||'');
+      const error=proxy.last_error ? `<div class="proxy-error-line">错误：${esc(proxy.last_error)}</div>` : '<div class="proxy-muted-line">暂无错误记录</div>';
+      return `<div class="proxy-issue-cell">${notes?`<div>${notes}</div>`:''}${error}</div>`;
+    }
     function renderProxyProfilesTable(){
       const proxies=filteredProxyProfiles();
       document.getElementById('proxy_profiles_table').innerHTML = proxies.length ? table(
@@ -4295,17 +4516,17 @@
           p.id,
           esc(p.name),
           esc(p.provider||'manual'),
-          `<span class="code">${esc(p.proxy_url||'未填写')}</span>`,
+          `<span class="proxy-mask-code code">${esc(p.proxy_url||'未填写')}</span>`,
           poolStatusBadge(p.status),
           esc(p.max_concurrency||1),
-          `${esc(p.notes||'')}${p.last_error?'<div class="small">错误：'+esc(p.last_error)+'</div>':''}`,
+          proxyIssueCell(p),
           esc(formatTime(p.updated_at)),
           [
             `<button class="secondary" onclick="editProxyProfile(${Number(p.id)})">编辑</button>`,
             `<button class="danger" onclick="deleteProxyProfile(${Number(p.id)})">删除</button>`
           ].join(' ')
         ])
-      ) : '<div class="empty">还没有代理。首版可先不使用代理；需要指定线路时，先新增代理再绑定到账号。</div>';
+      , {className:'proxy-resource-table', minWidth:980}) : '<div class="empty">还没有代理。首版可先不使用代理；需要指定线路时，先新增代理再绑定到账号。</div>';
     }
     function clearProxyFilters(){ ['proxy_search','proxy_status_filter'].forEach(id=>set(id,'')); renderProxyProfilesTable(); }
     function renderProxySelectOptions(){
@@ -4374,10 +4595,11 @@
     }
     function openProxyDrawer(title='新增代理'){
       document.getElementById('proxy_drawer_title').textContent=title;
-      document.getElementById('proxy_drawer_backdrop').classList.add('active');
-      document.getElementById('proxy_drawer').classList.add('active');
+      const drawer=openDrawerChrome('proxy_drawer_backdrop', 'proxy_drawer');
+      refreshEnhancedFilterSelects(drawer);
+      refreshEnhancedFilterDateInputs(drawer);
       refreshEnhancedFilterSelects(document.getElementById('proxy_drawer'));
-      document.body.style.overflow='hidden';
+      refreshEnhancedFilterDateInputs(document.getElementById('proxy_drawer'));
     }
     function closeProxyDrawer(){
       document.getElementById('proxy_drawer_backdrop').classList.remove('active');
@@ -4407,7 +4629,7 @@
         output_mode: val('job_output_mode'),
         browser_mode: val('job_browser_mode')
       };
-      if(hasJobTemplatePlaceholders(payload)){ toast('请先把测试数据模板里的律所名称和平台搜索词改成真实内容'); return; }
+      if(hasJobTemplatePlaceholders(payload)){ toast('请先将律所名称和平台搜索词改成真实内容'); return; }
       await withActionButtonLoading('save_job_btn', '保存中...', async ()=>{
         const res = await api(id ? '/jobs/'+id : '/jobs', {method:id?'PUT':'POST', body:JSON.stringify(payload)});
         if(!res.ok){ toast(await err(res)); return; }
@@ -4555,11 +4777,11 @@
     function openJobDrawer(title='新建任务'){
       document.getElementById('job_drawer_title').textContent=title;
       applyJobFormRoleMode();
-      document.getElementById('job_drawer_backdrop').classList.add('active');
-      document.getElementById('job_drawer').classList.add('active');
+      const drawer=openDrawerChrome('job_drawer_backdrop', 'job_drawer');
+      refreshEnhancedFilterSelects(drawer);
+      refreshEnhancedFilterDateInputs(drawer);
       refreshEnhancedFilterSelects(document.getElementById('job_drawer'));
       refreshEnhancedFilterDateInputs(document.getElementById('job_drawer'));
-      document.body.style.overflow='hidden';
     }
     function openNewJobDrawer(){
       resetJobForm();
@@ -4621,8 +4843,6 @@
       applyPromptToRuleFields(c.prompt || defaultAIPrompt);
       renderAIOutputSchema();
       updateAIPromptPreview();
-      const status=document.getElementById('ai_status');
-      if(status) status.textContent = '系统会把固定输出结构、评估规则和每条采集内容一起交给模型；AI 接入异常时，内容进入待人工复核。';
     }
     function composeAIPromptFromRules(){
       const sections=aiRuleFields.map(([key,id,label])=>`【${label}】\n${(val(id)||defaultPromptSections[key]||'').trim()}`);
@@ -4658,10 +4878,6 @@
       aiRuleFields.forEach(([key,id])=>{
         set(id, hasStructured ? (parsed[key] || defaultPromptSections[key] || '') : (defaultPromptSections[key] || ''));
       });
-      if(!hasStructured && prompt && prompt !== defaultAIPrompt){
-        const status=document.getElementById('ai_status');
-        if(status) status.textContent='已载入旧版完整 Prompt。建议按分段规则确认后重新保存，便于后续维护。';
-      }
     }
     function updateAIPromptPreview(){
       const prompt=composeAIPromptFromRules();
@@ -4730,13 +4946,13 @@
         ['ID','规则名称','状态','最近测试','更新时间','操作'],
         rules.map(rule=>[
           rule.id,
-          `<strong>${esc(rule.name)}</strong><div class="small">${esc((rule.prompt||'').replace(/\\s+/g,' ').slice(0,90))}</div>`,
-          rule.is_active ? '<span class="status ok">默认规则</span>' : '<span class="status">备用</span>',
-          esc(formatTestStatus(rule, '评估规则')),
-          esc(formatTime(rule.updated_at)),
+          `<div class="ai-rule-name-cell"><strong title="${esc(rule.name)}">${esc(rule.name)}</strong></div>`,
+          rule.is_active ? '<span class="status ok ai-rule-status-chip">默认规则</span>' : '<span class="status ai-rule-status-chip">备用规则</span>',
+          aiRuleTestStateCell(rule),
+          esc(formatCompactTime(rule.updated_at)),
           aiRuleActions(rule)
         ])
-      );
+      , {className:'ai-rule-table', minWidth:980});
       renderAIRuleActionMenu();
     }
     function aiRuleActions(rule){
@@ -4793,15 +5009,13 @@
       applyPromptToRuleFields(rule.prompt || defaultAIPrompt);
       renderAIOutputSchema();
       updateAIPromptPreview();
-      document.getElementById('ai_rules_result').textContent='可修改规则或样例内容后点击“测试评估规则”。';
+      setAIRuleResultState('is-idle', '');
       document.getElementById('ai_rule_modal_title').textContent='编辑评估规则';
       openAIRuleModal();
     }
     function openAIRuleModal(){
-      document.getElementById('ai_rule_modal_backdrop').classList.add('active');
-      document.getElementById('ai_rule_modal').classList.add('active');
-      refreshEnhancedFilterSelects(document.getElementById('ai_rule_modal'));
-      document.body.style.overflow='hidden';
+      const drawer=openDrawerChrome('ai_rule_modal_backdrop', 'ai_rule_modal');
+      refreshEnhancedFilterSelects(drawer);
     }
     function closeAIRuleModal(){
       document.getElementById('ai_rule_modal_backdrop').classList.remove('active');
@@ -4820,8 +5034,7 @@
       set('ai_sample_title','海安律所避雷：退费拖了很久');
       set('ai_sample_text','我想曝光一下，沟通很差，收费也不透明，投诉后一直没人处理。');
       set('ai_sample_comments','我也遇到退费慢的问题\n建议先保留沟通证据再投诉');
-      const result=document.getElementById('ai_rules_result');
-      if(result) result.textContent='调整规则或样例内容后，点击“测试评估规则”查看模型返回的结构化结果。';
+      setAIRuleResultState('is-idle', '');
     }
     function updateAIRuleStatusBadge(text, cls){
       const badge=document.getElementById('ai_rule_status_badge');
@@ -4881,9 +5094,8 @@
     }
     async function testAIRuleFromModal(){
       const id=val('ai_rule_id');
-      const resultBox=document.getElementById('ai_rules_result');
       await withActionButtonLoading('ai_rule_test_button', '测试中...', async ()=>{
-        if(resultBox) resultBox.textContent='正在测试当前评估规则...';
+        setAIRuleResultState('is-loading', '正在测试当前评估规则...');
         let res;
         if(id){
           res=await api('/ai-rule-profiles/'+id+'/test',{method:'POST',body:JSON.stringify(aiRuleSamplePayload())});
@@ -4891,7 +5103,7 @@
           syncAIPromptFromRules();
           res=await api('/ai-evaluation-config/test',{method:'POST',body:JSON.stringify({prompt:val('ai_prompt'), ...aiRuleSamplePayload()})});
         }
-        if(resultBox) resultBox.textContent = res.ok ? JSON.stringify((await res.json()).result,null,2) : cleanCustomerText(await err(res));
+        setAIRuleResultState(res.ok ? 'is-ok' : 'is-bad', res.ok ? JSON.stringify((await res.json()).result,null,2) : cleanCustomerText(await err(res)));
         toast(res.ok?'评估规则测试通过':'评估规则测试失败');
         await Promise.all([loadAIRuleProfiles(), loadReadiness()]);
       });
@@ -4946,18 +5158,19 @@
           p.id,
           esc(p.name),
           esc(providerLabel(p.provider)),
-          esc(p.model||'-'),
-          `<span class="code">${esc(p.base_url||'-')}</span>`,
-          esc(p.api_key||'未填写'),
-          p.is_active ? '<span class="status ok">默认接入</span>' : '<span class="status">备用</span>',
-          esc(formatTestStatus(p, 'AI 接入')),
+          `<span class="ai-model-chip" title="${esc(p.model||'-')}">${esc(p.model||'-')}</span>`,
+          `<span class="ai-base-url code" title="${esc(p.base_url||'-')}">${esc(p.base_url||'-')}</span>`,
+          `<span class="ai-key-mask" title="${esc(p.api_key ? 'API Key 已保存' : '未填写')}">${esc(p.api_key||'未填写')}</span>`,
+          p.is_active ? '<span class="status ok ai-default-badge">默认接入</span>' : '<span class="status ai-default-badge">备用</span>',
+          `<div class="ai-test-state" title="${esc(formatTestStatus(p, 'AI 接入'))}">${esc(formatTestStatus(p, 'AI 接入'))}</div>`,
           `<div class="wide-actions">${[
             `<button class="secondary" onclick="editAIProfile(${Number(p.id)})">编辑</button>`,
             `<button class="secondary" onclick="testAIProfile(${Number(p.id)})">连接测试</button>`,
             p.is_active ? '' : `<button class="secondary" onclick="activateAIProfile(${Number(p.id)})">设为默认</button>`,
             `<button class="danger" onclick="deleteAIProfile(${Number(p.id)})">删除</button>`
           ].join(' ')}</div>`
-        ])
+        ]),
+        {className:'ai-resource-table', minWidth:1560}
       );
       if(!profiles.length){
         document.getElementById('ai_profiles_table').innerHTML = '<div class="empty">还没有 AI 接入资源。采集仍可运行，线索会进入待人工复核；需要自动初筛时再新增模型连接。</div>';
@@ -4981,8 +5194,6 @@
     }
     async function loadAIProfileModels(button){
       await withActionButtonLoading(button, '获取中...', async ()=>{
-        const status=document.getElementById('ai_profile_model_status');
-        if(status) status.innerHTML=loadingNote('正在获取模型列表...');
         aiProfileModelOptions = [];
         renderAIProfileModelOptions(false);
         const id=val('ai_profile_id');
@@ -4994,8 +5205,6 @@
         const path=id?'/ai-profiles/'+id+'/models':'/ai-profiles/models';
         const res=await api(path,{method:'POST',body:JSON.stringify(payload)});
         if(!res.ok){
-          const message=cleanCustomerText(await err(res));
-          if(status) status.textContent='未获取到模型列表：' + message + '。可继续手动填写模型名称。';
           toast('模型列表获取失败，可手动填写模型名称');
           return;
         }
@@ -5004,7 +5213,6 @@
         if(!val('ai_profile_model') && models.length) set('ai_profile_model', models[0]);
         aiProfileModelOptions = models;
         renderAIProfileModelOptions(!!models.length, false);
-        if(status) status.textContent=models.length ? `已获取 ${models.length} 个模型，可在模型名称中直接选择或继续手动输入。` : '没有获取到模型名称，可手动填写。';
         toast(models.length ? '模型列表已更新' : '没有获取到模型名称');
       });
     }
@@ -5072,8 +5280,6 @@
       set('ai_profile_prompt', ''); set('ai_profile_api_key','');
       aiProfileModelOptions = [];
       renderAIProfileModelOptions(false);
-      const modelStatus=document.getElementById('ai_profile_model_status');
-      if(modelStatus) modelStatus.textContent='可获取当前接入下的模型列表；如果服务不支持列表接口，可保持手动填写。';
       document.getElementById('ai_profile_active').checked=!!p.is_active;
       openAIProfileDrawer('编辑 AI 接入');
       toast('已载入 AI 接入，API Key 留空表示不修改');
@@ -5111,8 +5317,7 @@
       const startBtn=document.getElementById('ai_test_start_btn');
       startBtn.disabled=false;
       startBtn.textContent='开始测试';
-      document.getElementById('ai_connection_test_backdrop').classList.add('active');
-      document.getElementById('ai_connection_test_modal').classList.add('active');
+      openDrawerChrome('ai_connection_test_backdrop', 'ai_connection_test_modal', {lockBody:false});
     }
     function closeAIConnectionTestModal(){
       document.getElementById('ai_connection_test_backdrop').classList.remove('active');
@@ -5191,18 +5396,14 @@
       set('ai_profile_provider','openai'); set('ai_profile_temperature','0'); set('ai_profile_prompt', '');
       aiProfileModelOptions = [];
       renderAIProfileModelOptions(false);
-      const modelStatus=document.getElementById('ai_profile_model_status');
-      if(modelStatus) modelStatus.textContent='部分服务不提供模型列表；获取失败时仍可手动填写模型名称。';
       document.getElementById('ai_profile_active').checked=false;
       const title=document.getElementById('ai_profile_drawer_title');
       if(title) title.textContent='新增 AI 接入';
     }
     function openAIProfileDrawer(title='新增 AI 接入'){
       document.getElementById('ai_profile_drawer_title').textContent=title;
-      document.getElementById('ai_profile_drawer_backdrop').classList.add('active');
-      document.getElementById('ai_profile_drawer').classList.add('active');
-      refreshEnhancedFilterSelects(document.getElementById('ai_profile_drawer'));
-      document.body.style.overflow='hidden';
+      const drawer=openDrawerChrome('ai_profile_drawer_backdrop', 'ai_profile_drawer');
+      refreshEnhancedFilterSelects(drawer);
     }
     function closeAIProfileDrawer(){
       document.getElementById('ai_profile_drawer_backdrop').classList.remove('active');
@@ -5228,13 +5429,18 @@
       set('default_recipients',(c.default_recipients||[]).join('\n'));
       const statusText=formatTestStatus(c, '邮件');
       const statusLabel=document.getElementById('email_status_label');
+      const statusCard=document.getElementById('email_test_status_card');
+      if(statusCard){
+        statusCard.classList.remove('is-ok','is-bad','is-idle');
+        statusCard.classList.add(c.last_test_status==='success' ? 'is-ok' : (c.last_test_status==='failed' ? 'is-bad' : 'is-idle'));
+      }
       if(statusLabel) statusLabel.textContent = c.last_test_status==='success' ? '最近测试通过' : (c.last_test_status==='failed' ? `最近测试失败：${statusText}` : '尚未测试');
       const passwordStatus=document.getElementById('smtp_password_status');
       if(passwordStatus) passwordStatus.textContent = c.password ? `已保存密码：${c.password}；如需更换请重新输入。` : '未保存密码；发送测试邮件前请填写。';
       const senderSummary=document.getElementById('email_sender_summary');
       if(senderSummary) senderSummary.textContent = c.sender || c.username || '-';
       const recipientSummary=document.getElementById('email_recipient_summary');
-      if(recipientSummary) recipientSummary.textContent = `${(c.default_recipients||[]).length} 个`;
+      if(recipientSummary) recipientSummary.textContent = `${(c.default_recipients||[]).length} 个兜底收件人`;
       const subjectSummary=document.getElementById('email_subject_summary');
       if(subjectSummary) subjectSummary.textContent = c.subject_template || '-';
       renderEmailValidationWindow(emailValidationWindowState);
@@ -5366,10 +5572,8 @@
       };
     }
     function openMailConfigModal(){
-      document.getElementById('mail_config_backdrop').classList.add('active');
-      document.getElementById('mail_config_modal').classList.add('active');
-      refreshEnhancedFilterSelects(document.getElementById('mail_config_modal'));
-      document.body.style.overflow='hidden';
+      const drawer=openDrawerChrome('mail_config_backdrop', 'mail_config_modal');
+      refreshEnhancedFilterSelects(drawer);
     }
     function closeMailConfigModal(){
       document.getElementById('mail_config_backdrop').classList.remove('active');
@@ -5381,9 +5585,7 @@
       if(consoleBox) consoleBox.textContent='开启真实邮件发送后，点击“开始测试”会提交一封测试邮件。SMTP 提交成功后仍需人工确认收件箱或垃圾箱。';
       const btn=document.getElementById('mail_test_start_btn');
       if(btn){ btn.disabled=false; btn.textContent='开始测试'; }
-      document.getElementById('mail_test_backdrop').classList.add('active');
-      document.getElementById('mail_test_modal').classList.add('active');
-      document.body.style.overflow='hidden';
+      openDrawerChrome('mail_test_backdrop', 'mail_test_modal');
     }
     function closeMailTestModal(){
       document.getElementById('mail_test_backdrop').classList.remove('active');
@@ -5443,17 +5645,17 @@
       document.getElementById('email_templates_table').innerHTML = templates.length ? table(
         ['ID','模板名称','标题模板','状态','更新时间','操作'],
         templates.map(t=>[
-          t.id,
-          esc(t.name),
-          `<span class="code">${esc(t.subject_template||'')}</span>`,
-          t.is_active ? '<span class="status ok">当前使用</span>' : '<span class="status">备用</span>',
-          esc(formatTime(t.updated_at)),
+          `<span class="email-template-id">#${esc(t.id)}</span>`,
+          `<div class="email-template-name-cell"><strong title="${esc(t.name||'未命名模板')}">${esc(t.name||'未命名模板')}</strong></div>`,
+          `<div class="email-template-subject-cell" title="${esc(t.subject_template||'未设置标题模板')}">${esc(t.subject_template||'未设置标题模板')}</div>`,
+          t.is_active ? '<span class="email-template-state-chip is-active">当前使用</span>' : '<span class="email-template-state-chip is-standby">备用</span>',
+          `<div class="email-template-updated-cell" title="${esc(formatTime(t.updated_at))}">${esc(formatCompactTime(t.updated_at))}</div>`,
           `<div class="wide-actions">${[
             `<button class="secondary" onclick="editEmailTemplate(${Number(t.id)})">编辑</button>`,
             `<button class="danger" onclick="deleteEmailTemplate(${Number(t.id)})">删除</button>`
           ].join(' ')}</div>`
         ])
-      ) : '<div class="empty">还没有 HTML 邮件模板。系统会先使用默认报告 HTML。</div>';
+      , {className:'email-template-table', minWidth:1040}) : '<div class="empty">还没有 HTML 邮件模板。系统会先使用默认报告 HTML。</div>';
     }
     function clearEmailTemplateFilters(){ ['email_template_search','email_template_status_filter'].forEach(id=>set(id,'')); renderEmailTemplatesTable(); }
     function renderJobEmailTemplateOptions(){
@@ -5483,13 +5685,22 @@
       if(!mount) return;
       const groups=['Crawling','Login','Scheduler','Retention'];
       const groupLabels={Crawling:'采集',Login:'登录',Scheduler:'调度',Retention:'保留周期'};
+      const groupNotes={
+        Crawling:'控制采集并发、超时、锁清理和重试节奏。',
+        Login:'控制扫码等待和登录会话有效期。',
+        Scheduler:'控制自动调度节奏和运行恢复窗口。',
+        Retention:'控制日志、报告和 AI 追溯数据保留时间。'
+      };
       mount.innerHTML=groups.map(group=>{
         const items=Object.values(settings||{}).filter(item=>item.group===group);
         if(!items.length) return '';
         const rows=items.map(item=>runtimeSettingRow(item));
-        return `<div class="settings-card" style="margin-bottom:14px">
-          <h3>${esc(groupLabels[group]||group)}</h3>
-          ${table(['设置','当前值','调整','范围','生效','锁定'], rows)}
+        return `<div class="settings-card runtime-settings-card">
+          <div class="runtime-settings-card-head">
+            <h3>${esc(groupLabels[group]||group)}</h3>
+            <span>${esc(groupNotes[group]||'')}</span>
+          </div>
+          ${table(['设置','当前值','调整','范围','生效','锁定'], rows, {className:'runtime-settings-table', minWidth:1040})}
         </div>`;
       }).join('');
     }
@@ -5499,15 +5710,36 @@
       const input=item.value_type==='boolean'
         ? `<select data-runtime-key="${esc(item.key)}"${disabled}><option value="false"${value==='false'?' selected':''}>否</option><option value="true"${value==='true'?' selected':''}>是</option></select>`
         : `<input data-runtime-key="${esc(item.key)}" type="number" min="${esc(item.minimum)}" max="${esc(item.maximum)}" value="${esc(value)}"${disabled}>`;
-      const lock=item.is_locked ? '<span class="status warn">部署锁定</span>' : '<span class="status ok">可编辑</span>';
+      const lock=item.is_locked ? '<span class="status warn runtime-lock-pill">部署锁定</span>' : '<span class="status ok runtime-lock-pill">可编辑</span>';
+      const sourceLabel=runtimeSettingSourceLabel(item.source);
       return [
-        `<strong>${esc(item.label)}</strong><div class="small">${esc(item.key)}</div>`,
-        `<span class="code">${esc(value)}</span><div class="small">${esc(item.source||'default')}</div>`,
-        input,
-        esc(item.range||'-'),
-        esc(runtimeApplyScopeLabel(item.apply_scope)),
-        `${lock}${item.lock_reason?'<div class="small">'+esc(item.lock_reason)+'</div>':''}`
+        `<div class="runtime-setting-name"><strong>${esc(item.label)}</strong><span>${esc(runtimeSettingGroupHint(item.group))}</span></div>`,
+        `<div class="runtime-current-value"><span class="code">${esc(value)}</span><span>${esc(sourceLabel)}</span></div>`,
+        `<div class="runtime-setting-control">${input}</div>`,
+        `<span class="runtime-range">${esc(item.range||'-')}</span>`,
+        `<span class="runtime-scope-chip">${esc(runtimeApplyScopeLabel(item.apply_scope))}</span>`,
+        `<div class="runtime-lock-state">${lock}${item.lock_reason?'<div class="small">'+esc(runtimeLockReasonLabel(item.lock_reason))+'</div>':''}</div>`
       ];
+    }
+    function runtimeSettingGroupHint(group){
+      return {
+        Crawling:'采集运行参数',
+        Login:'登录会话参数',
+        Scheduler:'调度运行参数',
+        Retention:'数据保留参数'
+      }[group] || '运行参数';
+    }
+    function runtimeSettingSourceLabel(source){
+      return {
+        default:'默认值',
+        config:'配置文件',
+        database:'后台保存',
+        environment:'部署配置',
+        deployment:'部署默认'
+      }[source] || '当前策略';
+    }
+    function runtimeLockReasonLabel(reason){
+      return reason ? '由部署配置控制' : '';
     }
     function runtimeApplyScopeLabel(scope){
       return {
@@ -5515,6 +5747,7 @@
         'next run':'下次运行',
         'next session':'下次登录会话',
         'scheduler reload or restart':'调度重载或重启',
+        'scheduler recovery':'调度恢复检查',
         'cleanup job':'清理任务'
       }[scope] || scope || '-';
     }
@@ -5590,10 +5823,8 @@
     function openEmailTemplateDrawer(title='新增邮件模板', keepForm=false){
       if(!keepForm) resetEmailTemplateForm();
       document.getElementById('email_template_drawer_title').textContent=title;
-      document.getElementById('email_template_drawer_backdrop').classList.add('active');
-      document.getElementById('email_template_drawer').classList.add('active');
-      refreshEnhancedFilterSelects(document.getElementById('email_template_drawer'));
-      document.body.style.overflow='hidden';
+      const drawer=openDrawerChrome('email_template_drawer_backdrop', 'email_template_drawer');
+      refreshEnhancedFilterSelects(drawer);
       scheduleEmailPreview();
     }
     function closeEmailTemplateDrawer(){
@@ -5618,14 +5849,6 @@
         const preview=(await res.json()).preview||{};
         document.getElementById('email_preview_subject').textContent = preview.subject || '';
         document.getElementById('email_template_preview').srcdoc = preview.html || '';
-        const note=document.getElementById('email_preview_note');
-        if(note){
-          const sampleNote = preview.sample_data_note || '预览使用样例数据；真实发送会使用对应运行生成的报告 HTML。';
-          const guardrailNote = preview.body_guardrail || (emailTemplateHasReportBodyPlaceholder(payload.html_template)
-            ? '正文占位符已保留，真实发送会插入系统生成的报告正文。'
-            : 'HTML 模板缺少 {report_html} 或 {report_body}，保存会被阻止。');
-          note.textContent = [sampleNote, guardrailNote].filter(Boolean).join(' ');
-        }
         if(showToast) toast('邮件模板预览已刷新');
       });
     }
@@ -6054,11 +6277,9 @@
       requestAnimationFrame(()=>{ box.scrollTop = box.scrollHeight; });
     }
     function openRunLogDrawer(id){
-      document.getElementById('run_log_backdrop').classList.add('active');
-      document.getElementById('run_log_drawer').classList.add('active');
+      openDrawerChrome('run_log_backdrop', 'run_log_drawer');
       document.getElementById('run_log_title').textContent=`运行日志 #${id}`;
       document.getElementById('run_log_meta').textContent='日志会自动定位到最新内容。';
-      document.body.style.overflow='hidden';
     }
     function closeRunLogDrawer(){
       document.getElementById('run_log_backdrop').classList.remove('active');
@@ -6069,9 +6290,7 @@
       currentRunDetailId=Number(id);
       currentRunDetailTab='overview';
       currentRunAiFilters = {};
-      document.getElementById('run_detail_backdrop').classList.add('active');
-      document.getElementById('run_detail_drawer').classList.add('active');
-      document.body.style.overflow='hidden';
+      openDrawerChrome('run_detail_backdrop', 'run_detail_drawer');
       await loadRunDetail(currentRunDetailId);
     }
     function closeRunDetailDrawer(){
@@ -6456,6 +6675,16 @@
       await navigator.clipboard.writeText(currentRunLogText);
       toast('日志已复制');
     }
+    async function copyText(text){
+      const value=String(text ?? '');
+      if(!value){ toast('没有可复制的内容'); return; }
+      try {
+        await navigator.clipboard.writeText(value);
+        toast('变量已复制');
+      } catch {
+        toast('复制失败，请手动复制');
+      }
+    }
     function downloadCurrentRunLogs(){
       if(!currentRunLogText){ toast('当前没有可下载的日志'); return; }
       const blob=new Blob([currentRunLogText], {type:'text/plain;charset=utf-8'});
@@ -6478,9 +6707,7 @@
     }
     function openReportPreviewDrawer(id){
       document.getElementById('report_preview_title').textContent = `报告预览 #${id}`;
-      document.getElementById('report_preview_backdrop').classList.add('active');
-      document.getElementById('report_preview_drawer').classList.add('active');
-      document.body.style.overflow='hidden';
+      openDrawerChrome('report_preview_backdrop', 'report_preview_drawer');
     }
     function closeReportPreviewDrawer(){
       document.getElementById('report_preview_backdrop').classList.remove('active');
@@ -6513,9 +6740,7 @@
     function openEmailDeliveryHistoryDrawer(id){
       const title=document.getElementById('email_delivery_history_title');
       if(title) title.textContent=`邮件交付历史 #${Number(id)}`;
-      document.getElementById('email_delivery_history_backdrop').classList.add('active');
-      document.getElementById('email_delivery_history_drawer').classList.add('active');
-      document.body.style.overflow='hidden';
+      openDrawerChrome('email_delivery_history_backdrop', 'email_delivery_history_drawer');
     }
     function closeEmailDeliveryHistoryDrawer(){
       document.getElementById('email_delivery_history_backdrop').classList.remove('active');
@@ -6595,12 +6820,28 @@
       setLoadingMarkup('doctor_table', listSkeleton(4));
       setLoadingText('doctor_recommendations', '正在生成处理建议...');
       const data=await (await api('/doctor')).json();
+      const checks=data.checks||[];
+      const failedChecks=checks.filter(c=>!c.ok);
       document.getElementById('doctor_summary').innerHTML = data.ok
-        ? '<div class="notice ok">基础配置检查已通过。</div>'
-        : '<div class="notice warn">还有基础配置未完成。</div>';
-      document.getElementById('doctor_table').innerHTML=renderDiagnosticChecks(data.checks||[]);
+        ? `<div class="notice ok diagnostic-summary-card">
+            <div class="readiness-mark">基础配置正常</div>
+            <div class="readiness-list">
+              <strong>当前基础配置检查已通过。</strong>
+              <span>可继续运行系统诊断或查看运行就绪状态。</span>
+            </div>
+          </div>`
+        : `<div class="notice warn diagnostic-summary-card">
+            <div class="readiness-mark">待处理</div>
+            <div class="readiness-list">
+              <strong>${esc(failedChecks.length)} 项基础配置需要处理</strong>
+              <span>优先处理会影响采集、报告或交付链路的检查项。</span>
+            </div>
+          </div>`;
+      document.getElementById('doctor_table').innerHTML=renderDiagnosticChecks(checks);
       const tips=data.recommendations||[];
-      document.getElementById('doctor_recommendations').innerHTML = tips.length ? `<ul class="diagnostic-recommendations">${tips.map(x=>`<li>${esc(cleanCustomerText(x))}</li>`).join('')}</ul>` : '<span class="muted">暂无建议。</span>';
+      document.getElementById('doctor_recommendations').innerHTML = tips.length
+        ? `<div class="diagnostic-recommendation-stack">${tips.map((x,index)=>`<div class="diagnostic-recommendation"><span>${esc(index+1)}</span><strong>${esc(cleanCustomerText(x))}</strong></div>`).join('')}</div>`
+        : '<div class="empty">暂无建议。</div>';
     }
     function renderDiagnosticChecks(checks){
       if(!checks.length) return '<div class="empty">暂无诊断项。</div>';
@@ -6615,7 +6856,7 @@
     }
     async function runSmokeCheck(){
       const mount=document.getElementById('smoke_result');
-      mount.innerHTML='<div class="notice">正在运行系统诊断，请稍候。</div>';
+      mount.innerHTML='<div class="notice diagnostic-smoke-state">正在运行系统诊断，请稍候。</div>';
       const res=await api('/smoke',{method:'POST'});
       if(!res.ok){ mount.innerHTML='<div class="notice warn">系统诊断失败。</div>'; toast(await err(res)); return; }
       const data=(await res.json()).result || {};
@@ -6636,7 +6877,8 @@
       const readinessFailures=(data.readiness&&data.readiness.failed_checks)||[];
       return `<div class="${data.ok?'notice':'notice warn'}">
         <strong>系统诊断${data.ok?'已通过':'有异常'}</strong>
-        <div class="small">报告 ID：${esc(systemCheck.report_id||'-')}；运行 ID：${esc(systemCheck.run_id||'-')}。本项只验证数据库、报告生成、附件和诊断汇总链路。</div>
+        <div class="small">报告 ID：${esc(systemCheck.report_id||'-')}；运行 ID：${esc(systemCheck.run_id||'-')}。</div>
+        <div class="small">验证范围：数据库、报告生成、附件和诊断汇总链路。</div>
         <div class="artifact-grid">${artifactCards || '<div class="empty">暂无产物。</div>'}</div>
         <div class="small" style="margin-top:8px">基础配置待处理：${esc(doctorFailures.length)} 项；运行状态待处理：${esc(readinessFailures.length)} 项。</div>
       </div>`;
@@ -6688,23 +6930,50 @@
     function formatPlatformCounts(counts){ const items=Object.entries(counts||{}).map(([p,n])=>`${formatPlatforms([p])} ${n}`); return items.length?items.join(' / '):'暂无'; }
     function formatFrequency(job){ const anchor=job.email_time||'09:00'; const labels={daily:`每天 ${anchor}`,'12h':`每 12 小时，起点 ${anchor}`,'6h':`每 6 小时，起点 ${anchor}`,cron:`cron ${job.cron_expr||''}`}; return labels[job.frequency] || job.frequency || ''; }
     function formatTime(value){ if(!value) return '-'; const d=new Date(value); if(!Number.isNaN(d.getTime())) return d.toLocaleString('zh-CN',{hour12:false}); return String(value).replace('T',' ').replace(/\+.*/, '').slice(0,19); }
+    function formatCompactTime(value){
+      if(!value) return '-';
+      const d=new Date(value);
+      if(Number.isNaN(d.getTime())) return String(value).replace('T',' ').replace(/\+.*/, '').slice(0,16);
+      const pad=n=>String(n).padStart(2,'0');
+      return `${d.getFullYear()}/${pad(d.getMonth()+1)}/${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+    }
     function formatBytes(bytes){ const n=Number(bytes||0); if(n<1024) return `${n} B`; if(n<1024*1024) return `${(n/1024).toFixed(1)} KB`; return `${(n/1024/1024).toFixed(1)} MB`; }
     function cleanCustomerText(text){
       return String(text||'')
-        .replace(new RegExp('Media'+'Crawler','g'),'平台采集服务')
+        .replace(new RegExp('Media'+'Crawler','g'),'采集服务')
         .replace(new RegExp('MONITOR_'+'SKIP_AI_API(?:=true|=false)?','g'),'AI 服务未启用')
         .replace(new RegExp('self'+'test-report','g'),'系统诊断报告')
         .replace(new RegExp('self'+'test','g'),'系统诊断')
         .replace(new RegExp('上线'+'\u9a8c\u6536','g'),'系统运行')
         .replace(new RegExp('待'+'\u9a8c\u6536','g'),'配置待完善')
-        .replace(new RegExp('\u9a8c\u6536'+'模板','g'),'测试数据模板')
+        .replace(new RegExp('\u9a8c\u6536'+'模板','g'),'示例内容')
+        .replace(new RegExp('测试'+'数据模板','g'),'示例内容')
         .replace(new RegExp('真实'+'测试 AI','g'),'连接测试')
-        .replace(new RegExp('uv '+'run python main'+'\\.py[^；。\\n]*','g'),'平台采集服务')
+        .replace(new RegExp('uv '+'run python main'+'\\.py[^；。\\n]*','g'),'采集服务')
         .replace(new RegExp('main'+'\\.py','g'),'采集入口')
-        .replace(new RegExp('C'+'LI','g'),'命令行工具')
+        .replace(new RegExp('C'+'LI','g'),'采集服务')
+        .replace(new RegExp('生产'+'模式已关闭本地登录窗口','g'),'当前仅支持网页登录')
+        .replace(new RegExp('生产'+'模式','g'),'当前配置')
+        .replace(new RegExp('开发'+'环境','g'),'当前配置')
         .replace(new RegExp('de'+'bug','ig'),'诊断');
     }
     function formatTestStatus(config, label){ const status=config.last_test_status||'untested'; if(status==='success') return `${label} 最近测试通过：${(config.last_test_at||'').replace('T',' ').slice(0,19)}`; if(status==='failed') return `${label} 最近测试失败：${cleanCustomerText(config.last_test_error)||'请检查配置'}`; return `${label} 尚未测试，配置更新后需要重新测试。`; }
+    function aiRuleTestStateCell(rule){
+      const status=rule.last_test_status||'untested';
+      const classes={success:'is-ok',failed:'is-bad',untested:'is-idle'}[status] || 'is-idle';
+      const label={success:'测试通过',failed:'测试失败',untested:'待测试'}[status] || '待测试';
+      const detail=status==='success'
+        ? esc(formatCompactTime(rule.last_test_at))
+        : (status==='failed' ? esc(cleanCustomerText(rule.last_test_error)||'请检查规则或 AI 接入') : '保存或调整后建议测试');
+      return `<div class="ai-rule-test-cell ${classes}"><strong>${label}</strong><span title="${detail}">${detail}</span></div>`;
+    }
+    function setAIRuleResultState(state, text){
+      const result=document.getElementById('ai_rules_result');
+      if(!result) return;
+      result.classList.remove('is-idle','is-loading','is-ok','is-bad');
+      result.classList.add(state || 'is-idle');
+      result.textContent=text || '';
+    }
     function emailValidationStatusLabel(status){ return {enabled:'已开启',disabled:'已关闭'}[status] || status || '未读取'; }
     function emailRecipientSourceLabel(source){ return {task_recipients:'任务收件人',global_default_fallback:'全局默认收件人',global_default_recipients:'全局默认收件人',explicit_target:'指定测试收件人',none:'未配置收件人',limited_context:'历史记录'}[source] || source || '-'; }
     function emailTemplateSourceLabel(source){ return {task_bound:'任务绑定模板',active_global_fallback:'发送时启用模板',default_renderer:'系统默认正文',limited_context:'历史记录'}[source] || source || '-'; }
@@ -6794,10 +7063,11 @@
     }
     function val(id){ const el=document.getElementById(id); return el ? el.value : ''; } function set(id,v){ const el=document.getElementById(id); if(!el) return; el.value = v ?? ''; if(el.matches && el.matches('.page-filter-region select[data-filter-select-enhanced="1"]')) syncFilterSelectButton(el); if(el.matches && el.matches('.page-filter-region input[type="date"][data-filter-date-enhanced="1"]')) syncFilterDateButton(el); }
     function esc(s){ return String(s??'').replace(/[&<>"']/g, m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m])); }
-    async function err(res){ try { return (await res.json()).detail || res.statusText; } catch { return res.statusText; } }
+    async function err(res){ try { return cleanCustomerText((await res.json()).detail || res.statusText); } catch { return cleanCustomerText(res.statusText); } }
     normalizeDrawerScrollBodies();
     enhanceFilterSelects();
     enhanceFilterDateInputs();
+    document.getElementById('account_menu_button')?.addEventListener('click', toggleSessionMenu);
     document.getElementById('save_job_btn').addEventListener('click', saveJob);
     document.getElementById('login_form').addEventListener('submit', loginWithForm);
     document.getElementById('fill_sample_job_btn').addEventListener('click', fillSampleJobTemplate);
@@ -6833,11 +7103,6 @@
       const el=document.getElementById(id);
       if(el) el.addEventListener('input', updateAIPromptPreview);
     });
-    document.getElementById('ai_profile_model_toggle')?.addEventListener('click', event=>{
-      event.preventDefault();
-      event.stopPropagation();
-      toggleAIProfileModelOptions();
-    });
     document.getElementById('ai_profile_model')?.addEventListener('input', ()=>{
       renderAIProfileModelOptions(!!aiProfileModelOptions.length, true);
     });
@@ -6858,6 +7123,8 @@
     resetAIProfileForm();
     resetSocialAccountForm();
     resetProxyForm();
+    syncNavigationTooltips();
+    syncResponsiveNavigationState();
     bootApp();
 </script>
 <script type="module" src="/static/monitor/monitor.js"></script>

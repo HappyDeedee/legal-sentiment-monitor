@@ -127,6 +127,12 @@ def _monitor_section(page: str, section_id: str) -> str:
     return page[start:end]
 
 
+def _monitor_inline_styles(page: str) -> str:
+    return "\n".join(
+        part.split("</style>", 1)[0] for part in page.split("<style>")[1:]
+    )
+
+
 def _task_group_view(page: str) -> str:
     return _monitor_section(page, "runs")
 
@@ -8770,7 +8776,7 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "账号资源" in page
     assert "账号详情" in page
     assert "账号列表" in page
-    assert "这里统一维护账号资源" in page
+    assert "查看账号可用性、登录方式和最近异常" in page
     assert "平台账号概览" not in page
     assert "账号资源台账" not in page
     assert "account_platform_overview" not in page
@@ -8788,10 +8794,7 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "account_save_button" in page
     assert "account_delete_button" in page
     assert "deleteCurrentSocialAccount" in page
-    assert "account_login_prereq_hint" in page
     assert "updateAccountLoginPrerequisites" in page
-    assert "请先填写账号名称。你可以先保存账号创建账号，再生成二维码登录。" in page
-    assert "账号名称已填写，可以生成二维码；扫码后系统会自动确认登录结果。" in page
     assert "qrButton.disabled=!nameReady" in page
     assert "checkSocialAccountLogin" in page
     assert "检测登录态" in page
@@ -8826,7 +8829,7 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "accountLedgerTable" in page
     assert 'return `<div class="table-wrap"><table class="account-table">' in page
     assert '<th class="col-actions">操作</th>' in page
-    assert "点击“详情”进入单个账号的登录、Cookie、代理和状态维护" in page
+    assert "查看账号可用性、登录方式和最近异常" in page
     assert "startLoginSessionForAccount" in page
     assert "openCurrentAccountLoginBrowser" in page
     assert "openLoginSessionBrowser" in page
@@ -8902,7 +8905,7 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "login-sessions" in page
     assert "pollLoginSession" in page
     assert "代理资源" in page
-    assert "代理可绑定到账号或任务，采集时按绑定关系使用" in page
+    assert "管理代理来源、并发上限和可用状态" in page
     assert "proxy_resource_summary" in page
     assert "proxy_resource_count" in page
     assert "proxy_search" in page
@@ -8910,7 +8913,7 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "clearProxyFilters" in page
     assert "renderProxyResourceSummary" in page
     assert "renderProxyProfilesTable" in page
-    assert "新增、编辑和删除都在弹窗内确认；代理 URL 保存后只显示掩码。" in page
+    assert "代理 URL 保存后仅显示掩码。" in page
     assert "保存后任务和账号绑定会继续引用这个代理资源；删除前请确认没有正在使用的任务。" in page
     assert "proxies" in page
     assert "loadProxyPool" in page
@@ -9012,11 +9015,11 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "addEventListener('click', fillSampleJobTemplate)" in page
     assert "fillSampleJobTemplate" in page
     assert "hasJobTemplatePlaceholders" in page
-    assert "请先把测试数据模板里的律所名称和平台搜索词改成真实内容" in page
+    assert "请先将律所名称和平台搜索词改成真实内容" in page
     assert "恢复默认规则" in page
     assert "default_prompt" in page
     assert "resetAIPrompt" in page
-    assert "维护可复用的舆情判断规则" in page
+    assert "管理舆情判断规则和默认初筛规则" in page
     assert "基础信息" in page
     assert "规则只影响模型如何判断和填写字段" in page
     assert "评估规则列表" in page
@@ -9075,7 +9078,7 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "字段由系统固定校验" in page
     assert "AI 接入资源" in page
     assert "接口协议" in page
-    assert "OpenAI-compatible / Anthropic-compatible 协议的模型连接资源" in page
+    assert "管理模型连接资源和默认接入状态" in page
     assert "Provider" not in page
     assert "ai_resource_summary" in page
     assert "ai_resource_count" in page
@@ -9085,8 +9088,9 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "clearAIProfileFilters" in page
     assert "renderAIResourceSummary" in page
     assert "renderAIProfilesTable" in page
-    assert "API Key 保存后不回显；连接测试在独立弹窗中执行并记录最近状态。" in page
+    assert "密钥保存后不回显，连接测试会记录最近状态。" in page
     assert "获取模型列表" in page
+    assert "可手动输入，或获取列表后选择" in page
     assert "ai_profile_model_options" in page
     assert "toggleAIProfileModelOptions" in page
     assert "selectAIProfileModel" in page
@@ -9115,6 +9119,10 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "连接测试" in page
     assert "ai-evaluation-config/test" in page
     assert "testAI" in page
+    assert "ai_profile_model_status" not in page
+    assert "model-combobox-status" not in page
+    assert "部分服务不提供模型列表；获取失败时仍可手动填写模型名称。" not in page
+    assert "可获取当前接入下的模型列表；如果服务不支持列表接口，可保持手动填写。" not in page
     assert "HTML 邮件模板" in page
     assert "email_template_summary" in page
     assert "email_template_resource_summary" in page
@@ -9151,7 +9159,6 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert email_section.count("openMailTestModal()") == 1
     assert "SMTP 与发送默认值" not in email_section
     assert "真实邮件发送状态尚未读取" not in email_section
-    assert "测试失败不会阻断报告生成；系统仍会保留报告供下载和预览。" in page
     assert "smtp_password_status" in page
     assert "已保存密码" in page
     assert "如需更换请重新输入" in page
@@ -9239,11 +9246,12 @@ def test_monitor_page_uses_consistent_buttons_tables_and_modal_actions():
     assert "if(header==='状态') classes.push('col-status');" in page
     assert "Math.max(Number(options.minWidth||0) || 920, (headers||[]).length * 112)" in page
     assert "class=\"form-actions\"" in page
-    assert ".form-actions { position:sticky;" in page
-    assert ".account-flow-actions { position:sticky;" in page
-    assert ".ai-test-actions { position:sticky;" in page
-    assert ".rule-modal-actions { position:sticky;" in page
-    assert ".resource-modal-actions { position:sticky;" in page
+    assert ".form-actions { position:relative;" in page
+    assert ".account-flow-actions { position:relative;" in page
+    assert ".ai-test-actions { position:relative;" in page
+    assert ".rule-modal-actions { position:relative;" in page
+    assert ".resource-modal-actions { position:relative;" in page
+    assert "drawer-fixed-footer" in frontend_source
     assert ".resource-summary-grid { display:grid;" in page
     assert ".resource-toolbar { display:flex;" in page
     assert ".mail-test-modal" in page
@@ -9306,13 +9314,20 @@ def test_cr071_drawer_modal_selects_reuse_filter_dropdown_mechanism():
     css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
 
     assert "function refreshEnhancedFilterSelects(root=document)" in page
-    assert "refreshEnhancedFilterSelects(document.getElementById('job_drawer'))" in page
     assert "refreshEnhancedFilterSelects(dialog)" in page
-    assert "refreshEnhancedFilterSelects(document.getElementById('proxy_drawer'))" in page
-    assert "refreshEnhancedFilterSelects(document.getElementById('ai_profile_drawer'))" in page
-    assert "refreshEnhancedFilterSelects(document.getElementById('ai_rule_modal'))" in page
-    assert "refreshEnhancedFilterSelects(document.getElementById('mail_config_modal'))" in page
-    assert "refreshEnhancedFilterSelects(document.getElementById('email_template_drawer'))" in page
+    for opener_name in [
+        "openJobDrawer",
+        "openProxyDrawer",
+        "openAIProfileDrawer",
+        "openAIRuleModal",
+        "openMailConfigModal",
+        "openEmailTemplateDrawer",
+    ]:
+        start = page.index(f"function {opener_name}")
+        end = page.find("\n    function ", start + 1)
+        snippet = page[start:end]
+        assert "openDrawerChrome(" in snippet
+        assert "refreshEnhancedFilterSelects(drawer)" in snippet
     assert "function refreshEnhancedFilterDateInputs(root=document)" in page
     assert "refreshEnhancedFilterDateInputs(document.getElementById('job_drawer'))" in page
     assert ".modal-filter-region.page-filter-region" in page
@@ -9469,7 +9484,7 @@ def test_phase_11b_base_layout_styles_live_in_monitor_css():
     ]:
         assert selector in css
 
-    inline_style = page[page.index("<style>") : page.index("</style>")]
+    inline_style = _monitor_inline_styles(page)
     inline_base_style = inline_style.split("@media", 1)[0]
     for migrated_selector in [
         ".shell {",
@@ -9489,7 +9504,7 @@ def test_phase_11c_interaction_helpers_and_floating_menus():
     page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
     css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
     js = Path("api/webui/monitor/monitor.js").read_text(encoding="utf-8")
-    inline_style = page[page.index("<style>") : page.index("</style>")]
+    inline_style = _monitor_inline_styles(page)
 
     for helper in [
         "root.MonitorUI = Object.freeze",
@@ -9560,7 +9575,7 @@ def test_phase_11c_interaction_helpers_and_floating_menus():
 def test_phase_11d_responsive_foundation_and_mobile_navigation():
     page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
     css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
-    inline_style = page[page.index("<style>") : page.index("</style>")]
+    inline_style = _monitor_inline_styles(page)
 
     for marker in [
         'id="mobile_nav_toggle"',
@@ -9580,18 +9595,36 @@ def test_phase_11d_responsive_foundation_and_mobile_navigation():
         "function closeMobileNav()",
         "function toggleMobileNav()",
         "document.body.classList.toggle('mobile-nav-open'",
+        "const sidebar=document.getElementById('primary_sidebar')",
+        "sidebar.style.setProperty('left', open ? '0px' : '-340px', 'important')",
         "document.getElementById('mobile_nav_toggle')?.addEventListener('click'",
         "document.getElementById('mobile_nav_backdrop')?.addEventListener('click', closeMobileNav)",
-        "if(window.innerWidth >= 1280) closeMobileNav()",
+        "if(open && window.innerWidth >= 768) open=false",
+        "if(window.innerWidth >= 768) closeMobileNav()",
         "closeMobileNav();",
         "if(!canMenu('mail_templates')) return;",
     ]:
         assert marker in page
 
     assert "@media (max-width: 1279px)" in css
+    assert "@media (min-width: 768px) and (max-width: 1279px)" in css
     assert "@media (max-width: 767px)" in css
     assert "@media (max-width: 1100px)" not in inline_style
     assert "@media (max-width: 720px)" not in inline_style
+    inline_header_actions_block = inline_style.split("body header .header-actions {", 1)[1].split("}", 1)[0]
+    assert "display:contents !important;" in inline_header_actions_block
+    assert "width:auto !important;" in inline_header_actions_block
+    assert "grid-template-areas:\n          \"nav title refresh account\"\n          \"status status status status\";" in inline_style
+    inline_title_strong_block = inline_style.split("body header .header-title strong {", 1)[1].split("}", 1)[0]
+    assert "display:block;" in inline_title_strong_block
+    assert "white-space:nowrap;" in inline_title_strong_block
+    assert "word-break:keep-all;" in inline_title_strong_block
+    inline_top_status_block = inline_style.split("body header #top_status {", 1)[1].split("}", 1)[0]
+    assert "grid-area:status;" in inline_top_status_block
+    assert "display:flex !important;" in inline_top_status_block
+    inline_account_area_block = inline_style.split("body header .account-area {", 1)[1].split("}", 1)[0]
+    assert "grid-area:account;" in inline_account_area_block
+    assert "width:auto;" in inline_account_area_block
 
     for selector in [
         ".mobile-nav-toggle",
@@ -9609,9 +9642,111 @@ def test_phase_11d_responsive_foundation_and_mobile_navigation():
 
     assert "grid-template-columns: minmax(0, 1fr);" in css
     assert "height: 100dvh;" in css
+    tablet_nav_block = css.split("@media (min-width: 768px) and (max-width: 1279px)", 1)[1].split(
+        "@media (max-width: 767px)", 1
+    )[0]
+    mobile_nav_block = css.split("@media (max-width: 767px)", 1)[1]
+    assert "body.sidebar-collapsed .shell {\n    grid-template-columns: 68px minmax(0, 1fr);" in tablet_nav_block
+    assert (
+        ".mobile-nav-toggle,\n"
+        "  .mobile-nav-backdrop,\n"
+        "  body.mobile-nav-open .mobile-nav-backdrop {\n"
+        "    display: none !important;"
+    ) in tablet_nav_block
+    assert ".sidebar-collapse-button {\n    display: flex !important;" in tablet_nav_block
+    assert "body.mobile-nav-open {" in mobile_nav_block
+    assert "body.mobile-nav-open #primary_sidebar {\n    left: 0 !important;\n    transform: none !important;" in mobile_nav_block
+    assert ".mobile-nav-toggle {\n    display: inline-flex;" in mobile_nav_block
+    assert "grid-template-columns: 40px minmax(0, 1fr) 36px 44px;" in mobile_nav_block
+    assert (
+        'grid-template-areas:\n'
+        '      "nav title refresh account"\n'
+        '      "status status status status";'
+    ) in mobile_nav_block
+    assert "body header .mobile-nav-toggle > span:not(.mobile-nav-icon) {\n    display: none;" in mobile_nav_block
+    assert "body header .header-actions {\n    display: contents !important;" in mobile_nav_block
+    assert "body header .header-title {\n    grid-area: title;" in mobile_nav_block
+    assert "display: block;" in mobile_nav_block
+    assert "writing-mode: horizontal-tb;" in mobile_nav_block
+    top_status_block = mobile_nav_block.split("body header #top_status {", 1)[1].split("}", 1)[0]
+    assert "display: flex !important;" in top_status_block
+    assert "grid-area: status;" in top_status_block
+    assert "overflow: visible;" in top_status_block
+    assert "flex-wrap: wrap;" in top_status_block
+    assert "body header #global_refresh_button {\n    grid-area: refresh;" in mobile_nav_block
+    assert ".account-area {\n    display: inline-flex;" in mobile_nav_block
+    assert "grid-area: account;" in mobile_nav_block
+    assert "body header .header-actions > .account-area {\n    min-width: 0;\n    width: auto;" in mobile_nav_block
+    assert "body:not(.mobile-nav-open) #primary_sidebar {\n    left: -340px !important;\n    transform: none !important;" in mobile_nav_block
     assert "max-height: calc(100dvh - 18px);" in css
     assert ".table-wrap table" in css
     assert "min-width: 760px !important;" in css
+
+
+def test_phase_21a_global_shell_and_design_tokens_refinement():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    js = Path("api/webui/monitor/monitor.js").read_text(encoding="utf-8")
+
+    assert "/* Phase 21 formal console refinement layer: visual-only, no workflow changes. */" in css
+    for token in [
+        "--phase21-bg: #f3f6f8;",
+        "--phase21-surface: #ffffff;",
+        "--phase21-line: #d6e0e8;",
+        "--phase21-text: #17212f;",
+        "--phase21-muted: #586a7d;",
+        "--phase21-accent: #0f766e;",
+        "--phase21-nav-hover: #edf1f5;",
+        "--phase21-nav-active: #e8fbf6;",
+        "--phase21-success-bg: #edf8f3;",
+        "--phase21-warning-bg: #fff7e8;",
+        "--phase21-danger-bg: #fff0f2;",
+        "--phase21-info-bg: #edf5fb;",
+        "--phase21-shadow-overlay:",
+        "--phase21-focus:",
+    ]:
+        assert token in css
+
+    for selector in [
+        "html body {",
+        "body .shell {",
+        "body .content {",
+        "body .shell > aside {",
+        "body header {",
+        "body input:focus-visible,",
+        "body button.primary {",
+        "body button.secondary,",
+        "body button.danger {",
+        "body button:disabled {",
+        "body .status.ok,",
+        "body .status.warn,",
+        "body .status.bad,",
+        "body .empty,\nbody .empty-state,",
+        "body .skeleton-block,",
+        "body .drawer {",
+        "body .modal-close:hover {",
+        "body .refresh-icon-button {",
+    ]:
+        assert selector in css
+
+    assert "body .shell > aside {\n  position: fixed;" in css
+    assert "overflow-x: hidden;" in css
+    assert "body * {\n  min-width: 0;\n}" in css
+    assert "body .wide-actions,\nbody .toolbar-actions," in css
+    assert "background: linear-gradient(180deg, #15847b 0%, var(--phase21-accent-strong) 100%);" in css
+    assert "box-shadow: var(--phase21-focus);" in css
+    assert "cursor: progress;" in css
+    assert "border-top-color: var(--phase21-accent);" in css
+
+    for forbidden in [
+        "tailwind",
+        "alpine",
+        "petite-vue",
+        "react.production",
+        "vue.global",
+    ]:
+        assert forbidden not in page.lower()
+        assert forbidden not in js.lower()
 
 
 def test_cr038_sticky_drawer_close_controls_are_shared_and_preserved():
@@ -9684,17 +9819,70 @@ def test_cr038_sticky_drawer_close_controls_are_shared_and_preserved():
     assert "z-index: var(--z-floating-menu);" in css
     assert "z-index:45;" in page
 
-    for sticky_footer in [
-        ".form-actions { position:sticky;",
-        ".account-flow-actions { position:sticky;",
-        ".ai-test-actions { position:sticky;",
-        ".rule-modal-actions { position:sticky;",
-        ".resource-modal-actions { position:sticky;",
+    for fixed_footer in [
+        ".form-actions { position:relative;",
+        ".account-flow-actions { position:relative;",
+        ".ai-test-actions { position:relative;",
+        ".rule-modal-actions { position:relative;",
+        ".resource-modal-actions { position:relative;",
     ]:
-        assert sticky_footer in frontend_source
+        assert fixed_footer in frontend_source
 
-    assert ".drawer .form-actions,\n.drawer .resource-modal-actions,\n.drawer .account-flow-actions,\n.drawer .ai-test-actions,\n.drawer .rule-modal-actions {" in css
-    assert "top: calc(var(--drawer-padding-y) + 80px);" in css
+    for marker in [
+        "const footerSelector='.form-actions, .resource-modal-actions, .account-flow-actions, .ai-test-actions, .rule-modal-actions';",
+        "body.querySelectorAll(footerSelector).forEach(action=>{",
+        "action.classList.add('drawer-fixed-footer');",
+        "drawer.appendChild(action);",
+        ".drawer > .drawer-fixed-footer {",
+        "body .drawer > .drawer-fixed-footer {",
+    ]:
+        assert marker in frontend_source
+
+    footer_block = css[css.index(".drawer > .drawer-fixed-footer {") : css.index(".action-menu-host,")]
+    for marker in [
+        "position: relative;",
+        "flex: 0 0 auto;",
+        "bottom: auto;",
+        "top: auto;",
+        "width: 100%;",
+        "margin: 0;",
+        "padding: 14px var(--drawer-padding-x);",
+        "border-top: 1px solid var(--color-neutral-200);",
+        "border-radius: 0 0 calc(var(--radius-modal-medium) - 1px) calc(var(--radius-modal-medium) - 1px);",
+    ]:
+        assert marker in footer_block
+    assert "top: calc(var(--drawer-padding-y) + 80px);" not in css
+
+    normalized_drawer_ids = [
+        "job_drawer",
+        "account_dialog",
+        "proxy_drawer",
+        "ai_connection_test_modal",
+        "ai_profile_drawer",
+        "ai_rule_modal",
+        "mail_config_modal",
+        "mail_test_modal",
+        "email_template_drawer",
+    ]
+    footer_action_classes = [
+        "form-actions",
+        "resource-modal-actions",
+        "account-flow-actions",
+        "ai-test-actions",
+        "rule-modal-actions",
+    ]
+    for drawer_id in normalized_drawer_ids:
+        drawer_start = page.index(f'id="{drawer_id}"')
+        next_drawer = page.find('class="drawer', drawer_start + 1)
+        drawer_html = page[drawer_start : next_drawer if next_drawer != -1 else len(page)]
+        footer_positions = [
+            drawer_html.find(f'class="{action_class}')
+            for action_class in footer_action_classes
+            if f'class="{action_class}' in drawer_html
+        ]
+        if footer_positions:
+            first_footer_position = min(footer_positions)
+            assert 'class="drawer-scroll-body"' not in drawer_html[:first_footer_position]
 
     assert "document.addEventListener('keydown', event => {" in page
     assert "if(event.key === 'Escape'){" in page
@@ -9770,10 +9958,28 @@ def test_cr073_scrollable_drawer_scrollbars_preserve_corner_radius():
         "drawer.querySelector(':scope > .drawer-scroll-body')",
         "drawer.querySelector(':scope > .drawer-head, :scope > .modal-head')",
         "body.className='drawer-scroll-body';",
-        "drawer.appendChild(body);",
+        "const topChromeSelector='.run-detail-toolbar, .detail-tabs.run-detail-tabs, .report-leads-toolbar, .drawer-actions';",
+        "node.matches(topChromeSelector)",
+        "node.classList.add('drawer-fixed-toolbar');",
+        "body.querySelectorAll(`:scope > ${topChromeSelector.split(',').join(', :scope > ')}`).forEach(chrome=>{",
+        "drawer.insertBefore(chrome, body);",
+        "drawer.insertBefore(body, insertAfter.nextSibling);",
+        "const footerSelector='.form-actions, .resource-modal-actions, .account-flow-actions, .ai-test-actions, .rule-modal-actions';",
+        "body.querySelectorAll(footerSelector).forEach(action=>{",
+        "action.classList.add('drawer-fixed-footer');",
         "normalizeDrawerScrollBodies();",
     ]:
         assert marker in page
+
+    footer_block = css[css.index(".drawer > .drawer-fixed-footer {") : css.index(".action-menu-host,")]
+    for marker in [
+        "flex: 0 0 auto;",
+        "bottom: auto;",
+        "top: auto;",
+        "margin: 0;",
+        "z-index: 24;",
+    ]:
+        assert marker in footer_block
 
     modal_close_block = css[css.index(".modal-close {") : css.index(".modal-close:hover {")]
     assert "flex: 0 0 34px;" in modal_close_block
@@ -9782,10 +9988,87 @@ def test_cr073_scrollable_drawer_scrollbars_preserve_corner_radius():
     assert "right:" not in modal_close_block
 
 
+def test_cr082_drawer_scrollbar_boundaries_are_rechecked_on_open():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    frontend_source = page + "\n" + css
+    inline_style = _monitor_inline_styles(page)
+
+    for marker in [
+        "function openDrawerChrome(backdropId, drawerId, options={})",
+        "normalizeDrawerScrollBodies();",
+        "drawer.classList.toggle('has-fixed-footer', !!drawer.querySelector(':scope > .drawer-fixed-footer'));",
+        "drawer.classList.toggle('has-fixed-toolbar', !!drawer.querySelector(':scope > .drawer-fixed-toolbar'));",
+        "body.setAttribute('data-scroll-owner', 'drawer-content');",
+        "if(options.lockBody !== false) document.body.style.overflow='hidden';",
+    ]:
+        assert marker in page
+
+    for opener in [
+        "openDrawerChrome('account_modal', 'account_dialog')",
+        "openDrawerChrome('proxy_drawer_backdrop', 'proxy_drawer')",
+        "openDrawerChrome('job_drawer_backdrop', 'job_drawer')",
+        "openDrawerChrome('ai_rule_modal_backdrop', 'ai_rule_modal')",
+        "openDrawerChrome('ai_connection_test_backdrop', 'ai_connection_test_modal', {lockBody:false})",
+        "openDrawerChrome('ai_profile_drawer_backdrop', 'ai_profile_drawer')",
+        "openDrawerChrome('mail_config_backdrop', 'mail_config_modal')",
+        "openDrawerChrome('mail_test_backdrop', 'mail_test_modal')",
+        "openDrawerChrome('email_template_drawer_backdrop', 'email_template_drawer')",
+        "openDrawerChrome('run_log_backdrop', 'run_log_drawer')",
+        "openDrawerChrome('run_detail_backdrop', 'run_detail_drawer')",
+        "openDrawerChrome('report_preview_backdrop', 'report_preview_drawer')",
+        "openDrawerChrome('email_delivery_history_backdrop', 'email_delivery_history_drawer')",
+    ]:
+        assert opener in page
+
+    for forbidden in [
+        "document.getElementById('mail_config_backdrop').classList.add('active')",
+        "document.getElementById('mail_config_modal').classList.add('active')",
+        "document.getElementById('job_drawer_backdrop').classList.add('active')",
+        "document.getElementById('run_detail_drawer').classList.add('active')",
+    ]:
+        assert forbidden not in page
+
+    for marker in [
+        "min-height: 0;",
+        "overflow: hidden;",
+        "isolation: isolate;",
+        "position: relative;",
+        "overflow-x: hidden;",
+        "overflow-y: auto;",
+        "overscroll-behavior: contain;",
+        "scrollbar-gutter: stable;",
+        ".drawer > .drawer-fixed-toolbar {",
+        ".drawer.has-fixed-footer > .drawer-scroll-body {",
+    ]:
+        assert marker in frontend_source
+        assert marker.replace(": ", ":").replace("; ", ";") in inline_style.replace(": ", ":").replace("; ", ";")
+
+    for marker in [
+        "flex: 0 0 auto;",
+        "z-index: 25;",
+        ".drawer > .drawer-fixed-toolbar.drawer-actions",
+        ".drawer > .drawer-fixed-toolbar.run-detail-toolbar,",
+        ".drawer > .drawer-fixed-toolbar.detail-tabs",
+    ]:
+        assert marker in frontend_source
+
+    for chrome_class in [
+        "run-detail-toolbar",
+        "detail-tabs run-detail-tabs",
+        "report-leads-toolbar",
+        "drawer-actions",
+    ]:
+        assert chrome_class in page
+
+    assert ".drawer::-webkit-scrollbar" not in css
+    assert "top: calc(var(--drawer-padding-y) + 80px);" not in frontend_source
+
+
 def test_phase_12a_navigation_groups_and_login_landing():
     page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
     css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
-    inline_style = page[page.index("<style>") : page.index("</style>")]
+    inline_style = _monitor_inline_styles(page)
 
     for forbidden in [
         "nav-popover",
@@ -9807,12 +10090,23 @@ def test_phase_12a_navigation_groups_and_login_landing():
         'aria-expanded="true"',
         'class="nav-sublist"',
         'class="nav-caret"',
-        'id="mobile_account_area"',
-        'id="mobile_current_user_badge"',
         'class="account-area"',
+        'id="sidebar_collapse_button"',
+        'class="sidebar-collapse-button"',
+        'aria-label="收起侧边导航"',
         "function routeToOperationsHome()",
         "routeToOperationsHome();",
         "const NAV_GROUPS = {",
+        "function navButtonLabel(button)",
+        "function syncNavigationTooltips()",
+        "function setSidebarCollapsed(collapsed)",
+        "function syncResponsiveNavigationState()",
+        "document.getElementById('sidebar_collapse_button')?.addEventListener('click'",
+        "document.body.classList.toggle('sidebar-collapsed', !!collapsed)",
+        "if(btn.dataset.navGroupToggle && document.body.classList.contains('sidebar-collapsed'))",
+        "if(window.innerWidth < 768) collapsed=false",
+        "if(window.innerWidth >= 768 && window.innerWidth < 1280)",
+        "syncResponsiveNavigationState();",
         "function toggleNavGroup(group)",
         "function setNavGroupExpanded(group, expanded)",
         "function expandNavGroupForTab(tab)",
@@ -9829,11 +10123,1171 @@ def test_phase_12a_navigation_groups_and_login_landing():
         ".nav-sublist",
         ".nav-group.is-collapsed .nav-sublist",
         ".account-area",
-        ".mobile-account-area",
+        ".sidebar-collapse-button",
+        "body.sidebar-collapsed .shell",
+        "body.sidebar-collapsed nav button",
+        "body.sidebar-collapsed nav button::after",
     ]:
         assert selector in css
 
+    assert "--color-navigation-hover-bg: #edf1f5;" in css
+    assert "--phase21-nav-hover: #edf1f5;" in css
+    assert "body nav button:hover:not(.active) {\n  background: var(--phase21-nav-hover);" in css
+    assert "body nav button.active {\n  background: var(--phase21-nav-active);" in css
+    assert "color: var(--phase21-accent);" in css
+    assert "--phase21-accent: #0f766e;" in css
+    assert "--phase21-nav-active: #e8fbf6;" in css
+    assert "nav button.active,\nnav button:hover" not in css
+    assert ".nav-sublist button.active,\n.nav-sublist button:hover" not in css
+    assert "nav button.active {\n  background: var(--color-navigation-active-bg);" in css
+    assert "body .nav-sublist button.sub:hover:not(.active) {\n  background: var(--phase21-nav-hover);" in css
+    assert "body .sidebar-collapse-button:hover {\n  color: var(--phase21-text);\n  background: var(--phase21-nav-hover);" in css
+    collapsed_sidebar_hover_block = css[
+        css.index("body.sidebar-collapsed .sidebar-collapse-button:hover {") : css.index(
+            "body .mobile-nav-toggle:hover", css.index("body.sidebar-collapsed .sidebar-collapse-button:hover {")
+        )
+    ]
+    assert "background: var(--phase21-nav-hover);" in collapsed_sidebar_hover_block
+    assert "color: var(--phase21-text);" in collapsed_sidebar_hover_block
+    assert "var(--phase21-accent-soft)" not in collapsed_sidebar_hover_block
+    assert "var(--phase21-accent-strong)" not in collapsed_sidebar_hover_block
+    assert ".nav-sublist button.active {\n  background: var(--color-navigation-active-bg);" in css
+    nav_sublist_hover_block = page[
+        page.index(".nav-sublist button:hover:not(.active) {") : page.index(
+            ".nav-sublist button.active {"
+        )
+    ]
+    nav_sublist_active_block = page[
+        page.index(".nav-sublist button.active {") : page.index(
+            "header {", page.index(".nav-sublist button.active {")
+        )
+    ]
+    assert "background:#edf1f5;" in nav_sublist_hover_block
+    assert "color:var(--text);" in nav_sublist_hover_block
+    assert "background:#e8fbf6;" not in nav_sublist_hover_block
+    assert "color:#0f766e;" not in nav_sublist_hover_block
+    assert "background:#e8fbf6;" in nav_sublist_active_block
+    assert "color:#0f766e;" in nav_sublist_active_block
     assert ".nav-popover" not in inline_style
+    assert 'id="mobile_account_area"' not in page
+    assert 'id="mobile_current_user_badge"' not in page
+    assert '<button class="secondary" onclick="logout()">退出</button>' not in page
+
+
+def test_phase_21_header_account_menu_matches_compact_user_control():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    header = page[page.index("<header>") : page.index("</header>", page.index("<header>"))]
+
+    assert 'id="account_menu_button"' in header
+    assert 'class="account-menu-button"' in header
+    assert 'aria-haspopup="menu"' in header
+    assert 'aria-controls="account_menu"' in header
+    assert 'id="account_menu"' in header
+    assert "刷新当前页" in header
+    assert "返回运营首页" in header
+    assert "退出登录" in header
+    assert 'onclick="logoutFromAccountMenu()"' in header
+    assert '<button class="secondary" onclick="logout()">退出</button>' not in header
+
+    for snippet in [
+        "function toggleSessionMenu(event)",
+        "function closeSessionMenu()",
+        "function refreshFromAccountMenu()",
+        "function returnToOperationsHomeFromAccountMenu()",
+        "function logoutFromAccountMenu()",
+        "document.getElementById('account_menu_button')?.addEventListener('click', toggleSessionMenu)",
+        "if(!event.target.closest('.account-area'))",
+    ]:
+        assert snippet in page
+
+    for selector in [
+        ".account-menu-button",
+        ".account-avatar",
+        ".account-menu-copy",
+        ".account-menu",
+        ".account-menu.active",
+        ".account-menu-summary",
+        ".account-menu .account-menu-danger",
+    ]:
+        assert selector in css
+
+
+def test_phase_21b_navigation_hierarchy_keeps_task_loop_and_subpages_distinct():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+
+    nav = page[page.index('<nav id="primary_navigation">') : page.index("</nav>", page.index('<nav id="primary_navigation">'))]
+
+    for first_level in [
+        'data-tab="dashboard" data-menu-key="overview"',
+        'data-tab="jobs" data-menu-key="monitoring"',
+        'data-tab="runs" data-menu-key="run_center"',
+    ]:
+        assert first_level in nav
+
+    for group_marker in [
+        'data-nav-group="resources"',
+        'data-nav-group-toggle="resources"',
+        'id="nav_group_resources"',
+        'data-nav-group="settings"',
+        'data-nav-group-toggle="settings"',
+        'id="nav_group_settings"',
+    ]:
+        assert group_marker in nav
+
+    for sub_marker in [
+        '<button class="sub" data-tab="accounts"',
+        '<button class="sub" data-tab="proxies"',
+        '<button class="sub" data-tab="ai"',
+        '<button class="sub" data-tab="ai_rules"',
+        '<button class="sub" data-tab="email"',
+        '<button class="sub" data-tab="email_templates"',
+        '<button class="sub" data-tab="runtime"',
+        '<button class="sub" data-tab="doctor"',
+    ]:
+        assert sub_marker in nav
+
+    for icon_marker in [
+        'href="#icon-dashboard"',
+        'href="#icon-monitor"',
+        'href="#icon-run"',
+        'href="#icon-resource"',
+        'href="#icon-account"',
+        'href="#icon-proxy"',
+        'href="#icon-ai"',
+        'href="#icon-settings"',
+        'href="#icon-rules"',
+        'href="#icon-mail"',
+        'href="#icon-template"',
+        'href="#icon-runtime"',
+        'href="#icon-doctor"',
+    ]:
+        assert icon_marker in nav
+
+    for css_marker in [
+        "body #primary_navigation > .nav-group:not(.nav-group-collapsible) > button {\n  min-height: 44px;",
+        "body .nav-group-toggle {\n  min-height: 40px;",
+        "body .nav-sublist {\n  position: relative;",
+        "body .nav-sublist::before {",
+        "background: rgba(148, 163, 184, 0.28);",
+        "body .nav-sublist button.sub {\n  position: relative;",
+        "font-weight: 560;",
+        "body .nav-group-toggle.active::before {\n  display: none;",
+        "body.sidebar-collapsed .nav-sublist {\n  display: grid !important;",
+    ]:
+        assert css_marker in css
+
+    assert "body nav button:hover:not(.active)" in css
+    assert "body .nav-sublist button.sub:hover:not(.active)" in css
+    assert "var(--phase21-nav-hover)" in css
+    assert "var(--phase21-nav-active)" in css
+    assert "body.sidebar-collapsed nav button::after" in css
+
+    tablet_block = css.split("@media (min-width: 768px) and (max-width: 1279px)", 1)[1].split(
+        "@media (max-width: 767px)", 1
+    )[0]
+    tablet_nav_block = tablet_block
+    for tablet_marker in [
+        "body.sidebar-collapsed nav {\n    gap: 4px;",
+        "min-height: 0;",
+        "max-height: 100%;",
+        "overflow-y: auto;",
+        "overscroll-behavior: contain;",
+        "body.sidebar-collapsed nav button,\n  body.sidebar-collapsed nav button.sub,\n  body.sidebar-collapsed .nav-group-toggle {\n    width: 42px;\n    height: 36px;",
+        "overflow-x: hidden;",
+        "body.sidebar-collapsed nav button::after,\n  body.sidebar-collapsed .sidebar-collapse-button::after {\n    content: none;",
+        "body.sidebar-collapsed .sidebar-collapse-button {\n    width: 42px;\n    height: 38px;",
+    ]:
+        assert tablet_marker in tablet_block
+
+    assert "body.sidebar-collapsed .shell > aside {" in tablet_block
+    assert "grid-template-rows: auto minmax(0, 1fr) auto;" in tablet_block
+    assert "body .shell > aside {\n    position: fixed;" in tablet_nav_block
+    assert "top: 0;" in tablet_nav_block
+    assert "inset: 0 auto 0 0;" in tablet_nav_block
+    assert "width: 272px;" in tablet_nav_block
+    assert "body.sidebar-collapsed .shell > aside {\n    width: 68px;" in tablet_nav_block
+
+
+def test_phase_21b_mobile_header_and_tablet_side_rail_resilience():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    inline_style = _monitor_inline_styles(page)
+
+    mobile_nav_block = css.split("@media (max-width: 767px)", 1)[1]
+    inline_mobile_block = inline_style.split("@media (max-width:767px)", 1)[1]
+    inline_tablet_nav_block = inline_style.split("@media (min-width:768px) and (max-width:1279px)", 1)[1].split(
+        "@media (max-width:767px)", 1
+    )[0]
+    tablet_nav_block = css.split("@media (min-width: 768px) and (max-width: 1279px)", 1)[1].split(
+        "@media (max-width: 767px)", 1
+    )[0]
+
+    for source in [mobile_nav_block, inline_mobile_block]:
+        compact_source = source.replace(" ", "")
+        assert "grid-template-columns:40pxminmax(0,1fr)36px44px;" in compact_source
+        assert '"nav title refresh account"' in source
+        assert '"status status status status"' in source
+        assert "bodyheader.mobile-nav-toggle>span:not(.mobile-nav-icon)" in compact_source
+        assert "display:none;" in compact_source
+        assert "display:block;" in compact_source
+        assert "writing-mode:horizontal-tb;" in compact_source
+        assert "white-space:nowrap;" in compact_source
+        assert "word-break:keep-all;" in compact_source
+        assert "display:contents!important;" in compact_source
+        assert "width:auto!important;" in compact_source
+        assert "min-width:0!important;" in compact_source
+        top_status_compact = compact_source.split("bodyheader#top_status{", 1)[1].split("}", 1)[0]
+        assert "overflow:visible;" in top_status_compact
+        assert "flex-wrap:wrap;" in top_status_compact
+
+    for source in [mobile_nav_block]:
+        assert "body:not(.mobile-nav-open) #primary_sidebar" in source
+        assert "left: -340px !important;" in source
+        assert "body .table-wrap" in source
+        assert "overflow-x: auto;" in source
+        assert "max-width: 100%;" in source
+
+    assert "grid-template-rows: auto minmax(0, 1fr) auto;" in tablet_nav_block
+    assert "min-height: 0;" in tablet_nav_block
+    assert "overflow-y: auto;" in tablet_nav_block
+    assert "overflow-x: hidden;" in tablet_nav_block
+    assert "overscroll-behavior: contain;" in tablet_nav_block
+    assert "body.sidebar-collapsed .shell > aside {\n    width: 68px;" in tablet_nav_block
+    assert ".sidebar-collapse-button {\n    display: flex !important;" in tablet_nav_block
+    assert "body.sidebar-collapsed nav button::after,\n  body.sidebar-collapsed .sidebar-collapse-button::after {\n    content: none;" in tablet_nav_block
+
+    inline_tablet_compact = inline_tablet_nav_block.replace(" ", "")
+    assert "body.sidebar-collapsed.shell{grid-template-columns:68pxminmax(0,1fr)!important;" in inline_tablet_compact
+    assert "body.sidebar-collapsed#primary_sidebar" in inline_tablet_compact
+    assert "width:68px!important;" in inline_tablet_compact
+    assert "max-width:68px!important;" in inline_tablet_compact
+    assert "bodyheadermobile-nav-toggle" not in inline_tablet_compact
+
+
+def test_phase_21d_monitoring_tasks_and_task_drawer_visual_pass_preserves_workflow():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    jobs_section = _monitor_section(page, "jobs")
+    job_drawer = page[page.index('id="job_drawer"') : page.index('<section id="accounts">')]
+
+    for marker in [
+        "openNewJobDrawer()",
+        "refreshJobSchedule(this)",
+        'data-shortcut-tab="runs" data-shortcut-grouped="1"',
+        'id="job_search"',
+        'id="job_platform_filter"',
+        'id="job_status_filter"',
+        "clearJobFilters()",
+        'id="jobs_table"',
+        "renderJobsTable()",
+        "jobActions",
+        "toggleJobActionMenu",
+        "/jobs/'+id+'/run",
+        "/jobs/'+id+'/stop",
+        "toggleJob",
+        "/jobs/'+id+(enabled?'/pause':'/resume')",
+        "deleteJob",
+        'id="job_drawer_backdrop" class="drawer-backdrop" onclick="closeJobDrawer()"',
+    ]:
+        assert marker in page
+
+    for marker in [
+        'id="job_drawer" class="drawer form-drawer"',
+        'id="job_form" class="panel"',
+        'id="normal_task_wizard_hint"',
+        'id="normal_task_wizard_steps"',
+        'class="wizard-step"',
+        'class="config-section wizard-section" data-wizard-step="target"',
+        'id="law_firm_name"',
+        'id="aliases"',
+        'data-wizard-step="content"',
+        'id="keywords"',
+        'name="platform" value="dy"',
+        'name="platform" value="ks"',
+        'name="platform" value="xhs"',
+        'id="job_max_items"',
+        'id="job_start_page"',
+        'id="job_max_pages"',
+        'id="enable_comments"',
+        'id="enable_sub_comments"',
+        'id="exclude_words"',
+        'class="config-section admin-advanced-section admin-only-job-field"',
+        'id="job_account_id"',
+        'id="job_proxy_id"',
+        'id="job_target_type"',
+        'id="job_output_mode"',
+        'id="job_browser_mode"',
+        'data-wizard-step="schedule"',
+        'id="time_window_type"',
+        'id="frequency"',
+        'id="email_time"',
+        'id="custom_start" type="date"',
+        'id="custom_end" type="date"',
+        'id="cron_expr"',
+        'id="enabled"',
+        'id="job_ai_profile_id"',
+        '使用系统配置中的 AI 评估规则',
+        'data-wizard-step="report"',
+        'id="recipients"',
+        'id="job_email_template_id"',
+        'id="save_job_btn"',
+        'id="fill_sample_job_btn"',
+        'id="reset_job_btn"',
+        'onclick="closeJobDrawer()">关闭</button>',
+    ]:
+        assert marker in job_drawer
+
+    for marker in [
+        "applyJobFormRoleMode()",
+        "document.querySelectorAll('.admin-only-job-field')",
+        "document.querySelectorAll('.normal-only')",
+        "refreshEnhancedFilterSelects(document.getElementById('job_drawer'))",
+        "refreshEnhancedFilterDateInputs(document.getElementById('job_drawer'))",
+        "toast('任务已保存'); resetJobForm(); closeJobDrawer(); await Promise.all([loadJobs(), loadDashboard(), loadDoctor()]);",
+        "fillSampleJobTemplate",
+        "clearJobFilters",
+        "resetJobForm",
+        "closeJobDrawer()",
+    ]:
+        assert marker in page
+
+    for selector in [
+        "body #jobs > .panel {",
+        "body #jobs .toolbar {",
+        "body #jobs details.advanced {",
+        "body #job_drawer .panel {",
+        "body #job_drawer textarea {",
+        "body .wizard-steps {",
+        "body .wizard-step {",
+        "body .config-section h3::before {",
+        "body .admin-advanced-section {",
+        "body .admin-advanced-section h3::before {",
+        "body .form-actions,",
+        "body #jobs_table .table-wrap table {",
+    ]:
+        assert selector in css
+
+    assert "min-width: 980px;" in css
+    assert "采集规则说明" in jobs_section
+def test_phase_21e_platform_accounts_visual_pass_preserves_account_workflow():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    accounts_section = _monitor_section(page, "accounts")
+    account_dialog = page[page.index('id="account_dialog"') : page.index('<section id="proxies">')]
+
+    for marker in [
+        'data-page-entry="accounts"',
+        'onclick="openNewSocialAccountModal()">新增账号',
+        'data-shortcut-tab="jobs" data-menu-key="monitoring"',
+        'id="account_metrics"',
+        'id="account_bulk_toolbar"',
+        'id="account_bulk_count"',
+        'id="account_bulk_check_btn"',
+        'id="account_bulk_disable_btn"',
+        'id="account_bulk_enable_btn"',
+        'id="account_bulk_delete_btn"',
+        'id="account_search"',
+        'id="account_platform_filter"',
+        'id="account_status_filter"',
+        'id="account_login_type_filter"',
+        'id="account_attention_filter"',
+        'id="account_bulk_bar"',
+        'id="social_accounts_table"',
+        "toggleAllFilteredAccounts",
+        "toggleAccountSelection",
+        "toggleAccountActionMenu",
+        "checkSelectedSocialAccountLogins",
+        "setSelectedSocialAccountStatus",
+        "deleteSelectedSocialAccounts",
+        "accountLedgerTable",
+        "startLoginSessionForAccount",
+        "reloginSocialAccount",
+        "deleteSocialAccount",
+    ]:
+        assert marker in page
+
+    for marker in [
+        'id="account_modal" class="drawer-backdrop" onclick="closeSocialAccountModal(event)"',
+        'id="account_dialog" class="drawer form-drawer account-detail-card"',
+        'id="account_detail_title"',
+        'onclick="closeSocialAccountModal()"',
+        'id="social_account_id"',
+        'id="account_detail_empty"',
+        'id="account_detail_summary"',
+        'class="account-modal-grid"',
+        'class="account-section"',
+        "1. 基础资料",
+        'id="social_account_name"',
+        'id="social_account_platform"',
+        'id="social_account_status"',
+        'id="social_account_proxy_id"',
+        'id="social_account_login_source"',
+        'id="social_account_notes"',
+        'id="social_account_error_summary"',
+        'id="social_account_last_error"',
+        "2. 登录维护",
+        'id="login_status_badge"',
+        'id="social_account_login_type"',
+        'id="social_login_method_options"',
+        'id="login_panel_qrcode"',
+        'id="account_qrcode_button"',
+        'id="account_local_login_button"',
+        'id="login_session_result"',
+        'id="login_panel_cookie"',
+        'id="social_account_cookie_input"',
+        'id="social_account_clear_cookie"',
+        'id="account_cookie_save_button"',
+        'id="cookie_login_result"',
+        "3. 登录记录",
+        'id="current_account_login_sessions"',
+        'id="account_modal_actions"',
+        "4. 完成账号设置",
+        'id="account_save_button"',
+        'id="account_delete_button"',
+    ]:
+        assert marker in account_dialog or marker in page
+
+    for marker in [
+        "handleSocialLoginTypeChange",
+        "selectSocialLoginType",
+        "supportedSocialLoginTypes",
+        "renderLoginModePanel",
+        "startLoginSessionFromForm",
+        "openCurrentAccountLoginBrowser",
+        "saveCurrentPlatformCookieLogin",
+        "loadLoginSessions",
+        "renderLoginSessionResult",
+        "updateAccountLoginPrerequisites",
+        "updateAccountModalActions",
+        "saveSocialAccount",
+        "deleteCurrentSocialAccount",
+        "renderProxySelectOptions",
+    ]:
+        assert marker in page
+
+    for selector in [
+        "body #accounts .account-list-panel {",
+        "body #accounts .account-ledger-head {",
+        "body #accounts .account-bulk-toolbar {",
+        "body #accounts .account-bulk-count {",
+        "body #accounts .account-filter {",
+        "body #accounts .account-quick-filter {",
+        "body #account_dialog.account-detail-card {",
+        "body #account_dialog .drawer-scroll-body {",
+        "body .account-detail-empty {",
+        "body .account-detail-summary div {",
+        "body .account-modal-grid {",
+        "body .account-section {",
+        "body .login-card {",
+        "body .login-card h3 {",
+        "body .login-actions {",
+        "body #account_modal_actions.account-flow-actions {",
+    ]:
+        assert selector in css
+
+    account_scroll_block = css[
+        css.index("body #account_dialog .drawer-scroll-body {") : css.index(
+            "body .account-detail-empty {", css.index("body #account_dialog .drawer-scroll-body {")
+        )
+    ]
+    assert "overflow-x: hidden;" in account_scroll_block
+    for marker in [
+        "body #account_dialog .account-modal-grid,",
+        "body #account_dialog .account-section,",
+        "body #account_dialog .login-card-grid,",
+        "body #account_dialog .login-actions,",
+        "max-width: 100%;",
+        "min-width: 0;",
+    ]:
+        assert marker in account_scroll_block
+    assert "body #account_dialog > .drawer-fixed-footer," in css
+    assert "body #account_dialog .resource-modal-actions {" not in account_scroll_block
+
+    for forbidden in [
+        "手机号登录",
+        "social_account_phone",
+        "saveCurrentPlatformPhoneLogin",
+        "startLoginSessionFromSelected",
+        "openSelectedAccountLoginBrowser",
+    ]:
+        assert forbidden not in accounts_section
+
+
+def test_phase_21f_proxy_resources_visual_pass_preserves_proxy_workflow():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    proxies_section = _monitor_section(page, "proxies")
+    proxy_drawer = page[page.index('id="proxy_drawer"') : page.index('<section id="ai">')]
+    header = page[page.index("<header>") : page.index("</header>", page.index("<header>"))]
+
+    for marker in [
+        'data-page-entry="proxies"',
+        'onclick="openProxyDrawer()">新增代理',
+        'data-shortcut-tab="accounts" data-menu-key="platform_accounts"',
+        'id="proxy_resource_summary"',
+        'id="proxy_resource_count"',
+        'id="proxy_search"',
+        'id="proxy_status_filter"',
+        "clearProxyFilters()",
+        'id="proxy_profiles_table"',
+        "loadProxyPool",
+        "renderProxyResourceSummary",
+        "filteredProxyProfiles",
+        "renderProxyProfilesTable",
+        "proxyIssueCell",
+        "editProxyProfile",
+        "deleteProxyProfile",
+    ]:
+        assert marker in page
+
+    for marker in [
+        'id="proxy_drawer_backdrop" class="drawer-backdrop" onclick="closeProxyDrawer()"',
+        'id="proxy_drawer" class="drawer form-drawer"',
+        'id="proxy_drawer_title"',
+        'onclick="closeProxyDrawer()"',
+        'id="proxy_id"',
+        'id="proxy_name"',
+        'id="proxy_provider"',
+        'id="proxy_status"',
+        'id="proxy_url" type="password"',
+        'id="proxy_max_concurrency"',
+        'id="proxy_notes"',
+        'id="proxy_last_error"',
+        "resetProxyForm()",
+        'id="proxy_save_button"',
+        "saveProxyProfile()",
+        "refreshEnhancedFilterSelects(document.getElementById('proxy_drawer'))",
+    ]:
+        assert marker in proxy_drawer or marker in page
+
+    for selector in [
+        "body #proxies > .panel {",
+        "body #proxies .account-ledger-head {",
+        "body #proxies .resource-toolbar {",
+        "body #proxy_profiles_table .proxy-resource-table table {",
+        "body .proxy-mask-code {",
+        "body .proxy-issue-cell {",
+        "body .proxy-error-line {",
+        "body #proxy_drawer {",
+        "body #proxy_drawer .drawer-scroll-body {",
+        "body #proxy_drawer .resource-modal-actions {",
+        "body #proxy_drawer > .drawer-fixed-footer,",
+    ]:
+        assert selector in css
+
+    assert "proxy-resource-table" in page
+    assert "proxy-mask-code code" in page
+    assert "min-width: 980px;" in css
+    assert "overflow-x: hidden;" in css[
+        css.index("body #proxy_drawer .drawer-scroll-body {") : css.index(
+            "body #proxy_drawer .panel {", css.index("body #proxy_drawer .drawer-scroll-body {")
+        )
+    ]
+
+    assert 'id="global_refresh_button"' in header
+    assert "refreshActiveSection(this)" in header
+    for duplicate_refresh in [
+        ">刷新代理</button>",
+        "refreshProxy",
+        "onclick=\"loadProxyPool()\"",
+    ]:
+        assert duplicate_refresh not in proxies_section
+
+
+def test_phase_21g_ai_access_visual_pass_preserves_ai_workflow():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    ai_section = _monitor_section(page, "ai")
+    ai_drawer = page[page.index('id="ai_profile_drawer"') : page.index('id="ai_rule_modal_backdrop"')]
+    ai_test_modal = page[page.index('id="ai_connection_test_modal"') : page.index('id="ai_profile_drawer_backdrop"')]
+    header = page[page.index("<header>") : page.index("</header>", page.index("<header>"))]
+
+    for marker in [
+        'data-page-entry="ai"',
+        'onclick="openAIProfileDrawer()">新增 AI 接入',
+        'data-shortcut-tab="ai_rules" data-menu-key="ai_rules"',
+        'id="ai_resource_summary"',
+        'id="ai_resource_count"',
+        'id="ai_profile_search"',
+        'id="ai_profile_provider_filter"',
+        'id="ai_profile_test_filter"',
+        "clearAIProfileFilters()",
+        'id="ai_profiles_table"',
+        "loadAIProfiles",
+        "renderAIResourceSummary",
+        "filteredAIProfiles",
+        "renderAIProfilesTable",
+        "editAIProfile",
+        "testAIProfile",
+        "activateAIProfile",
+        "deleteAIProfile",
+    ]:
+        assert marker in page
+
+    for marker in [
+        'id="ai_profile_drawer_backdrop" class="drawer-backdrop" onclick="closeAIProfileDrawer()"',
+        'id="ai_profile_drawer" class="drawer form-drawer"',
+        'id="ai_profile_drawer_title"',
+        'onclick="closeAIProfileDrawer()"',
+        'id="ai_profile_id"',
+        'id="ai_profile_name"',
+        'id="ai_profile_provider"',
+        'id="ai_profile_model"',
+        'class="secondary combo-trigger model-load-trigger"',
+        'id="ai_profile_model_options" class="model-options"',
+        'id="ai_profile_base_url"',
+        'id="ai_profile_api_key" type="password"',
+        'id="ai_profile_model_load_btn"',
+        'id="ai_profile_temperature"',
+        'id="ai_profile_active"',
+        "resetAIProfileForm()",
+        'id="ai_profile_save_button"',
+        "saveAIProfile()",
+        "loadAIProfileModels(this)",
+        "toggleAIProfileModelOptions",
+        "selectAIProfileModel",
+            "const drawer=openDrawerChrome('ai_profile_drawer_backdrop', 'ai_profile_drawer');",
+            "refreshEnhancedFilterSelects(drawer)",
+    ]:
+        assert marker in ai_drawer or marker in page
+
+    for marker in [
+        'id="ai_connection_test_modal" class="drawer ai-test-modal"',
+        'onclick="closeAIConnectionTestModal()"',
+        'id="ai_test_profile_name"',
+        'id="ai_test_profile_meta"',
+        'id="ai_test_status_badge"',
+        'id="ai_test_model"',
+        'id="ai_test_provider"',
+        'id="ai_test_message"',
+        'id="ai_test_console"',
+        'id="ai_test_start_btn"',
+        "runAIConnectionTest()",
+        "ai-profiles/'+id+'/connection-test",
+    ]:
+        assert marker in ai_test_modal or marker in page
+
+    for selector in [
+        "body #ai > .panel {",
+        "body #ai .account-ledger-head {",
+        "body #ai .resource-toolbar {",
+        "body #ai_profiles_table .ai-resource-table table {",
+        "body #ai_profiles_table .ai-resource-table th:nth-child(4),",
+        "body #ai_profiles_table .ai-resource-table th:nth-child(5),",
+        "body .ai-model-chip,",
+        "body .ai-base-url {",
+        "body .ai-test-state {",
+        "body #ai_profile_drawer,",
+        "body #ai_profile_drawer .drawer-scroll-body,",
+        "body #ai_profile_drawer .panel {",
+        "body #ai_connection_test_modal .ai-test-meta {",
+        "body #ai_profile_drawer > .drawer-fixed-footer,",
+    ]:
+        assert selector in css
+
+    assert "ai-resource-table" in page
+    assert "ai-model-chip" in page
+    assert "ai-base-url code" in page
+    assert "ai-key-mask" in page
+    assert "ai-test-state" in page
+    assert "min-width: 1560px;" in css
+    assert "table-layout: fixed;" in css
+    assert "text-overflow: ellipsis;" in css
+    ai_chip_block = css[
+        css.index("body .ai-model-chip,") : css.index(
+            "body .ai-key-mask {", css.index("body .ai-key-mask {") + 1
+        )
+    ]
+    assert "white-space: nowrap;" in ai_chip_block
+    assert "overflow: hidden;" in ai_chip_block
+    assert "body #ai_profile_drawer .model-combobox {" in css[
+        css.index("@media (max-width: 767px)") :
+    ]
+    assert "overflow-x: hidden;" in css[
+        css.index("body #ai_profile_drawer .drawer-scroll-body,") : css.index(
+            "body #ai_profile_drawer .panel {", css.index("body #ai_profile_drawer .drawer-scroll-body,")
+        )
+    ]
+
+    assert 'id="global_refresh_button"' in header
+    assert "refreshActiveSection(this)" in header
+    for duplicate_refresh in [
+        ">刷新 AI 接入</button>",
+        "refreshAIProfile",
+        "onclick=\"loadAIProfiles()\"",
+    ]:
+        assert duplicate_refresh not in ai_section
+
+    assert '<select id="ai_profile_model"' not in ai_drawer
+    assert 'id="ai_profile_model_toggle"' not in ai_drawer
+
+
+def test_phase_21h_ai_evaluation_rules_visual_pass_preserves_rule_workflow():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    ai_rules_section = _monitor_section(page, "ai_rules")
+    ai_rule_modal = page[page.index('id="ai_rule_modal"') : page.index('id="email"')]
+    header = page[page.index("<header>") : page.index("</header>", page.index("<header>"))]
+
+    for marker in [
+        'data-page-entry="ai_rules"',
+        'onclick="openNewAIRuleModal()">新增评估规则',
+        'data-shortcut-tab="ai" data-menu-key="ai_access"',
+        'class="panel ai-rule-panel"',
+        'class="account-ledger-head ai-rule-ledger-head"',
+        'id="ai_rules_summary" class="account-bulk-count ai-rule-summary"',
+        'id="ai_rules_table"',
+        "loadAIRuleProfiles",
+        "renderAIRuleProfiles",
+        "aiRuleActions",
+        "toggleAIRuleActionMenu",
+        "testAIRuleProfile",
+        "activateAIRuleProfile",
+        "deleteAIRuleProfile",
+        "aiRuleTestStateCell",
+    ]:
+        assert marker in page
+
+    for marker in [
+        'id="ai_rule_modal_backdrop" class="drawer-backdrop" onclick="closeAIRuleModal()"',
+        'id="ai_rule_modal" class="drawer template-modal"',
+        'id="ai_rule_modal_title"',
+        'onclick="closeAIRuleModal()"',
+        'class="rule-section-card rule-section-card-basic"',
+        'class="rule-section-card rule-section-card-config"',
+        'class="rule-section-card rule-section-card-schema"',
+        'class="rule-section-card rule-section-card-sample"',
+        'class="rule-section-card rule-section-card-result"',
+        'id="ai_rule_name"',
+        'id="ai_rule_role"',
+        'id="ai_rule_relevance"',
+        'id="ai_rule_negative"',
+        'id="ai_rule_risk"',
+        'id="ai_rule_evidence"',
+        'id="ai_rule_action"',
+        'id="ai_prompt_preview"',
+        'id="ai_output_schema_table"',
+        'id="ai_sample_law_firm_name"',
+        'id="ai_sample_platform"',
+        'id="ai_sample_source_keyword"',
+        'id="ai_sample_title"',
+        'id="ai_sample_text"',
+        'id="ai_sample_comments"',
+        'id="ai_rules_result" class="resultbox ai-rule-result is-idle"',
+        'id="ai_rule_test_button"',
+        'onclick="testAIRuleFromModal()"',
+        "resetAIPrompt()",
+        'id="ai_rule_save_button"',
+        "saveAIRuleFromModal()",
+    ]:
+        assert marker in ai_rule_modal or marker in page
+
+    for marker in [
+        "测试规则",
+        "设为默认",
+        "删除规则",
+        "基础信息",
+        "规则配置",
+        "固定输出字段",
+        "测试样例",
+        "测试结果",
+        "角色定位",
+        "相关性判断",
+        "疑似负面判断",
+        "风险等级规则",
+        "证据摘录规则",
+        "处理建议规则",
+        "生成后的 Prompt 预览",
+        "恢复默认规则",
+        "保存规则",
+        "关闭",
+    ]:
+        assert marker in page
+
+    for selector in [
+        "body #ai_rules .ai-rule-panel {",
+        "body #ai_rules .ai-rule-summary {",
+        "body #ai_rules_table .ai-rule-table table {",
+        "body #ai_rules_table .ai-rule-table th:nth-child(6),",
+        "body #ai_rules_table .ai-rule-table td.col-actions .wide-actions {",
+        "body .ai-rule-name-cell,",
+        "body .ai-rule-test-cell {",
+        "body .ai-rule-test-cell.is-ok {",
+        "body .ai-rule-test-cell.is-bad {",
+        "body .ai-rule-status-chip {",
+        "body .rule-modal-flow {",
+        "body .rule-editor-stack,",
+        "body .rule-test-stack {",
+        "body .rule-section-card {",
+        "body .rule-accordion {",
+        "body .rule-accordion summary:focus-visible {",
+        "body .rule-section-card-config .advanced {",
+        "body .prompt-preview {",
+        "body .ai-rule-result {",
+        "body .ai-rule-result.is-loading {",
+        "body .ai-rule-result.is-ok {",
+        "body .ai-rule-result.is-bad {",
+    ]:
+        assert selector in css
+
+    assert "ai-rule-table" in page
+    assert "table-layout: fixed;" in css
+    assert "min-width: 920px !important;" in css
+    assert "width: 120px;" in css
+    assert "min-width: 120px;" in css
+    assert "min-width: 112px;" in css
+    assert "grid-template-columns: minmax(0, 1.16fr) minmax(360px, 0.84fr);" in css
+    assert "body .rule-modal-flow {\n    grid-template-columns: minmax(0, 1fr);" in css[
+        css.index("@media (max-width: 1279px)") :
+    ]
+    assert "body .rule-test-stack {\n    grid-template-columns: minmax(0, 1fr);" in css[
+        css.index("@media (max-width: 767px)") :
+    ]
+    assert "body .rule-accordion textarea {\n  margin: 0 10px 9px;" in css
+    assert "body .ai-rule-result {\n  min-height: 204px;" in css
+    assert "body .prompt-preview {\n  max-height: 260px;" in css
+    assert "body .rule-section-card-sample .grid {\n  grid-template-columns: minmax(0, 1fr) 180px;" in css
+    assert "body .modal-select-compact {\n  min-width: 0;" in css
+
+    assert 'id="global_refresh_button"' in header
+    assert "refreshActiveSection(this)" in header
+    for duplicate_refresh in [
+        ">刷新规则</button>",
+        "refreshAIRules",
+        "onclick=\"loadAIRuleProfiles()\"",
+    ]:
+        assert duplicate_refresh not in ai_rules_section
+
+    assert "rule-modal-layout" not in page
+    assert "rule-side-stack" not in page
+
+
+def test_phase_21i_mail_configuration_visual_pass_preserves_delivery_workflow():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    email_section = page[page.index('<section id="email"') : page.index('<div id="mail_config_backdrop"')]
+    mail_config_modal = page[page.index('<div id="mail_config_backdrop"') : page.index('<div id="mail_test_backdrop"')]
+    mail_test_modal = page[page.index('<div id="mail_test_backdrop"') : page.index('<section id="email_templates">')]
+    header = page[page.index("<header>") : page.index("</header>", page.index("<header>"))]
+
+    for marker in [
+        'data-page-entry="email"',
+        "邮件配置",
+        "onclick=\"openMailConfigModal()\"",
+        "onclick=\"openMailTestModal()\"",
+        'data-shortcut-tab="runs" data-shortcut-grouped="1"',
+        'id="real_email_delivery_toggle"',
+        "setRealEmailDelivery(this.checked)",
+        "真实邮件：已关闭",
+        "email-toolbar-switch",
+        "mail-config-summary-grid",
+        'id="email_test_status_card"',
+        "mail-config-stat",
+        'id="email_status_label"',
+        'id="email_sender_summary"',
+        'id="email_recipient_summary"',
+        "0 个兜底收件人",
+        'id="email_subject_summary"',
+    ]:
+        assert marker in email_section
+
+    assert email_section.count("openMailConfigModal()") == 1
+    assert email_section.count("openMailTestModal()") == 1
+    assert "SMTP 与发送默认值" not in email_section
+    assert "email_validation_status" not in email_section
+
+    for marker in [
+        'id="mail_config_backdrop" class="drawer-backdrop" onclick="closeMailConfigModal()"',
+        'id="mail_config_modal" class="drawer form-drawer"',
+        'aria-label="邮件配置"',
+        "编辑邮件配置",
+        "mail-config-panel",
+        "mail-config-card",
+        "SMTP 连接",
+        'id="smtp_host"',
+        'id="smtp_port"',
+        'id="encryption"',
+        'id="sender"',
+        'id="smtp_username"',
+        'id="smtp_password"',
+        'id="smtp_password_status"',
+        "发送默认值",
+        'id="default_recipients"',
+        'id="subject_template"',
+        "取消",
+        'id="mail_config_save_button"',
+        "保存配置",
+        "closeMailConfigModal()",
+        "saveEmail()",
+    ]:
+        assert marker in mail_config_modal
+
+    for marker in [
+        'id="mail_test_backdrop" class="drawer-backdrop" onclick="closeMailTestModal()"',
+        'id="mail_test_modal" class="drawer mail-test-modal"',
+        'aria-label="邮件测试"',
+        "发送测试邮件",
+        'id="mail_test_console"',
+        'id="mail_test_start_btn"',
+        "开始测试",
+        "关闭",
+        "testEmail()",
+    ]:
+        assert marker in mail_test_modal
+
+    for marker in [
+        "const statusCard=document.getElementById('email_test_status_card');",
+        "statusCard.classList.remove('is-ok','is-bad','is-idle');",
+        "个兜底收件人",
+        "renderEmailValidationWindow(emailValidationWindowState)",
+        "refreshEnhancedFilterSelects(drawer)",
+        "openDrawerChrome('mail_config_backdrop', 'mail_config_modal')",
+        "openDrawerChrome('mail_test_backdrop', 'mail_test_modal')",
+        "api('/email-config'",
+        "api('/email-config/test'",
+        "请先开启真实邮件发送",
+        "SMTP 已接受不代表收件箱已收到，仍需人工确认收件箱或垃圾箱。",
+        "clearActionButtonLoading(btn, '重新测试')",
+    ]:
+        assert marker in page
+
+    for selector in [
+        "body #email .page-head {",
+        "body #email .email-toolbar-switch {",
+        "body #email .email-toolbar-switch:has(input:checked) {",
+        "body .mail-config-summary-grid {",
+        "body .mail-config-stat {",
+        "body .mail-config-stat::after {",
+        "body .mail-config-stat.is-ok::after {",
+        "body .mail-config-stat.is-bad::after {",
+        "body .mail-config-stat.is-idle::after {",
+        "body #email_subject_summary {",
+        "body .mail-config-panel {",
+        "body .mail-config-card {",
+        "body .mail-default-card textarea {",
+        "body #smtp_password_status {",
+        "body #mail_test_modal .drawer-scroll-body {",
+        "body #mail_test_modal .test-console {",
+    ]:
+        assert selector in css
+
+    assert "font-family: var(--font-family-sans);" in css
+    assert "overflow-wrap: anywhere;" in css
+    assert 'id="global_refresh_button"' in header
+    assert "refreshActiveSection(this)" in header
+    for duplicate_refresh in [
+        ">刷新邮件配置</button>",
+        "refreshMailConfig",
+        "onclick=\"loadEmail()\"",
+    ]:
+        assert duplicate_refresh not in email_section
+
+    assert ".drawer.has-fixed-footer > .drawer-scroll-body" in css
+    assert "action.classList.add('drawer-fixed-footer');" in page
+    assert "drawer.appendChild(action);" in page
+
+
+def test_phase_21j_mail_templates_visual_pass_preserves_template_workflow():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    email_templates_section = _monitor_section(page, "email_templates")
+    template_drawer = page[page.index('id="email_template_drawer_backdrop"') : page.index('<div id="run_log_backdrop"')]
+    header = page[page.index("<header>") : page.index("</header>", page.index("<header>"))]
+
+    for marker in [
+        'data-page-entry="email_templates"',
+        "邮件模板",
+        'onclick="openEmailTemplateDrawer()"',
+        'data-shortcut-tab="email" data-menu-key="mail_config"',
+        'id="email_template_resource_summary"',
+        'class="panel email-template-panel"',
+        'id="email_template_search"',
+        'id="email_template_status_filter"',
+        "全部模板",
+        "当前使用",
+        "备用",
+        "clearEmailTemplateFilters()",
+        'id="email_templates_table"',
+        "renderEmailTemplateResourceSummary",
+        "renderEmailTemplatesTable",
+        "email-template-table",
+        "email-template-name-cell",
+        "email-template-subject-cell",
+        "email-template-updated-cell",
+        "email-template-state-chip",
+        "editEmailTemplate",
+        "deleteEmailTemplate",
+    ]:
+        assert marker in email_templates_section or marker in page
+
+    for marker in [
+        'id="email_template_drawer_backdrop" class="drawer-backdrop" onclick="closeEmailTemplateDrawer()"',
+        'id="email_template_drawer" class="drawer template-modal email-template-modal"',
+        'aria-label="邮件模板"',
+        'id="email_template_drawer_title"',
+        'class="template-editor-stack"',
+        'class="template-section-card template-section-card-basic"',
+        'class="template-section-card template-section-card-html"',
+        'class="template-section-card template-section-card-variables"',
+        'class="template-active-toggle"',
+        'id="email_template_active"',
+        'id="email_template_name"',
+        'id="email_template_subject"',
+        'id="email_template_preset"',
+        'id="email_html_template"',
+        'id="email_template_guardrail"',
+        "HTML 模板必须包含 {report_html} 或 {report_body}，否则无法保存。",
+        'onclick="copyText(\'{report_body}\')"',
+        'onclick="copyText(\'{report_html}\')"',
+        'data-feedback-bound="1" onclick="copyText',
+        'id="email_template_save_button"',
+        "saveEmailTemplate()",
+        'id="email_template_preview_button"',
+        "previewEmailTemplate(true, this)",
+        "resetEmailTemplateForm()",
+        'class="template-preview-panel"',
+        'class="template-preview-head"',
+        'id="email_preview_subject"',
+        'id="email_template_preview" class="preview-frame"',
+        "closeEmailTemplateDrawer()",
+    ]:
+        assert marker in template_drawer or marker in page
+
+    for marker in [
+        "function copyText(text)",
+        "navigator.clipboard.writeText(value)",
+        "toast('变量已复制')",
+        "emailTemplateHasReportBodyPlaceholder",
+        "updateEmailTemplateGuardrail()",
+        "applyEmailTemplatePreset",
+        "email-templates/preview",
+        "templateDrawerActive",
+        "refreshEnhancedFilterSelects(drawer)",
+        "openDrawerChrome('email_template_drawer_backdrop', 'email_template_drawer')",
+    ]:
+        assert marker in page
+
+    for selector in [
+        "body #email_templates .email-template-panel {",
+        "body #email_templates_table .email-template-table table {",
+        "body .email-template-name-cell,",
+        "body .email-template-state-chip {",
+        "body #email_template_drawer .template-editor-layout {",
+        "body .template-editor-stack {",
+        "body .template-section-card {",
+        "body .template-section-head {",
+        "body .template-active-toggle {",
+        "body .template-section-card-html textarea {",
+        "body .template-variable-row {",
+        "body .template-variable-row button {",
+        "body .template-variable-row button:focus-visible {",
+        "body .template-preview-head {",
+        "body .template-preview-subject {",
+        "body .template-preview-panel iframe {",
+    ]:
+        assert selector in css
+
+    assert "grid-template-columns: minmax(0, 1.08fr) minmax(360px, .92fr);" in css
+    assert "grid-template-columns: minmax(0, 1fr);" in css[css.index("@media (max-width: 1279px)") :]
+    assert 'id="global_refresh_button"' in header
+    assert "refreshActiveSection(this)" in header
+    for duplicate_refresh in [
+        ">刷新邮件模板</button>",
+        "refreshEmailTemplates",
+        "onclick=\"loadEmailTemplates()\"",
+    ]:
+        assert duplicate_refresh not in email_templates_section
+
+    assert "点击复制到编辑器；`{report_body}` 和 `{report_html}` 至少保留一个。" not in page
+    assert "正文占位符已保留" not in email_templates_section
+    assert "email-template-updated-cell" in page
+    assert "formatCompactTime(t.updated_at)" in page
+    assert "title=\"${esc(formatTime(t.updated_at))}\"" in page
+    assert "esc(formatCompactTime(t.updated_at))" in page
+
+
+def test_phase_21k_runtime_strategy_visual_pass_preserves_runtime_workflow():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    runtime_section = _monitor_section(page, "runtime")
+    header = page[page.index("<header>") : page.index("</header>", page.index("<header>"))]
+
+    for marker in [
+        'data-page-entry="runtime"',
+        "运行策略",
+        "runtime-save-button",
+        "saveRuntimeSettings()",
+        'data-shortcut-tab="doctor" data-menu-key="system_diagnostics"',
+        'class="runtime-guardrail"',
+        "保存后会影响后续采集、登录会话、调度检查或清理任务。",
+        'id="runtime_settings_table"',
+    ]:
+        assert marker in runtime_section
+
+    for marker in [
+        "function renderRuntimeSettings(settings)",
+        "const groups=['Crawling','Login','Scheduler','Retention'];",
+        "const groupNotes={",
+        "runtime-settings-card",
+        "runtime-settings-card-head",
+        "runtime-settings-table",
+        "table(['设置','当前值','调整','范围','生效','锁定'], rows, {className:'runtime-settings-table', minWidth:1040})",
+        "function runtimeSettingRow(item)",
+        "data-runtime-key",
+        "runtime-setting-name",
+        "runtime-current-value",
+        "runtime-setting-control",
+        "runtime-range",
+        "runtime-scope-chip",
+        "runtime-lock-state",
+        "runtime-lock-pill",
+        "function runtimeSettingGroupHint(group)",
+        "function runtimeSettingSourceLabel(source)",
+        "function runtimeLockReasonLabel(reason)",
+        "由部署配置控制",
+        "'scheduler recovery':'调度恢复检查'",
+        "document.querySelectorAll('[data-runtime-key]').forEach",
+        "api('/runtime-settings',{method:'PUT'",
+        "toast('运行策略已保存')",
+    ]:
+        assert marker in page
+
+    for selector in [
+        "body #runtime .panel {",
+        "body #runtime .runtime-guardrail {",
+        "body #runtime_settings_table {",
+        "body .runtime-settings-card {",
+        "body .runtime-settings-card-head {",
+        "body #runtime_settings_table .runtime-settings-table {",
+        "body #runtime_settings_table .runtime-settings-table table {",
+        "body .runtime-setting-name,",
+        "body .runtime-current-value,",
+        "body .runtime-setting-control select,",
+        "body .runtime-range {",
+        "body .runtime-scope-chip {",
+        "body .runtime-save-button {",
+    ]:
+        assert selector in css
+
+    assert 'id="global_refresh_button"' in header
+    assert "refreshActiveSection(this)" in header
+    for duplicate_refresh in [
+        ">刷新运行策略</button>",
+        "refreshRuntimeSettings",
+        'onclick="loadRuntimeSettings()"',
+    ]:
+        assert duplicate_refresh not in runtime_section
+
+    for forbidden_customer_copy in [
+        "MONITOR_GLOBAL_CRAWL_CONCURRENCY",
+        "MONITOR_SCHEDULER_TICK_SECONDS",
+        "deployment configuration",
+        "<div class=\"small\">${esc(item.key)}</div>",
+        "<div class=\"small\">${esc(item.source||'default')}</div>",
+    ]:
+        assert forbidden_customer_copy not in runtime_section
 
 
 def test_phase_12b_page_entry_and_role_flow_shortcuts():
@@ -9914,7 +11368,7 @@ def test_phase_12b_page_entry_and_role_flow_shortcuts():
     # Normal-user shortcuts and page actions must not expose administrator
     # resource entries when menu permissions hide them.
     assert 'class="shortcut-card admin-entry" type="button" data-shortcut-tab="accounts" data-menu-key="platform_accounts"' in page
-    assert 'data-shortcut-tab="accounts" data-menu-key="platform_accounts">处理账号资源' in page
+    assert 'data-shortcut-tab="accounts" data-menu-key="platform_accounts"><span>04</span><strong>资源处理</strong>' in page
     assert 'data-shortcut-tab="doctor" data-menu-key="system_diagnostics"' in page
     assert 'data-shortcut-tab="email" data-menu-key="mail_config"' in page
     assert 'data-shortcut-tab="ai_rules" data-menu-key="ai_rules"' in page
@@ -9934,23 +11388,36 @@ def test_phase_13b_operations_home_desktop_visual_metrics():
         'class="operations-home"',
         'id="operations_home_meta"',
         'id="dashboard_metrics" class="operations-metric-grid"',
-        'id="operations_home_drilldowns"',
         'id="operations_home_resource"',
         'id="operations_home_admin_health" class="operations-admin-health admin-entry" data-menu-key="system_diagnostics"',
         "const home=data.operations_home || s.operations_home || legacyOperationsHome(s)",
         "function renderOperationsHome(home)",
         "function operationsMetricCard(card)",
-        "function renderOperationsDrilldowns(home)",
+        "function renderOperationsCommandRail(home)",
         "function renderOperationsResourceHealth(resource)",
         "function renderOperationsAdminHealth(home)",
         "bindShortcutButtons(document.getElementById('dashboard'))",
         "data-shortcut-target=\"task_center_panel\"",
         "data-shortcut-grouped=\"1\"",
         "data-shortcut-tab=\"accounts\" data-menu-key=\"platform_accounts\"",
+        "data-shortcut-tab=\"doctor\" data-menu-key=\"system_diagnostics\"",
         "资源由管理员维护",
-        "当前展示报告最新交付状态",
+        "报告最新交付状态",
+        "暂无待处理事项",
     ]:
         assert marker in page
+
+    for shortcut_label in [
+        "<span>01</span><strong>新建任务</strong>",
+        "<span>02</span><strong>任务中心</strong>",
+        "<span>03</span><strong>运行记录</strong>",
+        "<span>04</span><strong>资源处理</strong>",
+        "<span>05</span><strong>系统诊断</strong>",
+    ]:
+        assert shortcut_label in dashboard_section
+
+    assert "按任务、运行、报告和邮件交付汇总当前状态。" not in page
+    assert "首页仅保留精简运营健康信号" not in page
 
     for label in [
         "任务健康",
@@ -9959,7 +11426,7 @@ def test_phase_13b_operations_home_desktop_visual_metrics():
         "邮件交付",
         "疑似负面线索",
         "资源健康",
-        "钻取入口",
+        "今日关注",
         "系统健康摘要",
     ]:
         assert label in page
@@ -9970,9 +11437,9 @@ def test_phase_13b_operations_home_desktop_visual_metrics():
         ".operations-metric-grid",
         ".operations-metric-card",
         ".operations-home-lower",
-        ".operations-drilldowns",
+        ".operations-command-rail",
         ".operations-resource-panel",
-        ".operations-drilldown-list",
+        ".command-rail-summary",
         ".operations-resource-signals",
         ".operations-admin-health",
     ]:
@@ -9990,7 +11457,7 @@ def test_cr051_task_center_consolidates_report_grouping_without_separate_report_
     task_center = _monitor_section(page, "runs")
 
     assert '<button data-tab="runs" data-menu-key="run_center"' in page
-    assert ">任务中心</button>" in page
+    assert '<span>任务中心</span>' in page
     assert '<section id="reports"' not in page
     assert 'data-tab="reports"' not in page
     assert 'data-shortcut-tab="reports"' not in page
@@ -10002,8 +11469,8 @@ def test_cr051_task_center_consolidates_report_grouping_without_separate_report_
     assert 'id="task_group_toggle"' in task_center
     assert 'id="runs_table"' in task_center
     assert "按舆情任务分组" in task_center
-    assert "用同一套运行记录查看采集、AI 评估、报告和交付" in task_center
-    assert "字段口径保持一致；分组模式会隐藏组标题已展示的任务身份" in task_center
+    assert "按任务汇总运行、AI 评估、报告和交付状态" in task_center
+    assert "切换分组或运行记录，不影响详情查看" in task_center
 
     assert "function renderGroupedTaskRuns(runs)" in page
     assert "function groupRunsByTask(runs)" in page
@@ -10136,6 +11603,376 @@ def test_task_center_single_grouping_switch_unifies_rows_and_actions():
     assert "/reports/${Number(report.id)}/download?type=markdown" in page
 
 
+def test_phase_21l_task_center_visual_pass_preserves_current_structure():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    task_center = _monitor_section(page, "runs")
+    header = page[page.index("<header>") : page.index("</header>", page.index("<header>"))]
+
+    for marker in [
+        '<button data-tab="runs" data-menu-key="run_center"',
+        '<span>任务中心</span>',
+        'data-page-entry="runs"',
+        'id="task_center_panel"',
+        'id="task_group_toggle"',
+        "setTaskCenterGrouped(this.checked)",
+        'id="run_task_filter"',
+        'id="run_status_filter"',
+        'id="run_platform_filter"',
+        'id="run_date_from" type="date"',
+        'id="run_date_to" type="date"',
+        'id="run_type_filter"',
+        'id="run_visibility_filter"',
+        'id="run_limit"',
+        "applyRunFilters()",
+        "clearRunFilters()",
+        'id="run_filter_summary"',
+        'id="runs_table"',
+        'id="run_pagination"',
+        "renderGroupedTaskRuns(runs)",
+        "renderFlatTaskRuns(runs)",
+        "renderTaskRunGroup(group)",
+        "runGroupMetricChips(group)",
+        "runGroupMetaChips(group)",
+        "runTableHeaders('grouped')",
+        "runTableHeaders('flat')",
+        "openRunDetail(${Number(r.id)})",
+    ]:
+        assert marker in task_center or marker in page
+
+    for selector in [
+        "body .task-center-panel {",
+        "body #task_center_panel .account-ledger-head {",
+        "body #task_center_panel .page-toolbar {",
+        "body #running_summary .notice {",
+        "body #run_filter_summary {",
+        "body #runs_table {",
+        "body .report-task-group {",
+        "body .report-task-group-head:hover {",
+        "body .report-task-group-head:focus-visible {",
+        "body .report-task-group-metrics {",
+        "body .report-task-group-metric.is-warn {",
+        "body .report-task-group-metric.is-danger {",
+        "body .report-task-group-meta span {",
+        "body #runs_table .run-record-table {",
+        "body #runs_table .run-record-table tbody tr:hover td {",
+        "body .run-empty-state {",
+        "body #run_pagination {",
+    ]:
+        assert selector in css
+
+    assert 'id="global_refresh_button"' in header
+    assert "refreshActiveSection(this)" in header
+    for forbidden in [
+        '<section id="reports"',
+        'data-tab="reports"',
+        'data-shortcut-tab="reports"',
+        "report_center",
+        'id="task_group_view"',
+        'id="run_records_view"',
+        ">刷新任务中心</button>",
+        "onclick=\"loadRuns()\">刷新</button>",
+        "viewRunLeads(${Number(r.id)})",
+        "loadRunLogs(${Number(r.id)})",
+        "stopRun(${Number(r.id)})",
+        "archiveRun(${Number(r.id)})",
+        "restoreRun(${Number(r.id)})",
+        "<label>线索状态</label>",
+        'id="report_risk"',
+    ]:
+        assert forbidden not in task_center
+
+    assert '<button class="secondary" onclick="openRunDetail(${Number(r.id)})">详情</button>' in page
+    assert "report-task-group-metric${tone}" in page
+    assert "if(['操作','详情'].includes(header)) classes.push('col-actions');" in page
+    assert "if(header==='状态') classes.push('col-status');" in page
+
+
+def test_phase_21m_overlay_and_run_detail_freeze_gate_preserves_structure():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    frontend_source = page + "\n" + css
+    run_detail_drawer = page[
+        page.index('id="run_detail_drawer"') : page.index('id="report_preview_backdrop"')
+    ]
+
+    expected_tabs = [
+        ('data-run-detail-tab="overview"', "概览"),
+        ('data-run-detail-tab="logs"', "采集日志"),
+        ('data-run-detail-tab="contents"', "采集内容"),
+        ('data-run-detail-tab="ai"', "AI 评估"),
+        ('data-run-detail-tab="reports"', "报告"),
+        ('data-run-detail-tab="email"', "邮件交付"),
+    ]
+    previous_position = -1
+    for tab_marker, label in expected_tabs:
+        position = run_detail_drawer.index(tab_marker)
+        assert position > previous_position
+        assert f"{label}</button>" in run_detail_drawer[position : position + 180]
+        previous_position = position
+
+    for marker in [
+        'id="run_detail_backdrop" class="drawer-backdrop" onclick="closeRunDetailDrawer()"',
+        'id="run_detail_drawer" class="drawer run-detail-drawer"',
+        "data-run-detail-panel",
+        'id="run_detail_body"',
+        'id="run_detail_actions"',
+        "function switchRunDetailTab(tab)",
+        "function openRunDetail(id)",
+        "openDrawerChrome('run_detail_backdrop', 'run_detail_drawer')",
+        "renderRunDetailBody(currentRunDetailState)",
+        "run_detail_report_filter",
+        "run-detail-ai-toolbar page-filter-region",
+        'data-filter-region="run-detail-ai"',
+    ]:
+        assert marker in page
+
+    for opener in [
+        "openDrawerChrome('account_modal', 'account_dialog')",
+        "openDrawerChrome('proxy_drawer_backdrop', 'proxy_drawer')",
+        "openDrawerChrome('job_drawer_backdrop', 'job_drawer')",
+        "openDrawerChrome('ai_rule_modal_backdrop', 'ai_rule_modal')",
+        "openDrawerChrome('ai_connection_test_backdrop', 'ai_connection_test_modal', {lockBody:false})",
+        "openDrawerChrome('ai_profile_drawer_backdrop', 'ai_profile_drawer')",
+        "openDrawerChrome('mail_config_backdrop', 'mail_config_modal')",
+        "openDrawerChrome('mail_test_backdrop', 'mail_test_modal')",
+        "openDrawerChrome('email_template_drawer_backdrop', 'email_template_drawer')",
+        "openDrawerChrome('run_log_backdrop', 'run_log_drawer')",
+        "openDrawerChrome('run_detail_backdrop', 'run_detail_drawer')",
+        "openDrawerChrome('report_preview_backdrop', 'report_preview_drawer')",
+        "openDrawerChrome('email_delivery_history_backdrop', 'email_delivery_history_drawer')",
+    ]:
+        assert opener in page
+
+    for marker in [
+        "function normalizeDrawerScrollBodies(root=document)",
+        "const footerSelector='.form-actions, .resource-modal-actions, .account-flow-actions, .ai-test-actions, .rule-modal-actions';",
+        "const topChromeSelector='.run-detail-toolbar, .detail-tabs.run-detail-tabs, .report-leads-toolbar, .drawer-actions';",
+        "body.className='drawer-scroll-body';",
+        "action.classList.add('drawer-fixed-footer');",
+        "drawer.classList.toggle('has-fixed-footer', !!drawer.querySelector(':scope > .drawer-fixed-footer'));",
+        "drawer.classList.toggle('has-fixed-toolbar', !!drawer.querySelector(':scope > .drawer-fixed-toolbar'));",
+        "body.setAttribute('data-scroll-owner', 'drawer-content');",
+    ]:
+        assert marker in page
+
+    for selector in [
+        "body .drawer > .drawer-fixed-toolbar {",
+        "body .drawer > .drawer-fixed-toolbar.detail-tabs {",
+        "body .drawer > .drawer-fixed-footer {",
+        "body .drawer.has-fixed-toolbar > .drawer-scroll-body {",
+        "body .drawer.has-fixed-footer > .drawer-scroll-body {",
+        "body .run-detail-tabs button.active {",
+        "body .run-detail-code {",
+        "body .filter-select-option:focus-visible,",
+        "body .filter-select-menu::-webkit-scrollbar-thumb,",
+    ]:
+        assert selector in css
+
+    for marker in [
+        "overflow: hidden;",
+        "overflow-x: hidden;",
+        "overflow-y: auto;",
+        "scrollbar-gutter: stable;",
+        "scrollbar-color: rgba(88, 106, 125, 0.42) transparent;",
+        "--phase21-shadow-overlay-strong",
+    ]:
+        assert marker in frontend_source
+
+    for drawer_id in [
+        "job_drawer",
+        "account_dialog",
+        "proxy_drawer",
+        "ai_connection_test_modal",
+        "ai_profile_drawer",
+        "ai_rule_modal",
+        "mail_config_modal",
+        "mail_test_modal",
+        "email_template_drawer",
+    ]:
+        drawer_start = page.index(f'id="{drawer_id}"')
+        next_drawer = page.find('class="drawer', drawer_start + 1)
+        drawer_html = page[drawer_start : next_drawer if next_drawer != -1 else len(page)]
+        if "drawer-fixed-footer" in drawer_html:
+            assert 'class="drawer-scroll-body"' not in drawer_html[: drawer_html.index("drawer-fixed-footer")]
+
+    for forbidden in [
+        "report_leads_drawer",
+        "document.getElementById('run_detail_drawer').classList.add('active')",
+        "document.getElementById('job_drawer_backdrop').classList.add('active')",
+        "document.getElementById('mail_config_modal').classList.add('active')",
+        ".drawer::-webkit-scrollbar",
+        "top: calc(var(--drawer-padding-y) + 80px);",
+        'data-tab="reports"',
+    ]:
+        assert forbidden not in frontend_source
+
+    assert "previewReport(${Number(report.id)})" in page
+    assert "jumpToReportAiEvaluations(${Number(report.id)})" in page
+    assert "loadEmailDeliveryHistory(${Number(report.id)})" in page
+    assert "resendReportEmail(${Number(report.id)})" in page
+    assert "copyCurrentRunLogs()" in page
+    assert "downloadCurrentRunLogs()" in page
+
+
+def test_phase_21n_system_diagnostics_visual_pass_preserves_actions_and_mounts():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    doctor_section = page[page.index('<section id="doctor">') : page.index('</section>', page.index('<section id="doctor">'))]
+
+    for marker in [
+        'data-page-entry="doctor"',
+        'onclick="loadDoctor()">重新诊断</button>',
+        'onclick="runSmokeCheck()">运行系统诊断</button>',
+        'data-shortcut-tab="accounts" data-menu-key="platform_accounts">处理账号资源</button>',
+        'id="doctor_summary"',
+        'id="smoke_result"',
+        'id="doctor_table"',
+        'id="doctor_recommendations"',
+        'id="readiness_summary"',
+        'id="ops_checklist"',
+        'id="readiness_actions"',
+        'id="readiness_table"',
+        'id="scheduler_status"',
+        'id="platform_status_table"',
+        'diagnostic-overview-layout',
+        'diagnostic-primary-panel',
+        'diagnostic-next-panel',
+        'diagnostic-readiness-panel',
+        'diagnostic-scheduler-panel',
+        'diagnostic-platform-panel',
+    ]:
+        assert marker in doctor_section
+
+    for marker in [
+        "if(tab==='doctor') {\n        return Promise.all([\n          loadDoctor(),\n          loadReadiness(),\n          loadSchedulerStatus(),\n          loadPlatformStatus(),\n          loadSystemChecklist()\n        ]);\n      }",
+        "addPermittedLoad(loads, '系统状态', 'system_diagnostics', loadSystemChecklist);",
+        "addPermittedLoad(loads, '运行状态', 'system_diagnostics', loadReadiness);",
+        "addPermittedLoad(loads, '调度状态', 'system_diagnostics', loadSchedulerStatus);",
+        "addPermittedLoad(loads, '平台状态', 'system_diagnostics', loadPlatformStatus);",
+        "api('/doctor')",
+        "api('/readiness')",
+        "api('/scheduler-status')",
+        "api('/smoke',{method:'POST'})",
+        "renderReadinessActions(data)",
+        "platformStatusTable(data.platforms)",
+    ]:
+        assert marker in page
+
+    for marker in [
+        "基础配置",
+        "诊断结果",
+        "处理路径",
+        "下一步处理",
+        "运行就绪",
+        "系统运行状态",
+        "自动调度",
+        "调度器状态",
+        "平台资源",
+        "平台状态",
+        "验证范围：数据库、报告生成、附件和诊断汇总链路。",
+    ]:
+        assert marker in page
+
+    for selector in [
+        "body .diagnostic-overview-layout {",
+        "body .diagnostic-section-title {",
+        "body .diagnostic-summary-card {",
+        "body .diagnostic-recommendation-stack {",
+        "body .diagnostic-recommendation {",
+        "body .diagnostic-scheduler-card {",
+        "body .diagnostic-smoke-state {",
+        "body #doctor .table-wrap {",
+        ".diagnostic-overview-layout,",
+    ]:
+        assert selector in css
+
+    for forbidden in [
+        "href=\"/doctor\"",
+        "data-tab=\"reports\"",
+        "report_center",
+        "simulate error state",
+        "static data",
+        "mock data",
+    ]:
+        assert forbidden not in doctor_section
+
+
+def test_phase_21o_login_page_visual_pass_preserves_auth_flow():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    auth = page[
+        page.index('<div id="auth_screen"') : page.index(
+            '<svg aria-hidden="true"', page.index('<div id="auth_screen"')
+        )
+    ]
+
+    for marker in [
+        'id="auth_screen"',
+        'class="auth-screen"',
+        'class="auth-panel"',
+        'role="dialog"',
+        'aria-labelledby="auth_title"',
+        'aria-describedby="auth_intro"',
+        'class="auth-panel-head"',
+        'class="auth-brand"',
+        'class="auth-brand-mark"',
+        'id="auth_title"',
+        'id="auth_intro"',
+        'id="login_form"',
+        'for="login_email"',
+        'id="login_email" type="email" autocomplete="username" required',
+        'for="login_password"',
+        'id="login_password" type="password" autocomplete="current-password" required',
+        'id="login_error" class="auth-error" role="alert" aria-live="polite"',
+        'id="login_submit" class="primary auth-submit" type="submit"',
+        "<span>登录</span>",
+    ]:
+        assert marker in auth
+
+    for forbidden in [
+        "注册",
+        "prototype",
+        "mock",
+        "debug",
+        "simulate error state",
+        "static data",
+    ]:
+        assert forbidden not in auth.lower()
+
+    for marker in [
+        "const errorEl=document.getElementById('login_error');",
+        "if(errorEl) errorEl.textContent='';",
+        "button.classList.add('is-loading');",
+        "button.setAttribute('aria-busy','true');",
+        'class="auth-button-spinner"',
+        "if(errorEl) errorEl.textContent=await err(res);",
+        "routeToOperationsHome();",
+        "button.classList.remove('is-loading');",
+        "button.removeAttribute('aria-busy');",
+        "button.innerHTML=oldHtml;",
+    ]:
+        assert marker in page
+
+    for selector in [
+        "body .auth-screen",
+        "body .auth-panel",
+        "body .auth-panel-head",
+        "body .auth-brand",
+        "body .auth-brand-mark",
+        "body .auth-kicker",
+        "body .auth-field input:focus",
+        "body .auth-error:not(:empty)",
+        "body .auth-submit",
+        "body .auth-submit.is-loading",
+        "body .auth-button-spinner",
+    ]:
+        assert selector in css
+
+    assert "box-shadow: var(--phase21-focus);" in css
+    assert "animation: monitor-spin 0.8s linear infinite;" in css
+
+
 def test_cr074_page_refresh_actions_are_deduplicated_icon_only():
     page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
     css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
@@ -10190,6 +12027,89 @@ def test_cr074_page_refresh_actions_are_deduplicated_icon_only():
     assert "animation: monitor-spin 0.8s linear infinite;" in css
 
 
+def test_cr087_explanatory_helper_question_marks_are_removed_without_restoring_copy():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+
+    for removed_helper_artifact in [
+        "function helperTooltip(text, label='说明')",
+        "function initializeHelperTooltips(root=document)",
+        "function setHelperTooltipText(id, text)",
+        "function closeHelperTooltips()",
+        "helperTooltip(",
+        "setHelperTooltipText(",
+        "closeHelperTooltips();",
+        "initializeHelperTooltips();",
+        "helper.classList.toggle('is-open')",
+        "if(helper && ['Enter',' '].includes(event.key))",
+        'class="helper-tooltip"',
+        "helper-tooltip",
+        "data-tooltip",
+        "label-with-help",
+        "title-with-help",
+        "status-inline-help",
+        'id="ai_status" class="small" style="margin-top:8px"',
+        "const status=document.getElementById('ai_status');",
+        "if(status) status.textContent = '系统会把固定输出结构、评估规则和每条采集内容一起交给模型；AI 接入异常时，内容进入待人工复核。';",
+        "if(!hasStructured && prompt && prompt !== defaultAIPrompt){",
+        "if(status) status.textContent='已载入旧版完整 Prompt。建议按分段规则确认后重新保存，便于后续维护。';",
+    ]:
+        assert removed_helper_artifact not in page
+        assert removed_helper_artifact not in css
+
+    for removed_helper_copy in [
+        "查看今日任务、运行、报告与邮件交付状态。",
+        "新建和管理律所舆情监控任务。",
+        "管理平台账号、登录状态和代理绑定。",
+        "管理代理来源、并发上限和可用状态。",
+        "管理模型连接资源和默认接入状态。",
+        "管理舆情判断规则和默认初筛规则。",
+        "按任务汇总运行、AI 评估、报告和交付状态。",
+        "检查基础配置、运行状态和报告链路，便于管理员快速定位待处理项。",
+        "当前首版以平台搜索词采集为主。平台搜索词会用于平台搜索；律所名称、别名和排除词用于评估、报告和采集后过滤。",
+        "新建账号时选择平台；保存后平台不可变更。",
+        "该登录方式只作用于当前账号，任务绑定此账号后会复用这里保存的登录态。",
+        "保存账号会更新账号资料；登录是否可用以登录维护和账号检测结果为准。",
+        "代理 URL 保存后仅显示掩码。",
+        "密钥保存后不回显，连接测试会记录最近状态。",
+        "查看规则状态、默认规则和最近测试结果。",
+        "调整规则或样例内容后，点击“测试评估规则”查看模型返回的结构化结果。",
+        "可修改规则或样例内容后点击“测试评估规则”。",
+        "切换分组或运行记录，不影响详情查看。",
+        "检测通过后自动刷新",
+    ]:
+        assert removed_helper_copy not in page
+
+    assert '<section id="reports"' not in page
+    assert 'id="run_detail_drawer" class="drawer run-detail-drawer"' in page
+    assert ".drawer-scroll-body" in page
+    assert 'id="global_refresh_button"' in page
+
+    for preserved_operational_marker in [
+        'id="social_account_platform"',
+        'id="social_account_login_type"',
+        'id="account_save_button"',
+        'id="proxy_drawer"',
+        'id="ai_profile_drawer"',
+        'id="task_center_panel"',
+        'data-run-detail-tab="overview"',
+        'data-run-detail-tab="logs"',
+        'data-run-detail-tab="contents"',
+        'data-run-detail-tab="ai"',
+        'data-run-detail-tab="reports"',
+        'data-run-detail-tab="email"',
+        "未保存密码",
+        "点击“生成登录二维码”后在这里扫码。",
+        "清空筛选",
+        "保存任务",
+        "保存代理",
+        "保存 AI 接入",
+        "保存配置",
+        "保存模板",
+    ]:
+        assert preserved_operational_marker in page
+
+
 def test_phase_13c_operations_home_responsive_role_views():
     page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
     css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
@@ -10223,7 +12143,8 @@ def test_phase_13c_operations_home_responsive_role_views():
         ".operations-admin-health",
         ".operations-admin-health-card",
         ".operations-admin-health-signals",
-        ".operations-metric-foot button",
+        ".command-rail-summary",
+        ".command-rail-chip",
     ]:
         assert selector in css
 
@@ -10233,7 +12154,11 @@ def test_phase_13c_operations_home_responsive_role_views():
     assert ".operations-metric-grid" in tablet_block
     assert ".operations-resource-signals {\n    grid-template-columns: repeat(4, minmax(0, 1fr));\n  }" in tablet_block
     assert ".operations-admin-health-card {\n    align-items: flex-start;\n    flex-wrap: wrap;\n  }" in tablet_block
-    assert ".operations-metric-foot button {\n    width: 100%;\n    justify-content: center;\n    white-space: normal;\n  }" in mobile_block
+    assert ".account-menu-copy,\n  .account-menu-caret {\n    display: none;\n  }" in mobile_block
+    assert "body header .header-actions {\n    display: contents !important;" in mobile_block
+    top_status_block = mobile_block.split("body header #top_status {", 1)[1].split("}", 1)[0]
+    assert "grid-area: status;" in top_status_block
+    assert "body header .header-actions > .account-area {\n    min-width: 0;\n    width: auto;" in mobile_block
     assert ".operations-admin-health-signals {\n    display: grid;\n    grid-template-columns: minmax(0, 1fr);\n    width: 100%;\n  }" in mobile_block
 
     assert "资源由管理员维护" in page
@@ -12340,18 +14265,13 @@ def test_cr049_mail_and_delivery_history_action_hierarchy_frontend_hooks():
 def test_phase_17_1c_17_2bc_email_recipient_and_template_explanations():
     page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
 
-    assert "任务收件人优先；留空才使用邮件配置里的全局默认收件人" in page
-    assert "发件人只代表 SMTP 身份，不会自动成为收件人" in page
-    assert "全局默认收件人只在任务没有填写收件邮箱时使用" in page
-    assert "HTML 模板必须保留 {report_html} 或 {report_body}" in page
+    assert "HTML 模板必须包含 {report_html} 或 {report_body}" in page
     assert 'id="email_template_preset"' in page
     assert "标准日报" in page
     assert "紧凑摘要" in page
     assert "正式简报" in page
     assert "自定义 / 历史模板" in page
-    assert "选择预设会生成包含 {report_body} 的包装样式" in page
     assert 'id="email_template_guardrail"' in page
-    assert 'id="email_preview_note"' in page
     assert "function emailTemplateHasReportBodyPlaceholder(template)" in page
     assert "function updateEmailTemplateGuardrail()" in page
     assert "function applyEmailTemplatePreset(preset)" in page
@@ -12359,9 +14279,6 @@ def test_phase_17_1c_17_2bc_email_recipient_and_template_explanations():
     assert "templateDrawerActive" in page
     assert "set('email_template_preset', 'custom')" in page
     assert "set('email_template_preset', 'standard')" in page
-    assert "HTML 模板必须包含 {report_html} 或 {report_body}，否则真实邮件会缺少报告正文" in page
-    assert "preview.sample_data_note" in page
-    assert "preview.body_guardrail" in page
     assert "resourceStat('正文保护'" in page
     assert "发送时模板：" in page
     assert "function emailTemplateSourceLabel(source)" in page

@@ -96,6 +96,22 @@ Status values:
 - CR-079: MediaCrawler Internalization And Public Exposure Boundary
 - CR-080: Crawler Engine Provider Architecture
 - CR-081: Atomic Goal Execution Governance And Readiness Gate
+- CR-075: Responsive Navigation Interaction Consistency
+- CR-076: Mobile Header Layout Resilience Regression Fix
+- CR-077: Mobile Header Final Cascade Resilience Regression Fix
+- CR-078: Mobile And Tablet Navigation Layout Resilience Regression Fix
+- CR-079: Mobile Header Compact Rail Regression Fix
+- CR-080: Tablet Side Rail Horizontal Scrollbar Cleanup
+- CR-081: Scrollable Drawer Fixed Footer Boundary Regression Fix
+- CR-082: Drawer Scrollbar Header Footer Boundary Recheck
+- CR-083: AI Access Model Helper Copy Removal Regression Fix
+- CR-084: Tablet Side Rail Narrow-Width Collapse Regression Fix
+- CR-085: Narrow Tablet Inline Cascade Side Rail Regression Fix
+- CR-086: Explanatory Helper Copy Tooltip Consolidation
+- CR-087: Explanatory Helper Tooltip Removal
+- CR-088: AI Rule Modal Residual Helper Text Removal
+- CR-089: Mail Template Row Helper Text And Update-Time Compactness
+- CR-090: AI Rule List And Modal Field Width Compactness
 
 ## Entry Classification Rule
 
@@ -5230,6 +5246,901 @@ Verification:
   where they refresh different local scopes, and the top-bar refresh button
   enters disabled/loading state before restoring.
 
+## CR-075 - Responsive Navigation Interaction Consistency
+
+Date: 2026-06-19
+
+Source: user in-app browser review of the top-left `打开导航` button appearing
+at a `1169px`-wide viewport.
+
+Module: formal console navigation shell, responsive breakpoints, Phase 21B
+
+Type: Existing Feature Optimization
+
+Status: Verified
+
+Background:
+
+After the focused Phase 21 navigation visual pass, the console still used the
+mobile drawer trigger for every viewport below `1280px`. Browser review found
+that a `1169px` viewport showed the top-left `打开导航` button even though the
+viewport is wide enough for the same sidebar interaction model used elsewhere.
+This made navigation feel like two different systems rather than one coherent
+responsive shell.
+
+Purpose:
+
+Unify navigation behavior across accepted breakpoints so desktop uses the full
+sidebar, tablet/narrow desktop uses the same sidebar as a persistent icon rail,
+and only true mobile uses the top-left drawer trigger.
+
+Requirements:
+
+- Desktop `>= 1280px` keeps the expanded sidebar and bottom collapse control.
+- Tablet / narrow desktop `768px - 1279px` must keep a persistent side rail,
+  default it to the collapsed icon state, and hide the top-left `打开导航`
+  trigger and mobile backdrop.
+- Mobile `< 768px` keeps the existing touch-safe top-left navigation trigger,
+  backdrop, Escape close, and page-selection close behavior.
+- Resize and initial-load behavior must synchronize to the active breakpoint:
+  close mobile navigation at `>= 768px`, collapse the sidebar by default for
+  `768px - 1279px`, and disable sidebar collapse below `768px`.
+- Collapsed side-rail hover, active, and tooltip behavior must remain aligned
+  with the Phase 21 neutral hover and teal selected-state tokens.
+
+Scope boundary:
+
+- Frontend-only responsive navigation optimization.
+- No backend API, database schema, permission, crawler, AI provider, SMTP,
+  scheduler, deployment, Task Center, Run Detail, enhanced select/date, drawer,
+  modal, row menu, owner-scope, or report-scope behavior changes.
+
+Non-goals:
+
+- Do not restore separate top-level Run Center / Report Center.
+- Do not add a standalone `reports` top-level page.
+- Do not change the Task Center grouping model, `运行记录`, Run Detail tabs,
+  overlay close behavior, `.drawer-scroll-body`, enhanced dropdown logic, or
+  date-picker value/change semantics.
+
+Related tasks:
+
+- Phase 21B Navigation Hierarchy in `TASKS.md`
+- CR-040 Formal Console Page-Level UI/UX Refinement in `TRACEABILITY.md`
+- Phase 11D Responsive Layout And Mobile Navigation in `TEST_PLAN.md`
+
+Acceptance:
+
+- At `1440x900`, the full sidebar remains visible and can collapse to icons.
+- At `1024x768` and similar `1169px`-wide viewports, the top-left `打开导航`
+  trigger is absent, the side rail remains visible as icons, and the bottom
+  expand/collapse control remains usable.
+- At `390x844`, the top-left navigation trigger remains visible and opens the
+  mobile drawer; backdrop, Escape, and page-selection close behavior remain.
+- Administrator and normal-user menu visibility remains role-safe.
+- The single top-level `任务中心`, default task/report grouping, `运行记录`, Run
+  Detail six sections, CR-071/CR-072 controls, CR-073 drawer scroll ownership,
+  and CR-074 top-bar refresh remain unchanged.
+
+Verification:
+
+- Verified on 2026-06-19 with targeted frontend regression coverage, static JS
+  check, inline monitor script parse, docs consistency check, and browser
+  verification at desktop, tablet/narrow desktop, and mobile widths.
+- Browser verification confirmed `1440x900` keeps the full sidebar without the
+  mobile trigger, `1169px`/`1024x768` use the collapsed icon side rail without
+  the top-left `打开导航` trigger, and `390x844` keeps a horizontal two-row
+  mobile header plus working navigation drawer open/backdrop-close behavior.
+
+## CR-076 - Mobile Header Layout Resilience Regression Fix
+
+Date: 2026-06-19
+
+Source: user in-app browser screenshot showing the mobile `/monitor` header
+title squeezed into one-character vertical wrapping.
+
+Module: formal console mobile header, responsive shell, Phase 21B
+
+Type: Regression Fix
+
+Status: Verified
+
+Background:
+
+After CR-075 unified the responsive navigation breakpoints, browser review on a
+mobile-width viewport still found a layout state where the top header could
+compress the product title into a narrow vertical column. The visible cause was
+that the mobile header still let the navigation trigger, title, status chips,
+refresh icon, and account control compete for the same first-screen width.
+
+Purpose:
+
+Make the mobile header resilient under the accepted `<768px` drawer-navigation
+model so the title remains readable and the status/refresh/account controls do
+not squeeze it.
+
+Requirements:
+
+- Mobile `<768px` keeps the top-left navigation trigger and the same drawer
+  open, backdrop close, Escape close, and page-selection close behavior.
+- The mobile header title must occupy its own full-width row instead of
+  sharing the row with status chips, refresh, or account controls.
+- Status chips must occupy their own mobile header row and must not force the
+  title into one-character wrapping.
+- The top-bar refresh icon and compact account control remain visible and
+  reachable on mobile.
+- Generic mobile `.row` wrapping rules must not stretch the account area or
+  status area in a way that breaks the header grid.
+
+Scope boundary:
+
+- Frontend-only regression fix for responsive layout.
+- No backend API, database schema, permission, crawler, AI provider, SMTP,
+  scheduler, deployment, Task Center, Run Detail, enhanced select/date, drawer,
+  modal, row menu, owner-scope, or report-scope behavior changes.
+
+Non-goals:
+
+- Do not remove the mobile navigation trigger.
+- Do not change mobile drawer close behavior or `.drawer-scroll-body`.
+- Do not change Task Center grouping, `运行记录`, Run Detail tabs, enhanced
+  dropdown/date logic, or top-bar refresh semantics.
+
+Related tasks:
+
+- Phase 21B Navigation Hierarchy in `TASKS.md`
+- CR-075 Responsive Navigation Interaction Consistency in `CHANGE_REQUESTS.md`
+- Phase 12 Navigation And Page Entry Tests in `TEST_PLAN.md`
+
+Acceptance:
+
+- At `390x844`, `舆情监控运营后台` remains horizontal and readable.
+- The mobile header lays out as navigation plus refresh/account controls,
+  then title, then status chips.
+- No horizontal page overflow is introduced.
+- The mobile drawer still opens and closes through the accepted CR-075 paths.
+
+Verification:
+
+- Verified on 2026-06-19 with targeted frontend regression coverage, static JS
+  check, inline monitor script parse, and local HTTP resource checks.
+  Browser attachment was retried during the same pass; if the in-app browser
+  session is unavailable, the CSS/test regression remains the authoritative
+  automated gate and manual browser refresh should confirm the same layout.
+
+## CR-077 - Mobile Header Final Cascade Resilience Regression Fix
+
+Date: 2026-06-19
+
+Source: user in-app browser screenshot showing the mobile `/monitor` header
+still collapsing into vertical one-character title text after the first
+CR-076 pass.
+
+Module: formal console mobile header, inline/CSS cascade, Phase 21B
+
+Type: Regression Fix
+
+Status: Verified
+
+Background:
+
+CR-076 added the correct mobile header grid in `monitor.css`, but the formal
+page still has multiple inline `<style>` blocks that load after the static CSS.
+Browser review found that under the live page cascade, a later mobile inline
+rule could still override or weaken the intended final header layout and let
+the product title collapse vertically.
+
+Purpose:
+
+Make the accepted CR-076 mobile header rule resilient in the final loaded page
+cascade so the browser's computed layout, not only the static CSS file, keeps
+navigation, title, status, refresh, and account controls in their expected
+mobile grid areas.
+
+Requirements:
+
+- Keep the mobile `<768px` drawer-navigation model from CR-075.
+- Keep the CR-076 mobile header layout as the final cascade rule: top row
+  navigation / refresh / account, second row title, third row status.
+- Ensure the formal page's inline style blocks cannot stretch `.header-actions`
+  back into a full-width flex row that squeezes the title.
+- Ensure static regression tests inspect all inline `<style>` blocks, not only
+  the first one, because the formal page intentionally has more than one style
+  block.
+- Preserve tablet/narrow desktop icon rail behavior and desktop
+  full/collapsible sidebar behavior.
+
+Scope boundary:
+
+- Frontend-only responsive regression fix.
+- No backend API, database schema, permission, crawler, AI provider, SMTP,
+  scheduler, deployment, Task Center, Run Detail, enhanced select/date, drawer,
+  modal, row menu, owner-scope, or report-scope behavior changes.
+
+Non-goals:
+
+- Do not remove the mobile navigation trigger.
+- Do not change mobile drawer close behavior or `.drawer-scroll-body`.
+- Do not change Task Center grouping, `运行记录`, Run Detail tabs, enhanced
+  dropdown/date logic, or top-bar refresh semantics.
+
+Related tasks:
+
+- Phase 21B Navigation Hierarchy in `TASKS.md`
+- CR-076 Mobile Header Layout Resilience Regression Fix in
+  `CHANGE_REQUESTS.md`
+- Phase 12 Navigation And Page Entry Tests in `TEST_PLAN.md`
+
+Acceptance:
+
+- At mobile width, `舆情监控运营后台` remains horizontal and readable in the
+  browser's computed layout.
+- Mobile `#top_status` and `.account-area` occupy their intended grid areas.
+- Page content, including representative resource pages, has no right-side
+  horizontal overflow.
+- Mobile drawer open/backdrop/page-selection close behavior remains unchanged.
+- Tablet/narrow desktop still hides the top-left mobile trigger and uses the
+  persistent icon rail.
+
+Verification:
+
+- Verified on 2026-06-19 with targeted frontend regression coverage, static JS
+  check, inline monitor script parse, docs consistency check, and in-app
+  browser checks at mobile, tablet, and desktop widths.
+
+## CR-078 - Mobile And Tablet Navigation Layout Resilience Regression Fix
+
+Date: 2026-06-19
+
+Source: user in-app browser screenshot showing the mobile `/monitor` layout
+with vertically squeezed header title text and user review of the tablet
+collapsed side rail behavior.
+
+Module: formal console responsive shell, mobile resource pages, tablet icon
+side rail, Phase 21B
+
+Type: Regression Fix
+
+Status: Verified
+
+Background:
+
+After the CR-075 through CR-077 responsive navigation fixes, browser review
+still found mobile states where the loaded page could look like a desktop/tablet
+layout at a phone width or could risk squeezing the header title into a narrow
+vertical column. A separate tablet check also found a previous risk that the
+last collapsed navigation item could enter the bottom collapse button hit area.
+
+Purpose:
+
+Harden the already accepted responsive shell so the same navigation model works
+across desktop, tablet, and mobile: desktop keeps a full/collapsible sidebar,
+tablet keeps a persistent icon rail, and phone widths keep the drawer trigger
+without the title or resource pages becoming visually broken.
+
+Requirements:
+
+- At mobile `<768px`, the header must keep navigation, refresh, account, title,
+  and status in the accepted grid rows in the final loaded cascade.
+- The product title must remain horizontal and use `keep-all`/nowrap treatment
+  instead of one-character vertical wrapping.
+- A closed mobile drawer must stay off-canvas and must not reserve visible page
+  width.
+- Representative resource pages, including `代理资源`, must keep their page
+  header, metric cards, filter toolbar, and table container inside the viewport;
+  tables may scroll only inside `.table-wrap`.
+- At tablet/narrow desktop `768px - 1279px`, the collapsed side rail must keep
+  the navigation list in its own scrollable grid row so the final item does not
+  overlap the bottom collapse button.
+
+Scope boundary:
+
+- Frontend-only responsive regression fix.
+- No backend API, database schema, permission, crawler, AI provider, SMTP,
+  scheduler, deployment, Task Center, Run Detail, enhanced select/date, drawer,
+  modal, row menu, owner-scope, or report-scope behavior changes.
+
+Non-goals:
+
+- Do not remove the mobile navigation trigger.
+- Do not change mobile drawer close behavior, backdrop, Escape handling, or
+  `.drawer-scroll-body`.
+- Do not change Task Center grouping, `运行记录`, Run Detail tabs, enhanced
+  dropdown/date logic, top-bar refresh semantics, or role-based menu visibility.
+
+Related tasks:
+
+- Phase 21B Navigation Hierarchy in `TASKS.md`
+- CR-075 Responsive Navigation Interaction Consistency in `CHANGE_REQUESTS.md`
+- CR-076 / CR-077 mobile header resilience fixes in `CHANGE_REQUESTS.md`
+- Phase 21 Browser And Responsive Tests in `TEST_PLAN.md`
+
+Acceptance:
+
+- At a real mobile breakpoint (`innerWidth` around `390px`), `舆情监控运营后台`
+  remains horizontal and readable.
+- Mobile `代理资源` opens through the existing drawer navigation and closes the
+  drawer after selection; page width and document scroll width remain equal.
+- The closed mobile drawer remains off-canvas with the trigger still visible.
+- At `1024x768`, the top-left mobile trigger is hidden, the icon side rail is
+  visible, and clicking `系统诊断` activates the System Diagnostics page rather
+  than the bottom collapse button.
+- At `1440x900`, the full sidebar and user-controlled collapse behavior remain.
+- Browser console errors remain absent for the checked `/monitor` interactions.
+
+Verification:
+
+- Verified on 2026-06-19 with targeted frontend regression coverage, static JS
+  check, inline monitor script parse, docs consistency check, and in-app browser
+  checks at effective mobile, tablet, and desktop breakpoints.
+- Browser measurements confirmed mobile `innerWidth≈379`, `matchMobile=true`,
+  title `writing-mode: horizontal-tb`, document/client widths equal on
+  `代理资源`, tablet `系统诊断` center hit-tested to the navigation button, and
+  the desktop collapse button still toggled `sidebar-collapsed`.
+
+## CR-079 - Mobile Header Compact Rail Regression Fix
+
+Date: 2026-06-19
+
+Source: user in-app browser screenshot showing that a phone viewport could
+still render the `/monitor` header title as a narrow one-character vertical
+column on a resource page after CR-078.
+
+Module: formal console mobile header, responsive shell, Phase 21B
+
+Type: Regression Fix
+
+Status: Verified
+
+Background:
+
+CR-078 strengthened the mobile header and resource-page containment, but a
+later browser review still found a phone-width state where the visible header
+could look squeezed: the navigation trigger retained the visible `导航` label
+and the first mobile grid row could reserve width for controls before the title
+had a stable readable column.
+
+Purpose:
+
+Make the mobile header resilient by treating the mobile navigation trigger as a
+compact icon control, keeping the product title in the first-row main column,
+and moving status chips to their own wrapping row. This preserves the same
+mobile drawer model while preventing header controls from squeezing the title
+into one-character wrapping.
+
+Requirements:
+
+- At mobile `<768px`, the top row uses compact columns for navigation, refresh,
+  and account controls, with the product title in the remaining main column.
+- The mobile navigation trigger keeps its accessible name but hides the visible
+  `导航` text so it occupies a stable icon-button width.
+- The product title remains horizontal with `keep-all`/nowrap treatment and a
+  stable nonzero main-column width.
+- Status chips remain below the first row and may wrap instead of clipping or
+  compressing the title.
+- Representative resource pages, including `代理资源`, keep document width equal
+  to viewport width and show no one-character Chinese text columns.
+
+Scope boundary:
+
+- Frontend-only responsive regression fix.
+- No backend API, database schema, permission, crawler, AI provider, SMTP,
+  scheduler, deployment, Task Center, Run Detail, enhanced select/date, drawer,
+  modal, row menu, owner-scope, or report-scope behavior changes.
+
+Non-goals:
+
+- Do not remove the mobile navigation trigger or its drawer behavior.
+- Do not change backdrop, Escape, page-selection close behavior, or
+  `.drawer-scroll-body`.
+- Do not change Task Center grouping, `运行记录`, Run Detail tabs, enhanced
+  dropdown/date logic, top-bar refresh semantics, or role-based menu
+  visibility.
+
+Related tasks:
+
+- Phase 21B Navigation Hierarchy in `TASKS.md`
+- CR-075 through CR-078 responsive navigation fixes in `CHANGE_REQUESTS.md`
+- Phase 12 Navigation And Page Entry Tests in `TEST_PLAN.md`
+- Phase 21 Browser And Responsive Tests in `TEST_PLAN.md`
+
+Acceptance:
+
+- At a real mobile breakpoint (`innerWidth` around `390px`), the header grid is
+  `nav title refresh account` followed by a full-width status row.
+- The mobile navigation button is a 40px icon button while retaining the
+  existing accessible open-navigation control.
+- `舆情监控运营后台` remains horizontal and readable on mobile.
+- Mobile `代理资源` has no document-level horizontal overflow and no detected
+  one-character Chinese text columns.
+- Mobile drawer open, page selection, and close behavior remain unchanged.
+
+Verification:
+
+- Verified on 2026-06-19 with targeted frontend regression coverage, static JS
+  check, inline monitor script parse, docs consistency check, and in-app
+  browser checks at mobile, tablet, and desktop widths.
+  Browser measurements confirmed mobile `innerWidth≈379`, header grid
+  `nav title refresh account` plus a full-width status row, hidden visible
+  `导航` label with a 40px trigger, horizontal title text, no document-level
+  overflow on `代理资源`, and no detected narrow Chinese text columns.
+
+## CR-080 - Tablet Side Rail Horizontal Scrollbar Cleanup
+
+Date: 2026-06-19
+
+Source: user in-app browser review of the highlighted bottom horizontal
+scrollbar in the collapsed side rail at a `1169px`-wide `/monitor` viewport.
+The user clarified that the issue was the navigation bar's bottom scrollbar,
+not the sidebar collapse button.
+
+Module: formal console tablet/narrow-desktop side rail, Phase 21B
+
+Type: Existing Feature Optimization
+
+Status: Verified
+
+Background:
+
+CR-075 through CR-079 established one responsive navigation model: desktop
+keeps a full/collapsible sidebar, tablet/narrow desktop uses a persistent
+collapsed icon rail, and true mobile uses the drawer trigger. After that model
+was verified, browser review found a horizontal scrollbar at the bottom of the
+tablet/narrow-desktop side rail. The scrollbar was visual noise caused by
+horizontal overflow in the icon navigation rail, not a business control.
+
+Purpose:
+
+Remove the tablet/narrow-desktop side rail's bottom horizontal scrollbar while
+preserving the existing sidebar collapse button, desktop user-controlled
+collapse, and true-mobile drawer navigation. The tablet/narrow-desktop rail
+should read as a clean icon navigation surface without a horizontal scroll
+track at the bottom.
+
+Requirements:
+
+- At `768px - 1279px`, keep the persistent collapsed icon rail and prevent
+  horizontal overflow from exposing a bottom scrollbar.
+- Keep the side-rail navigation itself scrollable so all permitted entries,
+  including the final `系统诊断` entry for administrators, remain reachable.
+- Keep the existing sidebar collapse button and its expand/collapse behavior.
+- At desktop `>=1280px`, keep the expanded/collapsible sidebar behavior.
+- At mobile `<768px`, keep the existing drawer trigger, backdrop, Escape, and
+  page-selection close behavior.
+- Do not change menu visibility, page routing, Task Center, Run Detail,
+  enhanced select/date behavior, `.drawer-scroll-body`, owner scope, report
+  scope, or top-bar refresh behavior.
+
+Scope boundary:
+
+- Frontend-only responsive navigation visual/interaction cleanup.
+- No backend API, database schema, permission, crawler, AI provider, SMTP,
+  scheduler, deployment, Task Center, Run Detail, drawer, modal, enhanced
+  select/date, owner-scope, or report-scope behavior changes.
+
+Non-goals:
+
+- Do not remove the sidebar collapse control.
+- Do not hide permitted navigation entries or rely on a horizontal scrollbar.
+- Do not add a new mobile or tablet navigation mechanism.
+- Do not change the accepted top-level `任务中心` information architecture or
+  Run Detail tab structure.
+
+Related tasks:
+
+- Phase 21B Navigation Hierarchy in `TASKS.md`
+- CR-075 through CR-079 responsive navigation fixes in `CHANGE_REQUESTS.md`
+- Phase 12 Navigation And Page Entry Tests in `TEST_PLAN.md`
+- Phase 21 Browser And Responsive Tests in `TEST_PLAN.md`
+
+Acceptance:
+
+- At a tablet/narrow-desktop breakpoint such as the observed `innerWidth≈1169`,
+  the side rail exposes no bottom horizontal scrollbar.
+- The side rail still displays the collapse button and permitted icon
+  navigation entries; the final administrator entry remains clickable.
+- There is no document-level horizontal overflow.
+- Desktop `>=1280px` still exposes and operates the collapse button.
+- Mobile `<768px` still uses the drawer trigger and close behavior.
+
+Verification:
+
+- Verified on 2026-06-19 with targeted frontend regression coverage, static JS
+  check, inline monitor script parse, docs consistency check, and in-app
+  browser inspection of the observed tablet/narrow-desktop width.
+
+## CR-081 - Scrollable Drawer Fixed Footer Boundary Regression Fix
+
+Date: 2026-06-19
+
+Source: user in-app browser review showing scrollable drawers/modals whose
+scrollbar visually continued through the fixed top header or bottom action bar.
+
+Module: formal console secondary drawers/modals, `.drawer-scroll-body`, fixed
+drawer footer chrome
+
+Type: Regression Fix
+
+Status: Verified
+
+Background:
+
+CR-073 moved drawer content scrolling into `.drawer-scroll-body` so the outer
+drawer shell kept its rounded chrome. During the Phase 21G AI Access visual pass,
+browser review found that action bars such as Mail Configuration, AI Access,
+proxy edit, and account edit could still sit inside the scrolling content area.
+That made the scrollbar read as if it extended through the bottom fixed action
+bar instead of stopping between the header and footer.
+
+Purpose:
+
+Keep every scrollable drawer/modal visually divided into three stable regions:
+the top header, the middle `.drawer-scroll-body`, and the bottom action footer.
+Only the middle content region should own the scrollbar.
+
+Requirements:
+
+- Shared drawer normalization must keep `.drawer-scroll-body` as the only
+  content scroll owner.
+- Existing footer action groups (`.form-actions`, `.resource-modal-actions`,
+  `.account-flow-actions`, `.ai-test-actions`, and `.rule-modal-actions`) must be
+  lifted out of `.drawer-scroll-body` and attached as direct drawer children with
+  shared `.drawer-fixed-footer` chrome.
+- The visible scrollbar must begin below the header and end above the footer.
+- Preserve all existing save, close, clear, delete, test, preview, and refresh
+  actions; do not remove or rename footer buttons.
+- Preserve close buttons, backdrop click, Escape handling, enhanced drawer/modal
+  selects, task edit date picker behavior, Run Detail tabs, Task Center, owner
+  scope, report scope, and top-bar refresh semantics.
+
+Scope boundary:
+
+- Frontend-only visual/structural regression fix for existing drawer chrome.
+- No backend API, database schema, permission, crawler, AI provider, SMTP,
+  scheduler, deployment, report, or trace behavior changes.
+
+Non-goals:
+
+- Do not redesign drawer workflows or move actions to new pages.
+- Do not change `.drawer-scroll-body` into a different scroll owner.
+- Do not change modal/backdrop/Escape/page-switch close contracts.
+
+Related tasks:
+
+- CR-081 Scrollable Drawer Fixed Footer Boundary Regression Fix in `TASKS.md`
+- CR-073 Scrollable Drawer Corner Radius Regression Fix in `TRACEABILITY.md`
+- Phase 21G AI Access in `TASKS.md`
+
+Acceptance:
+
+- Long drawers and modals show the scrollbar only in the middle content region,
+  between the fixed header and fixed footer.
+- Browser checks at desktop, tablet, and phone widths verify the direct drawer
+  structure: fixed header, `.drawer-scroll-body`, and fixed footer have zero
+  visual gaps, and the scroll body does not contain footer action buttons.
+- Bottom action bars remain visible, aligned, and usable without becoming part
+  of the scrolling content.
+- AI Access edit drawer, AI connection test modal, Mail Configuration modal,
+  proxy drawer, account drawer, and task drawer preserve their existing buttons
+  and close behavior.
+- Targeted static tests cover footer extraction, fixed footer CSS, and the
+  absence of the old in-scroll sticky-footer boundary.
+
+Verification:
+
+- Verified on 2026-06-19 with targeted frontend regression coverage, static JS
+  check, inline monitor script parse, docs consistency check, and in-app
+  browser checks at desktop, tablet, and phone widths. CR-082 adds a focused
+  follow-up recheck for the visible scrollbar track boundary.
+
+## CR-082 - Drawer Scrollbar Header Footer Boundary Recheck
+
+Date: 2026-06-19
+
+Source: user in-app browser review clarifying that every scrollable overlay's
+visible scrollbar must stay between the fixed top header and fixed bottom
+action bar.
+
+Module: formal console secondary drawers/modals, `.drawer-scroll-body`, fixed
+drawer chrome
+
+Type: Regression Fix
+
+Status: Verified
+
+Background:
+
+CR-081 moved footer action groups out of `.drawer-scroll-body` so bottom
+actions no longer scrolled with the form content. A follow-up browser review
+clarified the stricter visual acceptance rule: in any scrollable drawer or
+modal, the visible scrollbar track itself must not run through either the fixed
+header region or the fixed footer region.
+
+Purpose:
+
+Recheck and lock the overlay geometry so the header, middle scroll body, and
+footer are three direct regions. The scrollbar belongs only to the middle
+`.drawer-scroll-body` region, with zero visual gaps between header/body/footer
+and no footer actions inside the scroll body.
+
+Requirements:
+
+- All drawer/modal open paths must call shared drawer normalization before
+  activation so late-rendered or previously normalized drawers are rechecked.
+- `.drawer-scroll-body` remains the only content scroll owner and is marked
+  with `data-scroll-owner="drawer-content"` for verification.
+- Drawers with direct fixed footers carry `has-fixed-footer`.
+- The outer `.drawer` keeps `overflow: hidden` and rounded chrome, while the
+  middle `.drawer-scroll-body` keeps vertical scrolling.
+- The visible scrollbar must start at the bottom edge of the header and end at
+  the top edge of the fixed footer.
+- Preserve close buttons, backdrop/Escape close behavior, page-switch close
+  behavior, bottom footer actions, enhanced select/date behavior, Run Detail
+  tabs, Task Center, owner scope, report scope, and top-bar refresh semantics.
+
+Scope boundary:
+
+- Frontend-only regression recheck for existing overlay chrome.
+- No backend API, database schema, permission, crawler, AI provider, SMTP,
+  scheduler, deployment, Task Center, Run Detail, enhanced select/date,
+  owner-scope, or report-scope behavior changes.
+
+Non-goals:
+
+- Do not change `.drawer-scroll-body` to a different scroll owner.
+- Do not move close buttons or footer actions to new workflow categories.
+- Do not change backdrop, Escape, or page-switch close contracts.
+- Do not redesign Run Detail tabs or secondary drawer/modal categories.
+
+Related tasks:
+
+- CR-082 Drawer Scrollbar Header Footer Boundary Recheck in `TASKS.md`
+- CR-081 Scrollable Drawer Fixed Footer Boundary Regression Fix in `TASKS.md`
+- CR-073 Scrollable Drawer Corner Radius Regression Fix in `TRACEABILITY.md`
+
+Acceptance:
+
+- Representative scrollable overlays at desktop and mobile widths have direct
+  header, `.drawer-scroll-body`, and optional `.drawer-fixed-footer` regions.
+- Header-to-body and body-to-footer measured gaps are `0`.
+- Footer action buttons are not descendants of `.drawer-scroll-body`.
+- The document has no horizontal overflow while overlays are open.
+- Required buttons such as save, cancel, sample fill, clear, close, refresh
+  preview, and test remain visible and usable.
+
+Verification:
+
+- Verified on 2026-06-19 with `node --check
+  api/webui/monitor/monitor.js`, inline monitor script parse,
+  `python -m py_compile tests/test_monitoring_mvp.py`, targeted pytest for
+  CR-073/CR-081/CR-082/CR-038, and in-app browser geometry checks.
+
+## CR-083 - AI Access Model Helper Copy Removal Regression Fix
+
+Date: 2026-06-19
+
+Source: user in-app browser review of the AI Access drawer.
+
+Module: formal console AI Access drawer, model combobox copy
+
+Type: Regression Fix
+
+Status: Verified
+
+Background:
+
+The AI Access drawer previously showed a persistent helper sentence under the
+model-name field: `部分服务不提供模型列表；获取失败时仍可手动填写模型名称。`
+The sentence was technically correct, but it occupied a full line in the drawer
+and made the model section feel heavier than necessary. The user asked to remove
+that sentence and keep the model-name input and `获取模型列表` action only.
+
+Purpose:
+
+Reduce visual noise in the AI Access drawer by removing the static helper copy
+that was stretching the model section, while preserving the combobox, fetch
+button, loading feedback, manual typing, and existing connection-test flow.
+
+Requirements:
+
+- remove the persistent helper sentence below the AI model combobox;
+- keep the model-name input, `获取模型列表` button, and selection list;
+- keep manual typing available when model-list fetch is unavailable or fails;
+- preserve the drawer layout, fixed footer, close behavior, and connection test
+  workflow;
+- keep the model-list fetch button and model selection logic intact.
+
+Scope boundary:
+
+- Frontend-only copy/layout regression fix for the AI Access drawer.
+- No backend API, authentication, permission, crawler, AI provider, SMTP,
+  scheduler, deployment, or drawer-category changes.
+
+Non-goals:
+
+- Do not remove model-list fetch capability.
+- Do not remove manual model-name entry.
+- Do not change AI Access modal/drawer structure or button order.
+
+Related tasks:
+
+- CR-083 AI Access Model Helper Copy Removal Regression Fix in `TASKS.md`
+- Phase 21G AI Access in `TASKS.md`
+- CR-081 / CR-082 overlay boundary work in `TASKS.md`
+
+Acceptance:
+
+- the AI Access drawer no longer renders the static helper sentence under the
+  model combobox;
+- the `获取模型列表` button and manual entry remain usable;
+- the drawer keeps its current layout at desktop, tablet, and phone widths;
+- no console errors or horizontal overflow are introduced;
+- the removal does not change the model combobox behavior or connection test
+  workflow.
+
+Verification:
+
+- Verified on 2026-06-20 with the targeted AI Access regression test, static
+  syntax checks, inline monitor script parse, docs consistency check, and
+  in-app browser checks at `1440x900`, `1024x768`, and `390x844`.
+- The opened AI Access drawer no longer renders the static helper sentence,
+  while the model-name input, `获取模型列表` button, manual-entry placeholder,
+  clear/save/close controls, fixed footer, `.drawer-scroll-body`, and
+  connection-test workflow remain intact.
+
+## CR-084 - Tablet Side Rail Narrow-Width Collapse Regression Fix
+
+Date: 2026-06-20
+
+Source: user in-app browser review of the tablet/narrow-desktop side rail at
+`1024x768`.
+
+Module: formal console navigation shell, tablet/narrow-desktop collapsed icon
+rail
+
+Type: Regression Fix
+
+Status: Verified
+
+Background:
+
+The tablet/narrow-desktop navigation shell already switched to the collapsed
+icon rail at `768px - 1279px`, but browser review at `1024x768` showed the
+rail still reading too wide in the final cascade. The body state was already
+`sidebar-collapsed`, so the regression was not the state toggle itself; the
+collapsed rail needed an explicit final width contract so it rendered as a true
+narrow icon rail instead of a wide fixed sidebar.
+
+Purpose:
+
+Restore the intended compact tablet rail width while preserving the existing
+collapse button, vertically scrollable navigation, and mobile drawer behavior.
+
+Requirements:
+
+- ensure the `sidebar-collapsed` tablet rail contracts the shell sidebar to
+  the narrow icon-rail width in the final cascade;
+- preserve the collapse button, tooltip labels, and vertically scrollable
+  navigation rail;
+- keep true mobile drawer behavior, backdrop/Escape close, and page selection
+  close unchanged;
+- do not touch Task Center, Run Detail, or navigation hierarchy structure.
+
+Scope boundary:
+
+- Frontend-only regression fix for the tablet/narrow-desktop navigation shell.
+- No backend API, permission, crawler, AI provider, SMTP, scheduler,
+  deployment, or Task Center / Run Detail IA changes.
+
+Non-goals:
+
+- Do not remove the collapse button.
+- Do not change mobile navigation into a different workflow.
+- Do not alter sidebar grouping, active-state behavior, or page routes.
+
+Related tasks:
+
+- CR-084 Tablet Side Rail Narrow-Width Collapse Regression Fix in `TASKS.md`
+- CR-075 Responsive Navigation Interaction Consistency in `TASKS.md`
+- CR-080 Tablet Side Rail Horizontal Scrollbar Cleanup in `TASKS.md`
+
+Acceptance:
+
+- `1024x768` shows the collapsed icon rail at the intended narrow width when
+  `sidebar-collapsed` is active;
+- the collapse button remains visible and usable;
+- administrator navigation entries remain reachable;
+- the rail does not introduce a bottom horizontal scrollbar;
+- mobile `<768px` continues to use the drawer trigger and close behavior.
+
+Verification:
+
+- Verified on 2026-06-20 with targeted navigation tests, docs consistency
+  check, CSS cascade inspection, and in-app browser checks at `1440x900`,
+  `1024x768`, and `390x844`.
+
+## CR-085 - Narrow Tablet Inline Cascade Side Rail Regression Fix
+
+Date: 2026-06-20
+
+Source: user in-app browser review of `/monitor#jobs` at an in-app panel width
+around `809px`.
+
+Module: formal console navigation shell, final inline CSS cascade,
+tablet/narrow-desktop collapsed icon rail
+
+Type: Regression Fix
+
+Status: Verified
+
+Background:
+
+After CR-084, browser review of a narrower in-app panel still showed a state
+where the console could look like a phone-width content column pinned to the
+left with empty space to the right. Runtime inspection showed the page was in
+`sidebar-collapsed` state and the sidebar itself could contract to `68px`, but
+the formal page's later inline `@media (max-width:1279px)` rules did not carry
+the same `768px - 1279px` side-rail contract. That left the final cascade
+dependent on load order and could temporarily or visually reserve the wrong
+grid track.
+
+Purpose:
+
+Lock the final inline cascade to the accepted responsive-navigation model:
+tablet/narrow desktop uses the persistent `68px` icon side rail, while true
+mobile remains the only breakpoint that shows the hamburger drawer trigger.
+
+Requirements:
+
+- add a final inline `768px - 1279px` media rule that keeps
+  `body.sidebar-collapsed .shell` on `68px minmax(0, 1fr)`;
+- keep `#primary_sidebar` and `.shell > aside` capped at `68px` in that
+  breakpoint;
+- hide the mobile navigation trigger and backdrop at `768px - 1279px`;
+- keep the sidebar collapse button visible at `768px - 1279px`;
+- preserve true mobile `<768px` drawer trigger, backdrop, Escape close, and
+  page-selection close behavior;
+- do not change Task Center, Run Detail, enhanced select/date controls,
+  `.drawer-scroll-body`, owner/report scope, or any backend/API behavior.
+
+Scope boundary:
+
+- Frontend-only final-cascade regression fix for the formal console shell.
+- No navigation IA, page route, Task Center, Run Detail, overlay, dropdown,
+  date picker, permission, API, crawler, AI, SMTP, scheduler, database, or
+  deployment changes.
+
+Non-goals:
+
+- Do not remove the sidebar collapse button.
+- Do not convert tablet/narrow desktop back to a mobile drawer.
+- Do not change `/monitor` route or hash routing behavior.
+- Do not alter the Run Detail tabs, overlay scroll ownership, or drawer close
+  contracts.
+
+Related tasks:
+
+- CR-085 Narrow Tablet Inline Cascade Side Rail Regression Fix in `TASKS.md`
+- CR-084 Tablet Side Rail Narrow-Width Collapse Regression Fix in `TASKS.md`
+- CR-075 Responsive Navigation Interaction Consistency in `TASKS.md`
+
+Acceptance:
+
+- at an in-app panel width around `809px`, `body.sidebar-collapsed` renders the
+  shell grid as `68px` plus content, with no right-side reserved blank area;
+- the mobile navigation button is not painted at `768px - 1279px`;
+- the sidebar collapse button remains painted and usable at `768px - 1279px`;
+- `1024x768` keeps the same persistent icon side rail;
+- `390x844` keeps the mobile hamburger drawer behavior;
+- no document horizontal overflow is introduced.
+
+Verification:
+
+- Verified on 2026-06-20 with a red/green targeted regression test for the
+  inline tablet cascade, in-app browser checks at the observed `innerWidth`
+  around `809px`, `1024x768`, and `390x844`, plus static syntax and docs
+  checks recorded in `docs/TEST_RESULTS.md`.
+
 ## CR-070 - Account Environment Export And Import Package
 
 Date: 2026-06-19
@@ -5934,6 +6845,393 @@ Tests:
 - `uv run python scripts/check_docs.py`.
 - `git diff --check`.
 - Read-only full open-todo cross-review.
+## CR-086 - Explanatory Helper Copy Tooltip Consolidation
+
+Date: 2026-06-20
+
+Source: user in-app browser review of formal console helper text density
+
+Module: formal console page headers, resource lists, form fields, and overlay
+helper copy
+
+Type: Existing Feature Optimization
+
+Status: Verified
+
+Background:
+
+Several formal console pages still showed explanatory helper sentences directly
+inside table cells, panel headers, form fields, or overlay action areas. The
+copy was useful, but always-visible small text made dense resource pages feel
+crowded and could widen columns or make mobile layouts harder to scan.
+
+Purpose:
+
+Keep the original explanatory meaning available while reducing visual noise:
+move targeted helper copy into a uniform small question-mark affordance beside
+the relevant title, label, or field.
+
+Requirements:
+
+- Replace targeted always-visible helper sentences with a consistent `?`
+  helper icon next to the related label/title/section heading.
+- The helper icon should use one neutral gray style, about `16x16px`, and be
+  usable by hover, keyboard focus, and click/focus on touch devices.
+- Tooltip content should preserve the original helper copy, including long or
+  multiline text where needed.
+- Apply the first accepted pass to the selectors and actual DOM surfaces raised
+  by the user: account platform/login hints, selected account-list helper
+  cells, account completion copy, proxy/AI/rule/template/Task Center list
+  headers, the Monitoring collection-rule help, and equivalent verified helper
+  text in those surfaces.
+- Keep status values, actual data, empty states, warnings, errors, and action
+  feedback visible when they are operational state rather than explanatory
+  helper copy.
+
+Scope boundary:
+
+- Frontend-only visual-density optimization for the formal `/monitor` console.
+- No backend API, database, permission, crawler, AI-provider, SMTP, scheduler,
+  deployment, owner-scope, or report-scope changes.
+- No change to Task Center information architecture, Run Detail six sections,
+  drawer/modal/floating-menu workflow categories, `.drawer-scroll-body`, close
+  behavior, enhanced select behavior, or date-picker behavior.
+
+Non-goals:
+
+- Do not remove fields, buttons, filters, row actions, batch actions, downloads,
+  copy actions, refresh actions, confirmations, or save/test flows.
+- Do not hide operational state such as errors, warnings, empty states, status
+  labels, test results, or loading feedback inside tooltips.
+- Do not introduce a new frontend framework, component library, or build step.
+
+Related tasks:
+
+- CR-086 Explanatory Helper Copy Tooltip Consolidation in `TASKS.md`
+- CR-086 Helper Tooltip Consolidation Tests in `TEST_PLAN.md`
+- Phase 21 visual refinement preservation rules in
+  `docs/FORMAL_CONSOLE_UI_REFINEMENT_PLAN.md`
+
+Acceptance:
+
+- Targeted explanatory helper text no longer appears as always-visible small
+  copy in the affected headers, fields, table cells, and action-helper areas.
+- The same text remains reachable from a consistent `?` tooltip adjacent to the
+  related label/title/field.
+- Browser checks confirm representative tooltips open on hover/focus/click and
+  do not create console errors, horizontal overflow, one-character Chinese text
+  columns, or overlay scroll regressions.
+- Task Center, Run Detail, enhanced selects/date pickers, drawer/modal close
+  behavior, `.drawer-scroll-body`, top-bar refresh, owner/report scope, and all
+  listed actions remain unchanged.
+
+Verification:
+
+- Verified on 2026-06-20 with static regression coverage, syntax checks, docs
+  consistency, and in-app browser checks at desktop, tablet, and mobile widths.
+  Targeted helper copy now lives behind consistent `?` tooltips, while
+  operational state text remains visible and Task Center, Run Detail,
+  enhanced selects/date pickers, `.drawer-scroll-body`, close behavior, and
+  top-bar refresh semantics are preserved.
+
+Superseded by:
+
+- CR-087 removes the `?` tooltip affordance after user acceptance review found
+  that the question marks themselves still added visual noise. CR-086 remains a
+  historical verified attempt and is not the current UI rule.
+
+## CR-087 - Explanatory Helper Tooltip Removal
+
+Date: 2026-06-20
+
+Source: user in-app browser acceptance review after CR-086
+
+Module: formal console page headers, resource lists, form fields, account
+cells, Task Center, and representative overlays
+
+Type: Existing Feature Optimization
+
+Status: Implemented
+
+Background:
+
+CR-086 moved explanatory helper copy from visible small text into `?` tooltips.
+During acceptance review, the user clarified that the question-mark affordances
+should also be removed and the removed small helper copy should not be restored.
+
+Purpose:
+
+Reduce dense-formal-console visual noise further: remove the helper-tooltip
+question marks entirely while keeping operational state, data, errors, loading,
+empty states, fields, buttons, and actions visible.
+
+Requirements:
+
+- Remove the `?` helper tooltip markup, CSS, and JavaScript behavior from the
+  formal `/monitor` console.
+- Do not restore the explanatory small helper sentences that CR-086 had moved
+  into tooltips.
+- Keep operational state text visible when it represents real data, validation,
+  errors, warnings, empty/loading feedback, counts, login prompts, password
+  status, or action feedback.
+- Preserve page headers, labels, fields, filters, buttons, tables, row actions,
+  batch actions, downloads, copy actions, refresh actions, save/test flows, and
+  destructive confirmations.
+
+Scope boundary:
+
+- Frontend-only visual-density follow-up to CR-086 and Phase 21.
+- No backend API, database, permission, crawler, AI-provider, SMTP, scheduler,
+  deployment, owner-scope, or report-scope changes.
+- No change to Task Center information architecture, Run Detail six sections,
+  enhanced select/date behavior, drawer/modal/floating-menu workflow
+  categories, `.drawer-scroll-body`, close behavior, or top-bar refresh.
+
+Non-goals:
+
+- Do not replace the `?` affordance with another icon or hidden tooltip system
+  for the removed helper copy.
+- Do not remove real operational explanations that are part of current action
+  feedback, error recovery, empty states, or safety guardrails.
+- Do not rewrite completed Phase 21 or CR-086 historical records as incomplete.
+
+Related tasks:
+
+- CR-087 Explanatory Helper Tooltip Removal in `TASKS.md`
+- CR-087 Helper Tooltip Removal Regression Tests in `TEST_PLAN.md`
+- CR-086 Explanatory Helper Copy Tooltip Consolidation as the superseded
+  historical attempt
+
+Acceptance:
+
+- No `.helper-tooltip`, `data-tooltip`, `helperTooltip`, helper open/close
+  handlers, or helper-specific CSS remains in the formal frontend.
+- The targeted explanatory helper copy removed in CR-086 does not return as
+  visible `.small`, `.inline-help`, field hint, header paragraph, or tooltip
+  content.
+- Operational state and required actions remain visible and reachable.
+- Task Center, Run Detail six sections, enhanced selects/date pickers,
+  drawer/modal close behavior, `.drawer-scroll-body`, top-bar refresh,
+  owner/report scope, and listed actions remain unchanged.
+
+## CR-088 - AI Rule Modal Residual Helper Text Removal
+
+Date: 2026-06-20
+
+Source: user in-app browser follow-up on the `AI 评估规则` modal after CR-087.
+
+Module: formal console AI rule modal, result panel copy
+
+Type: Existing Feature Optimization
+
+Status: Verified
+
+Background:
+
+After CR-087 removed helper-tooltips and their restored explanatory copy, the
+`AI 评估规则` modal still retained a few always-visible explanatory sentences:
+the `AI 状态` line, the old prompt-load notice, and the default result hint.
+Those lines were harmless but still made the modal feel busier than needed.
+
+Purpose:
+
+Remove the remaining always-visible explanatory helper text from the AI rule
+modal so the rule editor reads as a compact edit-and-test surface while keeping
+the rule fields, sample inputs, test button, save button, and test result area.
+
+Requirements:
+
+- Remove the `AI 状态` explanatory line from the rule modal.
+- Remove the old prompt-load notice shown when a legacy prompt is parsed.
+- Clear the default empty result hint so the result panel starts visually empty
+  until a test is run.
+- Preserve the existing rule sections, sample inputs, test action, save action,
+  and result rendering behavior.
+
+Scope boundary:
+
+- Frontend-only visual-density cleanup for the accepted Phase 21 AI rule
+  modal.
+- No backend API, database, permission, crawler, AI-provider, SMTP, scheduler,
+  deployment, Task Center, Run Detail, drawer, modal category, or enhanced
+  select/date behavior changes.
+
+Non-goals:
+
+- Do not change rule semantics, test behavior, or save behavior.
+- Do not add new helper icons, tooltips, or alternate explanation surfaces.
+- Do not change the result payload shown after a real test.
+
+Related tasks:
+
+- CR-087 Explanatory Helper Tooltip Removal in `TASKS.md`
+- CR-087 Helper Tooltip Removal Regression Tests in `TEST_PLAN.md`
+- Phase 21 visual-density rules in `UI_UX_GUIDELINES.md`
+
+Acceptance:
+
+- The `AI 评估规则` modal no longer shows the `AI 状态` helper sentence.
+- The modal no longer shows the legacy-prompt notice or the default empty
+  result hint.
+- Rule configuration, sample inputs, test action, save action, and rendered
+  test output remain intact.
+- Browser checks at desktop, tablet, and mobile widths show the modal is still
+  reachable and the table/layout does not re-expand because of the removed
+  helper text.
+
+Verification:
+
+- Verified on 2026-06-20 with targeted frontend regression coverage, inline
+  script parse, docs consistency, and in-app browser checks at desktop,
+  tablet, and mobile widths.
+
+## CR-089 - Mail Template Row Helper Text And Update-Time Compactness
+
+Date: 2026-06-20
+
+Source: user in-app browser follow-up on the `邮件模板` table after CR-088.
+
+Module: formal console mail template list
+
+Type: Existing Feature Optimization
+
+Status: Verified
+
+Background:
+
+The mail template list still showed a row-level helper sentence under the
+template name, and the `更新时间` cell used a taller timestamp style than the
+compact AI rule update-time treatment. Both details made the table feel wider
+and busier than the surrounding Phase 21 surfaces.
+
+Purpose:
+
+Trim the mail template list by removing the redundant row helper sentence and
+reusing the compact update-time treatment so the table stays dense without
+changing the available actions, template workflow, or placeholder guardrail.
+
+Requirements:
+
+- Remove the visible `正文占位符已保留` helper sentence from the mail template
+  row.
+- Keep the body-placeholder guardrail logic in the editor intact.
+- Make the `更新时间` cell use a compact, wrap-safe treatment aligned with the
+  AI rule update-time display so the table does not widen because of long
+  timestamps.
+- Preserve add, refresh, view mail config, search/status filters, row edit,
+  set current where available, delete, save, refresh preview, clear, close, and
+  iframe preview.
+
+Scope boundary:
+
+- Frontend-only visual-density cleanup for the accepted Phase 21 mail template
+  list.
+- No backend API, database, permission, crawler, AI-provider, SMTP, scheduler,
+  deployment, Task Center, Run Detail, drawer, modal category, or enhanced
+  select/date behavior changes.
+
+Non-goals:
+
+- Do not remove the template placeholder guardrail or change save validation.
+- Do not change template semantics, preview behavior, or delivery provenance.
+- Do not add new help icons or restore the removed helper sentence elsewhere.
+
+Related tasks:
+
+- Phase 21J Mail Templates in `TASKS.md`
+- CR-089 mail-template regression checks in `TEST_PLAN.md`
+- Phase 21 visual-density rules in `UI_UX_GUIDELINES.md`
+
+Acceptance:
+
+- The mail template list no longer shows the `正文占位符已保留` row helper
+  sentence.
+- The `更新时间` cell stays compact and no longer widens the table.
+- Template edit, preview, save, delete, and current-template behavior remain
+  intact.
+- Browser checks at desktop, tablet, and mobile widths show the mail template
+  table remains readable without new overflow or one-character text columns.
+
+Verification:
+
+- Verified on 2026-06-20 with targeted frontend regression coverage, inline
+  script parse, docs consistency, and live browser checks on the mail
+  template page at desktop, tablet, and mobile widths.
+
+## CR-090 - AI Rule List And Modal Field Width Compactness
+
+Date: 2026-06-20
+
+Source: user in-app browser follow-up on the `AI 评估规则` page after CR-088.
+
+Module: formal console AI rule list and rule modal
+
+Type: Existing Feature Optimization
+
+Status: Verified
+
+Background:
+
+The AI rule list and its modal still read visually loose after the Phase 21H
+compactness pass. The list table leaves too much white space in the test and
+update-time columns, and the modal's internal field widths are not yet balanced
+enough for a denser scan. The page feels wider than the surrounding Phase 21
+surfaces even though the actions and rule workflow are already correct.
+
+Purpose:
+
+Tighten the AI rule list and modal field widths so the page reads as a compact
+configuration surface without changing rule semantics, test behavior, or
+available actions.
+
+Requirements:
+
+- Narrow the AI rule list's visual width so the `规则名称`, `最近测试`, and
+  `更新时间` cells do not waste horizontal space.
+- Keep `详情` and `更多` reachable and visible.
+- Rebalance the rule modal's inner field widths so the basic info, rule
+  configuration, schema, sample, and result areas feel more proportional.
+- Preserve the existing rule fields, test action, save action, restore-default
+  action, modal close behavior, and rendered test result behavior.
+
+Scope boundary:
+
+- Frontend-only visual-density cleanup for the accepted Phase 21 AI rule page.
+- No backend API, database, permission, crawler, AI-provider, SMTP, scheduler,
+  deployment, Task Center, Run Detail, drawer category, or enhanced
+  select/date behavior changes.
+
+Non-goals:
+
+- Do not change rule semantics, sample semantics, or result payloads.
+- Do not remove required actions or add new workflow controls.
+- Do not change row action categories or open/close behavior.
+
+Related tasks:
+
+- Phase 21H AI Evaluation Rules in `TASKS.md`
+- CR-090 AI rule width regression checks in `TEST_PLAN.md`
+- Phase 21 visual-density rules in `UI_UX_GUIDELINES.md`
+
+Acceptance:
+
+- The AI rule table no longer feels overly wide at desktop.
+- The rule modal keeps its existing sections and actions while reading more
+  compactly.
+- Browser checks at desktop, tablet, and mobile widths show the page remains
+  readable without horizontal overflow or one-character text columns.
+
+Verification:
+
+- Verified on 2026-06-20 with targeted frontend regression coverage,
+  `node --check api/webui/monitor/monitor.js`, `uv run python scripts/check_docs.py`,
+  and live browser checks on `http://127.0.0.1:19221/monitor#ai_rules` at
+  desktop, tablet, and mobile widths.
+- The AI rule list now stays visually denser at desktop, and the rule modal
+  uses a more balanced editor-versus-test split while preserving the existing
+  sections, row actions, test/save/restore controls, close behavior,
+  `.drawer-scroll-body`, and responsive single-column fallback below the
+  desktop breakpoint.
 
 ## CR-055 - Task Center Status Column Visual Refinement
 

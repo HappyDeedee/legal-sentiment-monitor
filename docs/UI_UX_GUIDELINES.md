@@ -111,6 +111,10 @@ Phase 10-18 menu behavior:
 - mobile navigation must work by tap, not hover;
 - nested pages should remain reachable with clear active states and without
   clipped submenus.
+- tablet and narrow-desktop navigation uses the persistent collapsed icon rail
+  without a bottom horizontal scrollbar; the sidebar collapse control remains
+  available where the shell exposes it, and true mobile retains the drawer
+  trigger.
 
 ## Page Structure
 
@@ -204,6 +208,17 @@ Interaction rules:
   preview refresh, delivery-history refresh, and Run Detail refresh may remain
   only when they refresh a different local scope. All refresh icons should show
   a loading/spinning state while their associated work is pending.
+- Mail template tables should stay dense: remove redundant row helper sentences
+  when the template name already communicates the state, and keep update-time
+  cells in the same compact wrap-safe treatment used by the AI rule table so
+  timestamps do not widen the table.
+- Explanatory helper copy in dense formal-console headers, labels, table cells,
+  and overlay action areas should be removed when it repeats the surrounding
+  control meaning or crowds the layout. Do not replace that removed copy with
+  `?` helper icons or another hidden tooltip layer unless a later accepted CR
+  asks for it. Keep operational state, errors, warnings, empty states, loading
+  feedback, counts, login prompts, safety guardrails, and actual data visible
+  when they are needed for action or recovery.
 
 ## Responsive Layout
 

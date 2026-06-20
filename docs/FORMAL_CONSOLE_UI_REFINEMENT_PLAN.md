@@ -329,7 +329,8 @@ Do:
 - keep `ai_rules`, `email`, `email_templates`, `runtime`, and `doctor` under
   system configuration;
 - improve expanded/collapsed group affordances and active subpage cues;
-- verify mobile navigation opens by tap, closes by backdrop/Escape/page
+- verify tablet/narrow desktop uses the persistent collapsed icon side rail
+  while true mobile navigation opens by tap, closes by backdrop/Escape/page
   selection, and keeps active state clear.
 
 Do not:
@@ -475,8 +476,8 @@ Files:
 
 Must preserve:
 
-- add proxy, refresh proxy, view accounts, search, status filter, clear
-  filters, refresh;
+- add proxy, CR-074 top-bar refresh, view accounts, search, status filter,
+  clear filters;
 - row edit/delete;
 - drawer fields: name, provider, status, proxy URL, max concurrency, notes,
   error message;
@@ -906,7 +907,8 @@ Desktop `1440x900`:
 
 Tablet `1024x768`:
 
-- mobile/tablet navigation open, select nested page, close;
+- persistent collapsed side rail is visible without the top-left mobile trigger,
+  and nested pages remain selectable;
 - toolbars wrap without hidden primary actions;
 - drawers and modals fit within safe margins;
 - floating menus not clipped.

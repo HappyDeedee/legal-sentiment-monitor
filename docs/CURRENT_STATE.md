@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-06-19
+Last updated: 2026-06-20
 
 ## Current Phase
 
@@ -154,14 +154,323 @@ loaded the same data, keeps semantically scoped refresh actions as icon-only
 controls for schedule recomputation, delivery history, template preview, run
 logs, and Run Detail, and shows disabled/loading spin feedback while refresh
 work is pending.
-A final local regression pass on 2026-06-18
-verified the full Phase 19B-D, Phase 20B-E, CR-048/CR-049 preservation, and
-Task Center consolidation scope: the focused Phase 19/20/Task Center/CR-048/049
-pytest selection passed, the full `tests/test_monitoring_mvp.py` suite passed
-with 307 tests, `node --check api/webui/monitor/monitor.js`, the inline
-`api/monitor_web/index.html` script parse, and `scripts/check_docs.py` passed,
-and browser checks covered administrator plus normal-user Task Center/Run
-Detail paths at desktop, tablet, and mobile viewports.
+The first focused CR-040 / Phase 21 navigation visual pass is also implemented
+and locally verified: the formal console sidebar now uses the current light
+enterprise shell, compact icon-supported first/second-level entries, a desktop
+collapse-to-icon rail, and a compact top-right account menu. Navigation hover
+and active states are explicitly separated so first-level, second-level, and
+collapsed sidebar hover use a pure neutral light-gray surface while selected
+entries keep the restrained Phase 21 teal active state; the combined
+active/hover selector that made second-level hover look selected has been
+removed. CR-075 responsive navigation consistency is also verified: desktop
+keeps the full/collapsible sidebar, tablet/narrow desktop uses the persistent
+collapsed icon side rail without the top-left mobile trigger, and mobile keeps
+the drawer trigger with working backdrop/Escape/page-selection close behavior.
+CR-076 is verified as a focused mobile-header regression fix after browser
+review found a narrow state where the title could be squeezed into
+one-character vertical wrapping: the mobile header now gives navigation,
+title, status, refresh, and account controls explicit grid areas, with the
+title and status chips on their own readable rows. This pass preserved
+administrator/normal-user menu
+visibility, the single top-level `任务中心`, Task Center grouping and
+`运行记录`, Run Detail six sections, enhanced select/date behavior,
+`.drawer-scroll-body`, and top-bar refresh.
+CR-077 is also verified as the follow-up cascade-resilience fix for the same
+mobile header surface: because the formal page has inline style blocks after
+`monitor.css`, the accepted mobile header grid is now mirrored in the final
+inline style layer and regression tests inspect all inline style blocks. In-app
+browser verification at mobile, tablet, and desktop widths confirmed the title
+stays horizontal, mobile drawer behavior remains intact, tablet/narrow desktop
+keeps the icon rail without the top-left mobile trigger, and representative
+resource-page content has no right-side horizontal overflow.
+CR-078 is verified as an additional Phase 21B responsive-shell regression fix:
+the final mobile cascade now locks the header title to horizontal writing, keeps
+the closed mobile drawer off-canvas without visible width reservation, constrains
+representative resource pages such as `代理资源` to the phone viewport while
+leaving dense tables scrollable only inside `.table-wrap`, and separates the
+tablet collapsed side-rail navigation row from the bottom collapse button so
+`系统诊断` remains directly clickable at `1024x768`.
+CR-079 is verified as the follow-up mobile-header compact-rail fix after phone
+browser review still found a resource-page state that could squeeze the product
+title into a one-character column: the mobile header now uses a stable 40px
+icon navigation trigger, keeps `舆情监控运营后台` in the first-row title column,
+and lets status chips wrap on their own row. Browser checks on `代理资源`
+confirmed the document width stays inside the effective phone viewport and no
+narrow Chinese text columns are detected. Task Center, Run Detail, enhanced
+select/date controls, `.drawer-scroll-body`, mobile drawer close behavior,
+owner/report scope, and top-bar refresh semantics remain unchanged.
+CR-080 is verified as a focused Phase 21B side-rail cleanup after browser
+review of a `1169px` tablet/narrow-desktop viewport: the persistent collapsed
+icon rail no longer exposes a bottom horizontal scrollbar, while the existing
+sidebar collapse button remains available, the side-rail navigation remains
+vertically scrollable, and the final administrator entry still hit-tests to its
+navigation button. Desktop `>=1280px` keeps the expanded/collapsible sidebar,
+and true mobile `<768px` keeps the drawer trigger and close behavior. Task
+Center, Run Detail, enhanced select/date controls, `.drawer-scroll-body`,
+owner/report scope, role visibility, and top-bar refresh semantics remain
+unchanged.
+CR-086 is verified as a focused Phase 21 visual-density optimization: targeted
+explanatory helper copy in formal console page headers, labels, resource
+headers, account cells, Task Center, Monitoring, and representative overlays
+now uses a consistent neutral `?` tooltip with hover, keyboard focus, and click
+access. The original helper copy remains available in tooltip content while
+operational state, errors, warnings, counts, empty/loading feedback, buttons,
+filters, row actions, downloads, refresh, save/test, and confirmation flows
+remain visible or reachable. Task Center, Run Detail six sections, enhanced
+select/date controls, `.drawer-scroll-body`, close behavior, owner/report
+scope, role visibility, and top-bar refresh semantics remain unchanged.
+CR-087 is verified as the current follow-up rule after user acceptance
+review: the CR-086 `?` helper-tooltip affordance has been removed, the removed
+explanatory small helper copy is not restored, and operational state plus
+required actions remain visible. Task Center, Run Detail six sections,
+enhanced select/date controls, `.drawer-scroll-body`, close behavior,
+owner/report scope, role visibility, and top-bar refresh semantics remain
+unchanged.
+CR-088 is verified as the immediate AI rule modal follow-up: the `AI 状态`
+line, the legacy-prompt notice, and the default empty result hint were removed
+from the `AI 评估规则` modal, while the rule sections, sample inputs, test
+action, save action, and rendered test output remain intact.
+The CR-088 browser and docs checks are also reflected in `TEST_RESULTS.md`,
+`TRACEABILITY.md`, `TASKS.md`, and `TEST_PLAN.md`, so the current verified
+state now treats the AI rule modal as a compact edit-and-test surface rather
+than a small-helper-text surface.
+CR-089 is verified as the current mail-template follow-up: the mail template
+list no longer shows the `正文占位符已保留` row helper sentence, and the
+`更新时间` cell now uses the compact AI-rule-style timestamp treatment so the
+table stays dense without changing template actions or placeholder guardrails.
+The CR-089 browser and docs checks are reflected in `TEST_RESULTS.md`,
+`TRACEABILITY.md`, `TASKS.md`, and `TEST_PLAN.md`.
+Phase 21A and Phase 21B are now locally verified as the completed opening
+workstreams of the formal console refinement: the global shell/design-token
+layer remains a no-build Vanilla JavaScript plus CSS custom-property stack, the
+login surface and logged-in pages render without console errors or document
+horizontal overflow in the focused checks, administrator and normal-user menu
+visibility is preserved, and the navigation hierarchy visually separates the
+first-level task-loop pages from the Resource Management/System Configuration
+subpages. Browser verification covered administrator and normal-user paths at
+desktop, tablet/narrow-desktop, and phone widths, plus an administrator
+page-open sweep for `dashboard`, `jobs`, `runs`, `accounts`, `proxies`, `ai`,
+`ai_rules`, `email`, `email_templates`, `runtime`, and `doctor`. The verified
+CR-080 boundary is explicit: remove the side navigation rail's bottom
+horizontal scrollbar, not the sidebar collapse button. Phase 21C Operations
+Home refinement is the next unclosed Phase 21 workstream.
+Phase 21C Operations Home refinement is also implemented and locally verified:
+the dashboard now puts operational metrics, attention state, resource health,
+and system-health signals ahead of compact shortcuts; the administrator
+shortcut set preserves all five entries (`新建任务`, `任务中心`, `运行记录`,
+`资源处理`, and `系统诊断`), while normal users still see only their three
+permitted entries. Redundant explanatory dashboard copy was removed from the
+attention queue and system-health summary without changing the dashboard API,
+metrics, permissions, page routes, Task Center, Run Detail, enhanced
+select/date controls, `.drawer-scroll-body`, owner/report scope, or top-bar
+refresh behavior. Browser checks covered administrator and normal-user
+Operations Home views at desktop, tablet/narrow-desktop, and phone widths with
+no console errors, document horizontal overflow, hidden primary shortcuts, or
+one-character text columns. Phase 21D Monitoring Tasks and Task Drawer is now
+the next unclosed Phase 21 workstream.
+Phase 21D Monitoring Tasks and Task Drawer is now implemented and locally
+verified: the Monitoring page keeps new task, schedule refresh, Task Center
+shortcut, search, platform/status filters, clear filter, task table, run, stop,
+and row more-menu edit/pause-resume/delete actions, while the task drawer keeps
+all current normal-user and administrator fields. The visual pass only refines
+task toolbar chrome, drawer section hierarchy, administrator advanced grouping,
+and action-area polish. Normal users still receive the simplified task wizard
+with administrator-only fields hidden; administrators still see account/proxy,
+technical collection, AI, and template controls. Browser checks covered
+administrator and normal-user task page/drawer paths at desktop,
+tablet/narrow-desktop, and phone widths, with `.drawer-scroll-body`, close
+button behavior, enhanced select/date controls, Task Center, Run Detail,
+owner/report scope, and top-bar refresh semantics preserved. Phase 21E Platform
+Accounts is now implemented and locally verified: the Platform Accounts page
+keeps add account, return-to-tasks, filters, attention-only quick filter, batch
+check/disable/enable/delete controls, account list, row detail/action hooks, and
+the account-maintenance dialog with basic profile, login maintenance, login
+records, final account actions, QR login, local-window fallback, Cookie login,
+save, delete, and close controls. The visual pass only refines account-list
+chrome, batch-toolbar hierarchy, account filter density, account dialog
+sections, login-card hierarchy, and account-drawer overflow containment. Normal
+users still do not see Platform Accounts navigation or administrator shortcuts.
+Browser checks covered administrator account page/dialog paths at desktop,
+tablet/narrow-desktop, and phone widths plus normal-user role visibility; no
+console errors, document horizontal overflow, one-character text columns, or
+`.drawer-scroll-body` ownership regressions were found. Task Center, Run Detail,
+enhanced select/date controls, owner/report scope, and top-bar refresh semantics
+remain preserved. Phase 21F Proxy Resources is now implemented and locally
+verified: the Proxy Resources page keeps add proxy, view accounts, search,
+status filter, clear filters, row edit/delete, drawer clear/save/close, delete
+confirmation, and the CR-074 top-bar current-page refresh without reintroducing
+a page-local `刷新代理` button. The visual pass tightens proxy-list density,
+makes masked proxy values easier to read without exposing credentials, separates
+latest error text for scanning, and constrains the proxy drawer at desktop,
+tablet/narrow-desktop, and phone widths while preserving `.drawer-scroll-body`
+as the scroll owner. Browser checks covered administrator proxy list,
+create/edit/delete cleanup, proxy drawer, tablet side rail with the collapse
+button preserved and no bottom horizontal scrollbar, and phone table scrolling
+inside `.table-wrap`; no document horizontal overflow or one-character Chinese
+text columns were found.
+Phase 21G AI Access is now implemented and locally verified: the AI Access list
+and drawer keep model names as compact non-wrapping chips, the Base URL/API
+key/test-state columns are easier to scan, the model-list fetch action sits in
+the existing model combobox instead of a separate selection button, and the
+connection-test modal keeps its existing test/close flow. CR-081 is verified as
+a Phase 21G regression fix for scrollable drawers/modals: footer action bars
+are extracted from `.drawer-scroll-body` into direct `.drawer-fixed-footer`
+chrome so scrollbars stop between the fixed header and fixed footer. Static
+syntax, targeted CR-038/CR-073/Phase 21F/Phase 21G regression tests, docs
+consistency, and browser checks at `1440x900`, `1024x768`, and `390x844` pass
+for the CR-081 overlay boundary fix. Browser checks opened representative
+scrollable drawers/modals and confirmed zero header/body/footer gaps, no footer
+action buttons inside `.drawer-scroll-body`, no document horizontal overflow,
+and no one-character Chinese text columns.
+Phase 21H AI Evaluation Rules is now implemented and locally verified: the AI
+rule list uses denser rule-name, status, and test-state cells with stable action
+column width; the rule editor keeps the existing basic information, six rule
+sections, prompt preview, fixed output fields, sample input, and result area
+while making the editor/test areas easier to scan; and the test result panel now
+has idle/loading/success/error visual states. Browser checks at `1440x900`,
+`1024x768`, and `390x844` confirmed AI Evaluation Rules opens, add/view AI
+access actions remain visible, the row more menu stays within the viewport,
+the rule drawer opens with all fields/actions present, `.drawer-scroll-body`
+and fixed footer boundaries remain intact, and no document horizontal overflow
+or one-character Chinese text columns were found. CR-082 is also verified as a
+focused follow-up to CR-081 after user browser review of scrollable overlay
+chrome: Mail Configuration, Monitoring task drawer, and Mail Template drawer
+were rechecked at desktop and phone widths, and the measured geometry confirmed
+that the visible scrollbar belongs only to the middle `.drawer-scroll-body`
+between the fixed header and fixed footer. Footer actions remain direct
+  `.drawer-fixed-footer` children, required buttons remain visible, and no
+  document horizontal overflow was introduced.
+CR-090 is now also verified as the current narrow Phase 21H follow-up: the AI
+rule list keeps the denser desktop table widths, and the rule modal now uses a
+more compact left editor / right sample-and-result proportion while preserving
+the same sections, test/save/restore controls, close behavior, enhanced-select
+boundary, `.drawer-scroll-body`, and the single-column responsive fallback at
+tablet and phone widths.
+Phase 21I Mail Configuration is now implemented and locally verified: the mail
+configuration page keeps one page-level action group for editing configuration,
+sending a test mail, opening Task Center, and toggling real-email delivery,
+while the SMTP/defaults summary remains a compact status surface instead of
+duplicating edit/test actions. The visual pass refines summary cards, fallback
+recipient wording, masked password readability, SMTP/defaults form density, and
+mail-test console scanability without changing SMTP APIs, real-email switch
+confirmation, delivery behavior, or CR-049 action hierarchy. Browser checks at
+`1440x900`, `1024x768`, and `390x844` confirmed Mail Configuration opens, all
+required actions remain visible, there are no console errors, no document
+horizontal overflow, no one-character Chinese text columns, and the mail
+configuration/test drawer scrollbars stay between their fixed header and fixed
+footer. Phase 21J Mail Templates followed as the next unclosed Phase 21
+workstream.
+
+CR-083 AI Access Model Helper Copy Removal Regression Fix is now verified as a
+small follow-up to the Phase 21G AI Access drawer work: the persistent helper
+sentence under the model combobox has been removed to reduce drawer height,
+while the model-name input, `获取模型列表` action, manual entry, selection list,
+fixed footer, close behavior, and connection-test flow are preserved. Browser
+checks at `1440x900`, `1024x768`, and `390x844` confirmed the opened AI Access
+drawer no longer renders the removed helper copy, has no console errors,
+document horizontal overflow, or one-character Chinese text columns, and keeps
+the scrollbar between the fixed header and fixed footer.
+CR-084 is now verified as a focused Phase 21B follow-up for the
+tablet/narrow-desktop shell: at `1024x768`, the persistent `sidebar-collapsed`
+rail now contracts to the intended narrow icon-rail width in the final cascade
+instead of visually reading as the expanded fixed sidebar. The collapse button,
+vertical rail scrolling, role visibility, and true mobile drawer behavior are
+preserved.
+CR-085 is also verified as a narrower Phase 21B final-cascade follow-up after
+in-app browser review at an observed `innerWidth` around `809px`: the final
+inline style layer now mirrors the accepted `768px - 1279px` tablet side-rail
+contract, so `body.sidebar-collapsed .shell` uses a `68px` icon rail plus the
+content column, the mobile navigation trigger is not painted, the collapse
+button remains painted, and true mobile `<768px` still uses the drawer trigger.
+This preserved Task Center, Run Detail, enhanced select/date controls,
+`.drawer-scroll-body`, owner/report scope, top-bar refresh, and backend
+behavior.
+
+Phase 21J Mail Templates is now implemented and locally verified: the mail
+template list uses denser template-name, subject, active-state, and action
+treatment; the template drawer keeps the HTML editor, subject field, set-current
+checkbox, variable buttons, local preview refresh icon, iframe preview, save,
+clear, and close controls while shortening layout-heavy helper copy. The page
+keeps add template, view mail config, search/status filters, clear filters, row
+edit/delete, CR-039 body-placeholder guardrails, and CR-074 top-bar-only page
+refresh without adding a duplicate page-local refresh button. Browser checks at
+`1440x900`, `1024x768`, and `390x844` confirmed the Mail Templates page and
+drawer open with no console errors, no document horizontal overflow, no
+one-character Chinese text columns, and the template drawer scrollbar remains
+between the fixed header and fixed footer. Variable copy, preview refresh,
+status filtering, clear filters, and close interactions were exercised.
+
+Phase 21K Runtime Strategy is now implemented and locally verified: grouped
+runtime setting tables keep the accepted Crawling/Login/Scheduler/Retention
+structure while improving group headers, current-value/source readability,
+valid-range scanning, apply-scope chips, lock-state presentation, and the
+save-strategy risk cue. The page preserves save strategy, view diagnostics,
+top-bar-only page refresh, grouped tables, current values, inputs, ranges,
+apply scopes, and lock states without exposing raw deployment environment
+variable names in the runtime page copy. Static syntax, inline script parse,
+targeted Phase 21K/J/I plus CR-074 frontend tests, and browser checks at
+`1440x900`, `1024x768`, and `390x844` passed with no console errors, no
+document horizontal overflow, and no one-character Chinese text columns.
+
+Phase 21L Task Center Conservative Visual Pass is now implemented and locally
+verified: the current Task Center keeps one top-level `任务中心`, default
+task/report grouping, the `运行记录` subview, run filters, pagination, top-bar
+page refresh, compact statuses, grouped metric chips, and the single
+first-level `详情` route into Run Detail. The visual pass only refines panel
+density, filter-toolbar chrome, grouped metric chips, table separators, status
+contrast, hover/focus states, empty/loading surfaces, and responsive wrapping.
+It does not restore separate top-level Run Center or Report Center pages, does
+not add duplicate first-level log/preview/lead/delivery/download actions, and
+does not move lead-state filters into the first-level toolbar. Targeted
+Task Center/CR-051/CR-069/CR-071/CR-072/CR-073/CR-074 regression tests and
+browser checks at `1440x900`, `1024x768`, and `390x844` passed with no console
+errors, no document horizontal overflow, and no one-character Chinese text
+columns.
+
+Phase 21M Overlay And Run Detail Freeze Gate is now implemented and locally
+verified: overlay chrome, focus/hover states, scrollbar styling, header/footer
+separation, Run Detail tab chrome, and loading/empty/error visual treatment were
+refined without changing overlay workflows. The Run Detail drawer still exposes
+the six sections `概览`, `采集日志`, `采集内容`, `AI 评估`, `报告`, and
+`邮件交付` in the same order; `采集日志` keeps copy/download actions; the AI
+Evaluation filters keep enhanced select behavior; and task-edit custom date
+pickers keep the local attached date menu. Representative fixed-footer drawers
+at desktop, tablet, and phone widths keep direct header, `.drawer-scroll-body`,
+and footer regions with zero header/body and body/footer gaps, footer actions
+outside `.drawer-scroll-body`, no console errors, no document horizontal
+overflow, and no one-character Chinese text columns. Task Center, Run Detail,
+enhanced select/date, drawer scroll ownership, close/backdrop/Escape behavior,
+owner scope, report scope, and top-bar refresh semantics remain unchanged.
+
+Phase 21N System Diagnostics is now implemented and locally verified: the
+diagnostics page keeps rerun diagnosis, run system diagnosis, process account
+resources, readiness/action cards, runtime state, scheduler state, platform
+state, generated diagnosis artifacts, and customer-safe wording. The visual pass
+adds clearer section headers, status summary cards, impact/next-action
+hierarchy, compact recommendation cards, and a scheduler status card without
+changing `/doctor`, `/readiness`, `/scheduler-status`, `/smoke`, platform
+status APIs, permission checks, account-resource routing, or Task Center/Run
+Detail behavior. Phase 21O Login Page and Phase 21P Cross-Page Verification are
+now complete as well, with the remaining Phase 21 verification evidence
+recorded in `docs/TEST_RESULTS.md`.
+
+The final Phase 21 cross-page regression pass confirmed the current formal
+console baseline: one top-level `任务中心`, default task/report grouping,
+`运行记录` subview, Run Detail six sections, enhanced drawer/modal selects and
+task edit date picker, `.drawer-scroll-body`, and shared top-bar refresh. The
+Phase 21 plan remains visual-only and must not restore separate top-level Run
+Center / Report Center pages or change Task Center, Run Detail, overlay,
+select/date, close, scroll, routing, owner-scope, or report-scope behavior
+without a separate accepted CR.
+
+A final local regression pass on 2026-06-20 verified the full Phase 19B-D,
+Phase 20B-E, CR-048/CR-049 preservation, and Task Center consolidation scope:
+the focused Phase 19/20/Task Center/CR-048/049 pytest selection passed, the
+full `tests/test_monitoring_mvp.py` suite passed with 307 tests, `node --check
+api/webui/monitor/monitor.js`, the inline `api/monitor_web/index.html` script
+parse, and `scripts/check_docs.py` passed, and browser checks covered
+administrator plus normal-user Task Center/Run Detail paths at desktop,
+tablet, and mobile viewports.
 CR-035
 Run Lifecycle Finalization And AI Stuck
 Recovery Regression Fix is accepted as a follow-up for the completed Phase 7
@@ -538,9 +847,17 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   fully implemented. The focused CR-048/CR-049 frontend information-
   architecture subset and later CR-051/CR-053/CR-069/CR-071/CR-072/CR-073/
   CR-074 Task Center, Run Detail, dropdown/date, drawer-scroll, and refresh
-  refinements are verified and now form the current Phase 21 baseline. The
-  broader Phase 21 page-level visual refinement workstreams for global
-  shell/design tokens, navigation hierarchy, Operations Home, Monitoring,
+  refinements are verified and now form the current Phase 21 baseline. A
+  focused Phase 21A/B/C visual pass has started for the shell, navigation,
+  top-right account control, development-copy cleanup, and Operations Home
+  density; the second-level navigation hover regression is fixed so hover is
+  pure neutral gray and selected state remains teal, including collapsed
+  sidebar hover, and CR-075 verifies the desktop/tablet/mobile navigation
+  breakpoint model without reintroducing mobile `打开导航` at 1024px/1169px or
+  breaking the 390px mobile drawer/header. CR-077 closes the follow-up mobile
+  header cascade regression in the live formal page's final inline style layer.
+  The broader Phase 21 page-level
+  visual refinement workstreams for Monitoring,
   Platform Accounts, Proxies, AI Access, AI Rules, Mail Templates, Runtime
   Strategy, conservative Task Center visual polish, overlay/Run Detail freeze
   verification, System Diagnostics, Login, and cross-page verification remain

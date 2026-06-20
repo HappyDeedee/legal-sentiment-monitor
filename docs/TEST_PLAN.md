@@ -1017,6 +1017,37 @@ Run the relevant parts of this checklist after each Phase 11 batch:
   groups instead of detached hover-only popovers.
 - User identity and logout are grouped in the top-right account area on
   desktop and remain reachable on mobile.
+- CR-075 verifies one coherent responsive navigation model: desktop `>=1280px`
+  uses the full/collapsible sidebar, tablet/narrow desktop `768px - 1279px`
+  keeps a persistent collapsed icon rail without the top-left mobile trigger,
+  and mobile `<768px` keeps the top-left drawer trigger with backdrop, Escape,
+  and page-selection close behavior.
+- CR-076 verifies the mobile header layout inside that same model: at
+  `390x844`, navigation, refresh, and account controls must not squeeze the
+  product title; the title and status chips use their own readable rows.
+- CR-077 verifies the final loaded cascade for that same mobile header: tests
+  inspect all inline style blocks and browser checks confirm the computed
+  mobile layout still keeps the title horizontal after `monitor.css` and page
+  inline styles both load.
+- CR-078 verifies the responsive shell after the final loaded cascade: mobile
+  resource pages keep the title horizontal and page width inside the viewport,
+  the closed drawer remains off-canvas, and the tablet collapsed side rail keeps
+  its final navigation item out of the bottom collapse-button hit area.
+- CR-079 verifies the compact mobile header rail after further phone browser
+  review: the mobile navigation trigger keeps its accessible open-navigation
+  control but visually occupies a stable 40px icon-button column, the product
+  title stays in the first-row main column, and status chips move to a
+  full-width wrapping row so resource pages cannot squeeze the title into
+  one-character columns.
+- CR-080 verifies the tablet/narrow-desktop side rail after browser review:
+  `768px - 1279px` keeps the persistent collapsed icon rail and existing
+  collapse button, but does not expose a bottom horizontal scrollbar; the
+  navigation row remains vertically scrollable and the final permitted entry
+  remains reachable.
+- CR-085 verifies the final inline cascade for narrower in-app tablet panels:
+  around `809px`, `body.sidebar-collapsed .shell` must still compute to a
+  `68px` icon rail plus content column, the top-left mobile trigger must not be
+  painted, and the sidebar collapse button must remain visible.
 - Mobile navigation can open, close, select nested pages, and preserve active
   state without clipped menus.
 
@@ -1754,6 +1785,68 @@ run-detail frontend, and report-to-run backlinks.
   below the header, the rounded corner remains intact, and the close button is
   reachable.
 
+## CR-081 Scrollable Drawer Fixed Footer Boundary Regression Tests
+
+- Shared drawer normalization keeps `.drawer-scroll-body` as the only middle
+  content scroll owner.
+- Footer action groups are extracted from `.drawer-scroll-body` and attached as
+  direct drawer children with `.drawer-fixed-footer`: `.form-actions`,
+  `.resource-modal-actions`, `.account-flow-actions`, `.ai-test-actions`, and
+  `.rule-modal-actions`.
+- The old in-scroll sticky footer boundary using `top: calc(var(--drawer-padding-y) + 80px)`
+  must not return.
+- The visible scrollbar starts below the header and ends above the footer; it
+  must not visually run through the top header or bottom action bar.
+- Static tests cover task drawer, account drawer, proxy drawer, AI Access drawer,
+  AI connection test modal, AI rule modal, Mail Configuration modal, mail test
+  modal, and mail template drawer footer behavior.
+- Browser checks should open representative long drawers/modals at `1440x900`,
+  `1024x768`, and `390x844`, confirm save/close/test/clear buttons remain
+  visible and clickable, and confirm backdrop/Escape close behavior is unchanged.
+
+## CR-082 Drawer Scrollbar Header Footer Boundary Recheck Tests
+
+- Every drawer/modal opener should route through `openDrawerChrome(...)` so
+  shared normalization runs immediately before the overlay becomes active.
+- Shared normalization should recheck already-normalized drawers, set
+  `data-scroll-owner="drawer-content"` on `.drawer-scroll-body`, and toggle
+  `has-fixed-footer` when a direct `.drawer-fixed-footer` exists.
+- The outer `.drawer` should keep `overflow: hidden`, while only
+  `.drawer-scroll-body` has vertical scrolling.
+- Browser geometry checks should verify the header bottom equals scroll-body
+  top and scroll-body bottom equals fixed-footer top, with zero visual gaps.
+- Footer action buttons must not be descendants of `.drawer-scroll-body`.
+- Representative checks should include Mail Configuration, Monitoring task
+  drawer, Mail Template drawer, and at least one AI or proxy drawer across
+  desktop/tablet/phone verification.
+- Checks must confirm required footer actions remain visible and usable, no
+  document horizontal overflow is introduced, and close/backdrop/Escape
+  behavior is unchanged.
+
+## Phase 21I Mail Configuration Visual Refinement Tests
+
+- Mail Configuration keeps one page-level action group with edit configuration,
+  send test mail, Task Center shortcut, compact real-email switch, and the
+  shared top-bar refresh; no duplicate page-local refresh button may return.
+- The SMTP/defaults summary remains a status surface and must not repeat the
+  primary edit/test actions or the removed large `SMTP 与发送默认值` panel.
+- Summary cards show test status, sender identity, fallback default recipients,
+  and subject template without one-character Chinese text columns at
+  `1440x900`, `1024x768`, and `390x844`.
+- The mail configuration drawer preserves SMTP host, port, encryption, sender,
+  username, password, default recipients, subject template, save, cancel, close,
+  and enhanced select behavior.
+- The mail test drawer preserves the test console, start test, close action,
+  explicit real-email prerequisite, SMTP-acceptance wording, and no-real-SMTP
+  automated verification boundary.
+- Mail configuration and mail test drawers must keep `.drawer-scroll-body` as
+  the middle scroll owner, with footer actions outside the scroll body and
+  visible scrollbars bounded between fixed header and fixed footer.
+- Browser checks must confirm the page and both drawers open with no console
+  errors, no document horizontal overflow, and no change to SMTP API, delivery,
+  real-email switch, close/backdrop/Escape, Task Center, Run Detail,
+  enhanced-select, date-picker, owner-scope, or report-scope behavior.
+
 ## CR-074 Console Refresh Action Deduplication Tests
 
 - The authenticated console top bar exposes one current-page refresh icon with
@@ -1778,6 +1871,56 @@ run-detail frontend, and report-to-run backlinks.
   Run Detail, run-log drawer, email-template drawer, and delivery-history
   drawer to confirm the icon is visible, spins on click, and does not create a
   second page-level refresh control.
+
+## CR-087 Helper Tooltip Removal Regression Tests
+
+- The formal console must not render the CR-086 helper-tooltip affordance:
+  `.helper-tooltip`, `data-tooltip`, helper-specific CSS, and helper-specific
+  JavaScript functions must be absent.
+- Targeted explanatory helper copy removed during CR-086 must not return as
+  visible `.small`, `.inline-help`, field-hint, page-header paragraph, table
+  helper, or tooltip content.
+- Operational state text must remain visible when it represents data, error,
+  warning, loading, empty, status, count, login prompt, password state, or
+  action feedback rather than explanatory helper copy.
+- Static regression checks should prove Task Center, Run Detail six sections,
+  `.drawer-scroll-body`, enhanced select/date controls, top-bar refresh, and
+  representative save/test/close/filter actions are still present.
+- Browser checks should verify representative pages at desktop, tablet, and
+  mobile widths have no visible helper question marks, console errors,
+  horizontal overflow, one-character Chinese text columns, or drawer
+  scrollbar/header/footer regressions.
+
+## CR-088 AI Rule Modal Residual Helper Text Removal Regression Tests
+
+- The `AI 评估规则` modal must not render the always-visible `AI 状态`
+  helper line.
+- The modal must not render the legacy-prompt notice shown when old prompts
+  are parsed.
+- The empty result panel must start without the default explanatory hint; the
+  result area should stay visually blank until a test runs.
+- Rule configuration, sample inputs, `测试评估规则`, `恢复默认规则`,
+  `保存规则`, and rendered test output remain reachable.
+- Browser checks at desktop, tablet, and mobile widths should confirm the
+  modal remains readable and the table/list layout does not re-expand because
+  of the removed helper text.
+- For the CR-090 follow-up, browser checks should also confirm the AI rule
+  list no longer feels overwide at desktop, the basic-info card keeps
+  `规则名称` as a full-width field, and the modal's sample/test split remains
+  balanced while preserving the same actions and close behavior.
+
+## CR-089 Mail Template Row Helper Text And Update-Time Compactness Regression Tests
+
+- The mail template list must not render the `正文占位符已保留` helper sentence
+  under the template name.
+- The `更新时间` cell should use a compact, wrap-safe timestamp treatment so
+  the table does not widen on long values.
+- The template row must continue to expose add, refresh, view mail config,
+  search/status filters, row edit, set current, delete, save, refresh
+  preview, clear, close, and iframe preview actions.
+- Browser checks at desktop, tablet, and mobile widths should confirm the
+  mail template table remains readable and does not introduce horizontal
+  overflow or one-character Chinese text columns.
 
 ## CR-038 Sticky Drawer Close Control Tests
 
@@ -1870,6 +2013,9 @@ verification.
 - AI Evaluation Rules preserve row more menu, test, set default, delete, rule
   modal sections, prompt preview, test sample, result, restore default, save,
   and close.
+- AI Evaluation Rules keep the list table compact and the modal fields
+  proportional; the page should not feel overly wide from the rule name, last-
+  test, update-time, or result columns.
 - Mail Configuration preserves edit, test, refresh, delivery shortcut, masked
   password, save, cancel, and close.
 - Mail Configuration keeps edit configuration, send test mail, refresh/status,
@@ -1928,7 +2074,13 @@ Desktop `1440x900`:
 
 Tablet `1024x768`:
 
-- navigation opens, selects nested pages, and closes;
+- navigation uses the persistent collapsed icon rail without the top-left
+  mobile trigger; nested pages remain selectable and the final icon must not be
+  overlapped by the bottom collapse button;
+- the `sidebar-collapsed` rail must contract to the intended narrow icon-rail
+  width rather than remaining visually close to the expanded fixed sidebar;
+- the same `sidebar-collapsed` rail contract must hold for narrower in-app
+  tablet panels around `809px`, including the final inline style cascade;
 - page headers and toolbars wrap without hidden primary actions;
 - drawers and modals fit inside viewport safe margins;
 - floating menus remain reachable and unclipped;
@@ -1939,6 +2091,9 @@ Mobile `390x844`:
 
 - Operations Home shows key status and next action before long guidance;
 - navigation reaches all allowed core pages;
+- the loaded header title remains horizontal and resource pages such as
+  `代理资源` keep page width equal to document width, with dense tables scrolling
+  only inside `.table-wrap`;
 - task drawer, account dialog, run log drawer, and report preview drawer can
   scroll and close;
 - report preview and delivery history remain readable;
