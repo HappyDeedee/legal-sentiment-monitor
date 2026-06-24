@@ -107,6 +107,7 @@ Status values:
 - CR-105: Operations Home ECharts Dashboard Rebaseline
 - CR-106A: Operations Home Data-Aware Signal Refinement
 - CR-106B: Email Delivery Log Dashboard Aggregation
+- CR-107: Windows One-Click Local Startup Launcher And Browser URL Separation
 - CR-096: AI Evaluation Postprocessing Scope Reduction
 - CR-075: Responsive Navigation Interaction Consistency
 - CR-076: Mobile Header Layout Resilience Regression Fix
@@ -1504,6 +1505,70 @@ Acceptance:
   boundary.
 - Report Center has a clear "view leads" path and can link back to run detail
   when a report has `run_id`.
+
+## CR-107 - Windows One-Click Local Startup Launcher And Browser URL Separation
+
+Date: 2026-06-24
+
+Source: user request for a Windows one-click startup scheme
+
+Module: deployment/startup ergonomics
+
+Type: Existing Feature Optimization
+
+Status: Accepted
+
+Background:
+
+The repository already has separate startup entry points for the WebUI
+service and for opening the browser. The current experience still requires
+operators to connect the bind host, port, and browser URL manually, which can
+lead to mistakes if the service binds on `0.0.0.0` but the browser should open
+`127.0.0.1` locally or an explicit remote URL.
+
+Purpose:
+
+Provide one Windows-friendly entry point that starts the service, waits for it
+to become healthy, and opens the correct browser URL without conflating the
+service bind host with the browser destination.
+
+Requirements:
+
+- Add a Windows one-click launcher that starts `/monitor` with one command.
+- Keep the service bind host and browser open URL separate.
+- Default the browser open URL to the local machine URL when no explicit
+  override is provided.
+- Allow an explicit browser URL override for remote access or proxy-based
+  access.
+- Preserve the existing service-only startup entry points.
+
+Scope boundary:
+
+- Deployment/startup ergonomics only.
+- No backend API, database, permission, crawler, AI, SMTP, scheduler, or
+  browser UI changes.
+- No Windows service installer, auto-update, or dependency bootstrap.
+
+Non-goals:
+
+- Do not change the `/monitor` page behavior.
+- Do not introduce a new build pipeline or runtime framework.
+- Do not auto-detect or rewrite remote network topology beyond the explicit
+  browser URL override.
+
+Related tasks:
+
+- Windows one-click startup task in `TASKS.md`
+- Windows one-click launcher checks in `TEST_PLAN.md`
+- Startup instructions in `README.md` and `SERVER_DEPLOYMENT.md`
+
+Acceptance:
+
+- A single Windows launcher script starts the service and opens the browser.
+- The launcher defaults to a local browser URL while the service may bind to
+  `0.0.0.0`.
+- An explicit browser URL override is honored without changing the bind host.
+- Existing service-only startup commands still work.
 
 ## CR-035 - Run Lifecycle Finalization And AI Stuck Recovery Regression Fix
 

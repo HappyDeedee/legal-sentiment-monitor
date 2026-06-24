@@ -6,6 +6,7 @@ import os
 import re
 import smtplib
 import sqlite3
+import sys
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
@@ -100,11 +101,13 @@ from api.monitoring.preflight import build_job_preflight
 from api.monitoring.readiness import get_readiness_status
 from api.monitoring.reporting import create_report, resend_report_email, send_report_with_delivery_log
 from api.monitoring.security import redact_sensitive
+import api.monitoring.startup_launcher as api_monitoring_startup_launcher
 from api.monitoring.avatar_cache import AVATAR_CACHE_DIR
 from api.monitoring.selftest import create_sample_report
 from api.monitoring.smoke import run_smoke_check
 from api.monitoring.cli import run_due_jobs
 from api.monitoring.doctor import run_doctor
+from api.monitoring.startup_launcher import build_launch_plan
 from cmd_arg import parse_cmd as parse_mediacrawler_cmd
 from api.routers import monitor as monitor_router
 import api.monitoring.cli as cli_module
@@ -1808,6 +1811,70 @@ def test_login_browser_command_supports_per_platform_port_env(tmp_path, monkeypa
 
     assert command["debug_port"] == 19323
     assert command["profile_path"] == str((browser_data / "cdp_dy_user_data_dir").resolve())
+
+
+def test_windows_oneclick_launcher_separates_bind_host_and_browser_url():
+    default_plan = build_launch_plan("0.0.0.0", 8080)
+    explicit_plan = build_launch_plan("0.0.0.0", 8080, "http://10.0.0.12:8080/monitor")
+
+    assert default_plan.bind_host == "0.0.0.0"
+    assert default_plan.probe_url == "http://127.0.0.1:8080/api/health"
+    assert default_plan.browser_url == "http://127.0.0.1:8080/monitor"
+    assert explicit_plan.browser_url == "http://10.0.0.12:8080/monitor"
+    assert default_plan.command[:4] == [sys.executable, "-m", "uvicorn", "api.main:app"]
+
+
+def test_windows_oneclick_launcher_opens_browser_after_health(monkeypatch):
+    seen = {}
+
+    class FakeProcess:
+        def __init__(self):
+            self.poll_calls = 0
+            self.returncode = None
+
+        def poll(self):
+            self.poll_calls += 1
+            if self.poll_calls < 2:
+                return None
+            return 0
+
+        def terminate(self):
+            seen["terminated"] = True
+
+        def wait(self, timeout):
+            return 0
+
+        def kill(self):
+            seen["killed"] = True
+
+    class FakeResponse:
+        def read(self):
+            return b'{"status":"ok"}'
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    def fake_popen(*args, **kwargs):
+        seen["command"] = args[0]
+        seen["env_host"] = kwargs["env"]["MONITOR_HOST"]
+        seen["env_port"] = kwargs["env"]["MONITOR_PORT"]
+        seen["env_browser_url"] = kwargs["env"].get("MONITOR_BROWSER_URL")
+        return FakeProcess()
+
+    monkeypatch.setattr("api.monitoring.startup_launcher.subprocess.Popen", fake_popen)
+    monkeypatch.setattr("api.monitoring.startup_launcher.urlopen", lambda url, timeout=2: FakeResponse())
+    monkeypatch.setattr("api.monitoring.startup_launcher.webbrowser.open", lambda url: seen.setdefault("opened", url))
+
+    plan = api_monitoring_startup_launcher.start_oneclick("0.0.0.0", 8080, "http://10.0.0.12:8080/monitor", 1)
+
+    assert plan.browser_url == "http://10.0.0.12:8080/monitor"
+    assert seen["env_host"] == "0.0.0.0"
+    assert seen["env_port"] == "8080"
+    assert seen["env_browser_url"] == "http://10.0.0.12:8080/monitor"
+    assert seen["opened"] == "http://10.0.0.12:8080/monitor"
 
 
 def test_job_validation_rejects_operator_input_errors():

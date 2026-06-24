@@ -1406,6 +1406,20 @@ Run the relevant parts of this checklist after each Phase 11 batch:
   scope rules, and does not expose recipients, SMTP secrets, proxy URLs,
   cookies, profile paths, account details, or raw sensitive delivery errors.
 
+## CR-107 Windows One-Click Local Startup Launcher And Browser URL Separation Tests
+
+- The launcher must keep the service bind host and browser open URL as distinct
+  values.
+- The default browser URL should resolve to the local machine URL even when the
+  service bind host is `0.0.0.0`.
+- An explicit browser URL override should be honored without changing the bind
+  host.
+- Existing service-only startup commands must remain available and documented.
+- The launcher should be covered by a lightweight Python unit test that does
+  not start a real browser or open a real port.
+- Documentation tests should confirm the quick-start instructions mention the
+  one-click Windows launcher and the remote-access override behavior.
+
 ## Phase 14 Run Center Data Model Tests
 
 - `crawl_runs` has `visibility`, `run_type`, `archived_at`, and `archived_by`.

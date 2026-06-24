@@ -25,6 +25,12 @@
 .\start_webui.bat
 ```
 
+Windows 一键启动并自动打开浏览器：
+
+```powershell
+.\start_monitor_oneclick.bat
+```
+
 打开管理后台：
 
 ```text
@@ -36,6 +42,15 @@ http://127.0.0.1:8080/monitor
 ```powershell
 .\start_monitor_service.bat
 ```
+
+如果服务绑定到 `0.0.0.0`，浏览器仍应打开本机可访问地址，例如
+`http://127.0.0.1:8080/monitor`。远程访问时可以在一键启动脚本里显式
+传入浏览器 URL。
+
+`start_webui.bat` 也会尊重 `MONITOR_HOST`、`MONITOR_PORT` 和
+`MONITOR_BROWSER_URL`。
+
+`start_monitor_service.bat` 只启动服务，不自动打开浏览器。
 
 ## 后台功能
 

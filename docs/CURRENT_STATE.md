@@ -1428,6 +1428,15 @@ separate follow-up work.
   aggregation and product semantics change, even though it would not require a
   new schema field. Until accepted, CR-106A treats the Operations Home mail
   module as report-level delivery state from `reports.email_status`.
+- CR-107 is the next accepted deployment/startup ergonomics optimization. It
+  will add a Windows one-click launcher that starts the service and opens the
+  browser URL separately from the bind host, so local operators can use the
+  same entry point whether the service binds to `127.0.0.1` or `0.0.0.0`.
+- CR-107 is now implemented in the working tree: the new Windows one-click
+  launcher starts the service, waits for `/api/health`, and opens a browser
+  URL that is separate from the bind host. `start_webui.bat` remains a local
+  entry point, `start_monitor_service.bat` remains service-only, and the new
+  `start_monitor_oneclick.bat` handles the combined flow.
 - Email delivery-history UI and report task grouping are accepted directions.
   Run visibility/noise-filtering data fields are active schema features after
   Phase 14, archive/restore APIs, pagination, and filters are active after

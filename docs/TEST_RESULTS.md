@@ -2,6 +2,41 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-06-24 - CR-107 Windows One-Click Local Startup Launcher And Browser URL Separation
+
+Environment: local Windows worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Added `api/monitoring/startup_launcher.py` as a shared startup helper for
+  Windows one-click launch behavior.
+- Added `start_monitor_oneclick.bat` to start the service, wait for health,
+  and open the browser URL.
+- Kept `start_monitor_service.bat` as a service-only entry point.
+- Updated `start_webui.bat` to keep its own browser URL separate from the
+  service bind host while still supporting local use.
+- Documented the browser URL override path in `README.md`,
+  `docs/SERVER_DEPLOYMENT.md`, `docs/CHANGE_REQUESTS.md`, `docs/TASKS.md`,
+  `docs/TEST_PLAN.md`, `docs/CURRENT_STATE.md`, and `docs/TRACEABILITY.md`.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "windows_oneclick_launcher"`
+  passed: 2 passed, 329 deselected, 2 warnings. The tests confirm the default
+  browser URL resolves to `127.0.0.1`, explicit overrides are honored, and the
+  one-click launcher opens the configured browser URL after health succeeds.
+- `node --check api/webui/monitor/monitor.js` passed.
+- `uv run python scripts/check_docs.py` passed.
+- `git diff --check` passed with only the pre-existing CRLF normalization
+  warnings from Git.
+
+Notes:
+
+- The one-click launcher is designed for Windows local startup ergonomics and
+  does not change backend behavior.
+- The default behavior still keeps service-only startup available for operators
+  who want to start the service without opening a browser.
+
 ## 2026-06-23 - CR-106A Operations Home Data-Aware Signal Refinement
 
 Environment: local worktree `E:\myproject\MediaCrawler`, existing local monitor

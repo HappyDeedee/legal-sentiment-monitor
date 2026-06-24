@@ -1472,6 +1472,37 @@ be implemented as part of CR-106A.
       SMTP secrets, proxy URLs, cookies, profile paths, account details, or raw
       sensitive delivery errors are exposed on Operations Home.
 
+## CR-107 - Windows One-Click Local Startup Launcher And Browser URL Separation
+
+Planning status:
+
+CR-107 is an accepted deployment/startup ergonomics optimization. It does not
+change backend APIs, dashboard behavior, crawler behavior, or browser UI. It
+only adds a Windows one-click startup wrapper and the supporting tests/docs
+needed to prove the bind host and browser URL stay separate.
+
+- [ ] Add a shared startup helper that computes the service bind host/port and
+      the browser open URL as separate values.
+- [ ] Add a Windows launcher entry point that starts the service, waits for
+      health, and opens the browser URL.
+- [ ] Preserve the existing service-only startup commands.
+- [ ] Update the startup instructions in `README.md` and
+      `docs/SERVER_DEPLOYMENT.md`.
+- [ ] Verify the new launcher with targeted tests, docs consistency, and
+      `git diff --check`.
+
+Implementation status:
+
+- [x] Add a shared startup helper that computes the service bind host/port and
+      the browser open URL as separate values.
+- [x] Add a Windows launcher entry point that starts the service, waits for
+      health, and opens the browser URL.
+- [x] Preserve the existing service-only startup commands.
+- [x] Update the startup instructions in `README.md` and
+      `docs/SERVER_DEPLOYMENT.md`.
+- [x] Verify the new launcher with targeted tests, docs consistency, and
+      `git diff --check`.
+
 ## Phase 14 - Run Center Data Model Preparation
 
 Planning status:

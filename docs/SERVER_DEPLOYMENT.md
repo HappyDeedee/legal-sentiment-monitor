@@ -30,6 +30,25 @@ Allowed secondary target:
 
 Both modes must use the same server-side browser/profile behavior.
 
+## Windows Local Startup
+
+For Windows development or local operator use, the repository provides a
+one-click launcher that can start the service and open the browser on the same
+machine. The launcher should treat the service bind host and browser URL as
+separate values:
+
+- service bind host: where the FastAPI server listens;
+- browser URL: what the operator's browser opens.
+
+When the service binds to `0.0.0.0`, the browser should still open a concrete
+reachable address such as `http://127.0.0.1:8080/monitor` on the local
+machine. For remote or forwarded access, operators may override the browser
+URL explicitly without changing the bind host.
+
+The Windows helper scripts in the repository should follow the same rule:
+`MONITOR_HOST` controls the bind address, `MONITOR_PORT` controls the port,
+and `MONITOR_BROWSER_URL` overrides only the browser destination.
+
 ## Required Persistent Data
 
 Persist and back up:
