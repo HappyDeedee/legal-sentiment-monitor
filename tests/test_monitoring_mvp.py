@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import json
 import os
+import re
 import smtplib
 import sqlite3
 import uuid
@@ -3487,7 +3488,7 @@ def test_ai_evaluation_payload_includes_content_and_comment_context():
     assert "退费" in payload["comment_summary"]["sample_text"]
 
 
-def test_phase_7_2_source_keyword_only_noisy_positive_is_forced_unrelated(monkeypatch):
+def test_phase_7_2_cr096_valid_ai_output_is_not_forced_unrelated_by_source_keyword_gate(monkeypatch):
     init_db()
     profile_snapshot = _snapshot_table("ai_key_profiles")
     raw_response = {
@@ -3540,11 +3541,72 @@ def test_phase_7_2_source_keyword_only_noisy_positive_is_forced_unrelated(monkey
         _restore_table("ai_key_profiles", profile_snapshot)
 
     assert result["status"] == "ok"
-    assert result["is_related"] is False
-    assert result["is_negative"] is False
-    assert result["risk_level"] == "irrelevant"
-    assert result["evidence_quotes"] == []
-    assert "搜索词仅作为召回来源" in result["reason"]
+    assert result["is_related"] is True
+    assert result["is_negative"] is True
+    assert result["risk_level"] == "high"
+    assert result["reason"] == raw_response["reason"]
+    assert result["evidence_quotes"] == raw_response["evidence_quotes"]
+    assert result["recommended_action"] == raw_response["recommended_action"]
+
+
+def test_phase_7_2_cr096_semantic_law_firm_reference_survives_format_only_postprocessing(monkeypatch):
+    init_db()
+    profile_snapshot = _snapshot_table("ai_key_profiles")
+    raw_response = {
+        "is_related": True,
+        "is_negative": True,
+        "risk_level": "high",
+        "reason": "标题明确指向北京海安律师事务所并包含被骗陈述",
+        "evidence_quotes": ["我被北京海安律师事务所骗了"],
+        "recommended_action": "人工复核",
+    }
+
+    async def fake_call_openai(cfg, prompt, payload):
+        assert payload["law_firm_name"] == "北京海安律所"
+        assert payload.get("aliases") == []
+        assert "北京海安律师事务所骗了" in payload["title"]
+        assert "source_keyword" in prompt
+        return json.dumps(raw_response, ensure_ascii=False)
+
+    try:
+        save_ai_key_profile(
+            {
+                "name": "CR096 北京海安 AI",
+                "provider": "openai",
+                "base_url": "https://ai.example.com",
+                "api_key": "sk-profile",
+                "model": "profile-model",
+                "temperature": 0,
+                "prompt": DEFAULT_PROMPT,
+                "is_active": True,
+            }
+        )
+        monkeypatch.setattr("api.monitoring.ai._call_openai", fake_call_openai)
+
+        result = asyncio.run(
+            ai_module.evaluate_content(
+                {"law_firm_name": "北京海安律所", "aliases": [], "exclude_words": []},
+                {
+                    "platform": "dy",
+                    "platform_label": "抖音",
+                    "source_keyword": "北京海安律所",
+                    "title": "我被北京海安律师事务所骗了",
+                    "description": "我也被这家律所骗了2980元。",
+                    "author_name": "当事人",
+                    "comment_count": 0,
+                },
+                [],
+            )
+        )
+    finally:
+        _restore_table("ai_key_profiles", profile_snapshot)
+
+    assert result["status"] == "ok"
+    assert result["is_related"] is True
+    assert result["is_negative"] is True
+    assert result["risk_level"] == "high"
+    assert result["reason"] == raw_response["reason"]
+    assert result["evidence_quotes"] == raw_response["evidence_quotes"]
 
 
 def test_phase_7_2_target_evidence_in_title_or_comments_remains_negative(monkeypatch):
@@ -3620,7 +3682,7 @@ def test_phase_7_2_target_evidence_in_title_or_comments_remains_negative(monkeyp
     assert comment_result["evidence_quotes"] == ["评论补充：海安律所一直没处理退费。"]
 
 
-def test_phase_7_2_homonym_geography_only_is_not_target_evidence(monkeypatch):
+def test_phase_7_2_cr096_homonym_geography_valid_ai_output_is_preserved(monkeypatch):
     init_db()
     profile_snapshot = _snapshot_table("ai_key_profiles")
 
@@ -3670,10 +3732,11 @@ def test_phase_7_2_homonym_geography_only_is_not_target_evidence(monkeypatch):
     finally:
         _restore_table("ai_key_profiles", profile_snapshot)
 
-    assert result["is_related"] is False
-    assert result["is_negative"] is False
-    assert result["risk_level"] == "irrelevant"
-    assert "搜索词仅作为召回来源" in result["reason"]
+    assert result["is_related"] is True
+    assert result["is_negative"] is True
+    assert result["risk_level"] == "high"
+    assert result["reason"] == "模型误把地名海安当作目标律所"
+    assert result["evidence_quotes"] == ["海安本地退费纠纷"]
 
 
 def test_ai_offline_check_does_not_call_provider_or_update_test_status(monkeypatch):
@@ -6935,7 +6998,7 @@ def test_phase_7_2_lead_filters_split_unrelated_no_risk_pending_and_unevaluated(
     assert report_view["summary"]["unevaluated_count"] == 1
 
 
-def test_phase_7_2_calibration_fixtures_apply_target_evidence_gate(monkeypatch):
+def test_phase_7_2_cr096_calibration_fixtures_preserve_valid_ai_output(monkeypatch):
     init_db()
     snapshots = {
         "reports": _snapshot_table("reports"),
@@ -7075,19 +7138,28 @@ def test_phase_7_2_calibration_fixtures_apply_target_evidence_gate(monkeypatch):
         for table, snapshot in snapshots.items():
             _restore_table(table, snapshot)
 
-    assert eval_summary["negative_count"] == 2
-    assert eval_summary["high_count"] == 1
-    assert report_view["summary"]["negative_count"] == 2
+    assert eval_summary["negative_count"] == 4
+    assert eval_summary["high_count"] == 3
+    assert report_view["summary"]["negative_count"] == 4
     assert report_view["summary"]["suspected_negative_count"] == 1
-    assert report_view["summary"]["high_count"] == 1
-    assert {item["content_id"] for item in high} == {"pytest_cr045_comment_only"}
+    assert report_view["summary"]["high_count"] == 3
+    assert {item["content_id"] for item in high} == {
+        "pytest_cr045_keyword_only",
+        "pytest_cr045_comment_only",
+        "pytest_cr045_geography_only",
+    }
     assert {item["content_id"] for item in suspected} == {"pytest_cr045_title_target"}
-    assert {item["content_id"] for item in unrelated} == {"pytest_cr045_keyword_only", "pytest_cr045_geography_only"}
-    assert rows["pytest_cr045_keyword_only"]["is_related"] == 0
-    assert rows["pytest_cr045_keyword_only"]["risk_level"] == "irrelevant"
-    assert rows["pytest_cr045_geography_only"]["is_related"] == 0
-    assert "搜索词仅作为召回来源" in rows["pytest_cr045_keyword_only"]["reason"]
-    assert json.loads(rows["pytest_cr045_keyword_only"]["evidence_quotes"]) == []
+    assert unrelated == []
+    assert rows["pytest_cr045_keyword_only"]["is_related"] == 1
+    assert rows["pytest_cr045_keyword_only"]["is_negative"] == 1
+    assert rows["pytest_cr045_keyword_only"]["risk_level"] == "high"
+    assert rows["pytest_cr045_geography_only"]["is_related"] == 1
+    assert rows["pytest_cr045_geography_only"]["is_negative"] == 1
+    assert rows["pytest_cr045_geography_only"]["risk_level"] == "high"
+    assert rows["pytest_cr045_title_target"]["risk_level"] == "medium"
+    assert "source_keyword" in DEFAULT_PROMPT
+    assert "不能单独证明" in DEFAULT_PROMPT
+    assert json.loads(rows["pytest_cr045_keyword_only"]["evidence_quotes"]) == ["北京海安律所退费"]
 
 
 def test_cr050_report_center_risk_filters_do_not_mix_high_and_suspected_negative():
@@ -11382,30 +11454,108 @@ def test_phase_12b_page_entry_and_role_flow_shortcuts():
 def test_phase_13b_operations_home_desktop_visual_metrics():
     page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
     css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
+    js = Path("api/webui/monitor/monitor.js").read_text(encoding="utf-8")
+    echarts_vendor = Path("api/webui/monitor/vendor/echarts.min.js")
     dashboard_section = _monitor_section(page, "dashboard")
 
     for marker in [
         'class="operations-home"',
         'id="operations_home_meta"',
         'id="dashboard_metrics" class="operations-metric-grid"',
+        'id="operations_home_breakdowns" class="operations-breakdown-grid"',
+        'id="operations_home_attention" class="operations-chart-card operations-issues-chart"',
         'id="operations_home_resource"',
         'id="operations_home_admin_health" class="operations-admin-health admin-entry" data-menu-key="system_diagnostics"',
+        'class="operations-context-bar"',
+        'class="operations-chart-card operations-main-trend operations-cockpit-trend"',
+        'class="operations-trend-head"',
+        'class="operations-trend-controls"',
+        'class="operations-window-toggle" role="tablist" aria-label="时间窗口"',
+        "renderOperationsChartSurface('trend', 'trend', '监控走势')",
+        "renderOperationsChartSurface('issues', 'issues', '问题分布')",
+        "renderOperationsChartSurface('platforms', 'platforms', '平台分布')",
+        "renderOperationsChartSurface('delivery', 'delivery', '交付 / 复核')",
+        "renderOperationsChartSurface('resource', 'resource', '资源健康')",
+        'class="operations-breakdown-card operations-platform-chart"',
+        'class="operations-breakdown-card operations-delivery-chart"',
+        'class="operations-chart-fallback"',
+        'class="operations-visual-track"',
+        'class="task-loop-shortcuts operations-quick-dock"',
+        "operations-visual-segment is-",
+        "const operationsOverviewState = {",
+        "charts: new Map()",
+        "async function loadOperationsTrendBuckets(days=7){",
+        "async function setOperationsTrendWindow(days=7){",
+        "function operationsOverviewViewModel(home, trendPayload=null){",
+        "function renderOperationsTrendChart(model){",
+        "function renderOperationsBreakdowns(model){",
+        "function renderOperationsIssueChart(model){",
+        "function renderOperationsChartSurface",
+        "function scheduleOperationsChartRender(model)",
+        "function renderOperationsECharts(model)",
+        "function operationsTrendOption(model)",
+        "function operationsIssueOption(model)",
+        "function operationsPlatformOption(model)",
+        "function operationsDeliveryOption(model)",
+        "function operationsResourceOption(model)",
+        "function resourceSignalTone(status)",
+        "function disposeOperationsChart(key)",
+        "function operationsShortcutAttributes(card)",
+        "class=\"operations-resource-entry\"",
+        "class=\"operations-resource-card operations-resource-card-primary\"",
+        "class=\"operations-resource-card operations-admin-chart operations-resource-card-secondary\"",
         "const home=data.operations_home || s.operations_home || legacyOperationsHome(s)",
-        "function renderOperationsHome(home)",
+        "function renderOperationsHome(home, options={})",
+        "function operationsToneLabel(tone)",
+        "function operationsMetricIcon(label)",
+        "function operationsLegend(items=[], extraClass='')",
         "function operationsMetricCard(card)",
-        "function renderOperationsCommandRail(home)",
-        "function renderOperationsResourceHealth(resource)",
-        "function renderOperationsAdminHealth(home)",
+        "function renderOperationsResourceHealth(model)",
+        "function renderOperationsAdminHealth(model)",
         "bindShortcutButtons(document.getElementById('dashboard'))",
+        "class=\"operations-chart-legend",
+        "class=\"operations-legend-item",
+        "class=\"operations-metric-icon ",
+        "const platformPalette=['#0f766e', '#2563eb', '#65a30d', '#d97706', '#7c3aed', '#0891b2', '#94a3b8'];",
         "data-shortcut-target=\"task_center_panel\"",
         "data-shortcut-grouped=\"1\"",
         "data-shortcut-tab=\"accounts\" data-menu-key=\"platform_accounts\"",
         "data-shortcut-tab=\"doctor\" data-menu-key=\"system_diagnostics\"",
         "资源由管理员维护",
-        "报告最新交付状态",
-        "暂无待处理事项",
+        "任务",
+        "运行",
+        "报告",
+        "邮件",
+        "线索",
+        "运行失败",
+        "邮件失败",
+        "待复核",
+        "业务总量",
+        "异常 / 待处理",
+        "高风险",
+        "监控走势",
+        "问题分布",
+        "平台分布",
+        "交付 / 复核",
+        "7天",
+        "14天",
     ]:
         assert marker in page
+
+    assert echarts_vendor.exists()
+    assert echarts_vendor.stat().st_size > 500_000
+    assert '<script src="/static/monitor/vendor/echarts.min.js"></script>' in page
+    assert "/static/monitor/vendor/echarts.min.js" in page
+    assert not re.search(
+        r"<script[^>]+(?:https?:)?//[^>]*(?:echarts|cdn|unpkg|jsdelivr)",
+        page,
+        flags=re.IGNORECASE,
+    )
+    assert "https://cdn" not in page.lower()
+    assert "unpkg" not in page.lower()
+    assert "jsdelivr" not in page.lower()
+    assert "echarts.init(" in page
+    assert "echarts.init(" not in js
 
     for shortcut_label in [
         "<span>01</span><strong>新建任务</strong>",
@@ -11418,38 +11568,119 @@ def test_phase_13b_operations_home_desktop_visual_metrics():
 
     assert "按任务、运行、报告和邮件交付汇总当前状态。" not in page
     assert "首页仅保留精简运营健康信号" not in page
-
-    for label in [
-        "任务健康",
-        "运行活动",
-        "报告与复核",
-        "邮件交付",
-        "疑似负面线索",
-        "资源健康",
-        "今日关注",
-        "系统健康摘要",
+    assert "operationsChipList(" not in page
+    operations_block = page.split("const operationsOverviewState = {", 1)[1].split("function metricSkeletonGrid", 1)[0]
+    assert "function operationsOverviewViewModel(home, trendPayload=null)" in page
+    assert "function operationsIssueOption(model)" in page
+    assert "function operationsPlatformOption(model)" in page
+    assert "function operationsDeliveryOption(model)" in page
+    for marker in [
+        "operationsHealthSummary",
+        "operationsIssueSeverityRank",
+        "operationsPlatformFailureRows",
+        "CR-106A data-aware signal refinement",
     ]:
-        assert label in page
+        assert marker in operations_block
+    assert "报告级邮件状态" in operations_block
+    assert "report.email_status" in operations_block
+    assert "email_delivery_logs" not in dashboard_section
+    assert "email_delivery_logs" not in operations_block
+    assert "operationsTrendLinePath" not in operations_block
+    assert "operationsTrendAreaPath" not in operations_block
+    assert 'class="operations-trend-svg"' not in operations_block
+    assert "任务健康" not in operations_block
+    assert "运行活动" not in operations_block
+    assert "报告与复核" not in operations_block
+    assert "邮件交付" not in operations_block
+    assert "疑似负面线索" not in operations_block
+
+    assert "operationsTrack(card.segments, card.tone)" in page
+    assert "operationsChartUnavailable()" in page
+    assert "buildOperationsFallbackTrend(home, operationsOverviewState.trendDays)" in page
+    assert "api('/runs?'+runQs.toString())" in page
+    assert "api('/reports?'+reportQs.toString())" in page
+    assert "<button type=\"button\" class=\"operations-metric-card" in page
+    assert 'data-chart-action="${esc(action)}"' in page
+    assert "renderOperationsChartSurface('platforms', 'platforms', '平台分布')" in page
+    assert "renderOperationsChartSurface('delivery', 'delivery', '交付 / 复核')" in page
+    assert "renderOperationsChartSurface('issues', 'issues', '问题分布')" in page
 
     for selector in [
         ".operations-home",
         ".operations-home-meta",
+        ".operations-context-bar",
         ".operations-metric-grid",
         ".operations-metric-card",
         ".operations-home-lower",
-        ".operations-command-rail",
+        ".operations-chart-card",
+        ".operations-cockpit-trend",
+        ".operations-trend-head",
+        ".operations-trend-controls",
+        ".operations-window-toggle",
+        ".operations-chart-surface",
+        ".operations-chart-fallback",
+        ".operations-breakdown-grid",
+        ".operations-breakdown-card",
+        ".operations-chart-legend",
+        ".operations-legend-item",
+        ".operations-metric-icon",
         ".operations-resource-panel",
-        ".command-rail-summary",
+        ".operations-resource-entry",
+        ".operations-resource-card",
+        ".operations-resource-diagnostic-track",
         ".operations-resource-signals",
         ".operations-admin-health",
+        ".operations-admin-chart",
+        ".operations-quick-dock",
+        "CR-098 final cascade: data-first Operations Home visual refit.",
+        "CR-099 visual clarity: legend-first operations home alignment.",
+        "CR-100 density compaction: content-sized operations home layout.",
+        "CR-104 cockpit dashboard rebuild: single-screen chart-first Operations Home.",
+        "CR-105 ECharts dashboard rebaseline: local chart modules.",
     ]:
         assert selector in css
+
+    final_cr105_block = css.split("/* CR-105 ECharts dashboard rebaseline: local chart modules. */", 1)[1]
+    for compact_dashboard_rule in [
+        "body #dashboard.active .operations-home.is-user-overview .operations-home-lower {",
+        "body #dashboard.active .operations-home.is-user-overview #operations_home_resource {\n  display: none;",
+        "body #dashboard.active .operations-window-toggle {",
+        "body #dashboard.active .operations-window-toggle button.is-active {",
+        "body #dashboard.active .operations-chart-surface {",
+        "body #dashboard.active .operations-cockpit-trend {",
+        "body #dashboard.active .operations-breakdown-grid {\n  display: contents;",
+        "body #dashboard.active .operations-resource-entry {",
+        "body #dashboard.active .operations-resource-card {",
+        "body #dashboard.active .operations-quick-dock {\n  display: none !important;",
+        "body #dashboard.active > #operations_home_admin_health {\n  display: none !important;",
+        "body #dashboard.active {\n    min-height: calc(100vh - 68px);\n    max-height: calc(100vh - 68px);",
+        "body #dashboard.active > .operations-home {\n    height: calc(100vh - 144px);\n    max-height: calc(100vh - 144px);",
+        'grid-template-areas:\n    "trend trend attention"\n    "platforms delivery resource";',
+    ]:
+        assert compact_dashboard_rule in final_cr105_block
+
+    assert "if(status === 'empty') return 'is-neutral';" in page
+    assert "if(status === 'empty') return 'neutral';" in page
+    for old_chart_marker in [
+        'class="operations-trend-svg"',
+        "operationsTrendSeries(",
+        "operationsTrendLinePath",
+        "operationsTrendAreaPath",
+        "operations-flow-line operations-trend-line",
+        "operations-trend-point",
+        "class=\"operations-platform-row",
+        "class=\"operations-delivery-row",
+        "class=\"operations-priority-node",
+    ]:
+        assert old_chart_marker not in operations_block
 
     assert "new Chart(" not in page
     assert "chart.js" not in page.lower()
     assert "email_delivery_logs" not in dashboard_section
     assert "job_snapshot_json" not in dashboard_section
     assert "crawl_runs.visibility" not in dashboard_section
+    assert "function legacyOperationsHome(summary)" in page
+    assert "资源由管理员维护" in page
 
 
 def test_cr051_task_center_consolidates_report_grouping_without_separate_report_center():
@@ -12119,8 +12350,8 @@ def test_phase_13c_operations_home_responsive_role_views():
     load_section = page.split("function loadSectionData(tab){", 1)[1].split("function canMenu", 1)[0]
 
     assert 'id="operations_home_admin_health" class="operations-admin-health admin-entry" data-menu-key="system_diagnostics"' in dashboard_section
-    assert "renderOperationsAdminHealth(home)" in page
-    assert "function renderOperationsAdminHealth(home)" in page
+    assert "renderOperationsAdminHealth(model)" in page
+    assert "function renderOperationsAdminHealth(model)" in page
     assert 'data-shortcut-tab="doctor" data-menu-key="system_diagnostics">查看系统诊断' in page
 
     for diagnostic_mount in [
@@ -12141,25 +12372,45 @@ def test_phase_13c_operations_home_responsive_role_views():
 
     for selector in [
         ".operations-admin-health",
-        ".operations-admin-health-card",
-        ".operations-admin-health-signals",
-        ".command-rail-summary",
-        ".command-rail-chip",
+        ".operations-resource-entry",
+        ".operations-resource-card",
+        ".operations-window-toggle",
+        ".operations-breakdown-grid",
+        ".operations-chart-card",
+        ".operations-chart-surface",
     ]:
         assert selector in css
 
     tablet_block = css.split("@media (max-width: 1279px)", 1)[1].split("@media (max-width: 767px)", 1)[0]
+    tablet_height_block = css.split("@media (min-width: 768px) and (max-width: 1279px)", 1)[1].split("@media (max-width: 767px)", 1)[0]
     mobile_block = css.split("@media (max-width: 767px)", 1)[1]
+    final_cr105_block = css.split("/* CR-105 ECharts dashboard rebaseline: local chart modules. */", 1)[1]
     assert ".operations-home {\n    width: 100%;\n    overflow: hidden;\n  }" in tablet_block
-    assert ".operations-metric-grid" in tablet_block
-    assert ".operations-resource-signals {\n    grid-template-columns: repeat(4, minmax(0, 1fr));\n  }" in tablet_block
-    assert ".operations-admin-health-card {\n    align-items: flex-start;\n    flex-wrap: wrap;\n  }" in tablet_block
+    assert "body .operations-metric-grid,\n  .operations-metric-grid {\n    grid-template-columns: repeat(5, minmax(0, 1fr)) !important;" in tablet_block
+    assert ".operations-resource-signals {\n    grid-template-columns: repeat(2, minmax(0, 1fr));\n  }" in tablet_block
+    assert "body #dashboard.active {\n    min-height: calc(100vh - 68px);\n    max-height: calc(100vh - 68px);\n    overflow: hidden;" in tablet_height_block
+    assert "body #dashboard.active > .operations-home {\n    height: calc(100vh - 140px);\n    max-height: calc(100vh - 140px);" in final_cr105_block
+    assert "body #dashboard.active .operations-home-lower {\n    grid-template-columns: minmax(0, 1.28fr) minmax(180px, 0.62fr);" in final_cr105_block
+    assert 'grid-template-areas:\n    "trend trend attention"\n    "platforms delivery resource";' in final_cr105_block
     assert ".account-menu-copy,\n  .account-menu-caret {\n    display: none;\n  }" in mobile_block
     assert "body header .header-actions {\n    display: contents !important;" in mobile_block
     top_status_block = mobile_block.split("body header #top_status {", 1)[1].split("}", 1)[0]
     assert "grid-area: status;" in top_status_block
     assert "body header .header-actions > .account-area {\n    min-width: 0;\n    width: auto;" in mobile_block
-    assert ".operations-admin-health-signals {\n    display: grid;\n    grid-template-columns: minmax(0, 1fr);\n    width: 100%;\n  }" in mobile_block
+    assert ".operations-home-strip-head {\n    grid-template-columns: minmax(0, 1fr) auto;" in mobile_block
+    assert ".operations-home-strip-head span:last-child {\n    display: none;" in mobile_block
+    assert "body .operations-metric-grid,\n  .operations-metric-grid {\n    grid-template-columns: repeat(2, minmax(0, 1fr)) !important;" in mobile_block
+    assert "body #dashboard.active .operations-home-lower {\n    grid-template-columns: minmax(0, 1fr);\n    grid-template-areas:\n      \"trend\"\n      \"attention\"\n      \"platforms\"\n      \"delivery\"\n      \"resource\";" in final_cr105_block
+    assert "body #dashboard.active .operations-window-toggle {\n    margin-left: auto;" in final_cr105_block
+    assert "body #dashboard.active .operations-chart-surface {\n    min-height: 168px;" in final_cr105_block
+    assert "body #dashboard.active .operations-resource-signals {\n    grid-template-columns: repeat(2, minmax(0, 1fr));" in final_cr105_block
+    assert "/* CR-105 ECharts dashboard rebaseline: final inline cascade guard. */" in page
+    inline_cr105_block = page.split("/* CR-105 ECharts dashboard rebaseline: final inline cascade guard. */", 1)[1].split("</style>", 1)[0]
+    assert "body #dashboard.active > .operations-home {\n        grid-template-columns:minmax(0,1fr);" in inline_cr105_block
+    assert 'grid-template-areas:\n          "meta"\n          "metrics"\n          "lower";' in inline_cr105_block
+    assert 'grid-template-areas:\n          "trend"\n          "attention"\n          "platforms"\n          "delivery"\n          "resource";' in inline_cr105_block
+    assert "body #dashboard.active .operations-resource-card-primary .operations-chart-surface {\n      min-height:96px;" in inline_cr105_block
+    assert "function resourceSignalTone(status)" in page
 
     assert "资源由管理员维护" in page
     assert "social_accounts_total" not in dashboard_section.split("function renderOperationsAdminHealth", 1)[-1]

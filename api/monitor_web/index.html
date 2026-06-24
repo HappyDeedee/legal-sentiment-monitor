@@ -515,13 +515,11 @@
       grid-template-areas:
         "hero"
         "overview"
-        "shortcuts"
         "health";
       gap:18px;
     }
     #dashboard.active > .page-head { grid-area:hero; margin-bottom:0; }
     #dashboard.active > .operations-home { grid-area:overview; margin-bottom:0; }
-    #dashboard.active > #task_loop_shortcuts { grid-area:shortcuts; margin:0; }
     #dashboard.active > #operations_home_admin_health { grid-area:health; margin-top:0; }
     .task-loop-shortcuts {
       grid-template-columns:repeat(12, minmax(0,1fr));
@@ -540,95 +538,481 @@
         "meta"
         "metrics"
         "lower";
+      gap:12px;
     }
     .operations-home-meta {
       grid-area:meta;
-      justify-content:space-between;
+      display:grid;
+      gap:10px;
+      padding:0;
+    }
+    .operations-home-ledger {
+      display:flex;
       flex-wrap:wrap;
+      align-items:center;
+      gap:8px;
+    }
+    .operations-home-ledger .status {
+      display:inline-flex;
+      align-items:center;
+    }
+    .operations-home-ribbon {
+      display:grid;
+      grid-template-columns:repeat(5, minmax(0,1fr));
+      gap:8px;
+    }
+    .operations-home-legend {
+      display:flex;
+      flex-wrap:wrap;
+      align-items:center;
+      gap:8px;
+    }
+    .operations-home-strip {
+      display:grid;
+      gap:10px;
+      padding:10px 12px;
+      border:1px solid var(--line);
+      border-radius:12px;
+      background:linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,250,252,.98));
+      box-shadow:var(--shadow-sm);
+    }
+    .operations-home-strip-head {
+      display:grid;
+      grid-template-columns:minmax(0,1fr) auto minmax(0,1fr);
+      align-items:end;
+      gap:10px;
+    }
+    .operations-home-strip-head span {
+      color:var(--muted);
+      font-size:12px;
+      font-weight:700;
+    }
+    .operations-home-strip-head strong {
+      color:var(--text);
+      font-size:24px;
+      line-height:1;
+    }
+    .operations-home-strip-head span:last-child {
+      justify-self:end;
+    }
+    .operations-home-strip .operations-visual-track {
+      min-height:16px;
+      height:16px;
+      overflow:hidden;
+      border-radius:999px;
+    }
+    .operations-home-strip .operations-visual-segment {
+      min-width:0;
+      border-radius:0;
+    }
+    .operations-overview-chart .operations-home-legend {
+      justify-content:center;
+    }
+    .operations-overview-chart .operations-home-legend strong {
+      color:var(--text);
+      font-size:18px;
+      line-height:1;
+    }
+    .operations-overview-chart .operations-home-legend span {
+      color:var(--muted);
+      font-size:11px;
+      font-weight:700;
     }
     .operations-metric-grid {
       grid-area:metrics;
-      gap:12px;
+      gap:10px;
     }
     .operations-metric-card {
-      min-height:166px;
-      padding:18px 18px 16px;
+      appearance:none;
+      width:100%;
+      min-width:0;
+      min-height:126px;
+      display:grid;
+      grid-template-rows:auto 1fr auto;
+      gap:10px;
+      padding:13px 14px 12px;
+      border:1px solid rgba(221,229,239,.9);
+      border-top:3px solid var(--line);
+      border-radius:12px;
       background:linear-gradient(180deg, rgba(255,255,255,.98), rgba(250,251,253,.98));
+      box-shadow:var(--shadow-sm);
+      cursor:pointer;
+      text-align:left;
+      transition:border-color .16s ease, box-shadow .16s ease, transform .16s ease;
     }
-    .operations-metric-card strong { font-size:36px; }
+    .operations-metric-card:hover {
+      border-color:#c8d6e6;
+      box-shadow:0 10px 24px rgba(14,30,52,.08);
+      transform:translateY(-1px);
+    }
+    .operations-metric-card strong { font-size:32px; }
+    .operations-metric-head span {
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+    }
+    .operations-metric-head em {
+      font-style:normal;
+      color:var(--text);
+      font-size:13px;
+    }
+    .operations-metric-gauge {
+      position:relative;
+      width:min(110px, 100%);
+      aspect-ratio:1;
+      margin:0 auto;
+      border-radius:50%;
+      background:conic-gradient(from 225deg, var(--gauge-gradient));
+    }
+    .operations-metric-gauge::before {
+      content:"";
+      position:absolute;
+      inset:11px;
+      border-radius:50%;
+      background:var(--surface);
+      box-shadow:inset 0 0 0 1px rgba(221,229,239,.9);
+    }
+    .operations-metric-gauge-inner {
+      position:absolute;
+      inset:11px;
+      display:grid;
+      place-items:center;
+      text-align:center;
+      z-index:1;
+    }
+    .operations-metric-gauge-inner strong {
+      font-size:32px;
+      line-height:1;
+    }
+    .operations-metric-gauge-inner span {
+      color:var(--muted);
+      font-size:11px;
+      line-height:1.2;
+    }
+    .operations-metric-card p,
+    .operations-metric-foot {
+      display:block;
+    }
+    .operations-metric-foot {
+      margin-top:auto;
+    }
+    .operations-metric-foot .operations-visual-track {
+      min-height:8px;
+      height:8px;
+      border-radius:999px;
+      overflow:hidden;
+    }
+    .operations-visual-track {
+      display:flex;
+      align-items:stretch;
+      gap:4px;
+      min-height:10px;
+    }
+    .operations-visual-segment {
+      min-width:8px;
+      border-radius:999px;
+      background:var(--line);
+    }
+    .operations-visual-segment.is-ok { background:#176347; }
+    .operations-visual-segment.is-live { background:#2f5ec4; }
+    .operations-visual-segment.is-review { background:#8a4b11; }
+    .operations-visual-segment.is-attention,
+    .operations-visual-segment.is-risk { background:#9f2730; }
     .operations-home-lower {
       grid-area:lower;
-      grid-template-columns:minmax(0,1.2fr) minmax(300px,.8fr);
+      grid-template-columns:minmax(0,1.16fr) minmax(260px,.84fr);
       gap:12px;
       align-items:start;
     }
-    .operations-resource-panel { order:-1; }
+    .operations-home-timeline {
+      min-width:0;
+    }
+    .operations-resource-panel { order:0; }
+    .sr-only {
+      position:absolute !important;
+      width:1px !important;
+      height:1px !important;
+      padding:0 !important;
+      margin:-1px !important;
+      overflow:hidden !important;
+      clip:rect(0,0,0,0) !important;
+      white-space:nowrap !important;
+      border:0 !important;
+    }
     .operations-command-rail {
       min-width:0;
-      padding:14px;
+      display:grid;
+      gap:10px;
+      padding:12px;
       border:1px solid var(--line);
-      border-radius:var(--radius);
+      border-radius:12px;
       background:linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,250,252,.98));
       box-shadow:var(--shadow-sm);
     }
     .command-rail-head {
       display:flex;
-      align-items:flex-start;
-      justify-content:space-between;
-      gap:12px;
-      margin-bottom:12px;
+      align-items:baseline;
+      justify-content:center;
+      gap:8px;
     }
     .command-rail-head span {
       color:var(--muted);
-      font-size:12px;
+      font-size:11px;
       font-weight:700;
     }
     .command-rail-head strong {
       display:block;
       margin-top:2px;
-      font-size:18px;
+      font-size:30px;
       color:var(--text);
+      line-height:1;
     }
-    .command-rail-head p {
-      margin:6px 0 0;
-      color:var(--muted);
-      font-size:12px;
-      line-height:1.6;
+    .command-rail-meter {
+      display:flex;
+      align-items:stretch;
+      gap:4px;
+      min-height:14px;
     }
+    .command-rail-meter i {
+      display:block;
+      min-width:10px;
+      border-radius:999px;
+      background:var(--line);
+    }
+    .command-rail-meter i.is-ok { background:#176347; }
+    .command-rail-meter i.is-live { background:#2f5ec4; }
+    .command-rail-meter i.is-review { background:#8a4b11; }
+    .command-rail-meter i.is-attention,
+    .command-rail-meter i.is-risk { background:#9f2730; }
     .command-rail-summary {
       display:grid;
-      grid-template-columns:repeat(4, minmax(0,1fr));
+      grid-template-columns:repeat(5, minmax(0,1fr));
       gap:8px;
     }
     .command-rail-chip {
+      appearance:none;
+      width:100%;
       min-width:0;
-      display:flex;
-      align-items:center;
-      justify-content:space-between;
-      gap:8px;
-      padding:8px 10px;
+      display:grid;
+      justify-items:center;
+      grid-template-rows:auto auto 1fr;
+      gap:6px;
+      min-height:96px;
+      padding:9px 8px;
       border:1px solid var(--line);
-      border-radius:999px;
+      border-radius:12px;
       background:var(--subtle);
+      cursor:pointer;
+      text-align:center;
+      transition:border-color .16s ease, box-shadow .16s ease, transform .16s ease;
     }
-    .command-rail-chip strong { font-size:13px; white-space:nowrap; }
+    .command-rail-chip:hover {
+      border-color:#c8d6e6;
+      box-shadow:0 8px 18px rgba(14,30,52,.07);
+      transform:translateY(-1px);
+    }
+    .command-rail-chip strong {
+      color:var(--text);
+      font-size:26px;
+      line-height:1;
+    }
     .command-rail-chip span {
-      margin:0;
+      display:block;
       color:var(--muted);
-      font-size:12px;
-      line-height:1.3;
-      text-align:right;
+      font-size:11px;
+      font-weight:700;
     }
+    .command-rail-column {
+      display:flex;
+      align-items:end;
+      width:100%;
+      min-height:34px;
+    }
+    .command-rail-column i {
+      display:block;
+      width:100%;
+      min-height:12px;
+      border-radius:999px 999px 4px 4px;
+      background:var(--primary);
+    }
+    .command-rail-chip.is-ok .command-rail-column i { background:var(--success); }
+    .command-rail-chip.is-live .command-rail-column i { background:#2f5ec4; }
+    .command-rail-chip.is-review .command-rail-column i { background:var(--warning); }
+    .command-rail-chip.is-attention .command-rail-column i,
+    .command-rail-chip.is-risk .command-rail-column i { background:var(--danger); }
     .operations-admin-health-card {
-      align-items:flex-start;
+      appearance:none;
+      width:100%;
+      display:grid;
       gap:12px;
+      cursor:pointer;
+      text-align:left;
+      transition:border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+    }
+    .operations-admin-health-card:hover {
+      border-color:#c8d6e6;
+      box-shadow:0 10px 24px rgba(14,30,52,.08);
+      transform:translateY(-1px);
+    }
+    .operations-admin-chart {
+      border-style:solid;
     }
     .operations-admin-health-signals {
-      justify-content:flex-start;
+      display:grid;
+      grid-template-columns:repeat(3, minmax(0,1fr));
+      gap:8px;
+    }
+    .operations-admin-health-signal,
+    .operations-resource-signal {
+      display:grid;
+      gap:6px;
+      min-height:84px;
+      padding:10px 12px;
+      border:1px solid var(--line);
+      border-radius:10px;
+      background:var(--subtle);
+    }
+    .operations-admin-health-signal span,
+    .operations-resource-signal span {
+      color:var(--muted);
+      font-size:12px;
+    }
+    .operations-admin-health-signal strong,
+    .operations-resource-signal strong {
+      color:var(--text);
+      font-size:21px;
+      line-height:1;
+      overflow-wrap:anywhere;
+    }
+    .operations-admin-health-signal .ui-icon,
+    .operations-resource-signal .ui-icon {
+      display:none;
+    }
+    .operations-resource-chart {
+      display:grid;
+      gap:10px;
+    }
+    .operations-resource-signal,
+    .operations-admin-health-signal {
+      position:relative;
+      overflow:hidden;
+    }
+    .operations-admin-health-mini-bar,
+    .operations-resource-mini-bar {
+      display:flex;
+      align-items:end;
+      min-height:32px;
+    }
+    .operations-admin-health-mini-bar i,
+    .operations-resource-mini-bar i {
+      display:block;
+      width:100%;
+      min-height:14px;
+      border-radius:999px 999px 4px 4px;
+      background:linear-gradient(180deg, var(--primary), rgba(47,94,196,.72));
+    }
+    .operations-admin-health-signal.is-ok .operations-admin-health-mini-bar i,
+    .operations-resource-signal.is-ok .operations-resource-mini-bar i {
+      background:linear-gradient(180deg, var(--success), rgba(23,99,71,.72));
+    }
+    .operations-admin-health-signal.is-review .operations-admin-health-mini-bar i,
+    .operations-resource-signal.is-review .operations-resource-mini-bar i {
+      background:linear-gradient(180deg, var(--warning), rgba(138,75,17,.72));
+    }
+    .operations-admin-health-signal.is-attention .operations-admin-health-mini-bar i,
+    .operations-resource-signal.is-attention .operations-resource-mini-bar i {
+      background:linear-gradient(180deg, var(--danger), rgba(159,39,48,.72));
+    }
+    .operations-resource-panel {
+      display:grid;
+      gap:10px;
       min-width:0;
     }
-    .operations-admin-health-signals span {
+    .operations-resource-signals {
+      display:grid;
+      grid-template-columns:repeat(auto-fit, minmax(136px, 1fr));
+      gap:8px;
+    }
+    .operations-resource-signal strong {
+      font-size:22px;
+    }
+    .operations-resource-signal span {
+      color:var(--muted);
+      font-size:12px;
+    }
+    .operations-resource-signal strong {
+      color:var(--text);
+      line-height:1;
+      overflow-wrap:anywhere;
+    }
+    .operations-resource-mini-bar,
+    .operations-admin-health-mini-bar {
+      display:flex;
+      align-items:end;
+      min-height:32px;
+    }
+    .operations-resource-mini-bar i,
+    .operations-admin-health-mini-bar i {
+      display:block;
+      width:100%;
+      min-height:14px;
+      border-radius:999px 999px 4px 4px;
+      background:linear-gradient(180deg, var(--primary), rgba(47,94,196,.72));
+    }
+    .operations-resource-signal.is-ok .operations-resource-mini-bar i,
+    .operations-admin-health-signal.is-ok .operations-admin-health-mini-bar i {
+      background:linear-gradient(180deg, var(--success), rgba(23,99,71,.72));
+    }
+    .operations-resource-signal.is-review .operations-resource-mini-bar i,
+    .operations-admin-health-signal.is-review .operations-admin-health-mini-bar i {
+      background:linear-gradient(180deg, var(--warning), rgba(138,75,17,.72));
+    }
+    .operations-resource-signal.is-attention .operations-resource-mini-bar i,
+    .operations-admin-health-signal.is-attention .operations-admin-health-mini-bar i {
+      background:linear-gradient(180deg, var(--danger), rgba(159,39,48,.72));
+    }
+    .operations-admin-health-card {
+      appearance:none;
+      width:100%;
+      display:grid;
+      gap:12px;
+      padding:12px 14px;
+      border:1px solid var(--line);
+      border-radius:12px;
+      background:linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,250,252,.98));
+      box-shadow:var(--shadow-sm);
+      cursor:pointer;
+      text-align:left;
+      transition:border-color .16s ease, box-shadow .16s ease, transform .16s ease;
+    }
+    .operations-admin-health-card:hover {
+      border-color:#c8d6e6;
+      box-shadow:0 10px 24px rgba(14,30,52,.08);
+      transform:translateY(-1px);
+    }
+    .operations-admin-health-signals {
+      display:grid;
+      grid-template-columns:repeat(3, minmax(0,1fr));
+      gap:8px;
+    }
+    .operations-admin-health-signal {
+      display:grid;
+      gap:6px;
+      min-height:84px;
+      padding:10px 12px;
+      border:1px solid var(--line);
+      border-radius:10px;
       background:var(--subtle);
+    }
+    .operations-admin-health-signal span {
+      color:var(--muted);
+      font-size:12px;
+    }
+    .operations-admin-health-signal strong {
+      color:var(--text);
+      font-size:21px;
+      line-height:1;
+      overflow-wrap:anywhere;
     }
     .drawer-backdrop {
       background:rgba(10,18,32,.44);
@@ -644,6 +1028,10 @@
       min-height:0;
       overflow:hidden;
       isolation:isolate;
+      visibility:hidden;
+    }
+    .drawer.active {
+      visibility:visible;
     }
     .drawer-scroll-body {
       position:relative;
@@ -774,19 +1162,285 @@
     @keyframes loading-pulse {
       50% { opacity:.42; transform:scale(.78); }
     }
+    #dashboard.active {
+      gap:10px;
+    }
+    #dashboard.active > .page-head {
+      min-height:0;
+      align-items:center;
+      padding:8px 10px;
+      border-radius:10px;
+    }
+    #dashboard.active > .page-head .page-title-block {
+      min-width:0;
+      display:flex;
+      align-items:center;
+      gap:8px;
+    }
+    #dashboard.active > .page-head .page-kicker {
+      font-size:12px;
+    }
+    #dashboard.active > .page-head h2 {
+      font-size:18px;
+    }
+    #dashboard.active > .page-head .page-actions button {
+      min-height:32px;
+      padding:7px 12px;
+    }
+    #dashboard.active > #operations_home_admin_health {
+      display:none !important;
+    }
+    .operations-home {
+      display:grid;
+      grid-template-rows:auto minmax(88px, auto) minmax(0, 1fr) auto;
+      gap:8px;
+      min-height:0;
+    }
+    .operations-metric-grid {
+      grid-template-columns:repeat(5, minmax(0,1fr));
+      gap:8px;
+    }
+    .operations-metric-card {
+      min-height:64px;
+      grid-template-columns:minmax(0,1fr) auto;
+      grid-template-rows:auto auto;
+      align-items:center;
+      gap:4px 8px;
+      padding:7px 9px;
+    }
+    .operations-metric-card strong { font-size:20px; }
+    .operations-metric-foot { grid-column:1 / -1; }
+    .operations-metric-gauge {
+      width:42px;
+      grid-column:2;
+      grid-row:1 / 3;
+    }
+    .operations-metric-gauge::before,
+    .operations-metric-gauge-inner { inset:6px; }
+    .operations-metric-gauge-inner strong { font-size:16px; }
+    .operations-context-bar { padding:6px 9px; }
+    .operations-context-bar strong { font-size:16px; }
+    .operations-home-lower {
+      grid-template-columns:minmax(0,1.22fr) minmax(236px,.5fr) minmax(236px,.5fr);
+      grid-template-areas:
+        "trend breakdowns attention"
+        "trend breakdowns resource";
+      grid-template-rows:minmax(0,.42fr) minmax(0,.58fr);
+      gap:8px;
+      align-items:stretch;
+      min-height:0;
+    }
+    .operations-home-timeline {
+      grid-area:trend;
+      min-height:0;
+    }
+    .operations-breakdown-grid {
+      grid-area:breakdowns;
+      display:grid;
+      grid-template-rows:minmax(0,1.05fr) minmax(0,.95fr);
+      gap:8px;
+      min-height:0;
+    }
+    .operations-attention-panel {
+      grid-area:attention;
+      min-width:0;
+      min-height:0;
+    }
+    .operations-resource-panel {
+      grid-area:resource;
+      min-width:0;
+      min-height:0;
+      padding:10px;
+      overflow:hidden;
+    }
+    .operations-resource-chart {
+      height:100%;
+      min-height:0;
+      display:grid;
+      grid-template-rows:auto minmax(0,1fr);
+      gap:7px;
+    }
+    .operations-flow-chart,
+    .operations-breakdown-card,
+    .operations-priority-card {
+      gap:7px;
+      padding:10px;
+      overflow:hidden;
+    }
+    .operations-flow-line { stroke-width:3.4; }
+    .operations-flow-point circle { stroke-width:3.4; }
+    .operations-flow-point text { font-size:11px; }
+    .operations-flow-chart { grid-template-rows:auto minmax(0,1fr) auto; }
+    .operations-breakdown-card { grid-template-rows:auto minmax(0,1fr); }
+    .operations-composition-chart { grid-template-rows:auto auto minmax(0,1fr); }
+    .operations-priority-card { grid-template-rows:auto minmax(0,1fr); }
+    .operations-chart-head strong { font-size:19px; }
+    .operations-flow-svg {
+      min-height:0;
+      height:100%;
+    }
+    .operations-flow-pill {
+      min-height:28px;
+      padding:5px 7px;
+    }
+    .operations-platform-row {
+      min-height:31px;
+      padding:5px 7px;
+    }
+    .operations-platform-matrix {
+      display:grid;
+      grid-template-columns:repeat(7, minmax(0,1fr));
+      gap:4px;
+      min-height:0;
+      margin-top:2px;
+    }
+    .operations-platform-matrix span {
+      aspect-ratio:1;
+      min-height:10px;
+      border-radius:4px;
+      background:rgba(214,224,232,.64);
+    }
+    .operations-platform-matrix .is-ok { background:rgba(15,107,79,.42); }
+    .operations-platform-matrix .is-live { background:rgba(39,93,143,.42); }
+    .operations-platform-matrix .is-review { background:rgba(154,91,19,.38); }
+    .operations-platform-matrix .is-attention,
+    .operations-platform-matrix .is-risk { background:rgba(156,38,50,.42); }
+    .operations-composition-cell {
+      min-height:78px;
+      gap:4px;
+      padding:7px 6px;
+    }
+    .operations-composition-cell i { min-height:32px; }
+    .operations-resource-signals { grid-template-columns:repeat(2, minmax(0,1fr)); gap:6px; margin-top:6px; }
+    .operations-resource-signal { min-height:54px; padding:7px 8px; }
+    .operations-resource-signal strong { font-size:17px; }
+    .operations-resource-mini-bar { min-height:20px; }
+    .operations-priority-map {
+      grid-template-columns:minmax(0,1fr);
+      gap:6px;
+      min-height:0;
+      align-content:start;
+      grid-auto-rows:minmax(42px, auto);
+    }
+    .operations-priority-node {
+      min-height:0;
+      grid-template-columns:auto minmax(0,1fr);
+      grid-template-rows:auto auto;
+      align-items:center;
+      gap:4px 8px;
+      padding:7px 8px;
+    }
+    .operations-priority-node i { grid-column:1 / -1; }
+    .operations-quick-dock {
+      display:grid;
+      grid-template-columns:repeat(5, minmax(0,1fr));
+      gap:6px;
+      min-height:36px;
+    }
+    .operations-quick-dock .shortcut-card {
+      min-height:36px;
+      grid-template-columns:auto minmax(0,1fr);
+      padding:5px 7px;
+      border-radius:9px;
+      box-shadow:none;
+      background:rgba(255,255,255,.58);
+    }
+    .operations-quick-dock .shortcut-card span {
+      width:20px;
+      height:20px;
+      font-size:10px;
+    }
+    .operations-quick-dock .shortcut-card strong {
+      font-size:12px;
+      line-height:1;
+    }
+    @media (min-width:1280px) {
+      #dashboard.active {
+        min-height:calc(100vh - 68px);
+        max-height:calc(100vh - 68px);
+        overflow:hidden;
+        padding-top:10px;
+        padding-bottom:10px;
+      }
+      #dashboard.active > .page-head {
+        min-height:0;
+        padding:10px 14px;
+      }
+      #dashboard.active > .page-head h2 {
+        font-size:20px;
+      }
+      #dashboard.active > .page-head .page-kicker {
+        display:none;
+      }
+      #dashboard.active > .page-head .page-actions button {
+        min-height:32px;
+        padding:7px 12px;
+      }
+      #dashboard.active > .operations-home {
+        height:calc(100vh - 142px);
+        max-height:calc(100vh - 142px);
+      }
+    }
     @media (max-width:1279px) {
       .shell { grid-template-columns:minmax(0,1fr); }
       .task-loop-shortcuts,
       .metric-skeleton-grid { grid-template-columns:repeat(2, minmax(0,1fr)); }
+      .operations-metric-grid { grid-template-columns:repeat(5, minmax(0,1fr)) !important; }
       .shortcut-card { grid-column:span 1; }
-      .operations-home-lower,
-      .command-rail-summary { grid-template-columns:minmax(0,1fr); }
+      .operations-home-lower {
+        grid-template-columns:minmax(0,1.08fr) minmax(168px,.45fr) minmax(168px,.45fr);
+        grid-template-areas:
+          "trend breakdowns attention"
+          "trend breakdowns resource";
+        grid-template-rows:minmax(0,.45fr) minmax(0,.55fr);
+        gap:8px;
+        align-items:stretch;
+        min-height:0;
+      }
+      .operations-breakdown-grid { grid-area:breakdowns; }
+      .operations-attention-panel,
+      .operations-resource-panel { display:block; }
+      .operations-attention-panel { grid-area:attention; }
+      .operations-resource-panel { grid-area:resource; }
+      .command-rail-summary { grid-template-columns:repeat(3, minmax(0,1fr)); }
       .operations-resource-panel { order:0; }
-      .command-rail-head,
-      .operations-admin-health-card { flex-wrap:wrap; }
+      .command-rail-head { justify-content:center; }
       .operations-admin-health-signals { justify-content:flex-start; }
+      .operations-metric-card { min-height:54px; }
+      .operations-flow-svg { min-height:0; }
     }
     @media (min-width:768px) and (max-width:1279px) {
+      #dashboard.active {
+        min-height:calc(100vh - 68px);
+        max-height:calc(100vh - 68px);
+        overflow:hidden;
+        padding-top:10px;
+        padding-bottom:10px;
+      }
+      #dashboard.active > .page-head {
+        padding:8px 10px;
+      }
+      #dashboard.active > .page-head .page-kicker {
+        display:none;
+      }
+      #dashboard.active > .page-head h2 {
+        font-size:18px;
+      }
+      #dashboard.active > .operations-home {
+        height:calc(100vh - 144px);
+        max-height:calc(100vh - 144px);
+        overflow:hidden;
+      }
+      #dashboard.active .operations-home-lower {
+        grid-template-columns:minmax(0,1.08fr) minmax(168px,.45fr) minmax(168px,.45fr) !important;
+        grid-template-areas:
+          "trend breakdowns attention"
+          "trend breakdowns resource";
+        grid-template-rows:minmax(0,.45fr) minmax(0,.55fr);
+        gap:8px;
+        align-items:stretch;
+        min-height:0;
+      }
       body.sidebar-collapsed .shell { grid-template-columns:68px minmax(0,1fr) !important; }
       body.sidebar-collapsed #primary_sidebar,
       body.sidebar-collapsed .shell > aside {
@@ -805,42 +1459,57 @@
         grid-template-areas:
           "hero"
           "overview"
-          "health"
-          "shortcuts";
+          "health";
       }
       .task-loop-shortcuts,
       .metric-skeleton-grid { grid-template-columns:minmax(0,1fr); }
+      .operations-metric-grid { grid-template-columns:repeat(2, minmax(0,1fr)) !important; }
+      .operations-home-lower {
+        grid-template-columns:minmax(0,1fr);
+        grid-template-areas:
+          "trend"
+          "breakdowns"
+          "attention"
+          "resource";
+      }
+      .operations-quick-dock { grid-template-columns:repeat(5, minmax(0,1fr)) !important; gap:5px; }
+      .operations-quick-dock .shortcut-card {
+        min-height:34px;
+        grid-template-columns:minmax(0,1fr);
+        justify-items:center;
+        padding:5px 3px;
+      }
+      .operations-quick-dock .shortcut-card span { display:none; }
+      .operations-quick-dock .shortcut-card strong { font-size:11px; line-height:1.15; text-align:center; }
+      #dashboard.active > .page-head .page-title-block { display:grid; gap:3px; }
+      #dashboard.active > .page-head .page-kicker { display:block; }
       .operations-home-meta { justify-content:flex-start; }
       .operations-home { gap:10px; }
+      .operations-home-strip-head { grid-template-columns:minmax(0,1fr) auto; gap:8px; }
+      .operations-home-strip-head span:last-child { display:none; }
       .operations-metric-grid { gap:8px; }
       .operations-metric-card {
-        min-height:128px !important;
-        padding:12px !important;
-        gap:8px;
+        min-height:0 !important;
+        padding:7px 8px !important;
+        gap:4px 8px;
       }
-      .operations-metric-card strong { font-size:26px; }
+      .operations-metric-card strong { font-size:18px; }
       .operations-metric-card p { font-size:12px; line-height:1.45; }
-      .operations-metric-foot {
-        display:grid;
-        grid-template-columns:minmax(0,1fr) auto;
-        align-items:center;
-        gap:8px;
-      }
+      .operations-metric-gauge { width:38px; }
       .operations-home-lower { gap:10px; }
       .operations-command-rail { padding:12px; }
-      .command-rail-head { margin-bottom:10px; }
-      .command-rail-head strong { font-size:15px; }
-      .command-rail-head p { display:none; }
-      .command-rail-summary {
-        grid-template-columns:repeat(2, minmax(0,1fr));
-        gap:8px;
-      }
+      .command-rail-head { margin-bottom:0; }
+      .command-rail-head strong { font-size:24px; }
+      .command-rail-summary { grid-template-columns:minmax(0,1fr); }
       .command-rail-chip {
-        padding:10px;
+        padding:9px 10px;
         gap:6px;
       }
-      .command-rail-chip strong { font-size:13px; }
+      .command-rail-chip strong { font-size:24px; }
       .operations-resource-panel { padding:12px !important; }
+      .operations-flow-svg { min-height:138px; }
+      .operations-composition-cell,
+      .operations-priority-node { min-height:54px; }
       .detail-tabs.run-detail-tabs {
         display:grid;
         grid-template-columns:repeat(2, minmax(0,1fr));
@@ -954,6 +1623,1583 @@
         white-space:nowrap;
       }
     }
+    #dashboard.active > .operations-home {
+      --operations-card-bg:rgba(255,255,255,.78);
+      --operations-soft-bg:rgba(248,250,251,.72);
+      --operations-hairline:rgba(214,224,232,.82);
+    }
+    @media (min-width:768px) {
+      #dashboard.active > .operations-home {
+        grid-template-rows:auto minmax(46px, auto) minmax(0, 1fr);
+      }
+      #dashboard.active .operations-quick-dock {
+        display:none !important;
+      }
+      #dashboard.active > #operations_home_admin_health {
+        display:none !important;
+      }
+      #dashboard.active .operations-metric-grid {
+        gap:5px;
+      }
+      #dashboard.active .operations-metric-card {
+        min-height:46px;
+        grid-template-columns:minmax(0,1fr) 44px;
+        grid-template-rows:auto auto;
+        align-items:stretch;
+        gap:3px 7px;
+        padding:6px 7px;
+        border:1px solid transparent;
+        border-top:2px solid var(--operations-hairline);
+        background:var(--operations-card-bg);
+        box-shadow:none;
+      }
+      #dashboard.active .operations-metric-card:hover {
+        border-color:var(--phase21-accent-line);
+        background:var(--phase21-accent-soft);
+        box-shadow:none;
+      }
+      #dashboard.active .operations-metric-card strong {
+        font-size:18px;
+      }
+      #dashboard.active .operations-metric-head {
+        display:grid;
+        grid-template-columns:minmax(0,1fr) auto auto;
+        align-items:center;
+        grid-column:1;
+        gap:5px;
+      }
+      #dashboard.active .operations-metric-head span,
+      #dashboard.active .operations-flow-pill span,
+      #dashboard.active .operations-platform-row span,
+      #dashboard.active .operations-composition-cell span,
+      #dashboard.active .operations-priority-node span,
+      #dashboard.active .operations-resource-signal span {
+        font-size:10px;
+      }
+      #dashboard.active .operations-metric-head i {
+        width:6px;
+        height:6px;
+        margin-top:0;
+      }
+      #dashboard.active .operations-metric-gauge {
+        width:44px;
+        height:34px;
+        grid-column:2;
+        grid-row:1 / 3;
+        margin:0;
+        display:flex;
+        align-items:end;
+        justify-content:flex-end;
+        gap:3px;
+        border-radius:0;
+        background:transparent;
+      }
+      #dashboard.active .operations-metric-gauge::before,
+      #dashboard.active .operations-metric-gauge-inner {
+        content:none;
+        display:none;
+      }
+      #dashboard.active .operations-metric-gauge i {
+        display:block;
+        width:7px;
+        min-height:7px;
+        border-radius:999px 999px 3px 3px;
+        background:var(--phase21-line);
+      }
+      #dashboard.active .operations-metric-gauge i.is-ok { background:var(--phase21-success); }
+      #dashboard.active .operations-metric-gauge i.is-live { background:var(--phase21-info); }
+      #dashboard.active .operations-metric-gauge i.is-review { background:var(--phase21-warning); }
+      #dashboard.active .operations-metric-gauge i.is-attention,
+      #dashboard.active .operations-metric-gauge i.is-risk { background:var(--phase21-danger); }
+      #dashboard.active .operations-metric-foot {
+        grid-column:1;
+        align-self:end;
+      }
+      #dashboard.active .operations-metric-foot .operations-visual-track {
+        height:5px;
+        min-height:5px;
+      }
+      #dashboard.active .operations-home-lower {
+        gap:5px;
+      }
+      #dashboard.active .operations-flow-chart,
+      #dashboard.active .operations-breakdown-card,
+      #dashboard.active .operations-priority-card,
+      #dashboard.active .operations-resource-panel {
+        border-color:var(--operations-hairline);
+        border-radius:10px;
+        background:var(--operations-card-bg);
+        box-shadow:none;
+      }
+      #dashboard.active .operations-flow-chart,
+      #dashboard.active .operations-breakdown-card,
+      #dashboard.active .operations-priority-card {
+        padding:7px;
+        gap:4px;
+      }
+      #dashboard.active .operations-flow-chart {
+        grid-template-rows:auto minmax(0,1fr);
+      }
+      #dashboard.active .operations-resource-panel {
+        padding:7px;
+      }
+      #dashboard.active .operations-chart-head strong,
+      #dashboard.active .operations-section-head strong {
+        font-size:16px;
+      }
+      #dashboard.active .operations-flow-line {
+        stroke-width:3;
+      }
+      #dashboard.active .operations-flow-grid.is-upper,
+      #dashboard.active .operations-flow-grid.is-middle {
+        opacity:.42;
+      }
+      #dashboard.active .operations-flow-stem {
+        stroke:rgba(148,163,184,.24);
+        stroke-width:1;
+        stroke-dasharray:3 5;
+      }
+      #dashboard.active .operations-flow-point rect {
+        opacity:.74;
+      }
+      #dashboard.active .operations-flow-point circle {
+        stroke-width:2.8;
+      }
+      #dashboard.active .operations-flow-actions {
+        display:none;
+      }
+      #dashboard.active .operations-flow-pill,
+      #dashboard.active .operations-platform-row,
+      #dashboard.active .operations-composition-cell,
+      #dashboard.active .operations-priority-node,
+      #dashboard.active .operations-resource-signal {
+        border-color:transparent;
+        background:var(--operations-soft-bg);
+        box-shadow:none;
+      }
+      #dashboard.active .operations-flow-pill,
+      #dashboard.active .operations-platform-row {
+        min-height:22px;
+        padding:3px 6px;
+      }
+      #dashboard.active .operations-platform-bars,
+      #dashboard.active .operations-priority-map {
+        gap:5px;
+      }
+      #dashboard.active .operations-composition-cell {
+        min-height:28px;
+        grid-template-columns:minmax(34px,.7fr) auto minmax(56px,1.4fr);
+        grid-template-rows:auto;
+        align-items:center;
+        justify-items:stretch;
+        text-align:left;
+        gap:5px;
+        padding:4px 5px;
+      }
+      #dashboard.active .operations-composition-cell i {
+        width:100%;
+        min-height:8px;
+        height:8px;
+        border-radius:999px;
+      }
+      #dashboard.active .operations-composition-cell b,
+      #dashboard.active .operations-composition-cell em {
+        top:0;
+        right:auto;
+        bottom:0;
+        min-width:3px;
+        min-height:0;
+      }
+      #dashboard.active .operations-priority-node {
+        min-height:0;
+        padding:5px 6px;
+      }
+      #dashboard.active .operations-priority-node.is-attention,
+      #dashboard.active .operations-priority-node.is-risk,
+      #dashboard.active .operations-priority-node.is-review,
+      #dashboard.active .operations-resource-signal.is-attention {
+        border-color:transparent;
+      }
+      #dashboard.active .operations-resource-signals {
+        gap:5px;
+        margin-top:4px;
+      }
+      #dashboard.active .operations-resource-signal {
+        min-height:36px;
+        padding:5px 6px;
+      }
+      #dashboard.active .operations-resource-signal.is-neutral {
+        color:var(--phase21-muted);
+      }
+      #dashboard.active .operations-resource-signal.is-neutral .operations-resource-mini-bar i {
+        background:rgba(100,116,139,.34);
+      }
+      #dashboard.active .operations-resource-signal strong {
+        font-size:14px;
+      }
+      #dashboard.active .operations-resource-mini-bar {
+        min-height:10px;
+      }
+      #dashboard.active .operations-resource-mini-bar i {
+        min-height:6px;
+        border-radius:999px;
+      }
+    }
+    @media (min-width:1280px) {
+      #dashboard.active > .operations-home {
+        height:calc(100vh - 144px);
+        max-height:calc(100vh - 144px);
+      }
+    }
+    @media (min-width:768px) and (max-width:1279px) {
+      #dashboard.active > .operations-home {
+        height:calc(100vh - 140px);
+        max-height:calc(100vh - 140px);
+      }
+      #dashboard.active .operations-home-lower {
+        grid-template-columns:minmax(0,1.18fr) minmax(136px,.41fr) minmax(136px,.41fr) !important;
+      }
+    }
+    @media (max-width:767px) {
+      #dashboard.active > .operations-home {
+        gap:10px;
+      }
+      #dashboard.active .operations-home-lower {
+        gap:10px;
+      }
+      #dashboard.active .operations-flow-chart,
+      #dashboard.active .operations-breakdown-card,
+      #dashboard.active .operations-priority-card,
+      #dashboard.active .operations-resource-panel {
+        border-color:var(--operations-hairline);
+        border-radius:10px;
+        background:var(--operations-card-bg);
+        box-shadow:none;
+      }
+      #dashboard.active .operations-flow-chart {
+        min-height:168px;
+        grid-template-rows:auto minmax(126px, 1fr);
+        padding:10px;
+        gap:8px;
+        overflow:hidden;
+      }
+      #dashboard.active .operations-flow-svg {
+        height:126px;
+        min-height:126px;
+      }
+      #dashboard.active .operations-flow-point text {
+        font-size:12px;
+      }
+      #dashboard.active .operations-flow-actions {
+        display:none;
+      }
+      #dashboard.active .operations-flow-pill {
+        min-height:28px;
+        display:grid;
+        grid-template-columns:minmax(0, 1fr) auto;
+        align-items:center;
+        padding:5px 8px;
+        border-color:var(--operations-hairline);
+        background:rgba(248,250,251,.86);
+        box-shadow:none;
+      }
+      #dashboard.active .operations-flow-pill span {
+        min-width:0;
+        overflow:hidden;
+        font-size:12px;
+        text-overflow:ellipsis;
+        white-space:nowrap;
+      }
+      #dashboard.active .operations-flow-pill strong {
+        font-size:15px;
+      }
+      #dashboard.active .operations-quick-dock {
+        display:grid;
+      }
+    }
+    @media (min-width:768px) {
+      #dashboard.active .operations-flow-grid,
+      #dashboard.active .operations-flow-line,
+      #dashboard.active .operations-flow-stem {
+        vector-effect:non-scaling-stroke;
+      }
+      #dashboard.active .operations-flow-point circle,
+      #dashboard.active .operations-flow-point text {
+        display:none;
+      }
+      #dashboard.active .operations-flow-point rect {
+        opacity:.52;
+      }
+      #dashboard.active .operations-platform-bars {
+        align-content:start;
+        grid-auto-rows:minmax(23px, auto);
+      }
+      #dashboard.active .operations-platform-row {
+        grid-template-columns:minmax(44px,.65fr) auto minmax(68px,1.45fr);
+      }
+      #dashboard.active .operations-platform-chart {
+        grid-template-rows:auto auto minmax(0, auto);
+        align-content:start;
+      }
+      #dashboard.active .operations-platform-matrix {
+        grid-template-columns:repeat(7, minmax(10px,1fr));
+        gap:4px;
+      }
+      #dashboard.active .operations-platform-matrix span {
+        min-height:12px;
+      }
+      #dashboard.active .operations-composition-chart {
+        grid-template-rows:auto 7px minmax(0, auto);
+        align-content:start;
+      }
+      #dashboard.active .operations-composition-cells {
+        grid-template-columns:minmax(0, 1fr);
+        grid-auto-rows:minmax(23px, auto);
+        align-content:start;
+        gap:4px;
+      }
+      #dashboard.active .operations-composition-cell {
+        min-height:23px;
+        grid-template-columns:minmax(34px,.62fr) auto minmax(64px,1.55fr);
+        padding:3px 5px;
+      }
+      #dashboard.active .operations-composition-cell i {
+        min-height:6px;
+        height:6px;
+      }
+      #dashboard.active .operations-priority-map {
+        align-content:start;
+        grid-auto-rows:minmax(30px, auto);
+      }
+      #dashboard.active .operations-priority-node {
+        min-height:30px;
+      }
+      #dashboard.active .operations-resource-chart {
+        height:auto;
+        grid-template-rows:auto auto;
+        align-content:start;
+        gap:5px;
+      }
+      #dashboard.active .operations-resource-signals {
+        align-content:start;
+        grid-auto-rows:minmax(32px, auto);
+      }
+      #dashboard.active .operations-resource-signal {
+        min-height:32px;
+        display:grid;
+        grid-template-columns:minmax(0, 1fr) auto;
+        grid-template-rows:auto auto;
+        align-items:center;
+        gap:2px 5px;
+      }
+      #dashboard.active .operations-resource-signal span {
+        overflow:hidden;
+        text-overflow:ellipsis;
+        white-space:nowrap;
+      }
+      #dashboard.active .operations-resource-signal strong {
+        justify-self:end;
+      }
+      #dashboard.active .operations-resource-mini-bar {
+        grid-column:1 / -1;
+        min-height:5px;
+      }
+    }
+    /* CR-098 final cascade: data-first Operations Home visual refit. */
+    body #dashboard.active > .operations-home {
+      --operations-card-bg:rgba(255,255,255,.92);
+      --operations-soft-bg:rgba(248,250,251,.82);
+      --operations-hairline:rgba(214,224,232,.88);
+      --operations-stage-bg:rgba(15,118,110,.11);
+      --operations-stage-fill:rgba(15,118,110,.84);
+      --operations-alert-fill:rgba(156,38,50,.82);
+    }
+    body #dashboard.active .operations-quick-dock { display:none !important; }
+    body #dashboard.active .operations-context-bar {
+      min-height:28px;
+      padding:5px 8px;
+      border-radius:8px;
+      box-shadow:none;
+    }
+    body #dashboard.active .operations-context-bar span,
+    body #dashboard.active .operations-context-bar strong { font-size:11px; }
+    body #dashboard.active .operations-context-bar strong {
+      color:var(--phase21-danger);
+      font-size:14px;
+    }
+    body #dashboard.active .operations-chart-head,
+    body #dashboard.active .operations-section-head {
+      align-items:baseline;
+      min-height:18px;
+    }
+    body #dashboard.active .operations-chart-head span,
+    body #dashboard.active .operations-section-head span {
+      color:var(--phase21-muted);
+      font-size:10px;
+      font-weight:700;
+    }
+    body #dashboard.active .operations-chart-head strong,
+    body #dashboard.active .operations-section-head strong {
+      color:var(--phase21-text);
+      font-size:15px;
+      line-height:1;
+    }
+    body #dashboard.active .operations-metric-card,
+    body #dashboard.active .operations-flow-chart,
+    body #dashboard.active .operations-breakdown-card,
+    body #dashboard.active .operations-priority-card,
+    body #dashboard.active .operations-resource-panel {
+      border:1px solid var(--operations-hairline);
+      border-radius:8px;
+      background:var(--operations-card-bg);
+      box-shadow:none;
+    }
+    body #dashboard.active .operations-metric-card {
+      min-height:48px;
+      grid-template-columns:minmax(0,1fr) 50px;
+      grid-template-rows:auto auto;
+      gap:3px 8px;
+      padding:6px 8px;
+      border-top-width:1px;
+    }
+    body #dashboard.active .operations-metric-card:hover,
+    body #dashboard.active .operations-flow-pill:hover,
+    body #dashboard.active .operations-platform-row:hover,
+    body #dashboard.active .operations-composition-cell:hover,
+    body #dashboard.active .operations-priority-node:hover {
+      border-color:var(--phase21-accent-line);
+      background:var(--phase21-accent-soft);
+      box-shadow:none;
+      transform:none;
+    }
+    body #dashboard.active .operations-metric-card.is-attention,
+    body #dashboard.active .operations-metric-card.is-risk {
+      border-color:rgba(156,38,50,.34);
+    }
+    body #dashboard.active .operations-metric-head {
+      grid-template-columns:minmax(0,1fr) auto;
+      gap:5px;
+    }
+    body #dashboard.active .operations-metric-head span {
+      overflow:hidden;
+      color:var(--phase21-muted);
+      font-size:10px;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    body #dashboard.active .operations-metric-head strong {
+      color:var(--phase21-text);
+      font-size:17px;
+    }
+    body #dashboard.active .operations-metric-head i { display:none; }
+    body #dashboard.active .operations-metric-gauge {
+      width:50px;
+      height:30px;
+      grid-column:2;
+      grid-row:1 / 3;
+      display:flex;
+      align-items:end;
+      justify-content:end;
+      gap:2px;
+      margin:0;
+      border-radius:0;
+      background:transparent;
+    }
+    body #dashboard.active .operations-metric-gauge::before,
+    body #dashboard.active .operations-metric-gauge-inner {
+      content:none;
+      display:none;
+    }
+    body #dashboard.active .operations-metric-gauge i {
+      width:6px;
+      min-height:5px;
+      border-radius:999px 999px 3px 3px;
+      background:var(--phase21-line-strong);
+    }
+    body #dashboard.active .operations-metric-gauge i.is-ok,
+    body #dashboard.active .operations-visual-segment.is-ok { background:var(--phase21-success); }
+    body #dashboard.active .operations-metric-gauge i.is-live,
+    body #dashboard.active .operations-visual-segment.is-live { background:var(--phase21-info); }
+    body #dashboard.active .operations-metric-gauge i.is-review,
+    body #dashboard.active .operations-visual-segment.is-review { background:var(--phase21-warning); }
+    body #dashboard.active .operations-metric-gauge i.is-attention,
+    body #dashboard.active .operations-metric-gauge i.is-risk,
+    body #dashboard.active .operations-visual-segment.is-attention,
+    body #dashboard.active .operations-visual-segment.is-risk { background:var(--phase21-danger); }
+    body #dashboard.active .operations-metric-foot {
+      grid-column:1;
+      align-self:end;
+    }
+    body #dashboard.active .operations-metric-foot .operations-visual-track {
+      height:4px;
+      min-height:4px;
+      gap:2px;
+    }
+    body #dashboard.active .operations-stage-flow {
+      grid-template-rows:auto minmax(0,1fr) 0;
+      gap:8px;
+    }
+    body #dashboard.active .operations-stage-board {
+      position:relative;
+      min-height:0;
+      display:grid;
+      align-items:stretch;
+      overflow:hidden;
+    }
+    body #dashboard.active .operations-stage-line {
+      position:absolute;
+      inset:11% 2% auto;
+      width:96%;
+      height:42%;
+      opacity:.42;
+      pointer-events:none;
+    }
+    body #dashboard.active .operations-flow-grid {
+      stroke:var(--phase21-line);
+      stroke-width:1;
+      vector-effect:non-scaling-stroke;
+    }
+    body #dashboard.active .operations-flow-line {
+      stroke:var(--phase21-accent);
+      stroke-width:2.2;
+      vector-effect:non-scaling-stroke;
+    }
+    body #dashboard.active .operations-stage-nodes {
+      position:relative;
+      z-index:1;
+      height:100%;
+      min-height:0;
+      display:grid;
+      grid-template-columns:repeat(5, minmax(0,1fr));
+      gap:8px;
+      align-items:stretch;
+    }
+    body #dashboard.active .operations-stage-node {
+      min-height:0;
+      display:grid;
+      grid-template-columns:minmax(0,1fr);
+      grid-template-rows:auto auto minmax(0,1fr);
+      align-items:stretch;
+      gap:5px;
+      padding:8px 9px;
+      border:1px solid var(--operations-hairline);
+      border-radius:8px;
+      background:linear-gradient(180deg, rgba(255,255,255,.94), rgba(248,250,251,.86));
+      text-align:left;
+    }
+    body #dashboard.active .operations-stage-node span {
+      overflow:hidden;
+      color:var(--phase21-muted);
+      font-size:11px;
+      font-weight:700;
+      text-overflow:ellipsis;
+      white-space:nowrap;
+    }
+    body #dashboard.active .operations-stage-node strong {
+      color:var(--phase21-text);
+      font-size:22px;
+      line-height:1;
+    }
+    body #dashboard.active .operations-stage-bar {
+      position:relative;
+      grid-column:1;
+      align-self:end;
+      display:block;
+      width:100%;
+      height:100%;
+      min-height:42px;
+      overflow:hidden;
+      border-radius:999px 999px 5px 5px;
+      background:var(--operations-stage-bg);
+    }
+    body #dashboard.active .operations-stage-bar b,
+    body #dashboard.active .operations-stage-bar em {
+      position:absolute;
+      right:0;
+      bottom:0;
+      left:0;
+      display:block;
+      min-height:4px;
+    }
+    body #dashboard.active .operations-stage-bar b {
+      height:var(--stage-height);
+      background:var(--operations-stage-fill);
+    }
+    body #dashboard.active .operations-stage-bar em {
+      height:var(--stage-alert);
+      background:var(--operations-alert-fill);
+    }
+    body #dashboard.active .operations-stage-node.is-live .operations-stage-bar b { background:var(--phase21-info); }
+    body #dashboard.active .operations-stage-node.is-review .operations-stage-bar b { background:var(--phase21-warning); }
+    body #dashboard.active .operations-stage-node.is-attention .operations-stage-bar b,
+    body #dashboard.active .operations-stage-node.is-risk .operations-stage-bar b {
+      background:rgba(156,38,50,.56);
+    }
+    body #dashboard.active .operations-stage-node.is-live .operations-stage-bar b,
+    body #dashboard.active .operations-stage-node.is-review .operations-stage-bar b,
+    body #dashboard.active .operations-stage-node.is-attention .operations-stage-bar b,
+    body #dashboard.active .operations-stage-node.is-risk .operations-stage-bar b {
+      background:var(--operations-stage-fill);
+    }
+    body #dashboard.active .operations-flow-actions { display:none !important; }
+    body #dashboard.active .operations-breakdown-card,
+    body #dashboard.active .operations-priority-card,
+    body #dashboard.active .operations-resource-panel {
+      padding:8px;
+      gap:6px;
+    }
+    body #dashboard.active .operations-platform-bars,
+    body #dashboard.active .operations-composition-cells,
+    body #dashboard.active .operations-priority-map,
+    body #dashboard.active .operations-resource-signals { gap:5px; }
+    body #dashboard.active .operations-platform-matrix { display:none; }
+    body #dashboard.active .operations-platform-row,
+    body #dashboard.active .operations-composition-cell,
+    body #dashboard.active .operations-priority-node,
+    body #dashboard.active .operations-resource-signal {
+      border:1px solid transparent;
+      border-radius:7px;
+      background:var(--operations-soft-bg);
+      box-shadow:none;
+    }
+    body #dashboard.active .operations-platform-row {
+      min-height:24px;
+      grid-template-columns:minmax(42px,.7fr) auto minmax(72px,1.5fr);
+      padding:3px 6px;
+    }
+    body #dashboard.active .operations-platform-row span,
+    body #dashboard.active .operations-composition-cell span,
+    body #dashboard.active .operations-priority-node span,
+    body #dashboard.active .operations-resource-signal span {
+      color:var(--phase21-muted);
+      font-size:10px;
+      font-weight:700;
+    }
+    body #dashboard.active .operations-platform-row strong,
+    body #dashboard.active .operations-composition-cell strong,
+    body #dashboard.active .operations-priority-node strong,
+    body #dashboard.active .operations-resource-signal strong {
+      color:var(--phase21-text);
+      font-size:13px;
+      line-height:1;
+    }
+    body #dashboard.active .operations-platform-row i,
+    body #dashboard.active .operations-composition-cell i,
+    body #dashboard.active .operations-priority-node i,
+    body #dashboard.active .operations-resource-mini-bar {
+      height:6px;
+      min-height:6px;
+      overflow:hidden;
+      border-radius:999px;
+      background:rgba(214,224,232,.82);
+    }
+    body #dashboard.active .operations-platform-row i b,
+    body #dashboard.active .operations-composition-cell i b,
+    body #dashboard.active .operations-priority-node i b,
+    body #dashboard.active .operations-resource-mini-bar i {
+      display:block;
+      height:100%;
+      min-width:3px;
+      border-radius:inherit;
+      background:var(--phase21-accent);
+    }
+    body #dashboard.active .operations-composition-track {
+      height:7px;
+      min-height:7px;
+    }
+    body #dashboard.active .operations-composition-cells {
+      display:grid;
+      grid-auto-rows:minmax(24px, auto);
+    }
+    body #dashboard.active .operations-composition-cell {
+      min-height:24px;
+      grid-template-columns:minmax(34px,.7fr) auto minmax(62px,1.5fr);
+      padding:3px 6px;
+    }
+    body #dashboard.active .operations-composition-cell i em { background:var(--phase21-danger); }
+    body #dashboard.active .operations-priority-map {
+      display:grid;
+      grid-template-columns:minmax(0,1fr);
+      align-content:start;
+    }
+    body #dashboard.active .operations-priority-node {
+      min-height:30px;
+      grid-template-columns:auto minmax(0,1fr);
+      grid-template-rows:auto auto;
+      gap:4px 6px;
+      padding:5px 6px;
+      text-align:left;
+    }
+    body #dashboard.active .operations-priority-node i { grid-column:1 / -1; }
+    body #dashboard.active .operations-priority-node.is-attention,
+    body #dashboard.active .operations-priority-node.is-risk { background:rgba(255,240,242,.72); }
+    body #dashboard.active .operations-priority-node.is-review { background:rgba(255,247,232,.72); }
+    body #dashboard.active .operations-resource-chart {
+      height:100%;
+      min-height:0;
+      display:grid;
+      grid-template-rows:auto minmax(0,1fr);
+      gap:6px;
+    }
+    body #dashboard.active .operations-resource-signals {
+      display:grid;
+      grid-template-columns:repeat(2, minmax(0,1fr));
+      align-content:start;
+    }
+    body #dashboard.active .operations-resource-signal {
+      min-height:34px;
+      display:grid;
+      grid-template-columns:minmax(0,1fr) auto;
+      grid-template-rows:auto auto;
+      gap:3px 6px;
+      padding:5px 6px;
+    }
+    body #dashboard.active .operations-resource-mini-bar { grid-column:1 / -1; }
+    body #dashboard.active .operations-resource-signal.is-neutral .operations-resource-mini-bar i {
+      background:rgba(88,106,125,.48);
+    }
+    @media (min-width:1280px) {
+      body #dashboard.active {
+        min-height:calc(100vh - 68px);
+        max-height:calc(100vh - 68px);
+        overflow:hidden;
+      }
+      body #dashboard.active > .operations-home {
+        height:calc(100vh - 144px);
+        max-height:calc(100vh - 144px);
+        grid-template-rows:30px 50px minmax(0,1fr);
+        gap:6px;
+      }
+      body #dashboard.active .operations-metric-grid { gap:6px; }
+      body #dashboard.active .operations-home-lower {
+        grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(196px,.64fr);
+        grid-template-areas:
+          "trend trend attention"
+          "breakdowns breakdowns resource";
+        grid-template-rows:minmax(220px,.56fr) minmax(170px,.44fr);
+        gap:6px;
+      }
+      body #dashboard.active .operations-breakdown-grid {
+        grid-template-columns:repeat(2, minmax(0,1fr));
+        grid-template-rows:minmax(0,1fr);
+      }
+    }
+    @media (min-width:768px) and (max-width:1279px) {
+      body #dashboard.active {
+        min-height:calc(100vh - 68px);
+        max-height:calc(100vh - 68px);
+        overflow:hidden;
+      }
+      body #dashboard.active > .operations-home {
+        height:calc(100vh - 140px);
+        max-height:calc(100vh - 140px);
+        grid-template-rows:30px 50px minmax(0,1fr);
+        gap:6px;
+      }
+      body #dashboard.active .operations-home-lower {
+        grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(158px,.62fr) !important;
+        grid-template-areas:
+          "trend trend attention"
+          "breakdowns breakdowns resource";
+        grid-template-rows:minmax(190px,.56fr) minmax(150px,.44fr);
+        gap:6px;
+      }
+      body #dashboard.active .operations-breakdown-grid {
+        grid-template-columns:repeat(2, minmax(0,1fr));
+        grid-template-rows:minmax(0,1fr);
+      }
+      body #dashboard.active .operations-stage-nodes { gap:6px; }
+      body #dashboard.active .operations-stage-node { padding:7px 7px; }
+      body #dashboard.active .operations-stage-node strong { font-size:19px; }
+    }
+    @media (max-width:767px) {
+      body #dashboard.active {
+        max-height:none;
+        overflow:visible;
+      }
+      body #dashboard.active > .operations-home {
+        display:grid;
+        grid-template-areas:
+          "meta"
+          "attention"
+          "metrics"
+          "breakdowns"
+          "trend"
+          "resource";
+        grid-template-rows:auto auto auto auto auto auto;
+        gap:9px;
+      }
+      body #dashboard.active > .page-head .page-kicker { display:none; }
+      body #dashboard.active .operations-home-meta { grid-area:meta; }
+      body #dashboard.active .operations-metric-grid {
+        grid-area:metrics;
+        grid-template-columns:repeat(2, minmax(0,1fr)) !important;
+        gap:7px;
+      }
+      body #dashboard.active .operations-home-lower { display:contents; }
+      body #dashboard.active .operations-attention-panel { grid-area:attention; }
+      body #dashboard.active .operations-breakdown-grid {
+        grid-area:breakdowns;
+        display:grid;
+        grid-template-columns:minmax(0,1fr);
+        gap:9px;
+      }
+      body #dashboard.active .operations-home-timeline { grid-area:trend; }
+      body #dashboard.active .operations-resource-panel { grid-area:resource; }
+      body #dashboard.active .operations-context-bar {
+        grid-template-columns:repeat(3, max-content) minmax(0,1fr) max-content;
+        overflow:hidden;
+      }
+      body #dashboard.active .operations-context-bar span:nth-child(4) { display:none; }
+      body #dashboard.active .operations-stage-flow { min-height:190px; }
+      body #dashboard.active .operations-stage-board { min-height:146px; }
+      body #dashboard.active .operations-stage-nodes {
+        grid-template-columns:repeat(5, minmax(0,1fr));
+        gap:5px;
+      }
+      body #dashboard.active .operations-stage-node {
+        min-height:134px;
+        padding:7px 6px;
+      }
+      body #dashboard.active .operations-stage-node span { font-size:10px; }
+      body #dashboard.active .operations-stage-node strong { font-size:17px; }
+      body #dashboard.active .operations-priority-map { grid-template-columns:repeat(2, minmax(0,1fr)); }
+      body #dashboard.active .operations-resource-signals { grid-template-columns:repeat(2, minmax(0,1fr)); }
+    }
+
+    /* CR-099 visual clarity: legend-first operations home alignment. */
+    body #dashboard.active .operations-chart-legend {
+      display:flex;
+      flex-wrap:wrap;
+      align-items:center;
+      gap:8px;
+      min-height:18px;
+    }
+    body #dashboard.active .operations-chart-legend.is-compact { gap:6px; }
+    body #dashboard.active .operations-chart-legend.is-flow { margin-top:-2px; }
+    body #dashboard.active .operations-legend-item {
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+      color:var(--phase21-muted);
+      font-size:10px;
+      font-weight:700;
+    }
+    body #dashboard.active .operations-legend-item i {
+      width:8px;
+      height:8px;
+      flex:0 0 auto;
+      border-radius:999px;
+      background:var(--legend-color, rgba(148,163,184,.9));
+    }
+    body #dashboard.active .operations-legend-item strong {
+      color:var(--phase21-text);
+      font-size:10px;
+      font-weight:700;
+      line-height:1;
+    }
+    body #dashboard.active .operations-legend-item.is-ok i { --legend-color:var(--phase21-success); }
+    body #dashboard.active .operations-legend-item.is-live i { --legend-color:var(--phase21-info); }
+    body #dashboard.active .operations-legend-item.is-review i { --legend-color:var(--phase21-warning); }
+    body #dashboard.active .operations-legend-item.is-attention i,
+    body #dashboard.active .operations-legend-item.is-risk i { --legend-color:var(--phase21-danger); }
+    body #dashboard.active .operations-legend-item.is-neutral i { --legend-color:rgba(148,163,184,.92); }
+    body #dashboard.active .operations-context-bar {
+      gap:6px;
+      align-items:center;
+    }
+    body #dashboard.active .operations-context-bar span:nth-child(-n+4) {
+      padding:4px 8px;
+      border:1px solid var(--operations-hairline);
+      border-radius:999px;
+      background:rgba(255,255,255,.88);
+    }
+    body #dashboard.active .operations-metric-card {
+      min-height:70px;
+      grid-template-columns:minmax(0,1fr) auto;
+      grid-template-rows:auto auto auto;
+      gap:6px 10px;
+      padding:8px 10px 9px;
+      border-color:var(--operations-hairline);
+    }
+    body #dashboard.active .operations-metric-head { align-items:center; }
+    body #dashboard.active .operations-metric-label {
+      min-width:0;
+      display:inline-flex;
+      align-items:center;
+      gap:8px;
+    }
+    body #dashboard.active .operations-metric-label em {
+      font-style:normal;
+      color:var(--phase21-text);
+      font-size:13px;
+      font-weight:700;
+    }
+    body #dashboard.active .operations-metric-icon {
+      width:28px;
+      height:28px;
+      flex:0 0 auto;
+      display:grid;
+      place-items:center;
+      border:1px solid var(--operations-hairline);
+      border-radius:10px;
+      background:linear-gradient(180deg, rgba(255,255,255,.96), rgba(244,248,251,.88));
+      color:var(--phase21-accent);
+    }
+    body #dashboard.active .operations-metric-icon svg,
+    body #dashboard.active .operations-problem-icon svg {
+      width:16px;
+      height:16px;
+      display:block;
+      stroke:currentColor;
+      fill:none;
+      stroke-width:2;
+      stroke-linecap:round;
+      stroke-linejoin:round;
+    }
+    body #dashboard.active .operations-metric-icon.is-ok {
+      color:var(--phase21-success);
+      border-color:rgba(15,118,110,.18);
+      background:rgba(240,253,250,.94);
+    }
+    body #dashboard.active .operations-metric-icon.is-live {
+      color:var(--phase21-info);
+      border-color:rgba(37,99,235,.18);
+      background:rgba(239,246,255,.94);
+    }
+    body #dashboard.active .operations-metric-icon.is-review {
+      color:var(--phase21-warning);
+      border-color:rgba(180,83,9,.18);
+      background:rgba(255,247,237,.94);
+    }
+    body #dashboard.active .operations-metric-icon.is-attention,
+    body #dashboard.active .operations-metric-icon.is-risk {
+      color:var(--phase21-danger);
+      border-color:rgba(185,28,28,.18);
+      background:rgba(254,242,242,.94);
+    }
+    body #dashboard.active .operations-metric-head strong { font-size:22px; }
+    body #dashboard.active .operations-metric-card.is-attention,
+    body #dashboard.active .operations-metric-card.is-risk {
+      border-color:var(--operations-hairline);
+      background:var(--operations-card-bg);
+    }
+    body #dashboard.active .operations-metric-meta {
+      grid-column:1 / -1;
+      color:var(--phase21-muted);
+      font-size:10px;
+      font-weight:700;
+    }
+    body #dashboard.active .operations-metric-gauge {
+      width:auto;
+      height:14px;
+      grid-column:1 / -1;
+      grid-row:auto;
+      display:flex;
+      align-items:end;
+      justify-content:flex-start;
+      gap:4px;
+      margin:0;
+    }
+    body #dashboard.active .operations-metric-gauge i {
+      width:12px;
+      min-height:10px;
+      border-radius:999px;
+    }
+    body #dashboard.active .operations-metric-foot {
+      grid-column:1 / -1;
+      display:grid;
+      gap:5px;
+    }
+    body #dashboard.active .operations-stage-flow {
+      grid-template-rows:auto auto;
+      gap:8px;
+    }
+    body #dashboard.active .operations-stage-head {
+      display:grid;
+      grid-template-columns:minmax(0,1fr);
+      gap:4px;
+    }
+    body #dashboard.active .operations-stage-board {
+      position:relative;
+      padding-top:2px;
+    }
+    body #dashboard.active .operations-stage-plot {
+      position:relative;
+      display:grid;
+      gap:10px;
+      min-height:168px;
+      padding:12px;
+      border:1px solid rgba(214,224,232,.96);
+      border-radius:8px;
+      background:
+        linear-gradient(180deg, rgba(246,250,252,.98), rgba(240,246,249,.88)),
+        linear-gradient(180deg, rgba(255,255,255,.98), rgba(248,250,251,.94));
+      box-shadow:inset 0 1px 0 rgba(255,255,255,.68);
+    }
+    body #dashboard.active .operations-stage-plot::before {
+      content:"";
+      position:absolute;
+      inset:10px;
+      border-radius:8px;
+      border:1px solid rgba(255,255,255,.58);
+      pointer-events:none;
+    }
+    body #dashboard.active .operations-stage-chart {
+      position:relative;
+      min-height:104px;
+    }
+    body #dashboard.active .operations-stage-columns,
+    body #dashboard.active .operations-stage-line {
+      position:absolute;
+      inset:0;
+    }
+    body #dashboard.active .operations-stage-markers {
+      position:absolute;
+      inset:0;
+      pointer-events:none;
+    }
+    body #dashboard.active .operations-stage-columns {
+      display:grid;
+      grid-template-columns:repeat(5, minmax(0, 1fr));
+      gap:8px;
+      padding:2px 2px 12px;
+      pointer-events:none;
+    }
+    body #dashboard.active .operations-stage-column {
+      position:relative;
+      border-radius:8px;
+      background:linear-gradient(180deg, rgba(15,118,110,.05), rgba(15,118,110,.015));
+      box-shadow:inset 0 0 0 1px rgba(214,224,232,.66);
+    }
+    body #dashboard.active .operations-stage-column i {
+      position:absolute;
+      inset:0;
+      display:block;
+      background:linear-gradient(180deg, rgba(255,255,255,0), rgba(255,255,255,.16));
+      border-radius:inherit;
+    }
+    body #dashboard.active .operations-stage-line {
+      width:100%;
+      height:100%;
+      opacity:1;
+    }
+    body #dashboard.active .operations-flow-grid {
+      stroke:rgba(148,163,184,.26);
+      stroke-width:1;
+      stroke-dasharray:4 4;
+    }
+    body #dashboard.active .operations-stage-area {
+      fill:rgba(15,118,110,.08);
+    }
+    body #dashboard.active .operations-flow-line {
+      fill:none;
+      stroke-linecap:round;
+      stroke-linejoin:round;
+    }
+    body #dashboard.active .operations-stage-line-primary {
+      stroke:rgba(15,118,110,.92);
+      stroke-width:2.8;
+    }
+    body #dashboard.active .operations-stage-line-secondary {
+      stroke:rgba(156,38,50,.72);
+      stroke-width:2;
+    }
+    body #dashboard.active .operations-stage-point {
+      position:absolute;
+      left:var(--point-x);
+      top:var(--point-y);
+      border-radius:999px;
+      transform:translate(-50%, -50%);
+      background:#fff;
+      box-sizing:border-box;
+    }
+    body #dashboard.active .operations-stage-point-primary {
+      width:12px;
+      height:12px;
+      border:3px solid rgba(15,118,110,.92);
+      box-shadow:0 0 0 2px rgba(255,255,255,.92);
+    }
+    body #dashboard.active .operations-stage-point-secondary {
+      width:10px;
+      height:10px;
+      border:2px solid rgba(156,38,50,.72);
+      box-shadow:0 0 0 2px rgba(255,255,255,.9);
+    }
+    body #dashboard.active .operations-stage-nodes {
+      display:grid;
+      grid-template-columns:repeat(5, minmax(0,1fr));
+      gap:8px;
+      align-items:start;
+    }
+    body #dashboard.active .operations-stage-node {
+      min-height:0;
+      padding:0;
+      border:none;
+      background:transparent;
+      grid-template-columns:minmax(0,1fr);
+      grid-template-rows:auto auto;
+      gap:4px;
+      z-index:1;
+      text-align:center;
+    }
+    body #dashboard.active .operations-stage-node:hover {
+      background:transparent;
+      border-color:transparent;
+      transform:none;
+    }
+    body #dashboard.active .operations-stage-node-top {
+      display:grid;
+      justify-items:center;
+      gap:2px;
+    }
+    body #dashboard.active .operations-stage-node-label {
+      color:var(--phase21-muted);
+      font-size:10px;
+      font-weight:800;
+      letter-spacing:0;
+    }
+    body #dashboard.active .operations-stage-node-value {
+      color:var(--phase21-text);
+      font-size:20px;
+      line-height:1;
+      font-weight:800;
+    }
+    body #dashboard.active .operations-stage-node-status {
+      min-height:16px;
+      display:flex;
+      justify-content:center;
+      align-items:flex-start;
+    }
+    body #dashboard.active .operations-stage-chip {
+      min-width:18px;
+      height:16px;
+      padding:0 6px;
+      display:inline-flex;
+      align-items:center;
+      justify-content:center;
+      border-radius:999px;
+      background:rgba(156,38,50,.12);
+      color:var(--phase21-danger);
+      font-size:10px;
+      font-weight:800;
+      line-height:1;
+    }
+    body #dashboard.active .operations-stage-chip.is-empty {
+      opacity:0;
+    }
+    body #dashboard.active .operations-breakdown-card,
+    body #dashboard.active .operations-priority-card,
+    body #dashboard.active .operations-resource-panel { padding:10px; }
+    body #dashboard.active .operations-platform-layout {
+      display:grid;
+      grid-template-columns:96px minmax(0,1fr);
+      gap:10px;
+      align-items:center;
+    }
+    body #dashboard.active .operations-donut {
+      position:relative;
+      width:92px;
+      height:92px;
+      border-radius:999px;
+      box-shadow:inset 0 0 0 1px rgba(214,224,232,.88);
+    }
+    body #dashboard.active .operations-donut::before {
+      content:"";
+      position:absolute;
+      inset:15px;
+      border-radius:999px;
+      background:rgba(255,255,255,.98);
+      box-shadow:inset 0 0 0 1px rgba(214,224,232,.88);
+    }
+    body #dashboard.active .operations-donut-inner {
+      position:absolute;
+      inset:15px;
+      z-index:1;
+      display:grid;
+      place-items:center;
+      text-align:center;
+    }
+    body #dashboard.active .operations-donut-inner span {
+      color:var(--phase21-muted);
+      font-size:10px;
+      font-weight:700;
+    }
+    body #dashboard.active .operations-donut-inner strong {
+      color:var(--phase21-text);
+      font-size:18px;
+      line-height:1;
+    }
+    body #dashboard.active .operations-platform-bars {
+      display:grid;
+      gap:6px;
+    }
+    body #dashboard.active .operations-platform-row {
+      min-height:28px;
+      grid-template-columns:minmax(0,1fr) auto auto;
+      grid-template-rows:auto auto;
+      align-items:center;
+      gap:3px 8px;
+      padding:4px 0;
+      border:none;
+      background:transparent;
+    }
+    body #dashboard.active .operations-platform-row:hover {
+      background:transparent;
+      border-color:transparent;
+    }
+    body #dashboard.active .operations-platform-row-label {
+      min-width:0;
+      display:inline-flex;
+      align-items:center;
+      gap:6px;
+    }
+    body #dashboard.active .operations-platform-row-label span {
+      color:var(--phase21-text);
+      font-size:11px;
+    }
+    body #dashboard.active .operations-platform-swatch {
+      width:8px;
+      height:8px;
+      flex:0 0 auto;
+      border-radius:999px;
+      background:var(--platform-color, var(--phase21-accent));
+    }
+    body #dashboard.active .operations-platform-row strong { font-size:12px; }
+    body #dashboard.active .operations-platform-row em {
+      color:var(--phase21-muted);
+      font-size:10px;
+      font-style:normal;
+      font-weight:700;
+    }
+    body #dashboard.active .operations-platform-row i { grid-column:1 / -1; }
+    body #dashboard.active .operations-composition-track { display:none; }
+    body #dashboard.active .operations-composition-cells { gap:8px; }
+    body #dashboard.active .operations-composition-cell {
+      min-height:38px;
+      grid-template-columns:minmax(0,1fr);
+      grid-template-rows:auto auto auto;
+      gap:4px;
+      padding:4px 0;
+      border:none;
+      background:transparent;
+    }
+    body #dashboard.active .operations-composition-cell:hover {
+      background:transparent;
+      border-color:transparent;
+    }
+    body #dashboard.active .operations-composition-head {
+      display:flex;
+      align-items:center;
+      justify-content:space-between;
+      gap:8px;
+    }
+    body #dashboard.active .operations-composition-note {
+      color:var(--phase21-muted);
+      font-size:10px;
+      font-weight:700;
+    }
+    body #dashboard.active .operations-composition-cell i { height:8px; }
+    body #dashboard.active .operations-priority-map { gap:8px; }
+    body #dashboard.active .operations-priority-node {
+      min-height:42px;
+      grid-template-columns:auto minmax(0,1fr) auto;
+      grid-template-rows:auto auto;
+      gap:4px 8px;
+      padding:6px 0;
+      border:none;
+      background:transparent;
+    }
+    body #dashboard.active .operations-priority-node.is-attention,
+    body #dashboard.active .operations-priority-node.is-risk,
+    body #dashboard.active .operations-priority-node.is-review { background:transparent; }
+    body #dashboard.active .operations-priority-node:hover {
+      background:transparent;
+      border-color:transparent;
+    }
+    body #dashboard.active .operations-problem-icon {
+      width:24px;
+      height:24px;
+      display:grid;
+      place-items:center;
+      border:1px solid transparent;
+      border-radius:999px;
+      color:var(--phase21-muted);
+    }
+    body #dashboard.active .operations-problem-icon.is-attention,
+    body #dashboard.active .operations-problem-icon.is-risk {
+      color:var(--phase21-danger);
+      border-color:rgba(185,28,28,.18);
+      background:rgba(254,242,242,.94);
+    }
+    body #dashboard.active .operations-problem-icon.is-review {
+      color:var(--phase21-warning);
+      border-color:rgba(180,83,9,.18);
+      background:rgba(255,247,237,.94);
+    }
+    body #dashboard.active .operations-problem-copy {
+      min-width:0;
+      display:grid;
+      gap:2px;
+    }
+    body #dashboard.active .operations-problem-copy span {
+      color:var(--phase21-text);
+      font-size:11px;
+      font-weight:700;
+    }
+    body #dashboard.active .operations-problem-copy small {
+      color:var(--phase21-muted);
+      font-size:10px;
+      font-weight:700;
+    }
+    body #dashboard.active .operations-priority-node strong {
+      align-self:start;
+      font-size:18px;
+    }
+    body #dashboard.active .operations-priority-node i {
+      grid-column:2 / -1;
+      height:6px;
+    }
+    body #dashboard.active .operations-resource-chart { gap:8px; }
+    body #dashboard.active .operations-resource-signals { gap:8px; }
+    body #dashboard.active .operations-resource-signal {
+      min-height:58px;
+      padding:7px 8px;
+      border-radius:10px;
+    }
+    body #dashboard.active .operations-resource-signal strong { font-size:16px; }
+    body #dashboard.active .operations-resource-mini-bar {
+      height:8px;
+      min-height:8px;
+    }
+    @media (min-width: 1280px) {
+      body #dashboard.active > .operations-home { grid-template-rows:34px 76px minmax(0,1fr); }
+      body #dashboard.active .operations-home-lower {
+        grid-template-columns:minmax(0,1.04fr) minmax(0,.92fr) minmax(204px,.72fr);
+        grid-template-rows:minmax(196px,.56fr) minmax(146px,.44fr);
+      }
+    }
+    @media (min-width: 768px) and (max-width: 1279px) {
+      body #dashboard.active > .operations-home { grid-template-rows:34px 74px minmax(0,1fr); }
+      body #dashboard.active .operations-home-lower {
+        grid-template-columns:minmax(0,1fr) minmax(0,.94fr) minmax(168px,.66fr) !important;
+        grid-template-rows:minmax(178px,.56fr) minmax(138px,.44fr);
+      }
+      body #dashboard.active .operations-platform-layout {
+        grid-template-columns:84px minmax(0,1fr);
+      }
+      body #dashboard.active .operations-donut {
+        width:84px;
+        height:84px;
+      }
+      body #dashboard.active .operations-stage-plot { min-height:158px; }
+      body #dashboard.active .operations-stage-chart { min-height:98px; }
+      body #dashboard.active .operations-stage-node-value { font-size:18px; }
+      body #dashboard.active .operations-stage-point-primary {
+        width:11px;
+        height:11px;
+      }
+      body #dashboard.active .operations-stage-point-secondary {
+        width:9px;
+        height:9px;
+      }
+    }
+    @media (max-width: 767px) {
+      body #dashboard.active .operations-context-bar span:nth-child(-n+4) { padding:4px 7px; }
+      body #dashboard.active .operations-chart-legend { gap:5px; }
+      body #dashboard.active .operations-metric-card {
+        min-height:72px;
+        padding:8px 9px;
+      }
+      body #dashboard.active .operations-metric-head strong { font-size:20px; }
+      body #dashboard.active .operations-stage-plot { min-height:150px; }
+      body #dashboard.active .operations-stage-chart { min-height:88px; }
+      body #dashboard.active .operations-stage-columns { gap:5px; padding:2px 0 10px; }
+      body #dashboard.active .operations-stage-node-value { font-size:17px; }
+      body #dashboard.active .operations-stage-point-primary {
+        width:10px;
+        height:10px;
+        border-width:2.5px;
+      }
+      body #dashboard.active .operations-stage-point-secondary {
+        width:8px;
+        height:8px;
+      }
+      body #dashboard.active .operations-platform-layout {
+        grid-template-columns:82px minmax(0,1fr);
+        gap:8px;
+      }
+      body #dashboard.active .operations-donut {
+        width:82px;
+        height:82px;
+      }
+      body #dashboard.active .operations-priority-node {
+        grid-template-columns:auto minmax(0,1fr) auto;
+      }
+    }
+
+    /* CR-100 density compaction: content-sized operations home layout. */
+    @media (min-width: 768px) {
+      body #dashboard.active {
+        min-height:auto;
+        max-height:none;
+        overflow:visible;
+      }
+      body #dashboard.active > .operations-home {
+        height:auto;
+        align-content:start;
+        grid-template-rows:auto auto auto;
+      }
+      body #dashboard.active .operations-home-lower {
+        grid-template-rows:auto auto;
+        align-items:start;
+        align-content:start;
+      }
+      body #dashboard.active .operations-breakdown-grid {
+        grid-template-rows:auto auto;
+        align-content:start;
+      }
+      body #dashboard.active .operations-flow-chart,
+      body #dashboard.active .operations-breakdown-card,
+      body #dashboard.active .operations-priority-card,
+      body #dashboard.active .operations-resource-panel,
+      body #dashboard.active .operations-resource-chart {
+        height:auto;
+        align-content:start;
+      }
+      body #dashboard.active .operations-stage-flow { grid-template-rows:auto auto; }
+      body #dashboard.active .operations-stage-board {
+        position:relative;
+        display:block;
+        min-height:0;
+        padding-top:4px;
+      }
+      body #dashboard.active .operations-stage-plot {
+        min-height:160px;
+        padding:12px 12px 10px;
+      }
+    }
+    @media (min-width: 1280px) {
+      body #dashboard.active > .operations-home { max-height:calc(100vh - 144px); }
+    }
+    @media (min-width: 768px) and (max-width: 1279px) {
+      body #dashboard.active > .operations-home { max-height:calc(100vh - 140px); }
+      body #dashboard.active .operations-stage-plot {
+        min-height:154px;
+        padding:12px 10px 10px;
+      }
+      body #dashboard.active .operations-stage-chart { min-height:94px; }
+      body #dashboard.active .operations-stage-columns { gap:6px; }
+    }
+    /* CR-105 ECharts dashboard rebaseline: final inline cascade guard. */
+    body #dashboard.active .operations-home-lower {
+      grid-template-columns:minmax(0,1.3fr) minmax(0,1.3fr) minmax(250px,.86fr);
+      grid-template-areas:
+        "trend trend attention"
+        "platforms delivery resource";
+      grid-template-rows:minmax(250px,1.12fr) minmax(176px,.82fr);
+      gap:10px;
+    }
+    body #dashboard.active .operations-home.is-user-overview .operations-home-lower {
+      grid-template-columns:minmax(0,1.28fr) minmax(180px,.62fr);
+      grid-template-areas:
+        "trend attention"
+        "platforms delivery";
+      grid-template-rows:minmax(250px,1.12fr) minmax(176px,.76fr);
+    }
+    body #dashboard.active .operations-breakdown-grid { display:contents; }
+    body #dashboard.active .operations-platform-chart { grid-area:platforms; }
+    body #dashboard.active .operations-delivery-chart { grid-area:delivery; }
+    body #dashboard.active .operations-home.is-user-overview #operations_home_resource { display:none; }
+    body #dashboard.active .operations-home-timeline,
+    body #dashboard.active .operations-attention-panel,
+    body #dashboard.active .operations-platform-chart,
+    body #dashboard.active .operations-delivery-chart,
+    body #dashboard.active .operations-resource-panel {
+      height:100%;
+      min-height:0;
+    }
+    body #dashboard.active .operations-home-timeline > .operations-chart-card,
+    body #dashboard.active .operations-attention-panel,
+    body #dashboard.active .operations-platform-chart,
+    body #dashboard.active .operations-delivery-chart {
+      height:100%;
+    }
+    body #dashboard.active .operations-resource-panel,
+    body #dashboard.active .operations-resource-entry,
+    body #dashboard.active .operations-resource-card-primary {
+      overflow:hidden;
+    }
+    body #dashboard.active .operations-resource-entry {
+      height:100%;
+    }
+    body #dashboard.active .operations-resource-card-primary {
+      grid-template-rows:auto auto minmax(0,1fr);
+    }
+    body #dashboard.active .operations-resource-card-primary .operations-chart-surface {
+      min-height:96px;
+    }
+    body #dashboard.active .operations-resource-card-secondary {
+      min-height:44px;
+      padding:7px 10px;
+    }
+    @media (min-width:768px) and (max-width:1279px) {
+      body #dashboard.active .operations-home-lower {
+        grid-template-columns:minmax(0,1fr) minmax(0,1fr) minmax(220px,.74fr) !important;
+        grid-template-areas:
+          "trend trend attention"
+          "platforms delivery attention"
+          "resource resource resource";
+        grid-template-rows:minmax(220px,1fr) minmax(132px,.58fr) minmax(88px,auto);
+      }
+      body #dashboard.active .operations-home.is-user-overview .operations-home-lower {
+        grid-template-areas:
+          "trend trend attention"
+          "platforms delivery attention";
+        grid-template-rows:minmax(220px,1fr) minmax(132px,.58fr);
+      }
+    }
+    @media (max-width: 767px) {
+      body #dashboard.active > .operations-home {
+        grid-template-columns:minmax(0,1fr);
+        grid-template-areas:
+          "meta"
+          "metrics"
+          "lower";
+        grid-template-rows:auto auto auto;
+        overflow:visible;
+      }
+      body #dashboard.active .operations-home-lower,
+      body #dashboard.active .operations-home.is-user-overview .operations-home-lower {
+        display:grid;
+        grid-template-columns:minmax(0,1fr);
+        grid-template-areas:
+          "trend"
+          "attention"
+          "platforms"
+          "delivery"
+          "resource";
+        grid-template-rows:none;
+        gap:9px;
+      }
+      body #dashboard.active .operations-stage-node-top { gap:3px; }
+      body #dashboard.active .operations-stage-chip {
+        min-width:18px;
+        height:14px;
+        padding:0 5px;
+        font-size:9px;
+      }
+      body #dashboard.active .operations-stage-node-value { font-size:16px; }
+      body #dashboard.active .operations-stage-point-primary {
+        width:9px;
+        height:9px;
+        border-width:2.5px;
+      }
+      body #dashboard.active .operations-stage-point-secondary {
+        width:7px;
+        height:7px;
+      }
+    }
   </style>
 </head>
 <body>
@@ -995,6 +3241,9 @@
     <symbol id="icon-template" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path><path d="M14 2v6h6"></path><path d="M8 13h8"></path><path d="M8 17h5"></path></symbol>
     <symbol id="icon-runtime" viewBox="0 0 24 24"><path d="M4 17V7"></path><path d="M12 17V3"></path><path d="M20 17v-7"></path><path d="M4 21v-4"></path><path d="M12 21v-4"></path><path d="M20 21v-4"></path></symbol>
     <symbol id="icon-doctor" viewBox="0 0 24 24"><path d="M12 3 4 6v6c0 5 3.5 8 8 9 4.5-1 8-4 8-9V6z"></path><path d="M9 12h6"></path><path d="M12 9v6"></path></symbol>
+    <symbol id="icon-alert" viewBox="0 0 24 24"><path d="M12 3 2.8 19a1.1 1.1 0 0 0 1 1.6h16.4a1.1 1.1 0 0 0 1-1.6Z"></path><path d="M12 9v5"></path><path d="M12 17.5h.01"></path></symbol>
+    <symbol id="icon-clock" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="M12 7v6l4 2"></path></symbol>
+    <symbol id="icon-check-circle" viewBox="0 0 24 24"><circle cx="12" cy="12" r="9"></circle><path d="m8.5 12 2.4 2.4 4.8-5"></path></symbol>
     <symbol id="icon-collapse" viewBox="0 0 24 24"><path d="m15 18-6-6 6-6"></path><path d="m21 18-6-6 6-6"></path></symbol>
   </svg>
   <div id="mobile_nav_backdrop" class="mobile-nav-backdrop" aria-hidden="true"></div>
@@ -1079,18 +3328,21 @@
             <button class="primary" data-shortcut-tab="jobs" data-shortcut-action="new-job" data-menu-key="monitoring">新建监控任务</button>
           </div>
         </div>
-        <div id="task_loop_shortcuts" class="task-loop-shortcuts" aria-label="监控任务流快捷入口">
-          <button class="shortcut-card shortcut-primary" type="button" data-shortcut-tab="jobs" data-shortcut-action="new-job" data-menu-key="monitoring"><span>01</span><strong>新建任务</strong></button>
-          <button class="shortcut-card" type="button" data-shortcut-tab="runs" data-shortcut-grouped="1" data-shortcut-target="task_center_panel" data-menu-key="run_center"><span>02</span><strong>任务中心</strong></button>
-          <button class="shortcut-card" type="button" data-shortcut-tab="runs" data-shortcut-grouped="0" data-shortcut-target="task_center_panel" data-menu-key="run_center"><span>03</span><strong>运行记录</strong></button>
-          <button class="shortcut-card admin-entry" type="button" data-shortcut-tab="accounts" data-menu-key="platform_accounts"><span>04</span><strong>资源处理</strong></button>
-          <button class="shortcut-card admin-entry" type="button" data-shortcut-tab="doctor" data-menu-key="system_diagnostics"><span>05</span><strong>系统诊断</strong></button>
-        </div>
         <div class="operations-home" aria-label="运营指标">
           <div id="operations_home_meta" class="operations-home-meta"></div>
           <div id="dashboard_metrics" class="operations-metric-grid"></div>
           <div class="operations-home-lower">
+            <div id="operations_home_timeline" class="operations-home-timeline" aria-label="运营趋势"></div>
+            <div id="operations_home_breakdowns" class="operations-breakdown-grid" aria-label="运营分解"></div>
+            <div id="operations_home_attention" class="operations-chart-card operations-issues-chart" aria-label="问题分布"></div>
             <div id="operations_home_resource" class="operations-resource-panel"></div>
+          </div>
+          <div id="task_loop_shortcuts" class="task-loop-shortcuts operations-quick-dock" aria-label="监控任务流快捷入口">
+            <button class="shortcut-card shortcut-primary" type="button" data-shortcut-tab="jobs" data-shortcut-action="new-job" data-menu-key="monitoring"><span>01</span><strong>新建任务</strong></button>
+            <button class="shortcut-card" type="button" data-shortcut-tab="runs" data-shortcut-grouped="1" data-shortcut-target="task_center_panel" data-menu-key="run_center"><span>02</span><strong>任务中心</strong></button>
+            <button class="shortcut-card" type="button" data-shortcut-tab="runs" data-shortcut-grouped="0" data-shortcut-target="task_center_panel" data-menu-key="run_center"><span>03</span><strong>运行记录</strong></button>
+            <button class="shortcut-card admin-entry" type="button" data-shortcut-tab="accounts" data-menu-key="platform_accounts"><span>04</span><strong>资源处理</strong></button>
+            <button class="shortcut-card admin-entry" type="button" data-shortcut-tab="doctor" data-menu-key="system_diagnostics"><span>05</span><strong>系统诊断</strong></button>
           </div>
         </div>
         <div id="operations_home_admin_health" class="operations-admin-health admin-entry" data-menu-key="system_diagnostics"></div>
@@ -1996,6 +4248,7 @@
     <div id="report_email_subject" class="notice"></div>
     <iframe id="report_preview"></iframe>
   </div>
+  <script src="/static/monitor/vendor/echarts.min.js"></script>
   <script>
     let currentSession = null;
     let authReady = false;
@@ -3150,187 +5403,1067 @@
       await Promise.all(loads);
       await safeLoad('监控任务', loadJobs);
     }
+    const operationsOverviewState = {
+      home: null,
+      trendDays: 7,
+      trendCache: new Map(),
+      trendLoading: false,
+      charts: new Map(),
+      resizeBound: false,
+    };
     async function loadDashboard(){
       setLoadingText('top_status', '正在刷新首页状态...');
       setLoadingText('operations_home_meta', '正在同步运营数据...');
       setLoadingMarkup('dashboard_metrics', metricSkeletonGrid(5));
+      setLoadingMarkup('operations_home_timeline', listSkeleton(4));
+      setLoadingMarkup('operations_home_breakdowns', listSkeleton(2));
+      setLoadingMarkup('operations_home_attention', listSkeleton(2));
       setLoadingMarkup('operations_home_resource', listSkeleton(2));
-      setLoadingMarkup('operations_home_admin_health', listSkeleton(2));
-      const data=await (await api('/dashboard')).json();
+      setLoadingMarkup('operations_home_admin_health', '');
+      const dashboardRes=await api('/dashboard');
+      if(!dashboardRes.ok){
+        toast(await err(dashboardRes));
+        return;
+      }
+      const data=await dashboardRes.json();
       const s=data.summary||{};
       const home=data.operations_home || s.operations_home || legacyOperationsHome(s);
       const scheduler=data.scheduler||{};
       const readiness=data.readiness||{};
+      operationsOverviewState.home=home;
+      operationsOverviewState.trendCache.clear();
       document.getElementById('top_status').innerHTML = `<span class="status ${scheduler.enabled?'ok':'warn'}">${scheduler.enabled?'调度运行中':'调度未启用'}</span> <span class="status ${readiness.ready?'ok':'warn'}">${readiness.ready?'运行正常':'配置待完善'}</span>`;
-      renderOperationsHome(home);
+      renderOperationsHome(home, {
+        trend: buildOperationsFallbackTrend(home, operationsOverviewState.trendDays),
+        trendLoading: true,
+      });
+      await hydrateOperationsHomeTrend(home, operationsOverviewState.trendDays, {force:true});
     }
     function legacyOperationsHome(summary){
       return {
         last_updated_at: new Date().toISOString(),
         scope: isAdminUser() ? 'workspace' : 'own',
-        task_health: {total: summary.jobs_total||0, active: summary.jobs_enabled||0, paused: Math.max(0, (summary.jobs_total||0) - (summary.jobs_enabled||0)), needs_attention: (summary.failed_runs_recent||0) + (summary.skipped_runs_recent||0) + (summary.pending_review||0)},
-        run_activity: {total: summary.runs_total||0, today: 0, running: 0, failed_recent: summary.failed_runs_recent||0, skipped_recent: summary.skipped_runs_recent||0, platform_counts_recent: summary.platform_counts_recent||{}},
-        report_activity: {total: summary.reports_total||0, generated: summary.reports_total||0, manual_review: summary.pending_review||0, email_failed: 0, email_unsent: 0},
-        email_delivery: {total: summary.reports_total||0, sent: 0, failed: 0, unsent: 0, history_available: false},
-        lead_metrics: {contents_total: summary.contents_total||0, suspected_negative: summary.negative_total||0, high_risk: summary.high_total||0, pending_review: summary.pending_review||0, trend_available: false},
+        task_health: {
+          total: summary.jobs_total||0,
+          active: summary.jobs_enabled||0,
+          paused: Math.max(0, (summary.jobs_total||0) - (summary.jobs_enabled||0)),
+          needs_attention: (summary.failed_runs_recent||0) + (summary.skipped_runs_recent||0) + (summary.pending_review||0)
+        },
+        run_activity: {
+          total: summary.runs_total||0,
+          today: 0,
+          running: 0,
+          failed_recent: summary.failed_runs_recent||0,
+          skipped_recent: summary.skipped_runs_recent||0,
+          platform_counts_recent: summary.platform_counts_recent||{}
+        },
+        report_activity: {
+          total: summary.reports_total||0,
+          generated: summary.reports_total||0,
+          manual_review: summary.pending_review||0,
+          email_failed: 0,
+          email_unsent: 0
+        },
+        email_delivery: {
+          total: summary.reports_total||0,
+          sent: 0,
+          failed: 0,
+          unsent: 0,
+          history_available: false
+        },
+        lead_metrics: {
+          contents_total: summary.contents_total||0,
+          suspected_negative: summary.negative_total||0,
+          high_risk: summary.high_total||0,
+          pending_review: summary.pending_review||0,
+          trend_available: false
+        },
         resource_health: isAdminUser()
-          ? {scope: 'workspace', status: 'needs_attention', social_accounts_total: summary.social_accounts_total||0, proxy_profiles_total: summary.proxy_profiles_total||0, ai_profiles_total: summary.ai_profiles_total||0, login_sessions_total: summary.login_sessions_total||0, signals: []}
-          : {scope: 'business_safe', status: 'available', signals: [{label: '采集资源', status: 'available', note: '资源由管理员维护'}]}
+          ? {
+              scope: 'workspace',
+              status: 'needs_attention',
+              social_accounts_total: summary.social_accounts_total||0,
+              proxy_profiles_total: summary.proxy_profiles_total||0,
+              ai_profiles_total: summary.ai_profiles_total||0,
+              login_sessions_total: summary.login_sessions_total||0,
+              signals: []
+            }
+          : {
+              scope: 'business_safe',
+              status: 'available',
+              signals: [{label: '采集资源', status: 'available', note: '资源由管理员维护'}]
+            }
       };
     }
-    function renderOperationsHome(home){
+    function visualValue(value){
+      const number=Number(value);
+      return Number.isFinite(number) && number > 0 ? number : 0;
+    }
+    function operationsTrack(segments=[], fallbackTone='neutral'){
+      const items=(segments||[]).map(segment=>({
+        tone: segment.tone || fallbackTone,
+        value: visualValue(segment.value)
+      })).filter(segment=>segment.value > 0);
+      const rendered=items.length ? items : [{tone: fallbackTone, value: 1}];
+      return `<span class="operations-visual-track">${rendered.map(segment=>`<span class="operations-visual-segment is-${esc(segment.tone)}" style="flex:${Math.max(segment.value, 1)}"></span>`).join('')}</span>`;
+    }
+    function platformChartLabel(code){
+      const labels={dy:'抖音',xhs:'小红书',ks:'快手',wb:'微博',bili:'B站'};
+      return labels[String(code||'').toLowerCase()] || '其他';
+    }
+    function operationPercent(value, maxValue, min=3){
+      const max=Math.max(visualValue(maxValue), 1);
+      const ratio=Math.round((visualValue(value) / max) * 100);
+      return Math.max(value > 0 ? min : 0, Math.min(100, ratio));
+    }
+    function operationToneClass(tone){
+      return `is-${esc(tone || 'neutral')}`;
+    }
+    function operationsToneLabel(tone){
+      const labels={
+        ok:'正常',
+        live:'进行中',
+        review:'待处理',
+        attention:'异常',
+        risk:'高风险',
+        neutral:'其他'
+      };
+      return labels[tone || 'neutral'] || labels.neutral;
+    }
+    // CR-106A data-aware signal refinement: rank issue rows by operator urgency before raw count.
+    function operationsIssueSeverityRank(key){
+      return {
+        high_risk: 10,
+        pending_review: 9,
+        mail_failed: 8,
+        run_failed: 7,
+        run_skipped: 6,
+        mail_unsent: 5,
+      }[key] || 1;
+    }
+    // CR-106A mail source: report.email_status is the report-level mail state, not delivery-attempt history.
+    const operationsMailStatusSourceCopy='报告级邮件状态';
+    function operationsHealthSummary(model){
+      const issueTotal=model.priorities.reduce((sum, item)=>sum + visualValue(item.value), 0);
+      const highRisk=model.priorities.find(item=>item.key === 'high_risk');
+      const pending=model.priorities.find(item=>item.key === 'pending_review');
+      if(highRisk && visualValue(highRisk.value) > 0){
+        return {tone:'risk', title:'今日有高风险线索', detail:`${visualValue(highRisk.value)} 条高风险，优先进入任务中心复核`};
+      }
+      if(pending && visualValue(pending.value) > 0){
+        return {tone:'review', title:'今日有待复核事项', detail:`${visualValue(pending.value)} 项待复核，建议先处理问题分布`};
+      }
+      if(issueTotal > 0){
+        return {tone:'attention', title:'今日有异常待处理', detail:`${issueTotal} 项异常或待处理，点击图表进入任务中心`};
+      }
+      return {tone:'ok', title:'今日监控正常', detail:'暂无高风险、待复核或交付异常'};
+    }
+    function operationsMetricIcon(label){
+      const icons={
+        '任务':'icon-monitor',
+        '运行':'icon-run',
+        '报告':'icon-report',
+        '邮件':'icon-mail',
+        '线索':'icon-alert'
+      };
+      return icons[label] || 'icon-dashboard';
+    }
+    function operationsLegend(items=[], extraClass=''){
+      const rendered=(items||[]).filter(item=>item && item.label);
+      if(!rendered.length) return '';
+      return `<div class="operations-chart-legend${extraClass ? ` ${extraClass}` : ''}">${rendered.map(item=>{
+        const tone=item.tone ? ` is-${esc(item.tone)}` : '';
+        const color=item.color ? ` style="--legend-color:${esc(item.color)}"` : '';
+        const value=item.value !== undefined && item.value !== null ? `<strong>${esc(item.value)}</strong>` : '';
+        return `<span class="operations-legend-item${tone}"${color}><i aria-hidden="true"></i><span>${esc(item.label)}</span>${value}</span>`;
+      }).join('')}</div>`;
+    }
+    function operationsShortcutAttributes(card){
+      const attrs=[];
+      if(card.tab) attrs.push(`data-shortcut-tab="${esc(card.tab)}"`);
+      if(card.grouped !== undefined) attrs.push(`data-shortcut-grouped="${esc(card.grouped)}"`);
+      if(card.action) attrs.push(`data-shortcut-action="${esc(card.action)}"`);
+      if(card.target) attrs.push(`data-shortcut-target="${esc(card.target)}"`);
+      if(card.menuKey) attrs.push(`data-menu-key="${esc(card.menuKey)}"`);
+      return attrs.join(' ');
+    }
+    function operationsFormatDateKey(date){
+      const y=date.getFullYear();
+      const m=String(date.getMonth()+1).padStart(2,'0');
+      const d=String(date.getDate()).padStart(2,'0');
+      return `${y}-${m}-${d}`;
+    }
+    function operationsWindowRange(days=7){
+      const end=new Date();
+      end.setHours(0,0,0,0);
+      const start=new Date(end);
+      start.setDate(start.getDate() - days + 1);
+      return {
+        start,
+        end,
+        startKey: operationsFormatDateKey(start),
+        endKey: operationsFormatDateKey(end),
+      };
+    }
+    function operationsShortDayLabel(key=''){
+      if(!key) return '';
+      const parts=key.split('-');
+      if(parts.length !== 3) return key;
+      return `${Number(parts[1])}/${Number(parts[2])}`;
+    }
+    function operationsIsoDay(value){
+      return String(value||'').slice(0, 10);
+    }
+    function buildOperationsFallbackTrend(home, days=7){
+      const range=operationsWindowRange(days);
+      const totalSeed=Math.max(
+        1,
+        Math.round((visualValue(home.run_activity?.total||0) + visualValue(home.report_activity?.total||0)) / Math.max(days, 1))
+      );
+      const issueSeed=Math.max(
+        0,
+        Math.round((
+          visualValue(home.run_activity?.failed_recent||0) +
+          visualValue(home.run_activity?.skipped_recent||0) +
+          visualValue(home.report_activity?.manual_review||0) +
+          visualValue(home.email_delivery?.failed||0) +
+          visualValue(home.email_delivery?.unsent||0) +
+          visualValue(home.lead_metrics?.pending_review||0)
+        ) / Math.max(days, 1))
+      );
+      const buckets=[];
+      for(let index=0; index<days; index+=1){
+        const date=new Date(range.start);
+        date.setDate(range.start.getDate() + index);
+        const weight=0.72 + (index / Math.max(days - 1, 1)) * 0.48;
+        buckets.push({
+          key: operationsFormatDateKey(date),
+          label: operationsShortDayLabel(operationsFormatDateKey(date)),
+          total: Math.max(0, Math.round(totalSeed * weight)),
+          issue: Math.max(0, Math.round(issueSeed * (0.58 + (index / Math.max(days - 1, 1)) * 0.62))),
+        });
+      }
+      return {
+        days,
+        source: 'fallback',
+        buckets,
+      };
+    }
+    async function loadOperationsTrendBuckets(days=7){
+      const cacheKey=String(days);
+      if(operationsOverviewState.trendCache.has(cacheKey)){
+        return operationsOverviewState.trendCache.get(cacheKey);
+      }
+      const range=operationsWindowRange(days);
+      const dayKeys=[];
+      const bucketIndex=new Map();
+      const buckets=[];
+      for(let index=0; index<days; index+=1){
+        const date=new Date(range.start);
+        date.setDate(range.start.getDate() + index);
+        const key=operationsFormatDateKey(date);
+        dayKeys.push(key);
+        bucketIndex.set(key, buckets.length);
+        buckets.push({key, label: operationsShortDayLabel(key), total: 0, issue: 0});
+      }
+      const runQs=new URLSearchParams({
+        limit: '1000',
+        date_from: range.startKey,
+        date_to: range.endKey,
+      });
+      const reportQs=new URLSearchParams({
+        limit: '1000',
+        date_from: range.startKey,
+        date_to: range.endKey,
+      });
+      const [runsRes, reportsRes]=await Promise.all([
+        api('/runs?'+runQs.toString()),
+        api('/reports?'+reportQs.toString()),
+      ]);
+      if(!runsRes.ok) throw new Error(await err(runsRes));
+      if(!reportsRes.ok) throw new Error(await err(reportsRes));
+      const [runsData, reportsData]=await Promise.all([runsRes.json(), reportsRes.json()]);
+      const platformRows=[];
+      (runsData.runs||[]).forEach(run=>{
+        platformRows.push(run);
+        const key=operationsIsoDay(run.started_at || run.finished_at || '');
+        const index=bucketIndex.get(key);
+        if(index === undefined) return;
+        buckets[index].total += 1;
+        const status=String(run.status||'').toLowerCase();
+        if(['failed','skipped','cancelled'].includes(status)){
+          buckets[index].issue += 1;
+        }
+      });
+      (reportsData.reports||[]).forEach(report=>{
+        platformRows.push(report);
+        const key=operationsIsoDay(report.created_at || '');
+        const index=bucketIndex.get(key);
+        if(index === undefined) return;
+        buckets[index].total += 1;
+        const summary=report.summary||{};
+        const emailStatus=String(report.email_status||'').toLowerCase();
+        buckets[index].issue +=
+          visualValue(summary.pending_review_count||0) +
+          (emailStatus === 'failed' ? 1 : 0) +
+          (emailStatus === 'unsent' ? 1 : 0);
+      });
+      const payload={days, source:'aggregated', buckets, platformRows};
+      operationsOverviewState.trendCache.set(cacheKey, payload);
+      return payload;
+    }
+    async function hydrateOperationsHomeTrend(home, days=7, options={}){
+      operationsOverviewState.trendLoading=true;
+      try{
+        const trend=home?.trend_buckets
+          ? {days, source:'payload', buckets: home.trend_buckets}
+          : await loadOperationsTrendBuckets(days);
+        if(!operationsOverviewState.home) return;
+        renderOperationsHome(home, {trend, trendLoading:false, preserveWindow:true});
+      }catch(exc){
+        console.error('operationsHomeTrend', exc);
+        renderOperationsHome(home, {
+          trend: buildOperationsFallbackTrend(home, days),
+          trendLoading:false,
+          preserveWindow:true,
+        });
+      }finally{
+        operationsOverviewState.trendLoading=false;
+      }
+    }
+    function operationsPlatformFailureRows(sourceRows=[]){
+      const failures=new Map();
+      (sourceRows||[]).forEach(item=>{
+        const summary=item.summary || item || {};
+        const failed=Array.isArray(summary.failed_platforms) ? summary.failed_platforms : [];
+        const results=summary.platform_results || {};
+        const rowFailures=new Set();
+        failed.forEach(platform=>{
+          const key=String(platform||'').toLowerCase();
+          if(!key) return;
+          rowFailures.add(key);
+        });
+        Object.entries(results).forEach(([platform, result])=>{
+          const status=String(result?.status || '').toLowerCase();
+          if(!['failed','timeout','cancelled','skipped'].includes(status)) return;
+          const key=String(platform||'').toLowerCase();
+          if(!key) return;
+          rowFailures.add(key);
+        });
+        rowFailures.forEach(key=>{
+          failures.set(key, (failures.get(key) || 0) + 1);
+        });
+      });
+      return failures;
+    }
+    async function setOperationsTrendWindow(days=7){
+      const nextDays=Number(days) === 14 ? 14 : 7;
+      if(!operationsOverviewState.home || operationsOverviewState.trendDays === nextDays && operationsOverviewState.trendLoading){
+        return;
+      }
+      operationsOverviewState.trendDays=nextDays;
+      renderOperationsHome(operationsOverviewState.home, {
+        trend: buildOperationsFallbackTrend(operationsOverviewState.home, nextDays),
+        trendLoading:true,
+        preserveWindow:true,
+      });
+      await hydrateOperationsHomeTrend(operationsOverviewState.home, nextDays);
+    }
+    function operationsOverviewViewModel(home, trendPayload=null){
+      const taskAttention=visualValue(home.task_health?.needs_attention||0);
+      const runFailed=visualValue(home.run_activity?.failed_recent||0);
+      const runSkipped=visualValue(home.run_activity?.skipped_recent||0);
+      const runAttention=runFailed + runSkipped;
+      const reportAttention=visualValue(home.report_activity?.manual_review||0);
+      const deliveryFailed=visualValue(home.email_delivery?.failed||0);
+      const deliveryUnsent=visualValue(home.email_delivery?.unsent||0);
+      const deliveryAttention=deliveryFailed + deliveryUnsent;
+      const leadHigh=visualValue(home.lead_metrics?.high_risk||0);
+      const leadReview=visualValue(home.lead_metrics?.pending_review||0);
+      const leadAttention=leadHigh + leadReview;
+      const metricCards=[
+        {
+          label: '任务',
+          value: visualValue(home.task_health?.total||0),
+          note: taskAttention ? `${taskAttention} 异常 / 待处理` : `${visualValue(home.task_health?.active||0)} 运行中`,
+          tone: taskAttention ? 'attention' : 'ok',
+          tab: 'jobs',
+          segments: [
+            {tone:'ok', value: home.task_health?.active||0},
+            {tone:'neutral', value: home.task_health?.paused||0},
+            {tone:'attention', value: taskAttention},
+          ],
+        },
+        {
+          label: '运行',
+          value: visualValue(home.run_activity?.today||home.run_activity?.total||0),
+          note: runAttention ? `${runAttention} 异常 / 待处理` : `${visualValue(home.run_activity?.running||0)} 进行中`,
+          tone: runAttention ? 'attention' : (visualValue(home.run_activity?.running||0) ? 'live' : 'ok'),
+          tab: 'runs',
+          grouped: '0',
+          target: 'task_center_panel',
+          segments: [
+            {tone:'live', value: home.run_activity?.running||0},
+            {tone:'attention', value: runFailed},
+            {tone:'review', value: runSkipped},
+          ],
+        },
+        {
+          label: '报告',
+          value: visualValue(home.report_activity?.total||0),
+          note: reportAttention ? `${reportAttention} 待复核` : `${visualValue(home.report_activity?.generated||0)} 已生成`,
+          tone: reportAttention ? 'review' : 'ok',
+          tab: 'runs',
+          grouped: '1',
+          target: 'task_center_panel',
+          segments: [
+            {tone:'ok', value: home.report_activity?.generated||0},
+            {tone:'review', value: reportAttention},
+          ],
+        },
+        {
+          label: '邮件',
+          value: visualValue(home.email_delivery?.sent||0),
+          note: deliveryAttention ? `${deliveryAttention} 异常 / 待发` : `${visualValue(home.email_delivery?.sent||0)} 已交付`,
+          tone: deliveryAttention ? 'attention' : 'ok',
+          tab: 'runs',
+          grouped: '1',
+          target: 'task_center_panel',
+          segments: [
+            {tone:'ok', value: home.email_delivery?.sent||0},
+            {tone:'attention', value: deliveryFailed},
+            {tone:'review', value: deliveryUnsent},
+          ],
+        },
+        {
+          label: '线索',
+          value: visualValue(home.lead_metrics?.suspected_negative||0),
+          note: leadAttention ? `${leadAttention} 待处理` : `${visualValue(home.lead_metrics?.suspected_negative||0)} 关注中`,
+          tone: leadHigh ? 'risk' : (leadAttention ? 'review' : 'ok'),
+          tab: 'runs',
+          grouped: '1',
+          target: 'task_center_panel',
+          segments: [
+            {tone:'review', value: home.lead_metrics?.suspected_negative||0},
+            {tone:'risk', value: leadHigh},
+            {tone:'neutral', value: leadReview},
+          ],
+        }
+      ];
+      const priorities=[
+        {key:'high_risk', label:'高风险', value: leadHigh, tone:'risk', tab:'runs', grouped:'1', target:'task_center_panel'},
+        {key:'pending_review', label:'待复核', value: Math.max(reportAttention, leadReview), tone:'review', tab:'runs', grouped:'1', target:'task_center_panel'},
+        {key:'mail_failed', label:'邮件失败', value: deliveryFailed, tone:'attention', tab:'runs', grouped:'1', target:'task_center_panel'},
+        {key:'run_failed', label:'运行失败', value: runFailed, tone:'attention', tab:'runs', grouped:'0', target:'task_center_panel'},
+        {key:'run_skipped', label:'运行跳过', value: runSkipped, tone:'review', tab:'runs', grouped:'0', target:'task_center_panel'},
+        {key:'mail_unsent', label:'邮件待发', value: deliveryUnsent, tone:'review', tab:'runs', grouped:'1', target:'task_center_panel'},
+      ].filter(item=>visualValue(item.value) > 0).sort((a,b)=>{
+        const rankDiff=operationsIssueSeverityRank(b.key) - operationsIssueSeverityRank(a.key);
+        return rankDiff || visualValue(b.value) - visualValue(a.value);
+      });
+      const platformPalette=['#0f766e', '#2563eb', '#65a30d', '#d97706', '#7c3aed', '#0891b2', '#94a3b8'];
+      const platformCounts=home.run_activity?.platform_counts_recent || {};
+      const platformFailures=operationsPlatformFailureRows(home.platform_signal_rows || trendPayload?.platformRows || []);
+      /* CR-106A data-aware signal refinement: keep platform bars volume-based and expose failures as metadata only. */
+      const platforms=Object.entries(platformCounts)
+        .map(([key, value], index)=>({
+          label: platformChartLabel(key),
+          value: visualValue(value),
+          ratio: 0,
+          failures: visualValue(platformFailures.get(String(key||'').toLowerCase()) || 0),
+          tone: 'live',
+          color: platformPalette[index % platformPalette.length],
+          tab: 'runs',
+          grouped: '0',
+          target: 'task_center_panel',
+        }))
+        .filter(item=>item.value > 0)
+        .sort((a,b)=>b.value-a.value)
+        .slice(0, 5);
+      const platformTotal=platforms.reduce((sum, item)=>sum + item.value, 0);
+      const platformItems=(platforms.length ? platforms : [{
+        label:'平台',
+        value:0,
+        ratio:0,
+        tone:'neutral',
+        color:'#94a3b8',
+        tab:'runs',
+        grouped:'0',
+        target:'task_center_panel',
+      }]).map(item=>({
+        ...item,
+        ratio: platformTotal ? Number(((item.value / platformTotal) * 100).toFixed(1)) : 0,
+        tone: item.failures ? 'attention' : item.tone,
+      }));
+      const deliveryRows=[
+        {
+          label:'报告',
+          total: visualValue(home.report_activity?.total||0),
+          ok: visualValue(home.report_activity?.generated||0),
+          review: reportAttention,
+          attention: 0,
+          tone: reportAttention ? 'review' : 'ok',
+          tab: 'runs',
+          grouped: '1',
+          target: 'task_center_panel',
+        },
+        {
+          label:'邮件',
+          total: visualValue(home.email_delivery?.total||0) || (visualValue(home.email_delivery?.sent||0) + deliveryAttention),
+          ok: visualValue(home.email_delivery?.sent||0),
+          review: deliveryUnsent,
+          attention: deliveryFailed,
+          tone: deliveryAttention ? 'attention' : 'ok',
+          tab: 'runs',
+          grouped: '1',
+          target: 'task_center_panel',
+        },
+        {
+          label:'复核',
+          total: visualValue(home.lead_metrics?.suspected_negative||0) + leadReview,
+          ok: visualValue(home.lead_metrics?.suspected_negative||0),
+          review: leadReview,
+          attention: leadHigh,
+          tone: leadHigh ? 'risk' : (leadReview ? 'review' : 'ok'),
+          tab: 'runs',
+          grouped: '1',
+          target: 'task_center_panel',
+        },
+      ];
+      const resource=home.resource_health||{};
+      const adminSignals=((resource.signals||[]).length ? resource.signals : [
+        {label:'账号', status: resource.social_accounts_total ? 'ready' : 'empty', count: resource.social_accounts_total||0},
+        {label:'代理', status: resource.proxy_profiles_total ? 'ready' : 'empty', count: resource.proxy_profiles_total||0},
+        {label:'AI', status: resource.ai_profiles_total ? 'ready' : 'empty', count: resource.ai_profiles_total||0},
+        {label:'会话', status: resource.login_sessions_total ? 'ready' : 'empty', count: resource.login_sessions_total||0},
+      ]).map(resourceActionSignal);
+      const trend=trendPayload || buildOperationsFallbackTrend(home, operationsOverviewState.trendDays);
+      const buckets=(trend.buckets||[]).map(bucket=>({
+        key: bucket.key || '',
+        label: bucket.label || operationsShortDayLabel(bucket.key || ''),
+        total: visualValue(bucket.total),
+        issue: visualValue(bucket.issue),
+      }));
+      const trendMax=Math.max(
+        ...buckets.map(bucket=>Math.max(bucket.total, bucket.issue)),
+        1
+      );
+      const health=operationsHealthSummary({priorities});
+      return {
+        roleLabel: home.scope === 'own' ? '普通用户' : '管理员',
+        scopeLabel: home.scope === 'own' ? '当前账号' : '工作区',
+        updatedAt: formatCompactTime(home.last_updated_at),
+        attentionTotal: priorities.reduce((sum, item)=>sum + visualValue(item.value), 0),
+        health,
+        metricCards,
+        priorities: priorities.slice(0, 5),
+        platforms: platformItems,
+        platformTotal,
+        deliveryRows,
+        resourceScope: resource.scope || 'business_safe',
+        resourceStatus: resource.status || 'available',
+        resourceSignals: adminSignals,
+        trend: {
+          days: Number(trend.days || operationsOverviewState.trendDays || 7),
+          source: trend.source || 'fallback',
+          loading: !!operationsOverviewState.trendLoading,
+          buckets,
+          maxValue: trendMax,
+          latestTotal: buckets.length ? buckets[buckets.length - 1].total : 0,
+          latestIssue: buckets.length ? buckets[buckets.length - 1].issue : 0,
+        },
+      };
+    }
+    function renderOperationsHomeMeta(model){
+      return `<div class="operations-context-bar" aria-label="总览上下文">
+        <span class="is-${esc(model.health.tone)}">${esc(model.health.title)}</span>
+        <span>${esc(model.health.detail)}</span>
+        <span>${esc(model.roleLabel)}</span>
+        <span>${esc(model.scopeLabel)}</span>
+        <span>${esc(`${model.trend.days} 天`)}</span>
+        <strong>${esc(model.attentionTotal)}</strong>
+        <span>${esc(model.updatedAt)}</span>
+      </div>`;
+    }
+    function renderOperationsHome(home, options={}){
+      const trend=options.trend || buildOperationsFallbackTrend(home, operationsOverviewState.trendDays);
+      if(!options.preserveWindow){
+        operationsOverviewState.trendDays=Number(trend.days || operationsOverviewState.trendDays || 7);
+      }
+      operationsOverviewState.trendLoading=!!options.trendLoading;
+      const model=operationsOverviewViewModel(home, trend);
+      const canRenderResources=canRenderOperationsResourceHealth(model);
+      const root=document.querySelector('#dashboard > .operations-home');
+      if(root){
+        root.classList.toggle('is-admin-overview', canRenderResources);
+        root.classList.toggle('is-user-overview', !canRenderResources);
+      }
       const updated=document.getElementById('operations_home_meta');
       if(updated){
-        const scopeLabel=home.scope === 'own' ? '当前账号数据' : '工作区数据';
-        const taskAttention=home.task_health?.needs_attention||0;
-        const runAttention=(home.run_activity?.failed_recent||0) + (home.run_activity?.skipped_recent||0);
-        const deliveryAttention=(home.email_delivery?.failed||0) + (home.email_delivery?.unsent||0);
-        updated.innerHTML=`<div class="top-status-stack"><span class="status ${home.scope==='own'?'status-neutral':'ok'}">${esc(scopeLabel)}</span><span class="status ${taskAttention?'warn':'status-neutral'}">任务待处理 ${esc(taskAttention)}</span><span class="status ${runAttention?'warn':'status-neutral'}">运行异常 ${esc(runAttention)}</span><span class="status ${deliveryAttention?'warn':'status-neutral'}">交付关注 ${esc(deliveryAttention)}</span></div><span class="inline-meta">最后更新 ${esc(formatTime(home.last_updated_at))}</span>`;
+        updated.innerHTML=renderOperationsHomeMeta(model);
       }
       const metrics=document.getElementById('dashboard_metrics');
       if(metrics){
-        metrics.innerHTML=[
-          operationsMetricCard({
-            tone: (home.task_health?.needs_attention||0) ? 'attention' : 'ok',
-            label: '任务健康',
-            value: home.task_health?.total||0,
-            note: `启用 ${home.task_health?.active||0} / 暂停 ${home.task_health?.paused||0}`,
-            detail: `${home.task_health?.needs_attention||0} 个待处理信号`
-          }),
-          operationsMetricCard({
-            tone: (home.run_activity?.failed_recent||0) ? 'attention' : ((home.run_activity?.running||0) ? 'live' : ''),
-            label: '运行活动',
-            value: home.run_activity?.today||0,
-            note: `运行中 ${home.run_activity?.running||0} / 累计 ${home.run_activity?.total||0}`,
-            detail: `近 20 次失败 ${home.run_activity?.failed_recent||0} / 预检拦截 ${home.run_activity?.skipped_recent||0}`
-          }),
-          operationsMetricCard({
-            tone: (home.report_activity?.manual_review||0) ? 'review' : 'ok',
-            label: '报告与复核',
-            value: home.report_activity?.total||0,
-            note: `已生成 ${home.report_activity?.generated||0} 份`,
-            detail: `${home.report_activity?.manual_review||0} 条线索待人工复核`
-          }),
-          operationsMetricCard({
-            tone: (home.email_delivery?.failed||0) ? 'attention' : ((home.email_delivery?.unsent||0) ? 'review' : 'ok'),
-            label: '邮件交付',
-            value: home.email_delivery?.sent||0,
-            note: `失败 ${home.email_delivery?.failed||0} / 未发送 ${home.email_delivery?.unsent||0}`,
-            detail: home.email_delivery?.history_available ? '交付历史可查看' : '报告最新交付状态'
-          }),
-          operationsMetricCard({
-            tone: (home.lead_metrics?.high_risk||0) ? 'risk' : ((home.lead_metrics?.suspected_negative||0) ? 'review' : ''),
-            label: '疑似负面线索',
-            value: home.lead_metrics?.suspected_negative||0,
-            note: `高风险 ${home.lead_metrics?.high_risk||0} / 待复核 ${home.lead_metrics?.pending_review||0}`,
-            detail: `采集内容 ${home.lead_metrics?.contents_total||0} 条`
-          })
-        ].join('');
+        metrics.innerHTML=model.metricCards.map(card=>operationsMetricCard(card)).join('');
       }
-      const lower=document.querySelector('.operations-home-lower');
-      if(lower && !document.getElementById('operations_home_command_rail')){
-        const rail=document.createElement('div');
-        rail.id='operations_home_command_rail';
-        rail.className='operations-command-rail';
-        lower.insertBefore(rail, lower.firstChild);
+      const timeline=document.getElementById('operations_home_timeline');
+      if(timeline){
+        timeline.innerHTML=renderOperationsTrendChart(model);
       }
-      const commandRail=document.getElementById('operations_home_command_rail');
-      if(commandRail) commandRail.innerHTML=renderOperationsCommandRail(home);
+      const attention=document.getElementById('operations_home_attention');
+      if(attention){
+        attention.innerHTML=renderOperationsIssueChart(model);
+      }
+      const breakdowns=document.getElementById('operations_home_breakdowns');
+      if(breakdowns){
+        breakdowns.innerHTML=renderOperationsBreakdowns(model);
+      }
       const resource=document.getElementById('operations_home_resource');
-      if(resource) resource.innerHTML=renderOperationsResourceHealth(home.resource_health||{});
+      if(resource){
+        resource.innerHTML=renderOperationsResourceHealth(model);
+        resource.classList.toggle('is-empty', !resource.innerHTML.trim());
+      }
       const adminHealth=document.getElementById('operations_home_admin_health');
-      if(adminHealth) adminHealth.innerHTML=renderOperationsAdminHealth(home);
+      if(adminHealth){
+        adminHealth.innerHTML=renderOperationsAdminHealth(model);
+      }
       applyMenuPermissions();
       bindShortcutButtons(document.getElementById('dashboard'));
+      scheduleOperationsChartRender(model);
     }
     function operationsMetricCard(card){
       const tone=card.tone ? ` is-${card.tone}` : '';
-      return `<article class="operations-metric-card${tone}">
-        <div class="operations-metric-head"><span>${esc(card.label)}</span><i></i></div>
-        <strong>${esc(card.value)}</strong>
-        <p>${esc(card.note)}</p>
-        <div class="operations-metric-foot"><span>${esc(card.detail)}</span></div>
-      </article>`;
+      const value=visualValue(card.value);
+      const segments=(card.segments||[]).map(segment=>({
+        tone: segment.tone || card.tone || 'neutral',
+        value: visualValue(segment.value)
+      })).filter(segment=>segment.value > 0);
+      const segmentTotal=segments.reduce((sum, segment)=>sum + segment.value, 0);
+      const maxValue=Math.max(value, segmentTotal, ...segments.map(segment=>segment.value), 1);
+      const icon=operationsMetricIcon(card.label);
+      const bars=(segments.length ? segments : [{tone: card.tone || 'neutral', value: value || 1}]).map(segment=>{
+        const height=operationPercent(segment.value, maxValue, 14);
+        return `<i class="is-${esc(segment.tone)}" style="height:${height}%"></i>`;
+      }).join('');
+      const attrs=operationsShortcutAttributes(card);
+      return `<button type="button" class="operations-metric-card${tone}" ${attrs} aria-label="${esc(card.label)} ${esc(value)}">
+        <span class="operations-metric-head">
+          <span class="operations-metric-label"><span class="operations-metric-icon ${operationToneClass(card.tone)}" aria-hidden="true"><svg><use href="#${icon}"></use></svg></span><em>${esc(card.label)}</em></span>
+          <strong>${esc(value)}</strong>
+        </span>
+        <span class="operations-metric-meta">${esc(card.note || operationsToneLabel(card.tone || 'ok'))}</span>
+        <span class="operations-metric-gauge operations-metric-spark" aria-hidden="true">${bars}</span>
+        <span class="operations-metric-foot">${operationsTrack(card.segments, card.tone)}</span>
+      </button>`;
     }
-    function renderOperationsCommandRail(home){
-      const taskAttention=home.task_health?.needs_attention||0;
-      const runAttention=(home.run_activity?.failed_recent||0) + (home.run_activity?.skipped_recent||0);
-      const reportAttention=(home.report_activity?.manual_review||0);
-      const deliveryAttention=(home.email_delivery?.failed||0) + (home.email_delivery?.unsent||0);
-      const steps=[
-        {
-          tone: taskAttention ? 'attention' : 'ok',
-          title: '任务',
-          list: [`启用 ${home.task_health?.active||0} 个`, `暂停 ${home.task_health?.paused||0} 个`]
-        },
-        {
-          tone: runAttention ? 'attention' : ((home.run_activity?.running||0) ? 'review' : 'ok'),
-          title: '运行',
-          list: [`运行中 ${home.run_activity?.running||0}`, `今日 ${home.run_activity?.today||0} 次`]
-        },
-        {
-          tone: reportAttention ? 'review' : 'ok',
-          title: '报告',
-          list: [`已生成 ${home.report_activity?.generated||0} 份`, `待复核 ${home.report_activity?.manual_review||0} 条`]
-        },
-        {
-          tone: deliveryAttention ? 'attention' : 'ok',
-          title: '邮件',
-          list: [`失败 ${home.email_delivery?.failed||0}`, `未发送 ${home.email_delivery?.unsent||0}`]
-        }
-      ];
-      const attentionTotal=taskAttention + runAttention + reportAttention + deliveryAttention;
-      return `<div class="command-rail-head"><div><span>今日关注</span><strong>${attentionTotal ? `${attentionTotal} 项需要跟进` : '暂无待处理事项'}</strong><p>${attentionTotal ? '失败、预检拦截或登录态/配置阻断需要先处理。' : '闭环顺畅，先按任务、运行、报告、邮件的顺序巡检。'}</p></div><span class="status ${attentionTotal?'warn':'ok'}">${attentionTotal?'需要关注':'状态稳定'}</span></div><div class="command-rail-summary">${steps.map(step=>`<div class="command-rail-chip is-${esc(step.tone)}"><strong>${esc(step.title)}</strong><span>${step.list.map(item=>esc(item)).join(' / ')}</span></div>`).join('')}</div>`;
-    }
-    function renderOperationsResourceHealth(resource){
-      const admin=resource.scope === 'workspace';
-      const status=resource.status || (admin ? 'needs_attention' : 'available');
-      const title=admin ? '资源健康' : '采集资源';
-      const note=admin ? resourceHealthSummary(resource) : '资源由管理员维护';
-      const signals=(resource.signals||[]).length ? resource.signals : (admin ? [
-        {label:'平台账号', status: resource.social_accounts_total ? 'ready' : 'empty', count: resource.social_accounts_total||0},
-        {label:'代理资源', status: resource.proxy_profiles_total ? 'ready' : 'empty', count: resource.proxy_profiles_total||0},
-        {label:'AI 接入', status: resource.ai_profiles_total ? 'ready' : 'empty', count: resource.ai_profiles_total||0},
-        {label:'登录会话', status: resource.login_sessions_total ? 'ready' : 'empty', count: resource.login_sessions_total||0}
-      ] : [{label:'采集资源', status:'available', note:'资源由管理员维护'}]);
-      return `<div class="operations-section-head"><div><span>${esc(title)}</span><strong>${esc(resourceStatusText(status))}</strong></div><span class="status ${status==='ready'||status==='available'?'ok':'warn'}">${esc(admin ? '管理员可处理' : '业务可见')}</span></div>
-        <p class="operations-resource-note">${esc(note)}</p>
-        <div class="operations-resource-signals">${signals.map(signal=>`<div class="operations-resource-signal ${resourceSignalClass(signal.status)}">
-          <span>${esc(signal.label)}</span><strong>${esc(signal.count ?? signal.note ?? resourceStatusText(signal.status))}</strong>
-        </div>`).join('')}</div>`;
-    }
-    function renderOperationsAdminHealth(home){
-      const resource=home.resource_health||{};
-      if(resource.scope !== 'workspace') return '';
-      const status=resource.status || 'needs_attention';
-      const taskAttention=home.task_health?.needs_attention||0;
-      const runAttention=(home.run_activity?.failed_recent||0) + (home.run_activity?.skipped_recent||0);
-      const reportAttention=(home.report_activity?.manual_review||0) + (home.email_delivery?.failed||0);
-      const tone=status==='ready' || status==='available' ? 'ok' : 'warn';
-      return `<div class="operations-admin-health-card">
-        <div>
-          <span class="status ${tone}">${esc(resourceStatusText(status))}</span>
-          <strong>系统健康摘要</strong>
-          <p>${esc(resourceHealthSummary(resource))}</p>
-        </div>
-        <div class="operations-admin-health-signals" aria-label="系统健康摘要">
-          <span>任务待处理 ${esc(taskAttention)}</span>
-          <span>运行异常 ${esc(runAttention)}</span>
-          <span>报告/邮件关注 ${esc(reportAttention)}</span>
-        </div>
-        <button class="secondary" type="button" data-shortcut-tab="doctor" data-menu-key="system_diagnostics">查看系统诊断</button>
+    function renderOperationsChartSurface(key, action='', label=''){
+      const actionAttr=action ? ` data-chart-action="${esc(action)}"` : '';
+      const labelAttr=label ? ` aria-label="${esc(label)}"` : '';
+      return `<div class="operations-chart-shell"${actionAttr}${labelAttr}>
+        <div class="operations-chart-surface" data-chart-key="${esc(key)}" role="img"${labelAttr}></div>
+        <div class="operations-chart-fallback">${operationsChartUnavailable()}</div>
       </div>`;
+    }
+    function operationsChartUnavailable(){
+      return '图表暂不可用';
+    }
+    function operationsChartLibMissing(){
+      return !window.echarts;
+    }
+    function renderOperationsTrendChart(model){
+      const latestLabel=model.trend.loading ? '同步中' : `${model.trend.days} 天`;
+      return `<div class="operations-chart-card operations-main-trend operations-cockpit-trend">
+        <div class="operations-trend-head">
+          <div class="operations-chart-head"><span>监控走势</span><strong>${esc(latestLabel)}</strong></div>
+          <div class="operations-trend-controls">
+            ${operationsLegend([
+              {tone:'ok', label:'业务总量', value:model.trend.latestTotal},
+              {tone:'attention', label:'异常 / 待处理', value:model.trend.latestIssue},
+            ], 'is-compact')}
+            <div class="operations-window-toggle" role="tablist" aria-label="时间窗口">
+              <button type="button" class="${model.trend.days === 7 ? 'is-active' : ''}" onclick="setOperationsTrendWindow(7)">7天</button>
+              <button type="button" class="${model.trend.days === 14 ? 'is-active' : ''}" onclick="setOperationsTrendWindow(14)">14天</button>
+            </div>
+          </div>
+        </div>
+        ${renderOperationsChartSurface('trend', 'trend', '监控走势')}
+      </div>`;
+    }
+    function renderOperationsBreakdowns(model){
+      return `<div class="operations-breakdown-card operations-platform-chart">
+          <div class="operations-chart-head"><span>平台分布</span><strong>${esc(model.platformTotal)}</strong></div>
+          ${operationsLegend(model.platforms.map(item=>({label:item.label, value:item.value, color:item.color})), 'is-compact')}
+          ${renderOperationsChartSurface('platforms', 'platforms', '平台分布')}
+        </div>
+        <div class="operations-breakdown-card operations-delivery-chart">
+          <div class="operations-chart-head"><span>交付 / 复核</span><strong>${esc(model.deliveryRows.reduce((sum, item)=>sum + visualValue(item.review) + visualValue(item.attention), 0))}</strong></div>
+          <div class="small">${esc(operationsMailStatusSourceCopy)}，不汇总完整投递尝试历史。</div>
+          ${operationsLegend([
+            {tone:'ok', label:'完成'},
+            {tone:'review', label:'待复核'},
+            {tone:'attention', label:'异常'},
+          ], 'is-compact')}
+          ${renderOperationsChartSurface('delivery', 'delivery', '交付 / 复核')}
+        </div>`;
+    }
+    function renderOperationsIssueChart(model){
+      const priorities=model.priorities.length ? model.priorities : [{label:'稳定', value:0, tone:'ok'}];
+      return `<div class="operations-chart-card operations-problem-map">
+        <div class="operations-chart-head"><span>问题分布</span><strong>${esc(priorities.reduce((sum, item)=>sum + visualValue(item.value), 0))}</strong></div>
+        ${operationsLegend([
+          {tone:'attention', label:'异常'},
+          {tone:'review', label:'待处理'},
+          {tone:'risk', label:'高风险'}
+        ], 'is-compact')}
+        ${renderOperationsChartSurface('issues', 'issues', '问题分布')}
+      </div>`;
+    }
+    function renderOperationsCommandRail(model){
+      return renderOperationsIssueChart(model);
+    }
+    function renderOperationsResourceHealth(model){
+      if(!canRenderOperationsResourceHealth(model)){
+        disposeOperationsChart('resource');
+        return '';
+      }
+      const signals=model.resourceSignals.slice(0, 4);
+      const gapCount=signals.filter(signal=>['empty','needs_attention'].includes(signal.status)).length;
+      return `<div class="operations-resource-entry">
+        <button class="operations-resource-card operations-resource-card-primary" type="button" data-shortcut-tab="accounts" data-menu-key="platform_accounts" aria-label="资源健康">
+          <div class="operations-section-head"><span>资源健康</span><strong>${esc(resourceStatusText(model.resourceStatus))}</strong></div>
+          ${operationsLegend(signals.map(signal=>({label:signal.label, value:signal.count ?? 0, tone:resourceSignalTone(signal.status)})), 'is-compact')}
+          ${renderOperationsChartSurface('resource', 'resource', '资源健康')}
+        </button>
+        <button class="operations-resource-card operations-admin-chart operations-resource-card-secondary" type="button" data-shortcut-tab="doctor" data-menu-key="system_diagnostics" aria-label="系统诊断">
+          <div class="operations-section-head"><span>系统诊断</span><strong>${esc(gapCount)}</strong></div>
+          <div class="operations-resource-diagnostic-track" aria-hidden="true">
+            <span class="is-ok" style="flex:${Math.max(signals.length - gapCount, 1)}"></span>
+            <span class="is-attention" style="flex:${Math.max(gapCount, 1)}"></span>
+          </div>
+        </button>
+      </div>`;
+    }
+    function renderOperationsAdminHealth(model){
+      return '';
+    }
+    function operationsBaseChartOption(){
+      return {
+        animation: false,
+        backgroundColor: 'transparent',
+        textStyle: {
+          color: '#334155',
+          fontFamily: 'Inter, "Microsoft YaHei", Arial, sans-serif',
+          fontSize: 11,
+        },
+        tooltip: {
+          trigger: 'axis',
+          appendToBody: true,
+          borderWidth: 0,
+          backgroundColor: 'rgba(15, 23, 42, 0.92)',
+          textStyle: {color: '#fff', fontSize: 12},
+          extraCssText: 'border-radius:8px;box-shadow:0 12px 26px rgba(15,23,42,.18);',
+        },
+        grid: {left: 36, right: 14, top: 16, bottom: 24, containLabel: true},
+      };
+    }
+    function operationsTrendOption(model){
+      const buckets=model.trend.buckets.length ? model.trend.buckets : [{label:'今天', total:0, issue:0}];
+      return {
+        ...operationsBaseChartOption(),
+        color: ['#0F766E', '#DC2626'],
+        legend: {show: false},
+        xAxis: {
+          type: 'category',
+          boundaryGap: false,
+          data: buckets.map(bucket=>bucket.label),
+          axisLine: {lineStyle: {color: '#CBD5E1'}},
+          axisTick: {show: false},
+          axisLabel: {color: '#64748B', fontSize: 10, interval: buckets.length > 7 ? 1 : 0},
+        },
+        yAxis: {
+          type: 'value',
+          minInterval: 1,
+          splitLine: {lineStyle: {color: 'rgba(203,213,225,.65)', type: 'dashed'}},
+          axisLabel: {color: '#64748B', fontSize: 10},
+        },
+        series: [
+          {
+            name: '业务总量',
+            type: 'line',
+            smooth: true,
+            symbol: 'circle',
+            symbolSize: 6,
+            areaStyle: {color: 'rgba(15,118,110,.12)'},
+            lineStyle: {width: 2.5},
+            data: buckets.map(bucket=>bucket.total),
+            label: {show: buckets.length <= 7, position: 'top', color: '#0F766E', fontSize: 10},
+          },
+          {
+            name: '异常 / 待处理',
+            type: 'line',
+            smooth: true,
+            symbol: 'circle',
+            symbolSize: 6,
+            lineStyle: {width: 2.2},
+            data: buckets.map(bucket=>bucket.issue),
+            label: {show: buckets.length <= 7, position: 'bottom', color: '#DC2626', fontSize: 10},
+          },
+        ],
+      };
+    }
+    function operationsIssueOption(model){
+      const rows=(model.priorities.length ? model.priorities : [{label:'稳定', value:0, tone:'ok'}]).slice(0, 6);
+      return {
+        ...operationsBaseChartOption(),
+        tooltip: {...operationsBaseChartOption().tooltip, trigger: 'item'},
+        grid: {left: 58, right: 28, top: 10, bottom: 8, containLabel: false},
+        xAxis: {type: 'value', show: false, minInterval: 1},
+        yAxis: {
+          type: 'category',
+          inverse: true,
+          data: rows.map(row=>row.label),
+          axisLine: {show: false},
+          axisTick: {show: false},
+          axisLabel: {color: '#475569', fontSize: 11},
+        },
+        series: [{
+          name: '问题分布',
+          type: 'bar',
+          barWidth: 12,
+          data: rows.map(row=>({value: row.value, itemStyle: {color: toneGradient(row.tone)}})),
+          label: {show: true, position: 'right', color: '#1E293B', fontSize: 11},
+        }],
+      };
+    }
+    function operationsPlatformOption(model){
+      const rows=model.platforms.length ? model.platforms : [{label:'平台', value:0, ratio:0, color:'#94a3b8'}];
+      return {
+        ...operationsBaseChartOption(),
+        tooltip: {...operationsBaseChartOption().tooltip, trigger: 'item'},
+        grid: {left: 64, right: 42, top: 8, bottom: 8, containLabel: false},
+        xAxis: {type: 'value', show: false, minInterval: 1},
+        yAxis: {
+          type: 'category',
+          inverse: true,
+          data: rows.map(row=>row.label),
+          axisLine: {show: false},
+          axisTick: {show: false},
+          axisLabel: {color: '#475569', fontSize: 11},
+        },
+        series: [{
+          name: '平台分布',
+          type: 'bar',
+          barWidth: 12,
+          data: rows.map(row=>({value: row.value, itemStyle: {color: row.color}})),
+          label: {
+            show: true,
+            position: 'right',
+            color: '#1E293B',
+            fontSize: 11,
+            formatter: params => {
+              const row=rows[params.dataIndex] || {};
+              const failureText=row.failures ? ` / 异常${row.failures}` : '';
+              return `${params.value} / ${row.ratio || 0}%${failureText}`;
+            },
+          },
+        }],
+      };
+    }
+    function operationsDeliveryOption(model){
+      const rows=model.deliveryRows.length ? model.deliveryRows : [{label:'报告', ok:0, review:0, attention:0}];
+      return {
+        ...operationsBaseChartOption(),
+        color: ['#0F766E', '#D97706', '#DC2626'],
+        legend: {show: false},
+        grid: {left: 44, right: 22, top: 10, bottom: 10, containLabel: false},
+        xAxis: {type: 'value', show: false, minInterval: 1},
+        yAxis: {
+          type: 'category',
+          inverse: true,
+          data: rows.map(row=>row.label),
+          axisLine: {show: false},
+          axisTick: {show: false},
+          axisLabel: {color: '#475569', fontSize: 11},
+        },
+        series: [
+          {name:'完成', type:'bar', stack:'delivery', barWidth: 13, data: rows.map(row=>row.ok), label:{show:true, position:'insideRight', color:'#fff', fontSize:10}},
+          {name:'待复核', type:'bar', stack:'delivery', barWidth: 13, data: rows.map(row=>row.review), label:{show:true, position:'insideRight', color:'#fff', fontSize:10}},
+          {name:'异常', type:'bar', stack:'delivery', barWidth: 13, data: rows.map(row=>row.attention), label:{show:true, position:'right', color:'#1E293B', fontSize:10}},
+        ],
+      };
+    }
+    function operationsResourceOption(model){
+      const rows=model.resourceSignals.slice(0, 4).map(signal=>({
+        label: signal.label,
+        value: visualValue(signal.count ?? 0),
+        tone: resourceSignalTone(signal.status),
+      }));
+      const safeRows=rows.length ? rows : [{label:'资源', value:0, tone:'neutral'}];
+      return {
+        ...operationsBaseChartOption(),
+        tooltip: {...operationsBaseChartOption().tooltip, trigger: 'item'},
+        grid: {left: 48, right: 24, top: 8, bottom: 8, containLabel: false},
+        xAxis: {type: 'value', show: false, minInterval: 1},
+        yAxis: {
+          type: 'category',
+          inverse: true,
+          data: safeRows.map(row=>row.label),
+          axisLine: {show: false},
+          axisTick: {show: false},
+          axisLabel: {color: '#475569', fontSize: 11},
+        },
+        series: [{
+          name: '资源健康',
+          type: 'bar',
+          barWidth: 12,
+          data: safeRows.map(row=>({value: row.value, itemStyle: {color: toneGradient(row.tone)}})),
+          label: {show: true, position: 'right', color: '#1E293B', fontSize: 11},
+        }],
+      };
+    }
+    function operationsChartActionShortcut(action){
+      return {
+        trend: {tab:'runs', grouped:'0', target:'task_center_panel'},
+        issues: {tab:'runs', grouped:'1', target:'task_center_panel'},
+        platforms: {tab:'runs', grouped:'0', target:'task_center_panel'},
+        delivery: {tab:'runs', grouped:'1', target:'task_center_panel'},
+        resource: {tab:'accounts'},
+      }[action] || null;
+    }
+    function navigateOperationsChartAction(action){
+      const shortcut=operationsChartActionShortcut(action);
+      if(!shortcut) return;
+      navigateShortcut(shortcut.tab, {
+        target: shortcut.target || '',
+        grouped: shortcut.grouped || '',
+      });
+    }
+    function bindOperationsChartActions(root=document){
+      root.querySelectorAll('[data-chart-action]').forEach(target=>{
+        if(target.dataset.chartActionBound) return;
+        target.dataset.chartActionBound='1';
+        target.addEventListener('click', event=>{
+          if(event.target.closest('[data-shortcut-tab]')) return;
+          navigateOperationsChartAction(target.dataset.chartAction || '');
+        });
+      });
+    }
+    function disposeOperationsChart(key){
+      const chart=operationsOverviewState.charts.get(key);
+      if(chart){
+        try{ chart.dispose(); }catch(_exc){}
+        operationsOverviewState.charts.delete(key);
+      }
+    }
+    function operationsChartInstance(key, surface){
+      const existing=operationsOverviewState.charts.get(key);
+      if(existing && existing.getDom && existing.getDom() === surface){
+        return existing;
+      }
+      disposeOperationsChart(key);
+      const chart=echarts.init(surface, null, {renderer: 'canvas'});
+      operationsOverviewState.charts.set(key, chart);
+      return chart;
+    }
+    function renderOperationsECharts(model){
+      if(operationsChartLibMissing()){
+        document.querySelectorAll('#dashboard .operations-chart-fallback').forEach(item=>item.classList.add('is-visible'));
+        return;
+      }
+      const specs=[
+        ['trend', operationsTrendOption(model), 'trend'],
+        ['issues', operationsIssueOption(model), 'issues'],
+        ['platforms', operationsPlatformOption(model), 'platforms'],
+        ['delivery', operationsDeliveryOption(model), 'delivery'],
+      ];
+      if(canRenderOperationsResourceHealth(model)){
+        specs.push(['resource', operationsResourceOption(model), 'resource']);
+      }else{
+        disposeOperationsChart('resource');
+      }
+      specs.forEach(([key, option, action])=>{
+        const surface=document.querySelector(`#dashboard .operations-chart-surface[data-chart-key="${key}"]`);
+        if(!surface) return;
+        try{
+          surface.nextElementSibling?.classList.remove('is-visible');
+          const chart=operationsChartInstance(key, surface);
+          chart.setOption(option, true);
+          chart.off('click');
+          chart.on('click', ()=>navigateOperationsChartAction(action));
+        }catch(exc){
+          console.error('operationsHomeChart', key, exc);
+          surface.nextElementSibling?.classList.add('is-visible');
+        }
+      });
+      if(!operationsOverviewState.resizeBound){
+        window.addEventListener('resize', ()=>{
+          operationsOverviewState.charts.forEach(chart=>{
+            try{ chart.resize(); }catch(_exc){}
+          });
+        });
+        operationsOverviewState.resizeBound=true;
+      }
+    }
+    function scheduleOperationsChartRender(model){
+      bindOperationsChartActions(document.getElementById('dashboard'));
+      requestAnimationFrame(()=>renderOperationsECharts(model));
+    }
+    function toneGradient(tone){
+      return {
+        ok: '#176347',
+        live: '#2f5ec4',
+        review: '#8a4b11',
+        attention: '#9f2730',
+        risk: '#9f2730',
+        neutral: '#cbd5e1'
+      }[tone] || '#cbd5e1';
     }
     function resourceHealthSummary(resource){
       if(!resource || resource.scope !== 'workspace') return '资源由管理员维护';
       return `账号 ${resource.social_accounts_total||0} / 代理 ${resource.proxy_profiles_total||0} / AI ${resource.ai_profiles_total||0} / 会话 ${resource.login_sessions_total||0}`;
     }
     function resourceStatusText(status){
-      return {ready:'资源可用',available:'资源可用',needs_attention:'需要关注',empty:'待配置'}[status] || status || '状态未明';
+      const normalized=normalizeResourceSignalStatus(status);
+      return {ready:'资源可用',available:'资源可用',needs_attention:'需要关注',empty:'待配置'}[normalized] || status || '状态未明';
+    }
+    function canRenderOperationsResourceHealth(model){
+      return isAdminUser() && model.resourceScope === 'workspace';
+    }
+    function normalizeResourceSignalStatus(status){
+      const normalized=String(status || '').trim().toLowerCase().replace(/[\s-]+/g, '_');
+      return normalized || 'empty';
+    }
+    function resourceActionSignal(signal){
+      const label=String(signal?.label || '');
+      const status=normalizeResourceSignalStatus(signal?.status);
+      const source=[
+        [/(账号|account)/i, '账号'],
+        [/(代理|proxy)/i, '代理'],
+        [/(AI|ai)/, 'AI'],
+        [/(会话|登录|session|login)/i, '会话'],
+      ].find(([pattern])=>pattern.test(label));
+      const subject=source ? source[1] : '资源';
+      const action={
+        '账号': {ready:'账号可用', available:'账号可用', empty:'账号待配置', needs_attention:'账号需处理'},
+        '代理': {ready:'代理可用', available:'代理可用', empty:'代理待配置', needs_attention:'代理需处理'},
+        'AI': {ready:'AI 可用', available:'AI 可用', empty:'AI 待配置', needs_attention:'AI 需处理'},
+        '会话': {ready:'会话可用', available:'会话可用', empty:'会话待登录', needs_attention:'会话待登录'},
+        '资源': {ready:'资源可用', available:'资源可用', empty:'资源待配置', needs_attention:'资源需处理'},
+      }[subject] || {};
+      return {...signal, status, label: action[status] || action.empty || '资源待配置'};
+    }
+    function resourceSignalTone(status){
+      status=normalizeResourceSignalStatus(status);
+      if(status === 'ready' || status === 'available') return 'ok';
+      if(status === 'needs_attention') return 'attention';
+      if(status === 'empty') return 'neutral';
+      return 'neutral';
     }
     function resourceSignalClass(status){
+      status=normalizeResourceSignalStatus(status);
       if(status === 'ready' || status === 'available') return 'is-ok';
-      if(status === 'empty' || status === 'needs_attention') return 'is-attention';
+      if(status === 'needs_attention') return 'is-attention';
+      if(status === 'empty') return 'is-neutral';
       return '';
     }
     function metricSkeletonGrid(count=5){

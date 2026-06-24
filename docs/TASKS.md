@@ -117,11 +117,11 @@ and permission work.
       locks.
 - [x] Ensure login and crawling use the same account proxy when configured.
 
-## CR-075 - Open Todo MECE Rebaseline And Phase 5.1 Preflight Gate
+## CR-091 - Open Todo MECE Rebaseline And Phase 5.1 Preflight Gate
 
 Planning status:
 
-CR-075 is a documentation-governance batch for reorganizing the currently open
+CR-091 is a documentation-governance batch for reorganizing the currently open
 todo set before Phase 5.1 code work starts. It does not reopen completed
 historical phases and does not implement code, UI, schema, runtime data,
 account profiles, cookies, proxies, crawler behavior, or deployment changes.
@@ -152,11 +152,11 @@ Open todo layers:
       And Permissions page, and Phase 7.1D historical repair as independent
       deferred or operator-gated items, not part of Phase 21 or Phase 5.1.
 
-## CR-081 - Atomic Goal Execution Governance And Readiness Gate
+## CR-095 - Atomic Goal Execution Governance And Readiness Gate
 
 Planning status:
 
-CR-081 is a documentation-governance batch for turning the CR-075 open todo
+CR-095 is a documentation-governance batch for turning the CR-091 open todo
 lanes into executable goal packets. It does not reopen completed phases and
 does not implement code, UI, schema, runtime data, account profiles, cookies,
 proxies, crawler behavior, route exposure, deployment configuration, or
@@ -167,24 +167,24 @@ Goal readiness tasks:
 - [x] Add `docs/GOAL_EXECUTION_GUIDELINES.md` as the goal-readiness source for
       packet structure, atomicity rules, current execution lanes, test
       iteration loop, acceptance standards, and stop conditions.
-- [x] Keep CR-075 as the MECE lane-separation owner and CR-081 as the execution
+- [x] Keep CR-091 as the MECE lane-separation owner and CR-095 as the execution
       governance owner, so task boundaries and goal mechanics do not collapse
       into one mixed concern.
 - [x] Require every non-trivial future goal to state owner CR/phase, baseline,
       in scope, out of scope, hard boundaries, start gate, dependencies,
       expected touch surface, execution steps, test loop, acceptance criteria,
       rollback or recovery, documentation updates, and stop conditions.
-- [x] Record the current serial execution rhythm: Phase 21 merge, Phase 5.1P
-      read-only preflight, Phase 5.1A-D implementation, Phase 5.1 acceptance,
-      then CR-070 / Phase 5.2 after CR-047 provider/effective snapshot
-      verification.
+- [x] Record the current serial execution rhythm: Phase 21 merged and closed on
+      `main`, Phase 5.1P read-only preflight, Phase 5.1A-D implementation,
+      Phase 5.1 acceptance, then CR-070 / Phase 5.2 after CR-047
+      provider/effective snapshot verification.
 - [x] Make Phase 5.1 goal-ready as serial units: preflight, data model,
       generator/validator, locking/re-login, runtime binding, and acceptance
       gate.
 - [x] Make CR-070 / Phase 5.2 goal-ready as serial units: package contract and
       security model, export flow, import flow, post-import
       verification/recovery, and test-safety verification.
-- [x] Keep CR-078, CR-079, and CR-080 as future independent backlog lanes that
+- [x] Keep CR-092, CR-093, and CR-094 as future independent backlog lanes that
       cannot become hidden prerequisites for Phase 21, Phase 5.1P, Phase 5.1,
       or CR-070 without a later accepted decision.
 - [x] Add goal-readiness checks to workflow, documentation-check guidance,
@@ -194,7 +194,7 @@ Goal readiness tasks:
 
 Planning status:
 
-These items are future independent lanes introduced after the CR-075 MECE
+These items are future independent lanes introduced after the CR-091 MECE
 rebaseline. They are not part of Phase 21, Phase 5.1P, CR-047, or CR-070.
 They must not change code, UI, schema, runtime data, account profiles, cookies,
 proxies, crawler behavior, or deployment configuration until a later
@@ -202,15 +202,14 @@ implementation CR is explicitly accepted.
 
 Numbering note:
 
-CR-076 and CR-077 are intentionally not used in this mainline batch because
-the active Phase 21 worktree may already use them for focused responsive
-navigation/mobile-header fixes. If that worktree is merged, keep these future
-items as CR-078 through CR-080. If another target branch already uses those
-numbers, use the next available numbers and update all references together.
+CR-092 through CR-094 are the current identifiers for these future backlog
+lanes. They replace the earlier planning-only CR-078 through CR-080 labels
+because completed Phase 21 responsive fixes now own CR-078 through CR-080 as
+historical verified records.
 
-### CR-078 - Frontend Stack Migration Evaluation And Monitor Next Plan
+### CR-092 - Frontend Stack Migration Evaluation And Monitor Next Plan
 
-- [ ] Keep CR-078 as future planning only. It must not create a frontend
+- [ ] Keep CR-092 as future planning only. It must not create a frontend
       project, introduce a Node build pipeline, add package dependencies,
       change `/monitor`, change monitor APIs, change permissions, or modify
       Phase 21 work.
@@ -232,9 +231,9 @@ numbers, use the next available numbers and update all references together.
       select/date, report download, email delivery, routing, owner-scope, and
       permission behavior until replacement equivalence is verified.
 
-### CR-079 - MediaCrawler Internalization And Public Exposure Boundary
+### CR-093 - MediaCrawler Internalization And Public Exposure Boundary
 
-- [ ] Keep CR-079 as product-boundary and security-hardening planning until a
+- [ ] Keep CR-093 as product-boundary and security-hardening planning until a
       route/mount audit confirms the implementation strategy. It must not
       delete MediaCrawler code or disable routes in this documentation batch.
 - [ ] Audit FastAPI routers and static mounts before implementation, including
@@ -255,9 +254,9 @@ numbers, use the next available numbers and update all references together.
 - [ ] Add user-visible wording cleanup only in a later implementation CR and
       keep trusted administrator diagnostics separate.
 
-### CR-080 - Crawler Engine Provider Architecture
+### CR-094 - Crawler Engine Provider Architecture
 
-- [ ] Keep CR-080 as future architecture planning only. It must not implement
+- [ ] Keep CR-094 as future architecture planning only. It must not implement
       provider abstraction, schema, runtime, profile, account, proxy, crawler,
       UI, or deployment changes in this documentation batch.
 - [ ] Maintain `docs/CRAWLER_PROVIDER_ARCHITECTURE.md` as the source document
@@ -274,7 +273,7 @@ numbers, use the next available numbers and update all references together.
       profile, report, permission, or frontend entry systems.
 - [ ] Require a separate data model and migration CR before adding provider
       tables, profile-binding tables, or capability schema.
-- [ ] Keep CR-080 separate from Phase 5.1P; Phase 5.1P remains only the
+- [ ] Keep CR-094 separate from Phase 5.1P; Phase 5.1P remains only the
       current MediaCrawler/CDP/BrowserEnvironmentProvider compatibility
       preflight.
 
@@ -833,8 +832,10 @@ verified locally: missing AI evaluation records are treated as unevaluated or
 limited-context instead of no-risk, report/run counts and filters split the
 major lead states, and active timeout/partial finalization creates
 pending-review fallback rows for known unresolved candidates when safe. Phase
-7.2C-D relevance hardening and calibration fixtures are implemented and
-verified locally with a target-evidence gate.
+7.2C-D relevance hardening and calibration fixtures are retained as historical
+CR-045 verification. CR-096 supersedes the application-layer target-evidence
+gate as current behavior: `source_keyword` remains prompt guidance, while
+valid model semantics are no longer overwritten by hardcoded postprocessing.
 
 ### Phase 7.2A - Unevaluated Lead Status Safety
 
@@ -891,6 +892,33 @@ verified locally with a target-evidence gate.
       unresolved candidates to pending review for Phase 7.2B.
 - [x] Run docs consistency and targeted monitoring tests before marking the
       Phase 7.2A-D safety batch implemented.
+
+## CR-096 - AI Evaluation Postprocessing Scope Reduction
+
+Planning status:
+
+CR-096 is a verified regression fix for the completed CR-045/Phase 7.2 AI
+evaluation responsibility area. It does not reopen Phase 7, Phase 7.1, or
+Phase 7.2 historical completion records. It narrows AI evaluation
+postprocessing to format validation plus trace/storage safety so valid model
+semantic output cannot be erased by hardcoded target-word, alias,
+`source_keyword`, or quote matching.
+
+- [x] Remove application-layer target-evidence semantic rewriting from
+      `api/monitoring/ai.py`.
+- [x] Delete the unused target-evidence gate helpers that forced valid model
+      output to `irrelevant`.
+- [x] Keep JSON parsing, required-field checks, boolean coercion,
+      `risk_level` enum validation, and `evidence_quotes` normalization.
+- [x] Preserve `pending_review` fallback behavior for malformed JSON, missing
+      fields, invalid risk levels, provider errors, and timeouts.
+- [x] Preserve AI trace/log redaction and prompt/request/response/comment
+      truncation guardrails.
+- [x] Add regression coverage for valid model output preservation, including
+      the `北京海安律所` versus `北京海安律师事务所` variant case.
+- [x] Update CR-045/Phase 7.2 documentation to treat the previous
+      target-evidence gate as historical and CR-096 as the current
+      postprocessing rule.
 
 ## CR-050 - Report Center Lead Status Filter Precision Regression Fix
 
@@ -1145,6 +1173,304 @@ views in one goal.
       compact health summary on the home page.
 - [x] Verify no horizontal overflow, overlapping metric cards, hidden primary
       actions, or role leakage on tablet and mobile.
+
+## CR-097 - Operations Home Visual Density Reduction
+
+Planning status:
+
+CR-097 is an existing-feature optimization for the current Operations Home.
+It keeps the same data contract and drilldowns while making the first screen
+more visual and less wordy.
+
+- [x] Compress the Operations Home first viewport so the data reads like a
+      cockpit rather than a prose summary.
+- [x] Prefer visual encodings and compact numeric signals over explanatory
+      helper copy on the home surface.
+- [x] Replace the old large detail/workbench feeling with five compact KPI
+      meters, one dominant flow chart, platform breakdown with heatmap blocks,
+      delivery/lead composition, and a compact visual priority panel.
+- [x] Keep desktop, tablet, and mobile layouts readable with no overflow or
+      overlap.
+- [x] Keep desktop and tablet Operations Home within the shell/navigation
+      height by hiding the shortcut dock outside mobile and using a bounded
+      chart-first grid.
+- [x] Preserve role-safe resource visibility and administrator diagnostics
+      gating.
+
+## CR-098 - Operations Home Data-First Visual Refit
+
+Planning status:
+
+CR-098 is the follow-up existing-feature optimization for the current
+Operations Home. It keeps CR-097 verified as history while tightening the home
+into a data-first dashboard that follows the existing project design system.
+
+- [x] Refit the Operations Home to use the Phase 21 light enterprise shell,
+      teal accent, compact typography, modest radii, and restrained risk color.
+- [x] Replace the remaining status/prose-heavy read with KPI micro bars, a
+      five-stage flow chart, compact priority bars, platform/delivery
+      breakdowns, and resource bars.
+- [x] Hide the shortcut dock through the final CR-098 cascade so it no longer
+      increases the desktop/tablet or mobile page length.
+- [x] Keep the desktop 1440x900 and tablet 1024x768 Operations Home content
+      within the left navigation/shell height.
+- [x] Keep mobile chart-first and remove duplicated page-kicker copy from the
+      mobile overview.
+- [x] Preserve all existing dashboard data contracts, drilldowns, role gating,
+      Task Center, Run Detail, drawer, modal, enhanced select/date, routing,
+      owner-scope, and report-scope behavior.
+
+## CR-099 - Operations Home Legend-First Visual Clarity
+
+Planning status:
+
+CR-099 is the follow-up existing-feature optimization for the current
+Operations Home. It keeps CR-098 verified as history while making the visual
+language more self-explanatory through visible keys, normalized icon scale,
+and calmer palette separation.
+
+- [x] Add visible legend/direct-key treatment to the flow chart,
+      delivery/review chart, attention panel, and resource chart.
+- [x] Normalize KPI and alert icon sizes so they stay visually secondary to
+      the values and bars.
+- [x] Change the platform breakdown to a donut plus labeled bar list with a
+      category palette that stays distinct from status colors.
+- [x] Keep the desktop 1440x900 and tablet 1024x768 Operations Home content
+      within the left navigation/shell height.
+- [x] Keep mobile readable with the same chart-first order, visible keys, and
+      no horizontal overflow.
+- [x] Preserve all existing dashboard data contracts, drilldowns, role gating,
+      Task Center, Run Detail, drawer, modal, enhanced select/date, routing,
+      owner-scope, and report-scope behavior.
+
+## CR-100 - Operations Home Dense Visual Composition
+
+Planning status:
+
+CR-100 is the follow-up existing-feature optimization for the current
+Operations Home. It keeps CR-099 verified as history while reducing empty
+surface through content-sized layout rules and denser chart composition.
+
+- [x] Stop stretching desktop/tablet dashboard panels to fill empty viewport
+      height when the real data is sparse.
+- [x] Keep the same one-screen maximum height boundary relative to the left
+      navigation/shell.
+- [x] Add denser graphical structure to the flow chart without changing its
+      real field meaning.
+- [x] Keep the page chart-first and avoid adding prose/table filler.
+- [x] Preserve all existing dashboard data contracts, drilldowns, role gating,
+      Task Center, Run Detail, drawer, modal, enhanced select/date, routing,
+      owner-scope, and report-scope behavior.
+
+## CR-101 - Operations Home Flow Chart Layer Separation
+
+Planning status:
+
+CR-101 is the follow-up existing-feature optimization for the current
+Operations Home after live browser review of CR-100. It keeps CR-100 verified
+as history while refining only the `流程总览` internal layering.
+After CR-105, this is historical/archive-only evidence and must not be treated
+as a current requirement to preserve `流程总览` or `operations-stage-*` DOM.
+
+- [x] Split the flow chart into a clear head layer and a separate internal plot
+      area.
+- [x] Keep the same one-screen maximum height boundary relative to the left
+      navigation/shell.
+- [x] Reduce the visual weight of the stage backdrop columns so they behave as
+      substrate instead of competing cards.
+- [x] Keep the stage nodes as the foreground layer with clearer labels, counts,
+      and pending-state readability.
+- [x] Preserve all existing dashboard data contracts, drilldowns, role gating,
+      Task Center, Run Detail, drawer, modal, enhanced select/date, routing,
+      owner-scope, and report-scope behavior.
+
+## CR-102 - Operations Home Flow Chart Node Simplification
+
+Planning status:
+
+CR-102 is the follow-up existing-feature optimization for the current
+Operations Home after live browser review of CR-101. It keeps CR-101 verified
+as history while refining only the `流程总览` node payload and density.
+After CR-105, this is historical/archive-only evidence and must not be treated
+as a current requirement to preserve `流程总览` or `operations-stage-*` DOM.
+
+- [x] Remove the separate node helper-text row from the flow chart body.
+- [x] Keep pending state visible only as a compact chip when non-zero.
+- [x] Tighten node spacing, orb size, connector placement, and bar height so
+      the plot reads as one coherent chart block.
+- [x] Keep the same one-screen maximum height boundary relative to the left
+      navigation/shell.
+- [x] Preserve all existing dashboard data contracts, drilldowns, role gating,
+      Task Center, Run Detail, drawer, modal, enhanced select/date, routing,
+      owner-scope, and report-scope behavior.
+
+## CR-103 - Operations Home Flow Chart Semantic Trend Rebuild
+
+Planning status:
+
+CR-103 is the follow-up existing-feature optimization for the current
+Operations Home after live browser review of CR-102. It keeps CR-101 and
+CR-102 verified as history while rebuilding only the `流程总览` chart semantics.
+After CR-105, this is historical/archive-only evidence and must not be treated
+as a current requirement to preserve `流程总览` or `operations-stage-*` DOM.
+
+- [x] Rebuild `流程总览` as one chart-first stage trend view instead of mixed
+      orb/bar node cards.
+- [x] Keep the visible legend explicit for `总量` and `异常 / 待处理`.
+- [x] Keep the same five monitoring stages and current dashboard data
+      contract without inventing historical time-series fields.
+- [x] Keep the same one-screen maximum height boundary relative to the left
+      navigation/shell.
+- [x] Preserve all existing dashboard data contracts, drilldowns, role gating,
+      Task Center, Run Detail, drawer, modal, enhanced select/date, routing,
+      owner-scope, and report-scope behavior.
+
+## CR-104 - Operations Home Data Cockpit Moderate Rebuild
+
+Planning status:
+
+CR-104 is the follow-up existing-feature optimization for the current
+Operations Home after CR-103. It keeps CR-097 through CR-103 verified as
+history while rebuilding the overall first-screen composition into a chart-
+first data cockpit.
+
+- [x] Keep the existing `/api/monitor/dashboard` contract and current
+      drilldown targets.
+- [x] Add a frontend overview view-model layer for the current Operations Home.
+- [x] Use read-only frontend aggregation from `/runs` and `/reports` when the
+      dashboard payload does not include 7-day or 14-day trend buckets.
+- [x] Replace the current first-screen composition with compact KPI strip,
+      `监控走势`, `问题分布`, `平台分布`, and `交付 / 复核`.
+- [x] Reduce resource health to an administrator-only compact entry and hide
+      the resource block entirely for normal users.
+- [x] Keep the same one-screen maximum height boundary relative to the left
+      navigation/shell.
+- [x] Preserve all existing dashboard data contracts, role gating,
+      Task Center, Run Detail, drawer, modal, enhanced select/date, routing,
+      owner-scope, and report-scope behavior.
+
+## CR-105 - Operations Home ECharts Dashboard Rebaseline
+
+Implementation status:
+
+CR-105A is implemented and verified for the `/monitor` Operations Home first
+screen. It replaces the CR-104 handcrafted chart baseline with locally
+vendored ECharts for the core dashboard charts, while keeping CR-097 through
+CR-103 as historical/archive-only design iterations and preserving Task
+Center, Run Detail, drawer, modal, enhanced select/date, routing, owner-scope,
+report-scope, and top-bar refresh behavior.
+
+- [x] Perform a todo baseline review for Operations Home requirements across
+      `TASKS.md`, `CHANGE_REQUESTS.md`, `CURRENT_STATE.md`, `TRACEABILITY.md`,
+      `TEST_PLAN.md`, current code, and existing dashboard tests.
+- [x] Classify CR-097 through CR-103 as historical/archive-only for future
+      dashboard work while preserving them as verified implementation history.
+- [x] Keep CR-104 as the code baseline before CR-105 implementation:
+      compact KPI strip, `监控走势`, `问题分布`, `平台分布`, `交付 / 复核`,
+      administrator-only resource health, current dashboard API, role gating,
+      drilldowns, and shell-height boundary.
+- [x] Accept Apache ECharts as the current `/monitor` charting library for the
+      core CR-105 dashboard charts; the library must be vendored locally under
+      the existing static asset path and must not be loaded from a CDN. The
+      expected file path is
+      `api/webui/monitor/vendor/echarts.min.js`, served as
+      `/static/monitor/vendor/echarts.min.js`.
+- [x] Explicitly reject continuing CR-104 handcrafted SVG path geometry or
+      custom DOM chart layout calculations for core CR-105 dashboard charts;
+      SVG icons and ECharts internal rendering remain allowed, but
+      `.operations-trend-svg`, `operationsTrendLinePath()`, and
+      `operationsTrendAreaPath()` are the current baseline to replace.
+- [x] Define the chart plan: KPI micro charts, 7/14-day dual-line trend with
+      optional 30-day mode only when existing data supports bounded frontend
+      aggregation, issue-distribution horizontal bars, platform distribution
+      bar/donut-plus-bar, delivery/review stacked bars, and administrator
+      resource segmented bars, with future heatmap/matrix only when data
+      density justifies it.
+- [x] Define the dashboard goal and reading path: help users judge within
+      about 10 seconds whether today's monitoring is normal, where the risk or
+      exception is, and where to click next.
+- [x] Define the reusable first-version data set from current APIs:
+      tasks, runs, reports, mail state, suspected negative/high-risk leads,
+      manual review, platform distribution, and administrator-only resource
+      health.
+- [x] Defer later enhancement data explicitly: task funnel, platform risk
+      matrix, keyword heat, AI quality, and task rankings cannot be invented
+      as required persisted metrics for the first CR-105 implementation.
+- [x] Keep missing trend buckets as frontend read-only aggregation from
+      existing `/runs` and `/reports` for the first CR-105 implementation;
+      backend trend buckets require a later accepted CR.
+- [x] Define the dashboard color ledger, role boundaries, visible legend/direct
+      label rule, responsive layout, interactions, loading/empty/stale/error
+      states, and non-goals.
+- [x] Define module alignment as a hard CR-105 acceptance rule: card edges,
+      gutters, title/header heights, key numbers, legends, chart plot origins,
+      KPI internals, lower-card heights, and normal-user reflow must align
+      rather than appearing as independent uneven panels.
+- [x] Define the six stable containers and desktop/tablet/mobile layout:
+      KPI strip, `监控走势`, `问题分布`, `平台分布`, `交付 / 复核`, and
+      administrator-only `资源健康`, with normal-user lower modules reflowing
+      to fill the hidden resource-health space.
+- [x] Remove current planning/test language that would require preserving
+      `流程总览`, `operations-stage-*`, or earlier no-chart-library constraints
+      in a future CR-105 implementation.
+- [x] Add local Apache ECharts vendor asset at
+      `api/webui/monitor/vendor/echarts.min.js` before chart implementation and
+      verify it is served as `/static/monitor/vendor/echarts.min.js` without a
+      CDN or frontend build pipeline.
+- [x] Implement the CR-105 chart-dashboard UI, keeping
+      Task Center, Run Detail, drawer, modal, enhanced select/date, routing,
+      owner-scope, report-scope, and top-bar refresh behavior unchanged.
+- [x] Verify CR-105A with targeted static tests, JavaScript parse checks,
+      local-vendor HTTP checks, in-app browser role checks for administrator
+      and normal-user sessions, and responsive checks at `1440x900`,
+      `1024x768`, and `390x844`.
+
+## CR-106A - Operations Home Data-Aware Signal Refinement
+
+Implementation status:
+
+CR-106A is implemented and verified as the current Operations Home optimization
+after CR-105A. It stays within the existing frontend and dashboard-data
+boundaries: no backend schema changes, no new persisted metrics, no Task Center
+or Run Detail behavior changes, and no hidden resource details for normal
+users.
+
+- [x] Preserve CR-105A as the verified ECharts dashboard baseline and keep
+      CR-097 through CR-103 historical/archive-only.
+- [x] Record a read-only local data baseline as planning evidence, making clear
+      that sample counts can change and are not product acceptance constants.
+- [x] Refine the Operations Home top status summary so today's health is
+      readable in one concise line before decoding individual charts.
+- [x] Adjust `问题分布` semantics so high-risk leads, pending review, mail
+      failure, and run failure/skip are prioritized by action severity.
+- [x] Adjust `平台分布` semantics so platform volume and platform failure
+      signals can be distinguished from existing run summary data.
+- [x] Clarify the `邮件` module as report-level delivery state from
+      `reports.email_status` for CR-106A.
+- [x] Keep `email_delivery_logs` dashboard aggregation out of CR-106A and
+      track it under CR-106B until explicitly accepted.
+- [x] Make administrator `资源健康` action-oriented while preserving
+      normal-user hiding of account/proxy/AI/SMTP/session details.
+- [x] Improve mobile first-screen density so KPI cards do not prevent
+      `监控走势` and `问题分布` from appearing early.
+- [x] Verify administrator and normal-user views at `1440x900`, `1024x768`,
+      and `390x844`.
+- [x] Update `CURRENT_STATE.md`, `TEST_RESULTS.md`, and `TRACEABILITY.md` after
+      implementation and verification.
+
+## CR-106B - Email Delivery Log Dashboard Aggregation
+
+Planning status:
+
+CR-106B is a candidate follow-up and remains `Needs Confirmation`. It must not
+be implemented as part of CR-106A.
+
+- [ ] If accepted later, define dashboard mail-health aggregation from existing
+      `email_delivery_logs` while preserving report-level
+      `reports.email_status` compatibility.
+- [ ] If accepted later, add scoped/safe-count tests proving no recipients,
+      SMTP secrets, proxy URLs, cookies, profile paths, account details, or raw
+      sensitive delivery errors are exposed on Operations Home.
 
 ## Phase 14 - Run Center Data Model Preparation
 
@@ -1898,7 +2224,7 @@ select/date, close, scroll, or routing logic without a separate accepted CR.
 - [x] Rebaseline Phase 21 planning docs on 2026-06-19 against the current Task
       Center / Run Detail frontend after CR-051, CR-053, CR-069, CR-071,
       CR-072, CR-073, and CR-074.
-- [ ] Implement Phase 21 in small frontend workstreams A-O with local
+- [x] Implement Phase 21 in small frontend workstreams A-O with local
       smoke-checks before the final Phase 21P cross-page verification gate.
 
 ### Phase 21A - Global Shell And Design Tokens

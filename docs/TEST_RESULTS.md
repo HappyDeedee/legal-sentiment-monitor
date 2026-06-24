@@ -2,6 +2,374 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-06-23 - CR-106A Operations Home Data-Aware Signal Refinement
+
+Environment: local worktree `E:\myproject\MediaCrawler`, existing local monitor
+service at `http://127.0.0.1:19222/monitor`, local ECharts vendor served from
+`/static/monitor/vendor/echarts.min.js`.
+
+Result:
+
+- Refined the CR-105A local-ECharts Operations Home dashboard without backend
+  schema, dashboard API, route, permission, Task Center, Run Detail,
+  drawer/modal/select/date, crawler, AI, or email-execution changes.
+- Added a concise daily health summary so the first screen states whether
+  today is normal, where the highest-priority issue is, and which action path
+  to use next.
+- Reworked `问题分布` ordering around action severity: high-risk leads, pending
+  review, mail failure, run failure/skip, and mail pending are no longer buried
+  behind raw count sorting.
+- Reworked `平台分布` so volume and failure signals can be distinguished from
+  existing frontend run-summary data without using red as a category color.
+- Clarified `交付 / 复核` as report-level mail state from
+  `reports.email_status`; CR-106A still does not aggregate
+  `email_delivery_logs`.
+- Kept `资源健康` administrator-only, action-oriented, and free of account,
+  proxy, AI, SMTP, session, path, recipient, or raw error details for normal
+  users.
+- Tightened tablet/mobile Operations Home density and fixed the `1024x768`
+  overlap found during browser acceptance.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_13b or phase_13c"`
+  passed: 2 passed, 327 deselected. Warnings were limited to the existing
+  SQLAlchemy declarative-base deprecation and `.pytest_cache` write permission.
+- `node --check api/webui/monitor/monitor.js` passed.
+- Inline monitor page script parse for `api/monitor_web/index.html` passed:
+  1 inline script block parsed.
+- `uv run python scripts/check_docs.py` passed.
+- `git diff --check` passed with only Git's existing LF-to-CRLF working-copy
+  warnings.
+- Browser acceptance passed for administrator at `1440x900`, `1024x768`, and
+  `390x844`: no horizontal overflow, no sibling overlaps, 5 ECharts canvases,
+  no SVG core chart fallback, resource health visible and safe, and report-level
+  mail copy visible.
+- Browser acceptance passed for normal user at `1440x900`, `1024x768`, and
+  `390x844`: no horizontal overflow, no sibling overlaps, 4 ECharts canvases,
+  resource health hidden, no empty bottom slot, and no administrator resource
+  detail leakage.
+- Task Center / Run Detail smoke passed: Task Center opened, Run Detail drawer
+  opened with body overflow locked, then closed and returned to dashboard.
+
+What this proves:
+
+- The `/monitor` Operations Home first screen now keeps the CR-105A ECharts
+  baseline while making the available data more action-first for daily
+  operations decisions.
+- Administrator and normal-user role layouts remain aligned across the required
+  desktop, tablet, and mobile viewports.
+- CR-106A stayed within the existing frontend/data-source boundary and preserved
+  CR-106B as a separate `Needs Confirmation` item.
+
+What this does not prove:
+
+- This does not prove live external crawl success, real SMTP delivery, real AI
+  provider availability, or production-scale trend completeness.
+- This does not prove CR-106B email-delivery-log dashboard aggregation; that
+  remains unimplemented and pending confirmation.
+
+## 2026-06-22 - CR-106A/CR-106B Operations Home Optimization Plan
+
+Environment: local worktree `E:\myproject\MediaCrawler`, read-only review of
+current documents, dashboard implementation, and local `monitor_data`
+aggregate counts.
+
+Result:
+
+- Added CR-106A as the accepted follow-up plan for data-aware Operations Home
+  signal refinement after CR-105A.
+- Split email delivery-log dashboard aggregation into CR-106B with
+  `Needs Confirmation` status so it cannot be implemented implicitly as part of
+  CR-106A.
+- Preserved CR-105A as the verified local-ECharts dashboard baseline and kept
+  CR-097 through CR-103 historical/archive-only.
+- Recorded that CR-106A uses current dashboard/runs/reports data and treats
+  `reports.email_status` as the Operations Home mail module's report-level
+  source until CR-106B is accepted.
+
+Verification:
+
+- Read-only plan-cross-validation review returned `READY AFTER SMALL
+  REFINEMENTS` with no blocking findings.
+- Follow-up refinements were added for the CR-106A mail-module data-source
+  boundary, dashboard data-source tests, local sample-count disclaimer, and
+  normal-user resource visibility checks.
+- `uv run python scripts/check_docs.py` passed.
+- `git diff --check` passed, with only Git's existing LF-to-CRLF working-copy
+  warnings.
+
+What this proves:
+
+- The planning documents now separate the immediately executable frontend
+  signal-refinement work from the pending backend aggregation semantics for
+  detailed email delivery history.
+- The CR-106A documentation plan has no blocking plan-cross-validation finding
+  after the requested refinement pass.
+
+What this does not prove:
+
+- This entry does not prove any CR-106A UI implementation, browser acceptance,
+  live external crawl success, real SMTP delivery, or CR-106B acceptance.
+
+## 2026-06-22 - CR-105A Operations Home ECharts Dashboard Rebaseline
+
+Environment: local worktree `E:\myproject\MediaCrawler`, temporary runtime
+data directory under `%TEMP%`, local `/monitor` served at
+`http://127.0.0.1:54608/monitor`.
+
+Result:
+
+- Added local Apache ECharts at
+  `api/webui/monitor/vendor/echarts.min.js`, served through
+  `/static/monitor/vendor/echarts.min.js`.
+- Replaced the CR-104 handwritten core chart render path with ECharts chart
+  instances for `监控走势`, `问题分布`, `平台分布`, `交付 / 复核`, and
+  administrator-only `资源健康`.
+- Preserved the existing `/api/monitor/dashboard` data contract and reused
+  current task, run, report, mail, lead, platform, and resource data. No
+  backend fields, React/Vue/build pipeline, Task Center, Run Detail, drawer,
+  modal, enhanced select/date, routing, owner-scope, report-scope, or top-bar
+  refresh behavior was changed.
+- Normal users hide `资源健康`; the bottom dashboard modules reflow without an
+  empty resource slot.
+
+Verification:
+
+- Static HTTP checks returned 200 for `/monitor`,
+  `/static/monitor/vendor/echarts.min.js`, `/static/monitor/monitor.css`, and
+  `/static/monitor/monitor.js`.
+- In-app browser administrator checks at `1440x900`, `1024x768`, and
+  `390x844` showed 5 ECharts canvases, resource health visible, no
+  `.operations-trend-svg`, no chart fallbacks, no relevant console errors, no
+  horizontal overflow, and no one-character Chinese text columns.
+- In-app browser normal-user checks at `1440x900`, `1024x768`, and `390x844`
+  showed 4 ECharts canvases, resource health hidden, lower grid areas reflowed
+  to `"trend attention" / "platforms delivery"` on desktop/tablet and full-width
+  stacked modules on mobile, no horizontal overflow, and no one-character
+  Chinese text columns.
+- Browser review found and fixed two CR-105A regressions before closure:
+  missing `resourceSignalTone()` blocked admin chart initialization, and an
+  older inline mobile grid squeezed the CR-105 modules into a narrow right
+  column.
+- Automated checks: `uv run python -m pytest tests/test_monitoring_mvp.py -k
+  "phase_13b or phase_13c"`, `node --check api/webui/monitor/monitor.js`,
+  inline monitor script parse, `uv run python scripts/check_docs.py`, and
+  `git diff --check`.
+
+What this proves:
+
+- The CR-105A `/monitor` first screen uses local ECharts for the core dashboard
+  charts, avoids remote chart CDNs, preserves the existing frontend/backend
+  boundary, and satisfies administrator/normal-user responsive layout checks
+  for the required viewports.
+
+What this does not prove:
+
+- It does not prove live external crawl success, real SMTP delivery, real AI
+  provider availability, or backend-provided 30-day trend buckets. The first
+  implementation intentionally remains on existing data plus frontend 7/14-day
+  aggregation fallback.
+
+## 2026-06-22 - CR-104 Operations Home Data Cockpit Moderate Rebuild
+
+Environment: local worktree `E:\myproject\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Rebuilt the current Operations Home first screen into a chart-first data
+  cockpit while keeping the accepted `/api/monitor/dashboard` data contract,
+  role gating, drilldowns, Task Center, Run Detail, drawers, modals, enhanced
+  select/date controls, routing, owner-scope, and report-scope behavior.
+- Added a frontend overview view-model and read-only 7-day / 14-day trend
+  aggregation fallback from `/runs` and `/reports` for `监控走势`.
+- Replaced the current mixed first-screen composition with compact KPI strip,
+  `监控走势`, `问题分布`, `平台分布`, `交付 / 复核`, and administrator-only
+  compact resource/diagnostic entry.
+- Normal-user layout no longer keeps a blank resource panel, and the desktop
+  overview remains constrained to the left navigation/shell height boundary.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Inline monitor script parse from `api/monitor_web/index.html`
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_13b or phase_13c"`
+- `uv run python scripts/check_docs.py`
+- Browser/in-app review on `http://127.0.0.1:19221/monitor`
+- Result: the first screen now reads as one data cockpit with visible trend
+  legend and 7/14-day switch, issue chart and lower breakdown charts remain
+  compact, and desktop/tablet stay within the shell-height boundary.
+
+## 2026-06-22 - CR-103 Operations Home Flow Chart Semantic Trend Rebuild
+
+Environment: local worktree `E:\myproject\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Refined only the Operations Home `流程总览` card after live review showed the
+  CR-102 node simplification still did not read as a chart.
+- Rebuilt the block as a single monitoring-stage trend chart using the
+  existing five stage aggregates, with one line for total stage volume and one
+  line for abnormal or pending load.
+- Removed the orb-plus-bar mini-card composition from the stage nodes while
+  preserving the dashboard data contract, role gating, drilldowns, Task
+  Center, Run Detail, drawers, modals, enhanced select/date controls, routing,
+  owner-scope, and report-scope behavior.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Inline monitor script parse from `api/monitor_web/index.html`
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_13b or phase_13c"`
+- `uv run python scripts/check_docs.py`
+- In-app browser verification on `http://127.0.0.1:19221/monitor`
+- Result: desktop review-width `流程总览` now reads as one semantic trend chart,
+  labels and legend remain readable, and the Operations Home still stays
+  within the left navigation/shell height boundary.
+
+## 2026-06-22 - CR-102 Operations Home Flow Chart Node Simplification
+
+Environment: local worktree `E:\myproject\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Refined only the Operations Home `流程总览` node composition after live review
+  showed the CR-101 chart still felt crowded inside each stage.
+- Removed the separate node helper-text row and kept pending state visible only
+  as a compact numeric chip when non-zero.
+- Tightened the node orb size, connector placement, and bar height so the chart
+  reads faster without changing the dashboard data contract, role gating,
+  drilldowns, Task Center, Run Detail, drawers, modals, enhanced select/date
+  controls, routing, owner-scope, or report-scope behavior.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Inline monitor script parse from `api/monitor_web/index.html`
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_13b or phase_13c"`
+- `uv run python scripts/check_docs.py`
+- In-app browser verification on `http://127.0.0.1:19221/monitor`
+- Result: desktop review-width nodes now read as `label + value + chip`, the
+  helper-text row is gone, and measured `homeBottom=835` plus
+  `sidebarBottom=1199` confirms the Operations Home still stays within the
+  left navigation/shell height boundary.
+
+## 2026-06-22 - CR-101 Operations Home Flow Chart Layer Separation Verified
+
+Environment: local worktree `E:\myproject\MediaCrawler`, local `/monitor`
+served at `http://127.0.0.1:19221/monitor`.
+
+Result:
+
+- Refined only the Operations Home `流程总览` card after live browser review
+  found the flow chart still read as one mixed block after CR-100.
+- Split the card into a head layer plus an internal plot area.
+- Reduced the visual weight of the stage backdrop columns and kept stage nodes
+  as the foreground layer.
+- Preserved the existing dashboard data contract, role gating, drilldowns, Task
+  Center, Run Detail, drawers, modals, enhanced select/date controls, routing,
+  owner-scope, and report-scope behavior.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Inline monitor script parse from `api/monitor_web/index.html`
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_13b or phase_13c"`
+- `uv run python scripts/check_docs.py`
+- In-app browser verification on `http://127.0.0.1:19221/monitor`
+- Result: desktop review-width flow chart now renders with a distinct plot area;
+  measured `homeBottom=835` and `sidebarBottom=1199`, so the Operations Home
+  still stays within the left navigation/shell height boundary.
+
+## 2026-06-21 - CR-096 AI Evaluation Postprocessing Scope Reduction
+
+Environment: local worktree `E:\myproject\MediaCrawler`, branch
+`codex/cr096-ai-postprocessing-scope-reduction`.
+
+Result:
+
+- Removed the AI evaluation application-layer target-evidence gate from
+  `api/monitoring/ai.py`.
+- Valid model output is now preserved after JSON parsing and format validation;
+  `is_related`, `is_negative`, `risk_level`, `reason`, `evidence_quotes`, and
+  `recommended_action` are no longer rewritten by hardcoded target terms,
+  aliases, `source_keyword`, or quote matching.
+- The default prompt still tells the model that `source_keyword` is recall
+  provenance only.
+- Existing malformed-output, provider-error, timeout, trace redaction, and
+  trace truncation guardrails remain in place.
+- Historical saved `irrelevant` rows were not reprocessed.
+
+Verification:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_7_2_cr096"`
+- Result: RED before implementation, 4 failed for the expected gate rewrite;
+  GREEN after implementation, 4 passed.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_7_2 or phase_20b or ai_evaluation"`
+- Result: PASS, 15 passed, 314 deselected, 2 warnings.
+
+## 2026-06-20 - Documentation Governance Cleanup
+
+Environment: local main worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Added the Todo Baseline Review Rule to `AGENTS.md`,
+  `AGENT_WORKFLOW.md`, `GOAL_EXECUTION_GUIDELINES.md`, `TEST_PLAN.md`, and
+  `DOCUMENTATION_CHECKS.md`.
+- Renumbered non-Phase-21 governance and future backlog entries to CR-091
+  through CR-095, while preserving completed Phase 21 historical CR-075,
+  CR-078, CR-079, CR-080, and CR-081 records.
+- Added duplicate CR identifier checks to `scripts/check_docs.py` for
+  `CHANGE_REQUESTS.md` headings and `TRACEABILITY.md` rows.
+- Updated `TASKS.md`, `CURRENT_STATE.md`, `TRACEABILITY.md`, specialist docs,
+  and the future planning source docs to use CR-091/092/093/094/095 for the
+  governance and future backlog lanes.
+- This was documentation governance only. It did not change code, UI, schema,
+  runtime data, account profiles, cookies, proxies, crawler behavior,
+  deployment configuration, or production state.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- `git diff --check`
+- Result: PASS whitespace check.
+- Targeted CR numbering searches
+- Result: no duplicate CR headings or traceability rows; future backlog source
+  docs and rows use CR-092/093/094; Phase 21 historical records keep their
+  original CR identifiers.
+
+## 2026-06-20 - Phase 21 Mainline Documentation Closure
+
+Environment: local main worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Confirmed `main` and `origin/main` are both at commit `74ec69f`, the Phase 21
+  monitor console UI refinement merge commit.
+- Updated the current execution order so Phase 21 is treated as merged and
+  closed on `main`.
+- Marked the Phase 21 umbrella implementation task complete and made Phase
+  5.1P the next active documentation/read-only compatibility lane.
+- Aligned CR-087 status to `Verified` to match `CURRENT_STATE.md`,
+  `TRACEABILITY.md`, and the existing verification entry.
+- This closure did not change code, UI, schema, runtime data, account profiles,
+  cookies, proxies, crawler behavior, deployment configuration, or production
+  state.
+
+Verification:
+
+- `git status --short --branch`
+- Result: `## main...origin/main`.
+- `git log --oneline --decorate -n 1`
+- Result: `74ec69f (HEAD -> main, origin/main, origin/codex/phase21-current-ui-visual-refinement, origin/HEAD, codex/phase21-current-ui-visual-refinement) feat: refine phase 21 monitor console ui`.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+
 ## 2026-06-20 - CR-090 AI Rule List And Modal Field Width Compactness
 
 Environment: local worktree
@@ -259,7 +627,7 @@ How to read this file:
 - use `docs/CURRENT_STATE.md`, `docs/CHANGE_REQUESTS.md`, and
 `docs/TRACEABILITY.md` for final current-state decisions.
 
-## 2026-06-19 - CR-081 Atomic Goal Execution Governance Documentation Gate
+## 2026-06-19 - CR-095 Atomic Goal Execution Governance Documentation Gate
 
 Environment: local worktree `E:\myproject\MediaCrawler`.
 
@@ -268,7 +636,7 @@ Result:
 - Added `docs/GOAL_EXECUTION_GUIDELINES.md` as the source for goal packet
   structure, atomicity rules, current execution lanes, test iteration loop,
   acceptance standards, and stop conditions.
-- Confirmed CR-075 owns MECE open-todo lane separation while CR-081 owns how
+- Confirmed CR-091 owns MECE open-todo lane separation while CR-095 owns how
   those lanes become executable atomic goals.
 - Synchronized `CHANGE_REQUESTS.md`, `TASKS.md`, `CURRENT_STATE.md`,
   `AGENT_WORKFLOW.md`, `DOCUMENTATION_CHECKS.md`, `TEST_PLAN.md`,
@@ -294,22 +662,22 @@ Verification:
 - Result: no duplicate CR headings and no missing Quick Index entries.
 - Plan-cross-validation read-only subagent review
 - Result: READY AFTER SMALL REFINEMENTS, with no blocking findings. The review
-  confirmed CR-075 lane separation and CR-081 execution governance are not
+  confirmed CR-091 lane separation and CR-095 execution governance are not
   confused; Phase 21 remains `/monitor` frontend visual-only; Phase 5.1P
   remains read-only; Phase 5.1A-D and acceptance are serially gated; CR-070
-  waits for CR-047 provider/effective snapshot proof; CR-078/079/080 stay
+  waits for CR-047 provider/effective snapshot proof; CR-092/093/094 stay
   future independent; and `Needs Confirmation` items are not treated as ready
   implementation work. The two suggested refinements were applied in this
   entry, in the Phase 5.1 acceptance-gate task block, and in the Phase 5.1E
   task boundary wording.
 
-## 2026-06-19 - CR-078 To CR-080 Future Backlog MECE Documentation Gate
+## 2026-06-19 - CR-092 To CR-094 Future Backlog MECE Documentation Gate
 
 Environment: local worktree `E:\myproject\MediaCrawler`.
 
 Result:
 
-- Added CR-078, CR-079, and CR-080 as future independent backlog lanes.
+- Added CR-092, CR-093, and CR-094 as future independent backlog lanes.
 - Created `docs/MONITOR_NEXT_FRONTEND_PLAN.md` for future `/monitor-next`
   frontend migration planning.
 - Created `docs/CRAWLER_PROVIDER_ARCHITECTURE.md` for future crawler provider
@@ -320,7 +688,7 @@ Result:
 - Synchronized specialist docs for frontend architecture, server deployment,
   API authorization, account environment, data model, schema migration, roles
   and permissions, product requirements, and UI/UX guidelines.
-- Recorded the CR-079 decision split in `DECISIONS.md`: MediaCrawler internal
+- Recorded the CR-093 decision split in `DECISIONS.md`: MediaCrawler internal
   engine boundary is accepted, while exact production route/mount/
   reverse-proxy/404-vs-403-vs-unmounted behavior remains pending route audit.
 - No code, UI, database schema, runtime data, account profile, cookie, proxy,
@@ -334,19 +702,19 @@ Verification:
 - Result: PASS whitespace check. Git emitted Windows LF-to-CRLF working-copy
   warnings only.
 - Local full open-todo cross-check
-- Result: no blocking findings. CR-078 remains future `/monitor-next`
-  planning and does not touch current `/monitor` or Phase 21; CR-079 remains
+- Result: no blocking findings. CR-092 remains future `/monitor-next`
+  planning and does not touch current `/monitor` or Phase 21; CR-093 remains
   public exposure and product-boundary planning without choosing 404/403/
-  unmount behavior; CR-080 remains future provider architecture and is not a
+  unmount behavior; CR-094 remains future provider architecture and is not a
   Phase 5.1P prerequisite; CR-070 remains after CR-047 provider/effective
   snapshot verification; no duplicate CR headings were found; both new source
   documents exist.
 - Plan-cross-validation read-only subagent review
 - Result: READY AFTER SMALL REFINEMENTS, with no blocking findings. The review
-  confirmed CR-078/079/080 are present in tasks, CRs, traceability, and test
-  plan; CR-078 does not touch Phase 21; CR-079 is not a frontend visual task
-  and does not prematurely choose route behavior; CR-080 is separate from
-  Phase 5.1P and has no schema/code task; CR-078 and CR-080 remain Needs
+  confirmed CR-092/093/094 are present in tasks, CRs, traceability, and test
+  plan; CR-092 does not touch Phase 21; CR-093 is not a frontend visual task
+  and does not prematurely choose route behavior; CR-094 is separate from
+  Phase 5.1P and has no schema/code task; CR-092 and CR-094 remain Needs
   Confirmation; CR-070 remains correctly delayed.
 
 Follow-up:
@@ -354,9 +722,9 @@ Follow-up:
 - After the active Phase 21 worktree is merged, run a small documentation
   cleanup pass for CR numbering, overlapping Phase 21 wording, and any
   Phase21-completed visual or wording items that should be referenced rather
-  than repeated in CR-078/079/080.
+  than repeated in CR-092/093/094.
 
-## 2026-06-19 - CR-075 Open Todo MECE Rebaseline Documentation Gate
+## 2026-06-19 - CR-091 Open Todo MECE Rebaseline Documentation Gate
 
 Environment: local worktree `E:\myproject\MediaCrawler`.
 
@@ -4812,6 +5180,186 @@ Limitations:
   accepted data-model fields and migration/backfill tests first.
 - Real platform QR scanning, real platform crawling, real AI provider, and real
   SMTP delivery remain production pilot risks inherited from earlier phases.
+
+## 2026-06-22 - CR-098 Operations Home Data-First Visual Refit Verified
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Refit the current `/monitor` Operations Home after CR-097 feedback so it
+  reads as a data-first dashboard inside the existing project design system,
+  not as a detached prototype.
+- Kept the Phase 21 light enterprise shell, teal accent, compact typography,
+  modest radii, and restrained risk color.
+- Replaced the remaining status/prose-heavy read with compact KPI micro bars,
+  a five-stage flow chart, compact exception bars, platform/delivery
+  breakdowns, and resource bars.
+- Hid the shortcut dock through the final CR-098 cascade, hid noisy platform
+  heatmap blocks, and removed duplicated mobile page-kicker copy.
+- Preserved the existing dashboard API, role gating, drilldowns, Task Center,
+  Run Detail, drawers, modals, enhanced select/date controls, routing,
+  owner-scope, and report-scope behavior.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Inline monitor script parse from `api/monitor_web/index.html`
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_13b or phase_13c"`
+- Result: PASS, 2 passed, 327 deselected, 2 warnings.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_13 or operations_home or readiness_dashboard or phase_21a or phase_21b"`
+- Result: PASS, 7 passed, 322 deselected, 4 warnings.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- `git diff --check`
+- Result: PASS with Windows LF-to-CRLF working-copy warnings only.
+- Playwright fallback browser verification on
+  `http://127.0.0.1:19221/monitor`:
+  - desktop `1440x900`: document width matched viewport width, body height
+    `900`, dashboard bottom `900`, sidebar bottom `900`, Operations Home
+    bottom `898`, shortcut dock hidden, and no narrow Chinese text columns;
+  - tablet `1024x768`: document width matched viewport width, body height
+    `768`, dashboard bottom `768`, sidebar bottom `768`, Operations Home
+    bottom `766`, shortcut dock hidden, and no narrow Chinese text columns;
+  - mobile `390x844`: document width matched viewport width, no horizontal
+    overflow, no narrow Chinese text columns, chart-first vertical order, and
+    duplicated page kicker hidden.
+- Screenshot evidence:
+  `C:\Users\Administrator\AppData\Local\Temp\mediacrawler-cr098-qa\admin-desktop-final.png`,
+  `C:\Users\Administrator\AppData\Local\Temp\mediacrawler-cr098-qa\admin-tablet-final.png`,
+  and
+  `C:\Users\Administrator\AppData\Local\Temp\mediacrawler-cr098-qa\admin-mobile-final.png`.
+
+Limitations:
+
+- Browser plugin initialization failed with `browser.documentation is not a
+  function`, so rendered QA used Playwright fallback.
+- Browser console still records the expected unauthenticated session-check
+  `401` before login; authenticated response capture did not reproduce the
+  earlier generic `404` console entry.
+
+## 2026-06-22 - CR-099 Operations Home Legend-First Visual Clarity Verified
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Kept the CR-098 one-screen data-first Operations Home structure and current
+  dashboard contracts, then added visible legend/direct-key treatment so the
+  main charts explain themselves without extra prose.
+- Normalized KPI and alert icon scale across summary cards and attention rows.
+- Switched the platform breakdown to a donut plus labeled category bars and
+  separated category colors from semantic status colors.
+- Preserved the current design-system shell, drilldowns, role gating, Task
+  Center, Run Detail, drawers, modals, enhanced select/date controls, routing,
+  owner-scope, and report-scope behavior.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Inline monitor script parse from `api/monitor_web/index.html`
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_13b or phase_13c"`
+- `uv run python scripts/check_docs.py`
+- Playwright fallback browser verification on
+  `http://127.0.0.1:19221/monitor` at desktop `1440x900`, tablet `1024x768`,
+  and mobile `390x844`
+
+Limitations:
+
+- Browser plugin initialization still failed with `browser.documentation is not
+  a function`, so rendered QA continued to use Playwright fallback.
+
+## 2026-06-22 - CR-100 Operations Home Dense Visual Composition Verified
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Kept the CR-099 legend/icon/palette clarification but reduced the remaining
+  empty surface by changing desktop/tablet Operations Home from
+  viewport-stretched composition to content-sized composition.
+- Added a denser graphical substrate behind the five-stage flow chart instead
+  of leaving a large empty center field.
+- Preserved the current dashboard data contract, role gating, drilldowns, Task
+  Center, Run Detail, drawers, modals, enhanced select/date controls, routing,
+  owner-scope, and report-scope behavior.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Inline monitor script parse from `api/monitor_web/index.html`
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_13b or phase_13c"`
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_13 or operations_home or readiness_dashboard or phase_21a or phase_21b"`
+- `uv run python scripts/check_docs.py`
+- Playwright fallback browser verification on temporary server-like monitor
+  service at desktop `1440x900`, tablet `1024x768`, and mobile `390x844`
+
+Limitations:
+
+- Browser plugin initialization still failed with `browser.documentation is not
+  a function`, so rendered QA continued to use Playwright fallback.
+
+## 2026-06-22 - CR-097 Operations Home Visual Density Reduction Verified
+
+Environment: local worktree `E:\myproject\MediaCrawler`.
+
+Result:
+
+- Reworked the current `/monitor` Operations Home into a chart-first visual
+  overview while preserving the existing `/api/monitor/dashboard` data
+  contract, role visibility, and drilldown targets.
+- Tightened the visual pass after review: desktop/tablet KPI cards use compact
+  meters instead of large rings, the dominant flow chart no longer shows
+  stretched visible labels or circular markers, and the platform breakdown uses
+  heatmap blocks to avoid table-like empty filler.
+- Desktop and tablet views now hide the shortcut dock and keep the overview
+  within the left-navigation height boundary.
+- Mobile keeps a vertical chart stack, removes the duplicated flow-action
+  pills from the flow chart, preserves the mobile shortcut dock, and avoids
+  horizontal overflow.
+- Hidden drawers now stay `visibility: hidden` while inactive, preventing
+  off-screen modal text such as `规则操作` from being measured as a visible
+  one-character Chinese text column.
+- The change is frontend-only: no backend API, schema, permission, crawler, AI,
+  email, deployment, Task Center, Run Detail, drawer, modal, enhanced
+  select/date, close, scroll, routing, owner-scope, or report-scope behavior
+  was changed.
+
+Verification:
+
+- `node --check api/webui/monitor/monitor.js`
+- Inline monitor script parse from `api/monitor_web/index.html`
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_13b or phase_13c"`
+- Result: PASS, 2 passed, 327 deselected, 2 warnings.
+- `uv run python scripts/check_docs.py`
+- Result: PASS docs consistency.
+- Playwright fallback browser verification on
+  `http://127.0.0.1:19221/monitor`:
+  - desktop `1440x900`: Operations Home bottom `898`, sidebar bottom `900`,
+    shortcut dock hidden, administrator health block hidden, 28 platform
+    heatmap tiles visible, no horizontal overflow, no visible flow chart labels
+    or circular markers, and no visible narrow Chinese text columns;
+  - tablet `1024x768`: Operations Home bottom `766`, sidebar bottom `768`,
+    shortcut dock hidden, administrator health block hidden, 28 platform
+    heatmap tiles visible, no horizontal overflow, no visible flow chart labels
+    or circular markers, and no visible narrow Chinese text columns;
+  - mobile `390x844`: no horizontal overflow, no visible narrow Chinese text
+    columns, hidden drawers stayed invisible, shortcut dock stayed visible, and
+    the flow-action pills were hidden so the flow chart no longer overlaps
+    its controls.
+- Screenshot evidence:
+  `C:\Users\Administrator\AppData\Local\Temp\mediacrawler-cr097-tight-v8\shots\desktop-1440x900.png`,
+  `C:\Users\Administrator\AppData\Local\Temp\mediacrawler-cr097-tight-v8\shots\tablet-1024x768.png`,
+  and
+  `C:\Users\Administrator\AppData\Local\Temp\mediacrawler-cr097-tight-v8\shots\mobile-390x844.png`.
+
+Limitations:
+
+- Browser plugin initialization failed with `browser.documentation is not a
+  function`, so rendered QA used Playwright fallback.
+- Browser console still records the expected unauthenticated session-check
+  `401` before login; authenticated console verification reported no
+  relevant page errors.
 
 ## 2026-06-16 - Phase 13B Operations Home Desktop Visual Metrics Verified
 

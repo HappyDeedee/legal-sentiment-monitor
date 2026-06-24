@@ -1,6 +1,6 @@
 # Current State
 
-Last updated: 2026-06-20
+Last updated: 2026-06-22
 
 ## Current Phase
 
@@ -571,17 +571,17 @@ Run Center, leads API, report generation, and filters split unrelated,
 evaluated no-risk, suspected negative, high-risk, pending manual review, and
 unevaluated/limited-context states; active timeout/partial finalization creates
 `pending_review` fallback rows for known unresolved candidate IDs when safe and
-records customer-safe fallback evidence. Phase 7.2C-D is now implemented and
-verified locally: the AI prompt and post-provider normalization enforce that
-`source_keyword` is recall provenance only; title, description, author, or
-actually collected comments must contain the target law firm or accepted alias
-before model output can mark a row as target-related or negative; homonym or
-geography-only mentions such as "海安" remain unrelated unless the target law
-firm/alias appears; calibration fixtures cover noisy-positive keyword-only
-output, broad refund/legal noise, true title evidence, and comment-only target
-evidence. CR-050 is implemented and verified as a focused CR-045 follow-up:
-Report Center and leads API risk filters keep `高风险` and `疑似负面` exact, so
-the `疑似负面` filter no longer includes high-risk rows.
+records customer-safe fallback evidence. Phase 7.2C-D remains the historical
+CR-045 relevance-hardening verification. CR-096 now supersedes the
+application-layer target-evidence gate as current behavior: the prompt still
+instructs the model that `source_keyword` is recall provenance only, but valid
+AI output is no longer rewritten by hardcoded target-word, alias,
+`source_keyword`, or quote matching. Application postprocessing now preserves
+format validation, `pending_review` fallback for invalid output, and trace/log
+redaction plus truncation safety. CR-050 is implemented and verified as a
+focused CR-045 follow-up: Report Center and leads API risk filters keep
+`高风险` and `疑似负面` exact, so the `疑似负面` filter no longer includes
+high-risk rows.
 CR-047 Account Identity Fidelity is accepted as Phase 5.1, a future
 account-environment optimization that extends the existing `profile_key` model
 with lifecycle-level identity consistency: profile traces, browser
@@ -624,7 +624,7 @@ mail logs, users, runtime settings, or business history. V1 creates a new
 target account/profile on import and exports avatar metadata only. This is
 documentation planning only; no export/import code, schema migration, package
 artifact, real profile, cookie, proxy, or login state has been changed.
-CR-075 Open Todo MECE Rebaseline And Phase 5.1 Preflight Gate is accepted as a
+CR-091 Open Todo MECE Rebaseline And Phase 5.1 Preflight Gate is accepted as a
 documentation-governance batch. The current open work is now explicitly
 separated into an active Phase 21 frontend visual lane, a Phase 5.1 Preflight
 documentation/read-only compatibility lane, the later Phase 5.1 account
@@ -634,12 +634,12 @@ deferred items such as CR-037, the unrendered Users And Permissions page, and
 Phase 7.1D historical repair. This batch changes task sequencing only; it does
 not change code, UI, database schema, runtime data, account profiles, cookies,
 proxy configuration, crawler behavior, or deployment configuration.
-CR-078, CR-079, and CR-080 are added as future independent backlog lanes after
-the CR-075 rebaseline. CR-078 covers future `/monitor-next` frontend stack
+CR-092, CR-093, and CR-094 are added as future independent backlog lanes after
+the CR-091 rebaseline. CR-092 covers future `/monitor-next` frontend stack
 migration planning in `docs/MONITOR_NEXT_FRONTEND_PLAN.md` and is not a Phase
-21 task. CR-079 covers MediaCrawler internalization and public exposure
+21 task. CR-093 covers MediaCrawler internalization and public exposure
 boundary planning; its product boundary is accepted, but exact route/mount and
-reverse-proxy behavior still needs confirmation after read-only audit. CR-080
+reverse-proxy behavior still needs confirmation after read-only audit. CR-094
 covers future crawler provider architecture in
 `docs/CRAWLER_PROVIDER_ARCHITECTURE.md` and is separate from Phase 5.1P, which
 remains only the current MediaCrawler/CDP/BrowserEnvironmentProvider
@@ -647,8 +647,8 @@ compatibility preflight. These three backlog lanes do not block Phase 21,
 Phase 5.1P, CR-047/Phase 5.1, or CR-070/Phase 5.2, and they do not change
 code, UI, schema, runtime data, routes, crawler behavior, account profiles,
 cookies, proxies, or deployment configuration.
-CR-081 Atomic Goal Execution Governance And Readiness Gate is accepted as a
-documentation-governance layer on top of the CR-075 lane separation. It adds
+CR-095 Atomic Goal Execution Governance And Readiness Gate is accepted as a
+documentation-governance layer on top of the CR-091 lane separation. It adds
 `docs/GOAL_EXECUTION_GUIDELINES.md` as the source for goal packet structure,
 atomicity rules, current execution lanes, test iteration loop, acceptance
 standards, and stop conditions. This does not change the current roadmap
@@ -769,10 +769,14 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   pending-review, unrelated, evaluated no-risk, suspected negative, high-risk,
   and unevaluated buckets; timeout/partial finalization creates
   `pending_review` fallback rows for known unresolved AI candidate IDs when
-  safe and records customer-safe fallback evidence; source-keyword-only,
+  safe and records customer-safe fallback evidence. The CR-045
+  target-evidence gate is historical; CR-096 is the current rule, so
+  application postprocessing keeps valid AI semantics and only performs
+  format validation plus trace/storage safety checks. Source-keyword-only,
   homonym/geography-only, broad refund/legal, title-evidence, and
-  comment-evidence calibration fixtures verify the target-evidence gate. CR-050
-  has corrected the Report Center risk-filter precision gap so
+  comment-evidence calibration fixtures now verify that valid AI output is
+  preserved while `source_keyword` remains prompt guidance. CR-050 has
+  corrected the Report Center risk-filter precision gap so
   suspected-negative and high-risk filters do not include each other.
 - Phase 8 - Server-Like Validation: complete and verified through automated
   server-like validation.
@@ -887,8 +891,14 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
 - CR-045 - AI Evaluation Accuracy And Unevaluated Lead Status Clarity:
   complete and verified for Phase 7.2A-D. Unevaluated/limited-context status
   safety, active-finalization fallback, source-keyword recall-provenance
-  enforcement, target-evidence gating, homonym/geography safeguards, and
-  calibration fixtures are implemented and verified locally.
+  prompt guidance, the historical target-evidence gating attempt, homonym/
+  geography calibration, and lead-state fixtures are implemented and verified
+  locally. CR-096 supersedes the application-layer gate as current behavior.
+- CR-096 - AI Evaluation Postprocessing Scope Reduction:
+  complete and verified. AI evaluation postprocessing now preserves valid
+  model semantic output and only enforces format validation plus trace/storage
+  safety; malformed output still falls back to `pending_review`, and existing
+  trace redaction/truncation behavior remains covered.
 - CR-050 - Report Center Lead Status Filter Precision Regression Fix:
   complete and verified. Report Center and leads API filters now treat
   `高风险` and `疑似负面` as exact status filters; suspected-negative filtering
@@ -970,7 +980,7 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   BrowserEnvironmentProvider, MediaCrawler CDP, QR login, Cookie validation,
   login-state check, manual run, scheduler run, runner, and requested/effective
   snapshot compatibility boundary.
-- CR-075 - Open Todo MECE Rebaseline And Phase 5.1 Preflight Gate: accepted as
+- CR-091 - Open Todo MECE Rebaseline And Phase 5.1 Preflight Gate: accepted as
   a documentation-governance sequencing update. It keeps Phase 21 separate as a
   frontend visual-only lane, makes Phase 5.1P the next account-environment
   gate before schema/code implementation, moves container/server-like and
@@ -1255,10 +1265,12 @@ separate follow-up work.
   `ai_evaluations` rows and broad-keyword recall noise: missing rows now
   surface as unevaluated or limited-context rather than no-risk, active
   finalization creates pending-review fallback rows for known unresolved
-  candidates when safe, and keyword-only or homonym/geography-only AI model
-  positives are forced back to unrelated unless target evidence appears in
-  title, description, author, or actually collected comments. AI output remains
-  an initial suspected-lead screen, not a factual determination.
+  candidates when safe, and the prompt still tells the model that
+  `source_keyword` is recall provenance only. CR-096 removes the hardcoded
+  postprocessing gate that forced valid model positives back to unrelated, so
+  current application postprocessing is limited to format validation plus
+  trace/storage safety. AI output remains an initial suspected-lead screen, not
+  a factual determination.
 - CR-037 is deferred: normal-user email send/resend quotas and administrator
   policy controls are not yet designed. Existing V1 role permissions remain in
   force until a future confirmed phase changes them.
@@ -1333,6 +1345,89 @@ separate follow-up work.
   kept normal-user metrics business-safe, moved detailed readiness/scheduler/
   platform diagnostics to System Diagnostics, and retained only a compact
   administrator health summary on the home page.
+- CR-097 is verified as the first visual-density follow-up to Phase 13: the
+  Operations Home keeps the same metrics, role boundaries, and drilldowns but
+  replaces the prose/status-heavy overview with five compact KPI meters, one
+  dominant flow chart without stretched visible labels, platform bars plus
+  heatmap blocks, delivery/lead composition, a compact visual priority panel,
+  and concise role-safe resource health. The desktop and tablet home are now
+  bounded to the shell/navigation height and hide the shortcut dock outside
+  mobile so the overview does not extend below the left navigation. The
+  implementation is frontend-only and preserves the existing dashboard API
+  contract, Task Center, Run Detail, backend schema, permissions, crawler, AI,
+  email, and deployment behavior.
+- CR-098 is verified as the current data-first visual refit follow-up: the
+  Operations Home now follows the existing Phase 21 light enterprise visual
+  language, hides the shortcut dock through the final cascade, uses a
+  five-stage flow chart with uniform teal fill and risk overlay, limits the
+  priority panel to compact exception bars, hides platform heatmap blocks when
+  they add noise, removes duplicated mobile kicker copy, and keeps desktop
+  `1440x900` plus tablet `1024x768` within the left navigation/shell height.
+  The change remains frontend-only and preserves the dashboard API, role
+  gating, drilldowns, Task Center, Run Detail, drawers, modals, enhanced
+  select/date controls, routing, owner scope, and report scope.
+- CR-099 is verified as the current visual-clarity follow-up: visible legends
+  now explain the flow chart, delivery/review breakdown, attention panel, and
+  resource chart; KPI and alert icons use one normalized compact scale; the
+  platform breakdown now uses a donut plus labeled category bars; and the
+  palette separates semantic status colors from platform category colors while
+  preserving the CR-098 one-screen height boundary, current data contract,
+  drilldowns, and role gating.
+- CR-100 is verified as the current density-composition follow-up: desktop and
+  tablet Operations Home panels no longer rely on forced viewport stretching
+  for sparse states, the layout is content-sized within the same one-screen
+  boundary, and the flow chart now uses a denser graphical substrate while
+  preserving the current data contract, drilldowns, and role gating.
+- CR-101 through CR-103 are verified historical Operations Home flow-chart
+  refinement records. They preserve evidence for the old `流程总览` and
+  `operations-stage-*` implementations, but after CR-105 they are
+  historical/archive-only and must not require future dashboard work to keep
+  those DOM structures or the earlier no-chart-library constraint.
+- CR-104 is now the historical Operations Home cockpit baseline replaced by
+  CR-105A. It remains useful evidence for the pre-ECharts view-model, 7/14-day
+  read-only aggregation fallback from `/runs` plus `/reports`, and the
+  accepted role/drilldown boundaries, but its handwritten chart DOM and
+  `.operations-trend-svg` path geometry are no longer the current dashboard
+  implementation pattern.
+- CR-105A is implemented and verified for the `/monitor` Operations Home first
+  screen. The page now loads locally vendored Apache ECharts from
+  `/static/monitor/vendor/echarts.min.js`, does not load a remote chart CDN,
+  and renders the core `监控走势`, `问题分布`, `平台分布`, `交付 / 复核`, and
+  administrator `资源健康` charts through ECharts chart instances. The first
+  screen keeps the six-module dashboard target: KPI strip, trend, issue
+  distribution, platform distribution, delivery/review, and administrator-only
+  resource health. Normal users hide `资源健康` and reflow the lower modules
+  without an empty slot. The implementation reuses current task/run/report/
+  mail/lead/platform/resource data and preserves `/api/monitor/dashboard`,
+  role gating, drilldowns, Task Center, Run Detail, drawer/modal/select/date,
+  routing, owner/report scope, and top-bar refresh behavior. Browser
+  verification covered administrator and normal-user sessions at `1440x900`,
+  `1024x768`, and `390x844`; mobile now uses the full content width without
+  horizontal scroll or one-character Chinese text columns. Task funnel,
+  platform risk matrix, keyword heat, AI quality, task rankings, and backend
+  30-day trend buckets remain future enhancements rather than current persisted
+  fields.
+- CR-106A is implemented and verified as the current Operations Home
+  data-aware signal refinement after CR-105A. It preserves the CR-105A local
+  ECharts dashboard baseline and refines only current frontend/view-model,
+  labels, chart semantics, role-safe resource presentation, and mobile
+  first-screen density using existing dashboard/runs/reports data. The top
+  status now gives a concise daily health and next-action signal; `问题分布`
+  follows action severity; `平台分布` separates volume from failure cues;
+  `交付 / 复核` labels mail as report-level delivery state from
+  `reports.email_status`; administrator `资源健康` stays action-oriented and
+  normal users still receive no account/proxy/AI/SMTP/session details or
+  resource-layout gap. Browser verification covered administrator and
+  normal-user sessions at `1440x900`, `1024x768`, and `390x844`, including
+  Task Center and Run Detail smoke checks. CR-106A did not add backend schema
+  fields, invent persisted metrics, or change Task Center, Run Detail,
+  drawer/modal/select behavior, routing, permissions, owner/report scope, or
+  top-bar refresh.
+- CR-106B remains `Needs Confirmation`: aggregating existing
+  `email_delivery_logs` into Operations Home mail health would be a backend
+  aggregation and product semantics change, even though it would not require a
+  new schema field. Until accepted, CR-106A treats the Operations Home mail
+  module as report-level delivery state from `reports.email_status`.
 - Email delivery-history UI and report task grouping are accepted directions.
   Run visibility/noise-filtering data fields are active schema features after
   Phase 14, archive/restore APIs, pagination, and filters are active after
@@ -1360,12 +1455,12 @@ scope, out-of-scope, hard boundaries, start gate, expected touch surface,
 execution steps, tests, acceptance, rollback/recovery, documentation updates,
 and stop conditions.
 
-1. finish and merge the active Phase 21 worktree as frontend-only visual
-   refinement on the current Task Center / Run Detail baseline. Do not run
-   multiple Phase 21/UI worktrees that edit `api/monitor_web/index.html`,
-   `api/webui/monitor/monitor.css`, or `api/webui/monitor/monitor.js` at the
-   same time unless the split is deliberately coordinated;
-2. run Phase 5.1P Preflight as a documentation/read-only compatibility goal
+1. Phase 21 frontend-only visual refinement has been merged into `main` and is
+   closed for the current Task Center / Run Detail baseline. Do not reopen
+   Phase 21 or run a new UI worktree that edits `api/monitor_web/index.html`,
+   `api/webui/monitor/monitor.css`, or `api/webui/monitor/monitor.js` unless a
+   separate accepted CR defines the boundary;
+2. run Phase 5.1P Preflight as the next documentation/read-only compatibility goal
    before Phase 5.1 schema or code work. It must map QR login, Cookie
    validation, login-state checks, manual run, scheduler run, runner behavior,
    and MediaCrawler CDP launch/reconnect to one BrowserEnvironmentProvider
@@ -1382,16 +1477,15 @@ and stop conditions.
 4. implement CR-070/Phase 5.2 account-environment export/import only after
    CR-047 provider binding and requested/effective runtime snapshot behavior
    are implemented and verified;
-5. keep CR-078 `/monitor-next` planning, CR-079 MediaCrawler public exposure
-   boundary, and CR-080 crawler provider architecture as future independent
+5. keep CR-092 `/monitor-next` planning, CR-093 MediaCrawler public exposure
+   boundary, and CR-094 crawler provider architecture as future independent
    backlog lanes. They may receive read-only planning or documentation
    refinement, but they must not be treated as current implementation work,
    Phase 21 work, Phase 5.1P prerequisites, or CR-070 prerequisites without a
    later accepted decision;
-6. after the active Phase 21 worktree is merged, run a small documentation
-   cleanup pass to verify CR numbering, duplicate/overlapping Phase21 boundary
-   wording, and whether any Phase21-completed visual or wording items should
-   be referenced rather than repeated in CR-078/079/080;
+6. keep the documentation-governance cleanup complete: future backlog and
+   governance CRs were renumbered to CR-091 through CR-095 while completed
+   Phase 21 historical CRs kept their original identifiers;
 7. keep Phase 17.1D historical orphan email evidence closed as read-only
    dry-run/checklist/runbook work unless the operator explicitly approves a
    backup, rollback, and mutation path;
@@ -1424,26 +1518,25 @@ Test gate hardening recorded:
   finalization cannot be blocked or mutate business rows.
 - CR-048 and CR-049 now require UI tripwires for unlabeled lead tables and
   duplicated mail edit/test actions.
-- CR-078, CR-079, and CR-080 are intentionally separate from Phase 21 and
+- CR-092, CR-093, and CR-094 are intentionally separate from Phase 21 and
   Phase 5.1P. `/monitor-next` planning cannot modify the current `/monitor`
   console; MediaCrawler public exposure work cannot be treated as frontend
   visual polish; and crawler provider architecture cannot become the
   Phase 5.1P prerequisite unless a later accepted decision changes the
   roadmap.
-- CR-081 requires atomic goal packets and the iteration rule before future
+- CR-095 requires atomic goal packets and the iteration rule before future
   non-trivial work starts. A goal should not advance while targeted tests,
   required broader checks, documentation consistency, acceptance gates, or
   blocking cross-review findings remain open.
 
 Lowest-risk parallel execution lane:
 
-1. Phase 21 frontend-only page-level refinement may proceed in its existing
-   worktree. Phase 5.1P can be prepared only as read-only document/code-path
-   mapping after Phase 21 merge or in a deliberately coordinated non-UI
-   worktree; it must not create schema, code, provider, runtime, profile,
-   cookie, proxy, crawler, deployment, or database changes before the preflight
-   is explicitly accepted. Phase 5.1 code/schema implementation should wait for
-   the preflight result.
+1. Phase 21 frontend-only page-level refinement is merged and closed on
+   `main`. Phase 5.1P is now the lowest-risk active lane and may proceed only
+   as read-only document/code-path mapping; it must not create schema, code,
+   provider, runtime, profile, cookie, proxy, crawler, deployment, or database
+   changes before the preflight is explicitly accepted. Phase 5.1 code/schema
+   implementation should wait for the preflight result.
 
 Do not run Phase 19 and Phase 20 in parallel, and do not run more than one
 frontend worktree that edits the formal console shell at the same time.
