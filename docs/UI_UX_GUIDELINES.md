@@ -43,7 +43,7 @@ Accepted Phase 10-18 direction:
 Do not introduce a new UI framework or component library only for a single page
 without a change request and decision.
 
-CR-078 future `/monitor-next` planning may evaluate Vite, TypeScript, Vue,
+CR-092 future `/monitor-next` planning may evaluate Vite, TypeScript, Vue,
 React, and component-library options, but it does not change the current
 `/monitor` UI stack or Phase 21 visual scope. The current formal console
 interaction baseline remains Task Center, Run Detail, drawers, modals,
@@ -165,6 +165,47 @@ Visual rules:
 - use consistent status tags for running, success, warning, failed, archived,
   manual-review, and pending states;
 - use compact headings inside dashboards, tables, sidebars, and modals.
+- the Operations Home should prioritize charts, bars, and numbers over prose
+  or tables, and desktop/tablet dashboard content should not extend below the
+  left navigation/shell height.
+- Operations Home charts should expose visible legends or direct labels when
+  color meaning is not obvious, keep KPI/alert icons on one compact scale, and
+  reserve category palettes for composition views such as platform breakdowns.
+- When Operations Home data is sparse, prefer content-sized cards and denser
+  chart substrates over viewport-filling empty panels or filler copy.
+- CR-105 Operations Home uses a calm ToB operations color ledger: `#F6F8FA`
+  page background, `#FFFFFF` cards, `#0F766E` normal/completed/business-total,
+  `#2563EB` running/realtime/platform comparison, `#D97706` pending review or
+  pending action, `#DC2626` failure/exception, `#991B1B` high-risk public
+  opinion, and neutral grays `#64748B` / `#CBD5E1`.
+- Platform category colors may appear only inside the platform distribution
+  module. They must not override the page-wide semantic meaning of teal, blue,
+  amber, red, and dark red.
+- The CR-105 Operations Home target is six chart modules: KPI strip,
+  `监控走势`, `问题分布`, `平台分布`, `交付 / 复核`, and administrator-only
+  `资源健康`. Do not use the older process-node or `流程总览` diagram as the
+  future dashboard target.
+- CR-105 core dashboard charts should use locally vendored ECharts instances
+  instead of handcrafted SVG paths or custom DOM chart geometry. The current
+  CR-104 `.operations-trend-svg` and path helper functions are the baseline to
+  replace. SVG icons and ECharts internal SVG/canvas output remain allowed.
+- CR-105 module alignment is a hard visual rule. KPI cards, trend/issues row,
+  and lower modules must share consistent gutters and row edges; card title
+  regions should have the same height; headline numbers, legends, direct
+  labels, and chart plot origins should sit on stable left edges; lower cards
+  should use equal visual height on desktop. KPI cards should align internal
+  label, value, and micro-chart positions across all cards. When `资源健康` is
+  hidden, the remaining modules should reflow on the same grid instead of
+  leaving a blank slot or uneven spacing. Loading, empty, stale, and chart-local
+  error states must keep container dimensions stable.
+- CR-106A Operations Home refinement should make the top status and
+  `问题分布` action-first: high-risk leads and pending review should not be
+  visually buried behind lower-severity counts. The `平台分布` module should
+  distinguish platform volume from failure signals when current run summaries
+  provide that data. The `邮件` module should be labeled as report-level
+  delivery state until CR-106B is explicitly accepted. On mobile, KPI cards
+  should stay compact enough that `监控走势` and `问题分布` appear early in the
+  reading path.
 
 Interaction rules:
 

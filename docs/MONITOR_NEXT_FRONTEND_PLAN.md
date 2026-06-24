@@ -1,6 +1,6 @@
 # Monitor Next Frontend Plan
 
-This document is the planning source for CR-078. It records a future
+This document is the planning source for CR-092. It records a future
 `/monitor-next` evaluation lane and does not change the current `/monitor`
 console.
 
@@ -8,7 +8,7 @@ console.
 
 Status: Needs Confirmation.
 
-CR-078 is not Phase 21. Phase 21 remains the active frontend visual refinement
+CR-092 is not Phase 21. Phase 21 remains the active frontend visual refinement
 lane for the current `/monitor` console, using the existing Vanilla
 JavaScript and no-build baseline. This document must not be used to introduce a
 framework, build step, dependency, route, API change, or page migration until a
@@ -29,8 +29,8 @@ Default future direction:
 
 ## Hard Boundaries
 
-- Do not replace `/monitor` during CR-078 planning.
-- Do not create a frontend project or Node build pipeline during CR-078
+- Do not replace `/monitor` during CR-092 planning.
+- Do not create a frontend project or Node build pipeline during CR-092
   planning.
 - Do not select Vue, React, a component library, Tailwind, or a build process
   as final until a later accepted decision.

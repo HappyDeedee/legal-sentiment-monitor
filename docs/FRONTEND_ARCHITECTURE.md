@@ -65,7 +65,7 @@ Confirmed direction:
 
 Future planning boundary:
 
-- CR-078 records a future `/monitor-next` frontend migration evaluation in
+- CR-092 records a future `/monitor-next` frontend migration evaluation in
   `MONITOR_NEXT_FRONTEND_PLAN.md`. It does not change the accepted current
   `/monitor` Vanilla/no-build stack, Phase 21 visual work, or existing monitor
   API contracts.
@@ -617,6 +617,51 @@ The operations home should be visual and task-oriented:
 
 Avoid long diagnostic blocks on the home page. System diagnostics belong under
 administrator system configuration unless summarized as a small health signal.
+
+CR-105 current dashboard target:
+
+- The page should answer in about 10 seconds whether today's monitoring is
+  normal, where risk or exception exists, and where the user should click next.
+- Use six stable chart modules: KPI strip, `监控走势`, `问题分布`, `平台分布`,
+  `交付 / 复核`, and administrator-only `资源健康`.
+- Reuse current dashboard, runs, reports, mail, AI lead/review, platform, and
+  administrator resource data before adding backend fields.
+- Apache ECharts is the chart library for core CR-105 dashboard visualizations
+  in this current `/monitor` dashboard. Vendor it locally as
+  `api/webui/monitor/vendor/echarts.min.js`, served through
+  `/static/monitor/vendor/echarts.min.js`; do not load it from a CDN and do not
+  add a frontend build pipeline for this page.
+- Replace handcrafted SVG paths and custom DOM chart geometry in the core
+  CR-105 charts with ECharts chart instances. The current
+  `.operations-trend-svg`, `operationsTrendLinePath()`, and
+  `operationsTrendAreaPath()` implementation is the CR-104 baseline to replace,
+  not future architecture. SVG icons and ECharts internal rendering are allowed.
+- Do not carry forward old `流程总览`, `.operations-stage-*`, heatmap-block, or
+  no-chart-library requirements from CR-097 through CR-103. Those are
+  historical evidence, not future dashboard structure.
+- Keep essential values, legends, and direct labels visible without hover, and
+  provide tap/click detail on mobile.
+- Missing trend buckets should be derived through frontend read-only
+  aggregation from existing `/runs` and `/reports` for the first
+  implementation. Backend trend buckets require a later accepted CR.
+- Normal-user views hide administrator resource health and reflow the remaining
+  lower modules to fill the space; do not leave a blank resource slot.
+
+CR-106A data-aware signal refinement:
+
+- Keep CR-105A as the current ECharts dashboard baseline and refine only the
+  existing Operations Home data mapping, chart semantics, copy, and responsive
+  density.
+- The CR-106A mail module uses report-level delivery state from
+  `reports.email_status`. The existing `email_delivery_logs` table is valid
+  delivery-history data, but aggregating it into `/api/monitor/dashboard` is a
+  separate CR-106B decision and not part of CR-106A.
+- Platform distribution may use existing run summary fields such as
+  `platform_results` and `failed_platforms` to distinguish volume from failure
+  signal without adding persisted dashboard metrics.
+- Administrator resource health may summarize account/proxy/AI/mail/session
+  readiness as safe status counts and action cues. Normal-user views must not
+  expose administrator resource details or sensitive values.
 
 ## State Refresh
 

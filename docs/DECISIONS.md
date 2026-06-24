@@ -512,16 +512,57 @@ short `Superseded by` note rather than deleting history.
   top-bar refresh, drawer/modal/menu categories, close/backdrop/Escape
   behavior, and overlay scroll/routing logic must not be changed for visual
   neatness without a separate accepted CR.
-- Confirmed for CR-079: MediaCrawler is an internal collection engine for the
+- Confirmed for CR-093: MediaCrawler is an internal collection engine for the
   Legal Sentiment Monitor product, not the public product cockpit. The exact
   production route, mount, reverse-proxy, and 404-vs-403-vs-unmounted strategy
   remains pending until a read-only route audit confirms current dependencies
   and the user accepts the implementation strategy.
-- Confirmed for CR-081: future non-trivial work should start from an atomic
+- Confirmed for CR-095: future non-trivial work should start from an atomic
   goal packet before implementation. The packet must name the owner CR/phase,
   baseline, scope, out-of-scope, hard boundaries, start gate, touch surface,
   test loop, acceptance criteria, rollback or recovery, documentation updates,
-  and stop conditions. The accepted execution rhythm remains Phase 21 merge,
-  Phase 5.1P read-only preflight, Phase 5.1A-D implementation, Phase 5.1
-  acceptance, then CR-070 / Phase 5.2 after CR-047 provider/effective snapshot
-  verification.
+  and stop conditions. The accepted execution rhythm is now Phase 21 merged and
+  closed on `main`, Phase 5.1P read-only preflight, Phase 5.1A-D
+  implementation, Phase 5.1 acceptance, then CR-070 / Phase 5.2 after CR-047
+  provider/effective snapshot verification.
+
+## 2026-06-20
+
+- Confirmed for documentation governance: completed Phase 21 CR identifiers
+  remain historical records and are not rewritten. The non-Phase-21 governance
+  and future backlog items previously drafted with conflicting labels were
+  renumbered to CR-091 Open Todo MECE Rebaseline, CR-092 Frontend Stack
+  Migration Evaluation, CR-093 MediaCrawler Internalization/Public Exposure,
+  CR-094 Crawler Engine Provider Architecture, and CR-095 Atomic Goal
+  Execution Governance. Future agents must keep CR identifiers unique for
+  separate current entries.
+- Confirmed for todo governance: before a new execution lane or non-trivial
+  goal starts, agents must run a read-only todo baseline review and classify
+  active or next items as current, already completed, stale, duplicate,
+  future-only, deferred, `Needs Confirmation`, operator-gated, or
+  historical/archive-only.
+- Confirmed for CR-105: the next Operations Home dashboard optimization uses
+  Apache ECharts for core dashboard charts in the current no-build `/monitor`
+  console, and the library must be vendored locally under the existing static
+  asset path rather than loaded from a CDN. The current handcrafted
+  `.operations-trend-svg` / path-helper chart geometry is the CR-104 baseline
+  to replace, not the CR-105 implementation pattern.
+- Confirmed for CR-105: CR-097 through CR-103 are historical/archive-only for
+  future dashboard implementation. Their `流程总览`, `operations-stage-*`,
+  heatmap-block, and no-chart-library details must not block the accepted
+  chart-dashboard rebuild. CR-104 remains the current implemented baseline
+  until CR-105 code is implemented and verified.
+- Confirmed for CR-105: the future Operations Home target is a six-module
+  chart dashboard, not a process-node diagram. The page should let users judge
+  within about 10 seconds whether today's monitoring is normal, where risk or
+  exception exists, and where to click next. The first implementation should
+  reuse current dashboard/runs/reports data and administrator resource health;
+  task funnels, platform risk matrices, keyword heat, AI-quality analytics,
+  and task rankings are later enhancements rather than current requirements.
+- Confirmed for CR-105: the expected local ECharts vendor file is
+  `api/webui/monitor/vendor/echarts.min.js`, served at
+  `/static/monitor/vendor/echarts.min.js`. Missing trend buckets should remain
+  a frontend read-only aggregation from existing `/runs` and `/reports` in the
+  first implementation; backend trend buckets require a later accepted CR.
+  When normal-user views hide administrator resource health, the remaining
+  lower dashboard modules must reflow without a blank resource slot.

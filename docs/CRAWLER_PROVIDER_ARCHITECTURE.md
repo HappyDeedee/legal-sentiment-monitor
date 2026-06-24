@@ -1,15 +1,15 @@
 # Crawler Provider Architecture
 
-This document is the planning source for CR-080. It records future crawler
+This document is the planning source for CR-094. It records future crawler
 engine provider architecture and does not implement provider abstraction.
 
 ## Status
 
 Status: Needs Confirmation.
 
-CR-080 is separate from Phase 5.1P. Phase 5.1P maps the current
+CR-094 is separate from Phase 5.1P. Phase 5.1P maps the current
 MediaCrawler/CDP/BrowserEnvironmentProvider paths for CR-047 account identity
-fidelity. CR-080 is a future extensibility lane for adding or evaluating other
+fidelity. CR-094 is a future extensibility lane for adding or evaluating other
 crawler engines without creating parallel product systems.
 
 ## Goal
@@ -30,7 +30,7 @@ Monitoring task / account / proxy / profile_key
 
 ## Hard Boundaries
 
-- Do not replace MediaCrawler through CR-080 planning.
+- Do not replace MediaCrawler through CR-094 planning.
 - Do not implement a provider interface until a later accepted implementation
   CR.
 - Do not add provider tables, profile-binding tables, capability tables, or

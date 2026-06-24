@@ -1108,11 +1108,11 @@ CloakBrowser.
   separate decision with its own security, deployment, verification, and
   maintenance review.
 
-CR-080 records a future crawler-provider architecture planning lane in
+CR-094 records a future crawler-provider architecture planning lane in
 `CRAWLER_PROVIDER_ARCHITECTURE.md`. It is not the same as Phase 5.1P:
 Phase 5.1P maps the current MediaCrawler/CDP/BrowserEnvironmentProvider paths
-for CR-047 account identity fidelity, while CR-080 is future extensibility
-planning. CR-080 must not add provider bindings, provider tables, profile
+for CR-047 account identity fidelity, while CR-094 is future extensibility
+planning. CR-094 must not add provider bindings, provider tables, profile
 material, account fields, runtime behavior, or crawler changes without a later
 accepted implementation CR and, where needed, a separate data model/migration
 CR.

@@ -119,14 +119,14 @@ Endpoint groups:
 | runtime settings | yes | no |
 | diagnostics | yes | no |
 
-CR-079 route exposure hardening should classify raw MediaCrawler, crawler/data,
+CR-093 route exposure hardening should classify raw MediaCrawler, crawler/data,
 websocket, direct-control, raw-file, and old development surfaces before
 implementation. These surfaces are not normal-user product APIs. If any remain
 available for trusted diagnostics, they must be administrator-only, audited
 where security-sensitive, and redacted. The final public deny/unmount behavior
-requires the CR-079 route audit and confirmation.
+requires the CR-093 route audit and confirmation.
 
-CR-080 future provider APIs, if later accepted, must use the same monitor
+CR-094 future provider APIs, if later accepted, must use the same monitor
 authorization and data-scope model. A provider must not introduce a separate
 public permission system or bypass normal-user ownership scope.
 

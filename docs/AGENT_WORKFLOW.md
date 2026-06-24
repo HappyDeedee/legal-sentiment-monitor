@@ -69,6 +69,22 @@ Only after the global review is complete should the agent generate or approve a
 phase-specific execution goal such as a Phase 11A goal. A phase-specific goal
 is an execution gate, not a substitute for the global roadmap review.
 
+## Todo Baseline Review Gate
+
+Before starting a new execution lane, approving a non-trivial goal packet, or
+resolving sequencing ambiguity, perform a read-only todo baseline review. Read
+the open items in `TASKS.md`, `CHANGE_REQUESTS.md`, `CURRENT_STATE.md`,
+`TRACEABILITY.md`, `TEST_PLAN.md`, and accepted decisions, then compare them
+against current `main`, local worktree state, and relevant code, schema, UI,
+runtime, or documented evidence.
+
+Classify each active or next item as current, already completed, stale old
+baseline, duplicate or overlapping, future-only, deferred, `Needs
+Confirmation`, operator-gated, or historical/archive-only. Treat stale or
+misaligned tasks as documentation issues first: rewrite, defer, mark
+completed, merge duplicates, operator-gate, archive, or create a follow-up CR.
+Do not reopen completed historical phases through old unchecked boxes.
+
 ## Goal Readiness Gate
 
 Before starting or approving a non-trivial implementation or documentation
@@ -92,18 +108,19 @@ The packet must state:
 
 Do not start a goal if it mixes separate lanes such as Phase 21 visual work,
 Phase 5.1P read-only preflight, Phase 5.1 implementation, CR-070 export/import,
-CR-078 `/monitor-next`, CR-079 public exposure, or CR-080 provider architecture
+CR-092 `/monitor-next`, CR-093 public exposure, or CR-094 provider architecture
 without a later accepted decision that deliberately merges those boundaries.
 
 Current goal rhythm:
 
-1. Phase 21 worktree merge.
-2. Phase 5.1P documentation/read-only compatibility preflight.
+1. Phase 21 is merged and closed on `main`.
+2. Phase 5.1P documentation/read-only compatibility preflight is the next
+   active lane.
 3. Phase 5.1A-D implementation in order.
 4. Phase 5.1 acceptance gate.
 5. CR-070 / Phase 5.2A-E only after CR-047 provider/effective snapshot
    verification.
-6. CR-078, CR-079, and CR-080 remain future independent backlog lanes.
+6. CR-092, CR-093, and CR-094 remain future independent backlog lanes.
 
 Use the iteration rule from `docs/GOAL_EXECUTION_GUIDELINES.md`:
 pre-check, implement only the packet, run targeted checks, fix and rerun, run

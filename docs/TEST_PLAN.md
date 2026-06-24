@@ -7,10 +7,19 @@ the operator's computer is not a valid acceptance path.
 
 ## Goal Readiness And Execution Governance Tests
 
-CR-081 governs how open todos become executable goals. These tests apply before
+CR-095 governs how open todos become executable goals. These tests apply before
 starting or approving any non-trivial implementation or documentation
 governance goal.
 
+- A read-only todo baseline review compares open todo/CR/current-state/
+  traceability/test-plan items against current `main`, local worktree state,
+  accepted decisions, and relevant code/schema/UI/runtime evidence.
+- Active or next items are classified as current, already completed, stale,
+  duplicate, future-only, deferred, `Needs Confirmation`, operator-gated, or
+  historical/archive-only before implementation starts.
+- `CHANGE_REQUESTS.md` and `TRACEABILITY.md` use unique CR identifiers for
+  separate current entries; completed historical Phase 21 CRs are preserved and
+  conflicting governance/future backlog entries are renumbered instead.
 - A goal packet exists or is explicitly confirmed from
   `docs/GOAL_EXECUTION_GUIDELINES.md`.
 - The packet names one owner CR or phase and one primary risk area.
@@ -19,9 +28,9 @@ governance goal.
   acceptance criteria, rollback or recovery, documentation updates, and stop
   conditions.
 - The packet follows the current execution order unless a later accepted
-  decision changes it: Phase 21 merge, Phase 5.1P preflight, Phase 5.1A-D,
-  Phase 5.1 acceptance, then CR-070 / Phase 5.2 after CR-047 provider/
-  effective snapshot verification.
+  decision changes it: Phase 21 is merged and closed on `main`, Phase 5.1P
+  preflight is next, then Phase 5.1A-D, Phase 5.1 acceptance, and CR-070 /
+  Phase 5.2 after CR-047 provider/effective snapshot verification.
 - Phase 21 packets remain frontend-visual only and preserve Task Center, Run
   Detail, drawer, modal, row-menu, select/date, close, scroll, refresh,
   routing, owner-scope, and permission behavior unless a separate accepted CR
@@ -35,7 +44,7 @@ governance goal.
   snapshot boundary.
 - CR-070 / Phase 5.2 packets do not start before CR-047 provider binding and
   effective runtime snapshot behavior are implemented and verified.
-- CR-078, CR-079, and CR-080 packets remain future independent backlog work and
+- CR-092, CR-093, and CR-094 packets remain future independent backlog work and
   are not treated as hidden prerequisites for Phase 21, Phase 5.1P, Phase 5.1,
   or CR-070.
 - `Needs Confirmation` CRs can receive read-only planning or review only; tests
@@ -321,7 +330,7 @@ requested/effective runtime snapshot contract.
 
 ### Future Frontend Migration Tests
 
-CR-078 tests are planning gates for a future `/monitor-next` lane. They are
+CR-092 tests are planning gates for a future `/monitor-next` lane. They are
 not Phase 21 tests and must not be used to change the current `/monitor`
 console.
 
@@ -351,7 +360,7 @@ console.
 
 ### Public Exposure Boundary Tests
 
-CR-079 tests are planning gates for future MediaCrawler internalization and
+CR-093 tests are planning gates for future MediaCrawler internalization and
 production exposure hardening.
 
 - A route audit must list every FastAPI router and static mount before any
@@ -378,7 +387,7 @@ production exposure hardening.
 
 ### Crawler Provider Architecture Tests
 
-CR-080 tests are planning gates for future provider architecture. They are not
+CR-094 tests are planning gates for future provider architecture. They are not
 Phase 5.1P tests; Phase 5.1P remains the current MediaCrawler/CDP compatibility
 preflight.
 
@@ -663,13 +672,14 @@ verification records.
 
 ### Phase 7.2C AI Relevance And Prompt Hardening Tests
 
-- `source_keyword` alone cannot make a content item related. A fixture whose
-  keyword is `北京海安律所退费` but whose title/body/comments only discuss
-  unrelated education, medical, clothing, or generic lawyer refund topics must
-  not become a target-related negative lead.
-- Homonym or geography-only mentions such as `海安` must not be treated as the
-  target law firm unless the content includes the law firm name, accepted alias,
-  or clear contextual reference.
+- The default prompt states that `source_keyword` is recall provenance only and
+  should not by itself prove target-law-firm relatedness.
+- Valid AI output is preserved after format validation. Application
+  postprocessing must not use hardcoded `source_keyword`, target-name, alias,
+  or quote matching to force a result to unrelated.
+- Homonym, geography-only, broad refund/legal, title evidence, and
+  comment-evidence fixtures verify current model-output preservation and keep
+  CR-045's historical prompt-calibration coverage visible.
 - A fixture with the target law firm or alias in title, description, author, or
   sampled comments plus a complaint/refund/avoidance signal remains eligible
   for suspected-negative or high-risk classification.
@@ -681,12 +691,27 @@ verification records.
 - Add a small pilot-derived or fixture-based calibration set covering broad
   refund/legal noise, unrelated law firms, homonym geography, true target
   mentions, and comment-only target references.
-- A `source_keyword`-only fixture must stay out of suspected-negative/high-risk
-  buckets even if the model emits a noisy positive; the filter state stays
-  anchored to the target-evidence gate rather than the recall keyword alone.
+- A `source_keyword`-only fixture with valid model output is preserved as model
+  output; applications may not silently rewrite it to `irrelevant` through
+  hardcoded postprocessing.
 - Tests assert structured AI output normalization remains compatible with the
   existing fields unless a documented schema extension is accepted.
 - Documentation consistency passes after CR-045 task and traceability updates.
+
+### CR-096 AI Evaluation Postprocessing Scope Reduction Tests
+
+- Valid model output is preserved for `is_related`, `is_negative`,
+  `risk_level`, `reason`, `evidence_quotes`, and `recommended_action` after
+  parsing and format validation.
+- `law_firm_name=北京海安律所`, no aliases, title text containing
+  `北京海安律师事务所骗了`, and valid model high-risk output remains high-risk.
+- Invalid JSON, missing required fields, invalid `risk_level`, provider
+  failures, and timeouts still save `pending_review` fallback rows.
+- Phase 20B trace tests continue to prove API keys, Authorization, cookies,
+  proxy credentials, profile/local/server paths, and other sensitive data are
+  redacted.
+- Oversized prompt/request/response/comment snapshots remain truncated with
+  explicit truncation metadata and do not block AI evaluation.
 
 ### CR-050 Report Center Lead Status Filter Precision Tests
 
@@ -1089,10 +1114,297 @@ Run the relevant parts of this checklist after each Phase 11 batch:
 ### Phase 13C Operations Home Responsive And Role Tests
 
 - Normal users only see own task/report/run health and business-safe resource
-  signals.
+      signals.
 - Desktop 1440px, tablet 1024px, and mobile 390px layouts have no severe
-  overlap, hidden primary actions, or unreadable metric cards.
+      overlap, hidden primary actions, or unreadable metric cards.
 - Administrator resource health drilldowns remain hidden from normal users.
+
+## CR-097 Operations Home Visual Density Reduction Tests
+
+- The Operations Home first viewport remains focused on visual signals rather
+  than prose.
+- Task health, run activity, report/review, email delivery, lead risk, and
+  resource health remain represented by compact metrics and bars.
+- The home includes one dominant flow chart plus compact platform bars/heatmap
+  blocks and delivery/lead breakdowns without introducing a chart dependency.
+- Desktop and tablet checks must confirm the flow chart has no visibly
+  stretched Chinese labels or circular markers.
+- The visual priority panel uses short business labels and does not expose raw
+  fields such as `job_id`, `run_id`, `report_id`, `summary.platform_results`,
+  `collection_progress`, `ai_progress`, `job_snapshot_json`, or
+  `email_delivery_logs`.
+- Desktop 1440px, tablet 1024px, and mobile 390px layouts remain readable
+  after the visual-density reduction.
+- Desktop 1440x900 and tablet 1024x768 checks must confirm the Operations Home
+  bottom does not exceed the left navigation/shell viewport height; the
+  shortcut dock is hidden on those widths and remains available only on mobile.
+- Administrator diagnostics remain gated and do not leak into normal-user
+  views.
+
+## CR-098 Operations Home Data-First Visual Refit Tests
+
+- The Operations Home follows the existing project design system: light
+  enterprise shell, teal accent, compact type, modest radii, and risk color
+  reserved for exception overlays.
+- The first screen prioritizes charts, bars, and numbers over prose, tables, or
+  status-heavy blocks.
+- The stage flow is present as five visual stages and uses uniform teal fill
+  with risk represented by an alert overlay rather than competing fill colors.
+- The priority panel shows only compact exception bars and limits the visible
+  queue to the most important issues.
+- The shortcut dock is hidden by the final CR-098 cascade and does not add page
+  height on desktop, tablet, or mobile.
+- Platform heatmap blocks are hidden when the platform bar chart already gives
+  the needed breakdown.
+- Desktop `1440x900` and tablet `1024x768` checks confirm the Operations Home
+  bottom stays within the left navigation/shell height.
+- Mobile `390x844` checks confirm chart-first ordering, no duplicated
+  page-kicker copy, no horizontal overflow, and no narrow one-character Chinese
+  text columns.
+- Role boundaries, drilldowns, dashboard API compatibility, Task Center, Run
+  Detail, drawer, modal, enhanced select/date, routing, owner-scope, and
+  report-scope behavior remain unchanged.
+
+## CR-099 Operations Home Legend-First Visual Clarity Tests
+
+- The Operations Home exposes visible legend or direct-key treatment for the
+  flow chart, delivery/review chart, attention panel, and resource chart.
+- KPI cards and attention rows use normalized icon sizes rather than oversized
+  decorative marks.
+- Platform composition uses a category palette and donut-plus-list breakdown,
+  while status-driven charts keep semantic status colors.
+- Desktop `1440x900` and tablet `1024x768` checks still confirm the Operations
+  Home bottom stays within the left navigation/shell height.
+- Mobile `390x844` checks still confirm no horizontal overflow, no narrow
+  one-character Chinese text columns, and chart-first vertical ordering.
+- Role boundaries, drilldowns, dashboard API compatibility, Task Center, Run
+  Detail, drawer, modal, enhanced select/date, routing, owner-scope, and
+  report-scope behavior remain unchanged.
+
+## CR-100 Operations Home Dense Visual Composition Tests
+
+- Desktop/tablet Operations Home uses content-sized composition rather than
+  stretching sparse data into large empty panels.
+- The flow chart includes denser graphical structure while preserving the same
+  stage meaning and drilldown behavior.
+- Desktop `1440x900` and tablet `1024x768` checks still confirm the Operations
+  Home bottom stays within the left navigation/shell height boundary.
+- Mobile `390x844` checks still confirm no horizontal overflow, no narrow
+  one-character Chinese text columns, and chart-first vertical ordering.
+- Role boundaries, drilldowns, dashboard API compatibility, Task Center, Run
+- Detail, drawer, modal, enhanced select/date, routing, owner-scope, and
+- report-scope behavior remain unchanged.
+
+## CR-101 Operations Home Flow Chart Layer Separation Tests
+
+- Historical/archive-only after CR-105. These checks describe the old
+  handcrafted flow-chart implementation and must not be used to require
+  `流程总览`, `.operations-stage-head`, `.operations-stage-plot`, or other
+  `.operations-stage-*` DOM in a future ECharts dashboard.
+- Use these notes only when inspecting the verified CR-101 historical
+  implementation. Future CR-105 implementation should be tested against the
+  six chart-dashboard containers instead.
+
+## CR-102 Operations Home Flow Chart Node Simplification Tests
+
+- Historical/archive-only after CR-105. These checks describe the old
+  handcrafted flow-chart node simplification and must not be used to require
+  `.operations-stage-node-top`, `.operations-stage-chip`, or any
+  `.operations-stage-*` DOM in a future ECharts dashboard.
+- Use these notes only when inspecting the verified CR-102 historical
+  implementation. Future CR-105 implementation should be tested against the
+  six chart-dashboard containers instead.
+
+## CR-103 Operations Home Flow Chart Semantic Trend Rebuild Tests
+
+- Historical/archive-only after CR-105. These checks describe the old
+  handcrafted `流程总览` semantic-trend implementation and must not be used to
+  require `.operations-stage-chart`, `.operations-stage-line-primary`,
+  `.operations-stage-line-secondary`, or any `.operations-stage-*` DOM in a
+  future ECharts dashboard.
+- Use these notes only when inspecting the verified CR-103 historical
+  implementation. Future CR-105 implementation should be tested against the
+  six chart-dashboard containers instead.
+
+## CR-104 Operations Home Data Cockpit Moderate Rebuild Tests
+
+- Current implemented baseline before CR-105: these checks describe the
+  current handcrafted chart-first cockpit and can be used for regression while
+  it remains live, but they do not block CR-105 from replacing the internal
+  chart DOM with locally vendored Apache ECharts.
+- After CR-105 implementation, `.operations-trend-svg`,
+  `.operations-trend-line-primary`, `.operations-trend-line-secondary`, and
+  handcrafted trend-path assertions are CR-104 regression-only checks, not
+  acceptance criteria for the new dashboard. CR-105 tests should verify
+  ECharts-backed chart containers and options instead of requiring the
+  handwritten SVG fragments to remain.
+- The Operations Home keeps the existing dashboard data contract and drilldown
+  behavior, but the first screen now reads as a chart-first data cockpit.
+- The main chart DOM should include `.operations-cockpit-trend`,
+  `.operations-window-toggle`, `.operations-trend-svg`,
+  `.operations-trend-line-primary`, and `.operations-trend-line-secondary`.
+- The trend chart should expose visible legend items for `业务总量` and
+  `异常 / 待处理`, plus a 7-day / 14-day switch.
+- If the dashboard payload does not include trend buckets, the frontend should
+  use read-only aggregation from `/runs` and `/reports` without changing the
+  backend contract.
+- The issue panel should render compact horizontal issue bars rather than
+  mixed icon/status cards.
+- The lower area should keep `平台分布` and `交付 / 复核` as chart-first
+  breakdowns without explanatory paragraphs or tables.
+- Administrator view should keep compact resource and system-diagnostic entry;
+  normal-user view should not leave a blank resource area.
+- Desktop `1440x900` and tablet `1024x768` checks should still confirm the
+  Operations Home bottom stays within the left navigation/shell height.
+- Mobile `390x844` checks should confirm no overlap, no horizontal overflow,
+  and no chart deformation.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_13b or phase_13c"`,
+  `node --check api/webui/monitor/monitor.js`, inline monitor script parse,
+  in-app browser review, and `uv run python scripts/check_docs.py` must pass.
+
+## CR-105 Operations Home ECharts Dashboard Rebaseline Tests
+
+- The requirement baseline classifies CR-097 through CR-103 as
+  historical/archive-only and keeps CR-104 as the current code baseline until
+  CR-105 implementation is changed and verified.
+- No current planning or test text requires preserving `流程总览`,
+  `.operations-stage-*`, heatmap-block, or earlier no-chart-library
+  constraints for the future dashboard.
+- Apache ECharts is vendored locally under the existing static asset path and
+  is not loaded from a CDN.
+- The expected ECharts vendor file is
+  `api/webui/monitor/vendor/echarts.min.js`, served through
+  `/static/monitor/vendor/echarts.min.js`. Static tests should fail if
+  `/monitor` references `https://`, `http://`, `cdn`, `unpkg`, `jsdelivr`, or
+  another remote script for ECharts, and HTTP checks should confirm the local
+  vendor path returns 200 when implemented.
+- Core CR-105 chart tests should fail if `监控走势`, `问题分布`, `平台分布`,
+  or `交付 / 复核` continue to use handwritten SVG path geometry or custom DOM
+  percentage-bar chart structures instead of ECharts chart instances. SVG
+  icons and ECharts internal rendering are allowed; application code should not
+  preserve CR-104 path helpers such as `operationsTrendLinePath()` as the chart
+  renderer.
+- The accepted dashboard plan covers KPI micro charts, required 7/14-day trend
+  controls, optional 30-day trend only when bounded existing-data aggregation is
+  clean, issue distribution, platform/source breakdown, delivery/review
+  composition, administrator resource health, color-role ledger, visible
+  legends/direct labels, desktop/tablet/mobile order, and role boundaries.
+- The implementation exposes six stable modules: KPI strip, `监控走势`,
+  `问题分布`, `平台分布`, `交付 / 复核`, and administrator-only `资源健康`.
+- Desktop `>=1280px` checks cover five equal KPI cards, a `65% / 35%` trend
+  and issue row, and three equal lower modules. The dashboard aligns titles,
+  key numbers, legends, and direct labels on consistent left edges.
+- Browser or screenshot checks must treat module alignment as a hard
+  acceptance gate: card outer edges, row gutters, title/header heights,
+  headline numbers, legend starts, chart plot origins, KPI label/value/
+  micro-chart positions, and lower-card heights should visibly line up. Fail
+  the review for staggered title baselines, mismatched plot starts, uneven
+  gutters, or lower modules that drift after `资源健康` is hidden for normal
+  users.
+- Tablet checks cover KPI `5` columns or `3+2`, full-width main trend, and
+  one- or two-column lower modules. Mobile `390x844` checks cover two-column
+  KPI cards, trend first at readable height, no hover dependency, no
+  horizontal overflow, and no one-character Chinese text columns.
+- Color tests or visual review should verify the semantic ledger:
+  `#0F766E` normal/completed/business-total, `#2563EB` running/realtime,
+  `#D97706` pending review/action, `#DC2626` failure/exception,
+  `#991B1B` high risk, and platform category colors only inside platform
+  distribution.
+- First implementation data checks must reuse existing tasks, runs, reports,
+  mail state, AI lead/review, platform, and administrator resource data. Task
+  funnel, platform risk matrix, keyword heat, AI quality, and task rankings are
+  future enhancements and must not be required persisted fields.
+- Dashboard API and frontend tests should fail if the first CR-105
+  implementation adds or requires fields such as `task_funnel`, `risk_matrix`,
+  `keyword_heat`, `ai_quality_score`, or `task_ranking`, or renders placeholder
+  "future enhancement" panels for them.
+- Missing trend buckets should be handled through frontend read-only
+  aggregation from existing `/runs` and `/reports` in the first implementation.
+  Backend-provided trend buckets are a later enhancement unless a separate CR
+  accepts them.
+- Loading, empty, stale, and chart-local error states keep container dimensions
+  stable. Empty charts render zero-value chart surfaces; stale views show last
+  updated time; one failed chart does not blank the rest of the dashboard.
+- Interaction checks cover 7/14-day time window controls and, when implemented
+  from bounded existing data, 30-day controls. If 30-day aggregation cannot be
+  supported cleanly without backend buckets, the first CR-105 implementation may
+  ship 7/14 only and defer 30-day buckets to a later accepted CR. KPI
+  click-through, issue-bar click-through, platform-bar click-through,
+  high-risk/pending-review drilldowns, and tap/click detail on mobile must not
+  rely on hover.
+- The dashboard must answer within about 10 seconds whether today's monitoring
+  is normal, where exception/high-risk/pending work exists, and where the user
+  should click next. Browser review should fail a state-card collage or
+  process-node diagram even if individual numbers render.
+- Future implementation checks must preserve `/api/monitor/dashboard`
+  compatibility, role gating, drilldowns, Task Center, Run Detail, drawer,
+  modal, enhanced select/date, routing, owner-scope, report-scope, and
+  top-bar refresh behavior.
+- Future browser checks at `1440x900`, `1024x768`, and `390x844` must confirm
+  readable charts, visible essential values without hover, no horizontal
+  overflow, and no one-character Chinese text columns.
+- Normal-user checks must confirm administrator resource health is hidden
+  without leaving an empty module, and account/proxy/AI/SMTP/session details
+  are not exposed. On desktop, the remaining lower modules should reflow to two
+  equal columns or otherwise fill the hidden resource-health space without a
+  blank third slot.
+
+## CR-106A Operations Home Data-Aware Signal Refinement Tests
+
+- Documentation tests should confirm CR-105A remains the verified ECharts
+  dashboard baseline and CR-106A is a follow-up optimization, not a reopened
+  CR-105 implementation.
+- CR-106A static tests should verify the plan and implementation continue to
+  preserve `/api/monitor/dashboard` compatibility, local ECharts, role gating,
+  Task Center, Run Detail, drawer/modal/select/date behavior, routing,
+  owner-scope, report-scope, and top-bar refresh behavior.
+- Data-source tests should use bounded fixtures or safe local aggregates to
+  prove the top status, issue distribution, platform distribution, mail module,
+  and resource health are derived from existing dashboard/runs/reports data.
+  Tests must not require local sample counts as hard constants.
+- `问题分布` tests should prove action severity is visible: high-risk leads,
+  pending review, mail failure, and run failure/skip remain separately
+  readable and clickable.
+- `平台分布` tests should prove platform volume is not confused with platform
+  failure signals when existing run summary fields contain `platform_results`
+  or `failed_platforms`.
+- Mail-module tests should confirm CR-106A labels or maps the module as
+  report-level delivery state from `reports.email_status`; CR-106A must not
+  silently aggregate `email_delivery_logs` as the dashboard mail-health source.
+- Resource-health tests should confirm administrators can see action-oriented
+  account/proxy/AI/mail/session health cues while normal users do not see
+  account/proxy/AI/SMTP/session details or an empty resource placeholder.
+- Mobile browser checks at `390x844` should confirm KPI cards do not dominate
+  the first screen before `监控走势` and `问题分布`, and there is no horizontal
+  overflow, text overlap, or one-character Chinese column.
+- Desktop/tablet browser checks at `1440x900` and `1024x768` should confirm
+  the dashboard still reads as one aligned chart cockpit and not a state-card
+  collage.
+- Sensitive-data checks should fail if Operations Home exposes recipients,
+  SMTP secrets, proxy URLs, cookies, profile paths, account names, raw delivery
+  errors, or other administrator-only resource details to normal users.
+- Dashboard data-source tests should prove `问题分布`, `平台分布`, and `邮件`
+  derive from existing dashboard/runs/reports fields without querying
+  `email_delivery_logs`.
+- Implementation tests should use bounded fixtures or safe aggregates. They
+  must not hard-code local sample counts as acceptance constants.
+- Normal-user browser checks at `1440x900`, `1024x768`, and `390x844` should
+  confirm `资源健康` is not rendered, lower modules reflow, and no
+  administrator resource terms appear.
+- Standard checks for an implementation batch remain: targeted Operations Home
+  pytest coverage, `node --check api/webui/monitor/monitor.js`, inline monitor
+  script parse, `uv run python scripts/check_docs.py`, `git diff --check`, and
+  role/browser checks for administrator and normal-user sessions.
+
+## CR-106B Email Delivery Log Dashboard Aggregation Tests
+
+- CR-106B remains `Needs Confirmation`; no implementation tests are required
+  until the requirement is accepted.
+- If accepted later, tests must prove any dashboard aggregation from
+  `email_delivery_logs` uses scoped safe counts/statuses only, preserves
+  report-level `reports.email_status` compatibility, follows owner/workspace
+  scope rules, and does not expose recipients, SMTP secrets, proxy URLs,
+  cookies, profile paths, account details, or raw sensitive delivery errors.
 
 ## Phase 14 Run Center Data Model Tests
 

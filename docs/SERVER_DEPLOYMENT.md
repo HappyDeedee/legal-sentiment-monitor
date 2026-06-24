@@ -152,7 +152,7 @@ Required behavior:
 
 ## Public Exposure Boundary
 
-CR-079 accepts the product boundary that MediaCrawler is an internal collection
+CR-093 accepts the product boundary that MediaCrawler is an internal collection
 engine, not the public product cockpit. The exact route, mount, reverse-proxy,
 and 404-vs-403 strategy still needs confirmation after a read-only route audit.
 
@@ -172,7 +172,7 @@ formal monitor workflow still depends on an old route, that dependency must be
 recorded with a replacement path before the route is denied, unmounted, or
 hidden behind administrator-only diagnostics.
 
-CR-080 provider architecture is a future planning lane. Production crawler
+CR-094 provider architecture is a future planning lane. Production crawler
 providers must still satisfy the server-like/container admission rule here:
 they cannot require the operator's local desktop browser as the production
 runtime.

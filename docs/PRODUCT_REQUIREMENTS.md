@@ -22,7 +22,7 @@ Monitor web console. It is the product reference for UI, API, and testing work.
   and should not expose raw crawler/data routes, command-line concepts, local
   files, profile paths, cookies, proxy credentials, or provider debug details
   outside trusted administrator diagnostics.
-- Future `/monitor-next` planning under CR-078 is not a change to the current
+- Future `/monitor-next` planning under CR-092 is not a change to the current
   `/monitor` product flow. Current Task Center, Run Detail, drawer/modal,
   select/date, report/email, routing, permission, and scroll behavior remain
   the baseline until an explicit replacement gate is accepted and verified.
@@ -40,6 +40,8 @@ Purpose:
 - show task, run, report, and email delivery health;
 - provide common entry points and drilldowns;
 - surface account/resource health only as concise business signals.
+- help the user judge within about 10 seconds whether today's monitoring is
+  normal, where risk or exception exists, and where to click next.
 
 Administrator view:
 
@@ -51,6 +53,8 @@ Administrator view:
   and manual-review volume;
 - suspected negative lead metrics and risk trend;
 - account/platform availability summary;
+- administrator-only resource health for accounts, proxies, AI access, and
+  SMTP/session status;
 - recent failures and drilldowns into the affected page.
 
 Normal-user view:
@@ -61,14 +65,26 @@ Normal-user view:
 - own suspected negative lead trend where available;
 - platform availability in business language when it affects task execution;
 - shortcuts to create a task and view reports.
+- no account, proxy, AI, SMTP, session, or administrator resource details.
 
 Rules:
 
 - the overview should not behave like a system diagnostics page;
+- the accepted dashboard reading path is overall state, recent trend, problems
+  to handle, platform or workflow source, and destination for action;
+- the current accepted chart modules are KPI strip, monitoring trend, issue
+  distribution, platform distribution, delivery/review, and administrator-only
+  resource health;
+- first implementation should reuse existing tasks, runs, reports, mail state,
+  AI lead/review, platform, and administrator resource data. Task funnel,
+  platform risk matrix, keyword heat, AI quality, and task rankings are later
+  enhancements rather than current required data;
 - long scheduler, browser, platform, and deployment status blocks belong in
   administrator System Diagnostics unless summarized as a small health signal;
 - text-only status areas should be replaced by compact metrics, charts,
   grouped summaries, and drilldown links;
+- do not use the older process-node or `流程总览` diagram as the future
+  dashboard target;
 - labels such as "configuration incomplete" must identify the affected area or
   be removed;
 - global refresh wording should not appear as a second command surface. The
@@ -81,7 +97,9 @@ Acceptance:
   wording is shown;
 - normal users do not see resource-management controls;
 - operations home supports desktop, tablet, and mobile layouts without
-  overlapping content.
+  overlapping content;
+- key numbers, legends, and labels are visible without hover;
+- mobile has no horizontal scrolling and no one-character Chinese text columns.
 
 ## 2. Monitoring
 

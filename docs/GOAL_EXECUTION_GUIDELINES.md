@@ -1,6 +1,6 @@
 # Goal Execution Guidelines
 
-This document defines how open todos become executable goals after CR-081. It
+This document defines how open todos become executable goals after CR-095. It
 does not add product scope, reopen completed phases, or replace
 `CURRENT_STATE.md` as the source for the next allowed implementation order.
 
@@ -51,16 +51,25 @@ record the ambiguity instead of starting a later or broader task.
   real proxy use, profile export/import, file deletion, or production route
   exposure require explicit gates and tests or tripwires.
 
+## Todo Baseline Review
+
+Before approving or starting an active or next goal, compare the open todo and
+CR entries against current `main`, local worktree state, accepted decisions,
+traceability, test plan, and relevant code/schema/UI/runtime evidence. Classify
+items as current, already completed, stale, duplicate, future-only, deferred,
+`Needs Confirmation`, operator-gated, or historical/archive-only. Resolve stale
+or duplicate documentation before treating the item as implementation-ready.
+
 ## Current Execution Lanes
 
 Use this serial rhythm unless `CURRENT_STATE.md` is updated by a later accepted
 decision:
 
-1. Finish and merge the active Phase 21 worktree. Scope is current `/monitor`
-   frontend visual refinement only. It must preserve the current Task Center,
-   Run Detail, drawer, modal, enhanced select/date, close, scroll, refresh, and
-   routing logic.
-2. Run Phase 5.1P as a documentation/read-only compatibility preflight. It maps
+1. Phase 21 is merged and closed on `main`. The current `/monitor` frontend
+   baseline is Task Center / Run Detail with the verified drawer, modal,
+   enhanced select/date, close, scroll, refresh, and routing logic preserved.
+   Further UI work requires a separate accepted CR.
+2. Run Phase 5.1P as the next documentation/read-only compatibility preflight. It maps
    QR login, Cookie validation, login-state checks, manual runs, scheduler
    runs, runner behavior, and MediaCrawler CDP launch/reconnect to one
    BrowserEnvironmentProvider output and one requested/effective snapshot
@@ -81,7 +90,7 @@ decision:
    runtime snapshots are implemented and verified. Execute Phase 5.2A-E in
    order: package contract/security, export flow, import flow,
    post-import/recovery, then test safety and verification.
-9. Keep CR-078, CR-079, and CR-080 as future independent backlog lanes. They do
+9. Keep CR-092, CR-093, and CR-094 as future independent backlog lanes. They do
    not block Phase 21, Phase 5.1P, Phase 5.1, or CR-070, and they cannot be
    treated as hidden prerequisites without a later accepted decision.
 10. Keep CR-037, Users And Permissions page work, and Phase 7.1D historical

@@ -257,17 +257,17 @@ Compatibility and safety:
   states, overwrite an existing target account, or leave package/profile locks
   stuck.
 
-### Future CR-080 - Crawler Provider Architecture Schema Boundary
+### Future CR-094 - Crawler Provider Architecture Schema Boundary
 
-Status: Needs Confirmation for CR-080 planning. No schema migration is accepted
-for CR-080 in the current documentation-governance batch.
+Status: Needs Confirmation for CR-094 planning. No schema migration is accepted
+for CR-094 in the current documentation-governance batch.
 
 Rules:
 
 - do not add provider tables, provider-profile binding tables, capability
   tables, provider-runtime snapshot tables, or provider-specific account fields
-  as part of CR-080 planning;
-- do not fold CR-080 schema work into Phase 5.1P, because Phase 5.1P is the
+  as part of CR-094 planning;
+- do not fold CR-094 schema work into Phase 5.1P, because Phase 5.1P is the
   read-only current MediaCrawler/CDP compatibility preflight for CR-047;
 - if a future provider implementation needs schema, record a separate data
   model/migration CR before coding;

@@ -37,6 +37,19 @@ dependencies, whether one phase's changes affect later phases, batch size,
 rollback risk, implementation granularity, and whether the roadmap still
 converges on the final product goal.
 
+## Todo Baseline Review Rule
+
+Before starting a new execution lane, approving a non-trivial goal packet, or
+resolving sequencing ambiguity, perform a read-only todo baseline review.
+Compare open items in `docs/TASKS.md`, `docs/CHANGE_REQUESTS.md`,
+`docs/CURRENT_STATE.md`, `docs/TRACEABILITY.md`, `docs/TEST_PLAN.md`, and
+accepted decisions against current `main`, local worktree evidence, and
+relevant code/schema/UI/runtime evidence. Classify each active or next item as
+current, already completed, stale, duplicate, future-only, deferred,
+`Needs Confirmation`, operator-gated, or historical/archive-only before
+treating it as implementation-ready. Do not reopen completed phases through
+stale unchecked tasks; record a follow-up CR instead.
+
 Phase 0.5 is complete only when:
 
 - every Phase 0.5 task in `docs/TASKS.md` is marked `[x]`;

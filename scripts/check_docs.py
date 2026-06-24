@@ -25,7 +25,17 @@ def check_change_requests(issues: list[str]) -> None:
     change_requests = read(DOCS / "CHANGE_REQUESTS.md")
     traceability = read(DOCS / "TRACEABILITY.md")
     current_state = read(DOCS / "CURRENT_STATE.md")
-    cr_ids = sorted(set(re.findall(r"^## (CR-\d+[A-Z]?)\b", change_requests, re.MULTILINE)))
+    cr_headings = re.findall(r"^## (CR-\d+[A-Z]?)\b", change_requests, re.MULTILINE)
+    duplicated_headings = sorted({cr_id for cr_id in cr_headings if cr_headings.count(cr_id) > 1})
+    for cr_id in duplicated_headings:
+        add_issue(issues, "P0", f"{cr_id} is reused by multiple CHANGE_REQUESTS.md headings")
+
+    trace_rows = re.findall(r"^\| (CR-\d+[A-Z]?) \|", traceability, re.MULTILINE)
+    duplicated_trace_rows = sorted({cr_id for cr_id in trace_rows if trace_rows.count(cr_id) > 1})
+    for cr_id in duplicated_trace_rows:
+        add_issue(issues, "P0", f"{cr_id} is reused by multiple TRACEABILITY.md rows")
+
+    cr_ids = sorted(set(cr_headings))
     trace_ids = set(re.findall(r"\bCR-\d+[A-Z]?\b", traceability))
     for cr_id in cr_ids:
         if cr_id not in trace_ids:
@@ -77,6 +87,10 @@ def check_specialist_references(issues: list[str]) -> None:
     agents = read(ROOT / "AGENTS.md")
     workflow = read(DOCS / "AGENT_WORKFLOW.md")
     references = agents + "\n" + workflow
+    if "Todo Baseline Review Rule" not in agents:
+        add_issue(issues, "P1", "AGENTS.md is missing the Todo Baseline Review Rule")
+    if "Todo Baseline Review Gate" not in workflow:
+        add_issue(issues, "P1", "AGENT_WORKFLOW.md is missing the Todo Baseline Review Gate")
     specialist_docs = [
         "FRONTEND_ARCHITECTURE.md",
         "UI_UX_GUIDELINES.md",

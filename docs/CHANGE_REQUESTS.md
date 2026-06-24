@@ -91,11 +91,23 @@ Status values:
 - CR-072: Task Edit Custom Date Picker Consistency
 - CR-073: Scrollable Drawer Corner Radius Regression Fix
 - CR-074: Console Refresh Action Deduplication And Icon Loading
-- CR-075: Open Todo MECE Rebaseline And Phase 5.1 Preflight Gate
-- CR-078: Frontend Stack Migration Evaluation And Monitor Next Plan
-- CR-079: MediaCrawler Internalization And Public Exposure Boundary
-- CR-080: Crawler Engine Provider Architecture
-- CR-081: Atomic Goal Execution Governance And Readiness Gate
+- CR-091: Open Todo MECE Rebaseline And Phase 5.1 Preflight Gate
+- CR-092: Frontend Stack Migration Evaluation And Monitor Next Plan
+- CR-093: MediaCrawler Internalization And Public Exposure Boundary
+- CR-094: Crawler Engine Provider Architecture
+- CR-095: Atomic Goal Execution Governance And Readiness Gate
+- CR-097: Operations Home Visual Density Reduction
+- CR-098: Operations Home Data-First Visual Refit
+- CR-099: Operations Home Legend-First Visual Clarity
+- CR-100: Operations Home Dense Visual Composition
+- CR-101: Operations Home Flow Chart Layer Separation
+- CR-102: Operations Home Flow Chart Node Simplification
+- CR-103: Operations Home Flow Chart Semantic Trend Rebuild
+- CR-104: Operations Home Data Cockpit Moderate Rebuild
+- CR-105: Operations Home ECharts Dashboard Rebaseline
+- CR-106A: Operations Home Data-Aware Signal Refinement
+- CR-106B: Email Delivery Log Dashboard Aggregation
+- CR-096: AI Evaluation Postprocessing Scope Reduction
 - CR-075: Responsive Navigation Interaction Consistency
 - CR-076: Mobile Header Layout Resilience Regression Fix
 - CR-077: Mobile Header Final Cascade Resilience Regression Fix
@@ -184,7 +196,7 @@ Reason:
 
 Future coding agents need complete page-level logic and acceptance criteria.
 
-Status: Implemented
+Status: Verified
 
 Related tasks:
 
@@ -2792,6 +2804,102 @@ Acceptance:
   when the negative signal is present.
 - Normal-user output remains business-safe; administrator-only debug detail
   remains governed by Phase 20.
+
+Superseded current-rule detail:
+
+- CR-096 keeps CR-045's lead-state safety, fallback, and prompt guidance, but
+  supersedes the application-layer target-evidence gate as current behavior.
+  Target evidence is now a prompt/model judgment constraint, not a hardcoded
+  post-provider semantic override.
+
+## CR-096 - AI Evaluation Postprocessing Scope Reduction
+
+Date: 2026-06-21
+
+Source: user review of a real clue where valid AI high-risk output was later
+rewritten to unrelated by application postprocessing.
+
+Module: AI evaluation postprocessing, trace safety, Phase 7.2 follow-up
+
+Type: Regression Fix
+
+Status: Verified
+
+Background:
+
+A collected clue with title text identifying "北京海安律师事务所" and negative
+"被骗" allegations could be returned by the model as related, negative, and
+high risk. The application-level target-evidence gate then compared only
+hardcoded target terms such as "北京海安律所" and erased the model judgment to
+`irrelevant`. The same hardcoded gate can also hide genuine risk when the
+content uses reasonable law-firm name variants that the target/alias list did
+not enumerate.
+
+Purpose:
+
+Narrow AI evaluation postprocessing from a second semantic judge to format and
+storage-safety validation only. If the model returns a structurally valid
+result, keep `is_related`, `is_negative`, `risk_level`, `reason`,
+`evidence_quotes`, and `recommended_action` as the model output. Invalid or
+malformed model output still falls back to `pending_review`.
+
+Requirements:
+
+- Remove application-layer semantic rewriting from AI evaluation
+  postprocessing.
+- Do not use hardcoded target-name, alias, `source_keyword`, or evidence quote
+  matching to change a valid AI output to `irrelevant`.
+- Keep JSON parsing, required-field checks, boolean coercion, `risk_level`
+  enum validation, and `evidence_quotes` type normalization.
+- Keep malformed JSON, missing fields, invalid risk levels, provider errors,
+  and timeouts on the existing `pending_review` fallback path.
+- Keep trace/log storage safety: API key, Authorization, Cookie, token,
+  secret, password, SMTP password, proxy URL/credentials, profile path, local
+  path, and server path redaction.
+- Keep prompt/request/response/comment snapshot size caps and explicit
+  truncation metadata.
+- Keep prompt guidance that `source_keyword` is recall provenance only and
+  should not by itself prove target-law-firm relatedness.
+
+Scope boundary:
+
+- In scope: `api/monitoring/ai.py` postprocessing behavior, focused regression
+  tests, and documentation alignment for CR-045/Phase 7.2 current behavior.
+- Out of scope: changing the core AI prompt, adding law-firm equivalent-term
+  generation, adding suspicious-point annotations, adding a new manual-review
+  state machine, changing frontend copy, or rewriting historical saved
+  `irrelevant` evaluations.
+
+Non-goals:
+
+- Do not claim model output is a legal or factual conclusion.
+- Do not remove trace redaction, trace truncation, or format validation.
+- Do not auto-reprocess old rows that were already persisted as `irrelevant`.
+
+Related tasks:
+
+- CR-096 AI Evaluation Postprocessing Scope Reduction in `TASKS.md`
+- CR-096 row in `TRACEABILITY.md`
+- Phase 7.2 AI Evaluation Accuracy And Lead Status Tests in `TEST_PLAN.md`
+
+Acceptance:
+
+- A valid model result remains unchanged even when the only application-visible
+  hardcoded target/alias evidence would previously have failed.
+- `law_firm_name=北京海安律所`, `aliases=[]`, a title containing
+  "北京海安律师事务所骗了", and a valid model high-risk result persist as high
+  risk.
+- Existing malformed-output tests still save `pending_review`.
+- Phase 20B trace redaction and truncation tests still pass.
+- Documentation states that CR-045's target-evidence gate is historical and
+  superseded by CR-096 for current postprocessing behavior.
+
+Verification:
+
+- Verified on 2026-06-21 with targeted AI evaluation tests and docs
+  consistency. Valid model output is preserved, malformed output still falls
+  back to `pending_review`, and trace redaction/truncation coverage remains
+  passing.
 
 ## CR-046 - Platform Account Avatar Safe Cache Display Regression Fix
 
@@ -6310,7 +6418,7 @@ Acceptance:
   paths, package secrets, CDP endpoints, noVNC tokens, raw whole-profile cache,
   or traversal paths.
 
-## CR-075 - Open Todo MECE Rebaseline And Phase 5.1 Preflight Gate
+## CR-091 - Open Todo MECE Rebaseline And Phase 5.1 Preflight Gate
 
 Date: 2026-06-19
 
@@ -6397,7 +6505,7 @@ Non-goals:
 
 Related tasks:
 
-- CR-075 Open Todo MECE Rebaseline in `TASKS.md`
+- CR-091 Open Todo MECE Rebaseline in `TASKS.md`
 - CR-047 Account Identity Fidelity in `TASKS.md`
 - CR-070 Account Environment Export And Import Package in `TASKS.md`
 
@@ -6418,7 +6526,7 @@ Acceptance:
 - Documentation consistency and plan-cross-validation review pass without
   blocking findings.
 
-## CR-078 - Frontend Stack Migration Evaluation And Monitor Next Plan
+## CR-092 - Frontend Stack Migration Evaluation And Monitor Next Plan
 
 Date: 2026-06-19
 
@@ -6477,8 +6585,8 @@ Scope boundary:
 - Documentation and future architecture planning only.
 - No frontend project, Node build pipeline, package dependency, route, API,
   UI, schema, permission, crawler, or deployment change is part of this CR.
-- This CR does not block Phase 21, Phase 5.1P, CR-047, CR-070, CR-079, or
-  CR-080.
+- This CR does not block Phase 21, Phase 5.1P, CR-047, CR-070, CR-093, or
+  CR-094.
 
 Non-goals:
 
@@ -6493,7 +6601,7 @@ Non-goals:
 
 Dependencies:
 
-- CR-078 depends on no current implementation task.
+- CR-092 depends on no current implementation task.
 - Any later implementation must coordinate with the active Phase 21 baseline
   and must not edit the same `/monitor` files in parallel unless explicitly
   coordinated.
@@ -6522,9 +6630,9 @@ Acceptance:
 Tests:
 
 - Frontend migration tests in `TEST_PLAN.md`.
-- Traceability row for CR-078 in `TRACEABILITY.md`.
+- Traceability row for CR-092 in `TRACEABILITY.md`.
 
-## CR-079 - MediaCrawler Internalization And Public Exposure Boundary
+## CR-093 - MediaCrawler Internalization And Public Exposure Boundary
 
 Date: 2026-06-19
 
@@ -6585,8 +6693,8 @@ Scope boundary:
 - Documentation, route-audit planning, and future exposure governance only.
 - No route, mount, reverse proxy, API, UI, schema, crawler, deployment, or
   runtime configuration change is part of this CR.
-- This CR does not block Phase 21, Phase 5.1P, CR-047, CR-070, CR-078, or
-  CR-080.
+- This CR does not block Phase 21, Phase 5.1P, CR-047, CR-070, CR-092, or
+  CR-094.
 
 Non-goals:
 
@@ -6630,9 +6738,9 @@ Acceptance:
 Tests:
 
 - Public exposure boundary tests in `TEST_PLAN.md`.
-- Traceability row for CR-079 in `TRACEABILITY.md`.
+- Traceability row for CR-093 in `TRACEABILITY.md`.
 
-## CR-080 - Crawler Engine Provider Architecture
+## CR-094 - Crawler Engine Provider Architecture
 
 Date: 2026-06-19
 
@@ -6694,8 +6802,8 @@ Scope boundary:
   account, proxy, or deployment change is part of this CR.
 - This CR is not part of Phase 5.1P. Phase 5.1P remains the current
   MediaCrawler/CDP/BrowserEnvironmentProvider compatibility preflight only.
-- This CR does not block Phase 21, Phase 5.1P, CR-047, CR-070, CR-078, or
-  CR-079.
+- This CR does not block Phase 21, Phase 5.1P, CR-047, CR-070, CR-092, or
+  CR-093.
 
 Non-goals:
 
@@ -6725,7 +6833,7 @@ Implementation steps:
 
 Acceptance:
 
-- Documentation clearly separates CR-080 from Phase 5.1P.
+- Documentation clearly separates CR-094 from Phase 5.1P.
 - Documentation states that new providers cannot bypass the existing monitor
   task/account/proxy/profile/report/Run Detail/permission systems.
 - Documentation states that formal providers must be server-like and cannot
@@ -6735,9 +6843,9 @@ Acceptance:
 Tests:
 
 - Crawler provider architecture tests in `TEST_PLAN.md`.
-- Traceability row for CR-080 in `TRACEABILITY.md`.
+- Traceability row for CR-094 in `TRACEABILITY.md`.
 
-## CR-081 - Atomic Goal Execution Governance And Readiness Gate
+## CR-095 - Atomic Goal Execution Governance And Readiness Gate
 
 Date: 2026-06-19
 
@@ -6754,8 +6862,8 @@ Status: Accepted
 
 Background:
 
-CR-075 separated the current open roadmap into Phase 21, Phase 5.1P,
-Phase 5.1, CR-070 / Phase 5.2, future CR-078 through CR-080, and deferred
+CR-091 separated the current open roadmap into Phase 21, Phase 5.1P,
+Phase 5.1, CR-070 / Phase 5.2, future CR-092 through CR-094, and deferred
 operator-gated items. The next risk is not only whether the lanes are MECE, but
 whether each lane can be opened as a small executable goal without drifting
 into neighboring scope.
@@ -6772,15 +6880,16 @@ Requirements:
 - Add `docs/GOAL_EXECUTION_GUIDELINES.md` as the source for goal packet
   structure, atomicity rules, current execution lanes, test iteration loop,
   acceptance standards, and stop conditions.
-- Keep CR-075 as the owner of MECE open-todo lane separation. CR-081 owns how
+- Keep CR-091 as the owner of MECE open-todo lane separation. CR-095 owns how
   those lanes become executable goals.
 - Require every non-trivial future goal to state owner CR/phase, current
   baseline, in scope, out of scope, hard boundaries, dependencies, expected
   touch surface, execution steps, test loop, acceptance criteria, rollback or
   recovery, documentation updates, and stop conditions.
-- Preserve the current execution order: Phase 21 merge, Phase 5.1P read-only
-  preflight, Phase 5.1A-D implementation, Phase 5.1 acceptance, then CR-070 /
-  Phase 5.2 only after CR-047 provider/effective snapshot verification.
+- Preserve the current execution order: Phase 21 is merged and closed on
+  `main`, Phase 5.1P read-only preflight is next, then Phase 5.1A-D
+  implementation, Phase 5.1 acceptance, and CR-070 / Phase 5.2 only after
+  CR-047 provider/effective snapshot verification.
 - Split Phase 5.1 into goal-ready serial units: preflight, data model,
   generator/validator, locking/re-login, runtime binding, and acceptance gate.
 - Split CR-070 / Phase 5.2 into goal-ready serial units: package contract and
@@ -6791,7 +6900,7 @@ Requirements:
   Task Center structure, Run Detail structure, drawer/modal behavior,
   select/date behavior, close behavior, scroll ownership, refresh logic, or
   routing without a separate accepted CR.
-- Keep CR-078, CR-079, and CR-080 as future independent backlog lanes, not
+- Keep CR-092, CR-093, and CR-094 as future independent backlog lanes, not
   hidden prerequisites for Phase 21, Phase 5.1P, Phase 5.1, or CR-070.
 - Define the test iteration loop as pre-check, implementation, targeted tests,
   fix/rerun, broader checks, documentation sync, documentation consistency
@@ -6810,8 +6919,8 @@ Scope boundary:
 
 Non-goals:
 
-- Do not implement Phase 21, Phase 5.1P, Phase 5.1, CR-070, CR-078, CR-079,
-  or CR-080.
+- Do not implement Phase 21, Phase 5.1P, Phase 5.1, CR-070, CR-092, CR-093,
+  or CR-094.
 - Do not reopen completed historical phases.
 - Do not turn `Needs Confirmation` items into implementation-ready tasks.
 - Do not create a new branch, worktree, runtime package, provider abstraction,
@@ -6819,7 +6928,7 @@ Non-goals:
 
 Related tasks:
 
-- CR-081 Atomic Goal Execution Governance in `TASKS.md`
+- CR-095 Atomic Goal Execution Governance in `TASKS.md`
 - Goal execution guidance in `AGENT_WORKFLOW.md`
 - Goal readiness tests in `TEST_PLAN.md`
 
@@ -6828,14 +6937,14 @@ Acceptance:
 - `GOAL_EXECUTION_GUIDELINES.md` defines the goal packet template, atomicity
   rules, current execution lanes, test loop, acceptance standards, and stop
   conditions.
-- `TASKS.md` records CR-081 as a documentation-governance batch and keeps the
+- `TASKS.md` records CR-095 as a documentation-governance batch and keeps the
   current open lanes in the same priority order.
 - `CURRENT_STATE.md` states that future open work must be opened with the
-  CR-081 goal packet and must not skip the documented order.
+  CR-095 goal packet and must not skip the documented order.
 - `AGENT_WORKFLOW.md` points agents to the goal execution guidelines before
   approving or starting a non-trivial goal.
 - `TEST_PLAN.md` contains goal-readiness and execution-governance tests.
-- `TRACEABILITY.md` links CR-081 to its task and test areas.
+- `TRACEABILITY.md` links CR-095 to its task and test areas.
 - Documentation consistency, whitespace check, and full open-todo
   cross-review finish with no blocking findings.
 
@@ -6845,6 +6954,1126 @@ Tests:
 - `uv run python scripts/check_docs.py`.
 - `git diff --check`.
 - Read-only full open-todo cross-review.
+
+## CR-097 - Operations Home Visual Density Reduction
+
+Date: 2026-06-21
+
+Source: user request to make the operations home much more visual, much less
+wordy, easier to read at a glance, and bounded so the desktop/tablet overview
+does not run longer than the left navigation.
+
+Module: monitor web frontend dashboard surface, responsive CSS, and dashboard-specific regression tests
+
+Type: Existing Feature Optimization
+
+Status: Verified
+
+Background:
+
+The current Operations Home already exposes the right real data surface, but
+the first viewport still reads too much like a text-first status page. The user
+wants the page to feel more like a cockpit: mostly charts, bars, blocks, and
+numeric signals, with the minimum possible explanatory copy.
+
+Purpose:
+
+Reduce visible wording on the Operations Home while preserving the same
+underlying data contract, role safety, and drilldown paths.
+
+Requirements:
+
+- Keep the existing Operations Home data contract and drilldown destinations.
+- Reduce explanatory text density on the first screen.
+- Prefer visual encodings such as meter bars, segmented blocks, and compact
+  numeric summaries over prose.
+- Keep the first viewport chart-first: five compact KPI meters, one dominant
+  flow chart, platform breakdown with heatmap blocks, delivery/lead
+  composition, and a compact visual priority panel.
+- Keep desktop and tablet Operations Home height within the shell/navigation
+  height; do not leave a large shortcut/detail row below the visual dashboard.
+- Keep the shortcut dock as a lightweight mobile affordance only.
+- Keep normal-user and administrator visibility boundaries intact.
+- Preserve tablet and mobile readability.
+
+Scope boundary:
+
+- Frontend-only visual refinement of the current `/monitor` Operations Home.
+- No backend API, schema, permission, crawler, AI, email, or deployment change
+  is part of this CR.
+- No new route or new product surface is introduced.
+
+Non-goals:
+
+- Do not change the real metrics, their source fields, or drilldown behavior.
+- Do not add new chart dependencies or a new frontend stack.
+- Do not widen the product scope beyond the existing home, resource, and
+  diagnostics surfaces.
+
+Related tasks:
+
+- CR-097 Operations Home Visual Density Reduction in `TASKS.md`
+- Phase 13 overview operations home tests in `TEST_PLAN.md`
+- Operations Home implementation and responsive CSS in
+  `api/monitor_web/index.html` and `api/webui/monitor/monitor.css`
+
+Acceptance:
+
+- The Operations Home first viewport is visually denser and less prose-heavy.
+- The home still shows task health, run activity, report/review, email
+  delivery, lead risk, and resource health signals.
+- The dashboard does not expose raw field names such as `job_id`, `run_id`,
+  `report_id`, `summary.platform_results`, `collection_progress`,
+  `ai_progress`, `job_snapshot_json`, or `email_delivery_logs` as primary
+  labels.
+- Tablet and mobile layouts remain readable without overflow or overlap.
+- Desktop and tablet layouts fit in the same first-screen height as the left
+  navigation, with no page-length overrun caused by the overview itself.
+- The dominant flow chart avoids visible stretched labels or circular markers
+  on desktop/tablet, and the page uses visual encodings rather than table-like
+  filler.
+- Existing drilldowns and role boundaries still pass regression tests.
+
+Tests:
+
+- Phase 13 operations home tests in `TEST_PLAN.md`.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k \"phase_13b or phase_13c\"`.
+- `uv run python scripts/check_docs.py`.
+
+## CR-098 - Operations Home Data-First Visual Refit
+
+Date: 2026-06-22
+
+Source: user feedback after the CR-097 prototype that the overview still felt
+ugly, too text-heavy, and too long; the refined dashboard must follow the
+current project design system rather than a detached prototype style.
+
+Module: monitor web frontend dashboard surface, responsive CSS, and
+dashboard-specific regression tests
+
+Type: Existing Feature Optimization
+
+Status: Verified
+
+Background:
+
+CR-097 reduced the original text-heavy Operations Home and verified the first
+height boundary. The follow-up feedback requires a stricter visual refit:
+preserve the project shell, color, typography, and interaction rules while
+making the home page read as charts and data blocks first, with minimal copy
+and no page-length overrun beyond the left navigation on desktop/tablet.
+
+Purpose:
+
+Make the current `/monitor` Operations Home a data-first operational dashboard
+inside the existing design system, without changing product scope or backend
+contracts.
+
+Requirements:
+
+- Keep the current Phase 21 light enterprise visual language: neutral surface,
+  teal accent, restrained risk color, compact type, and modest radii.
+- Keep the page focused on visual evidence: KPI micro bars, a five-stage flow
+  chart, compact priority bars, platform/delivery breakdowns, and resource
+  bars.
+- Remove or hide prose, shortcut, table-like, and status-heavy elements that do
+  not help the first-screen read.
+- Keep desktop `1440x900` and tablet `1024x768` Operations Home content within
+  the left navigation/shell height.
+- Keep mobile readable with a chart-first vertical order and no duplicated
+  page-kicker copy.
+- Preserve administrator/normal-user boundaries, drilldown destinations, and
+  existing data fields.
+
+Scope boundary:
+
+- Frontend-only refit of the existing `/monitor` Operations Home.
+- No backend API, schema, permission, crawler, AI, email, deployment, Task
+  Center, Run Detail, drawer, modal, enhanced select/date, routing,
+  owner-scope, or report-scope behavior change is part of this CR.
+- No new route, frontend stack, chart dependency, or Open Design artifact is
+  introduced.
+
+Non-goals:
+
+- Do not replace the whole console shell.
+- Do not introduce a detached visual style that conflicts with the existing
+  project design guidelines.
+- Do not add new metrics that require backend fields.
+- Do not reopen CR-097 as incomplete; CR-098 is a follow-up refinement.
+
+Related tasks:
+
+- CR-098 Operations Home Data-First Visual Refit in `TASKS.md`
+- CR-098 tests in `TEST_PLAN.md`
+- Operations Home implementation and responsive CSS in
+  `api/monitor_web/index.html` and `api/webui/monitor/monitor.css`
+
+Acceptance:
+
+- The first screen reads primarily through charts, bars, and numbers rather
+  than prose or tables.
+- Desktop and tablet Operations Home do not extend below the left navigation.
+- The shortcut dock is hidden by the final CR-098 cascade so it no longer adds
+  page height.
+- The stage flow uses uniform teal fill with risk shown as an alert overlay,
+  preventing multiple competing palette meanings.
+- The priority panel shows only the most important exceptions as compact bars.
+- Platform heatmap blocks are hidden when they add visual noise rather than
+  insight.
+- Existing role gating and drilldowns still pass regression tests.
+
+Tests:
+
+- CR-098 operations home tests in `TEST_PLAN.md`.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k \"phase_13b or phase_13c\"`.
+- `node --check api/webui/monitor/monitor.js`.
+- Inline monitor script parse from `api/monitor_web/index.html`.
+- Browser/Playwright checks at `1440x900`, `1024x768`, and `390x844`.
+- `uv run python scripts/check_docs.py`.
+
+## CR-099 - Operations Home Legend-First Visual Clarity
+
+Date: 2026-06-22
+
+Source: user feedback after the CR-098 pass that the charts still lacked
+visible legends, icon sizes felt awkward, and the palette needed to move
+closer to the supplied reference image without copying it directly.
+
+Module: monitor web frontend dashboard surface, responsive CSS, and
+dashboard-specific regression tests
+
+Type: Existing Feature Optimization
+
+Status: Verified
+
+Background:
+
+CR-098 fixed the one-screen data-first layout and kept the dashboard inside the
+existing design system, but some charts still required guesswork because their
+meaning was not visible at first glance. The next pass needed to make the
+overview self-explanatory through visible keys, calmer icon scale, and clearer
+color-role separation.
+
+Purpose:
+
+Improve the current `/monitor` Operations Home readability by making the
+primary charts explain themselves without hover text or extra prose.
+
+Requirements:
+
+- Keep the current dashboard data contract, role boundaries, drilldowns,
+  one-screen height boundary, and existing console shell.
+- Add visible legend or direct-key treatment to the flow chart, delivery/review
+  breakdown, attention panel, and resource panel.
+- Normalize KPI and alert icon sizes so they support scanning instead of
+  dominating card content.
+- Separate color roles: semantic status colors for normal/live/review/risk and
+  category colors only for the platform composition breakdown.
+- Move the platform breakdown closer to the supplied figure direction with a
+  donut plus labeled bar list, while staying inside the current project design
+  language.
+
+Scope boundary:
+
+- Frontend-only refinement of the existing `/monitor` Operations Home.
+- No backend API, schema, permission, crawler, AI, email, deployment, Task
+  Center, Run Detail, drawer, modal, enhanced select/date, routing,
+  owner-scope, or report-scope behavior change is part of this CR.
+- No new chart library, build step, route, or detached prototype is
+  introduced.
+
+Non-goals:
+
+- Do not replace the current console shell or page structure.
+- Do not reintroduce long descriptive copy, table-heavy summary blocks, or a
+  second prototype visual language.
+- Do not change the meaning of existing dashboard aggregates or invent new
+  backend fields.
+- Do not reopen CR-098 as incomplete; CR-099 is a follow-up refinement.
+
+Related tasks:
+
+- CR-099 Operations Home Legend-First Visual Clarity in `TASKS.md`
+- CR-099 tests in `TEST_PLAN.md`
+- Operations Home implementation and responsive CSS in
+  `api/monitor_web/index.html` and `api/webui/monitor/monitor.css`
+
+Acceptance:
+
+- Operators can read chart meaning from visible legend/direct labels without
+  guessing what each color means.
+- KPI and alert icons use one consistent compact scale across cards and
+  attention rows.
+- Platform composition uses a category palette and donut-plus-list treatment,
+  while status-oriented charts keep semantic status colors.
+- Desktop/tablet keep the CR-098 height boundary and mobile remains chart-first
+  without overflow or one-character text columns.
+- Existing role gating, drilldowns, and dashboard data compatibility still
+  pass regression tests.
+
+Tests:
+
+- CR-099 operations home tests in `TEST_PLAN.md`.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_13b or phase_13c"`.
+- `node --check api/webui/monitor/monitor.js`.
+- Inline monitor script parse from `api/monitor_web/index.html`.
+- Browser/Playwright checks at `1440x900`, `1024x768`, and `390x844`.
+- `uv run python scripts/check_docs.py`.
+
+## CR-100 - Operations Home Dense Visual Composition
+
+Date: 2026-06-22
+
+Source: user feedback after the CR-099 pass that the dashboard still felt too
+empty even after legends, icons, and palette roles were corrected.
+
+Module: monitor web frontend dashboard surface, responsive CSS, and
+dashboard-specific regression tests
+
+Type: Existing Feature Optimization
+
+Status: Verified
+
+Background:
+
+CR-099 made the Operations Home easier to decode, but the current
+desktop/tablet layout still stretched sparse data into large white panels. The
+next pass needed to make the same data feel denser without adding prose,
+tables, or invented metrics.
+
+Purpose:
+
+Reduce empty visual surface on the current `/monitor` Operations Home by making
+the layout content-sized and by giving the main flow chart a denser graphical
+substrate.
+
+Requirements:
+
+- Keep the current dashboard data contract, role boundaries, drilldowns, and
+  one-screen maximum height boundary.
+- Prefer content-sized dashboard composition over viewport-filling empty
+  panels when real data is sparse.
+- Keep the first screen chart-first and low-text.
+- Add denser visual structure to the flow chart without changing its meaning or
+  inventing new backend fields.
+- Preserve the current project design system rather than introducing a detached
+  prototype style.
+
+Scope boundary:
+
+- Frontend-only refinement of the existing `/monitor` Operations Home.
+- No backend API, schema, permission, crawler, AI, email, deployment, Task
+  Center, Run Detail, drawer, modal, enhanced select/date, routing,
+  owner-scope, or report-scope behavior change is part of this CR.
+
+Non-goals:
+
+- Do not add new dashboard metrics that require backend changes.
+- Do not reintroduce long descriptive copy, tables, or status walls to fill
+  space.
+- Do not reopen CR-099 as incomplete; CR-100 is a follow-up refinement.
+
+Related tasks:
+
+- CR-100 Operations Home Dense Visual Composition in `TASKS.md`
+- CR-100 tests in `TEST_PLAN.md`
+- Operations Home implementation and responsive CSS in
+  `api/monitor_web/index.html` and `api/webui/monitor/monitor.css`
+
+Acceptance:
+
+- Desktop/tablet Operations Home reads denser and less vacant with the same
+  underlying data.
+- The flow chart uses a fuller graphical substrate rather than leaving a large
+  empty center field.
+- Sparse states still stay compact, chart-first, and visually intentional.
+- Desktop/tablet remain within the left navigation/shell height boundary, and
+  mobile remains readable without horizontal overflow.
+- Existing role gating, drilldowns, and dashboard compatibility still pass
+  regression tests.
+
+Tests:
+
+- CR-100 operations home tests in `TEST_PLAN.md`.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_13b or phase_13c"`.
+- `node --check api/webui/monitor/monitor.js`.
+- Inline monitor script parse from `api/monitor_web/index.html`.
+- Browser/Playwright checks at `1440x900`, `1024x768`, and `390x844`.
+- `uv run python scripts/check_docs.py`.
+
+## CR-101 - Operations Home Flow Chart Layer Separation
+
+Date: 2026-06-22
+
+Source: user in-app browser review of the current `/monitor` Operations Home
+flow chart after CR-100.
+
+Module: monitor web frontend dashboard surface, flow-chart structure, and
+dashboard-specific regression tests
+
+Type: Existing Feature Optimization
+
+Status: Verified
+
+Background:
+
+CR-100 made the Operations Home denser, but the user review on the live page
+found that the `流程总览` card still read as one mixed block. The problem was
+not the outer card radius itself. The issue was that title, legend, backdrop,
+connector line, and stage nodes sat too close in one visual layer, so the
+chart did not read like a separated plot area.
+
+Purpose:
+
+Keep the current dashboard data contract and one-screen shell boundary, but
+separate the flow chart into clearer internal layers so the chart reads as a
+proper visual surface instead of a stacked mixed block.
+
+Requirements:
+
+- Keep the current dashboard data contract, role boundaries, drilldowns, and
+  one-screen maximum height boundary.
+- Keep the existing modest radius system and current project design language;
+  do not switch the flow chart to a detached prototype style.
+- Split the flow chart into a clear head layer and a separate internal plot
+  area.
+- Weaken the background stage columns so they behave as substrate rather than
+  competing cards.
+- Raise stage nodes as the foreground layer so labels, counts, and pending
+  state are visually legible.
+- Do not add prose, tables, or new backend metrics to explain the chart.
+
+Scope boundary:
+
+- Frontend-only refinement of the existing `/monitor` Operations Home flow
+  chart.
+- No backend API, schema, permission, crawler, AI, email, deployment, Task
+  Center, Run Detail, drawer, modal, enhanced select/date, routing,
+  owner-scope, or report-scope behavior change is part of this CR.
+
+Non-goals:
+
+- Do not redesign the rest of Operations Home.
+- Do not change the platform/resource/attention cards as part of this follow-up.
+- Do not reopen CR-100 as incomplete; CR-101 is a follow-up refinement after
+  live browser review.
+
+Related tasks:
+
+- CR-101 Operations Home Flow Chart Layer Separation in `TASKS.md`
+- CR-101 tests in `TEST_PLAN.md`
+- Operations Home implementation and responsive CSS in
+  `api/monitor_web/index.html` and `api/webui/monitor/monitor.css`
+
+Acceptance:
+
+- The flow chart head and plot area are visibly separated inside the existing
+  Operations Home card.
+- Stage backdrop columns read as low-noise substrate rather than competing
+  mini-cards.
+- Stage nodes read as foreground data markers and no longer feel visually
+  mixed into the same layer as the backdrop.
+- Desktop/tablet remain within the left navigation/shell height boundary, and
+  mobile remains readable without horizontal overflow.
+- Existing role gating, drilldowns, and dashboard compatibility still pass
+  regression tests.
+
+Tests:
+
+- CR-101 operations home tests in `TEST_PLAN.md`.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_13b or phase_13c"`.
+- `node --check api/webui/monitor/monitor.js`.
+- Inline monitor script parse from `api/monitor_web/index.html`.
+- Browser/in-app checks at desktop review width plus shell-height boundary
+  confirmation.
+- `uv run python scripts/check_docs.py`.
+
+## CR-102 - Operations Home Flow Chart Node Simplification
+
+Date: 2026-06-22
+
+Source: user live review of the current `/monitor` Operations Home after
+CR-101.
+
+Module: monitor web frontend dashboard surface, flow-chart node composition,
+and dashboard-specific regression tests
+
+Type: Existing Feature Optimization
+
+Status: Implemented
+
+Background:
+
+CR-101 separated the `流程总览` chart into a head layer and plot area, but the
+live review still showed the stage nodes reading as crowded mini-compositions.
+The issue shifted from plot layering to node density: each stage still carried
+label, value, helper text, ring, backdrop, and bar in too small a space.
+
+Purpose:
+
+Keep the same dashboard data contract and one-screen shell boundary, but reduce
+the node payload so the flow chart reads faster: label first, number second,
+pending state as a small chip, and one compact state bar.
+
+Requirements:
+
+- Keep the current dashboard data contract, role boundaries, drilldowns, and
+  one-screen maximum height boundary.
+- Do not add prose, tables, extra legends, or new backend metrics.
+- Remove the always-visible stage helper line such as `进行中` or `6 待处理`
+  from the node body.
+- Keep pending state visible only as a compact numeric chip when it exists.
+- Tighten node spacing, orb size, line placement, and bar height so the chart
+  reads as one coherent visual block instead of five crowded mini-cards.
+
+Scope boundary:
+
+- Frontend-only refinement of the existing `/monitor` Operations Home flow
+  chart.
+- No backend API, schema, permission, crawler, AI, email, deployment, Task
+  Center, Run Detail, drawer, modal, enhanced select/date, routing,
+  owner-scope, or report-scope behavior change is part of this CR.
+
+Non-goals:
+
+- Do not redesign the rest of Operations Home.
+- Do not replace the current light enterprise design language with a detached
+  prototype style.
+- Do not reopen CR-101 as incomplete; CR-102 is the next follow-up refinement
+  after live browser review.
+
+Related tasks:
+
+- CR-102 Operations Home Flow Chart Node Simplification in `TASKS.md`
+- CR-102 tests in `TEST_PLAN.md`
+- Operations Home implementation and responsive CSS in
+  `api/monitor_web/index.html` and `api/webui/monitor/monitor.css`
+
+Acceptance:
+
+- The `流程总览` node body no longer contains a separate helper text row.
+- Pending state remains visible through a compact chip only when non-zero.
+- Desktop/tablet remain within the left navigation/shell height boundary, and
+  mobile remains readable without horizontal overflow.
+- Existing role gating, drilldowns, and dashboard compatibility still pass
+  regression tests.
+
+Tests:
+
+- CR-102 operations home tests in `TEST_PLAN.md`.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_13b or phase_13c"`.
+- `node --check api/webui/monitor/monitor.js`.
+- Inline monitor script parse from `api/monitor_web/index.html`.
+- Browser/in-app checks at desktop review width plus shell-height boundary
+  confirmation.
+- `uv run python scripts/check_docs.py`.
+
+## CR-103 - Operations Home Flow Chart Semantic Trend Rebuild
+
+Date: 2026-06-22
+
+Source: user live review of the current `/monitor` Operations Home after
+CR-102 and explicit request to make `流程总览` readable as a line-chart-style
+view of monitoring status.
+
+Module: monitor web frontend dashboard surface, flow-chart semantic rendering,
+and dashboard-specific regression tests
+
+Type: Existing Feature Optimization
+
+Status: Implemented
+
+Background:
+
+CR-101 and CR-102 reduced layering noise and node density, but the live page
+still read as several mixed mini-components inside one frame. The chart had
+card, connector, orb, bar, and chip semantics at the same time, so the user
+could not tell what the block was meant to say at a glance.
+
+Purpose:
+
+Keep the existing dashboard data contract and one-screen boundary, but rebuild
+`流程总览` as a single semantic monitoring-stage trend chart: one primary line
+for total stage volume and one secondary line for abnormal or pending load,
+with the five monitoring stages as the fixed x-axis.
+
+Requirements:
+
+- Keep the current dashboard data contract, role boundaries, drilldowns, and
+  one-screen maximum height boundary.
+- Do not add backend fields, pseudo historical time-series data, prose-heavy
+  explanations, or detached prototype styling.
+- Rebuild the chart so it reads as one chart instead of five mixed node cards.
+- Keep the visible legend explicit for `总量` and `异常 / 待处理`.
+- Keep the five stage labels and key values readable with minimal text.
+- Preserve current project design language, colors, typography, and overall
+  `/monitor` layout conventions.
+
+Scope boundary:
+
+- Frontend-only refinement of the existing `/monitor` Operations Home flow
+  chart.
+- No backend API, schema, permission, crawler, AI, email, deployment, Task
+  Center, Run Detail, drawer, modal, enhanced select/date, routing,
+  owner-scope, or report-scope behavior change is part of this CR.
+
+Non-goals:
+
+- Do not claim a real historical time-series view where the current data layer
+  only provides current-stage aggregates.
+- Do not redesign the rest of Operations Home.
+- Do not reopen CR-101 or CR-102 as incomplete; CR-103 is the next semantic
+  follow-up after live browser review.
+
+Related tasks:
+
+- CR-103 Operations Home Flow Chart Semantic Trend Rebuild in `TASKS.md`
+- CR-103 tests in `TEST_PLAN.md`
+- Operations Home implementation and responsive CSS in
+  `api/monitor_web/index.html` and `api/webui/monitor/monitor.css`
+
+Acceptance:
+
+- The `流程总览` card reads as a single chart-first monitoring-stage view.
+- The chart keeps an explicit visible legend for `总量` and `异常 / 待处理`.
+- The chart no longer presents each stage as an orb-plus-bar mini-card.
+- Desktop/tablet remain within the left navigation/shell height boundary, and
+  mobile remains readable without horizontal overflow.
+- Existing role gating, drilldowns, and dashboard compatibility still pass
+  regression tests.
+
+Tests:
+
+- CR-103 operations home tests in `TEST_PLAN.md`.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_13b or phase_13c"`.
+- `node --check api/webui/monitor/monitor.js`.
+- Inline monitor script parse from `api/monitor_web/index.html`.
+- Browser/in-app checks at desktop review width plus shell-height boundary
+  confirmation.
+- `uv run python scripts/check_docs.py`.
+
+## CR-104 - Operations Home Data Cockpit Moderate Rebuild
+
+Date: 2026-06-22
+
+Source: approved implementation plan to rebuild `/monitor` into a single-screen
+data cockpit after repeated live review showed the current overview still felt
+like a mixed status platter instead of a readable operations dashboard.
+
+Module: monitor web frontend dashboard surface, chart-first overview
+composition, and dashboard-focused regression tests
+
+Type: Existing Feature Optimization
+
+Status: Implemented
+
+Background:
+
+CR-097 through CR-103 reduced wording, clarified legends, and improved the
+main flow card, but the first screen still relied on several legacy visual
+patterns at once. The user wanted a more direct reading path: first see
+trend, then see problems, then see breakdowns. The page also needed to stay
+inside the left-shell height at desktop, use the current project design
+language, and avoid table-like or prose-heavy explanation blocks.
+
+Purpose:
+
+Keep the existing dashboard data contract, role boundaries, and drilldown
+targets, but rebuild the current Operations Home into a chart-first data
+cockpit: compact KPI strip, `监控走势` trend chart with 7/14 day switch,
+`问题分布` issue bars, lower `平台分布` and `交付 / 复核` breakdowns, and
+administrator-only compact resource/diagnostic entry.
+
+Requirements:
+
+- Keep `/api/monitor/dashboard` compatible and do not add backend fields.
+- Add a frontend overview view-model that unifies `operations_home` and the
+  existing KPI container.
+- If the dashboard payload does not expose time buckets, use read-only
+  frontend aggregation from `/runs` and `/reports` for 7-day and 14-day
+  trend buckets.
+- Desktop first viewport must stay inside the left navigation/shell height.
+- Reduce text and remove stage-node/card mixtures in favor of direct chart
+  shapes, legends, numbers, and short labels.
+- Keep existing drilldowns to Monitoring, Task Center, resource pages, and
+  System Diagnostics.
+- Show compact administrator-only resource health entry; normal users must not
+  keep a blank resource block.
+
+Scope boundary:
+
+- Frontend-only rebuild of the existing `/monitor` Operations Home.
+- No backend API, schema, permission, crawler, AI, email, deployment, Task
+  Center, Run Detail, drawer, modal, enhanced select/date, routing,
+  owner-scope, or report-scope behavior change is part of this CR.
+
+Non-goals:
+
+- Do not expand this work to other first-level pages.
+- Do not invent new persistent dashboard fields or change database schema.
+- Do not reopen CR-097 through CR-103 as incomplete; CR-104 is the next
+  accepted follow-up optimization.
+
+Related tasks:
+
+- CR-104 Operations Home Data Cockpit Moderate Rebuild in `TASKS.md`
+- CR-104 tests in `TEST_PLAN.md`
+- Operations Home implementation and responsive CSS in
+  `api/monitor_web/index.html` and `api/webui/monitor/monitor.css`
+
+Acceptance:
+
+- The first screen reads as a chart-first data cockpit instead of status-card
+  mixture.
+- `监控走势` shows visible legend and 7/14 day switch with either payload
+  buckets or read-only frontend aggregation.
+- `问题分布` answers what needs action now with compact horizontal issue bars.
+- Desktop/tablet stay within the left navigation/shell height boundary, mobile
+  stays readable without horizontal overflow or deformed charts.
+- Existing role gating, drilldowns, and dashboard compatibility still pass
+  regression tests.
+
+Tests:
+
+- CR-104 operations home tests in `TEST_PLAN.md`.
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_13b or phase_13c"`.
+- `node --check api/webui/monitor/monitor.js`.
+- Inline monitor script parse from `api/monitor_web/index.html`.
+- Browser/in-app checks at `1440x900`, `1024x768`, and `390x844`.
+- `uv run python scripts/check_docs.py`.
+
+Current follow-up:
+
+- CR-105 supersedes CR-097 through CR-103 as the current Operations Home
+  design target. CR-104 remains the current implemented baseline until CR-105
+  is implemented and verified.
+- The CR-097 no-chart-dependency constraint and CR-101 through CR-103
+  `流程总览` / `operations-stage-*` DOM expectations are historical verification
+  only. They must not block a later chart-library implementation.
+
+## CR-105 - Operations Home ECharts Dashboard Rebaseline
+
+Date: 2026-06-22
+
+Source: user request for a chart-style Operations Home dashboard plan covering
+color, visualization types, layout, container sizing, current and future
+monitoring-task data, responsiveness, legends, component-library choice,
+viewport UX, interactions, goals, acceptance, and cleanup of stale duplicate
+requirements that would affect the redesign.
+
+Module: monitor web frontend dashboard surface, visualization system,
+dashboard requirement baseline, and dashboard-specific regression tests
+
+Type: Existing Feature Optimization
+
+Status: Accepted
+
+Background:
+
+CR-097 through CR-104 iterated the Operations Home from a text-heavy overview
+into the current CR-104 chart-first data cockpit. The remaining issue is that
+the page still relies on handcrafted card/SVG fragments and carries historical
+requirements for earlier flow-chart attempts. Those requirements can mislead a
+future implementation into preserving old `流程总览` or `operations-stage-*`
+structures even though the accepted direction is now a cleaner chart-library
+dashboard.
+
+Purpose:
+
+Rebaseline the Operations Home around a true chart dashboard: KPI strip,
+trend chart, issue distribution, platform breakdown, delivery/review
+composition, and administrator-only resource health. The goal is a readable
+public-opinion monitoring instrument panel, not a status-card platter or a
+diagram of previous implementation stages.
+
+The page has one product goal: help the user decide within about 10 seconds
+whether today's monitoring operation is normal, where the risk is, and where
+to click next. The intended reading path is:
+
+```text
+overall state -> recent trend -> problems to handle -> source platform or
+workflow link -> destination for action
+```
+
+Requirements:
+
+- Keep `/api/monitor/dashboard` compatible and preserve the current
+  `operations_home` data contract where possible.
+- Treat CR-104 as the implementation baseline and CR-097 through CR-103 as
+  historical/archive-only design iterations, not current DOM or visual
+  constraints.
+- Use Apache ECharts for the core CR-105 dashboard charts in the current
+  no-build `/monitor` dashboard. It must be vendored locally under the
+  existing static asset path, not loaded from a CDN. The expected local vendor
+  file is `api/webui/monitor/vendor/echarts.min.js`, referenced by `/monitor`
+  through `/static/monitor/vendor/echarts.min.js`.
+- Do not continue handcrafted SVG path geometry or custom DOM chart layout
+  calculations for the core CR-105 charts. `监控走势`, `问题分布`, `平台分布`,
+  and `交付 / 复核` should be rendered by ECharts chart instances. The current
+  CR-104 `operationsTrendLinePath()`, `operationsTrendAreaPath()`, and
+  `.operations-trend-svg` fragments are the baseline to replace, not the
+  pattern to continue. SVG icons and ECharts internal SVG/canvas rendering are
+  allowed; the boundary is application-layer chart geometry for dashboard
+  charts.
+- Keep administrator and normal-user views different:
+  - administrators see workspace-wide operations, resource health, and system
+    exceptions;
+  - normal users see only their own tasks, reports, leads, and delivery status;
+  - normal users must not see account, proxy, AI, SMTP, session, or other
+    administrator resource details.
+- First implementation should reuse existing data before adding backend fields:
+  tasks total/enabled/paused/attention, today's runs/running/failed/skipped
+  and platform distribution, report total/generated/pending review, email sent
+  / failed / unsent, suspected negative and high-risk leads, pending manual
+  review, and administrator-only account/proxy/AI/session/SMTP health.
+- 7/14-day trend buckets may be derived by the frontend from existing `/runs`
+  and `/reports` data when the dashboard payload lacks buckets. A 30-day
+  window is an accepted interaction target and should also use bounded
+  frontend read-only aggregation when existing paginated data can support it
+  without excessive requests. If that cannot be done cleanly in the first
+  CR-105 implementation, keep the first shipped controls to 7/14 days and
+  defer backend-provided 30-day buckets to a later accepted CR instead of
+  adding new backend fields opportunistically.
+- Future enhancement data is explicitly deferred: task funnel, platform risk
+  matrix, keyword heat, AI quality metrics, and task ranking by high risk,
+  failures, or mail failures. These must not be invented as persisted metrics
+  to fill the first CR-105 screen, and the frontend must not render placeholder
+  "future" panels for those deferred enhancements.
+- Use the restrained ToB operations color ledger:
+  - background `#F6F8FA`;
+  - cards `#FFFFFF`;
+  - teal `#0F766E` for normal/completed/business-total signals;
+  - blue `#2563EB` for running/realtime/platform-comparison signals;
+  - amber `#D97706` for pending review or pending action;
+  - red `#DC2626` for failure/exception;
+  - dark red `#991B1B` for high-risk public-opinion leads;
+  - neutral gray `#64748B` and `#CBD5E1` for context, borders, and muted text.
+  Platform category colors may appear only inside the platform distribution
+  module and must not override the page-wide semantic color meaning.
+- Use six stable first-screen modules:
+  - KPI strip: five equal metric cards for tasks, runs, reports, mail, and
+    leads, with small bar/spark treatment.
+  - Monitoring trend: dual-line or line-plus-area chart for business volume
+    and exception/pending volume across 7/14 days, with 30 days only when
+    bounded frontend aggregation from existing data remains clean.
+  - Issue distribution: horizontal bars for run failure, mail failure,
+    pending review, high risk, and resource exceptions.
+  - Platform distribution: horizontal bars with optional donut only when useful
+    for Douyin, Xiaohongshu, Kuaishou, Weibo, Bilibili, and other platform
+    buckets. Do not default to heatmap blocks unless platform count and data
+    density justify them.
+  - Delivery / review: stacked bars for report, mail, and review status across
+    completed, pending, and exceptional states.
+  - Resource health: compact segmented bars for accounts, proxies, AI, and
+    SMTP/session health; administrator-only and hidden without an empty hole
+    for normal users.
+- Desktop layout at `>=1280px` should use:
+  - KPI strip as five equal columns, about `64px - 76px` high;
+  - trend and issue distribution in a `65% / 35%` row, about `280px - 320px`
+    high;
+  - platform distribution, delivery/review, and resource health in three
+    equal lower columns, about `180px - 220px` high;
+  - card radius `8px`, card padding `12px - 16px`, and chart title regions
+    about `32px` high.
+- Align every dashboard module as a strict grid, not as independent floating
+  cards. Card outer edges, row gutters, title regions, headline numbers,
+  legends, direct labels, chart plot areas, and bottom-module heights should
+  line up within each row. KPI cards should align their label, value, and
+  micro-chart positions across all five cards. When `资源健康` is hidden for
+  normal users, the remaining lower modules must reflow on the same grid
+  without a blank slot or uneven gutter. The dashboard should align with the
+  existing console shell width, not introduce marketing-page whitespace.
+- Tablet `768px - 1279px` should allow KPI `5` columns or `3+2`, make the
+  main trend full width, and use one- or two-column lower sections. Mobile
+  `<768px` should use two-column KPI cards, trend first at about
+  `220px - 260px`, then issue distribution, platform distribution,
+  delivery/review, and administrator-only resource health.
+- When normal-user views hide `资源健康`, the remaining lower modules should
+  reflow to fill available width, normally as two equal columns on desktop and
+  a single column on narrower screens. Do not leave a blank third slot.
+- Use chart types intentionally:
+  - KPI cards with small bar/sparkline treatment for task, run, report, mail,
+    and lead signals.
+  - Dual-line or line-plus-area trend chart for 7/14-day business volume and
+    exception/pending volume, with optional 30-day mode only when existing data
+    can support bounded frontend aggregation.
+  - Horizontal bar chart for issue distribution.
+  - Horizontal bar or donut-plus-bar chart for platform distribution.
+  - Stacked bar chart for report delivery, mail delivery, and review state.
+  - Compact segmented bars for administrator resource health.
+  - Future optional heatmap or matrix only when task/platform/risk data
+    density makes it meaningful.
+- Keep essential values, legends, and direct labels visible without hover.
+  Tooltips may add detail but cannot be the only way to read the chart.
+- Mobile has no hover dependency: chart points and bars must support tap/click
+  detail, legends should be visible, and horizontal bars should link to the
+  relevant filtered Task Center, run-record, Run Detail, or resource page.
+- Basic interactions should include time-window switching for 7/14 days, 30-day
+  switching when supported by bounded existing-data aggregation, KPI
+  click-throughs, issue-bar click-throughs, platform-bar click-throughs,
+  high-risk/pending-review drilldowns, and tooltips that explain value/date/
+  status without hiding the core value.
+- Loading, empty, stale, and error states must keep container dimensions
+  stable. Empty charts should render zero-value chart surfaces instead of long
+  prose; stale views show last-updated time; one chart failure must not blank
+  the rest of the dashboard.
+- Keep ordinary users scoped to their own tasks/runs/reports/leads and hide
+  administrator resource details without leaving a blank panel.
+- Preserve existing drilldowns to Monitoring, Task Center grouped view, Task
+  Center run records, Run Detail, resource pages, and System Diagnostics.
+- Preserve Task Center, Run Detail, drawer, modal, enhanced select/date,
+  routing, owner-scope, report-scope, and top-bar refresh behavior.
+- Keep desktop and tablet dashboard content inside the shell/navigation height
+  where practical, and keep mobile chart-first without horizontal overflow.
+
+Scope boundary:
+
+- In scope: Operations Home requirements, visualization plan, dependency
+  decision, current `/monitor` dashboard DOM/CSS/JS implementation when the
+  implementation batch starts, and dashboard-specific tests.
+- Out of scope: backend schema changes, new persistent dashboard fields,
+  `/monitor-next`, replacing the console shell, changing Task Center or Run
+  Detail behavior, changing permissions, crawler behavior, AI provider logic,
+  report generation, or email delivery behavior.
+
+Non-goals:
+
+- Do not preserve earlier `流程总览`, `operations-stage-*`, heatmap-block, or
+  no-chart-library constraints merely because they appeared in CR-097 through
+  CR-103.
+- Do not continue using a process-node diagram as the main dashboard chart.
+  The earlier flow/stage diagram repeatedly read as stitched mini-cards and is
+  superseded by the CR-105 chart-dashboard structure.
+- Do not add decorative charts that do not answer an operational question.
+- Do not introduce React, Vue, a build pipeline, or a component framework for
+  this current `/monitor` change.
+- Do not invent new persisted metrics to fill visual space.
+
+Related tasks:
+
+- CR-105 Operations Home ECharts Dashboard Rebaseline in `TASKS.md`
+- CR-105 tests in `TEST_PLAN.md`
+- CR-105 row in `TRACEABILITY.md`
+- ECharts dependency decision in `DECISIONS.md`
+
+Acceptance:
+
+- Documents clearly classify CR-097 through CR-103 as historical/archive-only
+  for future dashboard implementation, and CR-104 as the current code
+  baseline before CR-105 implementation.
+- No current planning or test text requires preserving `流程总览` or
+  `operations-stage-*` DOM for a future chart-library dashboard.
+- The accepted future dashboard plan names the chart families, color roles,
+  container hierarchy, responsive behavior, legends, interactions, component
+  library, role boundaries, and non-goals.
+- Implementation uses local ECharts for the core dashboard charts while
+  preserving the dashboard API, role gating, drilldowns, and shell behavior.
+  CR-105 acceptance should fail if the new core charts continue the CR-104
+  handwritten `.operations-trend-svg` / path-calculation pattern instead of
+  replacing it with chart-library rendering.
+- The resulting first screen reads as a chart-type dashboard rather than a
+  state-card collage; within about 10 seconds a user can answer whether today
+  is normal, where the exception/risk is, and where to click next.
+- All six modules align as one dashboard system: equal gutters, consistent
+  title/header heights, aligned chart plot origins, aligned KPI internals, and
+  equal-height lower cards on desktop. Browser review should fail visible card
+  drift, staggered title baselines, mismatched plot starts, or lower modules
+  that look uneven after the normal-user resource block is hidden.
+- Desktop first viewport stays within the console shell height, while mobile
+  has no horizontal scroll, no one-character Chinese text columns, and no
+  chart labels squeezed into unreadable stacks.
+- Normal users never see administrator resource details and do not see an
+  empty placeholder where the resource-health module was hidden.
+- Red is used only for exception/high-risk meaning, and platform category
+  colors stay inside the platform distribution module.
+- Key numbers, legends, and labels remain visible without hover.
+- Documentation consistency passes after the rebaseline.
+
+Tests:
+
+- CR-105 operations home tests in `TEST_PLAN.md`.
+- `uv run python scripts/check_docs.py`.
+- During implementation: targeted operations-home static tests, JavaScript
+  parse checks, browser checks at `1440x900`, `1024x768`, and `390x844`, and
+  role checks for administrator and normal-user views.
+
+## CR-106A - Operations Home Data-Aware Signal Refinement
+
+Date: 2026-06-22
+
+Source: user request to turn the post-CR-105A design/data review into a
+documented optimization plan before any code changes, with plan cross
+validation.
+
+Module: monitor web frontend dashboard surface, Operations Home data mapping,
+dashboard-specific UX rules, and dashboard plan verification
+
+Type: Existing Feature Optimization
+
+Status: Accepted
+
+Background:
+
+CR-105A completed the ECharts dashboard rebaseline. A follow-up read-only
+review against the current local dashboard data showed that the first screen
+can be made more decisive without reopening CR-105A or adding new persisted
+fields. The useful current signals include task/run/report counts, report-level
+mail state, AI high-risk and pending-review counts, platform results in run
+summaries, and administrator resource status.
+
+Purpose:
+
+Refine the Operations Home reading path so the first screen more directly
+answers: whether today's monitoring is normal, where exception/high-risk or
+pending work exists, and which existing destination the user should open next.
+
+Requirements:
+
+- Preserve CR-105A as the verified ECharts dashboard baseline. Do not reopen
+  CR-105A, reintroduce CR-104 handcrafted chart geometry, or restore
+  historical CR-097 through CR-103 flow-chart constraints.
+- Keep the existing no-build `/monitor` frontend and locally vendored ECharts.
+  Do not introduce React, Vue, a component framework, or remote chart assets.
+- Do not add backend schema fields or new persisted dashboard metrics for
+  CR-106A.
+- Preserve `/api/monitor/dashboard` compatibility, role gating, drilldowns,
+  Task Center, Run Detail, drawer, modal, enhanced select/date behavior,
+  routing, owner-scope, report-scope, and top-bar refresh behavior.
+- Add or document a read-only local data baseline for planning evidence. The
+  observed local data sample is evidence of available signal types, not an
+  acceptance constant; runtime counts can change.
+- Refine the top Operations Home status so today's health is readable in one
+  concise summary before the user decodes every chart.
+- Make `问题分布` prioritize action severity over raw count when needed:
+  high-risk leads, pending review, mail failure, then run failure/skip.
+- Make `平台分布` distinguish platform volume from platform failure signals
+  using existing run summary fields such as `platform_results` and
+  `failed_platforms` when available.
+- Clarify the `邮件` module's CR-106A data source as report-level delivery
+  state from `reports.email_status`. Do not silently treat it as the complete
+  delivery-attempt history.
+- Make administrator `资源健康` more action-oriented while preserving the
+  normal-user boundary. Administrators may see account, proxy, AI, mail, and
+  session health cues; normal users must not see account/proxy/AI/SMTP/session
+  details or an empty resource placeholder.
+- Improve mobile first-screen density so KPI cards do not dominate before
+  `监控走势` and `问题分布`.
+- Keep red reserved for failure/exception/high-risk meaning; platform category
+  colors remain confined to platform distribution.
+
+Scope boundary:
+
+- In scope: Operations Home view-model mapping from already available
+  dashboard/runs/reports data, chart option semantics, copy/labels, role-safe
+  resource-health presentation, mobile first-screen density, and related tests
+  and docs.
+- Out of scope: backend schema changes, new persisted fields, new task funnel
+  or ranking metrics, 30-day backend trend buckets, Task Center/Run Detail
+  behavior, permissions, crawler behavior, AI provider behavior, report
+  generation, and email-delivery execution behavior.
+
+Non-goals:
+
+- Do not use local sample counts as hard product expectations.
+- Do not fetch or display sensitive values such as recipients, SMTP secrets,
+  proxy URLs, cookies, profile paths, account names, or raw error details on
+  Operations Home.
+- Do not make `email_delivery_logs` the source of the Operations Home mail
+  health in CR-106A. That candidate is tracked separately by CR-106B.
+
+Related tasks:
+
+- CR-106A Operations Home Data-Aware Signal Refinement in `TASKS.md`.
+- CR-106A tests in `TEST_PLAN.md`.
+- CR-106A row in `TRACEABILITY.md`.
+- CR-106A frontend/data-source notes in `FRONTEND_ARCHITECTURE.md` and
+  `UI_UX_GUIDELINES.md`.
+
+Acceptance:
+
+- Documents keep CR-105A verified and identify CR-106A as a follow-up
+  optimization rather than a rewrite or reopened baseline.
+- CR-106A implementation can proceed without guessing whether
+  `email_delivery_logs` belongs in the dashboard payload.
+- The plan states exactly which existing data sources are in scope and which
+  mail-delivery aggregation choice is pending.
+- Dashboard data-source tests verify `问题分布`, `平台分布`, and `邮件` use only
+  dashboard/runs/reports data; `email_delivery_logs` queries belong to
+  CR-106B.
+- The `邮件` module displays report-level state from `reports.email_status`;
+  any use of `email_delivery_logs` aggregation is a CR-106B scope violation.
+- Browser checks for normal-user sessions confirm `资源健康` is not rendered,
+  lower modules reflow without empty placeholders, and no administrator
+  resource terms appear in Operations Home copy.
+- Implementation tests use bounded fixtures or safe aggregates. They must not
+  hard-code local sample counts as product acceptance constants.
+- The plan protects normal-user role boundaries and existing Task Center/Run
+  Detail/overlay behavior.
+- Plan validation and documentation consistency checks pass before code work
+  begins.
+
+Tests:
+
+- CR-106A Operations Home tests in `TEST_PLAN.md`.
+- `uv run python scripts/check_docs.py`.
+- During implementation: targeted operations-home static tests, JavaScript
+  parse checks, inline monitor script parse, browser checks at `1440x900`,
+  `1024x768`, and `390x844`, and administrator/normal-user role checks.
+
+## CR-106B - Email Delivery Log Dashboard Aggregation
+
+Date: 2026-06-22
+
+Source: follow-up from CR-106A planning after read-only local data review found
+that report-level `reports.email_status` and detailed `email_delivery_logs`
+can tell different stories.
+
+Module: Operations Home mail-health aggregation and dashboard data contract
+
+Type: Existing Feature Optimization
+
+Status: Needs Confirmation
+
+Background:
+
+The schema already contains `email_delivery_logs`, and Run Detail/report
+delivery history can use those records. However, CR-105A and CR-106A keep the
+Operations Home mail module on the existing report-level dashboard contract.
+Aggregating `email_delivery_logs` into `/api/monitor/dashboard` would not
+require a new schema field, but it would be a backend aggregation and product
+semantics change.
+
+Purpose:
+
+If accepted later, make Operations Home mail health reflect true delivery
+attempt history while preserving the current report-level status as a
+compatible signal.
+
+Candidate requirements pending confirmation:
+
+- Aggregate existing `email_delivery_logs` into Operations Home mail-health
+  counts with the same workspace/owner scope rules as reports.
+- Preserve report-level `reports.email_status` compatibility and label the two
+  sources clearly enough for operators to diagnose discrepancies.
+- Do not expose recipients, SMTP secrets, proxy URLs, cookies, profile paths,
+  account details, or raw sensitive error text in Operations Home.
+- Keep normal-user scope filtering consistent with existing report ownership.
+- Add tests proving the aggregation uses safe counts/statuses only and does not
+  leak delivery-history sensitive fields.
+
+Scope boundary:
+
+- Not part of CR-106A implementation.
+- Requires explicit acceptance before code or dashboard-data contract changes.
+
+Acceptance:
+
+- This CR remains `Needs Confirmation` until the user accepts the dashboard
+  mail-health source change.
+- Current-state documentation must not describe CR-106B as ready to start or
+  unblocked while it still needs confirmation.
+
 ## CR-086 - Explanatory Helper Copy Tooltip Consolidation
 
 Date: 2026-06-20
@@ -6951,7 +8180,7 @@ cells, Task Center, and representative overlays
 
 Type: Existing Feature Optimization
 
-Status: Implemented
+Status: Verified
 
 Background:
 
