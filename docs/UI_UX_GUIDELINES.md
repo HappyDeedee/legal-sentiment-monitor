@@ -601,6 +601,14 @@ Administrator language:
 - QR login timed out.
 - Verification is required.
 
+For platform-account login sessions, show the current action and next operator
+step before technical detail. Repeated backend polling records, page URLs,
+page titles, raw browser/profile errors, and platform navigation noise belong
+in collapsed administrator diagnostics, not the default customer-facing modal
+view. If explicit SMS verification is available, present send, input, submit,
+inline validation, and continue-confirm as one compact operation panel. Never
+present captcha, SMS, slider, or platform risk checks as bypassed or automated.
+
 ## Customer-Facing Forbidden Text
 
 Do not show these in customer-facing UI:

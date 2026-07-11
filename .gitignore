@@ -176,6 +176,10 @@ cython_debug/
 /reports/
 /logs/
 /artifacts/
+/.codex_tmp/
+deploy/docker/monitor.env
+deploy/docker/data/
+deploy/docker/browser_data/
 monitor.yaml
 !monitor.example.yaml
 *.sqlite

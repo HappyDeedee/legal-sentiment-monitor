@@ -154,6 +154,8 @@ Use the standard permission test data:
   `waiting_scan`, `waiting_confirm`, `success`, `needs_verification`,
   `qrcode_failed`, `timeout`, and `platform_error`.
 - Scanning succeeds without using the operator's local Chrome.
+- Scan-time login confirmation does not cancel the same-account cookie/session
+  fallback when the platform login-state method itself times out.
 - Verification states are returned when the platform requires captcha, slider,
   SMS, or manual confirmation.
 - QR session failure, timeout, or disappeared browser-session states are
@@ -1419,6 +1421,130 @@ Run the relevant parts of this checklist after each Phase 11 batch:
   not start a real browser or open a real port.
 - Documentation tests should confirm the quick-start instructions mention the
   one-click Windows launcher and the remote-access override behavior.
+
+## CR-108 Local/Server Login Initialization And Verification Flow Hardening Tests
+
+Documentation gate:
+
+- `CHANGE_REQUESTS.md`, `TASKS.md`, `CURRENT_STATE.md`, `TEST_PLAN.md`, and
+  `TRACEABILITY.md` record CR-108 with the current mainline number.
+- Old worktree CR-107/CR-108 server-login documents are not copied with their
+  old numbering; their useful evidence is remapped into current CR-108.
+- `uv run python scripts/check_docs.py` and `git diff --check` pass before
+  non-document code changes begin.
+
+Docker/server packaging:
+
+- `docker compose config` succeeds after selectively migrating Docker files.
+- Docker defaults use server-like login behavior:
+  `MONITOR_LOGIN_QR_HEADLESS=true` and
+  `MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=false`.
+- Docker documentation states that Compose configuration validity does not
+  prove host Docker Desktop, WSL, or `vmcompute` health.
+
+Profile contention:
+
+- Starting a QR login for an account whose runtime profile is already occupied
+  by a local login window returns a clear customer-safe conflict state/message
+  instead of raw `TargetClosedError` or raw profile path text.
+- Opening a local login window for an account with an active QR session closes
+  or supersedes that session and tells the operator which login path is active.
+- Same-account profile contention tests cover both `profile_key` and resolved
+  runtime path matching.
+- Server/production mode keeps local-window login unavailable when
+  `MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=false`.
+
+QR initialization hang regression:
+
+- A QR startup that reaches Playwright/browser context creation and then hangs
+  before QR discovery must return `qrcode_failed` with a customer-safe timeout
+  message within the configured QR timeout instead of blocking the API request
+  indefinitely.
+- The timeout path must close any half-initialized Playwright/browser context
+  and must not leave the session in the in-process active QR session registry.
+- Polling a fresh database `preparing` session before an in-process QR handle
+  exists must keep the session pending during the QR startup timeout window.
+- Polling a stale `preparing` session without an in-process QR handle after
+  the timeout window may convert it to `qrcode_failed` with a customer-safe
+  retry/manual-window message.
+- After the QR image has been generated, each poll step must be bounded:
+  MediaCrawler login-state checks, QR rediscovery, page preparation, and manual
+  verification detection must not block the `/login-sessions/{id}` response.
+- If a scan-time poll substep times out, the session should stay active and
+  return `waiting_confirm` with a customer-safe "continue confirmation" message
+  instead of closing the browser or marking the login failed.
+
+Local Windows first-run login:
+
+- A newly cloned Windows local setup can reach a documented first-run path:
+  create/select platform account, start QR or allowed manual login, complete
+  platform verification manually when required, close the browser window, and
+  run account check/continue confirmation.
+- The UI and API keep captcha, slider, SMS, and device checks as
+  `needs_verification` or manual-action states; tests must not assume bypass.
+- Customer-facing responses do not expose `profile_path`, cookies,
+  verification codes, QR payloads, local commands, proxy credentials, or raw
+  browser profile directories.
+
+Selective SMS/diagnostic migration:
+
+- If Douyin SMS submission precision is migrated, a
+  `#uc-second-verify` overlay containing send/resend controls and an exact
+  `验证` submit control must click only the exact visible `验证` control while
+  submitting a received code.
+- If login diagnostics UI is migrated, default modal text shows current state
+  and next action first; technical page URLs, titles, backend polling records,
+  and platform navigation noise stay collapsed.
+
+Required code-stage checks:
+
+- `uv run python -m pytest tests/test_monitoring_mvp.py -k "windows_oneclick_launcher or login_session or qrcode or login_browser or verification_code or manual_sms"`
+- `node --check api/webui/monitor/monitor.js`
+- existing inline monitor script parse check
+- `uv run python scripts/check_docs.py`
+- `git diff --check`
+
+## CR-109 Monitoring Task Collection Rule Explanation Removal Tests
+
+- The Monitoring / 舆情监控 task section must not render the "采集规则说明"
+  disclosure block below the task table.
+- Static frontend coverage should assert the removed text is absent from the
+  task section while preserving filters, task table, drawer, and workflow
+  markers.
+- Task-page CSS should not keep rules that only target the removed
+  `#jobs details.advanced` disclosure.
+- Required checks:
+  - `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_21d_monitoring_tasks_and_task_drawer_visual_pass_preserves_workflow"`
+  - `node --check api/webui/monitor/monitor.js`
+  - `uv run python scripts/check_docs.py`
+  - `git diff --check`
+
+## CR-110 QR Login SMS Verification Manual Submission Regression Tests
+
+- Backend login-session routes must expose manual SMS verification submission
+  and SMS send-request actions for active QR browser sessions.
+- The backend must reject malformed SMS codes without exposing sensitive
+  state, and must keep the session in `needs_verification` for inline retry.
+- Server-side QR browser helpers must fill a manually received code into the
+  visible verification input and submit it.
+- Douyin `#uc-second-verify` overlays must prefer exact visible `验证` submit
+  controls before broader confirmation selectors, so send/resend controls are
+  not clicked as submit.
+- SMS send-request helpers must click visible send-code controls without
+  receiving, reading, or automating the SMS.
+- The frontend login session panel must show send, input, inline validation,
+  submit, and continue-confirm actions when `verification_type` is `sms`.
+- The frontend must preserve a typed code while the login session panel
+  re-renders, and polling must stop on `needs_verification` so input is not
+  repeatedly overwritten.
+- Required checks:
+  - `uv run python -m pytest tests/test_monitoring_mvp.py::test_login_session_verification_code_route_submits_sms_code tests/test_monitoring_mvp.py::test_login_session_verification_code_request_route_sends_sms_code tests/test_monitoring_mvp.py::test_qrcode_manual_sms_verification_submission_fills_server_page tests/test_monitoring_mvp.py::test_frontend_sms_verification_has_manual_code_submission tests/test_monitoring_mvp.py::test_frontend_sms_verification_has_send_request tests/test_monitoring_mvp.py::test_frontend_sms_verification_preserves_input_during_polling tests/test_monitoring_mvp.py::test_frontend_sms_verification_panel_is_structured_and_inline_validated`
+  - `uv run python -m pytest tests/test_monitoring_mvp.py -k "login_session or qrcode or login_browser or verification_code or manual_sms"`
+  - `uv run python -m py_compile api/monitoring/login_qrcode.py api/routers/monitor.py`
+  - `node --check api/webui/monitor/monitor.js`
+  - inline monitor script parse check
+  - `uv run python scripts/check_docs.py`
+  - `git diff --check`
 
 ## Phase 14 Run Center Data Model Tests
 

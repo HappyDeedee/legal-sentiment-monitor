@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import base64
 import os
 import re
@@ -90,12 +91,26 @@ async def start_qrcode_login_session_with_profile(
 ) -> dict[str, Any]:
     """Start a QR login session using an explicit browser/profile command."""
 
+    timeout = int(timeout_ms or _login_qr_timeout_ms())
+    timeout_seconds = max(0.001, timeout / 1000)
     await close_qrcode_login_session(session_id)
     await close_qrcode_login_sessions_for_profile(command.get("profile_path") or "", except_session_id=session_id)
     if platform not in QR_SELECTORS:
         raise ValueError("unsupported platform")
+    try:
+        async with asyncio.timeout(timeout_seconds):
+            return await _start_qrcode_login_session_with_profile_once(session_id, platform, command, timeout)
+    except TimeoutError:
+        return _failure(platform, command, "登录二维码生成超时，请稍后重试或打开登录窗口。")
+
+
+async def _start_qrcode_login_session_with_profile_once(
+    session_id: int,
+    platform: str,
+    command: dict[str, Any],
+    timeout: int,
+) -> dict[str, Any]:
     capability = MEDIACRAWLER_LOGIN_FLOWS[platform]
-    timeout = int(timeout_ms or _login_qr_timeout_ms())
     headless = _login_qr_headless()
     playwright: Playwright | None = None
     context: BrowserContext | None = None
@@ -181,6 +196,9 @@ async def start_qrcode_login_session_with_profile(
             "profile_path": command["profile_path"],
             "message": "请使用手机扫码登录。扫码成功后系统会自动保存登录状态。",
         }
+    except asyncio.CancelledError:
+        await _close_context(playwright, context)
+        raise
     except Exception as exc:
         await _close_context(playwright, context)
         return _failure(platform, command, _brief_exception_message(exc))
@@ -205,6 +223,7 @@ async def poll_qrcode_login_session(session_id: int) -> dict[str, Any]:
             "message": "二维码已过期，请重新生成。",
         }
     try:
+        poll_timeout = _login_qr_poll_timeout_seconds()
         success = await _is_logged_in(handle.platform, handle.context, handle.page, handle.login_baseline)
         if success:
             await close_qrcode_login_session(session_id)
@@ -215,24 +234,10 @@ async def poll_qrcode_login_session(session_id: int) -> dict[str, Any]:
                 "message": "登录成功，Profile 已保存。",
             }
         login_adapter = _build_mediacrawler_login_adapter(handle.platform, handle.context, handle.page)
-        qr_image = await _find_login_qrcode(handle.page, handle.platform, 5000, login_adapter)
-        if qr_image:
-            return {
-                "active": True,
-                "success": False,
-                "status": LOGIN_STATE_WAITING_SCAN,
-                "qr_image": _as_data_url(qr_image),
-                "message": "二维码已生成，请扫码登录。",
-            }
-        try:
-            await _prepare_login_page(handle.platform, handle.page, 5000, login_adapter)
-        except Exception:
-            pass
-        qr_image = await _find_login_qrcode(
-            handle.page,
-            handle.platform,
-            3000,
-            _build_mediacrawler_login_adapter(handle.platform, handle.context, handle.page),
+        qr_image = await _bounded_poll_step(
+            _find_login_qrcode(handle.page, handle.platform, 5000, login_adapter),
+            poll_timeout,
+            "",
         )
         if qr_image:
             return {
@@ -242,14 +247,44 @@ async def poll_qrcode_login_session(session_id: int) -> dict[str, Any]:
                 "qr_image": _as_data_url(qr_image),
                 "message": "二维码已生成，请扫码登录。",
             }
-        verification = await _detect_manual_verification(handle.platform, handle.page)
+        try:
+            await _bounded_poll_step(
+                _prepare_login_page(handle.platform, handle.page, 5000, login_adapter),
+                poll_timeout,
+                None,
+            )
+        except Exception:
+            pass
+        qr_image = await _bounded_poll_step(
+            _find_login_qrcode(
+                handle.page,
+                handle.platform,
+                3000,
+                _build_mediacrawler_login_adapter(handle.platform, handle.context, handle.page),
+            ),
+            poll_timeout,
+            "",
+        )
+        if qr_image:
+            return {
+                "active": True,
+                "success": False,
+                "status": LOGIN_STATE_WAITING_SCAN,
+                "qr_image": _as_data_url(qr_image),
+                "message": "二维码已生成，请扫码登录。",
+            }
+        verification = await _bounded_poll_step(
+            _detect_manual_verification(handle.platform, handle.page),
+            poll_timeout,
+            {"needs_verification": False},
+        )
         if verification.get("needs_verification"):
             return await _manual_verification_poll_response(handle, verification)
         return {
             "active": True,
             "success": False,
             "status": LOGIN_STATE_WAITING_CONFIRM,
-            "message": "等待扫码确认。",
+            "message": "正在等待平台确认；如果手机端已确认，请稍后继续确认登录状态。",
         }
     except Exception as exc:
         return {
@@ -279,6 +314,222 @@ async def close_qrcode_login_sessions_for_profile(profile_path: str, except_sess
     ]
     for session_id in session_ids:
         await close_qrcode_login_session(session_id)
+
+
+async def submit_qrcode_login_verification_code(session_id: int, code: str) -> dict[str, Any]:
+    handle = ACTIVE_LOGIN_SESSIONS.get(int(session_id))
+    if not handle:
+        return {
+            "active": False,
+            "success": False,
+            "status": LOGIN_STATE_QRCODE_FAILED,
+            "message": "二维码浏览器会话不在运行，请重新生成二维码。",
+        }
+    verification_code = str(code or "").strip()
+    if not re.fullmatch(r"\d{4,8}", verification_code):
+        return await _manual_verification_poll_response(
+            handle,
+            {
+                "verification_type": "sms",
+                "verification_label": "短信验证码",
+                "verification_detail": "请输入 4-8 位短信验证码。",
+            },
+        )
+    submitted = await _submit_manual_verification_code(handle.page, verification_code)
+    if not submitted:
+        return await _manual_verification_poll_response(
+            handle,
+            {
+                "verification_type": "sms",
+                "verification_label": "短信验证码",
+                "verification_detail": "服务器浏览器没有找到可填写的验证码输入框，请重新生成二维码。",
+            },
+        )
+    try:
+        await handle.page.wait_for_timeout(800)
+    except Exception:
+        pass
+    if await _is_logged_in(handle.platform, handle.context, handle.page, handle.login_baseline):
+        await close_qrcode_login_session(session_id)
+        return {
+            "active": False,
+            "success": True,
+            "status": LOGIN_STATE_SUCCESS,
+            "message": "登录成功，Profile 已保存。",
+        }
+    return {
+        "active": True,
+        "success": False,
+        "status": LOGIN_STATE_WAITING_CONFIRM,
+        "verification_type": "sms",
+        "verification_label": "短信验证码",
+        "message": "短信验证码已提交，请等待平台确认登录结果。",
+    }
+
+
+async def request_qrcode_login_verification_code(session_id: int) -> dict[str, Any]:
+    handle = ACTIVE_LOGIN_SESSIONS.get(int(session_id))
+    if not handle:
+        return {
+            "active": False,
+            "success": False,
+            "status": LOGIN_STATE_QRCODE_FAILED,
+            "message": "二维码浏览器会话不在运行，请重新生成二维码。",
+        }
+    requested = await _request_manual_verification_code(handle.page)
+    if not requested:
+        return await _manual_verification_poll_response(
+            handle,
+            {
+                "verification_type": "sms",
+                "verification_label": "短信验证码",
+                "verification_detail": "服务器浏览器没有找到可点击的发送验证码按钮，请重新生成二维码或按页面提示处理。",
+            },
+        )
+    try:
+        await handle.page.wait_for_timeout(800)
+    except Exception:
+        pass
+    return {
+        "active": True,
+        "success": False,
+        "status": LOGIN_STATE_NEEDS_VERIFICATION,
+        "needs_verification": True,
+        "verification_type": "sms",
+        "verification_label": "短信验证码",
+        "verification_detail": "短信验证码发送请求已提交",
+        "verification_image": "",
+        "message": "短信验证码发送请求已提交，请查收后输入验证码。",
+    }
+
+
+async def _submit_manual_verification_code(page: Page, code: str) -> bool:
+    if await _submit_second_verify_code(page, code):
+        return True
+    input_selectors = (
+        "input[placeholder*='验证码']",
+        "input[name*='code']",
+        "input[inputmode='numeric']",
+        "input[type='tel']",
+        "input[type='text']",
+    )
+    filled = False
+    for selector in input_selectors:
+        try:
+            locator = page.locator(selector)
+            count = min(await locator.count(), 5)
+        except Exception:
+            continue
+        for index in range(count):
+            item = locator.nth(index)
+            try:
+                if hasattr(item, "is_visible") and not await item.is_visible(timeout=300):
+                    continue
+                await item.fill(code)
+                filled = True
+                break
+            except Exception:
+                continue
+        if filled:
+            break
+    if not filled:
+        return False
+    submit_selectors = (
+        "xpath=//button[normalize-space(.)='验证' or contains(., '登录') or contains(., '确认') or contains(., '提交') or contains(., '下一步')]",
+    )
+    for selector in submit_selectors:
+        try:
+            locator = page.locator(selector)
+            count = min(await locator.count(), 3)
+        except Exception:
+            continue
+        for index in range(count):
+            item = locator.nth(index)
+            try:
+                if hasattr(item, "is_visible") and not await item.is_visible(timeout=300):
+                    continue
+                await item.click(timeout=1000)
+                return True
+            except Exception:
+                continue
+    return True
+
+
+async def _submit_second_verify_code(page: Page, code: str) -> bool:
+    overlay_input_selectors = (
+        "#uc-second-verify input[placeholder*='验证码']",
+        "#uc-second-verify input[name*='code']",
+        "#uc-second-verify input[inputmode='numeric']",
+        "#uc-second-verify input[type='tel']",
+        "#uc-second-verify input[type='text']",
+    )
+    filled = False
+    for selector in overlay_input_selectors:
+        try:
+            locator = page.locator(selector)
+            count = min(await locator.count(), 5)
+        except Exception:
+            continue
+        for index in range(count):
+            item = locator.nth(index)
+            try:
+                if hasattr(item, "is_visible") and not await item.is_visible(timeout=300):
+                    continue
+                await item.fill(code)
+                filled = True
+                break
+            except Exception:
+                continue
+        if filled:
+            break
+    if not filled:
+        return False
+    overlay_submit_selectors = (
+        "xpath=//*[@id='uc-second-verify']//button[normalize-space(.)='验证']",
+        "xpath=//*[@id='uc-second-verify']//*[@role='button' and normalize-space(.)='验证']",
+        "xpath=//*[@id='uc-second-verify']//*[self::div or self::span or self::a][normalize-space(.)='验证']",
+        "xpath=//*[@id='uc-second-verify']//button[normalize-space(.)='确认' or normalize-space(.)='提交' or normalize-space(.)='登录' or normalize-space(.)='下一步']",
+        "xpath=//*[@id='uc-second-verify']//*[@role='button' and (normalize-space(.)='确认' or normalize-space(.)='提交' or normalize-space(.)='登录' or normalize-space(.)='下一步')]",
+    )
+    for selector in overlay_submit_selectors:
+        try:
+            locator = page.locator(selector)
+            count = min(await locator.count(), 5)
+        except Exception:
+            continue
+        for index in range(count):
+            item = locator.nth(index)
+            try:
+                if hasattr(item, "is_visible") and not await item.is_visible(timeout=300):
+                    continue
+                await item.click(timeout=1000)
+                return True
+            except Exception:
+                continue
+    return False
+
+
+async def _request_manual_verification_code(page: Page) -> bool:
+    send_selectors = (
+        "xpath=//button[contains(., '接收短信验证码') or contains(., '发送短信验证') or contains(., '发送验证码') or contains(., '重新获取验证码')]",
+        "xpath=//*[self::button or self::span or self::div][contains(., '接收短信验证码') or contains(., '发送短信验证') or contains(., '发送验证码') or contains(., '重新获取验证码')]",
+    )
+    for selector in send_selectors:
+        try:
+            locator = page.locator(selector)
+            count = min(await locator.count(), 5)
+        except Exception:
+            continue
+        for index in range(count):
+            item = locator.nth(index)
+            try:
+                if hasattr(item, "is_visible") and not await item.is_visible(timeout=300):
+                    continue
+                await item.click(timeout=1000)
+                return True
+            except Exception:
+                continue
+    return False
 
 
 async def _manual_verification_response(
@@ -667,6 +918,13 @@ async def _cookie_dict(context: BrowserContext) -> dict[str, Any]:
     return {item.get("name"): item.get("value") for item in cookies}
 
 
+async def _bounded_poll_step(awaitable: Any, timeout_seconds: float, fallback: Any) -> Any:
+    try:
+        return await asyncio.wait_for(awaitable, timeout=max(0.001, timeout_seconds))
+    except TimeoutError:
+        return fallback
+
+
 async def _is_logged_in(platform: str, context: BrowserContext, page: Page, login_baseline: str = "") -> bool:
     login_state = (MEDIACRAWLER_LOGIN_FLOWS.get(platform) or {}).get("login_state", {}) or {}
     anonymous_selector = str(login_state.get("anonymous_selector") or "")
@@ -677,7 +935,11 @@ async def _is_logged_in(platform: str, context: BrowserContext, page: Page, logi
         except Exception:
             pass
 
-    if await call_mediacrawler_check_login_state(platform, context, page, login_baseline):
+    if await _bounded_poll_step(
+        call_mediacrawler_check_login_state(platform, context, page, login_baseline),
+        _login_qr_poll_timeout_seconds(),
+        False,
+    ):
         return True
 
     profile_selector = str(login_state.get("profile_selector") or "")
@@ -723,6 +985,13 @@ def _login_session_ttl_seconds() -> int:
         return max(60, int(get_runtime_setting_value("login_session_ttl_seconds")))
     except Exception:
         return int(os.environ.get("MONITOR_LOGIN_QR_TTL_SECONDS") or 600)
+
+
+def _login_qr_poll_timeout_seconds() -> float:
+    try:
+        return max(0.05, int(os.environ.get("MONITOR_LOGIN_QR_POLL_TIMEOUT_MS") or "2500") / 1000)
+    except Exception:
+        return 2.5
 
 
 async def _close_context(playwright: Playwright | None, context: BrowserContext | None) -> None:

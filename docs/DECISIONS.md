@@ -105,6 +105,14 @@ short `Superseded by` note rather than deleting history.
   follow-up regression-fix CR and task block linked back to the original phase
   instead of rewriting the old phase as incomplete or mixing the defect into an
   unrelated later enhancement phase.
+- Confirmed for CR-108: documentation is the first gate before code migration.
+  The older server-login/SMS/Docker worktree is a source of historical evidence
+  and implementation material, not a branch to merge directly. Conflicting old
+  CR-107/CR-108 document entries must be remapped into current mainline CR-108.
+  Server/container mode keeps the server QR/status flow primary and local
+  login windows disabled; Windows local mode may use a service-owned visible
+  login window only as an explicit manual-verification fallback. Captcha, SMS,
+  slider, and platform risk checks are never bypassed.
 
 ## 2026-06-15
 

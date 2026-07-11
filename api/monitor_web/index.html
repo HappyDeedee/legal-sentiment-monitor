@@ -260,6 +260,14 @@
     .login-step.done { border-color:#bbf7d0; background:#f0fdf4; color:#047857; }
     .login-polling { display:flex; align-items:center; gap:8px; color:#1d4ed8; font-size:12px; }
     .login-spinner { width:14px; height:14px; border:2px solid #bfdbfe; border-top-color:#2563eb; border-radius:50%; animation:spin .8s linear infinite; flex:0 0 auto; }
+    .login-verification-panel { display:grid; gap:10px; border:1px solid #c7d2fe; border-radius:8px; background:#f8fbff; padding:12px; color:var(--text); }
+    .login-verification-head { display:flex; align-items:center; justify-content:space-between; gap:10px; flex-wrap:wrap; }
+    .login-verification-actions { display:flex; align-items:flex-start; gap:8px; flex-wrap:wrap; }
+    .login-verification-code-row { display:flex; align-items:flex-start; gap:8px; flex:1 1 320px; min-width:240px; }
+    .login-verification-input-wrap { display:grid; gap:4px; flex:1 1 180px; min-width:160px; }
+    .login-verification-input-wrap input { width:100%; }
+    .login-verification-error { min-height:16px; color:var(--danger); font-size:12px; line-height:1.35; }
+    .login-verification-followup { display:flex; gap:8px; flex-wrap:wrap; align-items:center; padding-top:2px; }
     @keyframes spin { to { transform:rotate(360deg); } }
     .verification-preview { margin-top:10px; text-align:left; }
     .verification-preview img { width:100%; max-width:360px; padding:4px; display:block; margin:8px auto 0; }
@@ -329,14 +337,6 @@
         linear-gradient(180deg,#f8fafc 0%,#eef2f7 100%);
       color:var(--text);
     }
-    .shell { grid-template-columns:276px minmax(0,1fr); }
-    .shell > aside {
-      background:
-        linear-gradient(180deg, rgba(255,255,255,.03), rgba(255,255,255,0)),
-        var(--nav);
-      box-shadow:22px 0 60px rgba(10,18,32,.12);
-      padding-bottom:24px;
-    }
     .brand strong { font-size:19px; }
     .brand span { line-height:1.45; }
     .nav-group.nav-group-collapsible {
@@ -344,7 +344,6 @@
       border-radius:12px;
       background:rgba(255,255,255,.03);
     }
-    nav button { min-height:42px; border-radius:10px; }
     nav button.sub {
       font-size:13px;
       font-weight:500;
@@ -361,12 +360,6 @@
       background:#e8fbf6;
       color:#0f766e;
       box-shadow:none;
-    }
-    header {
-      min-height:72px;
-      background:rgba(248,250,252,.86);
-      border-bottom:1px solid rgba(216,224,234,.96);
-      backdrop-filter:blur(18px);
     }
     .header-title strong { font-size:17px; }
     .header-actions { display:inline-flex; align-items:center; gap:10px; }
@@ -1481,6 +1474,13 @@
       }
       .operations-quick-dock .shortcut-card span { display:none; }
       .operations-quick-dock .shortcut-card strong { font-size:11px; line-height:1.15; text-align:center; }
+      .login-verification-actions,
+      .login-verification-code-row,
+      .login-verification-followup { display:grid; grid-template-columns:minmax(0,1fr); }
+      .login-verification-actions button,
+      .login-verification-code-row button,
+      .login-verification-followup button,
+      .login-verification-followup a { width:100%; }
       #dashboard.active > .page-head .page-title-block { display:grid; gap:3px; }
       #dashboard.active > .page-head .page-kicker { display:block; }
       .operations-home-meta { justify-content:flex-start; }
@@ -3338,6 +3338,7 @@
             <div id="operations_home_resource" class="operations-resource-panel"></div>
           </div>
           <div id="task_loop_shortcuts" class="task-loop-shortcuts operations-quick-dock" aria-label="监控任务流快捷入口">
+            <template><span class="task-loop-shortcuts"></span></template>
             <button class="shortcut-card shortcut-primary" type="button" data-shortcut-tab="jobs" data-shortcut-action="new-job" data-menu-key="monitoring"><span>01</span><strong>新建任务</strong></button>
             <button class="shortcut-card" type="button" data-shortcut-tab="runs" data-shortcut-grouped="1" data-shortcut-target="task_center_panel" data-menu-key="run_center"><span>02</span><strong>任务中心</strong></button>
             <button class="shortcut-card" type="button" data-shortcut-tab="runs" data-shortcut-grouped="0" data-shortcut-target="task_center_panel" data-menu-key="run_center"><span>03</span><strong>运行记录</strong></button>
@@ -3366,10 +3367,6 @@
           </div>
           <div id="jobs_table"></div>
         </div>
-        <details class="advanced">
-          <summary>采集规则说明</summary>
-          <div id="job_capability_table" style="margin-top:12px"></div>
-        </details>
       </section>
 
       <div id="job_drawer_backdrop" class="drawer-backdrop" onclick="closeJobDrawer()"></div>
@@ -3507,6 +3504,7 @@
             <div class="account-ledger-head">
               <div>
                 <h3>账号列表</h3>
+                <p class="small">查看账号可用性、登录方式和最近异常</p>
               </div>
               <div id="account_bulk_toolbar" class="account-bulk-toolbar">
                 <span id="account_bulk_count" class="account-bulk-count">未选择账号</span>
@@ -3597,6 +3595,7 @@
                     <div class="account-ledger-head">
                       <div>
                         <h3>最近登录结果</h3>
+                        <p class="small">这里只展示最近登录结果，登录和检测操作请在上方维护区或账号列表中完成</p>
                       </div>
                     </div>
                     <div id="current_account_login_sessions"></div>
@@ -4013,6 +4012,7 @@
           <div class="account-ledger-head">
             <div>
               <h3>运行记录</h3>
+              <p class="small">按任务汇总运行、AI 评估、报告和交付状态</p>
             </div>
             <div class="task-center-mode">
               <label class="switch-control" title="打开后按舆情监控任务分组展示；关闭后按任务 ID 和运行 ID 顺序展示。">
@@ -6759,6 +6759,7 @@
           syncAccountFromResponse(data.account_status);
           renderLoginSessionResult(data.session, data.capabilities, data.platform_status, data.account_status);
           await loadPlatformStatus();
+          if(normalizeLoginSessionStatus(data.session.status)==='needs_verification') return true;
           return isLoginSessionTerminal(data.session.status);
         };
         if(await update()){
@@ -6782,6 +6783,65 @@
         }, 3000);
       });
     }
+    async function submitLoginVerificationCode(sessionId, triggerButton=null){
+      const input=document.getElementById('login_verification_code_'+Number(sessionId));
+      const code=String(input && input.value || '').trim();
+      if(!/^\d{4,8}$/.test(code)){
+        setLoginVerificationError(sessionId, '请输入 4-8 位短信验证码');
+        if(input) input.focus();
+        return;
+      }
+      setLoginVerificationError(sessionId, '');
+      await withActionButtonLoading(triggerButton, '提交中...', async ()=>{
+        const res=await api('/login-sessions/'+encodeURIComponent(sessionId)+'/verification-code',{method:'POST',body:JSON.stringify({code})});
+        if(!res.ok){
+          const message=cleanCustomerText(await err(res));
+          setLoginVerificationError(sessionId, message);
+          toast(message);
+          return;
+        }
+        const data=await res.json();
+        syncAccountFromResponse(data.account_status);
+        renderLoginSessionResult(data.session, data.capabilities, data.platform_status, data.account_status);
+        await loadPlatformStatus();
+        await loadLoginSessions(Number(data.session.account_id||0));
+        if(isLoginSessionTerminal(data.session.status)){
+          if(normalizeLoginSessionStatus(data.session.status)==='success') toast('登录成功，当前账号登录态已保存');
+          return;
+        }
+        if(normalizeLoginSessionStatus(data.session.status)==='needs_verification'){
+          toast(cleanCustomerText(data.session.message||'短信验证码已提交，请等待平台确认登录结果。'));
+          return;
+        }
+        pollLoginSession(Number(sessionId));
+      });
+    }
+    async function requestLoginVerificationCode(sessionId, triggerButton=null){
+      await withActionButtonLoading(triggerButton, '发送中...', async ()=>{
+        const res=await api('/login-sessions/'+encodeURIComponent(sessionId)+'/verification-code/request',{method:'POST'});
+        if(!res.ok){ toast(await err(res)); return; }
+        const data=await res.json();
+        syncAccountFromResponse(data.account_status);
+        renderLoginSessionResult(data.session, data.capabilities, data.platform_status, data.account_status);
+        await loadPlatformStatus();
+        await loadLoginSessions(Number(data.session.account_id||0));
+        if(isLoginSessionTerminal(data.session.status)){
+          if(normalizeLoginSessionStatus(data.session.status)==='success') toast('登录成功，当前账号登录态已保存');
+          return;
+        }
+        toast('已请求发送短信验证码，请查收后输入');
+      });
+    }
+    function currentLoginVerificationCode(sessionId){
+      const input=document.getElementById('login_verification_code_'+Number(sessionId));
+      return String(input && input.value || '');
+    }
+    function setLoginVerificationError(sessionId, message){
+      const target=document.getElementById('login_verification_error_'+Number(sessionId));
+      if(!target) return;
+      target.textContent=message || '';
+      target.hidden=!message;
+    }
     function renderLoginSessionResult(session, capabilities={}, platformStatus={}, accountStatus=null){
       const result=document.getElementById('login_session_result');
       const badge=document.getElementById('login_status_badge');
@@ -6800,6 +6860,27 @@
       }
       const verificationLabel=capabilities.verification_label || '平台验证';
       const verificationDetail=capabilities.verification_detail ? `<div class="small">页面提示：${esc(capabilities.verification_detail)}</div>` : '';
+      const canSubmitLoginVerificationCode=capabilities.verification_type === 'sms';
+      const displayTitle=canSubmitLoginVerificationCode && status==='needs_verification' ? '平台要求完成短信验证码' : `${formatPlatforms([session.platform])} · ${loginSessionText(displayStatus)}`;
+      const existingVerificationCode=currentLoginVerificationCode(session.id);
+      const smsVerificationForm=canSubmitLoginVerificationCode ? `<div class="login-verification-panel">
+            <div class="login-verification-head">
+              <strong>平台要求完成短信验证码</strong>
+              <span class="status warn">等待验证</span>
+            </div>
+            <div class="small">请先发送验证码，收到短信后输入并提交。</div>
+            ${verificationDetail}
+            <div class="login-verification-actions">
+              <button class="secondary" type="button" data-feedback-bound="1" onclick="requestLoginVerificationCode(${Number(session.id)}, this)">1. 发送短信验证码</button>
+              <div class="login-verification-code-row">
+                <div class="login-verification-input-wrap">
+                  <input id="login_verification_code_${Number(session.id)}" inputmode="numeric" autocomplete="one-time-code" placeholder="输入短信验证码" value="${esc(existingVerificationCode)}" aria-describedby="login_verification_error_${Number(session.id)}">
+                  <div id="login_verification_error_${Number(session.id)}" class="login-verification-error" role="alert" hidden></div>
+                </div>
+                <button class="secondary" type="button" data-feedback-bound="1" onclick="submitLoginVerificationCode(${Number(session.id)}, this)">2. 提交短信验证码</button>
+              </div>
+            </div>
+          </div>` : '';
       const pending=isLoginSessionPending(displayStatus);
       const localLoginAction=localLoginButton('打开登录窗口处理', session.id, session.platform, session.account_id || null);
       let actionBlock='';
@@ -6819,15 +6900,25 @@
           <div class="small">请根据提示重新生成二维码；如平台要求人工验证，可按页面提示处理。</div>
         </div>`;
       } else if(status==='needs_verification'){
-        actionBlock=`<div class="notice warn">
-          <strong>平台要求先完成${esc(verificationLabel)}</strong>
-          <div class="small">请按照平台页面完成确认，完成后点击下方按钮继续确认。</div>
-          ${verificationDetail}
-          <div class="login-actions" style="margin-top:10px">
+        if(canSubmitLoginVerificationCode){
+          actionBlock=`<div class="login-flow-verification">
+          ${smsVerificationForm}
+          <div class="login-verification-followup">
             <button class="secondary" type="button" data-feedback-bound="1" onclick="pollLoginSession(${Number(session.id)}, this)">我已处理，继续确认</button>
             ${localLoginAction}
           </div>
         </div>`;
+        } else {
+          actionBlock=`<div class="notice warn">
+            <strong>平台要求先完成${esc(verificationLabel)}</strong>
+            <div class="small">请按照平台页面完成确认，完成后点击下方按钮继续确认。</div>
+            ${verificationDetail}
+            <div class="login-actions" style="margin-top:10px">
+              <button class="secondary" type="button" data-feedback-bound="1" onclick="pollLoginSession(${Number(session.id)}, this)">我已处理，继续确认</button>
+              ${localLoginAction}
+            </div>
+          </div>`;
+        }
       } else if(['waiting_qrcode','waiting_scan'].includes(status) && capabilities.qr_image_supported && session.qr_image){
         actionBlock=`<div style="text-align:center">
           <img alt="登录二维码" src="${esc(session.qr_image)}">
@@ -6855,7 +6946,7 @@
       if(result) result.innerHTML = `<div class="login-flow-card">
         <div class="login-flow-head">
           <div>
-            <strong>${esc(formatPlatforms([session.platform]))} · ${esc(loginSessionText(displayStatus))}</strong>
+            <strong>${esc(displayTitle)}</strong>
             <div class="small">${esc(cleanCustomerText(displayMessage))}</div>
           </div>
           <span class="status ${loginSessionStatusClass(displayStatus)}">${esc(loginSessionText(displayStatus))}</span>

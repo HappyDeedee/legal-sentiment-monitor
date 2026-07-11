@@ -2426,6 +2426,65 @@ th.col-actions {
   }
 }
 
+.login-verification-panel {
+  display: grid;
+  gap: var(--space-3);
+  padding: var(--space-3);
+  color: var(--color-neutral-900);
+  border: 1px solid #c7d2fe;
+  border-radius: var(--radius-card-medium);
+  background: #f8fbff;
+}
+
+.login-verification-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.login-verification-actions {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  flex-wrap: wrap;
+}
+
+.login-verification-code-row {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--space-2);
+  flex: 1 1 320px;
+  min-width: 240px;
+}
+
+.login-verification-input-wrap {
+  display: grid;
+  gap: var(--space-1);
+  flex: 1 1 180px;
+  min-width: 160px;
+}
+
+.login-verification-input-wrap input {
+  width: 100%;
+}
+
+.login-verification-error {
+  min-height: 16px;
+  color: var(--color-status-danger-text);
+  font-size: var(--font-size-xs);
+  line-height: 1.35;
+}
+
+.login-verification-followup {
+  display: flex;
+  gap: var(--space-2);
+  align-items: center;
+  flex-wrap: wrap;
+  padding-top: var(--space-1);
+}
+
 .drawer-backdrop {
   position: fixed;
   inset: 0;
@@ -2597,8 +2656,7 @@ th.col-actions {
   margin: 0;
 }
 
-.drawer > .drawer-fixed-toolbar.run-detail-toolbar,
-.drawer > .drawer-fixed-toolbar.report-leads-toolbar {
+.drawer > .drawer-fixed-toolbar.run-detail-toolbar {
   border-left: 0;
   border-right: 0;
   border-radius: 0;
@@ -4024,16 +4082,6 @@ body #jobs .toolbar > div {
   min-width: min(220px, 100%);
 }
 
-body #jobs details.advanced {
-  border-color: var(--phase21-line);
-  background: rgba(255, 255, 255, 0.78);
-}
-
-body #jobs details.advanced summary {
-  color: var(--phase21-text);
-  font-weight: 700;
-}
-
 body .wizard-steps {
   grid-template-columns: repeat(auto-fit, minmax(172px, 1fr));
   gap: 10px;
@@ -5020,6 +5068,24 @@ body .login-card h3 {
 
 body .login-actions {
   gap: 10px;
+}
+
+body .login-verification-panel {
+  border-color: var(--phase21-accent-line);
+  background: #f8fbff;
+  color: var(--phase21-text);
+}
+
+body .login-verification-actions,
+body .login-verification-code-row,
+body .login-verification-followup {
+  max-width: 100%;
+  min-width: 0;
+}
+
+body .login-verification-code-row button,
+body .login-verification-actions button {
+  white-space: nowrap;
 }
 
 body .login-method-guide,
@@ -8039,6 +8105,20 @@ body .template-variable-row code {
   .account-flow-actions button,
   .resource-modal-actions button {
     flex: 1 1 auto;
+  }
+
+  .login-verification-actions,
+  .login-verification-code-row,
+  .login-verification-followup {
+    display: grid;
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .login-verification-actions button,
+  .login-verification-code-row button,
+  .login-verification-followup button,
+  .login-verification-followup a {
+    width: 100%;
   }
 
   body .template-section-head,

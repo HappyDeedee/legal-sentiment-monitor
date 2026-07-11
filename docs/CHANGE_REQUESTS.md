@@ -108,6 +108,9 @@ Status values:
 - CR-106A: Operations Home Data-Aware Signal Refinement
 - CR-106B: Email Delivery Log Dashboard Aggregation
 - CR-107: Windows One-Click Local Startup Launcher And Browser URL Separation
+- CR-108: Local/Server Login Initialization And Verification Flow Hardening
+- CR-109: Monitoring Task Collection Rule Explanation Removal
+- CR-110: QR Login SMS Verification Manual Submission Regression Fix
 - CR-096: AI Evaluation Postprocessing Scope Reduction
 - CR-075: Responsive Navigation Interaction Consistency
 - CR-076: Mobile Header Layout Resilience Regression Fix
@@ -1569,6 +1572,234 @@ Acceptance:
   `0.0.0.0`.
 - An explicit browser URL override is honored without changing the bind host.
 - Existing service-only startup commands still work.
+
+## CR-108 - Local/Server Login Initialization And Verification Flow Hardening
+
+Date: 2026-06-26
+
+Source: user reports from a newly cloned Windows computer and follow-up review
+of the older server-login/SMS/Docker worktree at
+`C:\Users\Administrator\.codex\worktrees\1d0a\MediaCrawler`.
+
+Module: deployment startup, platform-account login sessions, server-side QR
+login, local Windows first-run login initialization, Docker/server packaging.
+
+Type: Existing Feature Optimization and Regression Fix
+
+Status: In Progress
+
+Background:
+
+CR-107 made the Windows launcher start `/monitor` and open the browser with a
+separate bind-host/browser-URL model. A newly cloned Windows machine can still
+fail the first real platform login because the account profile is machine-local
+and must be initialized on that machine or server. The same investigation also
+showed that opening a local login window and then starting a QR session can make
+both flows compete for the same account profile, leading to unclear QR failure
+messages such as a closed browser session or an occupied Profile.
+
+The older worktree contains useful but stale server-side evidence: Docker
+packaging, Tencent server QR/SMS verification UI work, and a Douyin
+second-verify exact `验证` submit fix. That worktree used its own CR-107 and
+CR-108 numbering, which conflicts with the current mainline where CR-107 is the
+Windows one-click launcher. Those older entries are historical evidence and
+implementation source material only; they must be remapped into this current
+CR-108 instead of copied with their old numbering.
+
+A local one-click verification run also showed a QR initialization hang:
+`POST /api/monitor/login-sessions` could remain blocked inside the
+server-side Playwright/platform preparation path, leaving the database session
+in `preparing`. A later poll could then report that the QR browser session was
+not running before the original initialization attempt had reached a QR handle.
+CR-108 must bound that startup path, clean up half-initialized browser state,
+and keep fresh `preparing` sessions pending until the QR startup timeout window
+has actually elapsed.
+
+A follow-up local scan test showed a second hang after the QR image was already
+visible: authenticated polling of `/api/monitor/login-sessions/{id}` could
+block while checking MediaCrawler login state or re-reading the QR image. CR-108
+must also bound each polling step so a slow platform page cannot stop the UI
+from continuing to show a pending confirmation state.
+
+A later regression check found that the scan-time polling hardening was too
+aggressive around login-state confirmation: the polling route wrapped
+`_is_logged_in()` with the same short timeout that `_is_logged_in()` uses for
+the MediaCrawler login-state method itself. If the MediaCrawler check timed out
+right when the platform had already written login cookies/session state, the
+outer timeout could cancel the fallback cookie/session checks and leave the UI
+waiting instead of advancing to success. CR-108 must keep the MediaCrawler
+method bounded without cancelling the same-account cookie/session fallback.
+
+Purpose:
+
+Make first-run platform login reliable and understandable in both supported
+modes:
+
+- server/container mode uses the server-side QR/status flow and disables local
+  login windows;
+- Windows local mode can use a service-owned visible browser window as an
+  explicit development/operator fallback when the platform requires captcha,
+  SMS, slider, or device verification;
+- QR login and manual login windows must not silently compete for the same
+  `profile_key` or runtime profile path.
+
+Scope Boundary:
+
+- Documentation must land first and pass consistency checks before code changes.
+- Docker/server packaging may be selectively migrated from the older worktree.
+- Login-session changes are limited to profile contention, customer-safe state
+  messages, verification-state clarity, and first-run guidance.
+- Existing dashboard, Task Center, Run Detail, routing, permissions, reports,
+  crawler business logic, AI, and email behavior must stay unchanged.
+- New work must preserve the existing `profile_key` account model and must not
+  expose raw `profile_path`, cookies, QR payloads, verification codes, local
+  commands, proxy credentials, or browser profile directories.
+
+Non-goals:
+
+- Do not bypass captcha, slider, SMS, phone confirmation, or platform risk
+  checks.
+- Do not automate SMS receiving.
+- Do not add new backend platform fields or migrate to another frontend stack.
+- Do not directly merge the old server-login worktree.
+- Do not treat Docker configuration parsing as proof that every Windows host's
+  Docker Desktop or WSL engine is healthy.
+
+Required merge policy:
+
+- Use the current mainline CR numbering; old worktree CR-107/CR-108 content is
+  folded into current CR-108 as historical evidence or implementation source.
+- Copying old documentation verbatim is forbidden when it would introduce
+  conflicting CR numbers or claim unverified current-main status.
+- `TEST_RESULTS.md` must distinguish current-main verification, old-worktree
+  evidence, Tencent server evidence, and items that are not revalidated.
+
+Related tasks:
+
+- CR-108 documentation-first task group in `TASKS.md`.
+- CR-108 login/Docker tests in `TEST_PLAN.md`.
+- CR-108 traceability row in `TRACEABILITY.md`.
+
+Acceptance:
+
+- CR-108 documentation gate passes before non-document code changes.
+- Docker packaging is migrated only as a selective, tested package with clear
+  host-health limitations.
+- QR sessions and local login windows are mutually exclusive for the same
+  account profile and show customer-safe conflict messages.
+- QR session startup is bounded by the configured timeout, cleans up partial
+  Playwright/browser state on timeout, and does not let polling prematurely
+  convert a fresh initializing session into `qrcode_failed`.
+- QR session polling is also bounded per step after scan, so login-state checks,
+  QR rediscovery, and manual-verification detection cannot block the UI polling
+  loop indefinitely.
+- Local Windows first-run login has a clear path for manual platform
+  verification and follow-up account check.
+- Server/container mode keeps local-window login disabled and uses server-side
+  QR/status flow.
+- If Douyin SMS/diagnostic improvements are migrated, the exact second-verify
+  `验证` action is preferred without clicking send/resend controls.
+- Required automated checks and documented manual acceptance pass or are
+  explicitly recorded as not revalidated.
+
+## CR-109 - Monitoring Task Collection Rule Explanation Removal
+
+Date: 2026-06-26
+
+Source: user screenshot and request to remove the "采集规则说明" block from the
+Monitoring / 舆情监控 task page.
+
+Module: Monitoring task page frontend.
+
+Type: Existing Feature Optimization
+
+Status: Implemented
+
+Scope:
+
+- Remove the standalone "采集规则说明" disclosure block below the monitoring
+  task table.
+- Remove CSS that only styled that deleted task-page disclosure block.
+- Preserve task creation/editing, filters, task table, drawer workflow,
+  platform accounts, crawler behavior, login, reports, AI, email, permissions,
+  and backend API contracts.
+
+Acceptance:
+
+- The Monitoring / 舆情监控 page no longer renders "采集规则说明".
+- Static frontend regression coverage fails if the text returns to the
+  monitoring task section.
+- JavaScript syntax, documentation checks, and whitespace checks pass.
+
+## CR-110 - QR Login SMS Verification Manual Submission Regression Fix
+
+Date: 2026-06-26
+
+Source: user report that Douyin showed SMS/captcha verification but the current
+version did not have the older worktree's send/input/submit verification-code
+flow.
+
+Module: platform-account login sessions, server-side QR login, account login
+modal frontend.
+
+Type: Regression Fix
+
+Status: Implemented
+
+Background:
+
+CR-108 deliberately did not migrate the older worktree SMS submit route because
+current main did not yet expose the required SMS submission API and UI. The
+latest manual Douyin QR test showed that this missing piece is now a real
+operator blocker: the UI can show `needs_verification` and tell the operator
+to handle verification, but it only offers "我已处理，继续确认" or the local
+login-window fallback. In server-like QR mode, the operator also needs a
+bounded manual path to request a platform SMS code, type the code they receive,
+and submit it into the server-side browser session.
+
+Purpose:
+
+Restore the manual SMS verification loop for server-side QR login without
+adding SMS receiving automation or bypass behavior.
+
+Scope Boundary:
+
+- Add backend login-session endpoints for requesting and submitting a manually
+  received SMS verification code.
+- Add frontend controls for send, input, inline validation, submit, and
+  continue-confirm when `verification_type` is `sms`.
+- Prefer the Douyin `#uc-second-verify` exact visible `验证` control when
+  submitting the code so send/resend controls are not clicked as submit.
+- Preserve existing QR, local-login-window fallback, account check, profile
+  locking, task execution, reports, AI, email, permissions, and crawler
+  business logic.
+
+Non-goals:
+
+- Do not receive, read, intercept, or automate SMS.
+- Do not bypass captcha, slider, phone confirmation, device verification, or
+  platform risk checks.
+- Do not migrate the older worktree's larger technical diagnostics UI.
+- Do not expose verification codes, cookies, profile paths, QR payloads, local
+  commands, or proxy credentials in customer-facing UI.
+
+Related tasks:
+
+- CR-110 task block in `TASKS.md`.
+- CR-110 tests in `TEST_PLAN.md`.
+- CR-110 traceability row in `TRACEABILITY.md`.
+
+Acceptance:
+
+- When a login session reports SMS verification, the account login modal shows
+  a compact send/input/submit/continue-confirm panel.
+- The input preserves the typed code while the UI is re-rendered.
+- Backend routes can request SMS send and submit the code to the active
+  server-side browser session.
+- Douyin second-verify submission prefers the exact visible `验证` control and
+  does not click send/resend controls as submit.
+- Automated tests cover route behavior, server-page submission, send-code
+  clicks, frontend rendering, inline validation, and login regression scope.
 
 ## CR-035 - Run Lifecycle Finalization And AI Stuck Recovery Regression Fix
 

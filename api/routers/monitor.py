@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 import re
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
 
@@ -87,10 +88,14 @@ from ..monitoring.database import (
 from ..monitoring.mailer import real_email_delivery_allowed, render_report_email_preview, resolve_report_recipients, send_test_email
 from ..monitoring.doctor import run_doctor
 from ..monitoring.login_browser import build_login_browser_command, open_login_browser_with_command
+from ..monitoring.login_state import login_window_status
 from ..monitoring.login_qrcode import (
     close_qrcode_login_session,
+    _login_qr_timeout_ms,
     poll_qrcode_login_session,
+    request_qrcode_login_verification_code,
     start_qrcode_login_session_with_profile,
+    submit_qrcode_login_verification_code,
 )
 from ..monitoring.login_status import (
     LOGIN_STATE_NEEDS_VERIFICATION,
@@ -276,7 +281,23 @@ async def platform_login_browser(platform: str, payload: dict[str, Any] | None =
         raise HTTPException(status_code=403, detail="生产模式已关闭本地登录窗口，请使用网页登录二维码完成登录")
     try:
         command = _login_browser_command_for_payload(platform, payload or {})
-        return _customer_view_login_session(open_login_browser_with_command(command))
+        expired_session_ids = expire_login_sessions_for_account(
+            int(command.get("account_id") or 0) or None,
+            str(platform),
+            str(command.get("profile_path") or ""),
+            str(command.get("profile_key") or ""),
+        )
+        switch_message = "已切换到登录窗口，请完成平台验证并关闭窗口后，再回后台验活账号。"
+        for expired_session_id in expired_session_ids:
+            update_login_session_status(int(expired_session_id), LOGIN_STATE_TIMEOUT, switch_message)
+            await close_qrcode_login_session(expired_session_id)
+        result = open_login_browser_with_command(command)
+        if expired_session_ids:
+            result = {
+                **result,
+                "message": switch_message,
+            }
+        return _customer_view_login_session(result)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
@@ -986,6 +1007,55 @@ async def create_platform_login_session(payload: dict[str, Any], admin: dict[str
             payload = {**payload, "account_id": draft["id"]}
         command = _login_browser_command_for_payload(str(platform), payload)
         account = get_social_account(int(payload.get("account_id") or 0)) if payload.get("account_id") else None
+        profile_window = _open_login_window_for_command(str(platform), command)
+        if profile_window:
+            session = create_login_session(
+                {
+                    "platform": platform,
+                    "account_id": payload.get("account_id"),
+                    "login_url": command["login_url"],
+                    "profile_key": command.get("profile_key") or "",
+                    "profile_path": command["profile_path"],
+                    "message": _profile_contention_message(),
+                }
+            )
+            session = update_login_session_status(
+                int(session["id"]),
+                LOGIN_STATE_NEEDS_VERIFICATION,
+                _profile_contention_message(),
+            )
+            account_status = update_social_account_login_state(
+                int(account["id"]) if account else None,
+                str(session.get("status") or ""),
+                str(session.get("message") or ""),
+            )
+            return {
+                "session": _customer_view_login_session(session),
+                "account_status": _customer_view_social_account(account_status) if account_status else None,
+                "capabilities": {
+                    **_login_capability_response(
+                        str(platform),
+                        {
+                            "needs_verification": True,
+                            "verification_type": "manual_browser",
+                            "verification_label": "网页登录窗口",
+                            "verification_detail": "登录窗口正在使用该账号，请完成验证并关闭窗口后再继续。",
+                        },
+                    ),
+                    "qr_image_supported": False,
+                    "verification_image": "",
+                    "verification_image_supported": False,
+                    "verification_type": "manual_browser",
+                    "verification_label": "网页登录窗口",
+                    "verification_detail": "登录窗口正在使用该账号，请完成验证并关闭窗口后再继续。",
+                    "diagnostic_image": "",
+                    "diagnostic_image_supported": False,
+                    "manual_browser_fallback": _local_login_window_allowed(),
+                    "local_login_window_allowed": _local_login_window_allowed(),
+                    "primary_login_flow": "server_qrcode",
+                    "polling_supported": True,
+                },
+            }
         expired_session_ids = expire_login_sessions_for_account(
             int(account["id"]) if account else None,
             str(platform),
@@ -1071,7 +1141,7 @@ async def login_session(session_id: int, admin: dict[str, Any] = AdminUser):
         session, account_status = await _verify_successful_login_session(session)
     else:
         current_status = normalize_login_state(session.get("status"))
-        next_status = _login_state_from_qr_poll(qr_poll, current_status)
+        next_status = _login_state_from_qr_poll(qr_poll, current_status, session)
         if _should_reconcile_login_failure(current_status, next_status, qr_poll):
             session, account_status = await _reconcile_login_session_with_account_check(session, qr_poll, next_status)
         else:
@@ -1082,7 +1152,11 @@ async def login_session(session_id: int, admin: dict[str, Any] = AdminUser):
                     str(qr_poll.get("message") or _default_login_state_message(next_status)),
                     str(qr_poll.get("qr_image") or ""),
                 )
-            elif qr_poll.get("message") and current_status in PENDING_LOGIN_STATES:
+            elif (
+                qr_poll.get("message")
+                and current_status in PENDING_LOGIN_STATES
+                and not _qr_initialization_still_pending(current_status, qr_poll)
+            ):
                 session = {**session, "status": current_status, "message": qr_poll.get("message")}
             else:
                 session = {**session, "status": current_status}
@@ -1106,6 +1180,106 @@ async def login_session(session_id: int, admin: dict[str, Any] = AdminUser):
             "qr_image_supported": bool(session.get("qr_image")),
             "verification_image": verification_image,
             "verification_image_supported": bool(verification_image),
+            "verification_type": str(qr_poll.get("verification_type") or ""),
+            "verification_label": str(qr_poll.get("verification_label") or ""),
+            "verification_detail": str(qr_poll.get("verification_detail") or ""),
+            "manual_browser_fallback": _local_login_window_allowed(),
+            "local_login_window_allowed": _local_login_window_allowed(),
+            "primary_login_flow": "server_qrcode",
+            "polling_supported": True,
+        },
+    }
+
+
+@router.post("/login-sessions/{session_id}/verification-code")
+async def submit_login_session_verification_code(session_id: int, payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
+    init_db()
+    session = get_login_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="login session not found")
+    qr_poll = await submit_qrcode_login_verification_code(session_id, str(payload.get("code") or ""))
+    account_status = None
+    if qr_poll.get("success"):
+        session = update_login_session_status(session_id, LOGIN_STATE_SUCCESS, str(qr_poll.get("message") or "登录成功"))
+        session, account_status = await _verify_successful_login_session(session)
+    else:
+        current_status = normalize_login_state(session.get("status"))
+        next_status = _login_state_from_qr_poll(qr_poll, current_status, session)
+        session = update_login_session_status(
+            session_id,
+            next_status,
+            str(qr_poll.get("message") or _default_login_state_message(next_status)),
+            str(qr_poll.get("qr_image") or ""),
+        )
+    if account_status is None:
+        account_status = update_social_account_login_state(
+            int(session.get("account_id") or 0) or None,
+            str(session.get("status") or ""),
+            str(session.get("message") or ""),
+        )
+    statuses = {item["platform"]: item for item in list_platform_status()}
+    platform = str(session.get("platform") or "")
+    platform_status = statuses.get(platform) or {}
+    session_view = _customer_view_login_session(session)
+    return {
+        "session": session_view,
+        "platform_status": _customer_view_platform_status(platform_status) if platform_status else {},
+        "account_status": _customer_view_social_account(account_status) if account_status else None,
+        "capabilities": {
+            **_login_capability_response(platform, qr_poll),
+            "qr_image_supported": bool(session_view.get("qr_image")),
+            "verification_image": "",
+            "verification_image_supported": False,
+            "verification_type": str(qr_poll.get("verification_type") or ""),
+            "verification_label": str(qr_poll.get("verification_label") or ""),
+            "verification_detail": str(qr_poll.get("verification_detail") or ""),
+            "manual_browser_fallback": _local_login_window_allowed(),
+            "local_login_window_allowed": _local_login_window_allowed(),
+            "primary_login_flow": "server_qrcode",
+            "polling_supported": True,
+        },
+    }
+
+
+@router.post("/login-sessions/{session_id}/verification-code/request")
+async def request_login_session_verification_code(session_id: int, admin: dict[str, Any] = AdminUser):
+    init_db()
+    session = get_login_session(session_id)
+    if not session:
+        raise HTTPException(status_code=404, detail="login session not found")
+    qr_poll = await request_qrcode_login_verification_code(session_id)
+    account_status = None
+    if qr_poll.get("success"):
+        session = update_login_session_status(session_id, LOGIN_STATE_SUCCESS, str(qr_poll.get("message") or "登录成功"))
+        session, account_status = await _verify_successful_login_session(session)
+    else:
+        current_status = normalize_login_state(session.get("status"))
+        next_status = _login_state_from_qr_poll(qr_poll, current_status, session)
+        session = update_login_session_status(
+            session_id,
+            next_status,
+            str(qr_poll.get("message") or _default_login_state_message(next_status)),
+            str(qr_poll.get("qr_image") or ""),
+        )
+    if account_status is None:
+        account_status = update_social_account_login_state(
+            int(session.get("account_id") or 0) or None,
+            str(session.get("status") or ""),
+            str(session.get("message") or ""),
+        )
+    statuses = {item["platform"]: item for item in list_platform_status()}
+    platform = str(session.get("platform") or "")
+    platform_status = statuses.get(platform) or {}
+    session_view = _customer_view_login_session(session)
+    return {
+        "session": session_view,
+        "platform_status": _customer_view_platform_status(platform_status) if platform_status else {},
+        "account_status": _customer_view_social_account(account_status) if account_status else None,
+        "capabilities": {
+            **_login_capability_response(platform, qr_poll),
+            "qr_image_supported": bool(session_view.get("qr_image")),
+            "verification_image": "",
+            "verification_image_supported": False,
             "verification_type": str(qr_poll.get("verification_type") or ""),
             "verification_label": str(qr_poll.get("verification_label") or ""),
             "verification_detail": str(qr_poll.get("verification_detail") or ""),
@@ -1611,6 +1785,29 @@ def _login_browser_command_for_payload(platform: str, payload: dict[str, Any]) -
     return command
 
 
+def _open_login_window_for_command(platform: str, command: dict[str, Any]) -> dict[str, Any]:
+    status = login_window_status(platform)
+    if not status.get("is_open"):
+        return {}
+    window_profile_key = str(status.get("profile_key") or "").strip()
+    command_profile_key = str(command.get("profile_key") or "").strip()
+    if window_profile_key and command_profile_key:
+        return status if window_profile_key == command_profile_key else {}
+    window_profile = str(status.get("profile_path") or "").strip()
+    command_profile = str(command.get("profile_path") or "").strip()
+    if not window_profile or not command_profile:
+        return {}
+    try:
+        same_profile = Path(window_profile).resolve() == Path(command_profile).resolve()
+    except OSError:
+        same_profile = window_profile == command_profile
+    return status if same_profile else {}
+
+
+def _profile_contention_message() -> str:
+    return "登录窗口正在使用该账号，请完成平台验证并关闭窗口后，再回后台继续确认登录状态。"
+
+
 def _platform_status_matches_login_session(session: dict[str, Any], platform_status: dict[str, Any]) -> bool:
     if not platform_status:
         return False
@@ -1646,8 +1843,14 @@ def _login_state_from_qr_result(result: dict[str, Any]) -> str:
     return LOGIN_STATE_QRCODE_FAILED
 
 
-def _login_state_from_qr_poll(result: dict[str, Any], current_status: str) -> str:
+def _login_state_from_qr_poll(
+    result: dict[str, Any],
+    current_status: str,
+    session: dict[str, Any] | None = None,
+) -> str:
     state = normalize_login_state(result.get("status"))
+    if _qr_initialization_still_pending(current_status, result, session):
+        return LOGIN_STATE_PREPARING
     if state != LOGIN_STATE_PREPARING:
         return state
     if result.get("success"):
@@ -1669,6 +1872,37 @@ def _login_state_from_qr_poll(result: dict[str, Any], current_status: str) -> st
     if result.get("active"):
         return LOGIN_STATE_WAITING_CONFIRM
     return current_status if current_status in PENDING_LOGIN_STATES else LOGIN_STATE_QRCODE_FAILED
+
+
+def _qr_initialization_still_pending(
+    current_status: str,
+    result: dict[str, Any],
+    session: dict[str, Any] | None = None,
+) -> bool:
+    if not (
+        normalize_login_state(current_status) == LOGIN_STATE_PREPARING
+        and normalize_login_state(result.get("status")) == LOGIN_STATE_QRCODE_FAILED
+        and not result.get("active")
+        and not result.get("success")
+    ):
+        return False
+    if not session:
+        return True
+    created_at = _parse_utc_datetime(session.get("created_at"))
+    if not created_at:
+        return False
+    elapsed_ms = (datetime.now(timezone.utc) - created_at).total_seconds() * 1000
+    return elapsed_ms <= max(1000, _login_qr_timeout_ms())
+
+
+def _parse_utc_datetime(value: Any) -> datetime | None:
+    try:
+        parsed = datetime.fromisoformat(str(value or "").replace("Z", "+00:00"))
+    except ValueError:
+        return None
+    if parsed.tzinfo is None:
+        parsed = parsed.replace(tzinfo=timezone.utc)
+    return parsed.astimezone(timezone.utc)
 
 
 def _default_login_state_message(status: str) -> str:

@@ -65,7 +65,13 @@ def open_login_browser_with_command(command: dict[str, Any]) -> dict[str, Any]:
         stderr=subprocess.DEVNULL,
         creationflags=creationflags,
     )
-    record_login_window(command["platform"], process.pid, command["debug_port"], command["profile_path"])
+    record_login_window(
+        command["platform"],
+        process.pid,
+        command["debug_port"],
+        command["profile_path"],
+        str(command.get("profile_key") or ""),
+    )
     return {
         **command,
         "pid": process.pid,

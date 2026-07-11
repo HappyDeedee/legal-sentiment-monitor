@@ -4898,6 +4898,79 @@ def test_login_session_route_falls_back_when_qrcode_unavailable(monkeypatch):
             _restore_table(table, snapshot)
 
 
+def test_login_session_route_keeps_preparing_session_pending_before_qr_handle_exists(monkeypatch):
+    init_db()
+    snapshot = _snapshot_table("login_sessions")
+    try:
+        session = create_login_session(
+            {
+                "platform": "dy",
+                "account_id": 10003,
+                "login_url": "https://www.douyin.com/",
+                "profile_key": "1/dy/acc_10003",
+                "profile_path": "browser_data/account_10003",
+                "message": "正在生成登录二维码。",
+            }
+        )
+
+        async def fake_poll_qrcode_login_session(session_id):
+            return {
+                "active": False,
+                "success": False,
+                "status": "qrcode_failed",
+                "message": "二维码浏览器会话不在运行，请重新生成二维码或打开登录窗口。",
+            }
+
+        monkeypatch.setattr(monitor_router, "poll_qrcode_login_session", fake_poll_qrcode_login_session)
+        monkeypatch.setattr(monitor_router, "list_platform_status", lambda: [])
+
+        polled = asyncio.run(monitor_router.login_session(int(session["id"])))
+        refreshed = get_login_session(int(session["id"]))
+
+        assert polled["session"]["status"] == "preparing"
+        assert polled["session"]["message"] == "正在生成登录二维码。"
+        assert refreshed["status"] == "preparing"
+    finally:
+        _restore_table("login_sessions", snapshot)
+
+
+def test_login_session_route_expires_stale_preparing_session_without_qr_handle(monkeypatch):
+    init_db()
+    snapshot = _snapshot_table("login_sessions")
+    try:
+        session = create_login_session(
+            {
+                "platform": "dy",
+                "account_id": 10004,
+                "login_url": "https://www.douyin.com/",
+                "profile_key": "1/dy/acc_10004",
+                "profile_path": "browser_data/account_10004",
+                "message": "正在生成登录二维码。",
+            }
+        )
+        old = (datetime.now(timezone.utc) - timedelta(seconds=120)).isoformat()
+        with get_conn() as conn:
+            conn.execute("UPDATE login_sessions SET created_at=?, updated_at=? WHERE id=?", (old, old, session["id"]))
+
+        async def fake_poll_qrcode_login_session(session_id):
+            return {
+                "active": False,
+                "success": False,
+                "status": "qrcode_failed",
+                "message": "二维码浏览器会话不在运行，请重新生成二维码或打开登录窗口。",
+            }
+
+        monkeypatch.setattr(monitor_router, "poll_qrcode_login_session", fake_poll_qrcode_login_session)
+        monkeypatch.setattr(monitor_router, "list_platform_status", lambda: [])
+
+        polled = asyncio.run(monitor_router.login_session(int(session["id"])))
+
+        assert polled["session"]["status"] == "qrcode_failed"
+        assert "二维码浏览器会话不在运行" in polled["session"]["message"]
+    finally:
+        _restore_table("login_sessions", snapshot)
+
+
 @pytest.mark.parametrize("platform", ["dy", "xhs", "ks"])
 def test_login_session_failure_reconciles_successful_same_account_check_for_supported_platforms(platform, monkeypatch):
     init_db()
@@ -5033,6 +5106,173 @@ def test_phase_6_production_mode_hides_local_login_window(monkeypatch):
         asyncio.run(monitor_router.platform_login_browser("dy", {}))
     assert exc.value.status_code == 403
     assert "网页登录二维码" in exc.value.detail
+
+
+def test_cr108_qr_login_is_blocked_when_same_profile_login_window_is_open(monkeypatch, tmp_path):
+    init_db()
+    snapshots = {
+        "login_sessions": _snapshot_table("login_sessions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        account = _login_test_account("dy", tmp_path)
+        profile_path = str(resolve_account_profile_path(f"1/dy/acc_{account['id']}"))
+        started = {"called": False}
+
+        monkeypatch.setattr(
+            monitor_router,
+            "build_login_browser_command",
+            lambda platform: {
+                "platform": platform,
+                "platform_label": "抖音",
+                "login_url": "https://www.douyin.com/",
+                "profile_path": str(tmp_path / "default_profile"),
+                "debug_port": 9323,
+                "browser_path": "chrome",
+            },
+        )
+        login_state_dir = tmp_path / "login_windows"
+        monkeypatch.setattr("api.monitoring.login_state.LOGIN_STATE_DIR", login_state_dir)
+        monkeypatch.setattr("api.monitoring.login_state._pid_exists", lambda pid: True)
+        record_login_window("dy", 12345, 9323, profile_path)
+
+        async def fake_start_qrcode_login_session_with_profile(session_id, platform, command):
+            started["called"] = True
+            return {"ok": True, "qr_image": "data:image/png;base64,abc", "message": "请扫码登录"}
+
+        monkeypatch.setattr(
+            monitor_router,
+            "start_qrcode_login_session_with_profile",
+            fake_start_qrcode_login_session_with_profile,
+        )
+
+        created = asyncio.run(monitor_router.create_platform_login_session({"platform": "dy", "account_id": account["id"]}))
+
+        assert started["called"] is False
+        assert created["session"]["status"] == "needs_verification"
+        assert "登录窗口正在使用该账号" in created["session"]["message"]
+        assert "TargetClosedError" not in created["session"]["message"]
+        assert profile_path not in created["session"]["message"]
+        assert created["capabilities"]["local_login_window_allowed"] is True
+    finally:
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+
+def test_cr108_qr_login_is_blocked_when_same_profile_key_login_window_is_open(monkeypatch, tmp_path):
+    init_db()
+    snapshots = {
+        "login_sessions": _snapshot_table("login_sessions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        account = _login_test_account("dy", tmp_path)
+        started = {"called": False}
+
+        monkeypatch.setattr(
+            monitor_router,
+            "build_login_browser_command",
+            lambda platform: {
+                "platform": platform,
+                "platform_label": "抖音",
+                "login_url": "https://www.douyin.com/",
+                "profile_path": str(tmp_path / "default_profile"),
+                "debug_port": 9323,
+                "browser_path": "chrome",
+            },
+        )
+        monkeypatch.setattr(
+            monitor_router,
+            "login_window_status",
+            lambda platform: {
+                "is_open": True,
+                "pid": 12345,
+                "debug_port": 9323,
+                "profile_key": account["profile_key"],
+                "profile_path": str(tmp_path / "different_runtime_path"),
+            },
+        )
+
+        async def fake_start_qrcode_login_session_with_profile(session_id, platform, command):
+            started["called"] = True
+            return {"ok": True, "qr_image": "data:image/png;base64,abc", "message": "请扫码登录"}
+
+        monkeypatch.setattr(
+            monitor_router,
+            "start_qrcode_login_session_with_profile",
+            fake_start_qrcode_login_session_with_profile,
+        )
+
+        created = asyncio.run(monitor_router.create_platform_login_session({"platform": "dy", "account_id": account["id"]}))
+
+        assert started["called"] is False
+        assert created["session"]["status"] == "needs_verification"
+        assert "登录窗口正在使用该账号" in created["session"]["message"]
+        assert account["profile_key"] not in created["session"]["message"]
+    finally:
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+
+def test_cr108_opening_login_window_supersedes_active_qr_session(monkeypatch, tmp_path):
+    init_db()
+    snapshots = {
+        "login_sessions": _snapshot_table("login_sessions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    closed: list[int] = []
+    seen: dict[str, Any] = {}
+    try:
+        account = _login_test_account("dy", tmp_path)
+        profile_path = str(resolve_account_profile_path(f"1/dy/acc_{account['id']}"))
+        session = create_login_session(
+            {
+                "platform": "dy",
+                "account_id": account["id"],
+                "login_url": "https://www.douyin.com/",
+                "profile_key": account["profile_key"],
+                "profile_path": profile_path,
+                "message": "二维码已生成，请扫码登录。",
+            }
+        )
+        monitor_router.update_login_session_status(int(session["id"]), "waiting_qrcode", "二维码已生成，请扫码登录。")
+
+        monkeypatch.setattr(
+            monitor_router,
+            "build_login_browser_command",
+            lambda platform: {
+                "platform": platform,
+                "platform_label": "抖音",
+                "login_url": "https://www.douyin.com/",
+                "profile_path": str(tmp_path / "default_profile"),
+                "debug_port": 9323,
+                "browser_path": "chrome",
+            },
+        )
+
+        async def fake_close_qrcode_login_session(session_id):
+            closed.append(int(session_id))
+
+        def fake_open_login_browser_with_command(command):
+            seen["profile_path"] = command["profile_path"]
+            return {**command, "pid": 45678, "message": "ok"}
+
+        monkeypatch.setattr(monitor_router, "close_qrcode_login_session", fake_close_qrcode_login_session)
+        monkeypatch.setattr(monitor_router, "open_login_browser_with_command", fake_open_login_browser_with_command)
+
+        result = asyncio.run(monitor_router.platform_login_browser("dy", {"account_id": account["id"]}))
+        refreshed = get_login_session(int(session["id"]))
+
+        assert closed == [int(session["id"])]
+        assert refreshed["status"] == "timeout"
+        assert "登录窗口" in refreshed["message"]
+        assert result["pid"] == 45678
+        assert seen["profile_path"] == profile_path
+        assert result["message"].startswith("已切换到登录窗口")
+        assert result["profile_path"] == "网页登录态已配置"
+    finally:
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
 
 
 def test_account_login_session_does_not_inherit_default_platform_success(monkeypatch, tmp_path):
@@ -5677,6 +5917,83 @@ def test_qrcode_start_prefers_qrcode_before_manual_verification(monkeypatch, tmp
         asyncio.run(login_qrcode_module.close_qrcode_login_session(888001))
 
 
+def test_qrcode_start_has_outer_timeout_and_closes_half_initialized_browser(monkeypatch, tmp_path):
+    events: list[str] = []
+
+    class FakePage:
+        def __init__(self):
+            self.context = None
+
+        def set_default_timeout(self, timeout):
+            events.append(f"timeout:{timeout}")
+
+        async def goto(self, *args, **kwargs):
+            events.append("goto")
+
+    class FakeContext:
+        def __init__(self):
+            self.pages = [FakePage()]
+            self.pages[0].context = self
+
+        async def new_page(self):
+            page = FakePage()
+            page.context = self
+            self.pages.append(page)
+            return page
+
+        async def close(self):
+            events.append("close")
+
+        async def cookies(self):
+            return []
+
+    class FakeChromium:
+        async def launch_persistent_context(self, **kwargs):
+            events.append("launch")
+            return FakeContext()
+
+    class FakePlaywright:
+        chromium = FakeChromium()
+
+        async def stop(self):
+            events.append("stop")
+
+    class FakePlaywrightFactory:
+        async def start(self):
+            events.append("start")
+            return FakePlaywright()
+
+    async def hanging_prepare_login_page(platform, page, timeout, login_adapter=None):
+        events.append("prepare")
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(login_qrcode_module, "async_playwright", lambda: FakePlaywrightFactory())
+    monkeypatch.setattr(login_qrcode_module, "_build_mediacrawler_login_adapter", lambda platform, context, page: object())
+    monkeypatch.setattr(login_qrcode_module, "_prepare_login_page", hanging_prepare_login_page)
+
+    result = asyncio.run(
+        asyncio.wait_for(
+            login_qrcode_module.start_qrcode_login_session_with_profile(
+                888002,
+                "dy",
+                {
+                    "profile_path": str(tmp_path / "dy_profile"),
+                    "browser_path": "chrome",
+                },
+                timeout_ms=5,
+            ),
+            timeout=0.2,
+        )
+    )
+
+    assert result["ok"] is False
+    assert result["status"] == "qrcode_failed"
+    assert "超时" in result["message"]
+    assert "close" in events
+    assert "stop" in events
+    assert 888002 not in login_qrcode_module.ACTIVE_LOGIN_SESSIONS
+
+
 def test_qrcode_login_defaults_to_server_headless_browser(monkeypatch):
     monkeypatch.delenv("MONITOR_LOGIN_QR_HEADLESS", raising=False)
 
@@ -5785,6 +6102,353 @@ def test_qrcode_manual_verification_classifies_sms_code():
     assert result["verification_label"] == "短信验证码"
 
 
+def test_login_session_verification_code_route_submits_sms_code(monkeypatch):
+    init_db()
+    snapshot = _snapshot_table("login_sessions")
+    seen: dict[str, Any] = {}
+    try:
+        session = create_login_session(
+            {
+                "platform": "dy",
+                "login_url": "https://www.douyin.com",
+                "status": "needs_verification",
+                "message": "平台要求先完成短信验证码。",
+            }
+        )
+
+        async def fake_submit_qrcode_login_verification_code(session_id, code):
+            seen["session_id"] = session_id
+            seen["code"] = code
+            return {
+                "active": True,
+                "success": False,
+                "status": "waiting_confirm",
+                "verification_type": "sms",
+                "verification_label": "短信验证码",
+                "message": "短信验证码已提交，请等待平台确认登录结果。",
+            }
+
+        monkeypatch.setattr(monitor_router, "submit_qrcode_login_verification_code", fake_submit_qrcode_login_verification_code)
+        monkeypatch.setattr(monitor_router, "list_platform_status", lambda: [])
+
+        result = asyncio.run(
+            monitor_router.submit_login_session_verification_code(int(session["id"]), {"code": "123456"})
+        )
+    finally:
+        _restore_table("login_sessions", snapshot)
+
+    assert seen == {"session_id": int(session["id"]), "code": "123456"}
+    assert result["session"]["status"] == "waiting_confirm"
+    assert "短信验证码已提交" in result["session"]["message"]
+    assert result["capabilities"]["verification_type"] == "sms"
+
+
+def test_login_session_verification_code_request_route_sends_sms_code(monkeypatch):
+    init_db()
+    snapshot = _snapshot_table("login_sessions")
+    seen: dict[str, Any] = {}
+    try:
+        session = create_login_session(
+            {
+                "platform": "dy",
+                "login_url": "https://www.douyin.com",
+                "status": "needs_verification",
+                "message": "平台要求先完成短信验证码。",
+            }
+        )
+
+        async def fake_request_qrcode_login_verification_code(session_id):
+            seen["session_id"] = session_id
+            return {
+                "active": True,
+                "success": False,
+                "status": "needs_verification",
+                "needs_verification": True,
+                "verification_type": "sms",
+                "verification_label": "短信验证码",
+                "verification_detail": "短信验证码发送请求已提交",
+                "message": "短信验证码发送请求已提交，请查收后输入验证码。",
+            }
+
+        monkeypatch.setattr(
+            monitor_router,
+            "request_qrcode_login_verification_code",
+            fake_request_qrcode_login_verification_code,
+        )
+        monkeypatch.setattr(monitor_router, "list_platform_status", lambda: [])
+
+        result = asyncio.run(monitor_router.request_login_session_verification_code(int(session["id"])))
+    finally:
+        _restore_table("login_sessions", snapshot)
+
+    assert seen == {"session_id": int(session["id"])}
+    assert result["session"]["status"] == "needs_verification"
+    assert "短信验证码发送请求已提交" in result["session"]["message"]
+    assert result["capabilities"]["verification_type"] == "sms"
+
+
+def test_qrcode_manual_sms_verification_submission_fills_server_page(monkeypatch):
+    class FakeInput:
+        def __init__(self, page):
+            self.page = page
+
+        async def is_visible(self, timeout=0):
+            return True
+
+        async def fill(self, value):
+            self.page.filled = value
+
+    class FakeButton:
+        def __init__(self, page):
+            self.page = page
+
+        async def is_visible(self, timeout=0):
+            return True
+
+        async def click(self, timeout=0):
+            self.page.clicked = True
+
+    class FakeLocator:
+        def __init__(self, page, kind: str):
+            self.page = page
+            self.kind = kind
+
+        async def count(self):
+            return 1 if self.kind in {"input", "button"} else 0
+
+        def nth(self, index):
+            return FakeInput(self.page) if self.kind == "input" else FakeButton(self.page)
+
+    class FakePage:
+        filled = ""
+        clicked = False
+
+        def locator(self, selector):
+            if selector == "input[placeholder*='验证码']":
+                return FakeLocator(self, "input")
+            if selector.startswith("xpath=//button"):
+                return FakeLocator(self, "button")
+            return FakeLocator(self, "")
+
+        async def wait_for_timeout(self, timeout):
+            pass
+
+    async def fake_is_logged_in(platform, context, page, baseline):
+        return False
+
+    page = FakePage()
+    session_id = 901234
+    login_qrcode_module.ACTIVE_LOGIN_SESSIONS[session_id] = login_qrcode_module.LoginSessionHandle(
+        platform="dy",
+        playwright=object(),
+        context=object(),
+        page=page,
+        profile_path="browser_data/test",
+        created_at=datetime.now(timezone.utc),
+    )
+    monkeypatch.setattr(login_qrcode_module, "_is_logged_in", fake_is_logged_in)
+    try:
+        result = asyncio.run(login_qrcode_module.submit_qrcode_login_verification_code(session_id, "123456"))
+    finally:
+        login_qrcode_module.ACTIVE_LOGIN_SESSIONS.pop(session_id, None)
+
+    assert page.filled == "123456"
+    assert page.clicked is True
+    assert result["status"] == "waiting_confirm"
+    assert "短信验证码已提交" in result["message"]
+
+
+def test_qrcode_manual_sms_verification_submission_prefers_second_verify_overlay():
+    class FakeInput:
+        def __init__(self, page, source: str):
+            self.page = page
+            self.source = source
+
+        async def is_visible(self, timeout=0):
+            return True
+
+        async def fill(self, value):
+            self.page.filled.append((self.source, value))
+
+    class FakeButton:
+        def __init__(self, page, source: str):
+            self.page = page
+            self.source = source
+
+        async def is_visible(self, timeout=0):
+            return True
+
+        async def click(self, timeout=0):
+            if self.source == "page":
+                self.page.page_button_clicked = True
+                raise RuntimeError("second verify overlay intercepts pointer events")
+            self.page.overlay_button_clicked = True
+
+    class FakeLocator:
+        def __init__(self, page, kind: str):
+            self.page = page
+            self.kind = kind
+
+        async def count(self):
+            return 1 if self.kind else 0
+
+        def nth(self, index):
+            if self.kind == "overlay_input":
+                return FakeInput(self.page, "overlay")
+            if self.kind == "page_input":
+                return FakeInput(self.page, "page")
+            if self.kind == "overlay_button":
+                return FakeButton(self.page, "overlay")
+            return FakeButton(self.page, "page")
+
+    class FakePage:
+        def __init__(self):
+            self.filled: list[tuple[str, str]] = []
+            self.page_button_clicked = False
+            self.overlay_button_clicked = False
+
+        def locator(self, selector):
+            if selector.startswith("#uc-second-verify") and "input" in selector:
+                return FakeLocator(self, "overlay_input")
+            if "uc-second-verify" in selector and "button" in selector:
+                return FakeLocator(self, "overlay_button")
+            if selector == "input[placeholder*='验证码']":
+                return FakeLocator(self, "page_input")
+            if selector.startswith("xpath=//button"):
+                return FakeLocator(self, "page_button")
+            return FakeLocator(self, "")
+
+    page = FakePage()
+    result = asyncio.run(login_qrcode_module._submit_manual_verification_code(page, "112233"))
+
+    assert result is True
+    assert page.filled == [("overlay", "112233")]
+    assert page.overlay_button_clicked is True
+    assert page.page_button_clicked is False
+
+
+def test_qrcode_manual_sms_verification_submission_prefers_exact_overlay_verify_text():
+    class FakeInput:
+        def __init__(self, page):
+            self.page = page
+
+        async def is_visible(self, timeout=0):
+            return True
+
+        async def fill(self, value):
+            self.page.filled = value
+
+    class FakeButton:
+        def __init__(self, page, label: str):
+            self.page = page
+            self.label = label
+
+        async def is_visible(self, timeout=0):
+            return True
+
+        async def click(self, timeout=0):
+            self.page.clicked_labels.append(self.label)
+            if self.label != "验证":
+                raise RuntimeError(f"wrong button clicked: {self.label}")
+
+    class FakeLocator:
+        def __init__(self, page, kind: str):
+            self.page = page
+            self.kind = kind
+
+        async def count(self):
+            if self.kind == "overlay_input":
+                return 1
+            if self.kind == "overlay_exact_verify":
+                return 1
+            if self.kind == "overlay_wide_buttons":
+                return 3
+            return 0
+
+        def nth(self, index):
+            if self.kind == "overlay_input":
+                return FakeInput(self.page)
+            if self.kind == "overlay_exact_verify":
+                return FakeButton(self.page, "验证")
+            return FakeButton(self.page, ["获取验证码", "重新获取验证码", "验证"][index])
+
+    class FakePage:
+        def __init__(self):
+            self.filled = ""
+            self.clicked_labels: list[str] = []
+
+        def locator(self, selector):
+            if selector.startswith("#uc-second-verify") and "input" in selector:
+                return FakeLocator(self, "overlay_input")
+            if "@id='uc-second-verify'" in selector and "normalize-space(.)='验证'" in selector and " or contains" not in selector:
+                return FakeLocator(self, "overlay_exact_verify")
+            if "uc-second-verify" in selector and "contains(., '确认')" in selector:
+                return FakeLocator(self, "overlay_wide_buttons")
+            return FakeLocator(self, "")
+
+    page = FakePage()
+    result = asyncio.run(login_qrcode_module._submit_manual_verification_code(page, "445566"))
+
+    assert result is True
+    assert page.filled == "445566"
+    assert page.clicked_labels == ["验证"]
+
+
+def test_qrcode_manual_sms_verification_request_clicks_send_code():
+    class FakeButton:
+        def __init__(self, page):
+            self.page = page
+
+        async def is_visible(self, timeout=0):
+            return True
+
+        async def click(self, timeout=0):
+            self.page.clicked = True
+
+    class FakeLocator:
+        def __init__(self, page, kind: str):
+            self.page = page
+            self.kind = kind
+
+        async def count(self):
+            return 1 if self.kind == "button" else 0
+
+        def nth(self, index):
+            return FakeButton(self.page)
+
+    class FakePage:
+        def __init__(self):
+            self.clicked = False
+
+        def locator(self, selector):
+            if "接收短信验证码" in selector or "发送短信验证" in selector:
+                return FakeLocator(self, "button")
+            return FakeLocator(self, "")
+
+        async def wait_for_timeout(self, timeout):
+            pass
+
+    page = FakePage()
+    session_id = 901235
+    login_qrcode_module.ACTIVE_LOGIN_SESSIONS[session_id] = login_qrcode_module.LoginSessionHandle(
+        platform="dy",
+        playwright=object(),
+        context=object(),
+        page=page,
+        profile_path="browser_data/test",
+        created_at=datetime.now(timezone.utc),
+    )
+    try:
+        result = asyncio.run(login_qrcode_module.request_qrcode_login_verification_code(session_id))
+    finally:
+        login_qrcode_module.ACTIVE_LOGIN_SESSIONS.pop(session_id, None)
+
+    assert page.clicked is True
+    assert result["status"] == "needs_verification"
+    assert result["verification_type"] == "sms"
+    assert "短信验证码发送请求已提交" in result["message"]
+
+
 def test_xhs_login_state_requires_session_change_when_login_modal_visible():
     class FakeContext:
         async def cookies(self):
@@ -5807,6 +6471,33 @@ def test_xhs_login_state_succeeds_after_session_change():
             return [{"name": "web_session", "value": "logged-session"}]
 
     result = asyncio.run(login_qrcode_module._is_logged_in("xhs", FakeContext(), object(), "guest-session"))
+
+    assert result is True
+
+
+def test_qrcode_login_state_timeout_falls_back_to_cookie_rules(monkeypatch):
+    class FakeContext:
+        pages = []
+
+        async def cookies(self):
+            return [{"name": "LOGIN_STATUS", "value": "1"}]
+
+    class FakePage:
+        async def is_visible(self, selector, timeout=0):
+            return False
+
+    async def hanging_login_state(platform, context, page, login_baseline=""):
+        await asyncio.Event().wait()
+
+    monkeypatch.setenv("MONITOR_LOGIN_QR_POLL_TIMEOUT_MS", "5")
+    monkeypatch.setattr(login_qrcode_module, "call_mediacrawler_check_login_state", hanging_login_state)
+
+    result = asyncio.run(
+        asyncio.wait_for(
+            login_qrcode_module._is_logged_in("dy", FakeContext(), FakePage(), ""),
+            timeout=0.2,
+        )
+    )
 
     assert result is True
 
@@ -6149,6 +6840,100 @@ def test_qrcode_poll_success_closes_browser_session(monkeypatch):
     assert 99999 not in login_qrcode_module.ACTIVE_LOGIN_SESSIONS
     assert context.closed is True
     assert playwright.stopped is True
+
+
+def test_qrcode_poll_timeout_returns_pending_state(monkeypatch):
+    class DummyContext:
+        async def close(self):
+            pass
+
+    class DummyPlaywright:
+        async def stop(self):
+            pass
+
+    handle = login_qrcode_module.LoginSessionHandle(
+        platform="dy",
+        playwright=DummyPlaywright(),
+        context=DummyContext(),
+        page=object(),
+        profile_path="browser_data/cdp_dy_user_data_dir",
+        created_at=datetime.now(timezone.utc),
+    )
+    login_qrcode_module.ACTIVE_LOGIN_SESSIONS[99998] = handle
+
+    async def fake_is_logged_in(platform, context, page, login_baseline=""):
+        return False
+
+    async def hanging_find_login_qrcode(page, platform, timeout, login_adapter=None):
+        await asyncio.Event().wait()
+
+    monkeypatch.setenv("MONITOR_LOGIN_QR_POLL_TIMEOUT_MS", "5")
+    monkeypatch.setattr(login_qrcode_module, "_is_logged_in", fake_is_logged_in)
+    monkeypatch.setattr(login_qrcode_module, "_find_login_qrcode", hanging_find_login_qrcode)
+
+    try:
+        result = asyncio.run(
+            asyncio.wait_for(
+                login_qrcode_module.poll_qrcode_login_session(99998),
+                timeout=0.2,
+            )
+        )
+    finally:
+        asyncio.run(login_qrcode_module.close_qrcode_login_session(99998))
+
+    assert result["active"] is True
+    assert result["success"] is False
+    assert result["status"] == "waiting_confirm"
+    assert "正在等待平台确认" in result["message"]
+
+
+def test_qrcode_poll_login_state_timeout_still_checks_cookie_success(monkeypatch):
+    class DummyContext:
+        pages = []
+
+        async def close(self):
+            pass
+
+        async def cookies(self):
+            return [{"name": "LOGIN_STATUS", "value": "1"}]
+
+    class DummyPage:
+        async def is_visible(self, selector, timeout=0):
+            return False
+
+    class DummyPlaywright:
+        async def stop(self):
+            pass
+
+    handle = login_qrcode_module.LoginSessionHandle(
+        platform="dy",
+        playwright=DummyPlaywright(),
+        context=DummyContext(),
+        page=DummyPage(),
+        profile_path="browser_data/cdp_dy_user_data_dir",
+        created_at=datetime.now(timezone.utc),
+    )
+    login_qrcode_module.ACTIVE_LOGIN_SESSIONS[99997] = handle
+
+    async def hanging_login_state(platform, context, page, login_baseline=""):
+        await asyncio.Event().wait()
+
+    monkeypatch.setenv("MONITOR_LOGIN_QR_POLL_TIMEOUT_MS", "5")
+    monkeypatch.setattr(login_qrcode_module, "call_mediacrawler_check_login_state", hanging_login_state)
+
+    try:
+        result = asyncio.run(
+            asyncio.wait_for(
+                login_qrcode_module.poll_qrcode_login_session(99997),
+                timeout=0.2,
+            )
+        )
+    finally:
+        login_qrcode_module.ACTIVE_LOGIN_SESSIONS.pop(99997, None)
+
+    assert result["success"] is True
+    assert result["status"] == "success"
+    assert 99997 not in login_qrcode_module.ACTIVE_LOGIN_SESSIONS
 
 
 def test_ai_skip_env_prevents_external_ai_calls(monkeypatch):
@@ -8943,7 +9728,6 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "/check-login" in page
     assert "updateAccountModalActions" in page
     assert "这是一个新账号。请先填写基础资料并保存账号，再按需完成扫码或 Cookie 登录。" in page
-    assert "保存账号会更新账号资料；登录是否可用以登录维护和账号检测结果为准。" in page
     assert "account_login_type_filter" in page
     assert "selectedSocialAccountIds" in page
     assert "account_bulk_bar" in page
@@ -8961,7 +9745,6 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "toggleAccountActionMenu" in page
     assert "reloginSocialAccount" in page
     assert "setAccountPlatformLocked" in page
-    assert "平台不可变更" in page
     assert "deleteSelectedSocialAccounts" in page
     assert "startLoginSessionFromSelected" not in page
     assert "openSelectedAccountLoginBrowser" not in page
@@ -9021,7 +9804,6 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "renderAccountList" in page
     assert "social-accounts" in page
     assert "loadAccountsPool" in page
-    assert "先生成二维码完成扫码登录；登录成功后，系统会把账号保存到账号池。" in page
     assert "二维码已生成，系统正在自动确认登录结果" in page
     assert "点击“生成二维码并登录”后，系统会自动确认扫码和登录结果。" in page
     assert "系统正在自动确认登录结果，每 3 秒刷新一次。" in page
@@ -9044,7 +9826,6 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "login-sessions" in page
     assert "pollLoginSession" in page
     assert "代理资源" in page
-    assert "管理代理来源、并发上限和可用状态" in page
     assert "proxy_resource_summary" in page
     assert "proxy_resource_count" in page
     assert "proxy_search" in page
@@ -9052,8 +9833,6 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "clearProxyFilters" in page
     assert "renderProxyResourceSummary" in page
     assert "renderProxyProfilesTable" in page
-    assert "代理 URL 保存后仅显示掩码。" in page
-    assert "保存后任务和账号绑定会继续引用这个代理资源；删除前请确认没有正在使用的任务。" in page
     assert "proxies" in page
     assert "loadProxyPool" in page
     assert "platformStatusTable" in page
@@ -9085,7 +9864,6 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "打开登录窗口" in page
     assert "用于默认登录态维护；账号资源请在账号详情里发起登录。" not in page
     assert "平台默认登录态" not in page
-    assert "网页登录二维码是主流程" in page
     assert "如平台需要额外确认，系统会提示下一步操作。" in page
     assert "login-browser" in page
     assert "openPlatformLoginBrowser" in page
@@ -9096,11 +9874,9 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "copyCurrentRunLogs" in page
     assert "downloadCurrentRunLogs" in page
     assert "全部运行记录" in page
-    assert "预检拦截" in page
     assert "skipped" in page
     assert "runStatusBadge" in page
     assert "runDisplayError" in page
-    assert "登录态/配置阻断" in page
     assert "jobActions" in page
     assert "toggleJobActionMenu" in page
     assert "/jobs/'+id+'/stop" in page
@@ -9141,10 +9917,6 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "任务运行超时由管理员在运行策略中统一控制" in page
     assert "过滤与去重" in page
     assert "平台搜索词（多行）" in page
-    assert "律所名称和别名用于 AI 判断、报告标题和线索归属，不会自动追加为平台搜索词。" in page
-    assert "排除词不参与平台搜索，只在内容采回后过滤标题、正文、作者和来源搜索词。" in page
-    assert "未配置邮件也可以采集和生成报告，只是不发送邮件。" in page
-    assert "这里的每一行才会用于平台搜索；律所别名不会自动参与搜索。" in page
     assert "监控对象" not in page
     assert "这里决定系统采什么内容" not in page
     assert "关键词栏" not in page
@@ -9158,9 +9930,7 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "恢复默认规则" in page
     assert "default_prompt" in page
     assert "resetAIPrompt" in page
-    assert "管理舆情判断规则和默认初筛规则" in page
     assert "基础信息" in page
-    assert "规则只影响模型如何判断和填写字段" in page
     assert "评估规则列表" in page
     assert "openNewAIRuleModal" in page
     assert "loadAIRuleProfiles" in page
@@ -9197,8 +9967,6 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     ai_rule_modal = page[page.index('id="ai_rule_modal"') : page.index('id="email"')]
     assert ai_rule_modal.index("基础信息") < ai_rule_modal.index("规则配置") < ai_rule_modal.index("固定输出字段") < ai_rule_modal.index("测试样例") < ai_rule_modal.index("测试结果")
     assert "测试样例" in page
-    assert "手动填写一条采集内容和评论样本，用来验证规则是否符合预期" in page
-    assert "平台只作为样例上下文，不会触发采集或导入数据" in page
     assert "ai_sample_law_firm_name" in page
     assert "ai_sample_platform" in page
     assert "ai_sample_source_keyword" in page
@@ -9213,11 +9981,8 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "sample_text:val('ai_sample_text')" in page
     assert "sample_comments:val('ai_sample_comments')" in page
     assert "is_related(boolean), is_negative(boolean), risk_level(high|medium|low|irrelevant)" in page
-    assert "规则只影响模型如何判断和填写字段" in page
-    assert "字段由系统固定校验" in page
     assert "AI 接入资源" in page
     assert "接口协议" in page
-    assert "管理模型连接资源和默认接入状态" in page
     assert "Provider" not in page
     assert "ai_resource_summary" in page
     assert "ai_resource_count" in page
@@ -9227,7 +9992,6 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "clearAIProfileFilters" in page
     assert "renderAIResourceSummary" in page
     assert "renderAIProfilesTable" in page
-    assert "密钥保存后不回显，连接测试会记录最近状态。" in page
     assert "获取模型列表" in page
     assert "可手动输入，或获取列表后选择" in page
     assert "ai_profile_model_options" in page
@@ -9253,7 +10017,6 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "测试消息" in page
     assert "模型返回" in page
     assert "模型已返回文本" in page
-    assert "连接测试只验证 API 是否能返回文本，不使用舆情评估 Prompt。" in page
     assert "连接测试" in page
     assert "连接测试" in page
     assert "ai-evaluation-config/test" in page
@@ -9364,6 +10127,57 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "loadRuns(), loadReadiness(), loadDoctor(), loadDashboard()" in page
     assert "重发邮件" in page
     assert "系统自检报告已生成" not in page
+
+
+def test_frontend_sms_verification_has_manual_code_submission():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+
+    assert "function submitLoginVerificationCode" in page
+    assert "/verification-code" in page
+    assert "autocomplete=\"one-time-code\"" in page
+    assert "提交短信验证码" in page
+    assert "capabilities.verification_type === 'sms'" in page
+
+
+def test_frontend_sms_verification_has_send_request():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+
+    assert "function requestLoginVerificationCode" in page
+    assert "/verification-code/request" in page
+    assert "发送短信验证码" in page
+    assert "submitLoginVerificationCode" in page
+    assert "capabilities.verification_type === 'sms'" in page
+
+
+def test_frontend_sms_verification_preserves_input_during_polling():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+
+    assert "function currentLoginVerificationCode(sessionId)" in page
+    assert "const existingVerificationCode=currentLoginVerificationCode(session.id)" in page
+    assert "value=\"${esc(existingVerificationCode)}\"" in page
+    assert "if(normalizeLoginSessionStatus(data.session.status)==='needs_verification') return true;" in page
+    assert "toast(cleanCustomerText(data.session.message||'短信验证码已提交，请等待平台确认登录结果。'))" in page
+
+
+def test_frontend_sms_verification_panel_is_structured_and_inline_validated():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+
+    assert ".login-verification-panel" in page
+    assert ".login-verification-actions" in page
+    assert ".login-verification-code-row" in page
+    assert ".login-verification-error" in page
+    assert "function setLoginVerificationError" in page
+    assert "id=\"login_verification_error_${Number(session.id)}\"" in page
+    assert "aria-describedby=\"login_verification_error_${Number(session.id)}\"" in page
+    assert "setLoginVerificationError(sessionId, '请输入 4-8 位短信验证码')" in page
+    assert "toast('请输入 4-8 位短信验证码')" not in page
+    assert "const displayTitle=canSubmitLoginVerificationCode && status==='needs_verification' ? '平台要求完成短信验证码'" in page
+    assert "平台要求完成短信验证码" in page
+    assert "请先发送验证码，收到短信后输入并提交。" in page
+    assert "1. 发送短信验证码" in page
+    assert "2. 提交短信验证码" in page
+    assert "发送中..." in page
+    assert "capabilities.verification_type === 'sms'" in page
 
 
 def test_monitor_page_uses_consistent_buttons_tables_and_modal_actions():
@@ -10595,7 +11409,6 @@ def test_phase_21d_monitoring_tasks_and_task_drawer_visual_pass_preserves_workfl
     for selector in [
         "body #jobs > .panel {",
         "body #jobs .toolbar {",
-        "body #jobs details.advanced {",
         "body #job_drawer .panel {",
         "body #job_drawer textarea {",
         "body .wizard-steps {",
@@ -10609,7 +11422,7 @@ def test_phase_21d_monitoring_tasks_and_task_drawer_visual_pass_preserves_workfl
         assert selector in css
 
     assert "min-width: 980px;" in css
-    assert "采集规则说明" in jobs_section
+    assert "采集规则说明" not in jobs_section
 def test_phase_21e_platform_accounts_visual_pass_preserves_account_workflow():
     page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
     css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
@@ -11768,7 +12581,6 @@ def test_cr051_task_center_consolidates_report_grouping_without_separate_report_
     assert 'id="runs_table"' in task_center
     assert "按舆情任务分组" in task_center
     assert "按任务汇总运行、AI 评估、报告和交付状态" in task_center
-    assert "切换分组或运行记录，不影响详情查看" in task_center
 
     assert "function renderGroupedTaskRuns(runs)" in page
     assert "function groupRunsByTask(runs)" in page

@@ -2,6 +2,322 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-06-26 - CR-110 QR Login SMS Verification Manual Submission Regression Fix
+
+Environment: local Windows worktree `E:\myproject\MediaCrawler`, branch
+`codex/cr108-login-initialization-hardening`.
+
+Result:
+
+- Restored the manual SMS verification loop for server-side QR login after the
+  live Douyin verification test showed the current CR-108 UI had no
+  send/input/submit flow.
+- Added login-session routes for requesting SMS send and submitting a manually
+  received verification code to the active server-side browser session.
+- Added server-side page helpers that fill the visible verification input and
+  prefer Douyin `#uc-second-verify` exact visible `验证` controls before
+  broader submit selectors.
+- Added the account login modal SMS panel with send, one-time-code input,
+  inline validation, submit, and continue-confirm actions. Polling stops on
+  `needs_verification` so typed input is not repeatedly overwritten.
+
+Verification:
+
+- Red check:
+  `uv run python -m pytest tests/test_monitoring_mvp.py::test_login_session_verification_code_route_submits_sms_code tests/test_monitoring_mvp.py::test_login_session_verification_code_request_route_sends_sms_code tests/test_monitoring_mvp.py::test_qrcode_manual_sms_verification_submission_fills_server_page tests/test_monitoring_mvp.py::test_frontend_sms_verification_has_manual_code_submission tests/test_monitoring_mvp.py::test_frontend_sms_verification_has_send_request tests/test_monitoring_mvp.py::test_frontend_sms_verification_preserves_input_during_polling tests/test_monitoring_mvp.py::test_frontend_sms_verification_panel_is_structured_and_inline_validated --basetemp .tmp-pytest\sms-red`
+  failed as expected: backend functions/routes and frontend SMS panel were
+  missing.
+- Green check:
+  `uv run python -m pytest tests/test_monitoring_mvp.py::test_login_session_verification_code_route_submits_sms_code tests/test_monitoring_mvp.py::test_login_session_verification_code_request_route_sends_sms_code tests/test_monitoring_mvp.py::test_qrcode_manual_sms_verification_submission_fills_server_page tests/test_monitoring_mvp.py::test_frontend_sms_verification_has_manual_code_submission tests/test_monitoring_mvp.py::test_frontend_sms_verification_has_send_request tests/test_monitoring_mvp.py::test_frontend_sms_verification_preserves_input_during_polling tests/test_monitoring_mvp.py::test_frontend_sms_verification_panel_is_structured_and_inline_validated --basetemp .tmp-pytest\sms-green-targeted`
+  passed: 7 passed.
+- Login regression subset:
+  `uv run python -m pytest tests/test_monitoring_mvp.py -k "login_session or qrcode or login_browser or verification_code or manual_sms" --basetemp .tmp-pytest\sms-login-regression`
+  passed: 53 passed.
+- `uv run python -m py_compile api/monitoring/login_qrcode.py api/routers/monitor.py`
+  passed.
+- `node --check api/webui/monitor/monitor.js` passed.
+- Inline monitor script parse check passed.
+- `uv run python scripts/check_docs.py` passed.
+- `git diff --check` passed with line-ending warnings only.
+
+Limitations:
+
+- This restores manual send/input/submit behavior only. It does not receive
+  SMS automatically and does not bypass captcha, SMS, slider, phone
+  confirmation, device verification, or platform risk checks.
+- Live Douyin success still requires the operator to receive the SMS on the
+  bound phone and enter it into the web UI.
+
+## 2026-06-26 - CR-109 Monitoring Task Collection Rule Explanation Removal
+
+Environment: local Windows worktree `E:\myproject\MediaCrawler`, branch
+`codex/cr108-login-initialization-hardening`.
+
+Result:
+
+- Removed the standalone "采集规则说明" disclosure block from the Monitoring /
+  舆情监控 task page.
+- Removed CSS rules that only targeted that deleted task-page disclosure.
+- Updated static frontend coverage so the monitoring task section must not
+  contain the removed text.
+
+Verification:
+
+- Pending in this work batch:
+  `uv run python -m pytest tests/test_monitoring_mvp.py -k "phase_21d_monitoring_tasks_and_task_drawer_visual_pass_preserves_workflow" --basetemp .tmp-pytest\remove-collection-rule-note`
+- Pending in this work batch: `node --check api/webui/monitor/monitor.js`
+- Pending in this work batch: `uv run python scripts/check_docs.py`
+- Pending in this work batch: `git diff --check`
+
+Limitations:
+
+- This is a narrow frontend cleanup. It does not change collection capability,
+  task execution, login, report, AI, email, permissions, or backend APIs.
+
+## 2026-06-26 - CR-108 QR Login Confirmation Timeout Regression Fix
+
+Environment: local Windows worktree `E:\myproject\MediaCrawler`, branch
+`codex/cr108-login-initialization-hardening`, local one-click service observed
+on `http://127.0.0.1:8080`.
+
+Result:
+
+- Reproduced the user-reported "scanned but no response" class as a regression
+  in the CR-108 QR polling hardening.
+- The prior scan-time timeout fix wrapped `_is_logged_in()` with the same short
+  timeout used inside `_is_logged_in()` for MediaCrawler's login-state method.
+  When the MediaCrawler method hung but platform cookies already indicated
+  success, the outer timeout could cancel the cookie/session fallback and keep
+  the UI in a pending state.
+- Removed the duplicate outer timeout around `_is_logged_in()` while keeping
+  the MediaCrawler method itself bounded. QR image rediscovery, page
+  preparation, and manual-verification detection remain bounded so the polling
+  API does not hang on slow page operations.
+
+Verification:
+
+- Red check:
+  `uv run python -m pytest tests/test_monitoring_mvp.py -k "qrcode_poll_login_state_timeout_still_checks_cookie_success" --basetemp .tmp-pytest\qr-cookie-red`
+  failed as expected because polling returned non-success even though the
+  account cookies showed login success.
+- Green check:
+  `uv run python -m pytest tests/test_monitoring_mvp.py -k "qrcode_poll_login_state_timeout_still_checks_cookie_success or qrcode_login_state_timeout_falls_back_to_cookie_rules or qrcode_poll_timeout_returns_pending_state" --basetemp .tmp-pytest\qr-cookie-green`
+  passed: 3 passed.
+- Login subset:
+  `uv run python -m pytest tests/test_monitoring_mvp.py -k "login_session or qrcode or login_browser or verification_code or manual_sms" --basetemp .tmp-pytest\qr-cookie-login`
+  passed: 47 passed.
+- `uv run python -m py_compile api/monitoring/login_qrcode.py` passed.
+
+Limitations:
+
+- Live platform-side success still depends on the operator completing phone
+  confirmation, captcha, SMS, slider, or device checks when the platform
+  requires them. This fix restores backend recognition of completed login state;
+  it does not bypass platform verification.
+- The running 8080 service must be restarted before manual retest uses this
+  code. QR codes generated before restart are invalid after restart.
+
+## 2026-06-26 - CR-108 QR Scan Polling Hang Regression Fix
+
+Environment: local Windows worktree `E:\myproject\MediaCrawler`, branch
+`codex/cr108-login-initialization-hardening`, local one-click service observed
+on `http://127.0.0.1:8080`.
+
+Result:
+
+- Diagnosed the follow-up "scanned but no response" case on login session
+  `3446`: the database stayed at `waiting_scan`, the server-side headless
+  Chrome was still alive for `monitor_data/account_profiles/1/dy/acc_4053`,
+  and an authenticated `GET /api/monitor/login-sessions/3446` timed out after
+  20 seconds.
+- The root cause was missing per-step timeout protection inside QR polling
+  after the QR handle exists. A slow MediaCrawler login-state check or QR
+  rediscovery step could block the API response, so the frontend polling loop
+  could not show progress after the operator scanned.
+- Added bounded polling substeps for login-state check, QR rediscovery, page
+  preparation, and manual-verification detection. Timeout fallback keeps the
+  session active and returns `waiting_confirm` with a customer-safe continue
+  confirmation message.
+
+Verification:
+
+- Red checks:
+  `uv run python -m pytest tests/test_monitoring_mvp.py -k "qrcode_login_state_timeout_falls_back_to_cookie_rules or qrcode_poll_timeout_returns_pending_state" --basetemp .tmp-pytest\qr-scan-poll-red`
+  failed as expected: 2 failed because both paths exceeded the test timeout.
+- Green check:
+  `uv run python -m pytest tests/test_monitoring_mvp.py -k "qrcode_login_state_timeout_falls_back_to_cookie_rules or qrcode_poll_timeout_returns_pending_state" --basetemp .tmp-pytest\qr-scan-poll-green-2`
+  passed: 2 passed.
+- `uv run python -m py_compile api/monitoring/login_qrcode.py` passed.
+- Login subset:
+  `uv run python -m pytest tests/test_monitoring_mvp.py -k "login_session or qrcode or login_browser or verification_code or manual_sms" --basetemp .tmp-pytest\qr-scan-poll-login`
+  passed: 46 passed.
+
+Limitations:
+
+- Live platform-side success still depends on the operator completing any
+  phone confirmation, captcha, SMS, slider, or device check. This fix prevents
+  backend polling from hanging; it does not bypass platform verification.
+- The already running 8080 service must be restarted before manual retest uses
+  this code.
+
+## 2026-06-26 - CR-108 QR Initialization Hang Regression Fix
+
+Environment: local Windows worktree `E:\myproject\MediaCrawler`, branch
+`codex/cr108-login-initialization-hardening`, local one-click service observed
+on `http://127.0.0.1:8080`.
+
+Result:
+
+- Diagnosed a local QR creation hang where the running 8080 process had a
+  server-side Playwright driver and headless Chrome process alive for
+  `monitor_data/account_profiles/1/dy/acc_4007` while the login session had
+  been created as `preparing`.
+- The root cause was a synchronous QR creation request waiting inside
+  server-side Playwright/platform initialization before an in-process QR handle
+  was registered. A separate status poll could then see no active handle and
+  report `qrcode_failed`, even though the original QR startup attempt was still
+  stuck.
+- Added an outer timeout around server-side QR startup so the API returns a
+  customer-safe timeout failure instead of blocking indefinitely.
+- Added cleanup for partially initialized Playwright/browser context state when
+  QR startup is cancelled by the timeout.
+- Adjusted login-session polling so a fresh database `preparing` session stays
+  pending during the QR startup timeout window, while stale `preparing`
+  sessions without a QR handle can still fail after the timeout window.
+
+Verification:
+
+- Red checks for the new QR hang regressions were run before the implementation
+  update and failed as expected:
+  - fresh `preparing` session was converted to `qrcode_failed` too early;
+  - hanging QR startup did not return before the test-level timeout.
+- Targeted green check:
+  `uv run python -m pytest tests/test_monitoring_mvp.py -k "keeps_preparing_session_pending_before_qr_handle_exists or expires_stale_preparing_session_without_qr_handle or qrcode_start_has_outer_timeout" --basetemp .tmp-pytest\qr-stuck-final-targeted`
+  passed: 3 passed.
+- `uv run python -m py_compile api/monitoring/login_qrcode.py api/routers/monitor.py`
+  passed.
+- CR-108 login/startup subset:
+  `uv run python -m pytest tests/test_monitoring_mvp.py -k "windows_oneclick_launcher or login_session or qrcode or login_browser or verification_code or manual_sms" --basetemp .tmp-pytest\cr108-final-qr-stuck`
+  passed: 46 passed.
+- `uv run python scripts/check_docs.py` passed.
+- `git diff --check` passed with only Git LF-to-CRLF working-copy warnings.
+
+Limitations:
+
+- The already running 8080 service had not been restarted when this regression
+  was diagnosed, so it did not yet have the new timeout/cleanup code loaded.
+- Existing stuck Playwright/Chrome processes from the old runtime may need a
+  local service restart or stale-process cleanup before retesting the QR flow
+  manually.
+- Live platform scan/SMS/device-verification success was not asserted by these
+  automated tests; captcha, SMS, slider, and platform risk checks remain manual
+  operator actions.
+
+## 2026-06-26 - CR-108 Login Initialization And Profile Contention Hardening
+
+Environment: local Windows worktree `E:\myproject\MediaCrawler`, branch
+`codex/cr108-login-initialization-hardening`.
+
+Result:
+
+- Implemented CR-108 current-main code after the documentation-first gate.
+- Added Docker/server packaging files with server-like defaults:
+  container-internal browser data, `MONITOR_LOGIN_QR_HEADLESS=true`,
+  `MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=false`, scheduler disabled by default, and
+  AI skipped unless an operator enables it.
+- Added same-account login Profile contention handling:
+  - QR session creation is blocked before Playwright launch when a local login
+    window is already open for the same `profile_key` or resolved runtime
+    profile path.
+  - Opening a local login window for an account supersedes pending QR sessions
+    for that account/profile, closes the QR handle, and records a
+    customer-safe "switched to login window" message.
+  - `login_window_status` can now carry `profile_key` while staying compatible
+    with older path-only login-window state files.
+- Preserved production/server mode behavior: local login windows remain blocked
+  when `MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=false`, and operators are directed to
+  the web QR/status flow.
+- Reviewed the old worktree SMS/diagnostic material as source material only.
+  The Douyin exact visible `验证` SMS submit selector was not migrated in this
+  batch because current main does not expose the old worktree's SMS submission
+  route; no SMS receiving automation or verification bypass was added.
+
+Verification:
+
+- Red/green CR-108 targeted tests:
+  - Red check in a temporary clean `HEAD` copy with only the new CR-108 tests
+    applied failed as expected: 3 failed, 331 deselected. The failures proved
+    the old baseline still started QR login, lacked the `profile_key` login
+    window status hook, and did not close the prior QR session when a local
+    login window opened.
+  - Green check on current mainline CR-108 code:
+  `uv run python -m pytest tests/test_monitoring_mvp.py -k "cr108_qr_login_is_blocked or cr108_opening_login_window" --basetemp .tmp-pytest\cr108-profile`
+  passed: 3 passed, 331 deselected.
+- Required login subset:
+  `uv run python -m pytest tests/test_monitoring_mvp.py -k "login_session or qrcode or login_browser or verification_code or manual_sms" --basetemp .tmp-pytest\cr108-login`
+  passed: 41 passed, 293 deselected.
+- Final CR-108 acceptance subset:
+  `uv run python -m pytest tests/test_monitoring_mvp.py -k "windows_oneclick_launcher or login_session or qrcode or login_browser or verification_code or manual_sms" --basetemp .tmp-pytest\cr108-final`
+  passed: 43 passed, 291 deselected.
+- `docker compose config` passed and proved Compose packaging/configuration
+  parses with the committed example env and optional untracked override.
+- `node --check api/webui/monitor/monitor.js` passed.
+- Inline monitor page script parse passed:
+  `PASS inline monitor script parse: 1 inline script block(s) parsed`.
+- `uv run python scripts/check_docs.py` passed.
+- `git diff --check` passed with only Git LF-to-CRLF working-copy warnings.
+
+Limitations:
+
+- Docker runtime startup was not executed here; `docker compose config` does
+  not prove Docker Desktop, WSL, `vmcompute`, or host browser/graphics health.
+- Live Douyin/XHS/Kuaishou QR scanning, SMS verification success, and Tencent
+  server behavior were not revalidated on current main.
+- The old worktree's larger login diagnostics UI and Douyin SMS submit route
+  remain future source material, not current-main verified behavior.
+
+## 2026-06-26 - CR-108 Documentation-First Gate
+
+Environment: local Windows worktree `E:\myproject\MediaCrawler`, branch
+`codex/cr108-login-initialization-hardening`.
+
+Result:
+
+- Recorded current mainline CR-108 as the login/deployment hardening lane after
+  CR-107 Windows one-click startup.
+- Added the rule that the older server-login/SMS/Docker worktree at
+  `C:\Users\Administrator\.codex\worktrees\1d0a\MediaCrawler` is historical
+  evidence and implementation source material only, not a branch to merge
+  directly.
+- Remapped the older worktree's conflicting CR-107/CR-108 document concepts
+  into current mainline CR-108 instead of copying old numbering.
+- Added planned acceptance for Docker packaging migration, QR/local-window
+  profile contention, local Windows first-run verification, server-mode
+  local-window blocking, and optional Douyin second-verify/SMS diagnostic
+  migration.
+- Selectively migrated Docker packaging from the old server-login worktree:
+  `.dockerignore`, `Dockerfile`, `docker-compose.yml`,
+  `deploy/docker/README.md`, and `deploy/docker/monitor.env.example`.
+- Kept Docker/server defaults on container-internal browser behavior,
+  `MONITOR_LOGIN_QR_HEADLESS=true`,
+  `MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=false`, scheduler disabled, and AI skipped.
+
+Verification:
+
+- `uv run python scripts/check_docs.py` passed.
+- `git diff --check` passed with only Git LF-to-CRLF working-copy warnings.
+- `docker compose config` passed after changing the compose file to read the
+  committed `monitor.env.example` and optionally overlay an untracked
+  `monitor.env`.
+
+Limitations:
+
+- This entry proves only the documentation gate intent and traceability. It
+  does not yet prove Docker runtime startup, current-main login-code behavior,
+  live Douyin QR/SMS success, or host Docker Desktop/WSL health.
+- Old Tencent server evidence remains historical until revalidated after the
+  current-main implementation is complete.
+
 ## 2026-06-24 - CR-107 Windows One-Click Local Startup Launcher And Browser URL Separation
 
 Environment: local Windows worktree `E:\myproject\MediaCrawler`.

@@ -14,13 +14,14 @@ LOGIN_STATE_DIR = MONITOR_DATA_DIR / "login_windows"
 RECENT_CLOSED_TTL_SECONDS = 3600
 
 
-def record_login_window(platform: str, pid: int, debug_port: int, profile_path: str) -> dict[str, Any]:
+def record_login_window(platform: str, pid: int, debug_port: int, profile_path: str, profile_key: str = "") -> dict[str, Any]:
     LOGIN_STATE_DIR.mkdir(parents=True, exist_ok=True)
     data = {
         "platform": platform,
         "pid": int(pid),
         "debug_port": int(debug_port),
         "profile_path": profile_path,
+        "profile_key": profile_key,
         "opened_at": datetime.now(timezone.utc).isoformat(),
     }
     _state_path(platform).write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
@@ -48,6 +49,7 @@ def login_window_status(platform: str) -> dict[str, Any]:
             "opened_at": data.get("opened_at"),
             "closed_at": data.get("closed_at") or closed_at,
             "profile_path": data.get("profile_path"),
+            "profile_key": data.get("profile_key"),
         }
     return {
         "is_open": is_open,
@@ -56,6 +58,7 @@ def login_window_status(platform: str) -> dict[str, Any]:
         "opened_at": data.get("opened_at"),
         "closed_at": data.get("closed_at"),
         "profile_path": data.get("profile_path"),
+        "profile_key": data.get("profile_key"),
     }
 
 

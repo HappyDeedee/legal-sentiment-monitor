@@ -1437,6 +1437,40 @@ separate follow-up work.
   URL that is separate from the bind host. `start_webui.bat` remains a local
   entry point, `start_monitor_service.bat` remains service-only, and the new
   `start_monitor_oneclick.bat` handles the combined flow.
+- CR-108 is implemented in the working tree after the documentation-first gate:
+  Docker/server packaging has been selectively migrated with server-like
+  defaults, QR sessions and local login windows are mutually exclusive for the
+  same `profile_key` or resolved runtime profile path, and local Windows
+  first-run login keeps the existing manual verification / continue-confirm /
+  account-check path without bypassing captcha, SMS, slider, or platform risk
+  checks. QR startup is also bounded by the configured timeout, cleans up
+  half-initialized Playwright/browser state on timeout, and keeps fresh
+  `preparing` sessions pending while initialization is still inside that
+  timeout window. Scan-time QR polling is bounded per substep as well, so a
+  slow MediaCrawler login-state check or QR rediscovery attempt keeps returning
+  an active `waiting_confirm` response instead of blocking the UI loop. A
+  follow-up regression in that scan-time hardening has also been fixed: the
+  route no longer wraps `_is_logged_in()` with an equal outer timeout, so when
+  the MediaCrawler login-state method times out after scanning, the same-account
+  cookie/session fallback can still advance the session to success. The old
+  server-login worktree
+  `C:\Users\Administrator\.codex\worktrees\1d0a\MediaCrawler` remains
+  historical/source material only; its Tencent server QR/SMS evidence and
+  Douyin exact `验证` SMS submit selector were reviewed but not revalidated or
+  migrated as a current-main SMS submission feature in this CR-108 batch.
+- CR-109 is implemented in the working tree as a narrow Monitoring page UI
+  cleanup: the standalone "采集规则说明" disclosure below the task table has
+  been removed, along with CSS that only styled that deleted disclosure. Task
+  filters, task table, drawer workflow, backend APIs, login, reports, AI,
+  email, and permissions are unchanged.
+- CR-110 is implemented in the working tree as a focused CR-108 follow-up
+  regression fix: server-side QR login now has manual SMS verification
+  request/submission routes, the account login modal shows a compact
+  send/input/submit/continue-confirm panel when `verification_type` is `sms`,
+  and the Douyin `#uc-second-verify` path prefers the exact visible `验证`
+  submit control instead of send/resend controls. This restores the manual SMS
+  loop only; it does not receive SMS automatically, bypass captcha/SMS/slider/
+  device checks, or migrate the older worktree's diagnostics UI.
 - Email delivery-history UI and report task grouping are accepted directions.
   Run visibility/noise-filtering data fields are active schema features after
   Phase 14, archive/restore APIs, pagination, and filters are active after

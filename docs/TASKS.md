@@ -1503,6 +1503,154 @@ Implementation status:
 - [x] Verify the new launcher with targeted tests, docs consistency, and
       `git diff --check`.
 
+## CR-108 - Local/Server Login Initialization And Verification Flow Hardening
+
+Planning status:
+
+CR-108 is the current login/deployment hardening lane after CR-107. It starts
+with a documentation gate. The older worktree
+`C:\Users\Administrator\.codex\worktrees\1d0a\MediaCrawler` is a source of
+historical server/Docker/SMS evidence, not a branch to merge directly. Its old
+CR-107 and CR-108 entries must be remapped into this current CR-108.
+
+Documentation gate:
+
+- [x] Record CR-108 in `CHANGE_REQUESTS.md` with the current mainline CR
+      number and explicit old-worktree remapping rule.
+- [x] Add this CR-108 task block before any non-document code change.
+- [x] Add CR-108 test coverage expectations to `TEST_PLAN.md`.
+- [x] Add CR-108 traceability row in `TRACEABILITY.md`.
+- [x] Update `CURRENT_STATE.md` to name CR-108 as the current objective after
+      CR-107 and classify old worktree evidence.
+- [x] Run `uv run python scripts/check_docs.py` for the docs-only gate.
+- [x] Run `git diff --check` for the docs-only gate.
+
+Docker/server packaging migration:
+
+- [x] Selectively migrate `.dockerignore`, `Dockerfile`, `docker-compose.yml`,
+      `deploy/docker/README.md`, and `deploy/docker/monitor.env.example` from
+      the old server-login worktree.
+- [x] Keep Docker defaults server-like: container-internal Playwright browser,
+      `MONITOR_LOGIN_QR_HEADLESS=true`,
+      `MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=false`, scheduler disabled, and AI
+      skipped unless an operator enables them.
+- [x] Document that `docker compose config` validates project packaging only
+      and does not prove host Docker Desktop/WSL health.
+- [x] Verify Docker packaging with `docker compose config` after migration.
+
+Profile contention and first-run login flow:
+
+- [x] Add failing regression coverage for starting a QR login while a same
+      account/profile local login window is open.
+- [x] Add failing regression coverage for starting a QR login while a same
+      `profile_key` local login window is open.
+- [x] Add failing regression coverage for switching from an active QR login
+      session to a local manual login window.
+- [x] Make the backend treat QR and local-window login as mutually exclusive
+      for the same `profile_key`/runtime profile path.
+- [x] Return customer-safe conflict states and messages instead of surfacing
+      raw Playwright `TargetClosedError`/Profile contention text.
+- [x] Keep production/server mode blocking local-window login and directing
+      administrators back to the web QR/status flow.
+- [x] Ensure local Windows first-run flow tells the operator to finish manual
+      verification, close the browser window, and run account check/continue
+      confirmation to persist the login state.
+
+QR initialization hang hardening:
+
+- [x] Add failing regression coverage for a half-initialized QR startup that
+      hangs before a QR handle is registered.
+- [x] Add failing regression coverage that fresh `preparing` sessions stay
+      pending while QR startup is still inside the timeout window.
+- [x] Add regression coverage that stale `preparing` sessions without a QR
+      handle can expire to `qrcode_failed` after the timeout window.
+- [x] Wrap server-side QR startup in an outer timeout and return a
+      customer-safe timeout message instead of leaving the API request blocked.
+- [x] Close partial Playwright/browser context state when QR startup is
+      cancelled by the timeout.
+- [x] Keep polling from overwriting a fresh initializing session with
+      "browser session not running" before initialization has had time to
+      complete.
+- [x] Add failing regression coverage for a scan-time polling request that
+      hangs inside MediaCrawler login-state detection.
+- [x] Add failing regression coverage for a scan-time polling request that
+      hangs while trying to rediscover the QR image.
+- [x] Add failing regression coverage for the scan-time case where the
+      MediaCrawler login-state method times out but same-account cookies already
+      prove login success.
+- [x] Bound QR polling substeps so the API keeps returning a pending
+      `waiting_confirm` state instead of blocking the frontend polling loop.
+- [x] Keep the MediaCrawler login-state method bounded without wrapping
+      `_is_logged_in()` in an equal outer timeout, so cookie/session fallback can
+      still advance the QR session to success after scanning.
+
+Selective SMS/diagnostic migration:
+
+- [x] Review old worktree diagnostics and SMS UI changes as source material
+      only.
+- [x] Do not migrate Douyin `#uc-second-verify` SMS submission in this CR-108
+      batch because current main does not expose the old worktree's SMS submit
+      route; keep the exact visible `验证` selector as future source material.
+- [x] Keep the current customer-facing login modal action-oriented and do not
+      migrate the old worktree's larger technical-diagnostics UI in this batch.
+- [x] Do not add SMS receiving automation or verification bypass behavior.
+
+Verification and documentation close-out:
+
+- [x] Run
+      `uv run python -m pytest tests/test_monitoring_mvp.py -k "windows_oneclick_launcher or login_session or qrcode or login_browser or verification_code or manual_sms"`.
+- [x] Run `node --check api/webui/monitor/monitor.js`.
+- [x] Run the existing inline monitor script parse check.
+- [x] Run `uv run python scripts/check_docs.py`.
+- [x] Run `git diff --check`.
+- [x] Update `TEST_RESULTS.md` with what was verified on current main, what
+      remains old-worktree/Tencent evidence, and what was not revalidated.
+- [x] Update this task block and `TRACEABILITY.md` to match the final
+      verified status.
+
+## CR-109 - Monitoring Task Collection Rule Explanation Removal
+
+Planning status:
+
+CR-109 is a narrow Monitoring page UI cleanup requested from the live screen.
+It removes the standalone "采集规则说明" helper block under the task list without
+changing task workflows or backend behavior.
+
+- [x] Record CR-109 in `CHANGE_REQUESTS.md`.
+- [x] Remove the monitoring task page "采集规则说明" disclosure block.
+- [x] Remove task-page CSS rules that only targeted the deleted disclosure.
+- [x] Update static frontend coverage to assert that the monitoring task
+      section no longer contains "采集规则说明".
+- [x] Verify with the targeted Monitoring task visual-regression test,
+      JavaScript syntax check, docs consistency, and `git diff --check`.
+
+## CR-110 - QR Login SMS Verification Manual Submission Regression Fix
+
+Planning status:
+
+CR-110 is a focused regression fix after live Douyin QR testing showed that the
+current CR-108 login UI can detect SMS verification but lacks the older
+worktree's manual send/input/submit flow.
+
+- [x] Record CR-110 in `CHANGE_REQUESTS.md` as a follow-up regression fix,
+      without rewriting CR-108 historical verification.
+- [x] Add backend login-session routes for requesting and submitting manually
+      received SMS verification codes.
+- [x] Add server-side QR browser helpers that click SMS send controls, fill a
+      manually received code, and prefer Douyin `#uc-second-verify` exact
+      visible `验证` submit controls.
+- [x] Add the account login modal SMS verification panel with send, input,
+      inline validation, submit, and continue-confirm actions.
+- [x] Preserve the typed SMS code while the login session panel re-renders.
+- [x] Keep SMS receiving automation, captcha/slider/device bypass, the older
+      technical diagnostics UI, crawler behavior, tasks, reports, AI, email,
+      permissions, and profile-locking out of scope.
+- [x] Add regression tests for backend routes, server-page SMS submit, send
+      request, Douyin exact submit selection, frontend rendering, and inline
+      validation.
+- [x] Verify the targeted red/green tests and the broader login regression
+      subset.
+
 ## Phase 14 - Run Center Data Model Preparation
 
 Planning status:
