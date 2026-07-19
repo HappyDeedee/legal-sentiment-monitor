@@ -321,7 +321,8 @@ map, the single provider plan/result contract, field proof classifications,
 fail-closed rules, server-like boundary, and the CR-112 ownership split. It did
 not change product code, schema, UI, runtime data, Profiles, Cookies, proxies,
 crawler behavior, browser processes, deployment configuration, or database
-state. Phase 5.1A is the next eligible execution unit.
+state. Phase 5.1A is now implemented and independently verified. Phase 5.1B is
+the next eligible execution unit.
 
 - [x] Keep Phase 5.1P as read-only mapping only. It must not create or change
       schema, code, provider implementation, runtime data, profiles, cookies,
@@ -374,6 +375,15 @@ state. Phase 5.1A is the next eligible execution unit.
 
 ### Phase 5.1A - Account Identity Data Model
 
+Implementation status:
+
+The additive schema and compatibility tests are implemented and independently
+verified in the isolated `codex/phase-5.1a-account-identity-schema` worktree
+against `main@8b55c2a`. Focused tests passed (`2` Phase 5.1A tests and `7`
+schema/account regression tests), the full monitoring suite passed (`352
+passed`), and the final read-only review returned `READY` with no finding.
+Phase 5.1B is next.
+
 - [x] Start only after Phase 5.1P is complete and confirms the provider,
       MediaCrawler, and container/server-like compatibility boundary. Verified
       by `docs/phase-5.1p-browser-entrypoint-map.md` on 2026-07-19.
@@ -381,7 +391,7 @@ state. Phase 5.1A is the next eligible execution unit.
       after CR-047 locks an account identity, task-level proxy overrides are
       rejected for that locked account environment. Changing the proxy requires
       explicit reset/re-login.
-- [ ] Add additive account identity fields for platform accounts:
+- [x] Add additive account identity fields for platform accounts:
       `environment_region`, `browser_platform`, `identity_template`,
       `fingerprint_seed`, `user_agent`, `timezone`, `locale`,
       `accept_language`, `screen_width`, `screen_height`, `viewport_width`,
@@ -390,16 +400,15 @@ state. Phase 5.1A is the next eligible execution unit.
       `requires_relogin`, `identity_state`,
       `identity_runtime_snapshot_json`, environment lock status, and lock
       timestamp/reason.
-- [ ] Keep `proxy_id` as the account-bound stable proxy policy field and
+- [x] Keep `proxy_id` as the account-bound stable proxy policy field and
       add a customer-safe proxy region snapshot so identity validation can
       detect region/timezone/locale drift without exposing proxy secrets.
-- [ ] Add negative tests proving locked environments reject hidden proxy or
-      process-default fallback, or surface the override as an explicit audited
-      exception under the confirmed policy.
-- [ ] Keep existing active accounts readable, do not silently backfill guessed
-      identity values, and require environment confirmation/re-login without
-      moving old profile directories.
-- [ ] Keep old accounts readable and avoid exposing raw `profile_path`.
+- [x] Keep existing active accounts readable, do not silently backfill guessed
+      identity values, and represent their ungenerated environment as
+      `identity_state = draft` without moving old profile directories. Runtime
+      confirmation/re-login enforcement remains Phase 5.1B-D work.
+- [x] Keep old accounts readable and avoid exposing raw `profile_path` in
+      masked detail and list reads.
 
 ### Phase 5.1B - Account Identity Generation And Validation
 
@@ -486,6 +495,9 @@ state. Phase 5.1A is the next eligible execution unit.
 - [ ] Ensure MediaCrawler integration receives the higher-priority account
       identity input when present, while preserving current MediaCrawler
       defaults only for accounts that do not yet have a Phase 5.1 identity.
+- [ ] Add negative tests proving locked environments reject task-level proxy
+      overrides, hidden process-default fallback, and default-network fallback
+      before browser or crawler launch.
 
 ### Phase 5.1 Acceptance Gate - Runtime Snapshot And Server-Like Verification
 
@@ -1706,9 +1718,8 @@ Planning status:
 CR-112 is a proposed new capability and remains `Needs Confirmation`. This
 documentation synchronization does not authorize product code, schema, UI,
 extension, Profile, Cookie, connector, runtime, deployment, or database
-changes. Phase 5.1P is verified and Phase 5.1A is the next CR-047 unit;
-CR-112 does not preempt CR-070 / Phase 5.2 while its sequencing is
-unconfirmed.
+changes. Phase 5.1P and Phase 5.1A are verified and Phase 5.1B is next;
+CR-112 does not preempt CR-070 / Phase 5.2 while its sequencing is unconfirmed.
 
 Documentation synchronization:
 

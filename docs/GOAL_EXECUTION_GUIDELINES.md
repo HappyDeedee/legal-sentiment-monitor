@@ -73,10 +73,9 @@ decision:
    `docs/phase-5.1p-browser-entrypoint-map.md` as the compatibility boundary
    for QR login, Cookie validation, login-state checks, manual and scheduler
    runs, runner behavior, and MediaCrawler CDP launch/reconnect.
-3. Implement Phase 5.1A next. Scope is the additive account identity data
-   model and confirmed locked-account proxy policy.
-4. Implement Phase 5.1B only after Phase 5.1A passes. Scope is identity
-   generation and validation.
+3. Phase 5.1A additive account identity data model is implemented and
+   independently verified.
+4. Implement Phase 5.1B next. Scope is identity generation and validation.
 5. Implement Phase 5.1C only after Phase 5.1B passes. Scope is locking,
    reset, re-login, audit, and state transitions.
 6. Implement Phase 5.1D only after Phase 5.1C passes. Scope is login and crawl

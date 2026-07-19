@@ -2,6 +2,66 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-19 - Phase 5.1A Account Identity Data Model
+
+Environment: isolated Windows worktree
+`C:\Users\Administrator\.codex\worktrees\phase51a-MediaCrawler`, branch
+`codex/phase-5.1a-account-identity-schema`, starting from synchronized
+`main@8b55c2a`.
+
+Result:
+
+- Added all 24 accepted CR-047 identity fields to fresh `social_accounts`
+  creation and one idempotent existing-database migration helper.
+- Added the three documented non-unique workspace-scoped indexes with exact
+  column order for `identity_state`, `requires_relogin`, and
+  `identity_template`.
+- Existing rows keep account status, `profile_key`, legacy Profile path,
+  `proxy_id`, encrypted Cookie storage, and timestamps. Migration writes no
+  guessed region, template, seed, browser, language, viewport, device,
+  generator, lock, relogin, or runtime-snapshot value.
+- Existing and new ungenerated rows use `identity_state = draft`; text identity
+  fields use an empty string for not generated, while nullable dimension and
+  scale fields use SQL `NULL`. Phase 5.1B must distinguish `NULL` from numeric
+  zero when it adds validation.
+- Account detail/list readers normalize `is_mobile`, `has_touch`, and
+  `requires_relogin` to Python booleans and continue masking raw Profile paths.
+- The locked-proxy/default-network runtime negative test was moved from Phase
+  5.1A to Phase 5.1D because it requires the provider/runtime path; it was not
+  credited as completed by this schema unit.
+
+Verification:
+
+- Baseline before edits: `uv run pytest tests/test_monitoring_mvp.py -q -p
+  no:cacheprovider --basetemp .codex_tmp\pytest-phase51a-baseline` passed:
+  `350 passed`.
+- TDD RED: `-k "phase_5_1a"` failed with exactly two expected failures: the 24
+  fields were absent and `_ensure_phase_51_account_identity_schema` did not
+  exist.
+- TDD GREEN: the same focused selection passed: `2 passed, 350 deselected`.
+- Schema/account regression selection passed: `7 passed, 345 deselected`.
+- Full monitoring regression passed: `352 passed` with three pre-existing
+  deprecation warnings.
+- `uv run python -m py_compile api/monitoring/database.py` passed.
+- `git diff --check` passed with only expected Windows LF-to-CRLF warnings on
+  modified Python files.
+- `uv run python scripts/check_docs.py` passed: `PASS docs consistency`.
+- `uv run pytest tests/test_documentation_checks.py -q -p no:cacheprovider
+  --basetemp .codex_tmp\pytest-phase51a-final-docs` passed: `1 passed`.
+- Final Claude Code read-only review inspected the complete code/test/docs
+  diff, affected account readers/writers, migration ordering, data exposure,
+  test isolation, and phase boundaries. It returned `READY` with no Critical,
+  Important, Minor, missing-test, or documentation-contradiction finding.
+
+Proof boundary:
+
+- This proves additive SQLite storage, migration idempotence, safe defaults,
+  index shape, legacy-row preservation, read compatibility, and no Profile-path
+  exposure regression. It does not implement or prove Phase 5.1B identity
+  generation/validation, Phase 5.1C state/lock/reset/audit behavior, Phase
+  5.1D provider/login/crawl/proxy/runtime snapshots, real browser/platform use,
+  server-like Phase 5.1 acceptance, CR-070, CR-094, or CR-112.
+
 ## 2026-07-19 - Phase 5.1P Runtime Compatibility And Provider Preflight
 
 Environment: local Windows workspace `E:\myproject\MediaCrawler`, branch

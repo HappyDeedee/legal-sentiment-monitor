@@ -2077,9 +2077,9 @@ Dependencies And Sequencing:
 
 - Phase 5.1P is verified as a read-only preflight; its provider map remains the
   CR-047 implementation boundary.
-- Phase 5.1A is the next eligible CR-047 unit. Phase 5.1A-D and the Phase 5.1
-  acceptance gate remain owned by CR-047 and must complete before any CR-112
-  product implementation.
+- Phase 5.1A is implemented and independently verified. Phase 5.1B-D and the
+  Phase 5.1 acceptance gate remain owned by CR-047 and must complete before any
+  CR-112 product implementation.
 - CR-070 / Phase 5.2 retains its currently accepted position after CR-047.
   CR-112 does not preempt or silently reorder CR-070 while this CR is `Needs
   Confirmation`; a later accepted sequencing decision must place the CR-112
@@ -2140,8 +2140,8 @@ Acceptance For This Documentation Stage:
 
 - CR-112 remains `Needs Confirmation` and is not described as
   implementation-ready.
-- Phase 5.1P is recorded as verified, Phase 5.1A is next, and CR-047 and
-  CR-070 ownership and sequencing are preserved.
+- Phase 5.1P and Phase 5.1A are recorded as verified, Phase 5.1B is next, and
+  CR-047 and CR-070 ownership and sequencing are preserved.
 - The five reviewed plan artifacts are linked from formal governance docs and
   distinguish roadmap readiness from future execution gates.
 - All five plan artifacts and their CR-112 formal references in
@@ -3861,8 +3861,9 @@ Phase 5.1P preflight result (2026-07-19):
   current login, validation, run, child-process, CDP, and fallback paths.
 - Confirmed one immutable BrowserEnvironmentProvider plan/result contract can
   cover the formal monitor paths with caller-specific adapters.
-- Phase 5.1A is the next eligible implementation unit; Phase 5.1B-D and final
-  server-like acceptance remain serially gated.
+- Phase 5.1A additive schema/read-compatibility is implemented and
+  independently verified; Phase 5.1B-D and final server-like acceptance remain
+  serially gated.
 
 Related tasks:
 

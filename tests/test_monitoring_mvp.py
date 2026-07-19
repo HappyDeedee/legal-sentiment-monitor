@@ -511,6 +511,153 @@ def test_phase_05_schema_defaults_keep_existing_mvp_records_compatible(tmp_path)
         _restore_monitor_jobs(jobs_snapshot)
 
 
+def test_phase_5_1a_account_identity_schema_defaults_and_indexes():
+    init_db()
+    expected_columns = {
+        "environment_region",
+        "browser_platform",
+        "identity_template",
+        "fingerprint_seed",
+        "user_agent",
+        "timezone",
+        "locale",
+        "accept_language",
+        "screen_width",
+        "screen_height",
+        "viewport_width",
+        "viewport_height",
+        "device_scale_factor",
+        "is_mobile",
+        "has_touch",
+        "identity_generator_name",
+        "identity_generator_version",
+        "identity_environment_version",
+        "proxy_region_snapshot",
+        "browser_environment_locked_at",
+        "browser_environment_lock_reason",
+        "requires_relogin",
+        "identity_state",
+        "identity_runtime_snapshot_json",
+    }
+    with get_conn() as conn:
+        assert expected_columns <= _table_columns(conn, "social_accounts")
+        index_rows = {
+            row["name"]: dict(row)
+            for row in conn.execute("PRAGMA index_list(social_accounts)").fetchall()
+        }
+        expected_indexes = {
+            "idx_social_accounts_identity_state": ["workspace_id", "identity_state"],
+            "idx_social_accounts_requires_relogin": ["workspace_id", "requires_relogin"],
+            "idx_social_accounts_identity_template": ["workspace_id", "identity_template"],
+        }
+        for name, expected in expected_indexes.items():
+            assert index_rows[name]["unique"] == 0
+            assert [
+                row["name"]
+                for row in conn.execute(f"PRAGMA index_info({name})").fetchall()
+            ] == expected
+
+    snapshot = _snapshot_table("social_accounts")
+    try:
+        account = save_social_account(
+            {
+                "name": "Phase 5.1A Draft Account",
+                "platform": "dy",
+                "login_type": "qrcode",
+                "status": "active",
+            }
+        )
+        expected_defaults = {
+            "environment_region": "",
+            "browser_platform": "",
+            "identity_template": "",
+            "fingerprint_seed": "",
+            "user_agent": "",
+            "timezone": "",
+            "locale": "",
+            "accept_language": "",
+            "screen_width": None,
+            "screen_height": None,
+            "viewport_width": None,
+            "viewport_height": None,
+            "device_scale_factor": None,
+            "is_mobile": False,
+            "has_touch": False,
+            "identity_generator_name": "",
+            "identity_generator_version": "",
+            "identity_environment_version": "",
+            "proxy_region_snapshot": "",
+            "browser_environment_locked_at": None,
+            "browser_environment_lock_reason": "",
+            "requires_relogin": False,
+            "identity_state": "draft",
+            "identity_runtime_snapshot_json": "",
+        }
+        assert {key: account[key] for key in expected_defaults} == expected_defaults
+        assert isinstance(account["requires_relogin"], bool)
+        assert isinstance(account["is_mobile"], bool)
+        assert isinstance(account["has_touch"], bool)
+        assert account["profile_path"] == ""
+        listed = next(
+            item for item in list_social_accounts() if item["id"] == account["id"]
+        )
+        assert listed["profile_path"] == ""
+        assert listed["requires_relogin"] is False
+    finally:
+        _restore_table("social_accounts", snapshot)
+
+
+def test_phase_5_1a_additive_migration_preserves_legacy_account_without_backfill():
+    conn = sqlite3.connect(":memory:")
+    conn.row_factory = sqlite3.Row
+    try:
+        conn.executescript(
+            """
+            CREATE TABLE social_accounts (
+                id INTEGER PRIMARY KEY,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
+                name TEXT NOT NULL,
+                platform TEXT NOT NULL,
+                status TEXT NOT NULL DEFAULT 'standby',
+                profile_key TEXT NOT NULL DEFAULT '',
+                profile_path TEXT NOT NULL DEFAULT '',
+                proxy_id INTEGER,
+                cookies_encrypted TEXT NOT NULL DEFAULT '',
+                created_at TEXT NOT NULL,
+                updated_at TEXT NOT NULL
+            );
+            INSERT INTO social_accounts (
+                id, workspace_id, name, platform, status, profile_key,
+                profile_path, proxy_id, cookies_encrypted, created_at, updated_at
+            ) VALUES (
+                7, 1, 'Legacy Account', 'dy', 'active', '1/dy/acc_7',
+                'legacy/profile/path', 3, 'encrypted-value', 'before', 'before'
+            );
+            """
+        )
+
+        database_module._ensure_phase_51_account_identity_schema(conn)
+        database_module._ensure_phase_51_account_identity_schema(conn)
+
+        row = dict(conn.execute("SELECT * FROM social_accounts WHERE id=7").fetchone())
+        assert row["status"] == "active"
+        assert row["profile_key"] == "1/dy/acc_7"
+        assert row["profile_path"] == "legacy/profile/path"
+        assert row["proxy_id"] == 3
+        assert row["cookies_encrypted"] == "encrypted-value"
+        assert row["created_at"] == "before"
+        assert row["updated_at"] == "before"
+        assert row["identity_state"] == "draft"
+        assert row["requires_relogin"] == 0
+        assert row["environment_region"] == ""
+        assert row["identity_template"] == ""
+        assert row["fingerprint_seed"] == ""
+        assert row["identity_runtime_snapshot_json"] == ""
+        assert row["browser_environment_locked_at"] is None
+    finally:
+        conn.close()
+
+
 def test_phase_1_bootstrap_admin_login_session_and_user_management():
     from api.routers import auth as auth_router
 
