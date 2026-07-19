@@ -69,13 +69,12 @@ decision:
    baseline is Task Center / Run Detail with the verified drawer, modal,
    enhanced select/date, close, scroll, refresh, and routing logic preserved.
    Further UI work requires a separate accepted CR.
-2. Run Phase 5.1P as the next documentation/read-only compatibility preflight. It maps
-   QR login, Cookie validation, login-state checks, manual runs, scheduler
-   runs, runner behavior, and MediaCrawler CDP launch/reconnect to one
-   BrowserEnvironmentProvider output and one requested/effective snapshot
-   contract.
-3. Implement Phase 5.1A only after Phase 5.1P passes. Scope is additive account
-   identity data model and confirmed locked-account proxy policy.
+2. Keep the verified Phase 5.1P read-only result in
+   `docs/phase-5.1p-browser-entrypoint-map.md` as the compatibility boundary
+   for QR login, Cookie validation, login-state checks, manual and scheduler
+   runs, runner behavior, and MediaCrawler CDP launch/reconnect.
+3. Implement Phase 5.1A next. Scope is the additive account identity data
+   model and confirmed locked-account proxy policy.
 4. Implement Phase 5.1B only after Phase 5.1A passes. Scope is identity
    generation and validation.
 5. Implement Phase 5.1C only after Phase 5.1B passes. Scope is locking,

@@ -90,9 +90,10 @@ should not be used as the primary identity for new account environments.
 
 ### Accepted Phase 5.1 - Add Account Identity Fields
 
-Status: Accepted for CR-047, not implemented yet. Phase 5.1 must extend the
-existing `profile_key` model with a persisted, locked account identity for
-each platform account.
+Status: Accepted for CR-047. Phase 5.1P is verified and Phase 5.1A is the next
+implementation unit. The additive migration below has not run on the current
+baseline and must extend the existing `profile_key` model with a persisted,
+locked account identity for each platform account.
 
 Additive fields for `social_accounts`:
 

@@ -273,9 +273,8 @@ historical verified records.
       profile, report, permission, or frontend entry systems.
 - [ ] Require a separate data model and migration CR before adding provider
       tables, profile-binding tables, or capability schema.
-- [ ] Keep CR-094 separate from Phase 5.1P; Phase 5.1P remains only the
-      current MediaCrawler/CDP/BrowserEnvironmentProvider compatibility
-      preflight.
+- [ ] Keep CR-094 separate from the verified Phase 5.1P current-provider
+      compatibility boundary; CR-094 remains future architecture planning.
 
 ## Phase 5.1 - Account Identity Fidelity
 
@@ -307,67 +306,77 @@ browsing history are future/provider-dependent, not V1 commitments.
 
 Execution order:
 
-Phase 5.1 must start with Phase 5.1P Preflight. Do not begin Phase 5.1A-D
-schema/code implementation until the preflight has mapped the current runtime
-entry points and confirmed how one BrowserEnvironmentProvider output can be
-shared by QR login, Cookie validation, login-state checks, manual runs,
-scheduler runs, runner behavior, and MediaCrawler CDP launch/reconnect.
+Phase 5.1P Preflight is complete and its verified map is the implementation
+boundary. Execute Phase 5.1A-D serially; do not widen a unit beyond the one
+BrowserEnvironmentProvider plan/result and requested/effective proof contract
+recorded by the preflight.
 
 ### Phase 5.1P - Runtime Compatibility And Provider Preflight
 
-- [ ] Keep Phase 5.1P as read-only mapping only. It must not create or change
+Verification status:
+
+Phase 5.1P is complete as a documentation/read-only preflight on 2026-07-19.
+`docs/phase-5.1p-browser-entrypoint-map.md` records the complete current-path
+map, the single provider plan/result contract, field proof classifications,
+fail-closed rules, server-like boundary, and the CR-112 ownership split. It did
+not change product code, schema, UI, runtime data, Profiles, Cookies, proxies,
+crawler behavior, browser processes, deployment configuration, or database
+state. Phase 5.1A is the next eligible execution unit.
+
+- [x] Keep Phase 5.1P as read-only mapping only. It must not create or change
       schema, code, provider implementation, runtime data, profiles, cookies,
       proxies, crawler behavior, deployment configuration, or database state.
       If any current path cannot be mapped to one BrowserEnvironmentProvider
       output and one requested/effective runtime snapshot contract, stop Phase
       5.1 and record the ambiguity instead of starting Phase 5.1A-D.
-- [ ] Map the current QR login, Cookie validation, login-state check, manual
+- [x] Map the current QR login, Cookie validation, login-state check, manual
       run, scheduler run, runner, and MediaCrawler CDP launch/reconnect
       entrypoints without changing code.
-- [ ] Document which current paths launch a server-side browser, attach to an
+- [x] Document which current paths launch a server-side browser, attach to an
       existing CDP endpoint, reuse a profile, validate login state, or fall
       back to MediaCrawler defaults.
-- [ ] Map current Cookie account validation, Profile persistence, raw argv/env,
+- [x] Map current Cookie account validation, Profile persistence, raw argv/env,
       MediaCrawler login branches, and CDP-to-standard generic Profile fallback.
       Record the exact adapter a future CR-112 internal `profile_only` mode
       would need to replace managed `login_type=cookie` child execution, while
       keeping current QR/Profile execution separate, without implementing or
       assigning that mode to CR-047.
-- [ ] Map Cookie CLI defaults, `main.py` error handling, each platform's
+- [x] Map Cookie CLI defaults, `main.py` error handling, each platform's
       login-state/login-class branch, CDP fallback, runner exit/log mapping, and
       existing Profile environment variables needed by the future hidden flag
       and reserved relogin exit contract.
-- [ ] Define the BrowserEnvironmentProvider contract that Phase 5.1
+- [x] Define the BrowserEnvironmentProvider contract that Phase 5.1
       implementation must use for all login and crawl entrypoints.
-- [ ] Confirm which identity fields the existing Playwright/CDP provider can
+- [x] Confirm which identity fields the existing Playwright/CDP provider can
       honor and prove in V1: `profile_key`, proxy policy, user agent,
       timezone, locale, accept-language, viewport/screen, device scale factor,
       mobile/touch flags, provider mode, and runtime snapshot probes.
-- [ ] Mark unsupported or not-managed high-fidelity surfaces explicitly:
+- [x] Mark unsupported or not-managed high-fidelity surfaces explicitly:
       Canvas, WebGL, font inventory, plugins, extensions, long browsing
       history, noVNC, and provider-specific fingerprint internals.
-- [ ] Define fail-closed behavior when a required identity value cannot be
+- [x] Define fail-closed behavior when a required identity value cannot be
       honored, when requested and effective values differ, or when a locked
       account would fall back to process defaults.
-- [ ] Confirm container/server-like execution as the Phase 5.1 development and
+- [x] Confirm container/server-like execution as the Phase 5.1 development and
       acceptance baseline. Local Chrome/Edge auto-detection, local-window
       login, and CDP connect-existing are development fallbacks only and cannot
       prove locked or active account identity.
-- [ ] Treat local Chrome/Edge auto-detection, local-window login, CDP
+- [x] Treat local Chrome/Edge auto-detection, local-window login, CDP
       connect-existing, process defaults, and default-network fallback as
       diagnostic fallbacks only. They cannot prove Phase 5.1 locked or active
       account identity.
-- [ ] Define how proxy effect will be proven or marked fail-closed before a
+- [x] Define how proxy effect will be proven or marked fail-closed before a
       locked account is called active, including the rule that hidden task
       proxy overrides and default-network fallback are rejected.
-- [ ] Produce a preflight review note or goal output that future Phase 5.1A-D
+- [x] Produce a preflight review note or goal output that future Phase 5.1A-D
       work can follow without guessing provider, MediaCrawler, or deployment
       compatibility.
 
 ### Phase 5.1A - Account Identity Data Model
 
-- [ ] Start only after Phase 5.1P is complete and confirms the provider,
-      MediaCrawler, and container/server-like compatibility boundary.
+- [x] Start only after Phase 5.1P is complete and confirms the provider,
+      MediaCrawler, and container/server-like compatibility boundary. Verified
+      by `docs/phase-5.1p-browser-entrypoint-map.md` on 2026-07-19.
 - [x] The fixed-environment proxy override policy is confirmed and recorded:
       after CR-047 locks an account identity, task-level proxy overrides are
       rejected for that locked account environment. Changing the proxy requires
@@ -1697,8 +1706,9 @@ Planning status:
 CR-112 is a proposed new capability and remains `Needs Confirmation`. This
 documentation synchronization does not authorize product code, schema, UI,
 extension, Profile, Cookie, connector, runtime, deployment, or database
-changes. Phase 5.1P remains the first unblocked lane, and CR-112 does not
-preempt CR-070 / Phase 5.2 while its sequencing is unconfirmed.
+changes. Phase 5.1P is verified and Phase 5.1A is the next CR-047 unit;
+CR-112 does not preempt CR-070 / Phase 5.2 while its sequencing is
+unconfirmed.
 
 Documentation synchronization:
 
@@ -1744,8 +1754,9 @@ Future gated work:
 
 - [ ] Obtain explicit confirmation for same-host local scope, project-owned
       extension/connector direction, and sequencing relative to CR-070.
-- [ ] Complete Phase 5.1P, Phase 5.1A-D, and the Phase 5.1 acceptance gate
-      under CR-047 before CR-112 product implementation.
+- [x] Complete Phase 5.1P under CR-047 before CR-112 product implementation.
+- [ ] Complete Phase 5.1A-D and the Phase 5.1 acceptance gate under CR-047
+      before CR-112 product implementation.
 - [ ] Place Packet B after CR-070 / Phase 5.2 by default, or record a later
       accepted decision that changes sequencing without reopening history.
 - [ ] Execute Packet B as a disposable protocol/compatibility spike and require

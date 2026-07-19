@@ -10,9 +10,10 @@ project-owned CookieBridge-compatible connector, verifies the exact account,
 and saves it without manual Cookie copying. Preserve QR login as the primary
 server path and manual Cookie input as a collapsed advanced option.
 
-**Baseline:** `main@abb4d66`; local `main` and `origin/main` were `0/0` when
-this roadmap was refreshed. `CR-111` is already used. The proposed requirement
-identifier is `CR-112`. Phase 5.1P remains the first unblocked execution lane.
+**Baseline:** originally reviewed against `main@abb4d66`; Phase 5.1P was later
+verified against `main@459237f` on 2026-07-19. `CR-111` is already used. The
+proposed requirement identifier is `CR-112`. Phase 5.1A is now the first
+unblocked CR-047 implementation unit.
 
 **Review lane:** Deep. The roadmap touches browser processes, extension
 distribution, authentication material, account identity, durable state,
@@ -27,7 +28,8 @@ listed for that packet is verified in current project documents.
 
 The current authoritative order is:
 
-1. Execute Packet A, the existing Phase 5.1P read-only preflight under CR-047.
+1. Keep Packet A, the verified Phase 5.1P read-only preflight under CR-047, as
+   the provider compatibility boundary.
 2. Complete the existing Phase 5.1A-D implementation and Phase 5.1 acceptance
    gate under CR-047. This roadmap does not duplicate or reorder that work.
 3. Preserve CR-070 / Phase 5.2 as the currently accepted lane after CR-047.
@@ -50,8 +52,8 @@ Packet documents:
 
 | Label | Current evidence | Classification | Documentation action | Protected behavior | Readiness |
 |---|---|---|---|---|---|
-| Phase 5.1P | `docs/TASKS.md` Phase 5.1P is unchecked and explicitly read-only | Active/current | Keep as first lane; execute Packet A | No code, schema, Profile, Cookie, proxy, or runtime mutation | Ready now, read-only |
-| Phase 5.1A-D | Gated by Phase 5.1P | Current dependency-gated | Keep under CR-047 | One provider output and requested/effective snapshots | Blocked by Phase 5.1P |
+| Phase 5.1P | `docs/TASKS.md` and `docs/phase-5.1p-browser-entrypoint-map.md` record verified completion | Completed read-only preflight | Keep as Packet A evidence and provider boundary | No code, schema, Profile, Cookie, proxy, or runtime mutation | Complete |
+| Phase 5.1A-D | Phase 5.1P gate passed; Phase 5.1A is next | Current, serially dependency-gated | Keep under CR-047 | One provider output and requested/effective snapshots | Phase 5.1A ready; B-D gated in order |
 | Phase 5.1 acceptance | Gated by Phase 5.1A-D | Current dependency-gated | Keep under CR-047 | Server-like proof; no diagnostic fallback presented as identity proof | Blocked |
 | Proposed CR-112 | Registered in formal governance with status `Needs Confirmation` | Needs Confirmation | Keep linked plans proposed until scope and sequencing are accepted | Current QR and manual Cookie flows | Not implementation-ready |
 | CookieBridge source | Temporary source under `.codex_tmp`; extension loads a Service Worker but did not register in the observed black-box run | Needs Baseline | Evaluate in Packet B only | No product dependency on unproved connector behavior | Future-valid |
@@ -66,7 +68,7 @@ Browser and login evidence on the current baseline:
 - `MONITOR_BROWSER_EXECUTABLE` is documented but is not yet one uniformly
   consumed login/runtime authority.
 - `runner.py` passes decrypted saved Cookie material through `--cookies` for
-  `login_type=cookie`. Phase 5.1P must map that current baseline without
+  `login_type=cookie`. Phase 5.1P mapped that current baseline without
   changing it; Packet C owns the later confirmed migration to persistent
   Profile preparation and no raw Cookie in managed crawler child argv.
 - The evaluated CookieBridge extension hardcodes `ws://localhost:8274/ws`,
@@ -450,16 +452,17 @@ MONITOR_ALLOW_REAL_BROWSER_TESTS=0
 
 ### Packet A: Phase 5.1P preflight
 
-Only this packet is ready now. It is read-only and produces the provider
-entrypoint map. It makes no CookieBridge implementation decision.
+This packet is complete. It is read-only, produced
+`docs/phase-5.1p-browser-entrypoint-map.md`, and made no CookieBridge
+implementation decision.
 
 **Exit:** all existing login/crawl/CDP entrypoints and requested/effective
 provider fields are mapped without runtime mutation.
 
 ### Existing Phase 5.1A-D and acceptance
 
-This existing CR-047 work runs after Packet A and before Packet B. Its current
-project tasks remain authoritative.
+This existing CR-047 work now runs from Phase 5.1A through Phase 5.1D and
+acceptance before Packet B. Its current project tasks remain authoritative.
 
 **Exit:** one BrowserEnvironmentProvider output and runtime snapshot contract
 are verified across server-like login and crawl paths.

@@ -4,7 +4,8 @@ Last updated: 2026-07-19
 
 ## Current Baseline
 
-- Code baseline before this documentation update: clean `main@28c0da5`,
+- Repository baseline before the Phase 5.1P documentation update: clean
+  `main@459237f`,
   matching the current local `origin/main` tracking reference.
 - Phase 21 and CR-107 through CR-110 are merged current-main history, not
   active working-tree implementation.
@@ -26,16 +27,21 @@ Last updated: 2026-07-19
   extension cleanup, structured Cookie, and deployment proof gaps. This is a
   future execution-contract review result, not CR-112 acceptance or
   implementation evidence.
-- Phase 5.1P is the next eligible execution lane, a
-  documentation/read-only compatibility preflight. It has not started in this
-  worktree: its tasks remain unchecked and its browser-entrypoint map output
-  artifact has not yet been generated. This CR-112 plan review does not
-  complete or partially credit Phase 5.1P.
-- Phase 5.1A-D and its acceptance gate remain blocked by Phase 5.1P. CR-070 /
-  Phase 5.2 remains blocked by verified CR-047 provider binding and requested /
-  effective runtime snapshots. CR-092 and CR-094 remain `Needs Confirmation`,
-  CR-112 remains `Needs Confirmation`, CR-093 remains future-only, CR-037
-  remains deferred, and Phase 7.1D remains operator-gated.
+- Phase 5.1P is complete as a documentation/read-only compatibility preflight.
+  `docs/phase-5.1p-browser-entrypoint-map.md` maps the current QR, visible
+  login, Cookie validation, Profile check, HTTP/CLI/scheduler run, runner,
+  legacy raw crawler, MediaCrawler login, CDP launch/reconnect, and standard
+  fallback paths. It defines one immutable provider plan/result contract,
+  requested/effective proof, fail-closed behavior, and the CR-112 ownership
+  split without changing product code, schema, UI, runtime data, Profiles,
+  Cookies, proxies, crawler behavior, browser processes, deployment, or the
+  database.
+- Phase 5.1A is the next eligible execution unit. Phase 5.1B-D and the Phase
+  5.1 acceptance gate remain serially gated. CR-070 / Phase 5.2 remains blocked
+  by implemented and verified CR-047 provider binding and requested/effective
+  runtime snapshots. CR-092 and CR-094 remain `Needs Confirmation`, CR-112
+  remains `Needs Confirmation`, CR-093 remains future-only, CR-037 remains
+  deferred, and Phase 7.1D remains operator-gated.
 - The unmerged server-login worktree is historical/source evidence only and is
   not a current-main completion source or a branch to merge directly.
 
@@ -618,9 +624,9 @@ redaction plus truncation safety. CR-050 is implemented and verified as a
 focused CR-045 follow-up: Report Center and leads API risk filters keep
 `高风险` and `疑似负面` exact, so the `疑似负面` filter no longer includes
 high-risk rows.
-CR-047 Account Identity Fidelity is accepted as Phase 5.1, a future
-account-environment optimization that extends the existing `profile_key` model
-with lifecycle-level identity consistency: profile traces, browser
+CR-047 Account Identity Fidelity is accepted as Phase 5.1, the current
+account-environment optimization lane that extends the existing `profile_key`
+model with lifecycle-level identity consistency: profile traces, browser
 environment, proxy region/policy, runtime binding, lock state, and audit
 state. The documentation now distinguishes profile-folder traces from
 database-stored launch/environment rules and adds the planned Account Identity
@@ -661,9 +667,9 @@ target account/profile on import and exports avatar metadata only. This is
 documentation planning only; no export/import code, schema migration, package
 artifact, real profile, cookie, proxy, or login state has been changed.
 CR-091 Open Todo MECE Rebaseline And Phase 5.1 Preflight Gate is verified as a
-documentation-governance batch. It separates the closed Phase 21 frontend
-baseline, the next Phase 5.1P documentation/read-only compatibility lane, the
-later Phase 5.1 account identity implementation body and acceptance gate,
+documentation-governance batch. It separated the closed Phase 21 frontend
+baseline, the then-next Phase 5.1P documentation/read-only compatibility lane,
+the later Phase 5.1 account identity implementation body and acceptance gate,
 Phase 5.2 / CR-070 after CR-047 provider/effective snapshot verification, and
 independent deferred or gated items such as CR-037, the unrendered Users And
 Permissions page, and Phase 7.1D historical repair. This batch changes task
@@ -678,9 +684,9 @@ boundary planning; its product boundary is accepted, but exact route/mount and
 reverse-proxy behavior still needs confirmation after read-only audit. CR-094
 covers future crawler provider architecture in
 `docs/CRAWLER_PROVIDER_ARCHITECTURE.md` and is separate from Phase 5.1P, which
-  remains only the current MediaCrawler/CDP/BrowserEnvironmentProvider
-  compatibility preflight. These three backlog lanes do not reopen the closed
-  Phase 21 baseline or block Phase 5.1P, CR-047/Phase 5.1, or CR-070/Phase 5.2,
+  is now the verified MediaCrawler/CDP/BrowserEnvironmentProvider compatibility
+  boundary. These three backlog lanes do not reopen the closed Phase 21
+  baseline or block CR-047/Phase 5.1 or CR-070/Phase 5.2,
   and they do not change
 code, UI, schema, runtime data, routes, crawler behavior, account profiles,
 cookies, proxies, or deployment configuration.
@@ -995,8 +1001,9 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
 - Phase 5/6 - Account Environment and Server Login: profile key, timeout, and
   lock-storage decisions are accepted; Phase 5 account environment runtime and
   Phase 6 login-flow runtime are complete.
-- CR-047 / Phase 5.1 - Account Identity Fidelity: accepted but not
-  implemented. Confirmed scope includes persisted per-account identity fields,
+- CR-047 / Phase 5.1 - Account Identity Fidelity: accepted; Phase 5.1P is
+  verified and Phase 5.1A implementation is next. Confirmed scope includes
+  persisted per-account identity fields,
   profile-trace versus database-identity responsibility split, stable Account
   Identity Generator, fail-closed Account Identity Validator, China mainland
   region/timezone/locale/accept-language defaults, identity generation before
@@ -1008,15 +1015,16 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   as future/provider-dependent scope. The current documentation also includes
   implementation-level gates for deterministic generation, exact template
   expansion, provider requested/effective probes, runtime snapshots,
-  `identity_state`, audit events, and test tripwires; implementation remains
-  pending until Phase 5.1P preflight confirms the container/server-like,
-  BrowserEnvironmentProvider, MediaCrawler CDP, QR login, Cookie validation,
-  login-state check, manual run, scheduler run, runner, and requested/effective
-  snapshot compatibility boundary.
+  `identity_state`, audit events, and test tripwires. Phase 5.1P has confirmed
+  the container/server-like, BrowserEnvironmentProvider, MediaCrawler CDP, QR
+  login, Cookie validation, login-state check, manual run, scheduler run,
+  runner, and requested/effective snapshot compatibility boundary; Phase 5.1A
+  schema/code implementation has not yet started in this baseline.
 - CR-091 - Open Todo MECE Rebaseline And Phase 5.1 Preflight Gate: verified as
   a documentation-governance sequencing update. It keeps closed Phase 21 as
-  the protected frontend baseline, makes Phase 5.1P the next
-  account-environment gate before schema/code implementation, moves
+  the protected frontend baseline and established Phase 5.1P as the
+  account-environment gate before schema/code implementation. That gate is now
+  verified. It moves
   container/server-like and BrowserEnvironmentProvider work into the Phase 5.1
   development/acceptance baseline rather than a separate parallel big task,
   and delays CR-070 / Phase 5.2 until CR-047 provider binding plus effective
@@ -1224,11 +1232,12 @@ separate follow-up work.
 
 - CR-111 documentation synchronization is verified and closed against
   `main@abb4d66`. Phase 10-21, CR-091, CR-095, and CR-107 through CR-110 are
-  complete through their recorded scope. No implementation lane is active;
-  the next unblocked project lane is Phase 5.1P read-only preflight, and no
-  Phase 5.1 schema/code work starts before it passes. Phase 7.1D remains
-  operator-gated, CR-037 remains deferred, CR-092 and CR-094 remain `Needs
-  Confirmation`, and CR-093 remains a future independent backlog lane.
+  complete through their recorded scope. Phase 5.1P is now also verified as a
+  documentation/read-only preflight. No product implementation lane is active;
+  Phase 5.1A is the next unblocked unit, while Phase 5.1B-D remain serially
+  gated. Phase 7.1D remains operator-gated, CR-037 remains deferred, CR-092 and
+  CR-094 remain `Needs Confirmation`, and CR-093 remains a future independent
+  backlog lane.
 - CR-112 planning is synchronized as a proposed new capability. The same-host
   local-desktop topology, project-owned extension/in-process Python 3.11
   connector, and sequencing relative to CR-070 still require confirmation.
@@ -1556,20 +1565,17 @@ and stop conditions.
    Phase 21 or run a new UI worktree that edits `api/monitor_web/index.html`,
    `api/webui/monitor/monitor.css`, or `api/webui/monitor/monitor.js` unless a
    separate accepted CR defines the boundary;
-2. run Phase 5.1P Preflight as the next documentation/read-only compatibility goal
-   before Phase 5.1 schema or code work. It must map QR login, Cookie
-   validation, login-state checks, manual run, scheduler run, runner behavior,
-   and MediaCrawler CDP launch/reconnect to one BrowserEnvironmentProvider
-   output and one requested/effective snapshot contract. It must not create or
-   change schema, code, provider implementation, runtime data, profiles,
-   cookies, proxies, crawler behavior, deployment configuration, or database
-   state; if any current path cannot be mapped to that provider/snapshot
-   contract, stop Phase 5.1 and record the ambiguity instead of starting Phase
-   5.1A-D;
-3. implement CR-047/Phase 5.1 account identity fidelity only after the
-   preflight passes, using the confirmed policy that locked account
-   environments reject task-level proxy overrides and using container/server-
-   like execution as the development and acceptance baseline;
+2. keep the verified Phase 5.1P result in
+   `docs/phase-5.1p-browser-entrypoint-map.md` as the implementation boundary:
+   one immutable BrowserEnvironmentProvider plan/result, requested/effective
+   probes, fail-closed proxy/Profile/browser behavior, diagnostic-only local
+   fallbacks, and no CR-112 ownership transfer;
+3. implement CR-047/Phase 5.1A next, then Phase 5.1B-D in order, using the
+   confirmed policy that locked account environments reject task-level proxy
+   overrides and using container/server-like execution as the development and
+   acceptance baseline. Stop if implementation requires a second browser,
+   Profile, proxy, or identity authority, or cannot prove a required effective
+   value;
 4. implement CR-070/Phase 5.2 account-environment export/import only after
    CR-047 provider binding and requested/effective runtime snapshot behavior
    are implemented and verified;
@@ -1606,10 +1612,10 @@ Test gate hardening recorded:
   self-consistency validation tests, and fail-closed browser-environment tests.
   It also has a V1 provider boundary: unsupported high-fidelity surfaces must
   be reported as not-managed or future/provider-dependent, not silently claimed.
-  Phase 5.1P preflight is now required before implementation so QR login,
-  Cookie validation, login-state checks, manual runs, scheduler runs, and
-  MediaCrawler CDP launch/reconnect share one provider output and the same
-  requested/effective snapshot contract.
+  Phase 5.1P preflight has verified the required implementation boundary so QR
+  login, Cookie validation, login-state checks, manual runs, scheduler runs,
+  and MediaCrawler CDP launch/reconnect can be migrated to one provider output
+  and the same requested/effective snapshot contract.
 - CR-045 now requires a noisy-positive model override fixture so keyword-only
   evidence cannot backdoor target-related negative classification.
 - Phase 17.1D now requires dry-run no-op proof plus backup/approval gates
@@ -1640,15 +1646,14 @@ Test gate hardening recorded:
 Lowest-risk parallel execution lane:
 
 1. Phase 21 frontend-only page-level refinement is merged and closed on
-   `main`. Phase 5.1P is now the lowest-risk active lane and may proceed only
-   as read-only document/code-path mapping; it must not create schema, code,
-   provider, runtime, profile, cookie, proxy, crawler, deployment, or database
-   changes before the preflight is explicitly accepted. Phase 5.1 code/schema
-   implementation should wait for the preflight result.
+   `main`. Phase 5.1P is verified as read-only document/code-path mapping.
+   Phase 5.1A is now the lowest-risk active implementation lane and must stay
+   within its additive account-identity data-model packet; Phase 5.1B-D remain
+   gated by serial verification.
 
 CR-112 may receive documentation refinement while it is `Needs Confirmation`,
-but it is not a parallel implementation lane and does not alter the lowest-risk
-Phase 5.1P preflight priority.
+but it is not a parallel implementation lane and does not alter the verified
+Phase 5.1P boundary or Phase 5.1A priority.
 
 Do not run Phase 19 and Phase 20 in parallel, and do not run more than one
 frontend worktree that edits the formal console shell at the same time.

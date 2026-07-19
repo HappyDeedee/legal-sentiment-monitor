@@ -2,6 +2,105 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-19 - Phase 5.1P Runtime Compatibility And Provider Preflight
+
+Environment: local Windows workspace `E:\myproject\MediaCrawler`, branch
+`main`, clean starting baseline `459237f`, matching the local `origin/main`
+tracking reference. The preflight and synchronization changed documentation
+only.
+
+Result:
+
+- Completed the Phase 5.1P read-only todo baseline review. Phase 21 is closed;
+  Phase 5.1P was the current lane; Phase 5.1A is now next; Phase 5.1B-D,
+  acceptance, and CR-070 remain dependency-gated; CR-112, CR-092, and CR-094
+  retain their future/`Needs Confirmation` boundaries; CR-093 remains future
+  route-boundary work; CR-037 and historical mutation work remain deferred or
+  operator-gated.
+- Added `docs/phase-5.1p-browser-entrypoint-map.md` with two complete matrices
+  covering web QR, local visible login, Cookie validation, Profile account
+  check, platform-status diagnostics, HTTP manual run, scheduler run, monitor
+  CLI, runner child launch, legacy raw crawler launch, MediaCrawler
+  `pong`-then-login, launch-owned CDP, connect-existing CDP, and
+  CDP-to-standard fallback.
+- Confirmed the root cause is split authority across monitor Playwright
+  launch/check code, runner account/proxy argv/env construction, and
+  MediaCrawler CDP/standard fallback. QR and visible login conditionally trust
+  stored `account.profile_path`; an empty value silently retains a generic
+  Profile without calling the `profile_key` resolver. Other current evidence
+  includes random/default identity values, ephemeral Cookie validation, no
+  `MONITOR_BROWSER_EXECUTABLE` consumer, no account proxy in account checks,
+  unproved CDP proxy effect, raw Cookie argv, generic Profile fallback, and no
+  requested/effective runtime snapshot.
+- Inspected all seven `main.py` platform registrations individually. Douyin,
+  Kuaishou, XHS, Bilibili, Weibo, Tieba, and Zhihu each have a named `pong`
+  branch, login class, three exposed login types, shared CDP-manager call, broad
+  CDP-to-standard fallback, and platform-specific standard identity source in
+  the map. Only the first three are formal monitor account paths.
+- Defined one immutable `BrowserEnvironmentPlan` plus one immutable
+  `BrowserEnvironmentResult`, caller adapters, field support/proof classes,
+  safe snapshot limits, proxy-effect proof, and fail-closed rules. Formal
+  monitor login/check/manual/scheduler/CLI/runner/CDP paths can use this single
+  authority; legacy `/api/crawler`, local auto-detection/visible login, and
+  connect-existing CDP remain diagnostic and cannot prove a locked identity.
+- Mapped the exact future CR-112 ownership boundary without changing its
+  status: keep `--lt cookie`, add hidden `--monitor_profile_only true`, omit
+  `--cookies`, reject Cookie/default fallback in the child, raise
+  `ProfileLoginRequired`, map only that condition to exit code `42`, and keep
+  existing QR/Profile execution separate. CR-112 still owns Profile promotion,
+  migration/cutover, profile-only execution, and raw-Cookie argv retirement.
+- Confirmed the server-like acceptance boundary. The current lightweight
+  validation proves Playwright Chromium availability and profile metadata, but
+  it does not prove the canonical executable resolver, real QR/account-check
+  path, requested/effective identity probes, MediaCrawler account Profile reuse,
+  or proxy egress. Those remain Phase 5.1D and acceptance requirements.
+- Updated the current execution-lane statements in `TASKS.md`,
+  `CURRENT_STATE.md`, `TRACEABILITY.md`, `TEST_PLAN.md`, workflow/readiness
+  guidance, CR-047/CR-094/CR-112 governance, schema planning, and the master
+  CookieBridge roadmap so Phase 5.1P is verified and Phase 5.1A is the next
+  eligible execution unit. Dated CR-111 and older test-result snapshots remain
+  historical. No new CR or product/permission/schema decision was introduced.
+
+Verification:
+
+- `uv run python scripts/check_docs.py` passed: `PASS docs consistency`.
+- `uv run pytest tests/test_documentation_checks.py -q -p no:cacheprovider
+  --basetemp .codex_tmp/pytest-phase51p-closure` passed: `1 passed`.
+- `git diff --check` passed with only expected Windows LF-to-CRLF warnings on
+  modified existing Markdown files.
+- The first independent read-only review returned `BLOCKED`: it found the
+  unchecked execution packet, the inaccurate E1/E2 Profile authority, and the
+  missing per-platform evidence. E1/E2 were retraced against
+  `_login_browser_command_for_payload`; all seven platform cores/login classes
+  were inspected; the map, traceability row, and execution packet were then
+  corrected.
+- The independent second read-only review found no remaining P1/P2 content
+  issue, confirmed the E1/E2 and seven-platform corrections against current
+  code, and returned `substantive content passed`, conditional only on the
+  checklist/result synchronization now recorded here.
+- After that synchronization, the final independent read-only governance
+  spot-check returned `PASS`: the packet, map, task/current/trace/test state,
+  Phase 5.1A handoff, CR-112 boundary, and proof limits are consistent.
+- A fresh Claude Code read-only closure review of all current governance,
+  specialist, preflight, and roadmap artifacts returned `READY` with no
+  blocking finding, material refinement, or required artifact update.
+- Map completeness remains manually verified static evidence because Phase
+  5.1P prohibited product/test-code changes. The documentation test checks
+  document governance but does not automatically validate caller coverage or
+  code-line claims; Phase 5.1A-D must add focused executable tests with their
+  implementation.
+- Read-only repository searches confirmed the browser launch surface and the
+  two `main.py` child-process entrypoints. No live browser, crawler, platform,
+  proxy, Profile, Cookie, database, or deployment process was started.
+
+Proof boundary:
+
+- This proves the Phase 5.1P mapping and implementation contract are complete
+  against `main@459237f`. It does not implement or verify Phase 5.1 schema,
+  identity generation, provider code, locks/state transitions, runtime
+  snapshots, proxy effect, real platform login, CR-112 behavior, or server-like
+  Phase 5.1 acceptance.
+
 ## 2026-07-19 - CR-112 Deep Plan Cross-Validation And Contract Closure
 
 Environment: local Windows workspace `E:\myproject\MediaCrawler`, branch

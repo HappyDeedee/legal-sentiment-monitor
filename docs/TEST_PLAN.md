@@ -28,9 +28,9 @@ governance goal.
   acceptance criteria, rollback or recovery, documentation updates, and stop
   conditions.
 - The packet follows the current execution order unless a later accepted
-  decision changes it: Phase 21 is merged and closed on `main`, Phase 5.1P
-  preflight is next, then Phase 5.1A-D, Phase 5.1 acceptance, and CR-070 /
-  Phase 5.2 after CR-047 provider/effective snapshot verification.
+  decision changes it: Phase 21 is merged and closed on `main`, Phase 5.1P is
+  verified, Phase 5.1A is next, then Phase 5.1B-D, Phase 5.1 acceptance, and
+  CR-070 / Phase 5.2 after CR-047 provider/effective snapshot verification.
 - Phase 21 packets remain frontend-visual only and preserve Task Center, Run
   Detail, drawer, modal, row-menu, select/date, close, scroll, refresh,
   routing, owner-scope, and permission behavior unless a separate accepted CR
@@ -40,8 +40,8 @@ governance goal.
   profiles, cookies, proxies, crawler behavior, deployment configuration, or
   database state.
 - Phase 5.1 implementation packets run in order and do not start until
-  Phase 5.1P confirms the BrowserEnvironmentProvider and requested/effective
-  snapshot boundary.
+  the verified Phase 5.1P map confirms the BrowserEnvironmentProvider and
+  requested/effective snapshot boundary.
 - CR-070 / Phase 5.2 packets do not start before CR-047 provider binding and
   effective runtime snapshot behavior are implemented and verified.
 - CR-092, CR-093, and CR-094 packets remain future independent backlog work and
@@ -203,14 +203,15 @@ stable, self-consistent account identity instead of relying on changing process
 defaults.
 
 Phase 5.1 cannot be accepted by database fields, UI summaries, requested launch
-options, or isolated generator tests alone. The first acceptance gate is a
-runtime compatibility preflight: QR login, Cookie validation, login-state
-checks, manual runs, scheduler runs, runner behavior, and MediaCrawler CDP
-launch/reconnect must share one BrowserEnvironmentProvider output and one
+options, or isolated generator tests alone. Its first gate, the Phase 5.1P
+runtime compatibility preflight, is verified in
+`docs/phase-5.1p-browser-entrypoint-map.md`; implementation and final
+acceptance must now prove the mapped QR, Cookie, login-state, manual,
+scheduler, runner, and MediaCrawler CDP paths share one provider output and
 requested/effective runtime snapshot contract.
 
-- Phase 5.1P preflight tests or review evidence map every current login and
-  crawl entrypoint before schema/code implementation starts.
+- Verified Phase 5.1P review evidence maps every current login and crawl
+  entrypoint before Phase 5.1A schema/code implementation starts.
 - QR login, Cookie validation, and login-state checks resolve the same
   `profile_key`, account identity, proxy policy, user agent, timezone, locale,
   accept-language, viewport/screen, device flags, and provider mode.
@@ -390,8 +391,8 @@ production exposure hardening.
 ### Crawler Provider Architecture Tests
 
 CR-094 tests are planning gates for future provider architecture. They are not
-Phase 5.1P tests; Phase 5.1P remains the current MediaCrawler/CDP compatibility
-preflight.
+Phase 5.1P tests; the verified Phase 5.1P result remains the current
+MediaCrawler/CDP compatibility boundary for CR-047 implementation.
 
 - Provider contract tests must cover provider id/name, supported platforms,
   login types, account checks, comment support, time filtering, proxy support,
@@ -1586,9 +1587,9 @@ Documentation-stage checks:
 - Before delivery, verify all five plan files and every CR-112 formal reference
   including `DATA_MODEL.md` and `SCHEMA_MIGRATION.md` are staged in one atomic
   commit; a partial commit fails the documentation acceptance gate.
-- Verify Phase 5.1P remains the first unblocked lane, Phase 5.1A-D remains
-  owned by CR-047, and CR-112 does not preempt the accepted CR-070 / Phase 5.2
-  sequence without a later accepted decision.
+- Verify Phase 5.1P remains recorded as verified, Phase 5.1A-D remains owned by
+  CR-047 with Phase 5.1A next, and CR-112 does not preempt the accepted CR-070
+  / Phase 5.2 sequence without a later accepted decision.
 - Verify account/security and deployment sections are explicitly proposed and
   do not change the current server-first QR acceptance boundary.
 - Verify `DECISIONS.md`, CR-112, account-environment guidance, and all five

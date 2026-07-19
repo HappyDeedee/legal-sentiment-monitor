@@ -115,9 +115,10 @@ that deliberately merges those boundaries.
 Current goal rhythm:
 
 1. Phase 21 is merged and closed on `main`.
-2. Phase 5.1P documentation/read-only compatibility preflight is the next
-   active lane.
-3. Phase 5.1A-D implementation in order.
+2. Phase 5.1P documentation/read-only compatibility preflight is verified;
+   keep `docs/phase-5.1p-browser-entrypoint-map.md` as its implementation
+   boundary.
+3. Phase 5.1A is the next active unit, followed by Phase 5.1B-D in order.
 4. Phase 5.1 acceptance gate.
 5. CR-070 / Phase 5.2A-E only after CR-047 provider/effective snapshot
    verification.
