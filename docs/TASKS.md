@@ -384,8 +384,8 @@ schema/account regression tests), the full monitoring suite passed (`352
 passed`), and the final read-only review returned `READY` with no finding.
 Phase 5.1B is also implemented and verified. Phase 5.1C lifecycle work is
 implemented, independently verified, merged, and rechecked; Phase 5.1D is
-merged and post-merge verified. CR-114 is the active follow-up before final
-server-like acceptance.
+merged and post-merge verified. CR-114 is also merged and reverified; final
+server-like acceptance is active.
 
 - [x] Start only after Phase 5.1P is complete and confirms the provider,
       MediaCrawler, and container/server-like compatibility boundary. Verified
@@ -421,8 +421,8 @@ baseline `main@f8be522`. Focused Phase 5.1B tests pass (`9 passed`) and the
 full monitor suite passes (`361 passed`). Final independent diff review and
 integration evidence are recorded in `TEST_RESULTS.md`. Phase 5.1C lifecycle
 work is implemented, independently verified, merged, and rechecked; Phase
-5.1D is merged and post-merge verified. CR-114 is the active follow-up before
-final server-like acceptance.
+5.1D is merged and post-merge verified. CR-114 is also merged and reverified;
+final server-like acceptance is active.
 
 - [x] Add an Account Identity Generator that uses workspace, platform,
       account, proxy/region policy, automatic template selection or a
@@ -475,7 +475,8 @@ desktop/mobile browser checks, and an independent Claude Code full-diff review
 pass in `codex/phase-5.1c-account-identity-lifecycle` from `main@100001e`.
 PR #4 is merged as `main@2adf661`; post-merge full monitoring, compile, and
 documentation gates pass. Phase 5.1D later merged through PR #5 and passed
-post-merge verification on `main@86e9d02`; CR-114 is its active follow-up.
+post-merge verification on `main@86e9d02`; CR-114 then merged through PR #6
+and passed post-merge verification on `main@27389a8`.
 
 - [x] Implement the persisted `identity_state` lifecycle from
       `ACCOUNT_ENVIRONMENT.md`: `draft`, `generated`, `validated`,
@@ -541,9 +542,9 @@ gate after CR-114 integrates.
 
 ### CR-114 - Browser Runtime Binding Object Identity Collision Regression Fix
 
-Implementation status (2026-07-19): implemented and locally verified in
-`codex/cr-114-browser-binding-object-identity` from merged `main@86e9d02`.
-Independent review, PR integration, and post-merge verification remain open.
+Implementation status (2026-07-19): verified and merged. PR #6 integrated the
+fix as `main@27389a8`; post-merge full (`485 passed`), focused (`132 passed`),
+compile, and documentation gates pass.
 
 - [x] Reproduce the Context/Page numeric-ID reuse defect with a deterministic
       regression test before changing production code.
@@ -555,12 +556,23 @@ Independent review, PR integration, and post-merge verification remain open.
       suite serially.
 - [x] Complete Python compile, documentation checks, and independent read-only
       full-diff review with no blocking or material finding.
-- [ ] Integrate through a PR and rerun post-merge verification.
+- [x] Integrate through PR #6 and rerun post-merge verification.
 
 ### Phase 5.1 Acceptance Gate - Runtime Snapshot And Server-Like Verification
 
-- [ ] Start only after Phase 5.1P and Phase 5.1A-D are complete and verified,
+Execution status (2026-07-19): the atomic packet is documentation-consistent
+and independently reviewed `READY`. Task 2 evidence-checker TDD is implemented
+and independently reviewed `PASS`; its formal CLI requires the exact deployed
+commit and 49 targeted, 183 focused, and 534 full tests pass. Task 3 environment
+preflight is next. No real account/proxy/platform action has run; Tasks 4-7
+remain operator-gated.
+
+- [x] Start only after Phase 5.1P and Phase 5.1A-D are complete and verified,
       and the CR-114 object-identity regression fix is merged and reverified.
+- [x] Create the atomic acceptance packet at
+      `docs/superpowers/plans/2026-07-19-phase-5.1-server-like-acceptance.md`.
+- [x] Implement and verify the redacted acceptance evidence checker before any
+      real acceptance action.
 - [ ] Verify QR login, Cookie validation, login-state checks, manual runs,
       scheduler runs, runner behavior, and MediaCrawler CDP launch/reconnect
       resolve the same BrowserEnvironmentProvider output.

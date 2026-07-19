@@ -1,0 +1,206 @@
+{
+  "schema_version": "phase_5_1_acceptance_v1",
+  "status": "incomplete",
+  "baseline": {
+    "commit": "",
+    "environment_type": "",
+    "environment_reference": "",
+    "operator_reference": "",
+    "reviewer_reference": "",
+    "template_created_at": "2026-07-19T00:00:00+00:00",
+    "run_window_started_at": "",
+    "run_window_ended_at": "",
+    "checked_at": ""
+  },
+  "environment": {
+    "service_started": false,
+    "web_admin_login": false,
+    "server_browser_owned": false,
+    "browser_source": "",
+    "browser_family": "",
+    "browser_version": "",
+    "persistent_data_root": false,
+    "persistent_profile_root": false,
+    "local_window_disabled": false,
+    "connect_existing_disabled": false,
+    "restart_completed": false
+  },
+  "accounts": {
+    "qr": {
+      "platform": "",
+      "account_reference": "",
+      "acceptance_labeled": false
+    },
+    "cookie": {
+      "platform": "",
+      "account_reference": "",
+      "acceptance_labeled": false
+    }
+  },
+  "login_actions": [
+    {
+      "action": "qr_login",
+      "trigger_source": "qrcode_login",
+      "account_reference": "",
+      "runtime_reference": "",
+      "resolution_reference": "",
+      "attempt_reference": "",
+      "environment_digest": "",
+      "observed_at": "",
+      "provider_mode": "persistent_launch",
+      "browser_source": "",
+      "proxy_effect": "",
+      "fallback_used": true,
+      "mismatch_count": -1
+    },
+    {
+      "action": "cookie_validation",
+      "trigger_source": "cookie_validation",
+      "account_reference": "",
+      "runtime_reference": "",
+      "resolution_reference": "",
+      "attempt_reference": "",
+      "environment_digest": "",
+      "observed_at": "",
+      "provider_mode": "ephemeral_cookie_validation",
+      "browser_source": "",
+      "proxy_effect": "",
+      "fallback_used": true,
+      "mismatch_count": -1
+    },
+    {
+      "action": "login_check",
+      "trigger_source": "profile_validation",
+      "account_reference": "",
+      "runtime_reference": "",
+      "resolution_reference": "",
+      "attempt_reference": "",
+      "environment_digest": "",
+      "observed_at": "",
+      "provider_mode": "persistent_launch",
+      "browser_source": "",
+      "proxy_effect": "",
+      "fallback_used": true,
+      "mismatch_count": -1
+    },
+    {
+      "action": "login_check",
+      "trigger_source": "profile_validation",
+      "account_reference": "",
+      "runtime_reference": "",
+      "resolution_reference": "",
+      "attempt_reference": "",
+      "environment_digest": "",
+      "observed_at": "",
+      "provider_mode": "persistent_launch",
+      "browser_source": "",
+      "proxy_effect": "",
+      "fallback_used": true,
+      "mismatch_count": -1
+    }
+  ],
+  "restart": {
+    "restarted_at": "",
+    "lock_timestamp_before": "",
+    "lock_timestamp_after": "",
+    "environment_digest_before": "",
+    "environment_digest_after": "",
+    "profile_login_survived": false
+  },
+  "proxy": {
+    "account_bound": false,
+    "region_reference": "",
+    "browser_region_proof_passed": false,
+    "no_task_or_default_override": false
+  },
+  "crawl_actions": [
+    {
+      "action": "crawl",
+      "trigger_source": "manual",
+      "account_reference": "",
+      "runtime_reference": "",
+      "resolution_reference": "",
+      "attempt_reference": "",
+      "environment_digest": "",
+      "observed_at": "",
+      "provider_mode": "cdp_launch",
+      "browser_source": "",
+      "proxy_effect": "",
+      "fallback_used": true,
+      "mismatch_count": -1,
+      "run_reference": "",
+      "terminal_status": "",
+      "pages": 0,
+      "accepted_items": 0,
+      "duration_seconds": 0
+    },
+    {
+      "action": "crawl",
+      "trigger_source": "scheduler",
+      "account_reference": "",
+      "runtime_reference": "",
+      "resolution_reference": "",
+      "attempt_reference": "",
+      "environment_digest": "",
+      "observed_at": "",
+      "provider_mode": "cdp_launch",
+      "browser_source": "",
+      "proxy_effect": "",
+      "fallback_used": true,
+      "mismatch_count": -1,
+      "run_reference": "",
+      "terminal_status": "",
+      "pages": 0,
+      "accepted_items": 0,
+      "duration_seconds": 0
+    },
+    {
+      "action": "crawl",
+      "trigger_source": "cli_manual",
+      "account_reference": "",
+      "runtime_reference": "",
+      "resolution_reference": "",
+      "attempt_reference": "",
+      "environment_digest": "",
+      "observed_at": "",
+      "provider_mode": "cdp_launch",
+      "browser_source": "",
+      "proxy_effect": "",
+      "fallback_used": true,
+      "mismatch_count": -1,
+      "run_reference": "",
+      "terminal_status": "",
+      "pages": 0,
+      "accepted_items": 0,
+      "duration_seconds": 0
+    }
+  ],
+  "runtime_authority": {
+    "safe_results_collected": false,
+    "browser_source_managed": false,
+    "profile_reference_matched": false,
+    "proxy_policy_account_bound": false,
+    "provider_mode_launch_owned": false,
+    "mismatch_evidence_empty": false,
+    "fallback_used_false": false,
+    "child_result_matched_before_ingest": false
+  },
+  "bounds": {
+    "serial_execution": false,
+    "all_terminal": false,
+    "max_pages": 1,
+    "max_accepted_items": 10,
+    "timeout_seconds": 300
+  },
+  "redaction": {
+    "checked_surfaces": [],
+    "no_sensitive_values_found": false,
+    "filled_evidence_outside_git": false,
+    "evidence_reference": ""
+  },
+  "attestations": {
+    "operator_observed": false,
+    "reviewer_cross_checked": false,
+    "notes": ""
+  }
+}

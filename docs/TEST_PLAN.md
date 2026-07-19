@@ -28,8 +28,8 @@ governance goal.
   acceptance criteria, rollback or recovery, documentation updates, and stop
   conditions.
 - The packet follows the current execution order unless a later accepted
-  decision changes it: Phase 21 and Phase 5.1A-D are merged and verified,
-  CR-114 integrates and is post-merge verified, then Phase 5.1 acceptance and
+  decision changes it: Phase 21, Phase 5.1A-D, and CR-114 are merged and
+  verified, then Phase 5.1 acceptance and
   CR-070 / Phase 5.2 after CR-047 provider/effective snapshot verification.
 - Phase 21 packets remain frontend-visual only and preserve Task Center, Run
   Detail, drawer, modal, row-menu, select/date, close, scroll, refresh,
@@ -276,6 +276,21 @@ requested/effective runtime snapshot contract.
   two BrowserContexts retain separate plans while both CDP Pages execute their
   own pre-navigation preparation. The test must fail against the merged
   Phase 5.1D ID-keyed collections and pass with object-scoped bindings.
+- Phase 5.1 acceptance-checker tests verify the incomplete template and example,
+  exact QR/Cookie/Profile/manual/scheduler/`cli_manual` action matrix, unique
+  references, chronology, restart lock/digest stability, managed provider
+  modes, positive crawl bounds, redaction surfaces, sensitive-value rejection,
+  and the checker-only proof boundary without any real external action.
+- Acceptance-checker CLI tests require an explicit full lowercase 40-character
+  deployed commit for `--check`, reject missing, empty, abbreviated, uppercase,
+  non-hex, and mismatched values, and pass only when it equals
+  `baseline.commit`. Pure synthetic validation may omit that runtime argument.
+- Checker boundary tests reject unreadable/invalid/non-object evidence with
+  structured path-safe errors; reject non-acceptance browser sources, action
+  source drift, duplicate/whitespace-equivalent account references, reordered
+  login/restart/crawl actions, out-of-window lock timestamps, URLs, CDP
+  endpoints, and Windows/UNC/Unicode Unix paths; and preserve ordinary
+  slash-delimited attestation text.
 - QR login, Cookie validation, and login-state checks resolve the same
   `profile_key`, account identity, proxy policy, user agent, timezone, locale,
   accept-language, viewport/screen, device flags, and provider mode.
