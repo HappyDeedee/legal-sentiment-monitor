@@ -13,14 +13,18 @@ MONITOR_DATA_DIR = Path(os.environ.get("MONITOR_DATA_DIR") or PROJECT_ROOT / "mo
 KEY_PATH = MONITOR_DATA_DIR / "secret.key"
 
 
-def _get_fernet() -> Fernet:
+def load_or_create_secret_key() -> bytes:
     MONITOR_DATA_DIR.mkdir(parents=True, exist_ok=True)
     if KEY_PATH.exists():
         key = KEY_PATH.read_bytes()
     else:
         key = Fernet.generate_key()
         KEY_PATH.write_bytes(key)
-    return Fernet(key)
+    return key
+
+
+def _get_fernet() -> Fernet:
+    return Fernet(load_or_create_secret_key())
 
 
 def encrypt_secret(value: str | None) -> str:

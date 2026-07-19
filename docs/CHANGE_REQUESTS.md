@@ -2077,8 +2077,8 @@ Dependencies And Sequencing:
 
 - Phase 5.1P is verified as a read-only preflight; its provider map remains the
   CR-047 implementation boundary.
-- Phase 5.1A is implemented and independently verified. Phase 5.1B-D and the
-  Phase 5.1 acceptance gate remain owned by CR-047 and must complete before any
+- Phase 5.1A-B are implemented and independently verified. Phase 5.1C-D and
+  the Phase 5.1 acceptance gate remain owned by CR-047 and must complete before any
   CR-112 product implementation.
 - CR-070 / Phase 5.2 retains its currently accepted position after CR-047.
   CR-112 does not preempt or silently reorder CR-070 while this CR is `Needs
@@ -2140,7 +2140,7 @@ Acceptance For This Documentation Stage:
 
 - CR-112 remains `Needs Confirmation` and is not described as
   implementation-ready.
-- Phase 5.1P and Phase 5.1A are recorded as verified, Phase 5.1B is next, and
+- Phase 5.1P and Phase 5.1A-B are recorded as verified, Phase 5.1C is next, and
   CR-047 and CR-070 ownership and sequencing are preserved.
 - The five reviewed plan artifacts are linked from formal governance docs and
   distinguish roadmap readiness from future execution gates.
@@ -3862,7 +3862,20 @@ Phase 5.1P preflight result (2026-07-19):
 - Confirmed one immutable BrowserEnvironmentProvider plan/result contract can
   cover the formal monitor paths with caller-specific adapters.
 - Phase 5.1A additive schema/read-compatibility is implemented and
-  independently verified; Phase 5.1B-D and final server-like acceptance remain
+  independently verified.
+
+Phase 5.1B implementation result (2026-07-19):
+
+- Implemented the exact six-template generator catalog, documented
+  HMAC-SHA256 selection/fingerprint derivation, and fixed deployment-key domain
+  separation.
+- New account INSERTs generate and validate identity in one SQLite transaction;
+  existing UPDATEs do not backfill or regenerate identity.
+- Implemented fail-closed missing/contradiction/proxy/relogin checks, safe
+  administrator pre-login region/template-family controls, API redaction, and
+  blocked-by-default pytest Playwright entrypoints.
+- Focused Phase 5.1B tests pass (`9 passed`) and the full monitor regression
+  passes (`361 passed`). Phase 5.1C-D and final server-like acceptance remain
   serially gated.
 
 Related tasks:

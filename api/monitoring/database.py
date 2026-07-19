@@ -14,6 +14,7 @@ from .account_environment import (
     default_account_profile_key,
     resolve_account_profile_path,
 )
+from .account_identity import generate_account_identity, validate_account_identity
 from .auth import generate_session_token, hash_password, hash_session_token, verify_password
 from .mediacrawler_login import LOGIN_TYPE_LABELS, PLATFORM_LOGIN_TYPES, SUPPORTED_MONITOR_PLATFORMS, get_mediacrawler_login_capability
 from .login_status import (
@@ -5138,7 +5139,87 @@ def save_social_account(payload: dict[str, Any], account_id: int | None = None) 
                     "UPDATE social_accounts SET profile_key=?, profile_path=?, updated_at=? WHERE id=?",
                     (profile_key, profile_path, now, target_id),
                 )
+            _generate_new_social_account_identity(
+                conn,
+                account_id=target_id,
+                workspace_id=DEFAULT_WORKSPACE_ID,
+                platform=platform,
+                proxy_id=proxy_id,
+                proxy_region_snapshot=str(payload.get("proxy_region_snapshot") or "CN_MAINLAND"),
+                template_family=str(payload.get("identity_template_family") or "auto"),
+                updated_at=now,
+            )
     return get_social_account(target_id) or {}
+
+
+def _generate_new_social_account_identity(
+    conn: sqlite3.Connection,
+    *,
+    account_id: int,
+    workspace_id: int,
+    platform: str,
+    proxy_id: int | None,
+    proxy_region_snapshot: str,
+    template_family: str,
+    updated_at: str,
+) -> None:
+    generated = generate_account_identity(
+        workspace_id=workspace_id,
+        platform=platform,
+        account_id=account_id,
+        proxy_region_snapshot=proxy_region_snapshot,
+        template_family=template_family,
+    )
+    bound_proxy_exists = proxy_id is None or conn.execute(
+        "SELECT 1 FROM proxy_profiles WHERE id=?",
+        (proxy_id,),
+    ).fetchone() is not None
+    validate_account_identity(
+        {
+            **generated,
+            "id": account_id,
+            "workspace_id": workspace_id,
+            "platform": platform,
+            "proxy_id": proxy_id,
+            "identity_state": "generated",
+            "requires_relogin": False,
+        },
+        bound_proxy_exists=bound_proxy_exists,
+    )
+    conn.execute(
+        """
+        UPDATE social_accounts SET
+            environment_region=?, browser_platform=?, identity_template=?, fingerprint_seed=?,
+            user_agent=?, timezone=?, locale=?, accept_language=?, screen_width=?, screen_height=?,
+            viewport_width=?, viewport_height=?, device_scale_factor=?, is_mobile=?, has_touch=?,
+            identity_generator_name=?, identity_generator_version=?, identity_environment_version=?,
+            proxy_region_snapshot=?, identity_state='generated', updated_at=?
+        WHERE id=?
+        """,
+        (
+            generated["environment_region"],
+            generated["browser_platform"],
+            generated["identity_template"],
+            generated["fingerprint_seed"],
+            generated["user_agent"],
+            generated["timezone"],
+            generated["locale"],
+            generated["accept_language"],
+            generated["screen_width"],
+            generated["screen_height"],
+            generated["viewport_width"],
+            generated["viewport_height"],
+            generated["device_scale_factor"],
+            1 if generated["is_mobile"] else 0,
+            1 if generated["has_touch"] else 0,
+            generated["identity_generator_name"],
+            generated["identity_generator_version"],
+            generated["identity_environment_version"],
+            generated["proxy_region_snapshot"],
+            updated_at,
+            account_id,
+        ),
+    )
 
 
 def create_draft_social_account(payload: dict[str, Any]) -> dict[str, Any]:

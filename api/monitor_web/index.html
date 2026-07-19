@@ -3560,6 +3560,28 @@
                   <summary>高级设置</summary>
                   <label>异常记录</label><textarea id="social_account_last_error" placeholder="最近一次登录或采集异常，可留空"></textarea>
                 </details>
+                <details class="advanced">
+                  <summary>账号环境（高级）</summary>
+                  <div class="grid">
+                    <div>
+                      <label>网络区域</label>
+                      <select id="social_account_proxy_region">
+                        <option value="CN_MAINLAND">中国大陆</option>
+                        <option value="HK">中国香港</option>
+                        <option value="SG">新加坡</option>
+                      </select>
+                    </div>
+                    <div>
+                      <label>浏览器模板族</label>
+                      <select id="social_account_identity_template_family">
+                        <option value="auto">系统自动选择</option>
+                        <option value="windows_chrome_desktop">Windows Chrome 桌面</option>
+                        <option value="mac_chrome_desktop">Mac Chrome 桌面</option>
+                        <option value="android_chrome">Android Chrome</option>
+                      </select>
+                    </div>
+                  </div>
+                </details>
                 </details>
               </div>
               <div class="account-section login-card">
@@ -6684,6 +6706,8 @@
         platform,
         name:val('social_account_name'),
         proxy_id:val('social_account_proxy_id'),
+        proxy_region_snapshot:val('social_account_proxy_region'),
+        identity_template_family:val('social_account_identity_template_family'),
         notes:val('social_account_notes')
       };
       const res=await api('/login-sessions',{method:'POST',body:JSON.stringify(payload)});
@@ -7243,6 +7267,18 @@
       renderAIRuleActionMenu();
       renderAccountActionMenu();
     }
+    function accountIdentityTemplateFamily(template){
+      if(template==='CN_MAC_CHROME_1440') return 'mac_chrome_desktop';
+      if(template==='CN_ANDROID_CHROME') return 'android_chrome';
+      if(['CN_WIN_CHROME_1920','CN_WIN_CHROME_1536','HK_DESKTOP_CHROME','SG_DESKTOP_CHROME'].includes(template)) return 'windows_chrome_desktop';
+      return 'auto';
+    }
+    function setAccountIdentityControlsLocked(locked){
+      ['social_account_proxy_region','social_account_identity_template_family'].forEach(id=>{
+        const control=document.getElementById(id);
+        if(control) control.disabled=!!locked;
+      });
+    }
     async function saveSocialAccount(){
       if(!val('social_account_name').trim()){ toast('请先填写账号名称'); return; }
       await withActionButtonLoading('account_save_button', '保存中...', async ()=>{
@@ -7274,6 +7310,10 @@
         last_error:val('social_account_last_error'),
         ...overrides
       };
+      if(!id){
+        payload.proxy_region_snapshot=val('social_account_proxy_region');
+        payload.identity_template_family=val('social_account_identity_template_family');
+      }
       const res=await api(id?'/social-accounts/'+id:'/social-accounts',{method:id?'PUT':'POST',body:JSON.stringify(payload)});
       if(!res.ok){ toast(await err(res)); return null; }
       const saved=(await res.json()).account;
@@ -7292,6 +7332,9 @@
       if([...loginSelect.options].some(option=>option.value===loginType)) set('social_account_login_type', loginType);
       set('social_account_status', a.status||'standby');
       set('social_account_proxy_id', a.proxy_id||''); set('social_account_notes', a.notes||''); set('social_account_last_error', a.last_error||'');
+      set('social_account_proxy_region', a.proxy_region_snapshot||'CN_MAINLAND');
+      set('social_account_identity_template_family', accountIdentityTemplateFamily(a.identity_template||''));
+      setAccountIdentityControlsLocked(true);
       renderLoginModePanel();
       updateAccountDetailHeader(a);
       updateAccountModalActions(a);
@@ -7669,6 +7712,8 @@
       const clearCookie=document.getElementById('social_account_clear_cookie');
       if(clearCookie) clearCookie.checked=false;
       set('social_account_platform','dy'); set('social_account_login_type','qrcode'); set('social_account_status','standby');
+      set('social_account_proxy_region','CN_MAINLAND'); set('social_account_identity_template_family','auto');
+      setAccountIdentityControlsLocked(false);
       setAccountPlatformLocked(false);
       updateSocialLoginTypeOptions();
       updateAccountDetailHeader(null);

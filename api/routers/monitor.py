@@ -2245,6 +2245,8 @@ def _customer_view_social_account(item: dict[str, Any] | None) -> dict[str, Any]
     forbidden = {
         "cookies",
         "cookies_encrypted",
+        "fingerprint_seed",
+        "identity_runtime_snapshot_json",
         "profile_path",
         "profile_runtime_path",
         "proxy_url",

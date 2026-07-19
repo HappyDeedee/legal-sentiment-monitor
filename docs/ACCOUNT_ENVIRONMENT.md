@@ -114,14 +114,16 @@ Existing `profile_path` is a transition-only legacy field. New account
 environments must use `profile_key`, and old low-volume accounts can be
 re-created or re-logged in instead of receiving long-term compatibility logic.
 
-The CR-047 account identity fields are accepted for future implementation, not
-yet implemented in the current runtime. They should be generated or assigned
-before the first QR login or accepted Cookie login validation and locked after
-the account environment becomes usable. Silent edits after successful login are
-not allowed; changing a locked identity requires an explicit reset/re-login
-flow with audit logging. If a proxy region or identity template change would
-make the current locked identity inconsistent, mark the account
-`requires_relogin` instead of silently changing future launches.
+CR-047 is implemented through Phase 5.1B. Phase 5.1A supplies additive storage
+and compatible reads. Phase 5.1B automatically generates and validates the
+documented identity for each newly inserted account after its stable ID and
+`profile_key` exist; existing account UPDATEs are never silently backfilled or
+regenerated. Phase 5.1C still owns persisted validation/login/lock/reset/audit
+transitions, and Phase 5.1D still owns mandatory provider/runtime binding,
+effective-value probes, proxy transport proof, and snapshots. Identity must be
+locked only after successful QR login or accepted Cookie validation. Silent
+edits after successful login remain disallowed; changing a locked identity
+requires the explicit reset/re-login flow with audit logging.
 
 Reference note:
 
@@ -265,6 +267,18 @@ Template-family change rules:
 ## Identity Generation Specification
 
 Phase 5.1 generator v1 is deterministic and template-driven:
+
+- generator implementation authority is
+  `api/monitoring/account_identity.py`;
+- explicit `MONITOR_ACCOUNT_IDENTITY_SEED_SALT` uses its UTF-8 bytes as the
+  HMAC key. When it is absent, decode the existing Fernet deployment key and
+  derive a 32-byte purpose-separated generator salt exactly with
+  `hmac.new(deployment_key_bytes,
+  b"MediaCrawler/account-identity/seed/v1",
+  hashlib.sha256).digest()`;
+- backup/restore must preserve either the explicit seed-salt setting or the
+  deployment secret key. Changing that authority is a future identity
+  migration/reset-re-login event, not silent regeneration;
 
 - template-selection input tuple:
   `workspace_id`, `platform`, `account_id`, `proxy_region_snapshot`,

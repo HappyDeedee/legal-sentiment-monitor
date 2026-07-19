@@ -93,7 +93,8 @@ should not be used as the primary identity for new account environments.
 Status: implemented and independently verified in the isolated Phase 5.1A
 worktree against `main@8b55c2a`. The additive migration extends the existing
 `profile_key` model with storage for a persisted, locked account identity while
-leaving generation, validation, locking, and runtime binding to Phase 5.1B-D.
+Phase 5.1B now supplies INSERT-only deterministic generation and validation.
+Locking/reset/audit and runtime binding remain Phase 5.1C-D.
 
 Additive fields for `social_accounts`:
 
@@ -148,7 +149,7 @@ Migration and compatibility:
   locked-identity paths until regenerated and re-logged in;
 - nullable dimension and scale fields use SQL `NULL` for not generated, while
   `TEXT NOT NULL DEFAULT ''` fields use an empty string for not generated;
-  Phase 5.1B validation must distinguish `NULL` from numeric zero;
+  Phase 5.1B validation distinguishes `NULL` from numeric zero;
 - do not move old profile directories during this migration;
 - keep `proxy_id` as the account-bound stable proxy policy field and reject
   task-level proxy overrides for locked account environments; changing the
@@ -172,6 +173,11 @@ Phase 5.1A implementation uses one idempotent
 `_ensure_column` migration authority, and creates each documented index as a
 non-unique workspace-scoped index. Reopening the same database is a no-op for
 existing columns and indexes.
+
+Phase 5.1B does not add another schema migration. It uses the Phase 5.1A
+columns through one bounded identity UPDATE inside the new-account INSERT
+transaction. Existing rows and all account UPDATE paths keep their current
+identity values until the explicit Phase 5.1C lifecycle/reset flow runs.
 
 ### Proposed CR-112 - Persistent Profile Promotion And Bridge Metadata
 
