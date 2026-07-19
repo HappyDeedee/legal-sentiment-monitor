@@ -121,6 +121,9 @@ Production-like acceptance must prove that:
 - After CR-047 locks an account identity, task-level proxy overrides are
   rejected for that locked account environment; proxy changes require explicit
   reset/re-login.
+- If a locked account has no bound `proxy_id`, the provider records an explicit
+  direct-network policy; it must not silently select a task proxy or default
+  network as a fallback. A bound proxy requires browser-routed region proof.
 - AI failure does not block collection or report generation.
 - Email failure does not block collection or report generation.
 - Sensitive values are encrypted or masked.

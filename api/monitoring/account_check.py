@@ -12,11 +12,23 @@ from media_platform.xhs.client import XiaoHongShuClient
 from playwright.async_api import Page, async_playwright
 
 from tools import utils
+from tools.browser_environment import (
+    BrowserEnvironmentError,
+    browser_environment_failure_result,
+    launch_managed_browser_context,
+    verify_managed_page,
+)
 from tools.browser_launcher import BrowserLauncher
 
+from .account_identity import AccountIdentityError
+from .browser_environment_provider import (
+    persist_account_browser_environment_result,
+    resolve_account_browser_environment,
+)
 from .database import (
     complete_social_account_identity_login,
     get_conn,
+    get_proxy_profile,
     get_social_account,
     prepare_social_account_identity_login,
     update_social_account_check_state,
@@ -73,6 +85,20 @@ async def check_social_account_login(
             result = await _check_cookie_account(account, timeout_ms)
         else:
             result = await _check_profile_account(account, timeout_ms)
+        provider_plan = result.pop("_browser_environment_plan", None)
+        provider_result = result.pop("_browser_environment_result", None)
+        result.pop("_browser_session_closed", None)
+        if provider_plan is not None or provider_result is not None:
+            if provider_plan is None or provider_result is None:
+                raise BrowserEnvironmentError("account_identity_snapshot_mismatch", "direct_result")
+            persist_account_browser_environment_result(account_id, provider_plan, provider_result)
+            if not provider_result.ok:
+                result = {
+                    **result,
+                    "ok": False,
+                    "status": provider_result.reason,
+                    "message": "浏览器账号环境校验未通过，请重试或重新登录。",
+                }
     except Exception:
         complete_social_account_identity_login(
             account_id,
@@ -126,41 +152,74 @@ async def _check_profile_account(account: dict[str, Any], timeout_ms: int) -> di
         if legacy_hint:
             return _result(False, legacy_hint, "missing_profile")
         return _result(False, "未找到该账号的网页登录态，请重新扫码登录。", "missing_profile")
-    browser_path = _browser_path()
     capability = get_mediacrawler_login_capability(platform)
     playwright = None
     context = None
+    plan = None
+    provider_result = None
+    result: dict[str, Any] | None = None
+    session_closed = False
     try:
         playwright = await async_playwright().start()
-        context = await playwright.chromium.launch_persistent_context(
-            user_data_dir=str(profile_path),
-            executable_path=browser_path,
-            accept_downloads=True,
-            headless=True,
-            viewport={"width": 1920, "height": 1080},
-            user_agent=utils.get_user_agent(),
+        plan = _resolve_account_plan(
+            account,
+            action="login_check",
+            trigger_source="profile_validation",
+            launch_mode="persistent_launch",
+            playwright_executable_path=str(playwright.chromium.executable_path),
         )
+        session = await launch_managed_browser_context(playwright, plan)
+        context = session.context
         page = context.pages[0] if context.pages else await context.new_page()
         page.set_default_timeout(timeout_ms)
         await page.goto(str(capability.get("login_url") or ""), wait_until="domcontentloaded", timeout=timeout_ms)
         await page.wait_for_timeout(1200)
+        provider_result = await verify_managed_page(context, page)
+        if provider_result is None or not provider_result.ok:
+            result = _result(False, "浏览器账号环境校验未通过，请重新登录。", "provider_mismatch")
+            return {
+                **result,
+                "_browser_environment_plan": plan,
+                "_browser_environment_result": provider_result,
+                "_browser_session_closed": False,
+            }
         login_baseline = await _login_baseline(platform, context)
         verified = await _verify_collectable_login(platform, context, page, timeout_ms, login_baseline)
         if verified.get("ok"):
             identity = await _extract_platform_identity(platform, page)
-            return _result(True, "登录态有效，可供采集任务使用。", "valid", identity)
-        verification = await _detect_simple_verification(page)
-        if verification:
-            return _result(False, verification, "needs_verification")
-        if verified.get("status") == "client_check_failed":
-            return _result(False, str(verified.get("message") or ""), "client_check_failed")
-        return _result(False, "登录态无效或已失效，请重新扫码登录。", "invalid")
+            result = _result(True, "登录态有效，可供采集任务使用。", "valid", identity)
+        else:
+            verification = await _detect_simple_verification(page)
+            if verification:
+                result = _result(False, verification, "needs_verification")
+            elif verified.get("status") == "client_check_failed":
+                result = _result(False, str(verified.get("message") or ""), "client_check_failed")
+            else:
+                result = _result(False, "登录态无效或已失效，请重新扫码登录。", "invalid")
+    except BrowserEnvironmentError as exc:
+        if plan is None:
+            raise
+        provider_result = getattr(exc, "browser_environment_result", None) or browser_environment_failure_result(
+            plan,
+            exc.reason,
+            proxy_effect="failed" if plan.proxy_policy == "account_bound" else "not_applicable",
+        )
+        result = _result(False, "浏览器账号环境校验失败，请重试或重新登录。", exc.reason)
+    except AccountIdentityError:
+        raise
     except Exception as exc:
-        return _result(False, _friendly_error(exc), "check_failed")
+        if plan is not None:
+            provider_result = browser_environment_failure_result(
+                plan,
+                "account_identity_provider_browser_crashed",
+                proxy_effect="failed" if plan.proxy_policy == "account_bound" else "not_applicable",
+            )
+        result = _result(False, _friendly_error(exc), "check_failed")
     finally:
         if context:
             try:
                 await context.close()
+                session_closed = True
             except Exception:
                 pass
         if playwright:
@@ -168,6 +227,12 @@ async def _check_profile_account(account: dict[str, Any], timeout_ms: int) -> di
                 await playwright.stop()
             except Exception:
                 pass
+    return {
+        **(result or _result(False, "登录态检测失败。", "check_failed")),
+        "_browser_environment_plan": plan,
+        "_browser_environment_result": provider_result,
+        "_browser_session_closed": session_closed,
+    }
 
 
 async def _check_cookie_account(account: dict[str, Any], timeout_ms: int) -> dict[str, Any]:
@@ -175,37 +240,77 @@ async def _check_cookie_account(account: dict[str, Any], timeout_ms: int) -> dic
     cookies = str(account.get("cookies") or "").strip()
     if not cookies:
         return _result(False, "该账号未保存 Cookie，请先在账号详情中保存 Cookie。", "missing_cookie")
-    browser_path = _browser_path()
     capability = get_mediacrawler_login_capability(platform)
     playwright = None
     browser = None
     context = None
+    plan = None
+    provider_result = None
+    result: dict[str, Any] | None = None
+    session_closed = False
     try:
         playwright = await async_playwright().start()
-        browser = await playwright.chromium.launch(executable_path=browser_path, headless=True)
-        context = await browser.new_context(user_agent=utils.get_user_agent(), viewport={"width": 1920, "height": 1080})
+        plan = _resolve_account_plan(
+            account,
+            action="cookie_validation",
+            trigger_source="cookie_validation",
+            launch_mode="ephemeral_cookie_validation",
+            playwright_executable_path=str(playwright.chromium.executable_path),
+        )
+        session = await launch_managed_browser_context(playwright, plan)
+        browser = session.browser
+        context = session.context
         await context.add_cookies(_cookie_items(platform, cookies))
         page = await context.new_page()
         page.set_default_timeout(timeout_ms)
         await page.goto(str(capability.get("login_url") or ""), wait_until="domcontentloaded", timeout=timeout_ms)
         await page.wait_for_timeout(1200)
+        provider_result = await verify_managed_page(context, page)
+        if provider_result is None or not provider_result.ok:
+            result = _result(False, "浏览器账号环境校验未通过，请重新保存 Cookie。", "provider_mismatch")
+            return {
+                **result,
+                "_browser_environment_plan": plan,
+                "_browser_environment_result": provider_result,
+                "_browser_session_closed": False,
+            }
         login_baseline = await _login_baseline(platform, context)
         verified = await _verify_collectable_login(platform, context, page, timeout_ms, login_baseline)
         if verified.get("ok"):
             identity = await _extract_platform_identity(platform, page)
-            return _result(True, "Cookie 登录态有效，可供采集任务使用。", "valid", identity)
-        verification = await _detect_simple_verification(page)
-        if verification:
-            return _result(False, verification, "needs_verification")
-        if verified.get("status") == "client_check_failed":
-            return _result(False, "Cookie 页面状态存在，但采集前验活未通过，请重新保存 Cookie 后再检测。", "client_check_failed")
-        return _result(False, "Cookie 登录态无效或已失效，请重新保存 Cookie。", "invalid")
+            result = _result(True, "Cookie 登录态有效，可供采集任务使用。", "valid", identity)
+        else:
+            verification = await _detect_simple_verification(page)
+            if verification:
+                result = _result(False, verification, "needs_verification")
+            elif verified.get("status") == "client_check_failed":
+                result = _result(False, "Cookie 页面状态存在，但采集前验活未通过，请重新保存 Cookie 后再检测。", "client_check_failed")
+            else:
+                result = _result(False, "Cookie 登录态无效或已失效，请重新保存 Cookie。", "invalid")
+    except BrowserEnvironmentError as exc:
+        if plan is None:
+            raise
+        provider_result = getattr(exc, "browser_environment_result", None) or browser_environment_failure_result(
+            plan,
+            exc.reason,
+            proxy_effect="failed" if plan.proxy_policy == "account_bound" else "not_applicable",
+        )
+        result = _result(False, "浏览器账号环境校验失败，请重试或重新保存 Cookie。", exc.reason)
+    except AccountIdentityError:
+        raise
     except Exception as exc:
-        return _result(False, _friendly_error(exc), "check_failed")
+        if plan is not None:
+            provider_result = browser_environment_failure_result(
+                plan,
+                "account_identity_provider_browser_crashed",
+                proxy_effect="failed" if plan.proxy_policy == "account_bound" else "not_applicable",
+            )
+        result = _result(False, _friendly_error(exc), "check_failed")
     finally:
         if context:
             try:
                 await context.close()
+                session_closed = True
             except Exception:
                 pass
         if browser:
@@ -218,6 +323,32 @@ async def _check_cookie_account(account: dict[str, Any], timeout_ms: int) -> dic
                 await playwright.stop()
             except Exception:
                 pass
+    return {
+        **(result or _result(False, "Cookie 登录态检测失败。", "check_failed")),
+        "_browser_environment_plan": plan,
+        "_browser_environment_result": provider_result,
+        "_browser_session_closed": session_closed,
+    }
+
+
+def _resolve_account_plan(
+    account: dict[str, Any],
+    *,
+    action: str,
+    trigger_source: str,
+    launch_mode: str,
+    playwright_executable_path: str,
+):
+    proxy = get_proxy_profile(int(account["proxy_id"]), masked=False) if account.get("proxy_id") else None
+    return resolve_account_browser_environment(
+        account,
+        action=action,
+        trigger_source=trigger_source,
+        headless=True,
+        launch_mode=launch_mode,
+        proxy=proxy,
+        playwright_executable_path=playwright_executable_path,
+    )
 
 
 def _cookie_items(platform: str, cookie_str: str) -> list[dict[str, str]]:

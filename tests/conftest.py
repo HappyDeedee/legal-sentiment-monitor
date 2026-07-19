@@ -96,8 +96,22 @@ def _account_identity_tripwire_policy(environ=None):
 
 
 @pytest.fixture(autouse=True)
-def account_identity_tripwire(monkeypatch):
-    from api.monitoring import account_check, login_qrcode
+def account_identity_tripwire(monkeypatch, tmp_path):
+    from api.monitoring import account_check, login_qrcode, runner
+    from api.routers import monitor as monitor_router
+
+    synthetic_browser = tmp_path / "tripwire-playwright-chromium.exe"
+    synthetic_browser.write_bytes(b"pytest browser tripwire fixture")
+    monkeypatch.setattr(
+        monitor_router,
+        "_playwright_chromium_executable_path",
+        lambda: str(synthetic_browser),
+    )
+    monkeypatch.setattr(
+        runner,
+        "_playwright_chromium_executable_path",
+        lambda: str(synthetic_browser),
+    )
 
     if not os.environ.get("MONITOR_ACCOUNT_IDENTITY_SEED_SALT"):
         monkeypatch.setenv("MONITOR_ACCOUNT_IDENTITY_SEED_SALT", "pytest-disposable-account-identity-salt")

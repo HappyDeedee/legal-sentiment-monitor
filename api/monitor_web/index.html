@@ -7327,6 +7327,25 @@
       const browser=account.browser_platform || '待确定浏览器';
       return `${state} / ${region} / ${template} / ${browser}`;
     }
+    function accountRuntimeEnvironmentSummary(account){
+      const summary=account && account.identity_runtime_summary;
+      if(!summary || !summary.provider || !summary.proxy || !summary.status) return '尚未验证';
+      const providerName=({playwright:'Playwright'})[summary.provider.name] || '未知运行引擎';
+      const providerMode=({persistent_launch:'持久化启动',ephemeral_cookie_validation:'Cookie 临时验活',cdp_launch:'CDP 启动'})[summary.provider.mode] || '未知模式';
+      const provider=`${providerName} / ${providerMode}`;
+      const proof=({passed:'代理已证明',not_applicable:'直连',failed:'代理证明失败'})[summary.proxy.effect_proof] || '代理未证明';
+      const checked=summary.status.validated_at ? formatTime(summary.status.validated_at) : '未记录时间';
+      const fallback=summary.status.fallback_used ? '发生回退' : '未回退';
+      const unsupported=`未管理字段 ${Number(summary.status.unsupported_field_count || 0)}`;
+      const mismatchLabels={identity_template:'环境模板',browser_platform:'浏览器平台',user_agent:'User-Agent',timezone:'时区',locale:'语言区域',accept_language:'首选语言',screen_width:'屏幕宽度',screen_height:'屏幕高度',viewport_width:'视口宽度',viewport_height:'视口高度',device_scale_factor:'显示缩放',is_mobile:'移动设备类型',has_touch:'触控能力',proxy_region_snapshot:'代理区域',browser_family:'浏览器类型',browser_version:'浏览器版本',browser_source:'浏览器来源',provider_mode:'运行模式',profile_key:'Profile 标识',proxy_effect:'代理证明'};
+      const mismatchFields=Array.isArray(summary.status.mismatch_fields)
+        ? summary.status.mismatch_fields.map(field=>mismatchLabels[field] || field)
+        : [];
+      const mismatch=mismatchFields.length
+        ? `不一致：${mismatchFields.join('、')}`
+        : '无字段不一致';
+      return `${provider} / ${checked} / ${proof} / ${fallback} / ${unsupported} / ${mismatch}`;
+    }
     function accountIdentityPreloginState(account){
       return ['draft','generated','validated'].includes(accountIdentityState(account));
     }
@@ -7681,6 +7700,7 @@
           accountSummaryItem('平台', formatPlatforms([account.platform])),
           accountSummaryItem('平台身份', accountIdentitySummary(account)),
           accountSummaryItem('账号环境', accountIdentityEnvironmentSummary(account)),
+          accountSummaryItem('运行实况', accountRuntimeEnvironmentSummary(account)),
           accountSummaryItem('可用性', accountAvailability(account).label),
           accountSummaryItem('最近验活', account.last_checked_at ? formatTime(account.last_checked_at) : '未检测'),
           accountSummaryItem('最近异常', account.last_error ? cleanCustomerText(account.last_error).slice(0,80) : '暂无异常')

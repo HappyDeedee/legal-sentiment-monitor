@@ -39,6 +39,14 @@ from model.m_kuaishou import VideoUrlInfo, CreatorUrlInfo
 from proxy.proxy_ip_pool import IpInfoModel, create_ip_pool
 from store import kuaishou as kuaishou_store
 from tools import utils
+from tools.browser_environment import (
+    BrowserEnvironmentError,
+    launch_managed_browser_context,
+    managed_proxy_formats,
+    plan_from_environment,
+    prepare_managed_page,
+    verify_managed_page,
+)
 from tools.cdp_browser import CDPBrowserManager
 from var import comment_tasks_var, crawler_type_var, source_keyword_var
 
@@ -57,13 +65,15 @@ class KuaishouCrawler(AbstractCrawler):
     def __init__(self):
         self.index_url = "https://www.kuaishou.com"
         self.cookie_urls = [self.index_url]
-        self.user_agent = utils.get_user_agent()
+        self.browser_environment_plan = plan_from_environment(required=False)
+        self.user_agent = self.browser_environment_plan.user_agent if self.browser_environment_plan else utils.get_user_agent()
+        self.managed_browser = None
         self.cdp_manager = None
         self.ip_proxy_pool = None  # Proxy IP pool, used for automatic proxy refresh
 
     async def start(self):
         playwright_proxy_format, httpx_proxy_format = None, None
-        if config.ENABLE_IP_PROXY:
+        if self.browser_environment_plan is None and config.ENABLE_IP_PROXY:
             self.ip_proxy_pool = await create_ip_pool(
                 config.IP_PROXY_POOL_COUNT, enable_validate_ip=True
             )
@@ -71,16 +81,22 @@ class KuaishouCrawler(AbstractCrawler):
             playwright_proxy_format, httpx_proxy_format = utils.format_proxy_info(
                 ip_proxy_info
             )
+        elif self.browser_environment_plan is not None:
+            playwright_proxy_format, httpx_proxy_format = managed_proxy_formats()
 
         async with async_playwright() as playwright:
             # Select startup mode based on configuration
-            if config.ENABLE_CDP_MODE:
+            if self.browser_environment_plan is not None and self.browser_environment_plan.launch_mode != "cdp_launch":
+                managed_session = await launch_managed_browser_context(playwright, self.browser_environment_plan)
+                self.managed_browser = managed_session.browser
+                self.browser_context = managed_session.context
+            elif self.browser_environment_plan is not None or config.ENABLE_CDP_MODE:
                 utils.logger.info("[KuaishouCrawler] Launching browser using CDP mode")
                 self.browser_context = await self.launch_browser_with_cdp(
                     playwright,
                     playwright_proxy_format,
                     self.user_agent,
-                    headless=config.CDP_HEADLESS,
+                    headless=(self.browser_environment_plan.headless if self.browser_environment_plan else config.CDP_HEADLESS),
                 )
             else:
                 utils.logger.info("[KuaishouCrawler] Launching browser using standard mode")
@@ -94,7 +110,11 @@ class KuaishouCrawler(AbstractCrawler):
 
 
             self.context_page = await self.browser_context.new_page()
+            await prepare_managed_page(self.browser_context, self.context_page)
             await self.context_page.goto(f"{self.index_url}?isHome=1")
+            provider_result = await verify_managed_page(self.browser_context, self.context_page)
+            if provider_result is not None and not provider_result.ok:
+                raise BrowserEnvironmentError(provider_result.reason, "page")
 
             # Create a client to interact with the kuaishou website.
             self.ks_client = await self.create_ks_client(httpx_proxy_format)
@@ -369,7 +389,7 @@ class KuaishouCrawler(AbstractCrawler):
         Launch browser using CDP mode
         """
         try:
-            self.cdp_manager = CDPBrowserManager()
+            self.cdp_manager = CDPBrowserManager(plan=self.browser_environment_plan)
             browser_context = await self.cdp_manager.launch_and_connect(
                 playwright=playwright,
                 playwright_proxy=playwright_proxy,
@@ -384,6 +404,8 @@ class KuaishouCrawler(AbstractCrawler):
             return browser_context
 
         except Exception as e:
+            if self.browser_environment_plan is not None:
+                raise
             utils.logger.error(
                 f"[KuaishouCrawler] CDP mode launch failed, fallback to standard mode: {e}"
             )

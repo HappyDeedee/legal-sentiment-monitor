@@ -649,8 +649,11 @@ Fields:
   available.
 - CR-047 Phase 5.1A-C account-identity summary: safe browser platform,
   identity template, region, environment lock/re-login state, and proxy binding
-  state are available now; Phase 5.1D still owns effective runtime proof and
-  safe requested/effective diagnostics.
+  state are available now. Phase 5.1D adds one administrator-only compact
+  runtime row with provider/mode, last proof time, proxy proof state, fallback
+  state, unsupported-field count, and mismatch field names. Raw runtime JSON,
+  requested/effective values, probes, Profile/executable paths, proxy endpoints,
+  CDP/debug values, fingerprint seeds, and commands remain hidden.
 - accepted CR-047 pre-login advanced option: administrators may choose
   only a template family before first login; ordinary account creation uses
   automatic template selection.

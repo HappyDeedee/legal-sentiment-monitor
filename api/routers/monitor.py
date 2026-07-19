@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import asyncio
 import os
 import re
 from datetime import datetime, timezone
@@ -8,6 +9,7 @@ from typing import Any
 
 from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse
+from playwright.sync_api import sync_playwright
 
 from ..monitoring import ai
 from ..monitoring.account_identity import (
@@ -96,10 +98,20 @@ from ..monitoring.database import (
 )
 from ..monitoring.mailer import real_email_delivery_allowed, render_report_email_preview, resolve_report_recipients, send_test_email
 from ..monitoring.doctor import run_doctor
-from ..monitoring.login_browser import build_login_browser_command, open_login_browser_with_command
+from ..monitoring.browser_environment_provider import (
+    persist_account_browser_environment_result,
+    resolve_account_browser_environment,
+    safe_browser_environment_summary,
+)
+from ..monitoring.login_browser import (
+    build_login_browser_command,
+    build_managed_login_browser_command,
+    open_login_browser_with_command,
+)
 from ..monitoring.login_state import login_window_status
 from ..monitoring.login_qrcode import (
     close_qrcode_login_session,
+    _login_qr_headless,
     _login_qr_timeout_ms,
     poll_qrcode_login_session,
     request_qrcode_login_verification_code,
@@ -395,7 +407,13 @@ async def platform_login_browser(platform: str, payload: dict[str, Any] | None =
                 user_id=_route_actor_id(admin),
             )
             prepared = True
-        command = _login_browser_command_for_payload(platform, request_payload)
+        command = await _login_browser_command_for_payload(
+            platform,
+            request_payload,
+            action="login_check",
+            trigger_source="visible_browser_login",
+            headless=False,
+        )
         expired_session_ids = expire_login_sessions_for_account(
             int(command.get("account_id") or 0) or None,
             str(platform),
@@ -1271,7 +1289,13 @@ async def create_platform_login_session(payload: dict[str, Any], admin: dict[str
                 user_id=_route_actor_id(admin),
             )
             identity_prepared = True
-        command = _login_browser_command_for_payload(str(platform), payload)
+        command = await _login_browser_command_for_payload(
+            str(platform),
+            payload,
+            action="qr_login",
+            trigger_source="qrcode_login",
+            headless=_login_qr_headless(),
+        )
         account = get_social_account(int(payload.get("account_id") or 0)) if payload.get("account_id") else None
         profile_window = _open_login_window_for_command(str(platform), command)
         if profile_window:
@@ -1342,6 +1366,12 @@ async def create_platform_login_session(payload: dict[str, Any], admin: dict[str
         )
         _audit_admin(admin, "create_login_session", "login_session", session.get("id"), {"platform": platform, "account_id": payload.get("account_id")})
         qr_result = await start_qrcode_login_session_with_profile(int(session["id"]), str(platform), command)
+        provider_plan = qr_result.pop("_browser_environment_plan", None)
+        provider_result = qr_result.pop("_browser_environment_result", None)
+        if provider_plan is not None or provider_result is not None:
+            if provider_plan is None or provider_result is None:
+                raise ValueError("account_identity_snapshot_mismatch")
+            persist_account_browser_environment_result(int(provider_plan.account_id), provider_plan, provider_result)
         verification_image = ""
         account_status = None
         if qr_result.get("already_logged_in"):
@@ -2094,35 +2124,47 @@ def _refresh_job_schedule_state(job: dict[str, Any] | None) -> None:
     set_job_schedule_state(job["id"], next_run_at(job) if job.get("enabled") else None)
 
 
-def _login_browser_command_for_payload(platform: str, payload: dict[str, Any]) -> dict[str, Any]:
-    command = build_login_browser_command(platform)
+async def _login_browser_command_for_payload(
+    platform: str,
+    payload: dict[str, Any],
+    *,
+    action: str = "qr_login",
+    trigger_source: str = "qrcode_login",
+    headless: bool = True,
+) -> dict[str, Any]:
     account_id = payload.get("account_id")
     if not account_id:
-        return command
+        return await asyncio.to_thread(build_login_browser_command, platform)
     account = get_social_account(int(account_id), masked=False)
     if not account:
         raise ValueError("account not found")
     if account.get("platform") != platform:
         raise ValueError("account platform does not match login platform")
-    if account.get("profile_path"):
-        command = {
-            **command,
-            "account_id": account.get("id"),
-            "account_name": account.get("name") or "",
-            "profile_key": account.get("profile_key") or "",
-            "profile_path": str(account["profile_path"]),
-        }
-    if account.get("proxy_id"):
-        proxy = get_proxy_profile(int(account["proxy_id"]), masked=False)
-        if proxy and proxy.get("status") == "active" and proxy.get("proxy_url"):
-            command = {
-                **command,
-                "proxy_id": proxy.get("id"),
-                "proxy_name": proxy.get("name") or "",
-                "provider": proxy.get("provider") or "",
-                "proxy_url": proxy.get("proxy_url") or "",
-            }
-    return command
+    proxy = get_proxy_profile(int(account["proxy_id"]), masked=False) if account.get("proxy_id") else None
+
+    def resolve_command() -> dict[str, Any]:
+        plan = resolve_account_browser_environment(
+            account,
+            action=action,
+            trigger_source=trigger_source,
+            headless=headless,
+            launch_mode="persistent_launch",
+            proxy=proxy,
+            playwright_executable_path=_playwright_chromium_executable_path(),
+        )
+        command = build_managed_login_browser_command(plan)
+        command["account_name"] = account.get("name") or ""
+        if proxy:
+            command["proxy_name"] = proxy.get("name") or ""
+            command["provider"] = proxy.get("provider") or ""
+        return command
+
+    return await asyncio.to_thread(resolve_command)
+
+
+def _playwright_chromium_executable_path() -> str:
+    with sync_playwright() as playwright:
+        return str(playwright.chromium.executable_path)
 
 
 def _open_login_window_for_command(platform: str, command: dict[str, Any]) -> dict[str, Any]:
@@ -2582,15 +2624,24 @@ def _customer_view_ai_evaluation_detail(item: dict[str, Any], *, admin: bool = F
 def _customer_view_social_account(item: dict[str, Any] | None) -> dict[str, Any]:
     if not item:
         return {}
+    runtime_summary = safe_browser_environment_summary(
+        str(item.get("identity_runtime_snapshot_json") or "")
+    )
     forbidden = {
+        "browser_executable_path",
+        "cdp_url",
+        "command",
         "cookies",
         "cookies_encrypted",
+        "debug_port",
         "fingerprint_seed",
         "identity_runtime_snapshot_json",
         "profile_path",
         "profile_runtime_path",
         "proxy_url",
         "proxy_url_encrypted",
+        "requested_user_agent",
+        "runtime_probes",
         "platform_avatar_url",
     }
     view = {
@@ -2598,6 +2649,7 @@ def _customer_view_social_account(item: dict[str, Any] | None) -> dict[str, Any]
         for key, value in item.items()
         if key not in forbidden
     }
+    view["identity_runtime_summary"] = runtime_summary
     view["has_cookies"] = bool(item.get("has_cookies"))
     view["profile_configured"] = bool(
         item.get("profile_configured")

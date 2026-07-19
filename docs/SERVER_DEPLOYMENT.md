@@ -186,6 +186,8 @@ MONITOR_DATABASE_URL
 MONITOR_SECRET_KEY_PATH
 MONITOR_ACCOUNT_IDENTITY_SEED_SALT
 MONITOR_BROWSER_EXECUTABLE
+MONITOR_BROWSER_PROXY_PROBE_URL
+MONITOR_BROWSER_PROXY_PROBE_TIMEOUT_MS
 MONITOR_ADMIN_EMAIL
 MONITOR_ADMIN_PASSWORD
 MONITOR_PORT
@@ -204,6 +206,29 @@ secret configuration containing this value together with the database and
 Profiles. Losing or changing the effective salt changes future deterministic
 generation and must be handled through the explicit reset/re-login lifecycle,
 not silent regeneration.
+
+`MONITOR_BROWSER_EXECUTABLE` is optional. A non-empty value is the exact
+authoritative Chromium executable for managed login/check/crawl paths; an
+invalid file fails closed. When empty, the server uses the Chromium executable
+from the pinned Playwright installation and records source
+`playwright_bundled`. Managed production paths do not select a local browser
+by Chrome/Edge discovery order.
+
+`MONITOR_BROWSER_PROXY_PROBE_URL` has no default and is required before an
+account-bound proxy can be used. The provider opens it through the bound
+browser proxy before returning the context. It must return a JSON object whose
+`region` exactly matches the account's safe `proxy_region_snapshot`. The URL,
+response, external IP, and proxy secret are not logged or persisted.
+`MONITOR_BROWSER_PROXY_PROBE_TIMEOUT_MS` controls only this proof and defaults
+to `30000`. Explicit-direct accounts do not call the probe and record
+`effect_proof=not_applicable`.
+
+`MONITOR_BROWSER_ENVIRONMENT_PLAN` and
+`MONITOR_BROWSER_ENVIRONMENT_RESULT_PATH` are bounded Runner-to-child internal
+handoff variables. Operators must not set them in `.env`, container, systemd,
+or secret-manager configuration. Each attempt receives a new binding; the
+child consumes/removes the plan before browser launch and atomically writes a
+safe result that the parent validates before ingesting crawler output.
 
 Production deployments should set:
 
@@ -228,6 +253,12 @@ Acceptance requirements:
 - closing the browser does not delete login state;
 - restarting the service/container preserves login state;
 - separate platform accounts use separate profile directories.
+- managed QR/Profile/Cookie/crawl paths use the same account-derived provider
+  plan and exact `profile_key` directory;
+- an account-bound proxy passes the configured browser-routed region proof, or
+  the login/crawl attempt stops before platform work;
+- managed CDP connect-existing, local browser auto-detection, generic Profile,
+  process proxy, and CDP-to-standard fallback do not satisfy acceptance.
 
 If the platform requires manual verification, the server should return a
 structured `needs_verification` state instead of attempting bypass behavior.

@@ -1465,7 +1465,7 @@ def test_phase_5_1c_visible_browser_prepares_then_recovers_sync_failure(monkeypa
             {"name": "Phase 5.1C Visible", "platform": "dy", "login_type": "qrcode"}
         )
 
-        def fake_command(platform, payload):
+        async def fake_command(platform, payload, **kwargs):
             seen["command_state"] = get_social_account(account["id"])["identity_state"]
             return {
                 "platform": platform,
@@ -1954,6 +1954,2161 @@ def test_phase_5_1c_account_ui_exposes_safe_reset_relogin_flow_only():
     assert "hasBlocked" not in identity_controls
     for forbidden in ("fingerprint_seed", "identity_runtime_snapshot_json", "profile_runtime_path"):
         assert forbidden not in account_dialog
+
+
+def _phase_5_1d_persisted_account(*, state="generated", proxy_id=41, requires_relogin=False):
+    from api.monitoring.account_identity import generate_account_identity
+
+    account_id = 5101
+    return {
+        **generate_account_identity(
+            workspace_id=1,
+            platform="dy",
+            account_id=account_id,
+            proxy_region_snapshot="CN_MAINLAND",
+            template_family="windows_chrome_desktop",
+        ),
+        "id": account_id,
+        "workspace_id": 1,
+        "platform": "dy",
+        "profile_key": f"1/dy/acc_{account_id}",
+        "profile_path": r"C:\legacy\shared-dy-profile",
+        "proxy_id": proxy_id,
+        "identity_state": state,
+        "requires_relogin": requires_relogin,
+        "is_draft": False,
+    }
+
+
+def _phase_5_1d_active_proxy(proxy_id=41, *, status="active"):
+    return {
+        "id": proxy_id,
+        "workspace_id": 1,
+        "status": status,
+        "proxy_url": "http://phase51d-user:phase51d-pass@proxy.invalid:8080",
+    }
+
+
+def _phase_5_1d_safe_snapshot():
+    return {
+        "contract_version": 1,
+        "resolution_id": "resolution-5101",
+        "attempt_id": "attempt-5101",
+        "action": "login_check",
+        "trigger_source": "profile_validation",
+        "account": {
+            "workspace_id": 1,
+            "account_id": 5101,
+            "platform": "dy",
+            "identity_state": "validated",
+        },
+        "browser": {
+            "family": "chromium",
+            "version": "126.0.6478.183",
+            "source": "playwright_bundled",
+        },
+        "profile": {"profile_key": "1/dy/acc_5101", "mode": "persistent"},
+        "proxy": {
+            "policy": "account_bound",
+            "proxy_id": 41,
+            "region": "CN_MAINLAND",
+            "effect_proof": "passed",
+        },
+        "requested": {
+            "identity_template": "CN_WIN_CHROME_1920",
+            "browser_platform": "windows",
+            "user_agent": "Mozilla/5.0 Chrome/126.0.6478.183",
+            "timezone": "Asia/Shanghai",
+            "locale": "zh-CN",
+            "accept_language": "zh-CN,zh;q=0.9",
+            "screen_width": 1920,
+            "screen_height": 1080,
+            "viewport_width": 1920,
+            "viewport_height": 963,
+            "device_scale_factor": 1.0,
+            "is_mobile": False,
+            "has_touch": False,
+            "proxy_region_snapshot": "CN_MAINLAND",
+        },
+        "effective": {
+            "user_agent": "Mozilla/5.0 Chrome/126.0.6478.183",
+            "timezone": "Asia/Shanghai",
+            "locale": "zh-CN",
+            "accept_language": "zh-CN,zh;q=0.9",
+            "screen_width": 1920,
+            "screen_height": 1080,
+            "viewport_width": 1920,
+            "viewport_height": 963,
+            "device_scale_factor": 1.0,
+            "is_mobile": False,
+            "has_touch": False,
+            "proxy_region_snapshot": "CN_MAINLAND",
+        },
+        "provider": {
+            "name": "playwright",
+            "mode": "persistent_launch",
+            "version": "1.45.0",
+        },
+        "probes": {
+            "navigator_user_agent": "Mozilla/5.0 Chrome/126.0.6478.183",
+            "navigator_language": "zh-CN",
+            "navigator_languages": ["zh-CN", "zh"],
+            "timezone": "Asia/Shanghai",
+            "screen_width": 1920,
+            "screen_height": 1080,
+            "viewport_width": 1920,
+            "viewport_height": 963,
+            "device_scale_factor": 1.0,
+            "max_touch_points": 0,
+            "is_mobile": False,
+            "webdriver": True,
+        },
+        "unsupported_fields": ["canvas", "webgl", "fonts", "plugins"],
+        "mismatch_evidence": [],
+        "fallback_used": False,
+        "ok": True,
+        "reason": "",
+        "validated_at": "2026-07-19T04:00:00+00:00",
+    }
+
+
+def test_phase_5_1d_provider_resolves_exact_account_environment(tmp_path, monkeypatch):
+    from dataclasses import FrozenInstanceError
+
+    from api.monitoring import account_environment
+    from api.monitoring.browser_environment_provider import resolve_account_browser_environment
+    from tools.browser_environment import (
+        browser_context_options,
+        browser_environment_plan_from_json,
+        browser_environment_plan_to_json,
+    )
+
+    profile_root = (tmp_path / "account-profiles").resolve()
+    explicit_browser = tmp_path / "managed-chromium.exe"
+    bundled_browser = tmp_path / "playwright-chromium.exe"
+    explicit_browser.write_bytes(b"synthetic browser fixture")
+    bundled_browser.write_bytes(b"synthetic Playwright fixture")
+    monkeypatch.setattr(account_environment, "ACCOUNT_PROFILE_ROOT", profile_root)
+    monkeypatch.setenv("MONITOR_BROWSER_EXECUTABLE", str(explicit_browser))
+    monkeypatch.setenv("MONITOR_BROWSER_PROXY_PROBE_URL", "https://probe.invalid/region")
+
+    account = _phase_5_1d_persisted_account()
+    plan = resolve_account_browser_environment(
+        account,
+        action="login_check",
+        trigger_source="profile_validation",
+        headless=True,
+        launch_mode="persistent_launch",
+        proxy=_phase_5_1d_active_proxy(),
+        playwright_executable_path=str(bundled_browser),
+    )
+
+    assert plan.workspace_id == account["workspace_id"]
+    assert plan.account_id == account["id"]
+    assert plan.platform == account["platform"]
+    assert plan.identity_state == account["identity_state"]
+    assert plan.identity_template == account["identity_template"]
+    assert plan.profile_key == account["profile_key"]
+    assert Path(plan.profile_path) == profile_root / "1" / "dy" / "acc_5101"
+    assert plan.profile_path != account["profile_path"]
+    assert plan.profile_mode == "persistent"
+    assert plan.browser_executable_path == str(explicit_browser.resolve())
+    assert plan.browser_source == "explicit"
+    assert plan.browser_family == "chromium"
+    assert plan.proxy_policy == "account_bound"
+    assert plan.proxy_id == 41
+    assert plan.proxy_region == "CN_MAINLAND"
+    assert plan.proxy_url == _phase_5_1d_active_proxy()["proxy_url"]
+    assert plan.provider_name == "playwright"
+    assert plan.launch_mode == "persistent_launch"
+    assert plan.headless is True
+
+    with pytest.raises(FrozenInstanceError):
+        plan.action = "crawl"
+    serialized_plan = browser_environment_plan_to_json(plan)
+    assert browser_environment_plan_from_json(serialized_plan) == plan
+    unsafe_plan = json.loads(serialized_plan)
+    unsafe_plan["unexpected"] = "process default"
+    with pytest.raises(ValueError) as exc_info:
+        browser_environment_plan_from_json(json.dumps(unsafe_plan))
+    assert getattr(exc_info.value, "reason", "") == "account_identity_provider_unsupported"
+
+    context_options = browser_context_options(plan)
+    assert context_options == {
+        "user_data_dir": plan.profile_path,
+        "executable_path": str(explicit_browser.resolve()),
+        "headless": True,
+        "proxy": {
+            "server": "http://proxy.invalid:8080",
+            "username": "phase51d-user",
+            "password": "phase51d-pass",
+        },
+        "user_agent": account["user_agent"],
+        "timezone_id": account["timezone"],
+        "locale": account["locale"],
+        "extra_http_headers": {"Accept-Language": account["accept_language"]},
+        "viewport": {"width": account["viewport_width"], "height": account["viewport_height"]},
+        "screen": {"width": account["screen_width"], "height": account["screen_height"]},
+        "device_scale_factor": account["device_scale_factor"],
+        "is_mobile": account["is_mobile"],
+        "has_touch": account["has_touch"],
+    }
+
+
+def test_phase_5_1d_restart_resolution_is_fresh_without_mutating_account_identity(tmp_path, monkeypatch):
+    from dataclasses import asdict
+
+    from api.monitoring import account_environment
+    from api.monitoring.browser_environment_provider import resolve_account_browser_environment
+    from tools.browser_environment import reset_browser_environment_cache_for_tests
+
+    profile_root = (tmp_path / "restart-profiles").resolve()
+    browser_path = tmp_path / "playwright-chromium.exe"
+    browser_path.write_bytes(b"synthetic Playwright fixture")
+    monkeypatch.setattr(account_environment, "ACCOUNT_PROFILE_ROOT", profile_root)
+    monkeypatch.delenv("MONITOR_BROWSER_EXECUTABLE", raising=False)
+    account = _phase_5_1d_persisted_account(state="active", proxy_id=None)
+    original_account = json.loads(json.dumps(account))
+
+    def resolve():
+        return resolve_account_browser_environment(
+            account,
+            action="crawl",
+            trigger_source="scheduler",
+            headless=True,
+            launch_mode="cdp_launch",
+            playwright_executable_path=str(browser_path),
+        )
+
+    before_restart = resolve()
+    reset_browser_environment_cache_for_tests()
+    after_restart = resolve()
+
+    assert before_restart.resolution_id != after_restart.resolution_id
+    assert before_restart.attempt_id != after_restart.attempt_id
+    comparable_before = {
+        key: value for key, value in asdict(before_restart).items() if key not in {"resolution_id", "attempt_id"}
+    }
+    comparable_after = {
+        key: value for key, value in asdict(after_restart).items() if key not in {"resolution_id", "attempt_id"}
+    }
+    assert comparable_before == comparable_after
+    assert account == original_account
+
+
+@pytest.mark.parametrize(
+    ("case", "expected_reason"),
+    [
+        ("invalid_explicit_executable", "account_identity_provider_unsupported"),
+        ("missing_identity_field", "account_identity_missing"),
+        ("requires_relogin", "account_identity_requires_relogin"),
+        ("locked_task_proxy_override", "account_identity_locked_proxy_override"),
+        ("inactive_bound_proxy", "account_identity_missing"),
+        ("missing_proxy_probe", "account_identity_provider_unsupported"),
+        ("diagnostic_auto_detect_for_locked_identity", "account_identity_provider_unsupported"),
+    ],
+)
+def test_phase_5_1d_provider_fails_closed_for_invalid_coverage(case, expected_reason, tmp_path, monkeypatch):
+    from api.monitoring.browser_environment_provider import resolve_account_browser_environment
+
+    bundled_browser = tmp_path / "playwright-chromium.exe"
+    bundled_browser.write_bytes(b"synthetic Playwright fixture")
+    monkeypatch.delenv("MONITOR_BROWSER_EXECUTABLE", raising=False)
+    monkeypatch.setenv("MONITOR_BROWSER_PROXY_PROBE_URL", "https://probe.invalid/region")
+    account = _phase_5_1d_persisted_account()
+    proxy = _phase_5_1d_active_proxy()
+    task_proxy_id = None
+    diagnostic = False
+
+    if case == "invalid_explicit_executable":
+        monkeypatch.setenv("MONITOR_BROWSER_EXECUTABLE", str(tmp_path / "missing-browser.exe"))
+    elif case == "missing_identity_field":
+        account["timezone"] = ""
+    elif case == "requires_relogin":
+        account["requires_relogin"] = True
+        account["identity_state"] = "requires_relogin"
+    elif case == "locked_task_proxy_override":
+        account["identity_state"] = "active"
+        task_proxy_id = 99
+    elif case == "inactive_bound_proxy":
+        proxy["status"] = "disabled"
+    elif case == "missing_proxy_probe":
+        monkeypatch.delenv("MONITOR_BROWSER_PROXY_PROBE_URL", raising=False)
+    elif case == "diagnostic_auto_detect_for_locked_identity":
+        account["identity_state"] = "locked"
+        diagnostic = True
+
+    with pytest.raises(ValueError) as exc_info:
+        resolve_account_browser_environment(
+            account,
+            action="login_check",
+            trigger_source="profile_validation",
+            headless=True,
+            launch_mode="persistent_launch",
+            proxy=proxy,
+            task_proxy_id=task_proxy_id,
+            playwright_executable_path=str(bundled_browser),
+            diagnostic=diagnostic,
+        )
+    assert getattr(exc_info.value, "reason", "") == expected_reason
+
+
+@pytest.mark.parametrize(
+    "forbidden_key",
+    [
+        "cookie",
+        "cookies",
+        "cookie_value",
+        "proxy_url",
+        "proxy_credentials",
+        "profile_path",
+        "browser_executable_path",
+        "executable_path",
+        "cdp_url",
+        "websocket_url",
+        "debug_port",
+        "novnc_token",
+        "command",
+        "environment",
+        "fingerprint_seed",
+        "probe_url",
+        "external_ip",
+        "exception",
+    ],
+)
+def test_phase_5_1d_snapshot_recursively_rejects_forbidden_keys(forbidden_key):
+    from tools.browser_environment import BrowserEnvironmentError, validate_safe_runtime_snapshot
+
+    snapshot = _phase_5_1d_safe_snapshot()
+    snapshot["probes"]["nested"] = {"evidence": [{forbidden_key: "secret-or-path"}]}
+
+    with pytest.raises(BrowserEnvironmentError) as exc_info:
+        validate_safe_runtime_snapshot(snapshot)
+    assert exc_info.value.reason == "account_identity_snapshot_unsafe"
+
+
+def test_phase_5_1d_snapshot_rejects_more_than_64_kib_before_persistence():
+    from tools.browser_environment import BrowserEnvironmentError, validate_safe_runtime_snapshot
+
+    snapshot = _phase_5_1d_safe_snapshot()
+    snapshot["requested"]["user_agent"] = "X" * 70000
+
+    with pytest.raises(BrowserEnvironmentError) as exc_info:
+        validate_safe_runtime_snapshot(snapshot)
+
+    assert exc_info.value.reason == "account_identity_snapshot_unsafe"
+    assert exc_info.value.fields == ("snapshot_size",)
+
+
+@pytest.mark.parametrize(
+    "mismatch",
+    [
+        {"field": "undocumented_field", "requested": "a", "effective": "b"},
+        {"field": "timezone", "requested": "Asia/Shanghai", "effective": "UTC", "detail": "raw"},
+        {"field": "timezone", "requested": {"proxy_url": "http://secret"}, "effective": "UTC"},
+        {"field": "timezone", "requested": "https://probe.invalid", "effective": "UTC"},
+        {"field": "timezone", "requested": r"C:\secret\profile", "effective": "UTC"},
+        {"field": "timezone", "requested": r"\\server\share\profile", "effective": "UTC"},
+        {"field": "timezone", "requested": "/srv/account/profile", "effective": "UTC"},
+        {"field": "timezone", "requested": ["Asia/Shanghai"], "effective": "UTC"},
+        {"field": "screen_width", "requested": "1920", "effective": 1920},
+        {"field": "is_mobile", "requested": 0, "effective": False},
+    ],
+)
+def test_phase_5_1d_snapshot_rejects_unsafe_or_untyped_mismatch_evidence(mismatch):
+    from tools.browser_environment import BrowserEnvironmentError, validate_safe_runtime_snapshot
+
+    snapshot = _phase_5_1d_safe_snapshot()
+    snapshot["ok"] = False
+    snapshot["reason"] = "account_identity_snapshot_mismatch"
+    snapshot["mismatch_evidence"] = [mismatch]
+
+    with pytest.raises(BrowserEnvironmentError) as exc_info:
+        validate_safe_runtime_snapshot(snapshot)
+    assert exc_info.value.reason == "account_identity_snapshot_unsafe"
+
+
+def test_phase_5_1d_snapshot_allows_field_scoped_safe_mismatch_and_bounded_summary():
+    from api.monitoring.browser_environment_provider import safe_browser_environment_summary
+    from tools.browser_environment import validate_safe_runtime_snapshot
+
+    snapshot = _phase_5_1d_safe_snapshot()
+    snapshot["ok"] = False
+    snapshot["reason"] = "account_identity_snapshot_mismatch"
+    snapshot["mismatch_evidence"] = [
+        {"field": "timezone", "requested": "Asia/Shanghai", "effective": "UTC"}
+    ]
+    assert validate_safe_runtime_snapshot(snapshot) == snapshot
+
+    summary = safe_browser_environment_summary(json.dumps(snapshot))
+    assert summary == {
+        "provider": {"name": "playwright", "mode": "persistent_launch"},
+        "browser": {
+            "family": "chromium",
+            "version": "126.0.6478.183",
+            "source": "playwright_bundled",
+        },
+        "profile": {"profile_key": "1/dy/acc_5101", "mode": "persistent"},
+        "proxy": {"policy": "account_bound", "effect_proof": "passed"},
+        "status": {
+            "ok": False,
+            "reason": "account_identity_snapshot_mismatch",
+            "validated_at": "2026-07-19T04:00:00+00:00",
+            "fallback_used": False,
+            "unsupported_field_count": 4,
+            "mismatch_fields": ["timezone"],
+        },
+    }
+    serialized = json.dumps(summary, ensure_ascii=False)
+    for forbidden in (
+        "user_agent",
+        "requested",
+        "effective",
+        "probes",
+        "proxy_id",
+        "CN_MAINLAND",
+        '"account_id"',
+        '"workspace_id"',
+    ):
+        assert forbidden not in serialized
+
+
+def test_phase_5_1d_admin_account_view_exposes_only_safe_runtime_summary():
+    snapshot = _phase_5_1d_safe_snapshot()
+    snapshot["ok"] = False
+    snapshot["reason"] = "account_identity_snapshot_mismatch"
+    snapshot["mismatch_evidence"] = [
+        {"field": "timezone", "requested": "Asia/Shanghai", "effective": "UTC"}
+    ]
+    raw = {
+        "id": 5101,
+        "name": "受管抖音账号",
+        "platform": "dy",
+        "identity_runtime_snapshot_json": json.dumps(snapshot),
+        "cookies": "sessionid=secret-cookie",
+        "fingerprint_seed": "secret-seed",
+        "profile_path": r"E:\server\profiles\dy\acc_5101",
+        "profile_runtime_path": r"E:\server\profiles\dy\acc_5101",
+        "proxy_url": "http://user:password@proxy.invalid:8080",
+        "browser_executable_path": r"C:\browser\chrome.exe",
+        "cdp_url": "http://127.0.0.1:9222",
+        "debug_port": 9222,
+        "command": "chrome.exe --remote-debugging-port=9222",
+        "requested_user_agent": "secret requested UA",
+        "runtime_probes": {"user_agent": "secret effective UA"},
+    }
+
+    view = monitor_router._customer_view_social_account(raw)
+    summary = view["identity_runtime_summary"]
+    visible = json.dumps(view, ensure_ascii=False)
+
+    assert summary["provider"] == {"name": "playwright", "mode": "persistent_launch"}
+    assert summary["proxy"] == {"policy": "account_bound", "effect_proof": "passed"}
+    assert summary["status"] == {
+        "ok": False,
+        "reason": "account_identity_snapshot_mismatch",
+        "validated_at": "2026-07-19T04:00:00+00:00",
+        "fallback_used": False,
+        "unsupported_field_count": 4,
+        "mismatch_fields": ["timezone"],
+    }
+    assert "identity_runtime_snapshot_json" not in view
+    for forbidden in (
+        "secret-cookie",
+        "secret-seed",
+        "E:\\server",
+        "user:password",
+        "chrome.exe",
+        "127.0.0.1",
+        "9222",
+        "secret requested UA",
+        "secret effective UA",
+        '"requested"',
+        '"effective"',
+        '"probes"',
+    ):
+        assert forbidden not in visible
+
+
+def test_phase_5_1d_admin_account_drawer_renders_compact_runtime_summary():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    start = page.index("function accountRuntimeEnvironmentSummary(account)")
+    runtime_summary_function = page[start : page.index("function accountIdentityPreloginState", start)]
+
+    for marker in (
+        "identity_runtime_summary",
+        "summary.provider",
+        "summary.proxy",
+        "summary.status",
+        "validated_at",
+        "fallback_used",
+        "unsupported_field_count",
+        "mismatch_fields",
+    ):
+        assert marker in runtime_summary_function
+    for marker in (
+        "playwright:'Playwright'",
+        "persistent_launch:'持久化启动'",
+        "ephemeral_cookie_validation:'Cookie 临时验活'",
+        "cdp_launch:'CDP 启动'",
+        "timezone:'时区'",
+        "proxy_effect:'代理证明'",
+    ):
+        assert marker in runtime_summary_function
+    assert "accountSummaryItem('运行实况', accountRuntimeEnvironmentSummary(account))" in page
+    for forbidden in (
+        "identity_runtime_snapshot_json",
+        "requested_user_agent",
+        "runtime_probes",
+        "browser_executable_path",
+        "cdp_url",
+        "debug_port",
+        "command_line",
+    ):
+        assert forbidden not in runtime_summary_function
+
+
+def test_phase_5_1d_deployment_examples_expose_only_operator_provider_settings():
+    examples = [
+        Path(".env.example"),
+        Path("deploy/docker/monitor.env.example"),
+        Path("deploy/systemd/legal-sentiment-monitor.env.example"),
+    ]
+    for path in examples:
+        content = path.read_text(encoding="utf-8")
+        assert "MONITOR_BROWSER_EXECUTABLE=" in content, path
+        assert "MONITOR_BROWSER_PROXY_PROBE_URL=" in content, path
+        assert "MONITOR_BROWSER_PROXY_PROBE_TIMEOUT_MS=30000" in content, path
+        assert "MONITOR_BROWSER_ENVIRONMENT_PLAN" not in content, path
+        assert "MONITOR_BROWSER_ENVIRONMENT_RESULT_PATH" not in content, path
+
+
+def test_phase_5_1d_snapshot_persistence_is_safe_and_account_scoped(monkeypatch):
+    from api.monitoring.database import update_social_account_identity_runtime_snapshot
+    from tools.browser_environment import BrowserEnvironmentError
+
+    monkeypatch.setenv("MONITOR_ACCOUNT_IDENTITY_SEED_SALT", "phase-5.1d-persistence-salt")
+    init_db()
+    snapshot_rows = _snapshot_table("social_accounts")
+    try:
+        account = save_social_account(
+            {
+                "name": "Phase 5.1D Snapshot Account",
+                "platform": "dy",
+                "login_type": "qrcode",
+                "status": "standby",
+                "proxy_region_snapshot": "CN_MAINLAND",
+                "identity_template_family": "windows_chrome_desktop",
+            }
+        )
+        safe_snapshot = _phase_5_1d_safe_snapshot()
+        safe_snapshot["account"] = {
+            "workspace_id": account["workspace_id"],
+            "account_id": account["id"],
+            "platform": account["platform"],
+            "identity_state": account["identity_state"],
+        }
+        safe_snapshot["profile"]["profile_key"] = account["profile_key"]
+        with get_conn() as conn:
+            before = dict(conn.execute("SELECT * FROM social_accounts WHERE id=?", (account["id"],)).fetchone())
+
+        stored = update_social_account_identity_runtime_snapshot(account["id"], safe_snapshot)
+        with get_conn() as conn:
+            after = dict(conn.execute("SELECT * FROM social_accounts WHERE id=?", (account["id"],)).fetchone())
+
+        assert json.loads(stored["identity_runtime_snapshot_json"]) == safe_snapshot
+        for field in before:
+            if field not in {"identity_runtime_snapshot_json", "updated_at"}:
+                assert after[field] == before[field]
+
+        mismatched = json.loads(json.dumps(safe_snapshot))
+        mismatched["account"]["account_id"] = account["id"] + 1
+        with pytest.raises(BrowserEnvironmentError) as exc_info:
+            update_social_account_identity_runtime_snapshot(account["id"], mismatched)
+        assert exc_info.value.reason == "account_identity_snapshot_mismatch"
+
+        unsafe = json.loads(json.dumps(safe_snapshot))
+        unsafe["probes"]["profile_path"] = r"C:\secret\profile"
+        with pytest.raises(BrowserEnvironmentError) as exc_info:
+            update_social_account_identity_runtime_snapshot(account["id"], unsafe)
+        assert exc_info.value.reason == "account_identity_snapshot_unsafe"
+    finally:
+        _restore_table("social_accounts", snapshot_rows)
+
+
+def _phase_5_1d_plan(tmp_path, monkeypatch, *, proxy_bound=False, action="login_check", launch_mode="persistent_launch"):
+    from api.monitoring import account_environment
+    from api.monitoring.browser_environment_provider import resolve_account_browser_environment
+
+    profile_root = (tmp_path / "managed-profiles").resolve()
+    browser_path = tmp_path / "playwright-chromium.exe"
+    browser_path.write_bytes(b"synthetic Playwright fixture")
+    monkeypatch.setattr(account_environment, "ACCOUNT_PROFILE_ROOT", profile_root)
+    monkeypatch.delenv("MONITOR_BROWSER_EXECUTABLE", raising=False)
+    account = _phase_5_1d_persisted_account(proxy_id=41 if proxy_bound else None)
+    proxy = _phase_5_1d_active_proxy() if proxy_bound else None
+    if proxy_bound:
+        monkeypatch.setenv("MONITOR_BROWSER_PROXY_PROBE_URL", "https://probe.invalid/region")
+    else:
+        monkeypatch.delenv("MONITOR_BROWSER_PROXY_PROBE_URL", raising=False)
+    return resolve_account_browser_environment(
+        account,
+        action=action,
+        trigger_source="cookie_validation" if action == "cookie_validation" else "profile_validation",
+        headless=True,
+        launch_mode=launch_mode,
+        proxy=proxy,
+        playwright_executable_path=str(browser_path),
+    )
+
+
+def _phase_5_1d_effective_probe(plan):
+    return {
+        "user_agent": plan.user_agent,
+        "timezone": plan.timezone,
+        "language": plan.locale,
+        "languages": [part.split(";", 1)[0].strip() for part in plan.accept_language.split(",")],
+        "screen_width": plan.screen_width,
+        "screen_height": plan.screen_height,
+        "viewport_width": plan.viewport_width,
+        "viewport_height": plan.viewport_height,
+        "device_scale_factor": plan.device_scale_factor,
+        "max_touch_points": 1 if plan.has_touch else 0,
+        "is_mobile": plan.is_mobile,
+        "webdriver": True,
+    }
+
+
+def test_phase_5_1d_proxy_proof_finishes_before_context_is_returned(tmp_path, monkeypatch):
+    from tools.browser_environment import launch_managed_browser_context
+
+    plan = _phase_5_1d_plan(tmp_path, monkeypatch, proxy_bound=True)
+    events = []
+    captured = {}
+
+    class FakeResponse:
+        ok = True
+        status = 200
+
+        async def json(self):
+            return {"region": "CN_MAINLAND"}
+
+    class FakeProofPage:
+        async def goto(self, url, **kwargs):
+            events.append(("probe", url, kwargs["timeout"]))
+            return FakeResponse()
+
+        async def close(self):
+            events.append(("probe_closed",))
+
+    class FakeContext:
+        pages = []
+        browser = None
+
+        def on(self, event, callback):
+            captured["request_handler"] = callback
+
+        async def new_page(self):
+            return FakeProofPage()
+
+    context = FakeContext()
+
+    class FakeChromium:
+        async def launch_persistent_context(self, **kwargs):
+            captured["launch"] = kwargs
+            events.append(("launch",))
+            return context
+
+    class FakePlaywright:
+        chromium = FakeChromium()
+
+    session = asyncio.run(launch_managed_browser_context(FakePlaywright(), plan))
+
+    assert session.context is context
+    assert session.browser is None
+    assert [item[0] for item in events] == ["launch", "probe", "probe_closed"]
+    assert captured["launch"]["user_data_dir"] == plan.profile_path
+    assert captured["launch"]["executable_path"] == plan.browser_executable_path
+    assert captured["launch"]["proxy"] == {
+        "server": "http://proxy.invalid:8080",
+        "username": "phase51d-user",
+        "password": "phase51d-pass",
+    }
+    assert getattr(context, "_monitor_proxy_effect_proof") == "passed"
+    assert getattr(context, "_monitor_browser_environment_plan") is plan
+
+
+@pytest.mark.parametrize(
+    ("case", "expected_reason"),
+    [
+        ("absent_url", "account_identity_provider_unsupported"),
+        ("http_failure", "account_identity_proxy_proof_failed"),
+        ("malformed_body", "account_identity_proxy_proof_failed"),
+        ("timeout", "account_identity_proxy_proof_failed"),
+        ("wrong_region", "account_identity_snapshot_mismatch"),
+    ],
+)
+def test_phase_5_1d_proxy_proof_fails_before_platform_navigation(case, expected_reason, tmp_path, monkeypatch):
+    from tools.browser_environment import BrowserEnvironmentError, launch_managed_browser_context
+
+    plan = _phase_5_1d_plan(tmp_path, monkeypatch, proxy_bound=True)
+    if case == "absent_url":
+        monkeypatch.delenv("MONITOR_BROWSER_PROXY_PROBE_URL", raising=False)
+    platform_navigation = []
+
+    class FakeResponse:
+        status = 503 if case == "http_failure" else 200
+        ok = case != "http_failure"
+
+        async def json(self):
+            if case == "malformed_body":
+                return ["CN_MAINLAND"]
+            return {"region": "HK" if case == "wrong_region" else "CN_MAINLAND"}
+
+    class FakeProofPage:
+        async def goto(self, *args, **kwargs):
+            if case == "timeout":
+                raise TimeoutError("synthetic timeout")
+            return FakeResponse()
+
+        async def close(self):
+            pass
+
+    class FakeContext:
+        pages = []
+        browser = None
+
+        def on(self, *args):
+            pass
+
+        async def new_page(self):
+            return FakeProofPage()
+
+    class FakeChromium:
+        async def launch_persistent_context(self, **kwargs):
+            return FakeContext()
+
+    class FakePlaywright:
+        chromium = FakeChromium()
+
+    with pytest.raises(BrowserEnvironmentError) as exc_info:
+        asyncio.run(launch_managed_browser_context(FakePlaywright(), plan))
+    assert exc_info.value.reason == expected_reason
+    failure_result = getattr(exc_info.value, "browser_environment_result", None)
+    assert failure_result is not None
+    assert failure_result.ok is False
+    assert failure_result.snapshot["proxy"]["effect_proof"] == "failed"
+    assert failure_result.snapshot["effective"] == {}
+    assert failure_result.snapshot["probes"] == {}
+    assert platform_navigation == []
+
+
+@pytest.mark.parametrize(
+    ("field", "mutated_value"),
+    [
+        ("user_agent", "Mozilla/5.0 Chrome/125.0.0.0"),
+        ("timezone", "UTC"),
+        ("locale", "en-US"),
+        ("accept_language", "en-US,en;q=0.9"),
+        ("screen_width", 1280),
+        ("viewport_height", 720),
+        ("device_scale_factor", 2.0),
+        ("has_touch", True),
+        ("is_mobile", True),
+        ("browser_version", "125.0.0.0"),
+    ],
+)
+def test_phase_5_1d_page_probe_records_field_scoped_mismatch(field, mutated_value, tmp_path, monkeypatch):
+    from tools.browser_environment import launch_managed_browser_context, verify_managed_page
+
+    plan = _phase_5_1d_plan(tmp_path, monkeypatch)
+    probe = _phase_5_1d_effective_probe(plan)
+    browser_version = plan.browser_version
+    request_headers = {"accept-language": plan.accept_language}
+    if field == "locale":
+        probe["language"] = mutated_value
+    elif field == "accept_language":
+        request_headers["accept-language"] = mutated_value
+    elif field == "has_touch":
+        probe["max_touch_points"] = 1
+    elif field == "browser_version":
+        browser_version = mutated_value
+    else:
+        probe[field] = mutated_value
+
+    class FakeRequest:
+        headers = request_headers
+
+    class FakePage:
+        async def goto(self, *args, **kwargs):
+            context.request_handler(FakeRequest())
+
+        async def evaluate(self, script):
+            return probe
+
+    class FakeBrowser:
+        version = browser_version
+
+    class FakeContext:
+        pages = []
+        browser = FakeBrowser()
+
+        def on(self, event, callback):
+            self.request_handler = callback
+
+    context = FakeContext()
+
+    class FakeChromium:
+        async def launch_persistent_context(self, **kwargs):
+            return context
+
+    class FakePlaywright:
+        chromium = FakeChromium()
+
+    session = asyncio.run(launch_managed_browser_context(FakePlaywright(), plan))
+    page = FakePage()
+    asyncio.run(page.goto("https://platform.invalid"))
+    result = asyncio.run(verify_managed_page(session.context, page))
+
+    assert result is not None
+    assert result.ok is False
+    assert result.reason == "account_identity_snapshot_mismatch"
+    assert result.snapshot["mismatch_evidence"] == [
+        {
+            "field": field,
+            "requested": getattr(plan, field if field != "browser_version" else "browser_version"),
+            "effective": mutated_value,
+        }
+    ]
+    assert set(result.snapshot["mismatch_evidence"][0]) == {"field", "requested", "effective"}
+
+
+def test_phase_5_1d_profile_cookie_and_visible_login_share_exact_plan(tmp_path, monkeypatch):
+    from api.monitoring import account_environment
+
+    profile_root = (tmp_path / "shared-profiles").resolve()
+    browser_path = tmp_path / "playwright-chromium.exe"
+    browser_path.write_bytes(b"synthetic Playwright fixture")
+    monkeypatch.setattr(account_environment, "ACCOUNT_PROFILE_ROOT", profile_root)
+    monkeypatch.delenv("MONITOR_BROWSER_EXECUTABLE", raising=False)
+    account = _phase_5_1d_persisted_account(proxy_id=None)
+    account["cookies"] = "sessionid=synthetic"
+    account["login_type"] = "cookie"
+    profile_path = profile_root / "1" / "dy" / "acc_5101"
+    profile_path.mkdir(parents=True)
+    launches = []
+
+    class FakeRequest:
+        headers = {"accept-language": account["accept_language"]}
+
+    class FakePage:
+        def set_default_timeout(self, timeout):
+            pass
+
+        async def goto(self, *args, **kwargs):
+            self.context.request_handler(FakeRequest())
+
+        async def wait_for_timeout(self, timeout):
+            pass
+
+        async def evaluate(self, script):
+            return _phase_5_1d_effective_probe(self.context._monitor_browser_environment_plan)
+
+    class FakeContext:
+        def __init__(self, browser):
+            self.browser = browser
+            self.pages = [FakePage()]
+            self.pages[0].context = self
+            self.closed = False
+            self.cookies_added = []
+
+        def on(self, event, callback):
+            self.request_handler = callback
+
+        async def new_page(self):
+            page = FakePage()
+            page.context = self
+            self.pages.append(page)
+            return page
+
+        async def add_cookies(self, cookies):
+            self.cookies_added.extend(cookies)
+
+        async def cookies(self):
+            return []
+
+        async def close(self):
+            self.closed = True
+
+    class FakeBrowser:
+        version = "126.0.6478.183"
+
+        def __init__(self):
+            self.closed = False
+            self.context = None
+
+        async def new_context(self, **kwargs):
+            launches.append(("new_context", kwargs))
+            self.context = FakeContext(self)
+            return self.context
+
+        async def close(self):
+            self.closed = True
+
+    class FakeChromium:
+        executable_path = str(browser_path)
+
+        async def launch_persistent_context(self, **kwargs):
+            launches.append(("persistent", kwargs))
+            return FakeContext(FakeBrowser())
+
+        async def launch(self, **kwargs):
+            launches.append(("ephemeral", kwargs))
+            return FakeBrowser()
+
+    class FakePlaywright:
+        chromium = FakeChromium()
+        stopped = False
+
+        async def stop(self):
+            self.stopped = True
+
+    class FakeFactory:
+        async def start(self):
+            return FakePlaywright()
+
+    async def fake_verify(*args, **kwargs):
+        return {"ok": True, "status": "valid", "message": "ok"}
+
+    async def fake_identity(*args, **kwargs):
+        return {}
+
+    monkeypatch.setattr(account_check_module, "async_playwright", lambda: FakeFactory())
+    monkeypatch.setattr(account_check_module, "_verify_collectable_login", fake_verify)
+    monkeypatch.setattr(account_check_module, "_extract_platform_identity", fake_identity)
+    monkeypatch.setattr(account_check_module, "get_proxy_profile", lambda *args, **kwargs: None, raising=False)
+    monkeypatch.setattr(monitor_router, "get_social_account", lambda *args, **kwargs: account)
+    monkeypatch.setattr(monitor_router, "get_proxy_profile", lambda *args, **kwargs: None)
+    monkeypatch.setattr(
+        monitor_router,
+        "_playwright_chromium_executable_path",
+        lambda: str(browser_path),
+        raising=False,
+    )
+
+    profile_account = {**account, "login_type": "qrcode"}
+    profile_result = asyncio.run(account_check_module._check_profile_account(profile_account, 1000))
+    cookie_result = asyncio.run(account_check_module._check_cookie_account(account, 1000))
+    visible_command = asyncio.run(
+        monitor_router._login_browser_command_for_payload(
+            "dy",
+            {"account_id": account["id"]},
+            action="login_check",
+            trigger_source="visible_browser_login",
+            headless=False,
+        )
+    )
+
+    profile_plan = profile_result["_browser_environment_plan"]
+    cookie_plan = cookie_result["_browser_environment_plan"]
+    visible_plan = visible_command["_browser_environment_plan"]
+    shared_fields = (
+        "workspace_id",
+        "account_id",
+        "platform",
+        "identity_template",
+        "browser_executable_path",
+        "browser_family",
+        "browser_source",
+        "profile_key",
+        "proxy_policy",
+        "proxy_id",
+        "proxy_region",
+        "user_agent",
+        "timezone",
+        "locale",
+        "accept_language",
+        "screen_width",
+        "screen_height",
+        "viewport_width",
+        "viewport_height",
+        "device_scale_factor",
+        "is_mobile",
+        "has_touch",
+    )
+    for field in shared_fields:
+        assert getattr(profile_plan, field) == getattr(cookie_plan, field) == getattr(visible_plan, field)
+    assert profile_plan.profile_mode == "persistent"
+    assert cookie_plan.profile_mode == "ephemeral_cookie_validation"
+    assert cookie_plan.launch_mode == "ephemeral_cookie_validation"
+    assert visible_plan.headless is False
+    assert launches[0][0] == "persistent"
+    assert launches[1][0] == "ephemeral"
+    assert all(str(profile_path) not in json.dumps(options) for kind, options in launches if kind != "persistent")
+    assert cookie_result["_browser_session_closed"] is True
+
+
+def test_phase_5_1d_qr_provider_mismatch_stops_before_qrcode_prepare(tmp_path, monkeypatch):
+    from api.monitoring.login_browser import build_managed_login_browser_command
+
+    plan = _phase_5_1d_plan(tmp_path, monkeypatch, action="qr_login")
+    events = []
+    probe = _phase_5_1d_effective_probe(plan)
+    probe["timezone"] = "UTC"
+
+    class FakeRequest:
+        headers = {"accept-language": plan.accept_language}
+
+    class FakePage:
+        def set_default_timeout(self, timeout):
+            pass
+
+        async def goto(self, *args, **kwargs):
+            events.append("platform_goto")
+            context.request_handler(FakeRequest())
+
+        async def evaluate(self, script):
+            return probe
+
+    class FakeBrowser:
+        version = plan.browser_version
+
+    class FakeContext:
+        browser = FakeBrowser()
+        pages = [FakePage()]
+        closed = False
+
+        def on(self, event, callback):
+            self.request_handler = callback
+
+        async def close(self):
+            self.closed = True
+
+    context = FakeContext()
+
+    class FakeChromium:
+        async def launch_persistent_context(self, **kwargs):
+            events.append("launch")
+            return context
+
+    class FakePlaywright:
+        chromium = FakeChromium()
+
+        async def stop(self):
+            events.append("stop")
+
+    class FakeFactory:
+        async def start(self):
+            return FakePlaywright()
+
+    async def forbidden_prepare(*args, **kwargs):
+        events.append("qrcode_prepare")
+
+    monkeypatch.setattr(login_qrcode_module, "async_playwright", lambda: FakeFactory())
+    monkeypatch.setattr(login_qrcode_module, "_prepare_login_page", forbidden_prepare)
+    result = asyncio.run(
+        login_qrcode_module._start_qrcode_login_session_with_profile_once(
+            951001,
+            "dy",
+            build_managed_login_browser_command(plan),
+            1000,
+        )
+    )
+
+    assert result["ok"] is False
+    assert result["_browser_environment_result"].reason == "account_identity_snapshot_mismatch"
+    assert events[:2] == ["launch", "platform_goto"]
+    assert "qrcode_prepare" not in events
+    assert context.closed is True
+
+
+def test_phase_5_1d_browser_disconnect_after_proof_is_typed_and_has_no_fallback(tmp_path, monkeypatch):
+    from tools.browser_environment import (
+        BrowserEnvironmentError,
+        launch_managed_browser_context,
+        verify_managed_page,
+    )
+
+    plan = _phase_5_1d_plan(tmp_path, monkeypatch)
+
+    class FakeBrowser:
+        version = plan.browser_version
+
+    class FakeContext:
+        browser = FakeBrowser()
+        pages = []
+
+        def on(self, event, callback):
+            self.request_handler = callback
+
+    context = FakeContext()
+
+    class FakeChromium:
+        launches = 0
+
+        async def launch_persistent_context(self, **kwargs):
+            self.launches += 1
+            return context
+
+    chromium = FakeChromium()
+
+    class FakePlaywright:
+        pass
+
+    playwright = FakePlaywright()
+    playwright.chromium = chromium
+
+    class ClosedPage:
+        async def evaluate(self, script):
+            raise RuntimeError("Target page, context or browser has been closed")
+
+    session = asyncio.run(launch_managed_browser_context(playwright, plan))
+    with pytest.raises(BrowserEnvironmentError) as exc_info:
+        asyncio.run(verify_managed_page(session.context, ClosedPage()))
+
+    assert exc_info.value.reason == "account_identity_provider_browser_crashed"
+    assert exc_info.value.browser_environment_result.ok is False
+    assert exc_info.value.browser_environment_result.snapshot["fallback_used"] is False
+    assert chromium.launches == 1
+
+
+def test_phase_5_1d_failed_direct_proof_persists_before_lifecycle_recovery(tmp_path, monkeypatch):
+    from api.monitoring.browser_environment_provider import (
+        persist_account_browser_environment_result as real_persist,
+        resolve_account_browser_environment,
+    )
+    from tools.browser_environment import browser_environment_failure_result
+
+    monkeypatch.setenv("MONITOR_ACCOUNT_IDENTITY_SEED_SALT", "phase-5.1d-direct-order-salt")
+    browser_path = tmp_path / "playwright-chromium.exe"
+    browser_path.write_bytes(b"synthetic Playwright fixture")
+    init_db()
+    rows = _snapshot_table("social_accounts")
+    observed_states = []
+    try:
+        account = save_social_account(
+            {"name": "Phase 5.1D Direct Failure", "platform": "dy", "login_type": "qrcode"}
+        )
+
+        async def fake_profile_check(prepared_account, timeout_ms):
+            plan = resolve_account_browser_environment(
+                prepared_account,
+                action="login_check",
+                trigger_source="profile_validation",
+                headless=True,
+                launch_mode="persistent_launch",
+                proxy=None,
+                playwright_executable_path=str(browser_path),
+            )
+            provider_result = browser_environment_failure_result(
+                plan,
+                "account_identity_snapshot_mismatch",
+                proxy_effect="not_applicable",
+            )
+            return {
+                "ok": True,
+                "status": "valid",
+                "message": "business check must not activate",
+                "identity": {},
+                "_browser_environment_plan": plan,
+                "_browser_environment_result": provider_result,
+                "_browser_session_closed": True,
+            }
+
+        def recording_persist(account_id, plan, result):
+            observed_states.append(get_social_account(account_id)["identity_state"])
+            return real_persist(account_id, plan, result)
+
+        monkeypatch.setattr(account_check_module, "_check_profile_account", fake_profile_check)
+        monkeypatch.setattr(account_check_module, "persist_account_browser_environment_result", recording_persist)
+
+        checked = asyncio.run(account_check_module.check_social_account_login(account["id"]))
+        stored = get_social_account(account["id"], masked=False)
+
+        assert observed_states == ["login_in_progress"]
+        assert checked["ok"] is False
+        assert stored["identity_state"] == "validated"
+        assert stored["browser_environment_locked_at"] is None
+        assert json.loads(stored["identity_runtime_snapshot_json"])["ok"] is False
+    finally:
+        _restore_table("social_accounts", rows)
+
+
+def _phase_5_1d_result_for_plan(plan, *, ok=True, reason=""):
+    from tools.browser_environment import BrowserEnvironmentResult
+
+    effective = {
+        "user_agent": plan.user_agent,
+        "timezone": plan.timezone,
+        "locale": plan.locale,
+        "accept_language": plan.accept_language,
+        "screen_width": plan.screen_width,
+        "screen_height": plan.screen_height,
+        "viewport_width": plan.viewport_width,
+        "viewport_height": plan.viewport_height,
+        "device_scale_factor": float(plan.device_scale_factor),
+        "is_mobile": plan.is_mobile,
+        "has_touch": plan.has_touch,
+        "proxy_region_snapshot": plan.proxy_region,
+    }
+    probes = {
+        "navigator_user_agent": plan.user_agent,
+        "navigator_language": plan.locale,
+        "navigator_languages": [part.split(";", 1)[0].strip() for part in plan.accept_language.split(",")],
+        "timezone": plan.timezone,
+        "screen_width": plan.screen_width,
+        "screen_height": plan.screen_height,
+        "viewport_width": plan.viewport_width,
+        "viewport_height": plan.viewport_height,
+        "device_scale_factor": float(plan.device_scale_factor),
+        "max_touch_points": 1 if plan.has_touch else 0,
+        "is_mobile": plan.is_mobile,
+        "webdriver": True,
+    }
+    snapshot = {
+        "contract_version": 1,
+        "resolution_id": plan.resolution_id,
+        "attempt_id": plan.attempt_id,
+        "action": plan.action,
+        "trigger_source": plan.trigger_source,
+        "account": {
+            "workspace_id": plan.workspace_id,
+            "account_id": plan.account_id,
+            "platform": plan.platform,
+            "identity_state": plan.identity_state,
+        },
+        "browser": {
+            "family": plan.browser_family,
+            "version": plan.browser_version,
+            "source": plan.browser_source,
+        },
+        "profile": {"profile_key": plan.profile_key, "mode": plan.profile_mode},
+        "proxy": {
+            "policy": plan.proxy_policy,
+            "proxy_id": plan.proxy_id,
+            "region": plan.proxy_region,
+            "effect_proof": "passed" if plan.proxy_policy == "account_bound" else "not_applicable",
+        },
+        "requested": {
+            "identity_template": plan.identity_template,
+            "browser_platform": plan.browser_platform,
+            "user_agent": plan.user_agent,
+            "timezone": plan.timezone,
+            "locale": plan.locale,
+            "accept_language": plan.accept_language,
+            "screen_width": plan.screen_width,
+            "screen_height": plan.screen_height,
+            "viewport_width": plan.viewport_width,
+            "viewport_height": plan.viewport_height,
+            "device_scale_factor": float(plan.device_scale_factor),
+            "is_mobile": plan.is_mobile,
+            "has_touch": plan.has_touch,
+            "proxy_region_snapshot": plan.proxy_region,
+        },
+        "effective": effective if ok else {},
+        "provider": {"name": "playwright", "mode": plan.launch_mode, "version": "1.45.0"},
+        "probes": probes if ok else {},
+        "unsupported_fields": ["canvas", "webgl", "fonts", "plugins"],
+        "mismatch_evidence": [],
+        "fallback_used": False,
+        "ok": ok,
+        "reason": reason,
+        "validated_at": datetime.now(timezone.utc).isoformat(),
+    }
+    return BrowserEnvironmentResult(ok=ok, reason=reason, snapshot=snapshot)
+
+
+def test_phase_5_1d_runner_handoff_is_bounded_and_not_in_command_or_summary(tmp_path, monkeypatch):
+    from dataclasses import replace
+
+    from tools.browser_environment import (
+        PLAN_ENV_NAME,
+        RESULT_PATH_ENV_NAME,
+        browser_environment_plan_from_json,
+        plan_from_environment,
+        reset_browser_environment_cache_for_tests,
+    )
+
+    plan = _phase_5_1d_plan(tmp_path, monkeypatch, proxy_bound=True, action="crawl", launch_mode="cdp_launch")
+    result_path = tmp_path / "attempt" / "browser-environment-result.json"
+    account_binding = {
+        "account_id": plan.account_id,
+        "account_name": "synthetic account",
+        "platform": plan.platform,
+        "login_type": "qrcode",
+        "profile_key": plan.profile_key,
+        "profile_path": plan.profile_path,
+        "proxy_id": plan.proxy_id,
+        "proxy_name": "synthetic proxy",
+        "proxy_url": plan.proxy_url,
+    }
+    monkeypatch.setenv("HTTP_PROXY", "http://process-default.invalid:8888")
+    monkeypatch.setenv("MONITOR_CDP_USER_DATA_DIR", r"C:\generic\profile")
+    monkeypatch.setenv("MONITOR_CDP_CONNECT_EXISTING", "false")
+
+    env = runner_module._build_crawler_env(account_binding, plan, result_path)
+    cmd = runner_module._build_crawler_cmd(
+        {"keywords": ["Phase 5.1D"], "target_type": "search"},
+        "dy",
+        tmp_path,
+        account_binding,
+        plan,
+    )
+
+    assert len(env[PLAN_ENV_NAME].encode("utf-8")) <= 8192
+    assert browser_environment_plan_from_json(env[PLAN_ENV_NAME]) == plan
+    assert env[RESULT_PATH_ENV_NAME] == str(result_path.resolve())
+    for forbidden_env in (
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "MONITOR_CDP_USER_DATA_DIR",
+        "MONITOR_CDP_USER_DATA_DIR_DY",
+        "MONITOR_ACTIVE_ACCOUNT_ID",
+        "MONITOR_ACTIVE_PROXY_ID",
+    ):
+        assert forbidden_env not in env
+    serialized_cmd = " ".join(cmd)
+    for forbidden in (PLAN_ENV_NAME, plan.profile_path, plan.proxy_url, plan.resolution_id, plan.attempt_id):
+        assert forbidden not in serialized_cmd
+    assert _cmd_value(cmd, "--cdp_connect_existing") == "false"
+    assert _cmd_value(cmd, "--headless") == "true"
+
+    long_plan = replace(
+        plan,
+        user_agent="Mozilla/5.0 " + ("X" * 900),
+        proxy_url="http://" + ("u" * 700) + ":" + ("p" * 700) + "@proxy.invalid:8080",
+    )
+    long_payload = runner_module._build_crawler_env(account_binding, long_plan, result_path)[PLAN_ENV_NAME]
+    parsed_long = browser_environment_plan_from_json(long_payload)
+    assert parsed_long.user_agent == long_plan.user_agent
+    assert parsed_long.proxy_url == long_plan.proxy_url
+    assert len(long_payload.encode("utf-8")) <= 8192
+
+    reset_browser_environment_cache_for_tests()
+    monkeypatch.setenv(PLAN_ENV_NAME, env[PLAN_ENV_NAME])
+    monkeypatch.setenv("HTTP_PROXY", plan.proxy_url)
+    monkeypatch.setenv("HTTPS_PROXY", plan.proxy_url)
+    parsed = plan_from_environment(required=True)
+    assert parsed == plan
+    assert PLAN_ENV_NAME not in os.environ
+    assert "HTTP_PROXY" not in os.environ
+    assert "HTTPS_PROXY" not in os.environ
+    reset_browser_environment_cache_for_tests()
+
+
+@pytest.mark.parametrize(
+    ("case", "expected_reason"),
+    [
+        ("missing", "account_identity_child_result_missing"),
+        ("malformed", "account_identity_snapshot_unsafe"),
+        ("temp_only", "account_identity_child_result_missing"),
+        ("wrong_attempt", "account_identity_snapshot_mismatch"),
+        ("stale", "account_identity_snapshot_mismatch"),
+    ],
+)
+def test_phase_5_1d_runner_rejects_missing_unsafe_or_stale_child_result(case, expected_reason, tmp_path, monkeypatch):
+    from dataclasses import replace
+
+    from tools.browser_environment import BrowserEnvironmentError
+
+    plan = _phase_5_1d_plan(tmp_path, monkeypatch, action="crawl", launch_mode="cdp_launch")
+    result_path = tmp_path / "result.json"
+    started_at = datetime.now(timezone.utc)
+    if case == "malformed":
+        result_path.write_text("{not-json", encoding="utf-8")
+    elif case == "temp_only":
+        result_path.with_name(f"{result_path.name}.tmp.123").write_text(
+            json.dumps(_phase_5_1d_result_for_plan(plan).snapshot),
+            encoding="utf-8",
+        )
+    elif case == "wrong_attempt":
+        wrong = _phase_5_1d_result_for_plan(replace(plan, attempt_id="attempt-wrong"))
+        result_path.write_text(
+            json.dumps({"ok": wrong.ok, "reason": wrong.reason, "snapshot": wrong.snapshot}),
+            encoding="utf-8",
+        )
+    elif case == "stale":
+        stale = _phase_5_1d_result_for_plan(plan)
+        stale.snapshot["validated_at"] = (started_at - timedelta(minutes=5)).isoformat()
+        result_path.write_text(
+            json.dumps({"ok": stale.ok, "reason": stale.reason, "snapshot": stale.snapshot}),
+            encoding="utf-8",
+        )
+
+    with pytest.raises(BrowserEnvironmentError) as exc_info:
+        runner_module._load_managed_child_result(result_path, plan, started_at)
+    assert exc_info.value.reason == expected_reason
+
+
+def test_phase_5_1d_runner_accepts_only_atomic_fresh_bound_child_result(tmp_path, monkeypatch):
+    from tools.browser_environment import RESULT_PATH_ENV_NAME, write_browser_environment_result
+
+    plan = _phase_5_1d_plan(tmp_path, monkeypatch, action="crawl", launch_mode="cdp_launch")
+    result = _phase_5_1d_result_for_plan(plan)
+    destination = tmp_path / "atomic-result.json"
+    monkeypatch.setenv(RESULT_PATH_ENV_NAME, str(destination))
+    started_at = datetime.now(timezone.utc) - timedelta(seconds=1)
+
+    write_browser_environment_result(result)
+    loaded = runner_module._load_managed_child_result(destination, plan, started_at)
+
+    assert loaded == result
+    assert destination.is_file()
+    assert not list(tmp_path.glob("atomic-result.json.tmp.*"))
+
+
+def test_phase_5_1d_runner_resolves_after_locks_and_persists_before_ingest(tmp_path, monkeypatch):
+    from dataclasses import replace
+
+    base_plan = _phase_5_1d_plan(tmp_path, monkeypatch, action="crawl", launch_mode="cdp_launch")
+    Path(base_plan.profile_path).mkdir(parents=True, exist_ok=True)
+    account = _phase_5_1d_persisted_account(state="active", proxy_id=None)
+    binding = {
+        "account_id": account["id"],
+        "account_name": "Phase 5.1D Runner",
+        "platform": "dy",
+        "login_type": "qrcode",
+        "profile_key": account["profile_key"],
+        "profile_path": base_plan.profile_path,
+        "proxy_id": None,
+        "_account": account,
+        "_proxy": None,
+        "task_proxy_id": None,
+    }
+    events = []
+    lock_state = {"held": False}
+    plans = []
+
+    monkeypatch.setattr(runner_module, "_resolve_platform_account_binding", lambda *args: binding)
+    monkeypatch.setattr(runner_module, "_raise_if_stop_requested", lambda *args: None)
+    monkeypatch.setattr(runner_module, "_raise_if_deadline_passed", lambda *args: None)
+    monkeypatch.setattr(runner_module, "_remaining_run_seconds", lambda *args: 30)
+    monkeypatch.setattr(runner_module, "_run_timeout_seconds", lambda *args: 30)
+    monkeypatch.setattr(runner_module, "_run_deadline_at", lambda *args: "")
+    monkeypatch.setattr(runner_module, "_lock_expires_at", lambda *args: "future")
+    monkeypatch.setattr(runner_module, "_ensure_login_window_closed", lambda *args: None)
+    monkeypatch.setattr(runner_module, "set_run_resource_bindings", lambda *args: events.append("bind"))
+
+    def acquire(*args):
+        lock_state["held"] = True
+        events.append("lock")
+        return True
+
+    def release(*args):
+        events.append("unlock")
+        lock_state["held"] = False
+
+    monkeypatch.setattr(runner_module, "acquire_account_lock", acquire)
+    monkeypatch.setattr(runner_module, "release_account_lock", release)
+
+    def resolve(binding_arg, trigger_source):
+        assert lock_state["held"] is True
+        events.append(f"resolve:{trigger_source}")
+        plan = replace(
+            base_plan,
+            resolution_id=f"resolution-{trigger_source}",
+            attempt_id=f"attempt-base-{trigger_source}",
+            trigger_source=trigger_source,
+        )
+        plans.append(plan)
+        return plan
+
+    monkeypatch.setattr(runner_module, "_resolve_runner_browser_plan", resolve, raising=False)
+
+    def fake_attempt(job_arg, platform, out_dir, account_binding):
+        assert lock_state["held"] is True
+        events.append("attempt")
+        plan = job_arg["_browser_environment_plan"]
+        return _phase_5_1d_result_for_plan(plan)
+
+    monkeypatch.setattr(runner_module, "_run_crawler_attempt", fake_attempt)
+
+    def persist(account_id, plan, result):
+        assert lock_state["held"] is True
+        events.append("persist")
+        return result.snapshot
+
+    monkeypatch.setattr(runner_module, "persist_account_browser_environment_result", persist, raising=False)
+    monkeypatch.setattr(runner_module, "collect_platform_outputs", lambda *args: (events.append("collect") or ([], [])))
+    monkeypatch.setattr(
+        runner_module,
+        "ingest_outputs",
+        lambda *args: {
+            "raw_contents": 0,
+            "filtered_contents": 0,
+            "excluded_contents": 0,
+            "new_contents": 0,
+            "content_db_ids": [],
+        },
+    )
+    monkeypatch.setattr(runner_module, "_update_collection_progress", lambda *args, **kwargs: None)
+    monkeypatch.setattr(runner_module, "_finalize_collection_progress", lambda *args, **kwargs: None)
+    monkeypatch.setenv("MONITOR_CRAWLER_MAX_RETRIES", "0")
+
+    manual = asyncio.run(
+        runner_module.run_platform({"id": 9511, "keywords": [], "_trigger_source": "manual"}, 9511, "dy", tmp_path / "manual")
+    )
+    scheduler = asyncio.run(
+        runner_module.run_platform({"id": 9512, "keywords": [], "_trigger_source": "scheduler"}, 9512, "dy", tmp_path / "scheduler")
+    )
+
+    assert manual["new_contents"] == scheduler["new_contents"] == 0
+    assert [plan.trigger_source for plan in plans] == ["manual", "scheduler"]
+    comparable = [
+        {key: value for key, value in plan.__dict__.items() if key not in {"resolution_id", "attempt_id", "trigger_source"}}
+        for plan in plans
+    ]
+    assert comparable[0] == comparable[1]
+    assert events.index("lock") < events.index("resolve:manual") < events.index("attempt") < events.index("persist") < events.index("collect") < events.index("unlock")
+
+
+def test_phase_5_1d_runner_missing_child_result_blocks_ingest(tmp_path, monkeypatch):
+    base_plan = _phase_5_1d_plan(tmp_path, monkeypatch, action="crawl", launch_mode="cdp_launch")
+    Path(base_plan.profile_path).mkdir(parents=True, exist_ok=True)
+    binding = {
+        "account_id": base_plan.account_id,
+        "account_name": "Phase 5.1D Missing Result",
+        "platform": "dy",
+        "login_type": "qrcode",
+        "profile_key": base_plan.profile_key,
+        "profile_path": base_plan.profile_path,
+        "proxy_id": None,
+        "_account": _phase_5_1d_persisted_account(state="active", proxy_id=None),
+        "_proxy": None,
+        "task_proxy_id": None,
+    }
+    monkeypatch.setattr(runner_module, "_resolve_platform_account_binding", lambda *args: binding)
+    monkeypatch.setattr(runner_module, "_resolve_runner_browser_plan", lambda *args: base_plan, raising=False)
+    monkeypatch.setattr(runner_module, "_ensure_login_window_closed", lambda *args: None)
+    monkeypatch.setattr(runner_module, "_raise_if_stop_requested", lambda *args: None)
+    monkeypatch.setattr(runner_module, "_raise_if_deadline_passed", lambda *args: None)
+    monkeypatch.setattr(runner_module, "_remaining_run_seconds", lambda *args: 30)
+    monkeypatch.setattr(runner_module, "_lock_expires_at", lambda *args: "future")
+    monkeypatch.setattr(runner_module, "acquire_account_lock", lambda *args: True)
+    monkeypatch.setattr(runner_module, "release_account_lock", lambda *args: None)
+    monkeypatch.setattr(runner_module, "set_run_resource_bindings", lambda *args: None)
+    monkeypatch.setattr(runner_module, "_run_crawler_attempt", lambda *args: None)
+    monkeypatch.setattr(
+        runner_module,
+        "collect_platform_outputs",
+        lambda *args: (_ for _ in ()).throw(AssertionError("ingest must not run without a child result")),
+    )
+    monkeypatch.setattr(runner_module, "_update_collection_progress", lambda *args, **kwargs: None)
+    monkeypatch.setenv("MONITOR_CRAWLER_MAX_RETRIES", "0")
+
+    with pytest.raises(RuntimeError, match="child result"):
+        asyncio.run(
+            runner_module.run_platform(
+                {"id": 9521, "keywords": [], "_trigger_source": "manual"},
+                9521,
+                "dy",
+                tmp_path,
+            )
+        )
+
+
+def test_phase_5_1d_runner_provider_failure_stops_retry_chain_after_persistence(tmp_path, monkeypatch):
+    base_plan = _phase_5_1d_plan(tmp_path, monkeypatch, action="crawl", launch_mode="cdp_launch")
+    Path(base_plan.profile_path).mkdir(parents=True, exist_ok=True)
+    binding = {
+        "account_id": base_plan.account_id,
+        "account_name": "Phase 5.1D Provider Failure",
+        "platform": "dy",
+        "login_type": "qrcode",
+        "profile_key": base_plan.profile_key,
+        "profile_path": base_plan.profile_path,
+        "proxy_id": None,
+        "_account": _phase_5_1d_persisted_account(state="active", proxy_id=None),
+        "_proxy": None,
+        "task_proxy_id": None,
+    }
+    calls = {"attempt": 0, "persist": 0}
+
+    monkeypatch.setattr(runner_module, "_resolve_platform_account_binding", lambda *args: binding)
+    monkeypatch.setattr(runner_module, "_resolve_runner_browser_plan", lambda *args: base_plan, raising=False)
+    monkeypatch.setattr(runner_module, "_ensure_login_window_closed", lambda *args: None)
+    monkeypatch.setattr(runner_module, "_raise_if_stop_requested", lambda *args: None)
+    monkeypatch.setattr(runner_module, "_raise_if_deadline_passed", lambda *args: None)
+    monkeypatch.setattr(runner_module, "_remaining_run_seconds", lambda *args: 30)
+    monkeypatch.setattr(runner_module, "_run_timeout_seconds", lambda *args: 30)
+    monkeypatch.setattr(runner_module, "_run_deadline_at", lambda *args: "")
+    monkeypatch.setattr(runner_module, "_lock_expires_at", lambda *args: "future")
+    monkeypatch.setattr(runner_module, "acquire_account_lock", lambda *args: True)
+    monkeypatch.setattr(runner_module, "release_account_lock", lambda *args: None)
+    monkeypatch.setattr(runner_module, "set_run_resource_bindings", lambda *args: None)
+    monkeypatch.setattr(runner_module, "_update_collection_progress", lambda *args, **kwargs: None)
+    monkeypatch.setattr(runner_module, "_finalize_collection_progress", lambda *args, **kwargs: None)
+    monkeypatch.setenv("MONITOR_CRAWLER_MAX_RETRIES", "2")
+
+    def fail_provider(job_arg, *args):
+        calls["attempt"] += 1
+        attempt_plan = job_arg["_browser_environment_plan"]
+        result = _phase_5_1d_result_for_plan(
+            attempt_plan,
+            ok=False,
+            reason="account_identity_snapshot_mismatch",
+        )
+        return runner_module.ManagedCrawlerOutcome(result, 0, False)
+
+    def persist(*args):
+        calls["persist"] += 1
+        return args[2].snapshot
+
+    monkeypatch.setattr(runner_module, "_run_crawler_attempt", fail_provider)
+    monkeypatch.setattr(runner_module, "persist_account_browser_environment_result", persist, raising=False)
+    monkeypatch.setattr(
+        runner_module,
+        "collect_platform_outputs",
+        lambda *args: (_ for _ in ()).throw(AssertionError("provider failure must block ingest")),
+    )
+
+    with pytest.raises(RuntimeError, match="failed after 1 attempt.*account_identity_snapshot_mismatch"):
+        asyncio.run(
+            runner_module.run_platform(
+                {"id": 9522, "keywords": [], "_trigger_source": "manual"},
+                9522,
+                "dy",
+                tmp_path,
+            )
+        )
+
+    assert calls == {"attempt": 1, "persist": 1}
+
+
+@pytest.mark.parametrize(
+    ("case", "expected_reason"),
+    [
+        ("locked_task_proxy_override", "account_identity_locked_proxy_override"),
+        ("missing_profile", "account_identity_requires_relogin"),
+        ("connect_existing", "account_identity_provider_unsupported"),
+    ],
+)
+def test_phase_5_1d_runner_resolver_fails_before_spawn(case, expected_reason, tmp_path, monkeypatch):
+    from api.monitoring import account_environment
+
+    profile_root = (tmp_path / "runner-profiles").resolve()
+    monkeypatch.setattr(account_environment, "ACCOUNT_PROFILE_ROOT", profile_root)
+    monkeypatch.delenv("MONITOR_CDP_CONNECT_EXISTING", raising=False)
+    account = _phase_5_1d_persisted_account(state="active", proxy_id=None)
+    binding = {
+        "account_id": account["id"],
+        "platform": account["platform"],
+        "profile_key": account["profile_key"],
+        "profile_path": account["profile_path"],
+        "proxy_id": None,
+        "task_proxy_id": None,
+        "_account": account,
+        "_proxy": None,
+    }
+    derived = profile_root / "1" / "dy" / "acc_5101"
+    if case != "missing_profile":
+        derived.mkdir(parents=True)
+    if case == "locked_task_proxy_override":
+        binding["task_proxy_id"] = 99
+    elif case == "connect_existing":
+        monkeypatch.setenv("MONITOR_CDP_CONNECT_EXISTING", "true")
+
+    with pytest.raises(ValueError) as exc_info:
+        runner_module._resolve_runner_browser_plan(binding, "manual")
+    assert getattr(exc_info.value, "reason", "") == expected_reason
+
+
+def test_phase_5_1d_runner_ignores_stored_generic_profile_path(tmp_path, monkeypatch):
+    from api.monitoring import account_environment
+
+    profile_root = (tmp_path / "runner-profiles").resolve()
+    monkeypatch.setattr(account_environment, "ACCOUNT_PROFILE_ROOT", profile_root)
+    monkeypatch.delenv("MONITOR_CDP_CONNECT_EXISTING", raising=False)
+    account = _phase_5_1d_persisted_account(state="active", proxy_id=None)
+    account["profile_path"] = r"C:\generic\shared-profile"
+    derived = profile_root / "1" / "dy" / "acc_5101"
+    derived.mkdir(parents=True)
+    binding = {
+        "account_id": account["id"],
+        "platform": account["platform"],
+        "profile_key": account["profile_key"],
+        "profile_path": account["profile_path"],
+        "proxy_id": None,
+        "task_proxy_id": None,
+        "_account": account,
+        "_proxy": None,
+    }
+
+    plan = runner_module._resolve_runner_browser_plan(binding, "manual")
+
+    assert plan is not None
+    assert Path(plan.profile_path) == derived
+    assert plan.profile_path != account["profile_path"]
+
+
+def test_phase_5_1d_cdp_prepares_exact_commands_before_navigation_and_writes_result(tmp_path, monkeypatch):
+    from tools.browser_environment import (
+        RESULT_PATH_ENV_NAME,
+        bind_managed_context,
+        prepare_managed_page,
+        verify_managed_page,
+    )
+
+    plan = _phase_5_1d_plan(tmp_path, monkeypatch, action="crawl", launch_mode="cdp_launch")
+    result_path = tmp_path / "cdp-result.json"
+    monkeypatch.setenv(RESULT_PATH_ENV_NAME, str(result_path))
+    events = []
+
+    class FakeRequest:
+        headers = {"accept-language": plan.accept_language}
+
+    class FakeCDPSession:
+        async def send(self, method, params):
+            events.append((method, params))
+
+    class FakeBrowser:
+        version = plan.browser_version
+
+    class FakeContext:
+        browser = FakeBrowser()
+
+        def on(self, event, callback):
+            self.request_handler = callback
+
+        async def new_cdp_session(self, page):
+            return FakeCDPSession()
+
+    context = FakeContext()
+
+    class FakePage:
+        async def goto(self, url):
+            assert [event[0] for event in events] == [
+                "Emulation.setUserAgentOverride",
+                "Emulation.setTimezoneOverride",
+                "Emulation.setLocaleOverride",
+                "Emulation.setDeviceMetricsOverride",
+                "Emulation.setTouchEmulationEnabled",
+            ]
+            events.append(("goto", url))
+            context.request_handler(FakeRequest())
+
+        async def evaluate(self, script):
+            return _phase_5_1d_effective_probe(plan)
+
+    page = FakePage()
+    bind_managed_context(context, plan)
+    asyncio.run(prepare_managed_page(context, page))
+    asyncio.run(page.goto("https://platform.invalid"))
+    result = asyncio.run(verify_managed_page(context, page))
+
+    assert result is not None and result.ok is True
+    assert result_path.is_file()
+    stored = json.loads(result_path.read_text(encoding="utf-8"))
+    assert stored["snapshot"]["resolution_id"] == plan.resolution_id
+    assert events[0][1] == {
+        "userAgent": plan.user_agent,
+        "acceptLanguage": plan.accept_language,
+        "platform": plan.browser_platform,
+    }
+    assert events[3][1] == {
+        "width": plan.viewport_width,
+        "height": plan.viewport_height,
+        "deviceScaleFactor": plan.device_scale_factor,
+        "mobile": plan.is_mobile,
+        "screenWidth": plan.screen_width,
+        "screenHeight": plan.screen_height,
+    }
+
+
+@pytest.mark.parametrize(
+    "failing_method",
+    [
+        "Emulation.setUserAgentOverride",
+        "Emulation.setTimezoneOverride",
+        "Emulation.setLocaleOverride",
+        "Emulation.setDeviceMetricsOverride",
+        "Emulation.setTouchEmulationEnabled",
+    ],
+)
+def test_phase_5_1d_cdp_command_failure_blocks_navigation(failing_method, tmp_path, monkeypatch):
+    from tools.browser_environment import (
+        BrowserEnvironmentError,
+        bind_managed_context,
+        prepare_managed_page,
+    )
+
+    plan = _phase_5_1d_plan(tmp_path, monkeypatch, action="crawl", launch_mode="cdp_launch")
+    navigations = []
+
+    class FakeCDPSession:
+        async def send(self, method, params):
+            if method == failing_method:
+                raise RuntimeError("synthetic CDP failure")
+
+    class FakeContext:
+        def on(self, event, callback):
+            pass
+
+        async def new_cdp_session(self, page):
+            return FakeCDPSession()
+
+    class FakePage:
+        async def goto(self, url):
+            navigations.append(url)
+
+    context = FakeContext()
+    page = FakePage()
+    bind_managed_context(context, plan)
+
+    with pytest.raises(BrowserEnvironmentError) as exc_info:
+        asyncio.run(prepare_managed_page(context, page))
+    assert exc_info.value.reason == "account_identity_provider_unsupported"
+    assert exc_info.value.browser_environment_result.ok is False
+    assert navigations == []
+
+
+def test_phase_5_1d_cdp_manager_launches_only_exact_managed_environment(tmp_path, monkeypatch):
+    from tools.browser_environment import managed_proxy_formats, reset_browser_environment_cache_for_tests
+    from tools.cdp_browser import CDPBrowserManager
+    import tools.cdp_browser as cdp_browser_module
+
+    plan = _phase_5_1d_plan(tmp_path, monkeypatch, proxy_bound=True, action="crawl", launch_mode="cdp_launch")
+    Path(plan.profile_path).mkdir(parents=True, exist_ok=True)
+    reset_browser_environment_cache_for_tests()
+    monkeypatch.setenv(
+        "MONITOR_BROWSER_ENVIRONMENT_PLAN",
+        __import__("tools.browser_environment", fromlist=["browser_environment_plan_to_json"])
+        .browser_environment_plan_to_json(plan),
+    )
+    parsed_plan = cdp_browser_module.plan_from_environment(required=True)
+    assert parsed_plan == plan
+    proxy, _ = managed_proxy_formats()
+    captured = {}
+
+    class FakeResponse:
+        ok = True
+
+        async def json(self):
+            return {"region": plan.proxy_region}
+
+    class FakeProofPage:
+        async def goto(self, *args, **kwargs):
+            captured["probe_before_return"] = True
+            return FakeResponse()
+
+        async def close(self):
+            pass
+
+    class FakeContext:
+        pages = []
+
+        def on(self, event, callback):
+            self.request_handler = callback
+
+        async def new_page(self):
+            return FakeProofPage()
+
+    context = FakeContext()
+
+    class FakeBrowser:
+        contexts = [context]
+        version = plan.browser_version
+
+        def is_connected(self):
+            return True
+
+    context.browser = FakeBrowser()
+
+    class FakeLauncher:
+        browser_process = None
+
+        def detect_browser_paths(self):
+            raise AssertionError("managed CDP must not auto-detect a browser")
+
+        def find_available_port(self, start_port):
+            return 9333
+
+        def launch_browser(self, **kwargs):
+            captured["launch"] = kwargs
+            self.browser_process = object()
+            return self.browser_process
+
+        def wait_for_browser_ready(self, *args, **kwargs):
+            return True
+
+        def cleanup(self):
+            pass
+
+    manager = CDPBrowserManager(plan=plan)
+    manager.launcher = FakeLauncher()
+    original_sleep = asyncio.sleep
+    monkeypatch.setattr(manager, "_register_cleanup_handlers", lambda: None)
+    monkeypatch.setattr(manager, "_test_cdp_connection", lambda *args: original_sleep(0, result=True))
+
+    async def fake_connect(playwright):
+        manager.browser = context.browser
+
+    monkeypatch.setattr(manager, "_connect_via_cdp", fake_connect)
+    monkeypatch.setattr(cdp_browser_module.asyncio, "sleep", lambda *args: original_sleep(0))
+    monkeypatch.setattr(cdp_browser_module.config, "CDP_CONNECT_EXISTING", False)
+
+    returned = asyncio.run(
+        manager.launch_and_connect(
+            playwright=object(),
+            playwright_proxy=proxy,
+            user_agent="caller-must-not-win",
+            headless=False,
+        )
+    )
+
+    assert returned is context
+    assert captured["probe_before_return"] is True
+    assert captured["launch"] == {
+        "browser_path": plan.browser_executable_path,
+        "debug_port": 9333,
+        "headless": plan.headless,
+        "user_data_dir": plan.profile_path,
+        "proxy_server": plan.proxy_url,
+        "user_agent": plan.user_agent,
+        "language": plan.locale,
+        "window_size": (plan.viewport_width, plan.viewport_height),
+        "device_scale_factor": plan.device_scale_factor,
+        "managed": True,
+    }
+    reset_browser_environment_cache_for_tests()
+
+
+@pytest.mark.parametrize(
+    ("module_name", "class_name"),
+    [
+        ("media_platform.douyin.core", "DouYinCrawler"),
+        ("media_platform.kuaishou.core", "KuaishouCrawler"),
+        ("media_platform.xhs.core", "XiaoHongShuCrawler"),
+        ("media_platform.bilibili.core", "BilibiliCrawler"),
+        ("media_platform.weibo.core", "WeiboCrawler"),
+        ("media_platform.tieba.core", "TieBaCrawler"),
+        ("media_platform.zhihu.core", "ZhihuCrawler"),
+    ],
+)
+def test_phase_5_1d_all_platforms_rethrow_managed_cdp_failure_without_standard_fallback(
+    module_name,
+    class_name,
+    tmp_path,
+    monkeypatch,
+):
+    import importlib
+
+    from tools.browser_environment import BrowserEnvironmentError
+
+    plan = _phase_5_1d_plan(tmp_path, monkeypatch, action="crawl", launch_mode="cdp_launch")
+    module = importlib.import_module(module_name)
+    monkeypatch.setattr(module, "plan_from_environment", lambda required=False: plan, raising=False)
+    crawler = getattr(module, class_name)()
+    crawler.browser_environment_plan = plan
+    fallback_called = []
+
+    class FailingManager:
+        def __init__(self, *args, **kwargs):
+            pass
+
+        async def launch_and_connect(self, **kwargs):
+            raise BrowserEnvironmentError("account_identity_provider_browser_crashed", "cdp")
+
+    async def forbidden_standard(*args, **kwargs):
+        fallback_called.append(True)
+        return object()
+
+    monkeypatch.setattr(module, "CDPBrowserManager", FailingManager)
+    monkeypatch.setattr(crawler, "launch_browser", forbidden_standard)
+
+    with pytest.raises(BrowserEnvironmentError) as exc_info:
+        asyncio.run(crawler.launch_browser_with_cdp(object(), None, plan.user_agent, headless=True))
+    assert exc_info.value.reason == "account_identity_provider_browser_crashed"
+    assert fallback_called == []
+
+
+@pytest.mark.parametrize(
+    ("module_name", "class_name", "client_factory", "is_tieba"),
+    [
+        ("media_platform.douyin.core", "DouYinCrawler", "create_douyin_client", False),
+        ("media_platform.kuaishou.core", "KuaishouCrawler", "create_ks_client", False),
+        ("media_platform.xhs.core", "XiaoHongShuCrawler", "create_xhs_client", False),
+        ("media_platform.bilibili.core", "BilibiliCrawler", "create_bilibili_client", False),
+        ("media_platform.weibo.core", "WeiboCrawler", "create_weibo_client", False),
+        ("media_platform.tieba.core", "TieBaCrawler", "create_tieba_client", True),
+        ("media_platform.zhihu.core", "ZhihuCrawler", "create_zhihu_client", False),
+    ],
+)
+@pytest.mark.parametrize("launch_mode", ["persistent_launch", "cdp_launch"])
+def test_phase_5_1d_all_platforms_use_one_managed_plan_before_first_navigation(
+    module_name,
+    class_name,
+    client_factory,
+    is_tieba,
+    launch_mode,
+    tmp_path,
+    monkeypatch,
+):
+    import importlib
+
+    plan = _phase_5_1d_plan(
+        tmp_path,
+        monkeypatch,
+        proxy_bound=True,
+        action="crawl",
+        launch_mode=launch_mode,
+    )
+    module = importlib.import_module(module_name)
+    events = []
+    captured = {"proxy_calls": 0, "pool_calls": 0}
+    browser_proxy = {"server": "http://managed-proxy.invalid:8080"}
+    http_proxy = "http://managed-proxy.invalid:8080"
+
+    monkeypatch.setattr(module, "plan_from_environment", lambda required=False: plan, raising=False)
+    monkeypatch.setattr(module.config, "ENABLE_IP_PROXY", True)
+    monkeypatch.setattr(module.config, "ENABLE_CDP_MODE", launch_mode == "persistent_launch")
+    monkeypatch.setattr(module.config, "CRAWLER_TYPE", "phase_5_1d_noop")
+    monkeypatch.setattr(module.config, "HEADLESS", False)
+    monkeypatch.setattr(module.config, "CDP_HEADLESS", False)
+
+    def fake_managed_proxy_formats():
+        captured["proxy_calls"] += 1
+        return browser_proxy, http_proxy
+
+    async def forbidden_create_ip_pool(*args, **kwargs):
+        captured["pool_calls"] += 1
+        raise AssertionError("managed crawl must not create a dynamic proxy pool")
+
+    monkeypatch.setattr(module, "managed_proxy_formats", fake_managed_proxy_formats, raising=False)
+    monkeypatch.setattr(module, "create_ip_pool", forbidden_create_ip_pool)
+
+    class FakePage:
+        async def goto(self, url, **kwargs):
+            events.append(("navigate", url))
+
+    page = FakePage()
+
+    class FakeContext:
+        async def new_page(self):
+            return page
+
+    context = FakeContext()
+
+    class FakeManagedSession:
+        browser = object()
+
+        def __init__(self):
+            self.context = context
+
+    async def fake_launch_managed(playwright, used_plan):
+        events.append(("managed_launch", used_plan))
+        return FakeManagedSession()
+
+    async def fake_prepare(used_context, used_page):
+        assert used_context is context
+        assert used_page is page
+        events.append(("prepare",))
+
+    async def fake_verify(used_context, used_page):
+        assert used_context is context
+        assert used_page is page
+        events.append(("verify",))
+        return None
+
+    monkeypatch.setattr(module, "launch_managed_browser_context", fake_launch_managed, raising=False)
+    monkeypatch.setattr(module, "prepare_managed_page", fake_prepare, raising=False)
+    monkeypatch.setattr(module, "verify_managed_page", fake_verify, raising=False)
+
+    class FakePlaywrightManager:
+        async def __aenter__(self):
+            return object()
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr(module, "async_playwright", lambda: FakePlaywrightManager())
+
+    async def no_sleep(*args, **kwargs):
+        return None
+
+    monkeypatch.setattr(module.asyncio, "sleep", no_sleep)
+
+    crawler = getattr(module, class_name)()
+    captured["crawler"] = crawler
+
+    async def fake_launch_cdp(playwright, used_proxy, user_agent, headless=True):
+        captured["cdp_launch"] = {
+            "proxy": used_proxy,
+            "user_agent": user_agent,
+            "headless": headless,
+        }
+        events.append(("cdp_launch",))
+        return context
+
+    monkeypatch.setattr(crawler, "launch_browser_with_cdp", fake_launch_cdp)
+
+    class FakeClient:
+        async def pong(self, *args, **kwargs):
+            return True
+
+        async def update_cookies(self, *args, **kwargs):
+            return None
+
+    async def fake_create_client(*args, **kwargs):
+        captured["http_proxy"] = args[0]
+        return FakeClient()
+
+    monkeypatch.setattr(crawler, client_factory, fake_create_client)
+
+    if is_tieba:
+        async def fake_inject():
+            return None
+
+        async def fake_navigate():
+            events.append(("navigate", crawler.index_url))
+
+        monkeypatch.setattr(crawler, "_inject_anti_detection_scripts", fake_inject)
+        monkeypatch.setattr(crawler, "_navigate_to_tieba_via_baidu", fake_navigate)
+
+    asyncio.run(crawler.start())
+
+    assert captured["proxy_calls"] == 1
+    assert captured["pool_calls"] == 0
+    assert captured["http_proxy"] == http_proxy
+    assert crawler.browser_environment_plan == plan
+    assert crawler.user_agent == plan.user_agent
+    if class_name == "WeiboCrawler":
+        assert crawler.mobile_user_agent == plan.user_agent
+
+    event_names = [event[0] for event in events]
+    assert event_names.index("prepare") < event_names.index("navigate") < event_names.index("verify")
+    if launch_mode == "cdp_launch":
+        assert "managed_launch" not in event_names
+        assert captured["cdp_launch"] == {
+            "proxy": browser_proxy,
+            "user_agent": plan.user_agent,
+            "headless": plan.headless,
+        }
+    else:
+        assert "cdp_launch" not in event_names
+        managed_event = next(event for event in events if event[0] == "managed_launch")
+        assert managed_event[1] == plan
+
+
+def test_phase_5_1d_all_platform_cores_use_shared_managed_adapters():
+    core_paths = [
+        Path("media_platform/douyin/core.py"),
+        Path("media_platform/kuaishou/core.py"),
+        Path("media_platform/xhs/core.py"),
+        Path("media_platform/bilibili/core.py"),
+        Path("media_platform/weibo/core.py"),
+        Path("media_platform/tieba/core.py"),
+        Path("media_platform/zhihu/core.py"),
+    ]
+    for path in core_paths:
+        source = path.read_text(encoding="utf-8")
+        assert "plan_from_environment" in source, path
+        assert "managed_proxy_formats" in source, path
+        assert "launch_managed_browser_context" in source, path
+        assert "prepare_managed_page" in source, path
+        assert "verify_managed_page" in source, path
+        assert "if self.browser_environment_plan is None and config.ENABLE_IP_PROXY" in source, path
 
 
 def test_phase_1_bootstrap_admin_login_session_and_user_management():
@@ -3762,8 +5917,9 @@ def test_runner_prefers_job_bound_account_and_proxy(tmp_path):
     assert binding["account_id"] == bound_account["id"]
     assert binding["profile_key"] == f"1/dy/acc_{bound_account['id']}"
     assert binding["profile_path"] == str(resolve_account_profile_path(binding["profile_key"]))
-    assert binding["proxy_id"] == job_proxy["id"]
-    assert env["HTTP_PROXY"] == "http://job:pass@127.0.0.1:8082"
+    assert binding["proxy_id"] == account_proxy["id"]
+    assert binding["task_proxy_id"] == job_proxy["id"]
+    assert env["HTTP_PROXY"] == "http://account:pass@127.0.0.1:8081"
 
 
 def test_phase_5_account_lock_blocks_concurrent_profile_use():
@@ -18408,6 +20564,7 @@ def test_run_platform_attaches_bound_proxy_summary(tmp_path, monkeypatch):
             ),
             encoding="utf-8",
         )
+        return _phase_5_1d_result_for_plan(job_arg["_browser_environment_plan"])
 
     try:
         proxy = save_proxy_profile(
@@ -18429,7 +20586,9 @@ def test_run_platform_attaches_bound_proxy_summary(tmp_path, monkeypatch):
                 "proxy_id": proxy["id"],
             }
         )
+        Path(resolve_account_profile_path(account["profile_key"])).mkdir(parents=True, exist_ok=True)
         monkeypatch.setenv("MONITOR_CRAWLER_MAX_RETRIES", "0")
+        monkeypatch.setenv("MONITOR_BROWSER_PROXY_PROBE_URL", "https://probe.invalid/region")
         monkeypatch.setattr(runner_module, "list_platform_status", lambda: [{"platform": "dy", "login_window_open": False}])
         monkeypatch.setattr(runner_module, "_run_crawler_attempt", fake_run_attempt)
 

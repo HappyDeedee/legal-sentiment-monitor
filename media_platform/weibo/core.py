@@ -41,6 +41,14 @@ from base.base_crawler import AbstractCrawler
 from proxy.proxy_ip_pool import IpInfoModel, create_ip_pool
 from store import weibo as weibo_store
 from tools import utils
+from tools.browser_environment import (
+    BrowserEnvironmentError,
+    launch_managed_browser_context,
+    managed_proxy_formats,
+    plan_from_environment,
+    prepare_managed_page,
+    verify_managed_page,
+)
 from tools.cdp_browser import CDPBrowserManager
 from var import crawler_type_var, source_keyword_var
 
@@ -61,27 +69,35 @@ class WeiboCrawler(AbstractCrawler):
         self.index_url = "https://www.weibo.com"
         self.mobile_index_url = "https://m.weibo.cn"
         self.cookie_urls = [self.mobile_index_url]
-        self.user_agent = utils.get_user_agent()
-        self.mobile_user_agent = utils.get_mobile_user_agent()
+        self.browser_environment_plan = plan_from_environment(required=False)
+        self.user_agent = self.browser_environment_plan.user_agent if self.browser_environment_plan else utils.get_user_agent()
+        self.mobile_user_agent = self.browser_environment_plan.user_agent if self.browser_environment_plan else utils.get_mobile_user_agent()
+        self.managed_browser = None
         self.cdp_manager = None
         self.ip_proxy_pool = None  # Proxy IP pool for automatic proxy refresh
 
     async def start(self):
         playwright_proxy_format, httpx_proxy_format = None, None
-        if config.ENABLE_IP_PROXY:
+        if self.browser_environment_plan is None and config.ENABLE_IP_PROXY:
             self.ip_proxy_pool = await create_ip_pool(config.IP_PROXY_POOL_COUNT, enable_validate_ip=True)
             ip_proxy_info: IpInfoModel = await self.ip_proxy_pool.get_proxy()
             playwright_proxy_format, httpx_proxy_format = utils.format_proxy_info(ip_proxy_info)
+        elif self.browser_environment_plan is not None:
+            playwright_proxy_format, httpx_proxy_format = managed_proxy_formats()
 
         async with async_playwright() as playwright:
             # Select launch mode based on configuration
-            if config.ENABLE_CDP_MODE:
+            if self.browser_environment_plan is not None and self.browser_environment_plan.launch_mode != "cdp_launch":
+                managed_session = await launch_managed_browser_context(playwright, self.browser_environment_plan)
+                self.managed_browser = managed_session.browser
+                self.browser_context = managed_session.context
+            elif self.browser_environment_plan is not None or config.ENABLE_CDP_MODE:
                 utils.logger.info("[WeiboCrawler] Launching browser with CDP mode")
                 self.browser_context = await self.launch_browser_with_cdp(
                     playwright,
                     playwright_proxy_format,
                     self.mobile_user_agent,
-                    headless=config.CDP_HEADLESS,
+                    headless=(self.browser_environment_plan.headless if self.browser_environment_plan else config.CDP_HEADLESS),
                 )
             else:
                 utils.logger.info("[WeiboCrawler] Launching browser with standard mode")
@@ -94,7 +110,11 @@ class WeiboCrawler(AbstractCrawler):
 
 
             self.context_page = await self.browser_context.new_page()
+            await prepare_managed_page(self.browser_context, self.context_page)
             await self.context_page.goto(self.index_url)
+            provider_result = await verify_managed_page(self.browser_context, self.context_page)
+            if provider_result is not None and not provider_result.ok:
+                raise BrowserEnvironmentError(provider_result.reason, "page")
             await asyncio.sleep(2)
 
 
@@ -398,7 +418,7 @@ class WeiboCrawler(AbstractCrawler):
         Launch browser with CDP mode
         """
         try:
-            self.cdp_manager = CDPBrowserManager()
+            self.cdp_manager = CDPBrowserManager(plan=self.browser_environment_plan)
             browser_context = await self.cdp_manager.launch_and_connect(
                 playwright=playwright,
                 playwright_proxy=playwright_proxy,
@@ -413,6 +433,8 @@ class WeiboCrawler(AbstractCrawler):
             return browser_context
 
         except Exception as e:
+            if self.browser_environment_plan is not None:
+                raise
             utils.logger.error(f"[WeiboCrawler] CDP mode startup failed, falling back to standard mode: {e}")
             # Fallback to standard mode
             chromium = playwright.chromium

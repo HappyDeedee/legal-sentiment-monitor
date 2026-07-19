@@ -383,8 +383,8 @@ against `main@8b55c2a`. Focused tests passed (`2` Phase 5.1A tests and `7`
 schema/account regression tests), the full monitoring suite passed (`352
 passed`), and the final read-only review returned `READY` with no finding.
 Phase 5.1B is also implemented and verified. Phase 5.1C lifecycle work is
-implemented and independently verified; Phase 5.1D remains gated only by
-Phase 5.1C branch integration and post-merge verification.
+implemented, independently verified, merged, and rechecked; Phase 5.1D is
+technically verified on its isolated branch and awaits integration.
 
 - [x] Start only after Phase 5.1P is complete and confirms the provider,
       MediaCrawler, and container/server-like compatibility boundary. Verified
@@ -419,8 +419,8 @@ Implementation status (2026-07-19): complete on
 baseline `main@f8be522`. Focused Phase 5.1B tests pass (`9 passed`) and the
 full monitor suite passes (`361 passed`). Final independent diff review and
 integration evidence are recorded in `TEST_RESULTS.md`. Phase 5.1C lifecycle
-work is implemented and independently verified; Phase 5.1D remains gated by
-Phase 5.1C branch integration and post-merge verification.
+work is implemented, independently verified, merged, and rechecked; Phase
+5.1D is technically verified and awaits integration.
 
 - [x] Add an Account Identity Generator that uses workspace, platform,
       account, proxy/region policy, automatic template selection or a
@@ -471,8 +471,9 @@ Implementation status (2026-07-19): verified. Code, UI, CR-113, focused tests,
 the full `378`-test monitoring suite, Python compile, documentation gates,
 desktop/mobile browser checks, and an independent Claude Code full-diff review
 pass in `codex/phase-5.1c-account-identity-lifecycle` from `main@100001e`.
-Phase 5.1D has not started and remains gated by branch integration plus
-post-merge verification.
+PR #4 is merged as `main@2adf661`; post-merge full monitoring, compile, and
+documentation gates pass. Phase 5.1D is technically verified in
+`codex/phase-5.1d-browser-runtime-binding` and awaits integration.
 
 - [x] Implement the persisted `identity_state` lifecycle from
       `ACCOUNT_ENVIRONMENT.md`: `draft`, `generated`, `validated`,
@@ -496,32 +497,42 @@ post-merge verification.
       the accepted safe region and template-family choices.
 - [x] Complete the independent read-only full-diff review and documentation
       consistency checks before marking Phase 5.1C technically verified.
-- [ ] Integrate the Phase 5.1C branch and complete post-merge verification
+- [x] Integrate the Phase 5.1C branch and complete post-merge verification
       before starting Phase 5.1D code.
 
 ### Phase 5.1D - Login And Crawl Runtime Binding
 
-- [ ] Ensure QR login launch options use the persisted environment values
+Implementation status (2026-07-19): technically verified before integration
+from merged `main@2adf661` in
+`codex/phase-5.1d-browser-runtime-binding`. The atomic execution packet is
+`docs/superpowers/plans/2026-07-19-phase-5.1d-browser-runtime-binding.md`.
+Focused Phase 5.1B-D tests pass (`131 passed`) and the complete monitoring
+suite passes (`484 passed`). Compile, documentation, JavaScript parse,
+desktop/mobile browser checks, and the independent Claude Code full-diff review
+pass. Commit/PR integration and post-merge verification remain; Phase 5.1
+acceptance remains a separate post-5.1D gate.
+
+- [x] Ensure QR login launch options use the persisted environment values
       rather than process defaults for user agent, viewport/screen, locale,
       timezone, proxy, and browser-platform/fingerprint provider inputs where
       supported.
-- [ ] Ensure crawler/CDP launch and reconnect paths use the same persisted
+- [x] Ensure crawler/CDP launch and reconnect paths use the same persisted
       account environment as login.
-- [ ] Add a browser-environment provider boundary so existing Playwright/CDP
+- [x] Add a browser-environment provider boundary so existing Playwright/CDP
       remains the V1 provider and unsupported high-fidelity surfaces are
       reported as future/provider-dependent rather than silently claimed.
-- [ ] Map persisted identity values to Playwright context options and runtime
+- [x] Map persisted identity values to Playwright context options and runtime
       probes exactly as specified in `ACCOUNT_ENVIRONMENT.md`, and fail closed
       if a required value cannot be honored.
-- [ ] Persist `identity_runtime_snapshot_json` with requested versus effective
+- [x] Persist `identity_runtime_snapshot_json` with requested versus effective
       values, provider metadata, unsupported field list, and `fallback_used`
       evidence after successful login/crawl launches.
-- [ ] Verify service restart, scheduler run, and manual run paths do not change
+- [x] Verify service restart, scheduler run, and manual run paths do not change
       the stored account browser environment.
-- [ ] Ensure MediaCrawler integration receives the higher-priority account
+- [x] Ensure MediaCrawler integration receives the higher-priority account
       identity input when present, while preserving current MediaCrawler
       defaults only for accounts that do not yet have a Phase 5.1 identity.
-- [ ] Add negative tests proving locked environments reject task-level proxy
+- [x] Add negative tests proving locked environments reject task-level proxy
       overrides, hidden process-default fallback, and default-network fallback
       before browser or crawler launch.
 
@@ -1744,8 +1755,9 @@ Planning status:
 CR-112 is a proposed new capability and remains `Needs Confirmation`. This
 documentation synchronization does not authorize product code, schema, UI,
 extension, Profile, Cookie, connector, runtime, deployment, or database
-changes. Phase 5.1P and Phase 5.1A-C are verified, and Phase 5.1D remains next
-after Phase 5.1C integration. CR-112 does not preempt CR-070 / Phase 5.2 while its sequencing is
+changes. Phase 5.1P and Phase 5.1A-C are verified, and Phase 5.1D is technically
+verified pending integration.
+CR-112 does not preempt CR-070 / Phase 5.2 while its sequencing is
 unconfirmed.
 
 Documentation synchronization:

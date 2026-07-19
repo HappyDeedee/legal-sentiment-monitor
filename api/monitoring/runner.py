@@ -6,15 +6,35 @@ import os
 import subprocess
 import threading
 import time
+import uuid
 from collections import defaultdict
+from dataclasses import dataclass, replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 from typing import Any
+
+from playwright.sync_api import sync_playwright
+
+from tools.browser_environment import (
+    PLAN_ENV_NAME,
+    RESULT_PATH_ENV_NAME,
+    BrowserEnvironmentError,
+    BrowserEnvironmentPlan,
+    BrowserEnvironmentResult,
+    browser_environment_plan_to_json,
+    browser_environment_result_from_json,
+)
 
 from .ai import (
     _build_trace_snapshot,
     _job_ai_config,
     evaluate_content,
+)
+from .account_identity import AccountIdentityError
+from .browser_environment_provider import (
+    is_legacy_draft_account,
+    persist_account_browser_environment_result,
+    resolve_account_browser_environment,
 )
 from .database import (
     acquire_account_lock,
@@ -71,6 +91,13 @@ class CrawlerStopped(Exception):
 
 class CrawlerTimedOut(Exception):
     """Raised when the run-level deadline is reached."""
+
+
+@dataclass(frozen=True)
+class ManagedCrawlerOutcome:
+    provider_result: BrowserEnvironmentResult
+    returncode: int
+    login_required: bool
 
 
 def clear_stop_request(job_id: int) -> None:
@@ -183,7 +210,8 @@ async def _run_job_locked(job_id: int, source: str = "manual") -> dict[str, Any]
     try:
         _raise_if_stop_requested(job_id)
         _mark_phase(run_id, summary, "collecting", last_safe_result={"platforms": job.get("platforms", [])})
-        tasks = [run_platform(job, run_id, platform, run_dir) for platform in job.get("platforms", [])]
+        platform_job = {**job, "_trigger_source": source}
+        tasks = [run_platform(platform_job, run_id, platform, run_dir) for platform in job.get("platforms", [])]
         results = await asyncio.gather(*tasks, return_exceptions=True)
         content_ids_for_eval: list[int] = []
         stopped = is_stop_requested(job_id)
@@ -342,6 +370,7 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
             max_retries = _crawler_max_retries()
             total_attempts = max_retries + 1
             last_error = ""
+            base_plan: BrowserEnvironmentPlan | None = None
             try:
                 if account_binding and account_binding.get("account_id"):
                     account_lock_acquired = acquire_account_lock(int(account_binding["account_id"]), run_id, lock_expires_at)
@@ -366,6 +395,12 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
                         _safe_int(account_binding.get("account_id")),
                         _safe_int(account_binding.get("proxy_id")),
                     )
+                if account_binding and account_binding.get("account_id"):
+                    base_plan = await asyncio.to_thread(
+                        _resolve_runner_browser_plan,
+                        account_binding,
+                        str(job.get("_trigger_source") or "manual"),
+                    )
                 for attempt in range(1, total_attempts + 1):
                     attempt_out = _attempt_output_dir(platform_root, attempt, total_attempts)
                     attempt_out.mkdir(parents=True, exist_ok=True)
@@ -373,8 +408,48 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
                         _raise_if_stop_requested(job["id"])
                         attempt_timeout = _remaining_run_seconds(run_id)
                         attempt_job = {**job, "_crawler_timeout_seconds": attempt_timeout, "_run_id": run_id}
+                        attempt_plan = None
+                        result_path = None
+                        if base_plan is not None:
+                            attempt_plan = replace(
+                                base_plan,
+                                attempt_id=f"attempt-{uuid.uuid4().hex}",
+                            )
+                            result_path = (attempt_out / ".browser-environment-result.json").resolve()
+                            attempt_job["_browser_environment_plan"] = attempt_plan
+                            attempt_job["_browser_environment_result_path"] = result_path
                         _update_collection_progress(run_id, platform, attempt_out, phase="collecting")
-                        await asyncio.to_thread(_run_crawler_attempt, attempt_job, platform, attempt_out, account_binding)
+                        crawler_outcome = await asyncio.to_thread(
+                            _run_crawler_attempt,
+                            attempt_job,
+                            platform,
+                            attempt_out,
+                            account_binding,
+                        )
+                        if attempt_plan is not None:
+                            if isinstance(crawler_outcome, BrowserEnvironmentResult):
+                                crawler_outcome = ManagedCrawlerOutcome(crawler_outcome, 0, False)
+                            if not isinstance(crawler_outcome, ManagedCrawlerOutcome):
+                                raise RuntimeError("managed crawler child result is missing")
+                            try:
+                                persist_account_browser_environment_result(
+                                    int(account_binding["account_id"]),
+                                    attempt_plan,
+                                    crawler_outcome.provider_result,
+                                )
+                            finally:
+                                if result_path is not None:
+                                    result_path.unlink(missing_ok=True)
+                            if not crawler_outcome.provider_result.ok:
+                                raise RuntimeError(
+                                    "managed browser environment failed: "
+                                    + crawler_outcome.provider_result.reason
+                                )
+                            if crawler_outcome.returncode != 0:
+                                hint = "；检测到登录态失效，请先重新登录该平台账号" if crawler_outcome.login_required else ""
+                                raise RuntimeError(
+                                    f"MediaCrawler exited with {crawler_outcome.returncode}{hint}"
+                                )
                         _raise_if_stop_requested(job["id"])
                         _raise_if_deadline_passed(run_id)
                         _update_collection_progress(run_id, platform, attempt_out, phase="ingesting")
@@ -418,23 +493,46 @@ def _run_crawler_attempt(
     platform: str,
     out_dir: Path,
     account_binding: dict[str, Any] | None = None,
-) -> None:
+) -> ManagedCrawlerOutcome | None:
     _raise_if_stop_requested(job["id"])
     run_id = _safe_int(job.get("_run_id"))
-    cmd = _build_crawler_cmd(job, platform, out_dir, account_binding)
-    env = _build_crawler_env(account_binding)
+    managed_plan = job.get("_browser_environment_plan")
+    if managed_plan is not None and not isinstance(managed_plan, BrowserEnvironmentPlan):
+        raise BrowserEnvironmentError("account_identity_provider_unsupported", "runner_plan")
+    result_path_value = job.get("_browser_environment_result_path")
+    result_path = Path(result_path_value).resolve() if result_path_value else None
+    if (managed_plan is None) != (result_path is None):
+        raise BrowserEnvironmentError("account_identity_provider_unsupported", "runner_result")
+    if result_path is not None:
+        try:
+            result_path.relative_to(out_dir.resolve())
+        except ValueError as exc:
+            raise BrowserEnvironmentError("account_identity_provider_unsupported", "runner_result") from exc
+        result_path.unlink(missing_ok=True)
+    cmd = _build_crawler_cmd(job, platform, out_dir, account_binding, managed_plan)
+    env = _build_crawler_env(account_binding, managed_plan, result_path)
     log_path = out_dir / "crawler.log"
     timeout_seconds = max(1, _safe_int(job.get("_crawler_timeout_seconds")) or _runtime_setting_int("crawler_timeout_seconds", 900))
     process: subprocess.Popen | None = None
+    child_started_at = datetime.now(timezone.utc)
     try:
         creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
         log_lines = [redact_sensitive("Starting crawler: " + " ".join(cmd))]
-        if account_binding and account_binding.get("profile_path"):
+        if managed_plan is not None:
+            log_lines.append(
+                "[monitor] Managed browser environment: "
+                f"resolution={managed_plan.resolution_id} "
+                f"attempt={managed_plan.attempt_id} "
+                f"account={managed_plan.account_id} "
+                f"action={managed_plan.action} "
+                f"source={managed_plan.trigger_source}"
+            )
+        elif account_binding and account_binding.get("profile_path"):
             log_lines.append(
                 "[monitor] Account profile enabled: "
                 + redact_sensitive(f"{account_binding.get('account_name') or '-'} {account_binding.get('profile_key') or ''}")
             )
-        if account_binding and account_binding.get("proxy_id"):
+        if managed_plan is None and account_binding and account_binding.get("proxy_id"):
             log_lines.append(
                 "[monitor] Proxy enabled: "
                 + redact_sensitive(
@@ -502,6 +600,13 @@ def _run_crawler_attempt(
         if run_id:
             _update_collection_progress(run_id, platform, out_dir, phase="collecting", error="stopped")
         raise CrawlerStopped(f"任务已手动停止；see {log_path}")
+    if managed_plan is not None and result_path is not None:
+        provider_result = _load_managed_child_result(result_path, managed_plan, child_started_at)
+        return ManagedCrawlerOutcome(
+            provider_result=provider_result,
+            returncode=int(process.returncode),
+            login_required=_looks_like_login_required(log_text),
+        )
     if process.returncode != 0:
         hint = "；检测到登录态失效，请先重新登录该平台账号" if _looks_like_login_required(log_text) else ""
         if run_id:
@@ -1399,9 +1504,20 @@ def _build_crawler_cmd(
     platform: str,
     out_dir: Path,
     account_binding: dict[str, Any] | None = None,
+    managed_plan: BrowserEnvironmentPlan | None = None,
 ) -> list[str]:
-    headless = os.environ.get("MONITOR_CRAWLER_HEADLESS", "true").lower() not in {"0", "false", "no"}
+    headless = (
+        managed_plan.headless
+        if managed_plan is not None
+        else os.environ.get("MONITOR_CRAWLER_HEADLESS", "true").lower() not in {"0", "false", "no"}
+    )
     connect_existing = os.environ.get("MONITOR_CDP_CONNECT_EXISTING", "false").lower() in {"1", "true", "yes"}
+    if managed_plan is not None:
+        if connect_existing:
+            raise BrowserEnvironmentError("account_identity_provider_unsupported", "cdp_connect_existing")
+        if managed_plan.action != "crawl" or managed_plan.platform != platform:
+            raise BrowserEnvironmentError("account_identity_snapshot_mismatch", "runner_plan")
+        connect_existing = False
     debug_port = os.environ.get(f"MONITOR_CDP_DEBUG_PORT_{platform.upper()}") or os.environ.get("MONITOR_CDP_DEBUG_PORT")
     debug_port = debug_port or str(PLATFORM_DEBUG_PORTS.get(platform, 9223))
     login_config = get_platform_login_config(platform, masked=False)
@@ -1476,8 +1592,37 @@ def _job_int(job: dict[str, Any], key: str, default: int) -> int:
         return default
 
 
-def _build_crawler_env(account_binding: dict[str, Any] | None = None) -> dict[str, str]:
+def _build_crawler_env(
+    account_binding: dict[str, Any] | None = None,
+    managed_plan: BrowserEnvironmentPlan | None = None,
+    result_path: Path | None = None,
+) -> dict[str, str]:
     env = {**os.environ, "PYTHONUNBUFFERED": "1"}
+    if managed_plan is not None:
+        if result_path is None:
+            raise BrowserEnvironmentError("account_identity_provider_unsupported", "runner_result")
+        for name in list(env):
+            if name in {
+                "HTTP_PROXY",
+                "HTTPS_PROXY",
+                "ALL_PROXY",
+                "NO_PROXY",
+                "http_proxy",
+                "https_proxy",
+                "all_proxy",
+                "no_proxy",
+                "MONITOR_ACTIVE_ACCOUNT_ID",
+                "MONITOR_ACTIVE_ACCOUNT_NAME",
+                "MONITOR_ACTIVE_PROXY_ID",
+                "MONITOR_ACTIVE_PROXY_NAME",
+                "MONITOR_CDP_CONNECT_EXISTING",
+                PLAN_ENV_NAME,
+                RESULT_PATH_ENV_NAME,
+            } or name.startswith("MONITOR_CDP_USER_DATA_DIR"):
+                env.pop(name, None)
+        env[PLAN_ENV_NAME] = browser_environment_plan_to_json(managed_plan)
+        env[RESULT_PATH_ENV_NAME] = str(result_path.resolve())
+        return env
     if not account_binding:
         return env
     profile_path = str(account_binding.get("profile_path") or "").strip()
@@ -1503,6 +1648,42 @@ def _build_crawler_env(account_binding: dict[str, Any] | None = None) -> dict[st
             }
         )
     return env
+
+
+def _load_managed_child_result(
+    result_path: Path,
+    plan: BrowserEnvironmentPlan,
+    started_at: datetime,
+) -> BrowserEnvironmentResult:
+    path = Path(result_path)
+    if not path.is_file():
+        raise BrowserEnvironmentError("account_identity_child_result_missing", "result")
+    try:
+        payload = path.read_text(encoding="utf-8")
+    except OSError as exc:
+        raise BrowserEnvironmentError("account_identity_child_result_missing", "result") from exc
+    result = browser_environment_result_from_json(payload)
+    snapshot = result.snapshot
+    account = snapshot["account"]
+    if (
+        snapshot["resolution_id"] != plan.resolution_id
+        or snapshot["attempt_id"] != plan.attempt_id
+        or snapshot["action"] != plan.action
+        or snapshot["trigger_source"] != plan.trigger_source
+        or account["workspace_id"] != plan.workspace_id
+        or account["account_id"] != plan.account_id
+        or account["platform"] != plan.platform
+    ):
+        raise BrowserEnvironmentError("account_identity_snapshot_mismatch", "result_binding")
+    try:
+        validated_at = datetime.fromisoformat(str(snapshot["validated_at"]).replace("Z", "+00:00"))
+    except ValueError as exc:
+        raise BrowserEnvironmentError("account_identity_snapshot_mismatch", "validated_at") from exc
+    started = started_at if started_at.tzinfo else started_at.replace(tzinfo=timezone.utc)
+    now = datetime.now(timezone.utc)
+    if validated_at < started - timedelta(seconds=1) or validated_at > now + timedelta(seconds=60):
+        raise BrowserEnvironmentError("account_identity_snapshot_mismatch", "validated_at")
+    return result
 
 
 def _resolve_platform_account_binding(platform: str, job: dict[str, Any] | None = None) -> dict[str, Any] | None:
@@ -1532,10 +1713,14 @@ def _resolve_platform_account_binding(platform: str, job: dict[str, Any] | None 
             "profile_key": account.get("profile_key") or "",
             "profile_configured": bool(account.get("profile_configured")),
             "profile_path": account.get("profile_path") or "",
+            "task_proxy_id": explicit_proxy_id,
+            "_account": account,
+            "_proxy": None,
         }
-        proxy_id = explicit_proxy_id or account.get("proxy_id")
-        if proxy_id:
-            proxy = get_proxy_profile(int(proxy_id), masked=False)
+        account_proxy_id = _safe_int(account.get("proxy_id"))
+        if account_proxy_id:
+            binding["proxy_id"] = account_proxy_id
+            proxy = get_proxy_profile(account_proxy_id, masked=False)
             if proxy and proxy.get("status") == "active" and proxy.get("proxy_url"):
                 binding.update(
                     {
@@ -1543,10 +1728,12 @@ def _resolve_platform_account_binding(platform: str, job: dict[str, Any] | None 
                         "proxy_name": proxy.get("name") or "",
                         "provider": proxy.get("provider") or "",
                         "proxy_url": proxy.get("proxy_url") or "",
+                        "_proxy": proxy,
                     }
                 )
-        if binding.get("profile_path") or binding.get("proxy_id") or binding.get("cookies"):
-            return binding
+        return binding
+    if explicit_account_id:
+        raise ValueError("configured account is unavailable for this platform")
     if explicit_proxy_id:
         proxy = get_proxy_profile(explicit_proxy_id, masked=False)
         if proxy and proxy.get("status") == "active" and proxy.get("proxy_url"):
@@ -1561,6 +1748,41 @@ def _resolve_platform_account_binding(platform: str, job: dict[str, Any] | None 
                 "proxy_url": proxy.get("proxy_url") or "",
             }
     return None
+
+
+def _resolve_runner_browser_plan(
+    account_binding: dict[str, Any],
+    trigger_source: str,
+) -> BrowserEnvironmentPlan | None:
+    account = account_binding.get("_account")
+    if not isinstance(account, dict):
+        account_id = _safe_int(account_binding.get("account_id"))
+        account = get_social_account(account_id, masked=False) if account_id else None
+    if not account:
+        return None
+    if is_legacy_draft_account(account):
+        return None
+    if os.environ.get("MONITOR_CDP_CONNECT_EXISTING", "false").lower() in {"1", "true", "yes"}:
+        raise BrowserEnvironmentError("account_identity_provider_unsupported", "cdp_connect_existing")
+    proxy = account_binding.get("_proxy")
+    plan = resolve_account_browser_environment(
+        account,
+        action="crawl",
+        trigger_source=trigger_source,
+        headless=os.environ.get("MONITOR_CRAWLER_HEADLESS", "true").lower() not in {"0", "false", "no"},
+        launch_mode="cdp_launch",
+        proxy=proxy if isinstance(proxy, dict) else None,
+        task_proxy_id=_safe_int(account_binding.get("task_proxy_id")),
+        playwright_executable_path=_playwright_chromium_executable_path(),
+    )
+    if not Path(plan.profile_path).is_dir():
+        raise AccountIdentityError("account_identity_requires_relogin", "profile_key")
+    return plan
+
+
+def _playwright_chromium_executable_path() -> str:
+    with sync_playwright() as playwright:
+        return str(playwright.chromium.executable_path)
 
 
 def _resolve_platform_proxy_binding(platform: str, job: dict[str, Any] | None = None) -> dict[str, Any] | None:
@@ -1748,7 +1970,7 @@ def _crawler_retry_delay_seconds() -> float:
 
 
 def _should_retry_crawler_error(error: str) -> bool:
-    if _looks_like_login_required(error) or "登录窗口未关闭" in error:
+    if _looks_like_login_required(error) or "登录窗口未关闭" in error or "account_identity_" in error:
         return False
     return True
 
