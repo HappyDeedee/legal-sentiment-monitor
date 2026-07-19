@@ -185,10 +185,13 @@ accounts to re-login instead of preserving long-term legacy path compatibility.
 The inline lock fields protect both the account and its `profile_key`.
 
 CR-047 account identity fields are implemented by Phase 5.1A as an additive
-schema migration. They become active when `init_db()` opens a database. Phase
-5.1A adds storage and read compatibility only; generation, validation,
-locking, and runtime binding remain Phase 5.1B-D. The fields make the browser
-identity inputs for a platform account explicit and persistent:
+schema migration and become active when `init_db()` opens a database. Phase
+5.1B now generates and validates exact catalog values for every new account
+INSERT and persists them as `identity_state = generated` in the same
+transaction. Existing account UPDATEs preserve identity columns and do not
+silently backfill legacy rows. Phase 5.1C still owns lifecycle/locking/reset/
+audit transitions; Phase 5.1D still owns provider/runtime binding and effective
+snapshots. The fields make the browser identity inputs explicit and persistent:
 
 - `environment_region`: customer-safe region bucket used for consistency
   checks, such as `CN_MAINLAND`, `HK`, or `SG`;
@@ -250,6 +253,17 @@ Phase 5.1A compatibility defaults:
   Profile, rewrite encrypted Cookies, or change existing timestamps;
 - workspace-scoped non-unique indexes cover `identity_state`,
   `requires_relogin`, and `identity_template` operational queries.
+
+Phase 5.1B write rules:
+
+- generator-owned identity columns are written only by an explicit bounded SQL
+  statement after the new account ID and `profile_key` exist;
+- request payloads may influence only the safe pre-login region snapshot and
+  template family; direct UA, seed, locale, timezone, viewport, screen, scale,
+  mobile, touch, or generator metadata values are not persistence inputs;
+- generation/validation failure rolls back the new account row;
+- `fingerprint_seed` and raw `identity_runtime_snapshot_json` remain internal
+  and are removed from customer-facing account responses.
 
 ### Proposed CR-112 Profile Runtime And Promotion Metadata
 

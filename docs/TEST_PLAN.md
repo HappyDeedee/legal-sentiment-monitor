@@ -29,7 +29,7 @@ governance goal.
   conditions.
 - The packet follows the current execution order unless a later accepted
   decision changes it: Phase 21 is merged and closed on `main`, Phase 5.1P and
-  Phase 5.1A are verified, Phase 5.1B is next, then Phase 5.1C-D, Phase 5.1
+  Phase 5.1A-B are verified, Phase 5.1C is next, then Phase 5.1D, Phase 5.1
   acceptance, and CR-070 / Phase 5.2 after CR-047 provider/effective snapshot
   verification.
 - Phase 21 packets remain frontend-visual only and preserve Task Center, Run
@@ -222,6 +222,15 @@ requested/effective runtime snapshot contract.
 - Phase 5.1A read tests verify false SQLite flags become Python booleans,
   nullable dimension/scale fields remain `None`, and masked detail/list reads
   do not expose raw Profile paths.
+- Phase 5.1B exact-catalog tests cover all six accepted templates, documented
+  catalog order, exact UA/screen/viewport/scale/device/region fields, automatic
+  and family-filtered selection, stable/differentiated HMAC output, and exact
+  deployment-key domain separation.
+- Phase 5.1B persistence/validator tests verify new-account INSERT-only
+  generation, transaction rollback, no legacy UPDATE backfill, request-field
+  ownership, missing/contradictory field rejection, declared region bundles,
+  missing bound proxy rejection, relogin/locked-proxy reasons, safe API/UI
+  surfaces, and blocked-by-default account Playwright entrypoints.
 - QR login, Cookie validation, and login-state checks resolve the same
   `profile_key`, account identity, proxy policy, user agent, timezone, locale,
   accept-language, viewport/screen, device flags, and provider mode.
@@ -1597,8 +1606,8 @@ Documentation-stage checks:
 - Before delivery, verify all five plan files and every CR-112 formal reference
   including `DATA_MODEL.md` and `SCHEMA_MIGRATION.md` are staged in one atomic
   commit; a partial commit fails the documentation acceptance gate.
-- Verify Phase 5.1P and Phase 5.1A remain recorded as verified, Phase 5.1B-D
-  remains owned by CR-047 with Phase 5.1B next, and CR-112 does not preempt the
+- Verify Phase 5.1P and Phase 5.1A-B remain recorded as verified, Phase 5.1C-D
+  remains owned by CR-047 with Phase 5.1C next, and CR-112 does not preempt the
   accepted CR-070 / Phase 5.2 sequence without a later accepted decision.
 - Verify account/security and deployment sections are explicitly proposed and
   do not change the current server-first QR acceptance boundary.

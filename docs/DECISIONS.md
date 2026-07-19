@@ -580,6 +580,23 @@ short `Superseded by` note rather than deleting history.
 
 ## 2026-07-19
 
+- Confirmed for CR-047 / Phase 5.1B: account identity generation uses
+  `MONITOR_ACCOUNT_IDENTITY_SEED_SALT` as UTF-8 bytes when explicitly set.
+  Otherwise it derives a purpose-separated 32-byte salt from the decoded
+  deployment Fernet key with
+  `hmac.new(deployment_key_bytes,
+  b"MediaCrawler/account-identity/seed/v1",
+  hashlib.sha256).digest()`. The salt/key is not stored in account rows or
+  returned through APIs.
+- Confirmed for CR-047 / Phase 5.1B: backup/restore must preserve either the
+  explicit identity seed-salt setting or the deployment secret key. Changing
+  this authority is an identity migration that requires the later explicit
+  reset/re-login lifecycle; it must not silently regenerate locked identities.
+- Confirmed for CR-047 / Phase 5.1B: deterministic identity is generated only
+  for a new social-account INSERT after the stable account ID and `profile_key`
+  exist. Ordinary UPDATEs, including legacy draft-account updates, never
+  regenerate or guess identity. Phase 5.1C owns explicit regeneration and
+  state transitions.
 - Confirmed for CR-112: QR login and accepted Cookie login converge on the
   same application-managed persistent Profile resolved from
   `social_account.profile_key`. The persistent Profile is the normal browser

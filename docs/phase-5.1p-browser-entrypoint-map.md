@@ -5,6 +5,7 @@ Owner: CR-047 / Phase 5.1P
 Evidence baseline: clean `main@459237f`, matching `origin/main`, before this
 documentation-only result was written
 Review date: 2026-07-19
+Current progress: Phase 5.1A-B implemented and verified; Phase 5.1C is next.
 
 ## Result
 
@@ -16,8 +17,8 @@ The formal monitor paths can consume one immutable
 without adding another account, Profile, proxy, or browser authority.
 
 This preflight made no code, schema, UI, runtime-data, database, Profile,
-Cookie, proxy, crawler, browser-process, or deployment change. Phase 5.1A is
-the next eligible execution unit. Phase 5.1B-D remain serially gated, and the
+Cookie, proxy, crawler, browser-process, or deployment change. Phase 5.1A-B
+have since passed their serial gates. Phase 5.1C-D remain serially gated, and the
 Phase 5.1 acceptance gate must prove the behavior described here in a
 container/server-like environment.
 
@@ -47,8 +48,8 @@ account + action
 | Phase 21 | historical/already completed | Merged and closed on current `main`; it is not reopened here. |
 | Phase 5.1P | current, completed by this preflight | The packet and all mapping tasks are executed by this document. |
 | Phase 5.1A | completed and verified | Its additive account identity data-model packet is implemented and independently reviewed. |
-| Phase 5.1B | current, next eligible | May start after the verified Phase 5.1A data-model boundary; scope remains deterministic generation and fail-closed validation. |
-| Phase 5.1B-D | current, dependency-gated | Must execute in order after the preceding Phase 5.1 unit passes. |
+| Phase 5.1B | completed and verified | Exact deterministic generation, fail-closed validation, safe creation controls, redaction, and test tripwires are implemented. |
+| Phase 5.1C-D | current, dependency-gated | Phase 5.1C is next; Phase 5.1D starts only after 5.1C passes. |
 | Phase 5.1 acceptance | current, dependency-gated | Requires server-like requested/effective, proxy-effect, manual/scheduler, and CDP proof. |
 | CR-070 / Phase 5.2 | current, dependency-gated | Remains blocked until all CR-047 provider binding and effective snapshots are verified. |
 | CR-112 | future, `Needs Confirmation` | May reuse the CR-047 provider contract later; no Bridge/Profile-promotion/profile-only implementation is assigned to CR-047. |
@@ -445,8 +446,8 @@ diagnostics but cannot individually satisfy this acceptance.
 ## Phase 5.1 Handoff
 
 Phase 5.1A-D can proceed without another provider-authority decision under
-these boundaries. Phase 5.1A is now implemented and independently verified;
-Phase 5.1B is next:
+these boundaries. Phase 5.1A-B are implemented and independently verified;
+Phase 5.1C is next:
 
 1. **5.1A:** add only the accepted additive identity/snapshot fields and keep
    existing accounts readable without guessed backfill.

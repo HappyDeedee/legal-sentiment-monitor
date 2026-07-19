@@ -2,6 +2,75 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-19 - Phase 5.1B Account Identity Generation And Validation
+
+Environment: isolated Windows worktree
+`C:\Users\Administrator\.codex\worktrees\phase51b-MediaCrawler`, branch
+`codex/phase-5.1b-account-identity-generator`, starting from synchronized
+`main@f8be522`.
+
+Result:
+
+- Added the exact ordered six-template V1 catalog and deterministic
+  HMAC-SHA256 selection/fingerprint algorithm from `ACCOUNT_ENVIRONMENT.md`.
+- Added stable deployment seed authority: an explicit
+  `MONITOR_ACCOUNT_IDENTITY_SEED_SALT` is used as UTF-8 bytes; otherwise the
+  existing 32-byte Fernet deployment key derives a purpose-separated seed with
+  `MediaCrawler/account-identity/seed/v1`. Raw seed/key material is not stored,
+  returned, or logged.
+- New platform account INSERTs now generate, validate, and persist exact
+  identity fields in the same SQLite transaction after stable account ID and
+  `profile_key` creation. Generation failure rolls back the row. Existing
+  account UPDATEs never regenerate or guess identity values.
+- Added fail-closed checks for missing values, unknown/mismatched templates,
+  region bundles, UA/platform/device/dimension contradictions, invalid seed
+  format, missing bound proxy records, relogin state, and locked task-level
+  proxy overrides.
+- Added a collapsed administrator-only new-account environment section with
+  safe region/template-family selections. Automatic CN-mainland selection is
+  the default; no UA, timezone, locale, viewport, screen, scale, mobile, touch,
+  or seed editor exists.
+- Account API views retain safe template/region/generator metadata while
+  removing `fingerprint_seed`, raw runtime-snapshot JSON, Cookies, proxy
+  credentials, and raw Profile/runtime paths.
+- Added pytest Playwright tripwires for the current QR and account-check
+  entrypoints. Real account identity plus platform login requires both explicit
+  opt-ins; a real proxy additionally requires its own opt-in.
+
+Verification:
+
+- Baseline before edits passed: `352 passed`.
+- TDD RED produced the expected `6 failed, 1 error`: generator module,
+  transactional generation, redaction, safe UI controls, and tripwire fixture
+  were absent.
+- Focused Phase 5.1B selection passed: `9 passed, 352 deselected`.
+- Phase 5.1A/5.1B compatibility selection passed: `11 passed, 350 deselected`.
+- Full monitoring regression passed: `361 passed` with three pre-existing
+  deprecation warnings.
+- `uv run python -m py_compile` passed for `account_identity.py`,
+  `security.py`, `database.py`, and `monitor.py`.
+- `uv run python scripts/check_docs.py` passed: `PASS docs consistency`.
+- `uv run pytest tests/test_documentation_checks.py -q -p no:cacheprovider
+  --basetemp .codex_tmp\pytest-phase51b-docs` passed: `1 passed`.
+- `git diff --check` passed with only expected Windows LF-to-CRLF notices.
+- Three iterative Claude Code read-only plan-review rounds ended with
+  `VERDICT: READY` after fixing exact seed derivation, INSERT/rollback,
+  template-family/region, redaction, UI, and tripwire boundaries.
+- Final Claude Code read-only code review traced every new-account caller,
+  SQLite rollback, legacy UPDATE preservation, seed derivation/recomputation,
+  proxy-region boundary, request-field ownership, API/UI exposure, tripwire
+  behavior, tests, and governance. It returned `VERDICT: PASS` with no
+  Critical, High, Medium, Low, security, regression, or missing-test finding.
+
+Proof boundary:
+
+- This proves deterministic generation, exact catalog expansion, INSERT-only
+  persistence, fail-closed validator behavior, safe pre-login choices/API
+  output, and standard-test browser isolation. It does not prove Phase 5.1C
+  lifecycle/locking/reset/audit behavior, Phase 5.1D launch/provider/proxy
+  transport/effective probes/runtime snapshots, real platform login, final
+  server-like Phase 5.1 acceptance, CR-070, CR-094, or CR-112.
+
 ## 2026-07-19 - Phase 5.1A Account Identity Data Model
 
 Environment: isolated Windows worktree

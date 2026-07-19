@@ -79,6 +79,67 @@ def smtp_tripwire(monkeypatch):
     monkeypatch.setattr(smtplib, "SMTP_SSL", BlockedSMTP)
 
 
+def _env_enabled(name, environ=None):
+    values = os.environ if environ is None else environ
+    return str(values.get(name) or "").strip().lower() in {"1", "true", "yes", "on"}
+
+
+def _account_identity_tripwire_policy(environ=None):
+    required_flags = (
+        "TEST_ALLOW_REAL_ACCOUNT_IDENTITY",
+        "TEST_ALLOW_REAL_PLATFORM_LOGIN",
+    )
+    return {
+        "blocked": not all(_env_enabled(name, environ) for name in required_flags),
+        "proxy_allowed": _env_enabled("TEST_ALLOW_REAL_PROXY", environ),
+    }
+
+
+@pytest.fixture(autouse=True)
+def account_identity_tripwire(monkeypatch):
+    from api.monitoring import account_check, login_qrcode
+
+    if not os.environ.get("MONITOR_ACCOUNT_IDENTITY_SEED_SALT"):
+        monkeypatch.setenv("MONITOR_ACCOUNT_IDENTITY_SEED_SALT", "pytest-disposable-account-identity-salt")
+
+    required_flags = (
+        "TEST_ALLOW_REAL_ACCOUNT_IDENTITY",
+        "TEST_ALLOW_REAL_PLATFORM_LOGIN",
+    )
+    policy = _account_identity_tripwire_policy()
+    blocked = policy["blocked"]
+
+    if blocked:
+        class BlockedAsyncPlaywright:
+            async def start(self):
+                raise AssertionError(
+                    "Automated tests must not reach real account Playwright without "
+                    "TEST_ALLOW_REAL_ACCOUNT_IDENTITY=true and "
+                    "TEST_ALLOW_REAL_PLATFORM_LOGIN=true"
+                )
+
+        monkeypatch.setattr(account_check, "async_playwright", lambda: BlockedAsyncPlaywright())
+        monkeypatch.setattr(login_qrcode, "async_playwright", lambda: BlockedAsyncPlaywright())
+    elif not policy["proxy_allowed"]:
+        original_start = login_qrcode._start_qrcode_login_session_with_profile_once
+
+        async def guarded_proxy_start(*args, **kwargs):
+            command = kwargs.get("command") or (args[2] if len(args) > 2 else {})
+            if isinstance(command, dict) and command.get("proxy_url"):
+                raise AssertionError(
+                    "Automated tests must not reach a real proxy without TEST_ALLOW_REAL_PROXY=true"
+                )
+            return await original_start(*args, **kwargs)
+
+        monkeypatch.setattr(login_qrcode, "_start_qrcode_login_session_with_profile_once", guarded_proxy_start)
+
+    return {
+        "blocked": blocked,
+        "required_flags": required_flags,
+        "policy": _account_identity_tripwire_policy,
+    }
+
+
 @pytest.fixture
 def sample_xhs_comment():
     """Sample Xiaohongshu comment data for testing"""

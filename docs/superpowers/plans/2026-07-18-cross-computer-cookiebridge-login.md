@@ -53,7 +53,7 @@ Packet documents:
 | Label | Current evidence | Classification | Documentation action | Protected behavior | Readiness |
 |---|---|---|---|---|---|
 | Phase 5.1P | `docs/TASKS.md` and `docs/phase-5.1p-browser-entrypoint-map.md` record verified completion | Completed read-only preflight | Keep as Packet A evidence and provider boundary | No code, schema, Profile, Cookie, proxy, or runtime mutation | Complete |
-| Phase 5.1A-D | Phase 5.1P and Phase 5.1A verified; Phase 5.1B is next | Current, serially dependency-gated | Keep under CR-047 | One provider output and requested/effective snapshots | Phase 5.1B ready; C-D gated in order |
+| Phase 5.1A-D | Phase 5.1P and Phase 5.1A-B verified; Phase 5.1C is next | Current, serially dependency-gated | Keep under CR-047 | One provider output and requested/effective snapshots | Phase 5.1C ready; D gated in order |
 | Phase 5.1 acceptance | Gated by Phase 5.1A-D | Current dependency-gated | Keep under CR-047 | Server-like proof; no diagnostic fallback presented as identity proof | Blocked |
 | Proposed CR-112 | Registered in formal governance with status `Needs Confirmation` | Needs Confirmation | Keep linked plans proposed until scope and sequencing are accepted | Current QR and manual Cookie flows | Not implementation-ready |
 | CookieBridge source | Temporary source under `.codex_tmp`; extension loads a Service Worker but did not register in the observed black-box run | Needs Baseline | Evaluate in Packet B only | No product dependency on unproved connector behavior | Future-valid |

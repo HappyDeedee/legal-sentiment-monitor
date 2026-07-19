@@ -559,14 +559,17 @@ def test_phase_5_1a_account_identity_schema_defaults_and_indexes():
 
     snapshot = _snapshot_table("social_accounts")
     try:
-        account = save_social_account(
-            {
-                "name": "Phase 5.1A Draft Account",
-                "platform": "dy",
-                "login_type": "qrcode",
-                "status": "active",
-            }
-        )
+        now = datetime.now(timezone.utc).isoformat()
+        with get_conn() as conn:
+            cursor = conn.execute(
+                """
+                INSERT INTO social_accounts (name, platform, status, created_at, updated_at)
+                VALUES (?, ?, ?, ?, ?)
+                """,
+                ("Phase 5.1A Draft Account", "dy", "active", now, now),
+            )
+            account_id = int(cursor.lastrowid)
+        account = get_social_account(account_id)
         expected_defaults = {
             "environment_region": "",
             "browser_platform": "",
@@ -656,6 +659,398 @@ def test_phase_5_1a_additive_migration_preserves_legacy_account_without_backfill
         assert row["browser_environment_locked_at"] is None
     finally:
         conn.close()
+
+
+def test_phase_5_1b_template_catalog_expands_all_documented_rows_exactly():
+    from api.monitoring.account_identity import IDENTITY_TEMPLATE_CATALOG
+
+    windows_ua = (
+        "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
+        "(KHTML, like Gecko) Chrome/126.0.6478.183 Safari/537.36"
+    )
+    expected = {
+        "CN_WIN_CHROME_1920": {
+            "browser_platform": "windows", "user_agent": windows_ua,
+            "screen_width": 1920, "screen_height": 1080,
+            "viewport_width": 1920, "viewport_height": 963,
+            "device_scale_factor": 1, "is_mobile": False, "has_touch": False,
+            "timezone": "Asia/Shanghai", "locale": "zh-CN",
+            "accept_language": "zh-CN,zh;q=0.9",
+        },
+        "CN_WIN_CHROME_1536": {
+            "browser_platform": "windows", "user_agent": windows_ua,
+            "screen_width": 1536, "screen_height": 864,
+            "viewport_width": 1536, "viewport_height": 768,
+            "device_scale_factor": 1, "is_mobile": False, "has_touch": False,
+            "timezone": "Asia/Shanghai", "locale": "zh-CN",
+            "accept_language": "zh-CN,zh;q=0.9",
+        },
+        "CN_MAC_CHROME_1440": {
+            "browser_platform": "macos",
+            "user_agent": (
+                "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/126.0.6478.183 Safari/537.36"
+            ),
+            "screen_width": 1440, "screen_height": 900,
+            "viewport_width": 1440, "viewport_height": 789,
+            "device_scale_factor": 2, "is_mobile": False, "has_touch": False,
+            "timezone": "Asia/Shanghai", "locale": "zh-CN",
+            "accept_language": "zh-CN,zh;q=0.9",
+        },
+        "CN_ANDROID_CHROME": {
+            "browser_platform": "android",
+            "user_agent": (
+                "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 "
+                "(KHTML, like Gecko) Chrome/126.0.6478.183 Mobile Safari/537.36"
+            ),
+            "screen_width": 1080, "screen_height": 2400,
+            "viewport_width": 412, "viewport_height": 915,
+            "device_scale_factor": 2.625, "is_mobile": True, "has_touch": True,
+            "timezone": "Asia/Shanghai", "locale": "zh-CN",
+            "accept_language": "zh-CN,zh;q=0.9",
+        },
+        "HK_DESKTOP_CHROME": {
+            "browser_platform": "windows", "user_agent": windows_ua,
+            "screen_width": 1920, "screen_height": 1080,
+            "viewport_width": 1920, "viewport_height": 963,
+            "device_scale_factor": 1, "is_mobile": False, "has_touch": False,
+            "timezone": "Asia/Hong_Kong", "locale": "zh-HK",
+            "accept_language": "zh-HK,zh;q=0.9,en;q=0.8",
+        },
+        "SG_DESKTOP_CHROME": {
+            "browser_platform": "windows", "user_agent": windows_ua,
+            "screen_width": 1440, "screen_height": 900,
+            "viewport_width": 1440, "viewport_height": 789,
+            "device_scale_factor": 1, "is_mobile": False, "has_touch": False,
+            "timezone": "Asia/Singapore", "locale": "en-SG",
+            "accept_language": "en-SG,en;q=0.9,zh;q=0.7",
+        },
+    }
+    assert tuple(item["identity_template"] for item in IDENTITY_TEMPLATE_CATALOG) == tuple(expected)
+    for item in IDENTITY_TEMPLATE_CATALOG:
+        assert {key: item[key] for key in expected[item["identity_template"]]} == expected[item["identity_template"]]
+
+
+def test_phase_5_1b_generator_uses_documented_hmac_and_family_filters():
+    import hashlib
+    import hmac
+
+    from api.monitoring.account_identity import (
+        AccountIdentityError,
+        IDENTITY_TEMPLATE_CATALOG,
+        generate_account_identity,
+    )
+
+    salt = b"phase-5.1b-fixed-test-salt"
+    generated = generate_account_identity(
+        workspace_id=1,
+        platform="dy",
+        account_id=41,
+        proxy_region_snapshot="CN_MAINLAND",
+        template_family="auto",
+        seed_salt=salt,
+    )
+    selection_message = b"1|dy|41|CN_MAINLAND|auto"
+    selection_seed = hmac.new(salt, selection_message, hashlib.sha256).hexdigest()[:32]
+    candidates = [item for item in IDENTITY_TEMPLATE_CATALOG if item["region"] == "CN_MAINLAND"]
+    expected_template = candidates[int(selection_seed[:8], 16) % len(candidates)]["identity_template"]
+    expected_fingerprint = hmac.new(
+        salt,
+        f"1|dy|41|CN_MAINLAND|{expected_template}".encode("utf-8"),
+        hashlib.sha256,
+    ).hexdigest()[:32]
+    assert generated["identity_template"] == expected_template
+    assert generated["fingerprint_seed"] == expected_fingerprint
+    assert generate_account_identity(
+        workspace_id=1, platform="dy", account_id=41,
+        proxy_region_snapshot="CN_MAINLAND", template_family="auto", seed_salt=salt,
+    ) == generated
+    assert generate_account_identity(
+        workspace_id=1, platform="dy", account_id=42,
+        proxy_region_snapshot="CN_MAINLAND", template_family="auto", seed_salt=salt,
+    )["fingerprint_seed"] != generated["fingerprint_seed"]
+
+    assert generate_account_identity(
+        workspace_id=1, platform="dy", account_id=41,
+        proxy_region_snapshot="CN_MAINLAND", template_family="windows_chrome_desktop", seed_salt=salt,
+    )["identity_template"] in {"CN_WIN_CHROME_1920", "CN_WIN_CHROME_1536"}
+    assert generate_account_identity(
+        workspace_id=1, platform="dy", account_id=41,
+        proxy_region_snapshot="CN_MAINLAND", template_family="mac_chrome_desktop", seed_salt=salt,
+    )["identity_template"] == "CN_MAC_CHROME_1440"
+    assert generate_account_identity(
+        workspace_id=1, platform="dy", account_id=41,
+        proxy_region_snapshot="CN_MAINLAND", template_family="android_chrome", seed_salt=salt,
+    )["identity_template"] == "CN_ANDROID_CHROME"
+    assert generate_account_identity(
+        workspace_id=1, platform="dy", account_id=41,
+        proxy_region_snapshot="HK", template_family="auto", seed_salt=salt,
+    )["identity_template"] == "HK_DESKTOP_CHROME"
+    with pytest.raises(AccountIdentityError) as exc_info:
+        generate_account_identity(
+            workspace_id=1, platform="dy", account_id=41,
+            proxy_region_snapshot="HK", template_family="mac_chrome_desktop", seed_salt=salt,
+        )
+    assert exc_info.value.reason == "account_identity_contradiction"
+
+
+def test_phase_5_1b_deployment_seed_derivation_is_domain_separated(monkeypatch):
+    import base64
+    import hashlib
+    import hmac
+
+    from api.monitoring import account_identity
+
+    deployment_key = bytes(range(32))
+    encoded_key = base64.urlsafe_b64encode(deployment_key)
+    monkeypatch.delenv("MONITOR_ACCOUNT_IDENTITY_SEED_SALT", raising=False)
+    monkeypatch.setattr(account_identity, "load_or_create_secret_key", lambda: encoded_key)
+
+    assert account_identity.resolve_account_identity_seed_salt() == hmac.new(
+        deployment_key,
+        b"MediaCrawler/account-identity/seed/v1",
+        hashlib.sha256,
+    ).digest()
+
+    monkeypatch.setattr(account_identity, "load_or_create_secret_key", lambda: base64.urlsafe_b64encode(b"short"))
+    with pytest.raises(account_identity.AccountIdentityError) as exc_info:
+        account_identity.resolve_account_identity_seed_salt()
+    assert exc_info.value.reason == "account_identity_missing"
+
+
+def test_phase_5_1b_validator_fails_closed_for_missing_and_contradictory_fields():
+    from api.monitoring.account_identity import (
+        AccountIdentityError,
+        generate_account_identity,
+        validate_account_identity,
+    )
+
+    generated = generate_account_identity(
+        workspace_id=1,
+        platform="dy",
+        account_id=51,
+        proxy_region_snapshot="CN_MAINLAND",
+        template_family="windows_chrome_desktop",
+        seed_salt=b"phase-5.1b-validator-salt",
+    )
+    account = {
+        **generated,
+        "id": 51,
+        "workspace_id": 1,
+        "platform": "dy",
+        "proxy_id": None,
+        "identity_state": "generated",
+        "requires_relogin": False,
+    }
+    validator_salt = b"phase-5.1b-validator-salt"
+    assert validate_account_identity(account, seed_salt=validator_salt) == account
+
+    for field, value, reason in (
+        ("timezone", "", "account_identity_missing"),
+        ("device_scale_factor", None, "account_identity_missing"),
+        ("device_scale_factor", 0, "account_identity_contradiction"),
+        ("viewport_width", account["screen_width"] + 1, "account_identity_contradiction"),
+        ("is_mobile", True, "account_identity_contradiction"),
+        ("has_touch", True, "account_identity_contradiction"),
+        ("proxy_region_snapshot", "HK", "account_identity_contradiction"),
+        ("fingerprint_seed", "not-a-seed", "account_identity_contradiction"),
+    ):
+        with pytest.raises(AccountIdentityError) as exc_info:
+            validate_account_identity({**account, field: value}, seed_salt=validator_salt)
+        assert exc_info.value.reason == reason
+
+    with pytest.raises(AccountIdentityError) as exc_info:
+        validate_account_identity({**account, "fingerprint_seed": "0" * 32}, seed_salt=validator_salt)
+    assert exc_info.value.reason == "account_identity_contradiction"
+
+    with pytest.raises(AccountIdentityError) as exc_info:
+        validate_account_identity(
+            {**account, "proxy_id": 99},
+            bound_proxy_exists=False,
+            seed_salt=validator_salt,
+        )
+    assert exc_info.value.reason == "account_identity_missing"
+    with pytest.raises(AccountIdentityError) as exc_info:
+        validate_account_identity(
+            {**account, "identity_state": "locked"},
+            task_proxy_id=7,
+            seed_salt=validator_salt,
+        )
+    assert exc_info.value.reason == "account_identity_locked_proxy_override"
+    with pytest.raises(AccountIdentityError) as exc_info:
+        validate_account_identity(
+            {**account, "identity_state": "active", "requires_relogin": True},
+            seed_salt=validator_salt,
+        )
+    assert exc_info.value.reason == "account_identity_requires_relogin"
+
+
+def test_phase_5_1b_new_account_generation_is_transactional_and_updates_do_not_backfill(monkeypatch):
+    monkeypatch.setenv("MONITOR_ACCOUNT_IDENTITY_SEED_SALT", "phase-5.1b-database-salt")
+    init_db()
+    snapshot = _snapshot_table("social_accounts")
+    try:
+        account = save_social_account(
+            {
+                "name": "Phase 5.1B Generated",
+                "platform": "dy",
+                "login_type": "qrcode",
+                "status": "standby",
+                "proxy_region_snapshot": "CN_MAINLAND",
+                "identity_template_family": "windows_chrome_desktop",
+                "user_agent": "request-controlled-user-agent",
+                "fingerprint_seed": "request-controlled-seed",
+            }
+        )
+        stored = get_social_account(account["id"], masked=False)
+        assert stored["identity_state"] == "generated"
+        assert stored["environment_region"] == "CN_MAINLAND"
+        assert stored["proxy_region_snapshot"] == "CN_MAINLAND"
+        assert stored["identity_template"] in {"CN_WIN_CHROME_1920", "CN_WIN_CHROME_1536"}
+        assert stored["user_agent"] != "request-controlled-user-agent"
+        assert stored["fingerprint_seed"] != "request-controlled-seed"
+        assert stored["identity_generator_name"] == "mediacrawler_account_identity"
+        assert stored["identity_generator_version"] == "1.0"
+        assert stored["identity_environment_version"] == "v1"
+
+        with get_conn() as conn:
+            conn.execute(
+                """
+                UPDATE social_accounts SET environment_region='', browser_platform='', identity_template='',
+                    fingerprint_seed='', user_agent='', timezone='', locale='', accept_language='',
+                    screen_width=NULL, screen_height=NULL, viewport_width=NULL, viewport_height=NULL,
+                    device_scale_factor=NULL, is_mobile=0, has_touch=0, identity_generator_name='',
+                    identity_generator_version='', identity_environment_version='', proxy_region_snapshot='',
+                    identity_state='draft' WHERE id=?
+                """,
+                (account["id"],),
+            )
+        save_social_account(
+            {
+                **get_social_account(account["id"], masked=False),
+                "name": "Phase 5.1B Legacy Draft Update",
+                "proxy_region_snapshot": "HK",
+                "identity_template_family": "auto",
+            },
+            account["id"],
+        )
+        legacy = get_social_account(account["id"], masked=False)
+        assert legacy["identity_state"] == "draft"
+        assert legacy["identity_template"] == ""
+        assert legacy["proxy_region_snapshot"] == ""
+
+        with get_conn() as conn:
+            before_count = conn.execute("SELECT COUNT(*) FROM social_accounts").fetchone()[0]
+        with pytest.raises(ValueError, match="account_identity_contradiction"):
+            save_social_account(
+                {
+                    "name": "Unsupported Region",
+                    "platform": "dy",
+                    "login_type": "qrcode",
+                    "proxy_region_snapshot": "JP",
+                }
+            )
+        with get_conn() as conn:
+            after_count = conn.execute("SELECT COUNT(*) FROM social_accounts").fetchone()[0]
+        assert after_count == before_count
+    finally:
+        _restore_table("social_accounts", snapshot)
+
+
+def test_phase_5_1b_customer_account_view_redacts_identity_internals():
+    view = monitor_router._customer_view_social_account(
+        {
+            "id": 71,
+            "identity_state": "generated",
+            "identity_template": "CN_WIN_CHROME_1920",
+            "environment_region": "CN_MAINLAND",
+            "browser_platform": "windows",
+            "timezone": "Asia/Shanghai",
+            "locale": "zh-CN",
+            "identity_generator_name": "mediacrawler_account_identity",
+            "identity_generator_version": "1.0",
+            "fingerprint_seed": "0123456789abcdef0123456789abcdef",
+            "identity_runtime_snapshot_json": '{"profile_path":"C:/secret","cookies":"secret"}',
+            "cookies_encrypted": "secret",
+            "profile_path": "C:/secret-profile",
+            "profile_runtime_path": "C:/secret-runtime",
+            "proxy_url": "http://user:pass@example.com:8080",
+        }
+    )
+    for forbidden in (
+        "fingerprint_seed",
+        "identity_runtime_snapshot_json",
+        "cookies_encrypted",
+        "profile_path",
+        "profile_runtime_path",
+        "proxy_url",
+    ):
+        assert forbidden not in view
+    assert view["identity_state"] == "generated"
+    assert view["identity_template"] == "CN_WIN_CHROME_1920"
+    assert view["identity_generator_version"] == "1.0"
+
+
+def test_phase_5_1b_account_ui_only_submits_safe_identity_choices_for_new_accounts():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    account_dialog = page[page.index('id="account_dialog"') : page.index('<section id="proxies">')]
+    assert 'id="social_account_proxy_region"' in account_dialog
+    assert 'id="social_account_identity_template_family"' in account_dialog
+    assert '<option value="CN_MAINLAND"' in account_dialog
+    assert '<option value="auto"' in account_dialog
+    for forbidden_id in (
+        "social_account_user_agent",
+        "social_account_timezone",
+        "social_account_locale",
+        "social_account_viewport_width",
+        "social_account_screen_width",
+        "social_account_device_scale_factor",
+        "social_account_is_mobile",
+        "social_account_has_touch",
+        "social_account_fingerprint_seed",
+    ):
+        assert f'id="{forbidden_id}"' not in account_dialog
+    assert "if(!id){" in page
+    assert "payload.proxy_region_snapshot=val('social_account_proxy_region')" in page
+    assert "payload.identity_template_family=val('social_account_identity_template_family')" in page
+    draft_login = page[page.index("async function startLoginSessionForDraft()") : page.index("async function startLoginSessionForAccount(")]
+    assert "proxy_region_snapshot:val('social_account_proxy_region')" in draft_login
+    assert "identity_template_family:val('social_account_identity_template_family')" in draft_login
+    assert "setAccountIdentityControlsLocked(true)" in page
+    assert "setAccountIdentityControlsLocked(false)" in page
+
+
+def test_phase_5_1b_test_tripwire_blocks_real_account_playwright_by_default(account_identity_tripwire):
+    assert account_identity_tripwire["blocked"] is True
+    assert account_identity_tripwire["required_flags"] == (
+        "TEST_ALLOW_REAL_ACCOUNT_IDENTITY",
+        "TEST_ALLOW_REAL_PLATFORM_LOGIN",
+    )
+    with pytest.raises(AssertionError, match="TEST_ALLOW_REAL_ACCOUNT_IDENTITY"):
+        asyncio.run(account_check_module.async_playwright().start())
+    with pytest.raises(AssertionError, match="TEST_ALLOW_REAL_PLATFORM_LOGIN"):
+        asyncio.run(login_qrcode_module.async_playwright().start())
+
+
+def test_phase_5_1b_test_tripwire_policy_requires_explicit_opt_ins(account_identity_tripwire):
+    policy = account_identity_tripwire["policy"]
+    assert policy({}) == {
+        "blocked": True,
+        "proxy_allowed": False,
+    }
+    assert policy(
+        {
+            "TEST_ALLOW_REAL_ACCOUNT_IDENTITY": "true",
+            "TEST_ALLOW_REAL_PLATFORM_LOGIN": "true",
+        }
+    ) == {"blocked": False, "proxy_allowed": False}
+    assert policy(
+        {
+            "TEST_ALLOW_REAL_ACCOUNT_IDENTITY": "true",
+            "TEST_ALLOW_REAL_PLATFORM_LOGIN": "true",
+            "TEST_ALLOW_REAL_PROXY": "true",
+        }
+    ) == {"blocked": False, "proxy_allowed": True}
 
 
 def test_phase_1_bootstrap_admin_login_session_and_user_management():

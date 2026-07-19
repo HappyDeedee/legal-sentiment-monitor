@@ -163,6 +163,7 @@ account profile root
 reports
 run logs
 secret/encryption key
+explicit account-identity seed salt when configured
 monitor.yaml if used
 ```
 
@@ -183,6 +184,7 @@ Required or expected deployment variables:
 MONITOR_DATA_DIR
 MONITOR_DATABASE_URL
 MONITOR_SECRET_KEY_PATH
+MONITOR_ACCOUNT_IDENTITY_SEED_SALT
 MONITOR_BROWSER_EXECUTABLE
 MONITOR_ADMIN_EMAIL
 MONITOR_ADMIN_PASSWORD
@@ -194,6 +196,14 @@ MONITOR_ALLOW_LOCAL_LOGIN_WINDOW
 
 Deployment variables that lock settings should be visible as read-only in the
 administrator settings UI.
+
+`MONITOR_ACCOUNT_IDENTITY_SEED_SALT` is optional. When omitted, Phase 5.1B
+derives the identity-generator salt from the existing deployment encryption
+key with a fixed purpose label. When explicitly set, back up the deployment
+secret configuration containing this value together with the database and
+Profiles. Losing or changing the effective salt changes future deterministic
+generation and must be handled through the explicit reset/re-login lifecycle,
+not silent regeneration.
 
 Production deployments should set:
 

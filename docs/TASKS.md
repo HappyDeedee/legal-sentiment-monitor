@@ -382,7 +382,7 @@ verified in the isolated `codex/phase-5.1a-account-identity-schema` worktree
 against `main@8b55c2a`. Focused tests passed (`2` Phase 5.1A tests and `7`
 schema/account regression tests), the full monitoring suite passed (`352
 passed`), and the final read-only review returned `READY` with no finding.
-Phase 5.1B is next.
+Phase 5.1B is also implemented and verified; Phase 5.1C is next.
 
 - [x] Start only after Phase 5.1P is complete and confirms the provider,
       MediaCrawler, and container/server-like compatibility boundary. Verified
@@ -406,51 +406,60 @@ Phase 5.1B is next.
 - [x] Keep existing active accounts readable, do not silently backfill guessed
       identity values, and represent their ungenerated environment as
       `identity_state = draft` without moving old profile directories. Runtime
-      confirmation/re-login enforcement remains Phase 5.1B-D work.
+      confirmation/re-login enforcement remains Phase 5.1C-D work.
 - [x] Keep old accounts readable and avoid exposing raw `profile_path` in
       masked detail and list reads.
 
 ### Phase 5.1B - Account Identity Generation And Validation
 
-- [ ] Add an Account Identity Generator that uses workspace, platform,
+Implementation status (2026-07-19): complete on
+`codex/phase-5.1b-account-identity-generator` against merged Phase 5.1A
+baseline `main@f8be522`. Focused Phase 5.1B tests pass (`9 passed`) and the
+full monitor suite passes (`361 passed`). Final independent diff review and
+integration evidence are recorded in `TEST_RESULTS.md`; Phase 5.1C is next.
+
+- [x] Add an Account Identity Generator that uses workspace, platform,
       account, proxy/region policy, automatic template selection or a
       pre-login administrator template-family choice, and seed salt to produce
       stable account identity output before first QR login or Cookie
       validation.
-- [ ] Ensure the generator is stable, differentiated, self-consistent, and
+- [x] Ensure the generator is stable, differentiated, self-consistent, and
       explainable: same input produces the same identity, different accounts
       normally differ, and each output can be traced to a customer-safe
       template/version.
-- [ ] Make automatic template selection the default: normal users cannot choose
+- [x] Make automatic template selection the default: normal users cannot choose
       identity templates, ordinary administrator account creation does not
       require template choice, and administrators may only choose a template
       family before first login through an advanced path.
-- [ ] Do not expose field-level identity editing for UA, viewport, screen,
+- [x] Do not expose field-level identity editing for UA, viewport, screen,
       timezone, locale, accept-language, device scale factor, mobile flag, or
       touch flag; these fields must come from the selected catalog template and
       region bundle.
-- [ ] Add China mainland generation rules: `environment_region =
+- [x] Add China mainland generation rules: `environment_region =
       CN_MAINLAND`, `timezone = Asia/Shanghai`, `locale = zh-CN`,
       `accept_language = zh-CN,zh;q=0.9`, and a coherent desktop/mobile
       device template instead of province-level overfitting.
-- [ ] Support a small template catalog such as `CN_WIN_CHROME_1920`,
+- [x] Support a small template catalog such as `CN_WIN_CHROME_1920`,
       `CN_WIN_CHROME_1536`, `CN_MAC_CHROME_1440`, `CN_ANDROID_CHROME`,
       `HK_DESKTOP_CHROME`, and `SG_DESKTOP_CHROME`, with generator metadata
       persisted on each account.
-- [ ] Implement the deterministic generation algorithm from
+- [x] Implement the deterministic generation algorithm from
       `ACCOUNT_ENVIRONMENT.md`: deterministic template-selection seed,
       documented catalog-order selection from eligible templates, HMAC-SHA256
       fingerprint seed derivation from workspace, platform, account, region,
       selected template, and salt; exact template expansion; no random or
       process-default fallback.
-- [ ] Add an Account Identity Validator that fails closed when proxy region,
+- [x] Add an Account Identity Validator that fails closed when proxy region,
       timezone, locale, accept-language, UA, browser platform, viewport/screen,
       mobile/touch flags, or locked fields are missing or contradictory.
-- [ ] Reject silent fallback to Playwright/process defaults when a locked
-      identity exists.
-- [ ] Add test safety tripwires so automated tests and local diagnostics cannot
+- [x] Reject silent fallback to Playwright/process defaults at the validator
+      boundary when a locked identity exists. Phase 5.1D still owns mandatory
+      invocation from every launch/attach adapter and effective-value proof.
+- [x] Add test safety tripwires so automated tests and local diagnostics cannot
       touch real profile roots, cookies, proxy credentials, or real platform
-      login sessions without explicit opt-in environment variables.
+      login sessions without explicit opt-in environment variables. Current
+      Playwright account-check/QR entrypoints are blocked by default in pytest;
+      Phase 5.1D owns narrow Runner/login-window process-provider guards.
 
 ### Phase 5.1C - Account Identity Locking And Re-Login
 
@@ -1718,7 +1727,7 @@ Planning status:
 CR-112 is a proposed new capability and remains `Needs Confirmation`. This
 documentation synchronization does not authorize product code, schema, UI,
 extension, Profile, Cookie, connector, runtime, deployment, or database
-changes. Phase 5.1P and Phase 5.1A are verified and Phase 5.1B is next;
+changes. Phase 5.1P and Phase 5.1A-B are verified and Phase 5.1C is next;
 CR-112 does not preempt CR-070 / Phase 5.2 while its sequencing is unconfirmed.
 
 Documentation synchronization:
