@@ -2077,9 +2077,9 @@ Dependencies And Sequencing:
 
 - Phase 5.1P is verified as a read-only preflight; its provider map remains the
   CR-047 implementation boundary.
-- Phase 5.1A-B are implemented and independently verified. Phase 5.1C-D and
-  the Phase 5.1 acceptance gate remain owned by CR-047 and must complete before any
-  CR-112 product implementation.
+- Phase 5.1A-C are implemented and independently verified. Phase 5.1D and the Phase 5.1
+  acceptance gate remain owned by CR-047 and must complete before any CR-112
+  product implementation.
 - CR-070 / Phase 5.2 retains its currently accepted position after CR-047.
   CR-112 does not preempt or silently reorder CR-070 while this CR is `Needs
   Confirmation`; a later accepted sequencing decision must place the CR-112
@@ -2140,8 +2140,9 @@ Acceptance For This Documentation Stage:
 
 - CR-112 remains `Needs Confirmation` and is not described as
   implementation-ready.
-- Phase 5.1P and Phase 5.1A-B are recorded as verified, Phase 5.1C is next, and
-  CR-047 and CR-070 ownership and sequencing are preserved.
+- Phase 5.1P and Phase 5.1A-C are recorded as verified, Phase 5.1D follows
+  Phase 5.1C integration, and CR-047 and CR-070 ownership and sequencing are
+  preserved.
 - The five reviewed plan artifacts are linked from formal governance docs and
   distinguish roadmap readiness from future execution gates.
 - All five plan artifacts and their CR-112 formal references in
@@ -3875,8 +3876,21 @@ Phase 5.1B implementation result (2026-07-19):
   administrator pre-login region/template-family controls, API redaction, and
   blocked-by-default pytest Playwright entrypoints.
 - Focused Phase 5.1B tests pass (`9 passed`) and the full monitor regression
-  passes (`361 passed`). Phase 5.1C-D and final server-like acceptance remain
-  serially gated.
+  passes (`361 passed`).
+
+Phase 5.1C implementation result (2026-07-19):
+
+- Implemented SQLite-authoritative identity prepare/completion,
+  lock/activation, failure recovery, safe configuration, non-destructive
+  reset, and allowlisted audit behavior across QR, visible-browser, Cookie,
+  Profile, verification-code, administrator-check, cancellation, and draft
+  confirmation paths.
+- Added the administrator safe environment summary and explicit locked
+  change/reset/re-login flow; CR-113 fixes QR draft safe-choice forwarding.
+- Focused Phase 5.1C/CR-113 tests pass (`17 passed`) and the full monitor
+  regression passes (`378 passed`). Python compile, documentation gates,
+  browser checks, and independent Claude Code full-diff review pass. Phase 5.1D
+  and final server-like acceptance remain serially gated.
 
 Related tasks:
 
@@ -4582,6 +4596,53 @@ Verification:
 
 - Verified on 2026-06-18 with targeted frontend regression coverage, syntax
   checks, docs check, and browser inspection of the local `/monitor` page.
+
+## CR-113 - QR Draft Account Identity Choice Forwarding
+
+Date: 2026-07-19
+
+Source: Phase 5.1C route audit of the existing new-account QR login flow.
+
+Module: platform account draft creation, QR login, and account identity input
+forwarding.
+
+Type: Regression Fix
+
+Status: Verified
+
+Background:
+
+The account form already submitted the administrator's safe
+`proxy_region_snapshot` and `identity_template_family` choices to
+`POST /login-sessions`. The route created the draft account with only name,
+platform, proxy ID, and notes, so the two accepted identity choices were lost
+and Phase 5.1B generated the CN/automatic default instead.
+
+Requirements:
+
+- Forward the existing `proxy_region_snapshot` and
+  `identity_template_family` request values into
+  `create_draft_social_account()` before QR login preparation.
+- Keep generated fields such as user agent, timezone, locale, viewport,
+  device flags, and fingerprint seed owned by the Account Identity Generator.
+- Do not change existing-account QR payloads, login types, Profile ownership,
+  proxy credentials, or normal-user permissions.
+- Add a route regression test that captures the draft payload and proves the
+  two safe values are forwarded while an attempted generated field is not.
+
+Acceptance:
+
+- A new-account QR login uses the same safe region/template-family choices
+  shown in the account form.
+- Unknown or generated identity fields are not forwarded to draft creation.
+- Phase 5.1B remains historically verified; this follow-up does not reopen or
+  rewrite that phase.
+
+Verification:
+
+- The focused CR-113/Phase 5.1C selection and full monitoring suite pass in
+  the isolated Phase 5.1C worktree. Python compile, documentation gates,
+  browser checks, and the independent Claude Code full-diff review also pass.
 
 ## CR-056 - Filter Dropdown Alignment Regression Fix
 

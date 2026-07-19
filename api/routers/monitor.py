@@ -10,15 +10,22 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from fastapi.responses import FileResponse, HTMLResponse
 
 from ..monitoring import ai
+from ..monitoring.account_identity import (
+    IDENTITY_STATE_LOGIN_IN_PROGRESS,
+    AccountIdentityError,
+    identity_template_family,
+)
 from ..monitoring.auth_context import is_administrator, require_authenticated_user, require_role
 from ..monitoring.prompts import AI_OUTPUT_SCHEMA, DEFAULT_PROMPT, DEFAULT_PROMPT_SECTIONS
 from ..monitoring.database import (
     MONITOR_DATA_DIR,
+    apply_social_account_identity_configuration,
     archive_run,
     cancel_run,
     cancel_running_runs_for_job,
     create_login_session,
     confirm_social_account,
+    complete_social_account_identity_login,
     create_draft_social_account,
     delete_job,
     delete_ai_key_profile,
@@ -61,6 +68,7 @@ from ..monitoring.database import (
     list_runs,
     list_runs_page,
     list_social_accounts,
+    prepare_social_account_identity_login,
     record_audit_log,
     mark_ai_key_profile_test_result,
     mark_ai_rule_profile_test_result,
@@ -77,6 +85,7 @@ from ..monitoring.database import (
     save_proxy_profile,
     save_runtime_settings,
     save_social_account,
+    reset_social_account_identity,
     restore_run,
     set_active_ai_key_profile,
     set_active_ai_rule_profile,
@@ -137,6 +146,102 @@ CurrentUser = Depends(require_authenticated_user)
 
 def _route_actor(user: Any) -> dict[str, Any] | None:
     return user if isinstance(user, dict) else None
+
+
+def _route_actor_id(user: Any) -> int | None:
+    actor = _route_actor(user)
+    return int(actor.get("id") or 0) or None if actor else None
+
+
+def _identity_error_detail(exc: AccountIdentityError) -> str:
+    return {
+        "account_identity_requires_relogin": "账号环境已变更，请先重置并重新登录。",
+        "account_identity_login_conflict": "账号正在登录、验活或重置，请先完成当前操作。",
+        "account_identity_reset_blocked": "账号正在登录或被采集任务占用，请结束当前操作后再重置。",
+    }.get(exc.reason, customer_safe_text(str(exc)))
+
+
+def _raise_identity_http_error(exc: AccountIdentityError) -> None:
+    status_code = 409 if exc.reason in {
+        "account_identity_requires_relogin",
+        "account_identity_login_conflict",
+        "account_identity_reset_blocked",
+    } else 400
+    raise HTTPException(status_code=status_code, detail=_identity_error_detail(exc))
+
+
+def _optional_positive_id(value: Any, field: str) -> int | None:
+    if value in (None, ""):
+        return None
+    try:
+        parsed = int(value)
+    except (TypeError, ValueError) as exc:
+        raise ValueError(f"{field} is invalid") from exc
+    if parsed <= 0:
+        raise ValueError(f"{field} is invalid")
+    return parsed
+
+
+def _identity_configuration_request(
+    account: dict[str, Any],
+    payload: dict[str, Any],
+) -> tuple[int | None, str, str]:
+    proxy_id = (
+        _optional_positive_id(payload.get("proxy_id"), "proxy_id")
+        if "proxy_id" in payload
+        else _optional_positive_id(account.get("proxy_id"), "proxy_id")
+    )
+    region = str(
+        payload.get("proxy_region_snapshot")
+        if "proxy_region_snapshot" in payload
+        else account.get("proxy_region_snapshot") or "CN_MAINLAND"
+    ).strip().upper()
+    template_family = str(
+        payload.get("identity_template_family")
+        if "identity_template_family" in payload
+        else identity_template_family(account.get("identity_template"))
+    ).strip()
+    return proxy_id, region, template_family
+
+
+def _identity_configuration_changed(
+    account: dict[str, Any],
+    proxy_id: int | None,
+    region: str,
+    template_family: str,
+) -> bool:
+    current_proxy_id = _optional_positive_id(account.get("proxy_id"), "proxy_id")
+    current_region = str(account.get("proxy_region_snapshot") or "CN_MAINLAND").strip().upper()
+    current_family = identity_template_family(account.get("identity_template"))
+    return (proxy_id, region, template_family) != (
+        current_proxy_id,
+        current_region,
+        current_family,
+    )
+
+
+def _recover_prepared_account_identity(
+    account_id: int | None,
+    *,
+    trigger_source: str,
+    failure_reason: str,
+    user_id: int | None = None,
+) -> dict[str, Any] | None:
+    if not account_id:
+        return None
+    account = get_social_account(int(account_id), masked=False)
+    if not account or str(account.get("identity_state") or "") != IDENTITY_STATE_LOGIN_IN_PROGRESS:
+        return account
+    try:
+        return complete_social_account_identity_login(
+            int(account_id),
+            ok=False,
+            trigger_source=trigger_source,
+            failure_reason=failure_reason,
+            user_id=user_id,
+        )
+    except AccountIdentityError:
+        return get_social_account(int(account_id), masked=False)
 
 
 def _local_login_window_allowed() -> bool:
@@ -279,8 +384,18 @@ async def platform_status():
 async def platform_login_browser(platform: str, payload: dict[str, Any] | None = None, admin: dict[str, Any] = AdminUser):
     if not _local_login_window_allowed():
         raise HTTPException(status_code=403, detail="生产模式已关闭本地登录窗口，请使用网页登录二维码完成登录")
+    request_payload = payload or {}
+    account_id = _optional_positive_id(request_payload.get("account_id"), "account_id")
+    prepared = False
     try:
-        command = _login_browser_command_for_payload(platform, payload or {})
+        if account_id:
+            prepare_social_account_identity_login(
+                account_id,
+                trigger_source="visible_browser_login",
+                user_id=_route_actor_id(admin),
+            )
+            prepared = True
+        command = _login_browser_command_for_payload(platform, request_payload)
         expired_session_ids = expire_login_sessions_for_account(
             int(command.get("account_id") or 0) or None,
             str(platform),
@@ -298,9 +413,32 @@ async def platform_login_browser(platform: str, payload: dict[str, Any] | None =
                 "message": switch_message,
             }
         return _customer_view_login_session(result)
+    except AccountIdentityError as exc:
+        if prepared:
+            _recover_prepared_account_identity(
+                account_id,
+                trigger_source="visible_browser_login",
+                failure_reason="visible_browser_start_failed",
+                user_id=_route_actor_id(admin),
+            )
+        _raise_identity_http_error(exc)
     except ValueError as exc:
+        if prepared:
+            _recover_prepared_account_identity(
+                account_id,
+                trigger_source="visible_browser_login",
+                failure_reason="visible_browser_start_failed",
+                user_id=_route_actor_id(admin),
+            )
         raise HTTPException(status_code=400, detail=str(exc))
     except Exception as exc:
+        if prepared:
+            _recover_prepared_account_identity(
+                account_id,
+                trigger_source="visible_browser_login",
+                failure_reason="visible_browser_start_failed",
+                user_id=_route_actor_id(admin),
+            )
         raise HTTPException(status_code=500, detail=redact_sensitive(f"{type(exc).__name__}: {exc}"))
 
 
@@ -905,9 +1043,11 @@ async def social_account_avatar_for_account(account_id: int, admin: dict[str, An
 @router.post("/social-accounts")
 async def create_social_account(payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     try:
-        account = save_social_account(payload)
+        account = save_social_account(payload, actor_id=_route_actor_id(admin))
         _audit_admin(admin, "create_social_account", "social_account", account.get("id"), {"platform": account.get("platform"), "login_type": account.get("login_type")})
         return {"account": _customer_view_social_account(account)}
+    except AccountIdentityError as exc:
+        _raise_identity_http_error(exc)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -915,19 +1055,102 @@ async def create_social_account(payload: dict[str, Any], admin: dict[str, Any] =
 @router.put("/social-accounts/{account_id}")
 async def update_social_account(account_id: int, payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     try:
-        account = save_social_account(payload, account_id)
+        current = get_social_account(account_id, masked=False)
+        if not current:
+            raise ValueError("account not found")
+        proxy_id, region, template_family = _identity_configuration_request(current, payload)
+        configuration_changed = _identity_configuration_changed(
+            current,
+            proxy_id,
+            region,
+            template_family,
+        )
+        base_payload = {**payload, "proxy_id": current.get("proxy_id")}
+        account = save_social_account(
+            base_payload,
+            account_id,
+            actor_id=_route_actor_id(admin),
+        )
+        if configuration_changed:
+            account = apply_social_account_identity_configuration(
+                account_id,
+                proxy_id=proxy_id,
+                proxy_region_snapshot=region,
+                template_family=template_family,
+                trigger_source="admin_account_update",
+                user_id=_route_actor_id(admin),
+            )
         _audit_admin(admin, "update_social_account", "social_account", account_id, {"platform": account.get("platform"), "status": account.get("status")})
         return {"account": _customer_view_social_account(account)}
+    except AccountIdentityError as exc:
+        _raise_identity_http_error(exc)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+@router.post("/social-accounts/{account_id}/identity/reset")
+async def reset_social_account_identity_route(
+    account_id: int,
+    payload: dict[str, Any] | None = None,
+    admin: dict[str, Any] = AdminUser,
+):
+    try:
+        current = get_social_account(account_id, masked=False)
+        if not current:
+            raise ValueError("account not found")
+        proxy_id, region, template_family = _identity_configuration_request(
+            current,
+            payload or {},
+        )
+        account = reset_social_account_identity(
+            account_id,
+            proxy_id=proxy_id,
+            proxy_region_snapshot=region,
+            template_family=template_family,
+            trigger_source="admin_reset",
+            user_id=_route_actor_id(admin),
+        )
+        return {"account": _customer_view_social_account(account)}
+    except AccountIdentityError as exc:
+        _raise_identity_http_error(exc)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=customer_safe_text(str(exc)))
 
 
 @router.post("/social-accounts/{account_id}/confirm")
 async def confirm_account(account_id: int, payload: dict[str, Any] | None = None, admin: dict[str, Any] = AdminUser):
     try:
-        account = confirm_social_account(account_id, payload or {})
+        current = get_social_account(account_id, masked=False)
+        if not current:
+            raise ValueError("account not found")
+        request_payload = payload or {}
+        proxy_id, region, template_family = _identity_configuration_request(
+            current,
+            request_payload,
+        )
+        configuration_changed = _identity_configuration_changed(
+            current,
+            proxy_id,
+            region,
+            template_family,
+        )
+        account = confirm_social_account(
+            account_id,
+            {**request_payload, "proxy_id": current.get("proxy_id")},
+        )
+        if configuration_changed:
+            account = apply_social_account_identity_configuration(
+                account_id,
+                proxy_id=proxy_id,
+                proxy_region_snapshot=region,
+                template_family=template_family,
+                trigger_source="admin_draft_confirm",
+                user_id=_route_actor_id(admin),
+            )
         _audit_admin(admin, "confirm_social_account", "social_account", account_id, {"platform": account.get("platform"), "status": account.get("status")})
         return {"account": _customer_view_social_account(account)}
+    except AccountIdentityError as exc:
+        _raise_identity_http_error(exc)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -942,11 +1165,23 @@ async def remove_social_account(account_id: int, admin: dict[str, Any] = AdminUs
 @router.post("/social-accounts/{account_id}/check-login")
 async def check_social_account(account_id: int, admin: dict[str, Any] = AdminUser):
     try:
-        result = await check_social_account_login(account_id)
+        account = get_social_account(account_id, masked=False)
+        if not account:
+            raise ValueError("account not found")
+        result = await check_social_account_login(
+            account_id,
+            identity_prepared=(
+                str(account.get("identity_state") or "")
+                == IDENTITY_STATE_LOGIN_IN_PROGRESS
+            ),
+            actor_id=_route_actor_id(admin),
+        )
         _audit_admin(admin, "check_social_account_login", "social_account", account_id, {"status": result.get("status"), "ok": result.get("ok")})
         if isinstance(result.get("account"), dict):
             result = {**result, "account": _customer_view_social_account(result["account"])}
         return {"result": result}
+    except AccountIdentityError as exc:
+        _raise_identity_http_error(exc)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=redact_sensitive(str(exc)))
 
@@ -964,10 +1199,29 @@ async def check_social_accounts(payload: dict[str, Any] | None = None, admin: di
             results.append({"account_id": raw_id, "ok": False, "status": "invalid", "message": "账号 ID 无效"})
             continue
         try:
-            result = await check_social_account_login(account_id)
+            account = get_social_account(account_id, masked=False)
+            if not account:
+                raise ValueError("account not found")
+            result = await check_social_account_login(
+                account_id,
+                identity_prepared=(
+                    str(account.get("identity_state") or "")
+                    == IDENTITY_STATE_LOGIN_IN_PROGRESS
+                ),
+                actor_id=_route_actor_id(admin),
+            )
             if isinstance(result.get("account"), dict):
                 result = {**result, "account": _customer_view_social_account(result["account"])}
             results.append(result)
+        except AccountIdentityError as exc:
+            results.append(
+                {
+                    "account_id": account_id,
+                    "ok": False,
+                    "status": "conflict",
+                    "message": _identity_error_detail(exc),
+                }
+            )
         except ValueError as exc:
             results.append(
                 {
@@ -994,6 +1248,8 @@ async def login_sessions(
 async def create_platform_login_session(payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     init_db()
     platform = payload.get("platform")
+    prepared_account_id: int | None = None
+    identity_prepared = False
     try:
         if not payload.get("account_id"):
             draft = create_draft_social_account(
@@ -1001,10 +1257,20 @@ async def create_platform_login_session(payload: dict[str, Any], admin: dict[str
                     "name": payload.get("name") or "未命名账号",
                     "platform": platform,
                     "proxy_id": payload.get("proxy_id"),
+                    "proxy_region_snapshot": payload.get("proxy_region_snapshot") or "CN_MAINLAND",
+                    "identity_template_family": payload.get("identity_template_family") or "auto",
                     "notes": payload.get("notes") or "",
                 }
             )
             payload = {**payload, "account_id": draft["id"]}
+        prepared_account_id = _optional_positive_id(payload.get("account_id"), "account_id")
+        if prepared_account_id:
+            prepare_social_account_identity_login(
+                prepared_account_id,
+                trigger_source="qrcode_login",
+                user_id=_route_actor_id(admin),
+            )
+            identity_prepared = True
         command = _login_browser_command_for_payload(str(platform), payload)
         account = get_social_account(int(payload.get("account_id") or 0)) if payload.get("account_id") else None
         profile_window = _open_login_window_for_command(str(platform), command)
@@ -1121,8 +1387,34 @@ async def create_platform_login_session(payload: dict[str, Any], admin: dict[str
                 "polling_supported": True,
             },
         }
+    except AccountIdentityError as exc:
+        if identity_prepared:
+            _recover_prepared_account_identity(
+                prepared_account_id,
+                trigger_source="qrcode_login",
+                failure_reason="qrcode_start_failed",
+                user_id=_route_actor_id(admin),
+            )
+        _raise_identity_http_error(exc)
     except ValueError as exc:
+        _recover_prepared_account_identity(
+            prepared_account_id,
+            trigger_source="qrcode_login",
+            failure_reason="qrcode_start_failed",
+            user_id=_route_actor_id(admin),
+        )
         raise HTTPException(status_code=400, detail=redact_sensitive(str(exc)))
+    except Exception as exc:
+        _recover_prepared_account_identity(
+            prepared_account_id,
+            trigger_source="qrcode_login",
+            failure_reason="qrcode_start_failed",
+            user_id=_route_actor_id(admin),
+        )
+        raise HTTPException(
+            status_code=500,
+            detail=customer_safe_text(redact_sensitive(f"{type(exc).__name__}: {exc}")),
+        )
 
 
 @router.get("/login-sessions/{session_id}")
@@ -1205,12 +1497,19 @@ async def submit_login_session_verification_code(session_id: int, payload: dict[
     else:
         current_status = normalize_login_state(session.get("status"))
         next_status = _login_state_from_qr_poll(qr_poll, current_status, session)
-        session = update_login_session_status(
-            session_id,
-            next_status,
-            str(qr_poll.get("message") or _default_login_state_message(next_status)),
-            str(qr_poll.get("qr_image") or ""),
-        )
+        if _should_reconcile_login_failure(current_status, next_status, qr_poll):
+            session, account_status = await _reconcile_login_session_with_account_check(
+                session,
+                qr_poll,
+                next_status,
+            )
+        else:
+            session = update_login_session_status(
+                session_id,
+                next_status,
+                str(qr_poll.get("message") or _default_login_state_message(next_status)),
+                str(qr_poll.get("qr_image") or ""),
+            )
     if account_status is None:
         account_status = update_social_account_login_state(
             int(session.get("account_id") or 0) or None,
@@ -1255,12 +1554,19 @@ async def request_login_session_verification_code(session_id: int, admin: dict[s
     else:
         current_status = normalize_login_state(session.get("status"))
         next_status = _login_state_from_qr_poll(qr_poll, current_status, session)
-        session = update_login_session_status(
-            session_id,
-            next_status,
-            str(qr_poll.get("message") or _default_login_state_message(next_status)),
-            str(qr_poll.get("qr_image") or ""),
-        )
+        if _should_reconcile_login_failure(current_status, next_status, qr_poll):
+            session, account_status = await _reconcile_login_session_with_account_check(
+                session,
+                qr_poll,
+                next_status,
+            )
+        else:
+            session = update_login_session_status(
+                session_id,
+                next_status,
+                str(qr_poll.get("message") or _default_login_state_message(next_status)),
+                str(qr_poll.get("qr_image") or ""),
+            )
     if account_status is None:
         account_status = update_social_account_login_state(
             int(session.get("account_id") or 0) or None,
@@ -1296,16 +1602,28 @@ async def _verify_successful_login_session(session: dict[str, Any]) -> tuple[dic
     if not account_id:
         return session, None
     try:
-        check = await check_social_account_login(account_id, allow_draft=True)
+        check = await check_social_account_login(
+            account_id,
+            allow_draft=True,
+            identity_prepared=True,
+        )
     except Exception as exc:
         message = customer_safe_text(f"登录结果未确认，请重新生成二维码后扫码登录。{redact_sensitive(str(exc))}")
         failed_session = update_login_session_status(int(session["id"]), LOGIN_STATE_PLATFORM_ERROR, message)
-        account_status = update_social_account_login_state(account_id, LOGIN_STATE_PLATFORM_ERROR, message)
+        account_status = _recover_prepared_account_identity(
+            account_id,
+            trigger_source="qrcode_login",
+            failure_reason="qrcode_verification_failed",
+        ) or update_social_account_login_state(account_id, LOGIN_STATE_PLATFORM_ERROR, message)
         return failed_session, account_status
     if not check.get("ok"):
         message = customer_safe_text(str(check.get("message") or "登录态未通过验活，请重新扫码登录。"))
         failed_session = update_login_session_status(int(session["id"]), LOGIN_STATE_PLATFORM_ERROR, message)
-        account_status = check.get("account") or update_social_account_login_state(account_id, LOGIN_STATE_PLATFORM_ERROR, message)
+        account_status = _recover_prepared_account_identity(
+            account_id,
+            trigger_source="qrcode_login",
+            failure_reason=str(check.get("status") or "qrcode_verification_failed"),
+        ) or check.get("account") or update_social_account_login_state(account_id, LOGIN_STATE_PLATFORM_ERROR, message)
         return failed_session, account_status
     success_message = "登录成功，账号已通过验活。"
     verified_session = update_login_session_status(int(session["id"]), LOGIN_STATE_SUCCESS, success_message, str(session.get("qr_image") or ""))
@@ -1333,11 +1651,20 @@ async def _reconcile_login_session_with_account_check(
     if not account_id:
         return update_login_session_status(int(session["id"]), fallback_status, message, str(qr_poll.get("qr_image") or "")), None
     try:
-        check = await check_social_account_login(account_id, allow_draft=True)
+        check = await check_social_account_login(
+            account_id,
+            allow_draft=True,
+            identity_prepared=True,
+        )
     except Exception:
+        account_status = _recover_prepared_account_identity(
+            account_id,
+            trigger_source="qrcode_login",
+            failure_reason=str(fallback_status or "qrcode_verification_failed"),
+        )
         return (
             update_login_session_status(int(session["id"]), fallback_status, message, str(qr_poll.get("qr_image") or "")),
-            update_social_account_login_state(account_id, fallback_status, message),
+            account_status or update_social_account_login_state(account_id, fallback_status, message),
         )
     if check.get("ok"):
         success_message = "登录成功，账号已通过验活。"
@@ -1350,15 +1677,28 @@ async def _reconcile_login_session_with_account_check(
         return verified_session, check.get("account") or get_social_account(account_id)
     check_message = str(check.get("message") or "")
     failure_message = customer_safe_text(check_message if not qr_poll.get("message") else message)
+    account_status = _recover_prepared_account_identity(
+        account_id,
+        trigger_source="qrcode_login",
+        failure_reason=str(check.get("status") or fallback_status or "qrcode_verification_failed"),
+    )
     return (
         update_login_session_status(int(session["id"]), fallback_status, failure_message, str(qr_poll.get("qr_image") or "")),
-        check.get("account") or update_social_account_login_state(account_id, fallback_status, failure_message),
+        account_status or check.get("account") or update_social_account_login_state(account_id, fallback_status, failure_message),
     )
 
 
 @router.delete("/login-sessions/{session_id}")
 async def remove_login_session(session_id: int, admin: dict[str, Any] = AdminUser):
+    session = get_login_session(session_id)
     await close_qrcode_login_session(session_id)
+    if session:
+        _recover_prepared_account_identity(
+            _optional_positive_id(session.get("account_id"), "account_id"),
+            trigger_source="qrcode_login",
+            failure_reason="cancelled",
+            user_id=_route_actor_id(admin),
+        )
     delete_login_session(session_id)
     _audit_admin(admin, "delete_login_session", "login_session", session_id)
     return {"ok": True}

@@ -4,8 +4,8 @@ Last updated: 2026-07-19
 
 ## Current Baseline
 
-- Current synchronized baseline: clean `main@f8be522`, matching `origin/main`
-  before the isolated Phase 5.1B implementation worktree was opened.
+- Phase 5.1C branch baseline: clean `main@100001e`, matching `origin/main` when
+  the isolated implementation worktree was opened.
 - Phase 5.1A code/tests are complete on
   `codex/phase-5.1a-account-identity-schema`: all 24 additive fields, three
   workspace-scoped indexes, idempotent legacy migration, and boolean read
@@ -19,6 +19,15 @@ Last updated: 2026-07-19
   administrator pre-login region/template-family controls, response
   redaction, and pytest Playwright tripwires are implemented. Focused tests
   pass (`9 passed`) and the full monitor suite passes (`361 passed`).
+- Phase 5.1C code/UI/tests are implemented on
+  `codex/phase-5.1c-account-identity-lifecycle`: SQLite owns lifecycle state,
+  lock, reset, and audit writes; QR, visible-browser, Cookie, Profile,
+  verification-code, cancellation, administrator check, configuration-change,
+  and reset routes use that authority. CR-113 forwards safe QR draft region and
+  template-family choices. Focused tests pass (`17 passed`) and the full
+  monitor suite passes (`378 passed`). Python compile, documentation gates,
+  browser checks, and the independent Claude Code full-diff review pass. Branch
+  integration and post-merge verification remain before Phase 5.1D code starts.
 - Phase 21 and CR-107 through CR-110 are merged current-main history, not
   active working-tree implementation.
 - CR-111 verified and synchronized human-readable governance state only; it did
@@ -48,9 +57,8 @@ Last updated: 2026-07-19
   split without changing product code, schema, UI, runtime data, Profiles,
   Cookies, proxies, crawler behavior, browser processes, deployment, or the
   database.
-- Phase 5.1A-B are implemented and verified. Phase 5.1C is the next eligible
-  unit; Phase 5.1D and the Phase 5.1 acceptance gate remain serially
-  gated. CR-070 / Phase 5.2 remains blocked
+- Phase 5.1A-C are implemented and independently verified. Phase 5.1D and the
+  Phase 5.1 acceptance gate remain serially gated. CR-070 / Phase 5.2 remains blocked
   by implemented and verified CR-047 provider binding and requested/effective
   runtime snapshots. CR-092 and CR-094 remain `Needs Confirmation`, CR-112
   remains `Needs Confirmation`, CR-093 remains future-only, CR-037 remains
@@ -662,10 +670,11 @@ the documentation now adds the Phase 5.1 generation algorithm, deterministic
 template-selection rule, template catalog, fail-closed enforcement rules,
 Playwright/CDP provider contract, identity lifecycle state machine, runtime
 snapshot shape, audit events, and test-safety tripwires. These are
-now partially implemented through Phase 5.1A-B: additive storage/read
-compatibility plus deterministic generation/fail-closed validation are code
-and test evidence. Phase 5.1C state/lock/reset/audit behavior, Phase 5.1D
-provider/runtime binding, and final server-like acceptance remain open.
+now implemented and independently verified through Phase 5.1C:
+additive storage/read compatibility, deterministic generation/fail-closed
+validation, and lifecycle/lock/reset/audit behavior are code and test evidence.
+Phase 5.1D provider/runtime binding and final server-like acceptance remain
+open.
 CR-070 Account Environment Export And Import Package is accepted as a Phase
 5.2 new capability for moving a single platform account environment between
 deployments. It extends the CR-047 identity model with metadata-only and slim
@@ -1021,20 +1030,21 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   and independently verified. Phase 5.1B deterministic generation and
   fail-closed validation are implemented and verified: new account INSERTs
   receive the exact catalog-derived environment before later login, while
-  existing draft rows are not silently regenerated. Confirmed remaining scope
-  includes locking after successful QR login or accepted Cookie
-  validation, login/crawl reuse of the same profile/user-agent/browser-
-  platform/timezone/locale/device/proxy policy, explicit reset/re-login for
-  locked changes, and a V1 boundary that keeps CloakBrowser out of the first
-  implementation while recording Canvas/WebGL/fonts/plugins/extensions/history
-  as future/provider-dependent scope. The current documentation also includes
+  existing draft rows are not silently regenerated. Phase 5.1C lifecycle,
+  verified locking, failure recovery, explicit non-destructive reset/re-login,
+  safe audit, route integration, UI, and CR-113 are implemented and
+  independently verified. Confirmed remaining scope is login/crawl
+  runtime reuse of the same profile/user-agent/browser-platform/timezone/
+  locale/device/proxy policy and a V1 boundary that keeps CloakBrowser out of
+  the first implementation while recording Canvas/WebGL/fonts/plugins/
+  extensions/history as future/provider-dependent scope. The documentation also includes
   implementation-level gates for deterministic generation, exact template
   expansion, provider requested/effective probes, runtime snapshots,
   `identity_state`, audit events, and test tripwires. Phase 5.1P has confirmed
   the container/server-like, BrowserEnvironmentProvider, MediaCrawler CDP, QR
   login, Cookie validation, login-state check, manual run, scheduler run,
-  runner, and requested/effective snapshot compatibility boundary. Phase 5.1C
-  state/lock/reset/audit is next; Phase 5.1D and final acceptance remain gated.
+  runner, and requested/effective snapshot compatibility boundary. Phase 5.1D
+  is the next implementation unit; final acceptance remains gated.
 - CR-091 - Open Todo MECE Rebaseline And Phase 5.1 Preflight Gate: verified as
   a documentation-governance sequencing update. It keeps closed Phase 21 as
   the protected frontend baseline and established Phase 5.1P as the
@@ -1248,8 +1258,8 @@ separate follow-up work.
 - CR-111 documentation synchronization is verified and closed against
   `main@abb4d66`. Phase 10-21, CR-091, CR-095, and CR-107 through CR-110 are
   complete through their recorded scope. Phase 5.1P is now also verified as a
-  documentation/read-only preflight. Phase 5.1A-B are implemented and
-  verified; Phase 5.1C is next and Phase 5.1D remains serially gated. Phase
+  documentation/read-only preflight. Phase 5.1A-C are implemented and
+  independently verified, and Phase 5.1D is the next serial unit. Phase
   7.1D remains operator-gated, CR-037 remains deferred, CR-092 and
   CR-094 remain `Needs Confirmation`, and CR-093 remains a future independent
   backlog lane.
@@ -1585,7 +1595,8 @@ and stop conditions.
    one immutable BrowserEnvironmentProvider plan/result, requested/effective
    probes, fail-closed proxy/Profile/browser behavior, diagnostic-only local
    fallbacks, and no CR-112 ownership transfer;
-3. implement CR-047/Phase 5.1C next, then Phase 5.1D in order using the
+3. integrate the independently verified CR-047/Phase 5.1C unit, then implement
+   Phase 5.1D using the
    confirmed policy that locked account
    environments reject task-level proxy overrides and using container/server-
    like execution as the development and acceptance baseline. Stop if
@@ -1663,12 +1674,13 @@ Lowest-risk parallel execution lane:
 1. Phase 21 frontend-only page-level refinement is merged and closed on
    `main`. Phase 5.1P is verified as read-only document/code-path mapping.
    Phase 5.1A additive account identity and Phase 5.1B deterministic
-   generation/validation are verified. Phase 5.1C is now the lowest-risk
-   active implementation lane; Phase 5.1D remains gated by serial verification.
+   generation/validation and Phase 5.1C lifecycle are independently verified.
+   Phase 5.1D is the next serial implementation lane after Phase 5.1C branch
+   integration and post-merge verification.
 
 CR-112 may receive documentation refinement while it is `Needs Confirmation`,
 but it is not a parallel implementation lane and does not alter the verified
-Phase 5.1P/Phase 5.1A-B boundary or Phase 5.1C priority.
+Phase 5.1P/Phase 5.1A-C boundary or Phase 5.1D sequencing.
 
 Do not run Phase 19 and Phase 20 in parallel, and do not run more than one
 frontend worktree that edits the formal console shell at the same time.
@@ -1677,6 +1689,21 @@ remain historical closed items rather than next implementation tasks. CR-070
 must not start before CR-047 provider/effective snapshot verification.
 
 ## Latest Verification
+
+Phase 5.1C implementation and independent verification on 2026-07-19:
+
+- focused Phase 5.1C/CR-113 tests passed (`17 passed`);
+- the full monitoring suite passed (`378 passed`) with three pre-existing
+  deprecation warnings using a worktree-local pytest temporary directory;
+- lifecycle, lock/failure recovery, safe configuration, non-destructive reset,
+  audit redaction, QR/Cookie/Profile/visible-browser/verification-code routes,
+  UI state, concurrency, and CR-113 are covered without real side effects;
+- Python compile, `scripts/check_docs.py`, the documentation regression test,
+  `git diff --check`, and desktop/mobile browser checks passed;
+- the independent Claude Code full-diff review returned `PASS` with no
+  blocking finding, material finding, or missing high-value test;
+- branch integration and post-merge verification remain before Phase 5.1D
+  code starts.
 
 Phase 17.1D historical orphan email evidence verification on 2026-06-18:
 

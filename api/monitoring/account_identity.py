@@ -16,6 +16,31 @@ IDENTITY_GENERATOR_VERSION = "1.0"
 IDENTITY_ENVIRONMENT_VERSION = "v1"
 IDENTITY_SEED_DOMAIN = b"MediaCrawler/account-identity/seed/v1"
 
+IDENTITY_STATE_DRAFT = "draft"
+IDENTITY_STATE_GENERATED = "generated"
+IDENTITY_STATE_VALIDATED = "validated"
+IDENTITY_STATE_LOGIN_IN_PROGRESS = "login_in_progress"
+IDENTITY_STATE_LOCKED = "locked"
+IDENTITY_STATE_ACTIVE = "active"
+IDENTITY_STATE_REQUIRES_RELOGIN = "requires_relogin"
+IDENTITY_STATE_RESETTING = "resetting"
+IDENTITY_STATES = frozenset(
+    {
+        IDENTITY_STATE_DRAFT,
+        IDENTITY_STATE_GENERATED,
+        IDENTITY_STATE_VALIDATED,
+        IDENTITY_STATE_LOGIN_IN_PROGRESS,
+        IDENTITY_STATE_LOCKED,
+        IDENTITY_STATE_ACTIVE,
+        IDENTITY_STATE_REQUIRES_RELOGIN,
+        IDENTITY_STATE_RESETTING,
+    }
+)
+IDENTITY_LOCKED_STATES = frozenset({IDENTITY_STATE_LOCKED, IDENTITY_STATE_ACTIVE})
+IDENTITY_PRELOGIN_STATES = frozenset(
+    {IDENTITY_STATE_DRAFT, IDENTITY_STATE_GENERATED, IDENTITY_STATE_VALIDATED}
+)
+
 TEMPLATE_FAMILY_AUTO = "auto"
 TEMPLATE_FAMILIES = {
     TEMPLATE_FAMILY_AUTO,
@@ -148,6 +173,11 @@ IDENTITY_TEMPLATE_CATALOG: tuple[Mapping[str, Any], ...] = (
 IDENTITY_TEMPLATE_BY_NAME = MappingProxyType(
     {str(item["identity_template"]): item for item in IDENTITY_TEMPLATE_CATALOG}
 )
+
+
+def identity_template_family(identity_template: Any) -> str:
+    template = IDENTITY_TEMPLATE_BY_NAME.get(str(identity_template or ""))
+    return str(template["family"]) if template else TEMPLATE_FAMILY_AUTO
 
 GENERATOR_OWNED_FIELDS = (
     "environment_region",

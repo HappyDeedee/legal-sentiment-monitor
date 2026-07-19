@@ -14,7 +14,13 @@ from playwright.async_api import Page, async_playwright
 from tools import utils
 from tools.browser_launcher import BrowserLauncher
 
-from .database import get_conn, get_social_account, update_social_account_check_state
+from .database import (
+    complete_social_account_identity_login,
+    get_conn,
+    get_social_account,
+    prepare_social_account_identity_login,
+    update_social_account_check_state,
+)
 from .mediacrawler_login import call_mediacrawler_check_login_state, get_mediacrawler_login_capability
 from .normalizer import PLATFORM_LABELS
 from .security import customer_safe_text, redact_sensitive
@@ -34,7 +40,13 @@ MEDIACRAWLER_CLIENT_CLASSES = {
 }
 
 
-async def check_social_account_login(account_id: int, timeout_ms: int = 15000, allow_draft: bool = False) -> dict[str, Any]:
+async def check_social_account_login(
+    account_id: int,
+    timeout_ms: int = 15000,
+    allow_draft: bool = False,
+    identity_prepared: bool = False,
+    actor_id: int | None = None,
+) -> dict[str, Any]:
     account = get_social_account(account_id, masked=False)
     if not account:
         raise ValueError("account not found")
@@ -44,11 +56,50 @@ async def check_social_account_login(account_id: int, timeout_ms: int = 15000, a
     login_type = str(account.get("login_type") or "qrcode")
     platform_label = PLATFORM_LABELS.get(platform, platform)
     if login_type == "cookie":
-        result = await _check_cookie_account(account, timeout_ms)
+        trigger_source = "cookie_validation"
+    elif identity_prepared and allow_draft:
+        trigger_source = "qrcode_login"
     else:
-        result = await _check_profile_account(account, timeout_ms)
+        trigger_source = "profile_validation"
+    prepare_social_account_identity_login(
+        account_id,
+        trigger_source=trigger_source,
+        user_id=actor_id,
+        allow_prepared_validation=identity_prepared,
+    )
+    account = get_social_account(account_id, masked=False) or account
+    try:
+        if login_type == "cookie":
+            result = await _check_cookie_account(account, timeout_ms)
+        else:
+            result = await _check_profile_account(account, timeout_ms)
+    except Exception:
+        complete_social_account_identity_login(
+            account_id,
+            ok=False,
+            trigger_source=trigger_source,
+            failure_reason="account_check_failed",
+            user_id=actor_id,
+        )
+        raise
     ok = bool(result.get("ok"))
     message = str(result.get("message") or ("登录态有效" if ok else "登录态无效"))
+    complete_social_account_identity_login(
+        account_id,
+        ok=ok,
+        trigger_source=trigger_source,
+        lock_reason=(
+            "cookie_validation_success"
+            if login_type == "cookie"
+            else (
+                "qrcode_login_success"
+                if trigger_source == "qrcode_login"
+                else "profile_validation_success"
+            )
+        ),
+        failure_reason=str(result.get("status") or message),
+        user_id=actor_id,
+    )
     updated = update_social_account_check_state(
         int(account_id),
         ok=ok,

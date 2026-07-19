@@ -2,6 +2,72 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-19 - Phase 5.1C Account Identity Lifecycle And CR-113
+
+Environment: isolated Windows worktree
+`C:\Users\Administrator\.codex\worktrees\phase51c-MediaCrawler`, branch
+`codex/phase-5.1c-account-identity-lifecycle`, starting from synchronized
+`main@100001e`.
+
+Result:
+
+- Added SQLite-authoritative account identity prepare, completion,
+  pre-login configuration, locked-change, and reset operations with atomic
+  customer-safe audit events.
+- QR, visible-browser, Cookie, Profile, verification-code, administrator
+  check, terminal failure, cancellation, and draft-confirmation paths now use
+  the same persisted lifecycle. QR status success alone does not lock an
+  account; the account-level check must pass.
+- Successful QR, Cookie, and Profile checks lock and activate the same
+  persisted identity with distinct reason codes. Unlocked failures recover to
+  `validated`; failed maintenance of an already locked account restores
+  `active` and preserves its prior lock.
+- Pre-login safe proxy/region/template-family changes regenerate and validate.
+  Locked changes preserve the active values and mark `requires_relogin`.
+  Administrator reset rejects login/run ownership, preserves Profile key,
+  legacy Profile metadata, encrypted Cookie, account ID, and platform identity,
+  rebuilds generated fields, and ends `validated`/`standby`.
+- The Platform Accounts drawer shows a safe environment summary, permits safe
+  pre-login configuration, requires an explicit change/reset action after
+  lock, and disables login/check actions while relogin/reset state blocks them.
+- CR-113 forwards only `proxy_region_snapshot` and
+  `identity_template_family` from the new-account QR route; generated fields
+  remain generator-owned.
+
+Verification:
+
+- Baseline before Phase 5.1C edits passed: `361 passed`.
+- Initial lifecycle RED passed as expected with `7 failed, 361 deselected`;
+  later route/terminal/audit RED iterations failed only at the missing
+  integration boundaries they were designed to prove.
+- Focused Phase 5.1C/CR-113 selection passed: `17 passed, 361 deselected`.
+- Full monitoring regression passed: `378 passed` with three pre-existing
+  deprecation warnings. The first full attempt exposed a Windows system-temp
+  ACL error; rerunning with a worktree-local pytest `--basetemp` removed that
+  environment-only error and passed.
+- Python compile passed for `account_identity.py`, `database.py`,
+  `account_check.py`, and `monitor.py`.
+- `scripts/check_docs.py` passed, and the documentation regression passed
+  (`1 passed`).
+- `git diff --check` passed with only expected Windows LF-to-CRLF notices.
+- Desktop and `390x844` browser checks passed with no console/page error or
+  horizontal overflow. Active accounts locked the environment controls while
+  keeping explicit change/reset actions visible; `requires_relogin` disabled
+  QR, visible-browser, and Cookie actions while keeping reset visible.
+- The independent Claude Code read-only full-diff review returned `PASS` with
+  no blocking finding, material non-blocking finding, or missing high-value
+  test. Phase 5.1C and CR-113 are technically verified; branch integration and
+  post-merge verification remain before Phase 5.1D code starts.
+
+Proof boundary:
+
+- This proves Phase 5.1C lifecycle, lock, failure recovery, safe configuration,
+  reset, audit, route, UI, concurrency, and CR-113 behavior without real
+  browser/Profile/Cookie/proxy/platform effects. It does not prove Phase 5.1D
+  provider launch binding, effective runtime probes, proxy transport,
+  `identity_runtime_snapshot_json`, Runner/CDP/default removal, final
+  server-like Phase 5.1 acceptance, CR-070, CR-094, or CR-112.
+
 ## 2026-07-19 - Phase 5.1B Account Identity Generation And Validation
 
 Environment: isolated Windows worktree

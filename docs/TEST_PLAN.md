@@ -29,9 +29,8 @@ governance goal.
   conditions.
 - The packet follows the current execution order unless a later accepted
   decision changes it: Phase 21 is merged and closed on `main`, Phase 5.1P and
-  Phase 5.1A-B are verified, Phase 5.1C is next, then Phase 5.1D, Phase 5.1
-  acceptance, and CR-070 / Phase 5.2 after CR-047 provider/effective snapshot
-  verification.
+  Phase 5.1A-C are verified, then Phase 5.1D, Phase 5.1 acceptance, and CR-070 / Phase
+  5.2 after CR-047 provider/effective snapshot verification.
 - Phase 21 packets remain frontend-visual only and preserve Task Center, Run
   Detail, drawer, modal, row-menu, select/date, close, scroll, refresh,
   routing, owner-scope, and permission behavior unless a separate accepted CR
@@ -231,6 +230,24 @@ requested/effective runtime snapshot contract.
   ownership, missing/contradictory field rejection, declared region bundles,
   missing bound proxy rejection, relogin/locked-proxy reasons, safe API/UI
   surfaces, and blocked-by-default account Playwright entrypoints.
+- Phase 5.1C lifecycle tests verify SQLite-authoritative prepare/completion,
+  all eight persisted states, QR-only lock after account-level verification,
+  Cookie/Profile lock reasons, unlocked failure recovery to `validated`,
+  locked maintenance recovery to `active`, and concurrent/relogin/reset
+  conflict behavior.
+- Phase 5.1C route tests verify QR and visible-browser prepare before launch,
+  terminal QR and verification-code recovery, explicit session deletion,
+  standalone and continued administrator checks, locked-safe configuration
+  changes, draft confirmation, reset HTTP 409 mapping, and CR-113 exact safe
+  field forwarding.
+- Phase 5.1C reset/audit tests verify Profile key, legacy Profile metadata,
+  encrypted Cookie, platform identity, and account ID survive reset; generated
+  fields and lock metadata are rebuilt; audit details use an exact safe
+  allowlist and preserve explicit `null` when a locked proxy is cleared.
+- Phase 5.1C UI tests verify safe environment summary/state labels, pre-login
+  editing, explicit locked change/reset flow, and login/check disabling for
+  `requires_relogin` and `resetting`, with no seed, runtime snapshot, Cookie,
+  raw Profile path, proxy credential, CDP, or noVNC exposure.
 - QR login, Cookie validation, and login-state checks resolve the same
   `profile_key`, account identity, proxy policy, user agent, timezone, locale,
   accept-language, viewport/screen, device flags, and provider mode.
@@ -1606,9 +1623,10 @@ Documentation-stage checks:
 - Before delivery, verify all five plan files and every CR-112 formal reference
   including `DATA_MODEL.md` and `SCHEMA_MIGRATION.md` are staged in one atomic
   commit; a partial commit fails the documentation acceptance gate.
-- Verify Phase 5.1P and Phase 5.1A-B remain recorded as verified, Phase 5.1C-D
-  remains owned by CR-047 with Phase 5.1C next, and CR-112 does not preempt the
-  accepted CR-070 / Phase 5.2 sequence without a later accepted decision.
+- Verify Phase 5.1P and Phase 5.1A-C remain recorded as verified, Phase 5.1D
+  remains owned by CR-047 and follows Phase 5.1C integration,
+  and CR-112 does not preempt the accepted CR-070 / Phase 5.2 sequence without
+  a later accepted decision.
 - Verify account/security and deployment sections are explicitly proposed and
   do not change the current server-first QR acceptance boundary.
 - Verify `DECISIONS.md`, CR-112, account-environment guidance, and all five

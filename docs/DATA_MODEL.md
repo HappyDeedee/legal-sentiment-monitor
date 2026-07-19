@@ -189,9 +189,10 @@ schema migration and become active when `init_db()` opens a database. Phase
 5.1B now generates and validates exact catalog values for every new account
 INSERT and persists them as `identity_state = generated` in the same
 transaction. Existing account UPDATEs preserve identity columns and do not
-silently backfill legacy rows. Phase 5.1C still owns lifecycle/locking/reset/
-audit transitions; Phase 5.1D still owns provider/runtime binding and effective
-snapshots. The fields make the browser identity inputs explicit and persistent:
+silently backfill legacy rows. Phase 5.1C now implements lifecycle/locking/
+reset/audit transitions without adding another schema migration; Phase 5.1D
+still owns provider/runtime binding and effective snapshots. The fields make
+the browser identity inputs explicit and persistent:
 
 - `environment_region`: customer-safe region bucket used for consistency
   checks, such as `CN_MAINLAND`, `HK`, or `SG`;
