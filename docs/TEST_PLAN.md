@@ -841,6 +841,11 @@ verification records.
 - Run a task using the server-side browser/profile.
 - Restart service/container and verify profile reuse.
 - Verify no acceptance step depends on local Chrome.
+- CR-115 synthetic cleanup tests simulate transient Windows deletion locks and
+  prove the lower-strength validator retries generated temporary data removal,
+  reports path-safe cleanup status, and does not treat residual SQLite/WAL
+  files as success. Explicit `--data-dir` and `--keep-data` remain retained by
+  design.
 
 ## Minimum Usable Pilot Acceptance Tests
 

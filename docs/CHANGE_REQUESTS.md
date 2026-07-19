@@ -4713,6 +4713,76 @@ Verification:
   compile/documentation gates pass. CR-114 is closed; the separate Phase 5.1
   server-like acceptance packet is now the next unit.
 
+## CR-115 - Server-Like Validation Temporary Data Cleanup Regression Fix
+
+Date: 2026-07-20
+
+Source: repeated Phase 5.1 Task 3 Windows lower-strength preflight on merged
+`main@808822a`.
+
+Module: `scripts/server_like_validation.py` temporary validation lifecycle.
+
+Type: Regression Fix
+
+Status: Implemented
+
+Background:
+
+Two successful default invocations completed all 11 synthetic server-like
+checks but left `monitor.sqlite`, `monitor.sqlite-shm`, and
+`monitor.sqlite-wal` under their generated temporary directories. The script
+stopped its service process and then called
+`shutil.rmtree(data_dir, ignore_errors=True)` once. A transient Windows file
+lock was therefore silently treated as successful cleanup; the same directory
+could be removed immediately after the validator process exited.
+
+Requirements:
+
+- Keep the existing isolated synthetic server-like checks and their external
+  side-effect boundary unchanged.
+- After the service process is stopped, retry temporary-directory removal for
+  a small bounded interval when Windows reports a transient filesystem error.
+- Do not use `ignore_errors=True` or report final success while generated
+  SQLite/WAL files remain.
+- Emit one structured `temporary_data_cleanup` result and return nonzero if
+  bounded cleanup still fails, without exposing database content or adding
+  runtime artifacts to Git.
+- Preserve explicit `--data-dir` and `--keep-data` behavior; those operator-
+  requested directories are retained.
+
+Scope boundary:
+
+- This follow-up changes only the lower-strength validation script, its
+  synthetic test, and governance evidence. It does not change product runtime,
+  database schema, browser Provider behavior, account/Profile/Cookie/proxy
+  state, Docker/WSL configuration, or real Phase 5.1 acceptance.
+- Phase 8 remains historical. CR-115 owns the newly reproduced cleanup defect.
+
+Acceptance:
+
+- A RED regression simulates two transient removal failures and proves the old
+  single ignored removal leaves the directory behind.
+- The fixed script retries, removes the directory, records successful cleanup,
+  and returns success only after cleanup completes.
+- A real lower-strength preflight rerun passes and its reported temporary
+  directory no longer exists after process exit.
+- Focused/full tests, documentation checks, Python compile, and independent
+  read-only review pass before merge.
+
+Verification:
+
+- RED reproduced the old behavior: the synthetic transient-lock test observed
+  one ignored deletion attempt instead of the required three attempts.
+- Four focused tests pass for transient retry, permanent structured failure,
+  explicit `--data-dir`, and `--keep-data` retention.
+- A real lower-strength preflight passes all 12 checks including
+  `temporary_data_cleanup`; its generated directory is absent after exit and
+  default temporary-mode output contains only a safe directory name rather
+  than an absolute local path.
+- The complete monitor suite passes (`538 passed`) with the same three existing
+  warnings. Python compile and independent read-only review pass. PR integration
+  and post-merge verification remain open.
+
 ## CR-056 - Filter Dropdown Alignment Regression Fix
 
 Date: 2026-06-18

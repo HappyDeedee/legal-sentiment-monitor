@@ -558,6 +558,24 @@ compile, and documentation gates pass.
       full-diff review with no blocking or material finding.
 - [x] Integrate through PR #6 and rerun post-merge verification.
 
+### CR-115 - Server-Like Validation Temporary Data Cleanup Regression Fix
+
+Implementation status (2026-07-20): implemented and technically verified after two repeated Windows
+lower-strength preflight runs on `main@808822a` left generated SQLite/WAL files
+because one `ignore_errors=True` removal silently lost a transient lock error.
+PR integration and post-merge verification remain open.
+
+- [x] Add a synthetic RED that simulates transient Windows removal failures.
+- [x] Retry bounded temporary cleanup after the validation service stops.
+- [x] Return structured cleanup failure instead of reporting success with
+      generated files still present.
+- [x] Preserve explicit `--data-dir` and `--keep-data` retention behavior.
+- [x] Rerun the real lower-strength preflight and prove its generated directory
+      is absent after exit.
+- [x] Complete focused/full/docs/compile and independent read-only review.
+- [ ] Merge this follow-up and complete post-merge verification before resuming
+      Phase 5.1 Task 3.
+
 ### Phase 5.1 Acceptance Gate - Runtime Snapshot And Server-Like Verification
 
 Execution status (2026-07-19): the atomic packet is documentation-consistent
