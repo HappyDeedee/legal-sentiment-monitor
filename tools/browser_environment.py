@@ -239,9 +239,9 @@ class ManagedBrowserSession:
 
 _cached_plan: BrowserEnvironmentPlan | None = None
 _cache_lock = threading.Lock()
-_context_plans: dict[int, BrowserEnvironmentPlan] = {}
-_context_runtime: dict[int, dict[str, Any]] = {}
-_prepared_pages: set[int] = set()
+_CONTEXT_PLAN_ATTR = "_monitor_browser_environment_plan"
+_CONTEXT_RUNTIME_ATTR = "_monitor_browser_environment_runtime"
+_PAGE_PREPARED_ATTR = "_monitor_browser_environment_prepared"
 
 
 def browser_environment_plan_to_json(plan: BrowserEnvironmentPlan) -> str:
@@ -398,9 +398,9 @@ async def verify_managed_page(context: Any, page: Any) -> BrowserEnvironmentResu
     plan = _context_plan(context) or current_managed_plan()
     if plan is None:
         return None
-    if plan.launch_mode == "cdp_launch" and id(page) not in _prepared_pages:
+    if plan.launch_mode == "cdp_launch" and not _page_is_prepared(page, plan):
         failure = BrowserEnvironmentError("account_identity_provider_unsupported", "cdp_page_unprepared")
-        runtime = _context_runtime.get(id(context), {})
+        runtime = _context_runtime_state(context)
         failure.browser_environment_result = browser_environment_failure_result(
             plan,
             failure.reason,
@@ -427,7 +427,7 @@ async def verify_managed_page(context: Any, page: Any) -> BrowserEnvironmentResu
         )
         if not isinstance(probes, dict):
             raise TypeError("invalid probe result")
-        runtime = _context_runtime.get(id(context), {})
+        runtime = _context_runtime_state(context)
         accept_language = str(runtime.get("accept_language") or "")
         browser = getattr(context, "browser", None)
         browser_version = str(getattr(browser, "version", "") or "")
@@ -539,7 +539,7 @@ async def verify_managed_page(context: Any, page: Any) -> BrowserEnvironmentResu
         raise
     except Exception as exc:
         failure = BrowserEnvironmentError("account_identity_provider_browser_crashed", "page")
-        runtime = _context_runtime.get(id(context), {})
+        runtime = _context_runtime_state(context)
         failure.browser_environment_result = browser_environment_failure_result(
             plan,
             failure.reason,
@@ -632,10 +632,10 @@ async def prepare_managed_page(context: Any, page: Any) -> None:
     plan = _context_plan(context) or current_managed_plan()
     if plan is None:
         return
-    if id(page) in _prepared_pages:
+    if _page_is_prepared(page, plan):
         return
     if plan.launch_mode != "cdp_launch":
-        _prepared_pages.add(id(page))
+        _mark_page_prepared(page, plan)
         return
     commands = (
         (
@@ -665,9 +665,10 @@ async def prepare_managed_page(context: Any, page: Any) -> None:
         session = await context.new_cdp_session(page)
         for method, params in commands:
             await session.send(method, params)
+        _mark_page_prepared(page, plan)
     except Exception as exc:
         failure = BrowserEnvironmentError("account_identity_provider_unsupported", "cdp_page_prepare")
-        runtime = _context_runtime.get(id(context), {})
+        runtime = _context_runtime_state(context)
         failure.browser_environment_result = browser_environment_failure_result(
             plan,
             failure.reason,
@@ -675,7 +676,6 @@ async def prepare_managed_page(context: Any, page: Any) -> None:
         )
         write_browser_environment_result(failure.browser_environment_result)
         raise failure from exc
-    _prepared_pages.add(id(page))
 
 
 def validate_safe_runtime_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:
@@ -839,24 +839,49 @@ def write_browser_environment_result(result: BrowserEnvironmentResult) -> None:
 
 
 def _bind_context_plan(context: Any, plan: BrowserEnvironmentPlan) -> None:
-    _context_plans[id(context)] = plan
-    _context_runtime[id(context)] = {
+    runtime = {
         "accept_language": "",
         "proxy_effect_proof": "pending" if plan.proxy_policy == "account_bound" else "not_applicable",
     }
     try:
-        setattr(context, "_monitor_browser_environment_plan", plan)
-        setattr(
-            context,
-            "_monitor_proxy_effect_proof",
-            _context_runtime[id(context)]["proxy_effect_proof"],
-        )
-    except (AttributeError, TypeError):
-        pass
+        setattr(context, _CONTEXT_PLAN_ATTR, plan)
+        setattr(context, _CONTEXT_RUNTIME_ATTR, runtime)
+        setattr(context, "_monitor_proxy_effect_proof", runtime["proxy_effect_proof"])
+    except Exception as exc:
+        raise BrowserEnvironmentError(
+            "account_identity_provider_unsupported",
+            "context_binding",
+        ) from exc
 
 
 def _context_plan(context: Any) -> BrowserEnvironmentPlan | None:
-    return _context_plans.get(id(context)) or getattr(context, "_monitor_browser_environment_plan", None)
+    plan = getattr(context, _CONTEXT_PLAN_ATTR, None)
+    if plan is None:
+        return None
+    if not isinstance(plan, BrowserEnvironmentPlan):
+        raise BrowserEnvironmentError("account_identity_provider_unsupported", "context_binding")
+    return plan
+
+
+def _context_runtime_state(context: Any) -> dict[str, Any]:
+    runtime = getattr(context, _CONTEXT_RUNTIME_ATTR, None)
+    if not isinstance(runtime, dict):
+        raise BrowserEnvironmentError("account_identity_provider_unsupported", "context_binding")
+    return runtime
+
+
+def _page_is_prepared(page: Any, plan: BrowserEnvironmentPlan) -> bool:
+    return getattr(page, _PAGE_PREPARED_ATTR, None) == (plan.resolution_id, plan.attempt_id)
+
+
+def _mark_page_prepared(page: Any, plan: BrowserEnvironmentPlan) -> None:
+    try:
+        setattr(page, _PAGE_PREPARED_ATTR, (plan.resolution_id, plan.attempt_id))
+    except Exception as exc:
+        raise BrowserEnvironmentError(
+            "account_identity_provider_unsupported",
+            "cdp_page_binding",
+        ) from exc
 
 
 def _attach_accept_language_recorder(context: Any) -> None:
@@ -869,7 +894,7 @@ def _attach_accept_language_recorder(context: Any) -> None:
             "",
         )
         if value:
-            _context_runtime.setdefault(id(context), {})["accept_language"] = value
+            _context_runtime_state(context)["accept_language"] = value
 
     try:
         context.on("request", record)
@@ -916,7 +941,7 @@ async def _prove_managed_proxy(context: Any, plan: BrowserEnvironmentPlan) -> No
 
 
 def _set_proxy_effect(context: Any, value: str) -> None:
-    _context_runtime.setdefault(id(context), {})["proxy_effect_proof"] = value
+    _context_runtime_state(context)["proxy_effect_proof"] = value
     try:
         setattr(context, "_monitor_proxy_effect_proof", value)
     except (AttributeError, TypeError):

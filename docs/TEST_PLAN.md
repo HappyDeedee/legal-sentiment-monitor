@@ -28,9 +28,9 @@ governance goal.
   acceptance criteria, rollback or recovery, documentation updates, and stop
   conditions.
 - The packet follows the current execution order unless a later accepted
-  decision changes it: Phase 21 is merged and closed on `main`, Phase 5.1P and
-  Phase 5.1A-C are verified, then Phase 5.1D, Phase 5.1 acceptance, and CR-070 / Phase
-  5.2 after CR-047 provider/effective snapshot verification.
+  decision changes it: Phase 21 and Phase 5.1A-D are merged and verified,
+  CR-114 integrates and is post-merge verified, then Phase 5.1 acceptance and
+  CR-070 / Phase 5.2 after CR-047 provider/effective snapshot verification.
 - Phase 21 packets remain frontend-visual only and preserve Task Center, Run
   Detail, drawer, modal, row-menu, select/date, close, scroll, refresh,
   routing, owner-scope, and permission behavior unless a separate accepted CR
@@ -272,6 +272,10 @@ requested/effective runtime snapshot contract.
   operator settings appear in environment examples; internal plan/result
   handoff variables remain absent. Inline monitor JavaScript must parse after
   the compact runtime summary is added.
+- CR-114 deterministically simulates repeated numeric object IDs and verifies
+  two BrowserContexts retain separate plans while both CDP Pages execute their
+  own pre-navigation preparation. The test must fail against the merged
+  Phase 5.1D ID-keyed collections and pass with object-scoped bindings.
 - QR login, Cookie validation, and login-state checks resolve the same
   `profile_key`, account identity, proxy policy, user agent, timezone, locale,
   accept-language, viewport/screen, device flags, and provider mode.
@@ -1647,8 +1651,8 @@ Documentation-stage checks:
 - Before delivery, verify all five plan files and every CR-112 formal reference
   including `DATA_MODEL.md` and `SCHEMA_MIGRATION.md` are staged in one atomic
   commit; a partial commit fails the documentation acceptance gate.
-- Verify Phase 5.1P and Phase 5.1A-C remain recorded as verified, Phase 5.1D
-  remains owned by CR-047 and follows Phase 5.1C integration,
+- Verify Phase 5.1P and Phase 5.1A-D remain recorded as verified and merged,
+  CR-114 remains the separate post-5.1D regression owner,
   and CR-112 does not preempt the accepted CR-070 / Phase 5.2 sequence without
   a later accepted decision.
 - Verify account/security and deployment sections are explicitly proposed and

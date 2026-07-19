@@ -384,7 +384,8 @@ schema/account regression tests), the full monitoring suite passed (`352
 passed`), and the final read-only review returned `READY` with no finding.
 Phase 5.1B is also implemented and verified. Phase 5.1C lifecycle work is
 implemented, independently verified, merged, and rechecked; Phase 5.1D is
-technically verified on its isolated branch and awaits integration.
+merged and post-merge verified. CR-114 is the active follow-up before final
+server-like acceptance.
 
 - [x] Start only after Phase 5.1P is complete and confirms the provider,
       MediaCrawler, and container/server-like compatibility boundary. Verified
@@ -420,7 +421,8 @@ baseline `main@f8be522`. Focused Phase 5.1B tests pass (`9 passed`) and the
 full monitor suite passes (`361 passed`). Final independent diff review and
 integration evidence are recorded in `TEST_RESULTS.md`. Phase 5.1C lifecycle
 work is implemented, independently verified, merged, and rechecked; Phase
-5.1D is technically verified and awaits integration.
+5.1D is merged and post-merge verified. CR-114 is the active follow-up before
+final server-like acceptance.
 
 - [x] Add an Account Identity Generator that uses workspace, platform,
       account, proxy/region policy, automatic template selection or a
@@ -472,8 +474,8 @@ the full `378`-test monitoring suite, Python compile, documentation gates,
 desktop/mobile browser checks, and an independent Claude Code full-diff review
 pass in `codex/phase-5.1c-account-identity-lifecycle` from `main@100001e`.
 PR #4 is merged as `main@2adf661`; post-merge full monitoring, compile, and
-documentation gates pass. Phase 5.1D is technically verified in
-`codex/phase-5.1d-browser-runtime-binding` and awaits integration.
+documentation gates pass. Phase 5.1D later merged through PR #5 and passed
+post-merge verification on `main@86e9d02`; CR-114 is its active follow-up.
 
 - [x] Implement the persisted `identity_state` lifecycle from
       `ACCOUNT_ENVIRONMENT.md`: `draft`, `generated`, `validated`,
@@ -502,15 +504,16 @@ documentation gates pass. Phase 5.1D is technically verified in
 
 ### Phase 5.1D - Login And Crawl Runtime Binding
 
-Implementation status (2026-07-19): technically verified before integration
-from merged `main@2adf661` in
-`codex/phase-5.1d-browser-runtime-binding`. The atomic execution packet is
+Implementation status (2026-07-19): merged and post-merge verified. PR #5
+merged `codex/phase-5.1d-browser-runtime-binding` into `main@86e9d02`. The
+atomic execution packet is
 `docs/superpowers/plans/2026-07-19-phase-5.1d-browser-runtime-binding.md`.
-Focused Phase 5.1B-D tests pass (`131 passed`) and the complete monitoring
-suite passes (`484 passed`). Compile, documentation, JavaScript parse,
-desktop/mobile browser checks, and the independent Claude Code full-diff review
-pass. Commit/PR integration and post-merge verification remain; Phase 5.1
-acceptance remains a separate post-5.1D gate.
+Post-merge focused Phase 5.1B-D tests pass (`131 passed`) and the complete
+monitoring suite passes (`484 passed`). Compile, documentation, JavaScript
+parse, desktop/mobile browser checks, and the independent Claude Code full-diff
+review pass. CR-114 now owns the later-discovered object-ID reuse regression;
+it does not rewrite Phase 5.1D history. Phase 5.1 acceptance remains a separate
+gate after CR-114 integrates.
 
 - [x] Ensure QR login launch options use the persisted environment values
       rather than process defaults for user agent, viewport/screen, locale,
@@ -536,9 +539,28 @@ acceptance remains a separate post-5.1D gate.
       overrides, hidden process-default fallback, and default-network fallback
       before browser or crawler launch.
 
+### CR-114 - Browser Runtime Binding Object Identity Collision Regression Fix
+
+Implementation status (2026-07-19): implemented and locally verified in
+`codex/cr-114-browser-binding-object-identity` from merged `main@86e9d02`.
+Independent review, PR integration, and post-merge verification remain open.
+
+- [x] Reproduce the Context/Page numeric-ID reuse defect with a deterministic
+      regression test before changing production code.
+- [x] Replace process-global numeric-ID plan/runtime/prepared collections with
+      exact object-scoped bindings tied to the current resolution and attempt.
+- [x] Preserve fail-closed CDP command ordering, safe result handling, and all
+      Phase 5.1D managed no-fallback boundaries.
+- [x] Run adjacent CDP tests, focused Phase 5.1B-D tests, and the full monitor
+      suite serially.
+- [x] Complete Python compile, documentation checks, and independent read-only
+      full-diff review with no blocking or material finding.
+- [ ] Integrate through a PR and rerun post-merge verification.
+
 ### Phase 5.1 Acceptance Gate - Runtime Snapshot And Server-Like Verification
 
-- [ ] Start only after Phase 5.1P and Phase 5.1A-D are complete and verified.
+- [ ] Start only after Phase 5.1P and Phase 5.1A-D are complete and verified,
+      and the CR-114 object-identity regression fix is merged and reverified.
 - [ ] Verify QR login, Cookie validation, login-state checks, manual runs,
       scheduler runs, runner behavior, and MediaCrawler CDP launch/reconnect
       resolve the same BrowserEnvironmentProvider output.
@@ -1755,8 +1777,8 @@ Planning status:
 CR-112 is a proposed new capability and remains `Needs Confirmation`. This
 documentation synchronization does not authorize product code, schema, UI,
 extension, Profile, Cookie, connector, runtime, deployment, or database
-changes. Phase 5.1P and Phase 5.1A-C are verified, and Phase 5.1D is technically
-verified pending integration.
+changes. Phase 5.1P and Phase 5.1A-D are verified and merged; CR-114 remains a
+separate follow-up pending integration before final server-like acceptance.
 CR-112 does not preempt CR-070 / Phase 5.2 while its sequencing is
 unconfirmed.
 
