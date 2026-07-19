@@ -111,6 +111,8 @@ Status values:
 - CR-108: Local/Server Login Initialization And Verification Flow Hardening
 - CR-109: Monitoring Task Collection Rule Explanation Removal
 - CR-110: QR Login SMS Verification Manual Submission Regression Fix
+- CR-111: Current-Main Documentation State Synchronization
+- CR-112: Local Browser Auto-Sync Cookie Acquisition
 - CR-096: AI Evaluation Postprocessing Scope Reduction
 - CR-075: Responsive Navigation Interaction Consistency
 - CR-076: Mobile Header Layout Resilience Regression Fix
@@ -458,7 +460,7 @@ Reason:
 The target data model is ahead of the current schema. A migration plan is needed
 to avoid breaking existing monitoring data and account profiles.
 
-Status: Implemented
+Status: Verified
 
 Related tasks:
 
@@ -490,7 +492,7 @@ Reason:
 Phase 2 needs a concrete configuration example and deployment operators need a
 safe starting point.
 
-Status: Implemented
+Status: Verified
 
 Related tasks:
 
@@ -626,7 +628,7 @@ Reason:
 `ROLES_AND_PERMISSIONS.md` defines permissions, but coding agents also need a
 concrete API/auth contract to avoid inconsistent FastAPI implementations.
 
-Status: Implemented
+Status: Verified
 
 Related tasks:
 
@@ -659,7 +661,7 @@ Reason:
 The product must be deployed on a server and validated through the web UI, not
 through the operator's local browser.
 
-Status: Implemented
+Status: Verified
 
 Related tasks:
 
@@ -693,7 +695,7 @@ Reason:
 The task list required a documentation check script, but no specification
 existed for coding agents to implement it consistently.
 
-Status: Implemented
+Status: Verified
 
 Related tasks:
 
@@ -758,7 +760,7 @@ The settings fields and categories are documented, but the exact UI pattern
 for grouping, apply-scope display, and locked-setting display should be clear
 before implementation.
 
-Status: Accepted
+Status: Verified
 
 Related tasks:
 
@@ -793,7 +795,7 @@ monitoring-layer filtering, approximate conversion, or a combination of these.
 Product copy, tests, and implementation plans must avoid overpromising exact
 page or time-window behavior.
 
-Status: Accepted
+Status: Verified
 
 Related tasks:
 
@@ -831,7 +833,7 @@ The current navigation hierarchy is hard to understand, Resource Management and
 System Configuration use popover menus that are difficult on mobile, and the
 user identity/logout area has weak visual grouping.
 
-Status: Accepted
+Status: Verified
 
 Related tasks:
 
@@ -868,7 +870,7 @@ table density, empty states, loading states, floating menus, and responsive
 behavior need to be governed as one system instead of being patched page by
 page.
 
-Status: Accepted
+Status: Verified
 
 Related tasks:
 
@@ -905,7 +907,7 @@ The current overview is stretched by system status content, feels mostly
 textual, and does not give operators a clear visual understanding of monitoring
 activity or next actions.
 
-Status: Accepted
+Status: Verified
 
 Related tasks:
 
@@ -939,7 +941,7 @@ The current run center has no pagination, limited filtering, no practical
 delete/hide behavior, and presents repeated or skipped records in a way that
 feels noisy.
 
-Status: Accepted
+Status: Verified
 
 Related tasks:
 
@@ -975,7 +977,7 @@ The current report center behaves like one flat list, which makes it difficult
 to connect reports back to a law-firm monitoring task. Existing `reports.job_id`
 can be nullable, so historical reports need independent task context.
 
-Status: Accepted
+Status: Verified
 
 Related tasks:
 
@@ -1008,7 +1010,7 @@ The user reported receiving multiple emails even though only one monitoring
 task was configured. Current email sending is state-light and does not record
 delivery attempts in a way that supports idempotency or operator review.
 
-Status: Accepted
+Status: Verified
 
 Related tasks:
 
@@ -1048,7 +1050,7 @@ Reason:
 The `reports` table only stores latest email status/error and cannot represent
 multiple attempts, manual resend, or idempotent automatic delivery history.
 
-Status: Accepted
+Status: Verified
 
 Related tasks:
 
@@ -1090,7 +1092,7 @@ Reason:
 The run center needs to hide duplicate or low-value operational noise while
 preserving execution history for administrators and audits.
 
-Status: Accepted
+Status: Verified
 
 Related tasks:
 
@@ -1127,7 +1129,7 @@ migration would add risk before the product flow, visual system, responsive
 rules, run governance, report grouping, and email delivery behavior are
 stabilized.
 
-Status: Accepted
+Status: Verified
 
 Related tasks:
 
@@ -1162,7 +1164,7 @@ A single-phase readiness review can incorrectly conclude that one small batch
 is safe while missing whether the full roadmap is coherent, sufficiently
 landable, and aligned with the monitoring task-loop product goal.
 
-Status: Accepted
+Status: Verified
 
 Related tasks:
 
@@ -1313,7 +1315,7 @@ Non-goals:
 - Do not expose raw output paths, crawler commands, cookies, profile paths, or
   platform secrets in customer-facing UI.
 
-Status: Accepted
+Status: Verified
 
 Related tasks:
 
@@ -1488,7 +1490,7 @@ Non-goals:
   persisted.
 - Do not introduce a new frontend framework or build pipeline.
 
-Status: Accepted
+Status: Verified
 
 Related tasks:
 
@@ -1519,7 +1521,7 @@ Module: deployment/startup ergonomics
 
 Type: Existing Feature Optimization
 
-Status: Accepted
+Status: Verified
 
 Background:
 
@@ -1586,7 +1588,7 @@ login, local Windows first-run login initialization, Docker/server packaging.
 
 Type: Existing Feature Optimization and Regression Fix
 
-Status: In Progress
+Status: Verified
 
 Background:
 
@@ -1713,7 +1715,7 @@ Module: Monitoring task page frontend.
 
 Type: Existing Feature Optimization
 
-Status: Implemented
+Status: Verified
 
 Scope:
 
@@ -1744,7 +1746,7 @@ modal frontend.
 
 Type: Regression Fix
 
-Status: Implemented
+Status: Verified
 
 Background:
 
@@ -1800,6 +1802,309 @@ Acceptance:
   does not click send/resend controls as submit.
 - Automated tests cover route behavior, server-page submission, send-code
   clicks, frontend rendering, inline validation, and login regression scope.
+
+## CR-111 - Current-Main Documentation State Synchronization
+
+Date: 2026-07-12
+
+Source: user request to synchronize all project governance documents against
+the code and verification evidence currently merged on `main`.
+
+Module: documentation governance, current state, task lifecycle, validation,
+and traceability.
+
+Type: Documentation Governance and Regression Fix
+
+Status: Verified
+
+Background:
+
+The current code baseline is `main` at `abb4d66`. The product implementation,
+tests, and traceability records show that several CRs are verified, while some
+older lifecycle labels still say `Accepted`, `In Progress`, or `Implemented`.
+`TASKS.md` also keeps five unchecked CR-107 planning items beside a completed
+implementation checklist, `CURRENT_STATE.md` still contains pre-merge wording
+for Phase 21 and CR-107 through CR-110, CR-052 lacks a traceability row, and
+CR-066 lacks a `Status` field. The existing automated documentation check
+passes because it validates structure and references, not every semantic
+lifecycle comparison.
+
+Purpose:
+
+Make the human-readable governance documents describe the actual current-main
+baseline without reopening completed work, promoting future or gated work, or
+changing product behavior.
+
+Current Baseline:
+
+- Baseline source: clean `main` at `abb4d66`, matching the current local
+  `origin/main` tracking reference.
+- Baseline evidence read: current Git/worktree state, all open `TASKS.md`
+  checkboxes, CR statuses, traceability rows, current-state text, test plans,
+  test results, recent commit contents, relevant implementation symbols, and
+  targeted/full validation commands.
+- Existing behavior to preserve: Phase 21 remains closed; CR-107 through
+  CR-110 remain current-main history; Phase 5.1P remains the first unblocked
+  lane; Phase 5.1A-D and Phase 5.2 remain dependency-gated; `Needs
+  Confirmation`, deferred, operator-gated, and historical items remain
+  non-executable.
+- Out of scope: product code, UI behavior, schema, runtime data, account
+  profiles, cookies, local databases, deployment secrets, and old-worktree
+  mutation or merge.
+- Old-baseline conflict rule: current `main` plus verified current documents
+  win over stale planning labels, unmerged worktree content, old screenshots,
+  or chat history.
+
+Scope Boundary:
+
+- Synchronize CR lifecycle labels only where current code, completed tasks,
+  traceability, and recorded verification provide sufficient evidence.
+- Mark the duplicate unchecked CR-107 planning checklist complete while
+  preserving its verified implementation checklist.
+- Repair current-state wording and keep the next allowed lane explicit.
+- Add missing CR-052 traceability and CR-066 status metadata.
+- Fix the documentation check's `Needs Confirmation` parser so a later CR's
+  status cannot be attributed to an earlier CR section.
+- Record semantic status-review guidance without claiming it is already an
+  automated `scripts/check_docs.py` check.
+- Append validation evidence for this documentation-only synchronization.
+
+Non-goals:
+
+- Do not implement Phase 5.1, Phase 5.2, CR-092, CR-093, CR-094, CR-106B, or
+  any operator-gated historical repair.
+- Do not treat Docker Compose configuration validation as proof that this host
+  can run Linux containers or that production deployment is accepted.
+- Do not treat unit/static tests as new real-platform, SMTP, AI-provider, or
+  production-pilot evidence.
+- Do not merge, reset, clean, or delete the old server-login worktree.
+
+Related tasks:
+
+- CR-111 task block in `TASKS.md`.
+- CR-111 semantic alignment checks in `TEST_PLAN.md`.
+- CR-111 row in `TRACEABILITY.md`.
+- CR-111 evidence entry in `TEST_RESULTS.md` after verification.
+
+Acceptance:
+
+- Lifecycle labels, task completion, current-state wording, and traceability
+  no longer contradict verified current-main evidence.
+- Remaining unchecked tasks are only current, dependency-blocked,
+  future-only, `Needs Confirmation`, or operator-gated work.
+- Phase 5.1P remains the first unblocked lane and no future/gated item is
+  promoted to implementation-ready.
+- `GOAL.md`, `DECISIONS.md`, specialist product documents, README, and
+  deployment documents remain unchanged when their existing statements match
+  current code and proof boundaries.
+- Documentation consistency, machine-readable dry-run validation, relevant
+  tests, Docker Compose configuration, and whitespace checks pass.
+- A focused regression test proves `Needs Confirmation` detection does not
+  cross CR section boundaries.
+
+## CR-112 - Local Browser Auto-Sync Cookie Acquisition
+
+Date: 2026-07-19
+
+Source: user request to improve local account login by automatically acquiring
+and validating Cookie material from a project-managed browser, followed by a
+Claude Code cross-validation request and formal project-document synchronization.
+
+Module: platform account login, browser environment, Cookie acquisition,
+multi-account binding, local deployment, and login UI.
+
+Type: New Capability
+
+Status: Needs Confirmation
+
+Background:
+
+The current product supports server-side QR login, a local visible-browser
+fallback, and manually pasted Cookie login. The local visible-browser fallback
+still requires the operator to return to the monitor and complete follow-up
+steps, while manual Cookie login requires external copying and pasting. A
+CookieBridge reference implementation demonstrates browser-extension Cookie
+observation, but the evaluated source uses an unauthenticated `client_id`, can
+select an arbitrary available client, hardcodes `ws://localhost:8274/ws`, keeps
+connection/cache state in memory, requires Python 3.12 for its reference
+server, and is licensed for non-commercial learning use.
+
+Purpose:
+
+Plan an optional local-desktop workflow in which the monitor opens a dedicated
+application-managed Chrome or Edge Profile, the user completes normal platform
+login in that browser, a project-owned compatible extension synchronizes the
+exact account's Cookie material to a loopback connector, and the monitor
+validates and encrypts the Cookie without manual copy/paste. Preserve the
+server-first QR production boundary and the advanced manual Cookie path.
+
+Proposed Product Boundary:
+
+- Keep the backend login types `qrcode` and `cookie`; represent automatic and
+  manual Cookie acquisition with `cookie_source=bridge|manual` rather than a
+  third login type.
+- Keep QR login as the default user-facing method. Show local browser auto-sync
+  only when the feature is enabled and healthy. Keep manual Cookie entry in a
+  collapsed advanced section and do not automatically promote it after a
+  Bridge failure.
+- Use an application-managed persistent Profile derived from `profile_key`.
+  Do not depend on the user's default Chrome Profile, a Google account, manual
+  Chrome Profile creation, extension-store installation, or developer-tools
+  Cookie copying.
+- Resolve a valid explicit `MONITOR_BROWSER_EXECUTABLE` first, then Chrome,
+  Edge, and supported Chromium. Chrome remains preferred when Chrome and Edge
+  both exist.
+- Limit V1 auto-sync to a same-host Windows local-desktop topology. The
+  project-owned connector is proposed as a feature-gated WebSocket module in
+  the existing Python 3.11 FastAPI service and accepts extension connections
+  only through loopback.
+- Because the monitor service may listen on `0.0.0.0`, enforce locality from
+  the server-side socket peer rather than only from the extension URL. Accept
+  only a parseable loopback peer (`127.0.0.1` or `::1`), ignore
+  `X-Forwarded-For`/`Forwarded` for this authorization decision, require the
+  exact stable `chrome-extension://<extension-id>` Origin, and reject invalid
+  peer or Origin before WebSocket acceptance.
+- When the feature is disabled, do not mount the connector route so the
+  handshake receives 404. When enabled, reverse proxies must deny and must not
+  forward `/api/monitor/cookie-bridge/`; LAN-address access, spoofed forwarding
+  headers, missing/wrong Origin, and reverse-proxy access must fail before
+  connector protocol state.
+- Keep production/server acceptance on the current server-started QR browser
+  and server-persisted Profile. Local Chrome/Edge success is not production
+  acceptance. Remote/cross-host Bridge and headless Bridge support remain
+  outside V1 unless a later accepted decision and test result add them.
+
+Proposed Identity And Security Contract:
+
+- `social_account` plus `profile_key` remains account identity authority.
+  QR-mode execution remains Profile-authoritative. Cookie-mode V1 execution
+  remains authoritative on the encrypted, platform-verified Cookie currently
+  passed through `runner.py --cookies`; the Profile supports acquisition and
+  browser state but does not silently replace that runtime contract.
+- Reuse the existing draft-account flow so every new browser-sync session has a
+  persisted account id and assigned `profile_key` before browser launch.
+- Pair one login session to one extension `client_id` with a cryptographically
+  random single-use token, short expiry, atomic consume, stable extension
+  origin, Profile-scoped reconnect credential, credential rotation/revocation,
+  and exact request/response ids.
+- Never select the first, newest, or only connected client implicitly. Empty,
+  stale, late, replayed, wrong-origin, wrong-Profile, or wrong-platform claims
+  fail closed and do not replace the previous verified Cookie.
+- Store raw Cookies only through the existing encrypted account mechanism.
+  Store only pairing/credential hashes server-side and redact Cookie, token,
+  credential, raw Profile path, proxy secret, and extension internals from UI,
+  logs, diagnostics, tests, and documentation evidence.
+- Treat the temporary third-party CookieBridge source as evaluation evidence
+  only. Product delivery requires written permission for the intended use or a
+  project-owned compatible implementation; the proposed default is a
+  project-owned implementation without copying restricted source.
+- Classify current `runner.py --cookies` behavior as a pre-existing secret
+  exposure risk because decrypted Cookie material can appear in OS process
+  arguments and diagnostics. Before Packet C starts, accept one explicit path:
+  an independently governed secure child-secret transport change, or a
+  time-bounded local-only risk acceptance with owner, expiry, environment
+  boundary, and no production-security claim. CR-112 must not silently change
+  the runner contract or silently accept this risk.
+
+Dependencies And Sequencing:
+
+- Phase 5.1P remains the first unblocked lane and is read-only.
+- Phase 5.1A-D and the Phase 5.1 acceptance gate remain owned by CR-047 and
+  must complete before any CR-112 product implementation.
+- CR-070 / Phase 5.2 retains its currently accepted position after CR-047.
+  CR-112 does not preempt or silently reorder CR-070 while this CR is `Needs
+  Confirmation`; a later accepted sequencing decision must place the CR-112
+  compatibility spike and implementation packets.
+- CR-112 Packet B is a disposable compatibility/pairing/protocol spike only.
+  Packet C contains local feature implementation. Packet D contains
+  clean-computer and deployment acceptance. Each packet keeps its own start,
+  exit, rollback, and stop gates.
+
+Non-goals:
+
+- No captcha, slider, device, or SMS bypass.
+- No SMS receiving automation.
+- No complex account rotation or dynamic proxy scheduling.
+- No use of personal/default browser Profiles.
+- No remote Bridge, cross-host Cookie transport, or local-browser-as-server
+  production acceptance.
+- No Firefox, Safari, or unverified Chromium-fork support.
+- No third-party restricted-source bundling.
+- No product-wide Python 3.12 upgrade or second connector service lifecycle.
+- No implicit acceptance of raw Cookie exposure through subprocess arguments.
+  A secure transport change needs an accepted owner and boundary; temporary
+  acceptance must be explicit, local-only, and time-bounded.
+- No Task Center, Run Detail, report, email, AI, role, or crawler-provider
+  architecture changes.
+
+Required Confirmations:
+
+- Confirm the same-host Windows local-desktop scope for V1 auto-sync.
+- Confirm the project-owned extension and in-process Python 3.11 connector
+  direction, subject to Packet B compatibility proof.
+- Confirm the login-material authority split between QR Profile execution and
+  Cookie-mode encrypted Cookie execution.
+- Confirm CR-112 sequencing relative to the already accepted CR-070 / Phase 5.2
+  lane after CR-047 acceptance.
+- Confirm whether Packet C waits for secure child-secret transport or uses a
+  documented, time-bounded local-only acceptance of the existing
+  `runner.py --cookies` process-argument exposure.
+
+Related Plans:
+
+- `docs/superpowers/plans/2026-07-18-cross-computer-cookiebridge-login.md`
+- `docs/superpowers/plans/2026-07-19-phase-5.1p-browser-provider-preflight.md`
+- `docs/superpowers/plans/2026-07-19-cookiebridge-pairing-compatibility-spike.md`
+- `docs/superpowers/plans/2026-07-19-local-browser-auto-sync-login.md`
+- `docs/superpowers/plans/2026-07-19-cookiebridge-deployment-acceptance.md`
+
+Related Governance:
+
+- CR-112 task block in `TASKS.md`.
+- CR-112 proposed boundaries in `ACCOUNT_ENVIRONMENT.md` and
+  `SERVER_DEPLOYMENT.md`.
+- CR-112 planned tests in `TEST_PLAN.md`.
+- CR-112 row in `TRACEABILITY.md`.
+- CR-112 planning synchronization evidence in `TEST_RESULTS.md`.
+
+Acceptance For This Documentation Stage:
+
+- CR-112 remains `Needs Confirmation` and is not described as
+  implementation-ready.
+- Phase 5.1P remains the first unblocked lane; CR-047 and CR-070 ownership and
+  sequencing are preserved.
+- The five reviewed plan artifacts are linked from formal governance docs and
+  distinguish roadmap readiness from future execution gates.
+- All five plan artifacts and their CR-112 formal references in
+  `CHANGE_REQUESTS.md`, `TASKS.md`, `CURRENT_STATE.md`, `TRACEABILITY.md`,
+  `TEST_PLAN.md`, `TEST_RESULTS.md`, `ACCOUNT_ENVIRONMENT.md`, and
+  `SERVER_DEPLOYMENT.md` must be staged and committed atomically. A partial
+  commit is not a valid CR-112 documentation delivery.
+- Account, security, local/server, distribution, runtime, testing, proof, and
+  rollback boundaries agree across all affected documents.
+- Documentation consistency, whitespace validation, and focused independent
+  read-only review pass.
+
+Implementation Acceptance If Later Confirmed:
+
+- Standard tests prove pairing, replay rejection, exact account routing,
+  concurrent account isolation, timeout/cancellation/browser-close cleanup,
+  restart/reconnect, prior-Cookie preservation, and no real external effects.
+- Opt-in Chrome and Edge tests prove extension Service Worker load, authenticated
+  registration, exact client pairing, and one synthetic Cookie roundtrip.
+- Security tests prove non-loopback socket peers, spoofed forwarding headers,
+  missing/wrong extension Origins, and reverse-proxy forwarding fail before
+  connector protocol state; feature-disabled startup leaves the route
+  unmounted and returns 404.
+- The accepted subprocess-Cookie decision has evidence: either process
+  inspection proves no raw Cookie in argv, or a current local-only risk record
+  names owner, expiry, environment boundary, and excluded production claims.
+- A clean Windows installation requires no manual extension/Profile setup or
+  extra connector/Python runtime placement.
+- A local pilot verifies exact-account login and encrypted persistence without
+  exposing sensitive evidence.
+- Existing server QR login, advanced manual Cookie login, account checks,
+  scheduler/manual runs, and crawler behavior show no regression.
 
 ## CR-035 - Run Lifecycle Finalization And AI Stuck Recovery Regression Fix
 
@@ -1914,7 +2219,7 @@ Non-goals:
 - Do not expose API keys, cookies, profile paths, proxy credentials, provider
   endpoints, local paths, crawler commands, or raw runtime data.
 
-Status: Accepted
+Status: Implemented
 
 Related tasks:
 
@@ -2529,7 +2834,7 @@ Non-goals:
   this CR; if the user wants that missing page implemented later, record it as
   a separate new-capability CR.
 
-Status: Accepted
+Status: Verified
 
 Related tasks:
 
@@ -4973,6 +5278,8 @@ Module: formal console global filter date controls
 
 Type: Regression Fix
 
+Status: Verified
+
 Background:
 
 CR-065 made the date menu mathematically centered on the clicked field, but
@@ -6727,7 +7034,7 @@ planning
 
 Type: Documentation Governance
 
-Status: Accepted
+Status: Verified
 
 Background:
 
@@ -7154,7 +7461,7 @@ iteration, acceptance standards
 
 Type: Documentation Governance
 
-Status: Accepted
+Status: Verified
 
 Background:
 
@@ -7697,7 +8004,7 @@ and dashboard-specific regression tests
 
 Type: Existing Feature Optimization
 
-Status: Implemented
+Status: Verified
 
 Background:
 
@@ -7778,7 +8085,7 @@ and dashboard-specific regression tests
 
 Type: Existing Feature Optimization
 
-Status: Implemented
+Status: Verified
 
 Background:
 
@@ -7862,7 +8169,7 @@ composition, and dashboard-focused regression tests
 
 Type: Existing Feature Optimization
 
-Status: Implemented
+Status: Verified
 
 Background:
 
@@ -7941,12 +8248,11 @@ Tests:
 
 Current follow-up:
 
-- CR-105 supersedes CR-097 through CR-103 as the current Operations Home
-  design target. CR-104 remains the current implemented baseline until CR-105
-  is implemented and verified.
+- CR-105 is the current implemented and verified Operations Home ECharts
+  baseline. CR-097 through CR-104 are verified historical predecessors.
 - The CR-097 no-chart-dependency constraint and CR-101 through CR-103
   `流程总览` / `operations-stage-*` DOM expectations are historical verification
-  only. They must not block a later chart-library implementation.
+  only. They do not constrain the current ECharts implementation.
 
 ## CR-105 - Operations Home ECharts Dashboard Rebaseline
 
@@ -7963,7 +8269,7 @@ dashboard requirement baseline, and dashboard-specific regression tests
 
 Type: Existing Feature Optimization
 
-Status: Accepted
+Status: Verified
 
 Background:
 
@@ -8155,12 +8461,11 @@ Related tasks:
 
 Acceptance:
 
-- Documents clearly classify CR-097 through CR-103 as historical/archive-only
-  for future dashboard implementation, and CR-104 as the current code
-  baseline before CR-105 implementation.
+- Documents clearly classify CR-097 through CR-104 as historical/archive-only
+  predecessors and CR-105 as the current verified dashboard baseline.
 - No current planning or test text requires preserving `流程总览` or
-  `operations-stage-*` DOM for a future chart-library dashboard.
-- The accepted future dashboard plan names the chart families, color roles,
+  `operations-stage-*` DOM for the current chart-library dashboard.
+- The verified dashboard plan names the chart families, color roles,
   container hierarchy, responsive behavior, legends, interactions, component
   library, role boundaries, and non-goals.
 - Implementation uses local ECharts for the core dashboard charts while
@@ -8207,7 +8512,7 @@ dashboard-specific UX rules, and dashboard plan verification
 
 Type: Existing Feature Optimization
 
-Status: Accepted
+Status: Verified
 
 Background:
 

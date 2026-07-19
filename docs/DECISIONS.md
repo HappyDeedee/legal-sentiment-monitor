@@ -560,6 +560,9 @@ short `Superseded by` note rather than deleting history.
   heatmap-block, and no-chart-library details must not block the accepted
   chart-dashboard rebuild. CR-104 remains the current implemented baseline
   until CR-105 code is implemented and verified.
+  Current-state note (2026-07-12): that condition is satisfied. CR-105 is the
+  implemented and verified current ECharts baseline; CR-104 is now a verified
+  historical predecessor.
 - Confirmed for CR-105: the future Operations Home target is a six-module
   chart dashboard, not a process-node diagram. The page should let users judge
   within about 10 seconds whether today's monitoring is normal, where risk or

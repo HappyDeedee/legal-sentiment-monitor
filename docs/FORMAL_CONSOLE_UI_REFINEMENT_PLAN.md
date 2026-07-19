@@ -1,11 +1,12 @@
 # Formal Console UI Refinement Execution Plan
 
-Status: Accepted Phase 21 execution plan, rebaselined on 2026-06-19 against
-the current formal `/monitor` console after Task Center and Run Detail
-consolidation. Broad CR-040 page-level visual refinement remains open, while
-verified CR-051, CR-053, CR-069, CR-071, CR-072, CR-073, and CR-074 behavior is
-the current baseline and must not be undone. Use this document as the required
-implementation reference before editing the formal console frontend.
+Status: Phase 21A-P is implemented, verified, merged, and closed on current
+`main`. This execution plan was rebaselined on 2026-06-19 against the formal
+`/monitor` console after Task Center and Run Detail consolidation and now
+records the protected CR-040 regression baseline. Verified CR-051, CR-053,
+CR-069, CR-071, CR-072, CR-073, and CR-074 behavior must not be undone. Use
+this document as the historical execution and regression reference before a
+separate accepted follow-up CR edits the formal console frontend.
 
 ## Purpose
 
@@ -157,18 +158,21 @@ Always require a separate user confirmation or CR before:
 
 ## Implementation Sequencing
 
-Implement Phase 21 as small frontend batches, not as one broad visual rewrite:
+Phase 21 was implemented as small frontend batches rather than one broad visual
+rewrite. Any accepted follow-up that changes this baseline must preserve the
+same sequencing safeguards:
 
 - Workstreams A-O may be implemented and smoke-checked independently, but the
   current Task Center and overlay structure is frozen unless a separate
   accepted CR explicitly changes it.
 - Each workstream must preserve its listed fields, buttons, overlays, menus,
   role boundaries, and visible states before moving to the next workstream.
-- Phase 21P is the final cross-page verification gate after A-O are complete.
-- If Phase 21P finds a regression, rework the smallest affected workstream
-  rather than rewriting unrelated pages.
-- Do not mark any Phase 21 task complete until the corresponding code change,
-  browser check, and documentation update agree.
+- Phase 21P was the final cross-page verification gate after A-O completed.
+- A regression against the closed baseline should be recorded as a follow-up
+  CR and repaired in the smallest affected workstream rather than by rewriting
+  unrelated pages.
+- Do not reopen a completed Phase 21 task; require a new follow-up task whose
+  code change, browser check, and documentation update agree.
 
 ## Global Refinement Rules
 

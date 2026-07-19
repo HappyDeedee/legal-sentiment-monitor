@@ -41,11 +41,16 @@ def check_change_requests(issues: list[str]) -> None:
         if cr_id not in trace_ids:
             add_issue(issues, "P0", f"{cr_id} is missing from TRACEABILITY.md")
 
-    needs_confirmation = re.findall(
-        r"^## (CR-\d+[A-Z]?)\b[\s\S]*?^Status: Needs Confirmation\b",
+    cr_sections = re.finditer(
+        r"^## (CR-\d+[A-Z]?)\b(?P<body>[\s\S]*?)(?=^## |\Z)",
         change_requests,
         re.MULTILINE,
     )
+    needs_confirmation = [
+        match.group(1)
+        for match in cr_sections
+        if re.search(r"^Status: Needs Confirmation\b", match.group("body"), re.MULTILINE)
+    ]
     for cr_id in needs_confirmation:
         if re.search(rf"{re.escape(cr_id)}[\s\S]{{0,200}}(can begin|ready to start|unblocked)", current_state, re.IGNORECASE):
             add_issue(issues, "P0", f"{cr_id} needs confirmation but CURRENT_STATE describes it as ready")

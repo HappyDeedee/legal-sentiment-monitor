@@ -1194,8 +1194,8 @@ Run the relevant parts of this checklist after each Phase 11 batch:
 - Mobile `390x844` checks still confirm no horizontal overflow, no narrow
   one-character Chinese text columns, and chart-first vertical ordering.
 - Role boundaries, drilldowns, dashboard API compatibility, Task Center, Run
-- Detail, drawer, modal, enhanced select/date, routing, owner-scope, and
-- report-scope behavior remain unchanged.
+  Detail, drawer, modal, enhanced select/date, routing, owner-scope, and
+  report-scope behavior remain unchanged.
 
 ## CR-101 Operations Home Flow Chart Layer Separation Tests
 
@@ -1204,8 +1204,8 @@ Run the relevant parts of this checklist after each Phase 11 batch:
   `流程总览`, `.operations-stage-head`, `.operations-stage-plot`, or other
   `.operations-stage-*` DOM in a future ECharts dashboard.
 - Use these notes only when inspecting the verified CR-101 historical
-  implementation. Future CR-105 implementation should be tested against the
-  six chart-dashboard containers instead.
+  implementation. The verified CR-105 implementation is tested against the six
+  chart-dashboard containers instead.
 
 ## CR-102 Operations Home Flow Chart Node Simplification Tests
 
@@ -1214,8 +1214,8 @@ Run the relevant parts of this checklist after each Phase 11 batch:
   `.operations-stage-node-top`, `.operations-stage-chip`, or any
   `.operations-stage-*` DOM in a future ECharts dashboard.
 - Use these notes only when inspecting the verified CR-102 historical
-  implementation. Future CR-105 implementation should be tested against the
-  six chart-dashboard containers instead.
+  implementation. The verified CR-105 implementation is tested against the six
+  chart-dashboard containers instead.
 
 ## CR-103 Operations Home Flow Chart Semantic Trend Rebuild Tests
 
@@ -1225,24 +1225,24 @@ Run the relevant parts of this checklist after each Phase 11 batch:
   `.operations-stage-line-secondary`, or any `.operations-stage-*` DOM in a
   future ECharts dashboard.
 - Use these notes only when inspecting the verified CR-103 historical
-  implementation. Future CR-105 implementation should be tested against the
-  six chart-dashboard containers instead.
+  implementation. The verified CR-105 implementation is tested against the six
+  chart-dashboard containers instead.
 
 ## CR-104 Operations Home Data Cockpit Moderate Rebuild Tests
 
-- Current implemented baseline before CR-105: these checks describe the
-  current handcrafted chart-first cockpit and can be used for regression while
-  it remains live, but they do not block CR-105 from replacing the internal
-  chart DOM with locally vendored Apache ECharts.
+- Historical verified baseline before CR-105: these checks describe the
+  superseded handcrafted chart-first cockpit. They remain historical
+  regression evidence and do not require the current ECharts dashboard to
+  preserve the old internal chart DOM.
 - After CR-105 implementation, `.operations-trend-svg`,
   `.operations-trend-line-primary`, `.operations-trend-line-secondary`, and
   handcrafted trend-path assertions are CR-104 regression-only checks, not
   acceptance criteria for the new dashboard. CR-105 tests should verify
   ECharts-backed chart containers and options instead of requiring the
   handwritten SVG fragments to remain.
-- The Operations Home keeps the existing dashboard data contract and drilldown
-  behavior, but the first screen now reads as a chart-first data cockpit.
-- The main chart DOM should include `.operations-cockpit-trend`,
+- The historical CR-104 Operations Home kept the existing dashboard data
+  contract and drilldown behavior while reading as a chart-first data cockpit.
+- The historical CR-104 chart DOM included `.operations-cockpit-trend`,
   `.operations-window-toggle`, `.operations-trend-svg`,
   `.operations-trend-line-primary`, and `.operations-trend-line-secondary`.
 - The trend chart should expose visible legend items for `业务总量` and
@@ -1266,12 +1266,12 @@ Run the relevant parts of this checklist after each Phase 11 batch:
 
 ## CR-105 Operations Home ECharts Dashboard Rebaseline Tests
 
-- The requirement baseline classifies CR-097 through CR-103 as
-  historical/archive-only and keeps CR-104 as the current code baseline until
-  CR-105 implementation is changed and verified.
+- The requirement baseline classifies CR-097 through CR-104 as verified
+  historical predecessors and CR-105 as the current verified ECharts dashboard
+  baseline.
 - No current planning or test text requires preserving `流程总览`,
   `.operations-stage-*`, heatmap-block, or earlier no-chart-library
-  constraints for the future dashboard.
+  constraints for the current dashboard.
 - Apache ECharts is vendored locally under the existing static asset path and
   is not loaded from a CDN.
 - The expected ECharts vendor file is
@@ -1279,14 +1279,14 @@ Run the relevant parts of this checklist after each Phase 11 batch:
   `/static/monitor/vendor/echarts.min.js`. Static tests should fail if
   `/monitor` references `https://`, `http://`, `cdn`, `unpkg`, `jsdelivr`, or
   another remote script for ECharts, and HTTP checks should confirm the local
-  vendor path returns 200 when implemented.
+  vendor path returns 200.
 - Core CR-105 chart tests should fail if `监控走势`, `问题分布`, `平台分布`,
   or `交付 / 复核` continue to use handwritten SVG path geometry or custom DOM
   percentage-bar chart structures instead of ECharts chart instances. SVG
   icons and ECharts internal rendering are allowed; application code should not
   preserve CR-104 path helpers such as `operationsTrendLinePath()` as the chart
   renderer.
-- The accepted dashboard plan covers KPI micro charts, required 7/14-day trend
+- The verified dashboard covers KPI micro charts, required 7/14-day trend
   controls, optional 30-day trend only when bounded existing-data aggregation is
   clean, issue distribution, platform/source breakdown, delivery/review
   composition, administrator resource health, color-role ledger, visible
@@ -1312,16 +1312,16 @@ Run the relevant parts of this checklist after each Phase 11 batch:
   `#D97706` pending review/action, `#DC2626` failure/exception,
   `#991B1B` high risk, and platform category colors only inside platform
   distribution.
-- First implementation data checks must reuse existing tasks, runs, reports,
+- Current implementation data checks reuse existing tasks, runs, reports,
   mail state, AI lead/review, platform, and administrator resource data. Task
   funnel, platform risk matrix, keyword heat, AI quality, and task rankings are
   future enhancements and must not be required persisted fields.
-- Dashboard API and frontend tests should fail if the first CR-105
+- Dashboard API and frontend tests should fail if the current CR-105
   implementation adds or requires fields such as `task_funnel`, `risk_matrix`,
   `keyword_heat`, `ai_quality_score`, or `task_ranking`, or renders placeholder
   "future enhancement" panels for them.
-- Missing trend buckets should be handled through frontend read-only
-  aggregation from existing `/runs` and `/reports` in the first implementation.
+- Missing trend buckets are handled through frontend read-only aggregation from
+  existing `/runs` and `/reports` in the current implementation.
   Backend-provided trend buckets are a later enhancement unless a separate CR
   accepts them.
 - Loading, empty, stale, and chart-local error states keep container dimensions
@@ -1545,6 +1545,117 @@ Required code-stage checks:
   - inline monitor script parse check
   - `uv run python scripts/check_docs.py`
   - `git diff --check`
+
+## CR-111 Current-Main Documentation State Synchronization Tests
+
+- Use clean `main@abb4d66` as the baseline; unmerged worktrees are historical
+  evidence only and cannot establish current-main completion.
+- Compare every CR lifecycle label in `CHANGE_REQUESTS.md` with completed task
+  evidence, `TRACEABILITY.md`, `CURRENT_STATE.md`, `TEST_RESULTS.md`, and
+  relevant code/tests before promoting it.
+- Verify CR-107 no longer has unchecked planning duplicates beside its
+  completed implementation checklist.
+- Verify CR-052 has a traceability row and CR-066 has an explicit lifecycle
+  status.
+- Verify Phase 21 and CR-107 through CR-110 are described as merged/current-main
+  history, not active working-tree implementation.
+- Verify Phase 5.1P remains the first unblocked lane; Phase 5.1A-D, Phase 5.2,
+  CR-092, CR-093, CR-094, CR-106B, CR-037, and Phase 7.1D keep their dependency,
+  future, confirmation, deferred, or operator gates.
+- Verify no product code, schema, runtime data, sensitive files, or old
+  worktree content changes in CR-111.
+- A regression fixture with verified CR-095 followed by `Needs Confirmation`
+  CR-106B must not attribute CR-106B's status to CR-095; the real pending CR
+  still remains detectable within its own section.
+- Run `uv run python scripts/check_docs.py`, plugin Markdown consistency audit,
+  machine-readable documentation dry-run export/validation, relevant pytest
+  coverage, `docker compose config --quiet`, and `git diff --check`.
+- Treat documentation checks as structural evidence, tests as code-regression
+  evidence, Compose config as packaging evidence, and existing real-pilot
+  records as historical pilot evidence; do not merge those proof levels.
+
+## CR-112 Local Browser Auto-Sync Cookie Acquisition Tests
+
+Documentation-stage checks:
+
+- Verify CR-112 is classified as a `New Capability` with status
+  `Needs Confirmation` in `CHANGE_REQUESTS.md`, `TASKS.md`,
+  `CURRENT_STATE.md`, and `TRACEABILITY.md`.
+- Verify the five plan artifacts remain planning/goal packets and are linked
+  from formal governance documents.
+- Before delivery, verify all five plan files and every CR-112 formal reference
+  are staged in one atomic commit; a partial commit fails the documentation
+  acceptance gate.
+- Verify Phase 5.1P remains the first unblocked lane, Phase 5.1A-D remains
+  owned by CR-047, and CR-112 does not preempt the accepted CR-070 / Phase 5.2
+  sequence without a later accepted decision.
+- Verify account/security and deployment sections are explicitly proposed and
+  do not change the current server-first QR acceptance boundary.
+- Run `uv run python scripts/check_docs.py`, `git diff --check`, a trailing
+  whitespace/end-of-file check for the five new plan files, and focused
+  independent read-only review.
+
+Future fake/unit/integration tests if CR-112 is accepted:
+
+- Feature disabled by default must leave the connector route unmounted and
+  return 404, load no extension, create no pairing token, and show no active
+  auto-sync action.
+- Provider tests must prove valid explicit executable, Chrome, Edge, and
+  supported Chromium precedence and reject invalid explicit paths or locked
+  account fallback to another browser, Profile, proxy, user agent, or network.
+- Pairing tests must cover token expiry, replay, wrong extension origin,
+  wrong Profile/client credential, rotation, revocation, malformed frames, and
+  empty-binding rejection.
+- WebSocket boundary tests must derive locality only from the ASGI socket peer,
+  accept literal loopback peers, and reject empty/unparsable/non-loopback peers
+  before acceptance. Spoofed `X-Forwarded-For`, `Forwarded`, or similar headers
+  must not convert a non-loopback peer into an allowed peer.
+- Origin tests must require the exact stable
+  `chrome-extension://<extension-id>` value and reject missing, opaque, or
+  unexpected Origins before any session, client, pairing, audit-success, or
+  Cookie-read state exists.
+- State-machine tests must cover success, failure, timeout, cancellation,
+  browser close, Bridge offline, service restart, connector reconnect, late
+  response rejection, idempotent finalization, lock release, and ephemeral
+  extension-config cleanup.
+- Multi-account tests must run Account A/Profile A/client X and Account
+  B/Profile B/client Y concurrently with reversed registration/response order
+  and prove no first/newest/only-client selection or Cookie leakage.
+- Cookie validation/persistence tests must reject wrong-platform or wrong-account
+  material, preserve the previous verified Cookie on failure, and commit
+  verified ciphertext, source, identity snapshot, binding metadata, and status
+  atomically.
+- A global tripwire must prove standard tests cannot reach real browsers, real
+  platform accounts, real connector endpoints, or real Cookie material even
+  when production-like environment variables are present.
+- The accepted Cookie subprocess decision must be testable: secure transport
+  selection requires process inspection proving raw Cookie is absent from
+  child argv; temporary local-only risk acceptance requires a current owner,
+  expiry, environment boundary, and a test/documentation tripwire against
+  production-security claims.
+
+Future opt-in and acceptance tests if CR-112 is accepted:
+
+- Chrome and Edge tests require `MONITOR_ALLOW_REAL_BROWSER_TESTS=1` and use
+  synthetic Cookie fixtures. Each browser must prove four separate milestones:
+  extension Service Worker, authenticated WebSocket registration, exact
+  login-session/client/Profile pairing, and one correlated Cookie roundtrip.
+- Clean-Windows acceptance must prove the standard monitor installation contains
+  the project-owned extension and in-process Python 3.11 connector support;
+  the operator performs no extension/connector file placement, personal Chrome
+  Profile setup, Google login, or Python 3.12 installation.
+- LAN-address and configured reverse-proxy probes must fail before WebSocket
+  protocol state, including WebSocket upgrade attempts. Reverse-proxy
+  configuration checks must prove `/api/monitor/cookie-bridge/` is denied and
+  not forwarded; the exact extension Origin over direct loopback is the only
+  network path that may proceed to pairing authentication.
+- A local real-platform pilot requires explicit operator opt-in and redacted
+  evidence, and proves only the tested local machine/account flow.
+- Server-like regression must keep the connector feature disabled by default
+  and verify server-started QR login, manual SMS handling, Profile persistence,
+  account checks, manual/scheduler runs, and crawler execution.
+- Headless Bridge results are reported separately as supported or unsupported;
+  they do not replace the server QR production acceptance boundary.
 
 ## Phase 14 Run Center Data Model Tests
 
@@ -2392,16 +2503,14 @@ run-detail frontend, and report-to-run backlinks.
 
 ## Phase 21 Formal Console Page-Level UI/UX Refinement Tests
 
-Phase 21 is an accepted frontend-only refinement phase for the formal
-`/monitor` console. These tests are the implementation gate for Phase 21A-21P.
-Before making Phase 21 code changes, implementers must read
-`docs/FORMAL_CONSOLE_UI_REFINEMENT_PLAN.md`; it defines the per-page
-preservation rules, allowed refinements, forbidden changes, and acceptance
-standards. As of the 2026-06-19 rebaseline, Phase 21 uses the current Task
-Center / Run Detail console as the baseline, not the older separate Run Center
-and Report Center layout. Phase 21 must be implemented as small workstreams
-A-O with local smoke checks, then finalized through Phase 21P cross-page
-verification.
+Phase 21 is implemented, verified, merged, and closed for the formal `/monitor`
+console through Phase 21A-P. These tests remain the regression gate for the
+verified Phase 21 baseline. `docs/FORMAL_CONSOLE_UI_REFINEMENT_PLAN.md` records
+the per-page preservation rules, allowed refinements, forbidden changes, and
+acceptance standards. The current baseline is the Task Center / Run Detail
+console, not the older separate Run Center and Report Center layout. New Phase
+21 changes require a separate accepted follow-up CR rather than reopening these
+historical workstreams.
 
 ### Phase 21 Planning Document Tests
 

@@ -106,10 +106,11 @@ The packet must state:
 - documentation updates;
 - stop conditions.
 
-Do not start a goal if it mixes separate lanes such as Phase 21 visual work,
-Phase 5.1P read-only preflight, Phase 5.1 implementation, CR-070 export/import,
-CR-092 `/monitor-next`, CR-093 public exposure, or CR-094 provider architecture
-without a later accepted decision that deliberately merges those boundaries.
+Do not start a goal if it mixes separate lanes such as a follow-up against the
+closed Phase 21 visual baseline, Phase 5.1P read-only preflight, Phase 5.1
+implementation, CR-070 export/import, CR-092 `/monitor-next`, CR-093 public
+exposure, or CR-094 provider architecture without a later accepted decision
+that deliberately merges those boundaries.
 
 Current goal rhythm:
 
@@ -241,11 +242,22 @@ A change is complete only when:
 
 - code is updated;
 - relevant tests or checks are run;
+- `CHANGE_REQUESTS.md` lifecycle status matches the actual proof level:
+  `Accepted` before implementation, `Implemented` after code completion, and
+  `Verified` only after the recorded acceptance checks pass;
 - `TASKS.md` reflects task status;
+- completed planning checklists are not left unchecked beside duplicate
+  completed implementation checklists;
 - `CURRENT_STATE.md` reflects latest state;
 - `TEST_RESULTS.md` records verification;
 - `DECISIONS.md` records any new decision;
 - `TRACEABILITY.md` links requirements to tasks and tests where applicable.
+
+The final semantic lifecycle comparison is a manual current-baseline review
+unless `scripts/check_docs.py` explicitly implements the same check. A passing
+documentation script must not be used to justify stale `Accepted`, `In
+Progress`, or unchecked-task labels that conflict with current code and
+recorded verification.
 
 ## Parallel Development
 

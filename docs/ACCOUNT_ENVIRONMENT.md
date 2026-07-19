@@ -1151,6 +1151,72 @@ Not included in V1:
 
 Verification states must be returned to the UI rather than bypassed.
 
+## Proposed CR-112 Local Browser Auto-Sync Cookie Acquisition
+
+Status: `Needs Confirmation`. This section records a proposed future account
+login optimization only. It does not change the current V1 QR/Cookie contract,
+Phase 5.1P priority, CR-047 ownership, schema, runtime, Profile, Cookie, or
+server acceptance behavior.
+
+Proposed login model:
+
+- keep `qrcode` and `cookie` as the only backend login types;
+- use `cookie_source=bridge|manual` as Cookie provenance;
+- keep QR login as the default user-facing workflow;
+- show browser auto-sync as the normal Cookie acquisition workflow only when
+  its local feature flag and health gates pass;
+- keep manual Cookie entry as a collapsed advanced option rather than an
+  automatic fallback.
+
+Proposed authority split:
+
+- `social_account` plus `profile_key` remains account identity authority;
+- QR execution remains authoritative on the persistent server Profile;
+- Cookie execution remains authoritative on encrypted, platform-verified Cookie
+  material passed through the current runner contract;
+- a managed local Profile supports Cookie acquisition and browser state but
+  does not silently turn Cookie mode into Profile-only execution;
+- connector cache and extension observations are temporary acquisition state,
+  not durable login authority.
+
+The current runner contract passes decrypted Cookie material through
+`runner.py --cookies`. That value can be visible in OS process arguments and
+diagnostic tools even though it is encrypted at rest and redacted from product
+logs/UI. CR-112 treats this as a pre-existing security risk, not as proof of
+end-to-end secret isolation. Packet C stays gated until an accepted decision
+either assigns a secure child-secret transport change to an explicit owner or
+records a time-bounded local-only risk acceptance with owner, expiry,
+environment limit, and excluded production claims.
+
+Proposed account and pairing flow:
+
+1. reuse `create_draft_social_account` for a new account so account id and
+   `profile_key` exist before browser launch;
+2. hold the account/Profile lock for the full browser-sync session;
+3. launch a visible application-managed Chrome or Edge persistent Profile;
+4. inject a short-lived single-use pairing token only into that managed
+   Profile's project-owned extension session;
+5. atomically bind the token to login session, account, Profile, platform, and
+   extension `client_id`, then issue a rotatable Profile-scoped reconnect
+   credential;
+6. route Cookie requests only through exact binding/request ids and reject
+   first/newest/only-client selection, replay, stale/late responses, wrong
+   origin, wrong Profile, and wrong platform;
+7. validate platform identity before atomically replacing encrypted Cookie
+   material and activation metadata;
+8. preserve the previous verified Cookie on every failure path and finalize
+   browser, waiters, locks, and ephemeral extension files idempotently.
+
+The connector handshake derives locality from the server-side socket peer,
+not forwarded headers; it requires a parseable loopback peer and the exact
+stable extension Origin before acceptance. Client URL validation alone is not
+an account or transport security boundary.
+
+The project-owned extension/connector direction, same-host scope, authority
+split, additive data model, and sequencing relative to CR-070 require explicit
+confirmation. Detailed roadmap and goal packets are linked from CR-112 in
+`CHANGE_REQUESTS.md`.
+
 ## Login State Machine
 
 | State | Meaning |

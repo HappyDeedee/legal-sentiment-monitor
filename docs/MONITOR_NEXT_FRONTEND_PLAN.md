@@ -8,11 +8,12 @@ console.
 
 Status: Needs Confirmation.
 
-CR-092 is not Phase 21. Phase 21 remains the active frontend visual refinement
-lane for the current `/monitor` console, using the existing Vanilla
-JavaScript and no-build baseline. This document must not be used to introduce a
-framework, build step, dependency, route, API change, or page migration until a
-later accepted implementation CR confirms the decision.
+CR-092 is not Phase 21. Phase 21 is merged and closed; its current `/monitor`
+Vanilla JavaScript/no-build implementation is the protected production
+baseline. CR-092 remains an independent future evaluation lane. This document
+must not be used to introduce a framework, build step, dependency, route, API
+change, or page migration until a later accepted implementation CR confirms
+the decision.
 
 ## Goal
 

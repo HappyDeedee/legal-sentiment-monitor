@@ -136,10 +136,11 @@ A code or UI implementation goal is complete only when:
   implementation-only language;
 - `docs/TEST_RESULTS.md` records what was proved and what was not proved.
 
-Phase 21 goals must include browser verification for administrator and
-normal-user paths at `1440x900`, `1024x768`, and `390x844`, and must fail on
-one-character vertical text, overlap, hidden primary actions, broken
-drawer/modal/menu behavior, or horizontal page overflow.
+A future goal that changes the closed Phase 21 baseline must include browser
+verification for administrator and normal-user paths at `1440x900`,
+`1024x768`, and `390x844`, and must fail on one-character vertical text,
+overlap, hidden primary actions, broken drawer/modal/menu behavior, or
+horizontal page overflow.
 
 Phase 5.1 and CR-070 goals must use container/server-like validation as the
 acceptance baseline. Local Chrome, local-window login, CDP connect-existing,

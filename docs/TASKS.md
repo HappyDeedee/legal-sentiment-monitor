@@ -1412,7 +1412,7 @@ report-scope, and top-bar refresh behavior.
       to fill the hidden resource-health space.
 - [x] Remove current planning/test language that would require preserving
       `流程总览`, `operations-stage-*`, or earlier no-chart-library constraints
-      in a future CR-105 implementation.
+      in the verified CR-105 implementation.
 - [x] Add local Apache ECharts vendor asset at
       `api/webui/monitor/vendor/echarts.min.js` before chart implementation and
       verify it is served as `/static/monitor/vendor/echarts.min.js` without a
@@ -1474,21 +1474,21 @@ be implemented as part of CR-106A.
 
 ## CR-107 - Windows One-Click Local Startup Launcher And Browser URL Separation
 
-Planning status:
+Lifecycle status:
 
-CR-107 is an accepted deployment/startup ergonomics optimization. It does not
-change backend APIs, dashboard behavior, crawler behavior, or browser UI. It
-only adds a Windows one-click startup wrapper and the supporting tests/docs
-needed to prove the bind host and browser URL stay separate.
+CR-107 is implemented and verified on current `main`. It does not change
+backend APIs, dashboard behavior, crawler behavior, or browser UI. It adds a
+Windows one-click startup wrapper and the supporting tests/docs that prove the
+bind host and browser URL stay separate.
 
-- [ ] Add a shared startup helper that computes the service bind host/port and
+- [x] Add a shared startup helper that computes the service bind host/port and
       the browser open URL as separate values.
-- [ ] Add a Windows launcher entry point that starts the service, waits for
+- [x] Add a Windows launcher entry point that starts the service, waits for
       health, and opens the browser URL.
-- [ ] Preserve the existing service-only startup commands.
-- [ ] Update the startup instructions in `README.md` and
+- [x] Preserve the existing service-only startup commands.
+- [x] Update the startup instructions in `README.md` and
       `docs/SERVER_DEPLOYMENT.md`.
-- [ ] Verify the new launcher with targeted tests, docs consistency, and
+- [x] Verify the new launcher with targeted tests, docs consistency, and
       `git diff --check`.
 
 Implementation status:
@@ -1505,10 +1505,10 @@ Implementation status:
 
 ## CR-108 - Local/Server Login Initialization And Verification Flow Hardening
 
-Planning status:
+Lifecycle status:
 
-CR-108 is the current login/deployment hardening lane after CR-107. It starts
-with a documentation gate. The older worktree
+CR-108 is implemented and verified on current `main` after its documentation
+gate. The older worktree
 `C:\Users\Administrator\.codex\worktrees\1d0a\MediaCrawler` is a source of
 historical server/Docker/SMS evidence, not a branch to merge directly. Its old
 CR-107 and CR-108 entries must be remapped into this current CR-108.
@@ -1610,11 +1610,11 @@ Verification and documentation close-out:
 
 ## CR-109 - Monitoring Task Collection Rule Explanation Removal
 
-Planning status:
+Lifecycle status:
 
-CR-109 is a narrow Monitoring page UI cleanup requested from the live screen.
-It removes the standalone "采集规则说明" helper block under the task list without
-changing task workflows or backend behavior.
+CR-109 is implemented and verified on current `main` as a narrow Monitoring
+page UI cleanup. It removes the standalone "采集规则说明" helper block under the
+task list without changing task workflows or backend behavior.
 
 - [x] Record CR-109 in `CHANGE_REQUESTS.md`.
 - [x] Remove the monitoring task page "采集规则说明" disclosure block.
@@ -1626,11 +1626,11 @@ changing task workflows or backend behavior.
 
 ## CR-110 - QR Login SMS Verification Manual Submission Regression Fix
 
-Planning status:
+Lifecycle status:
 
-CR-110 is a focused regression fix after live Douyin QR testing showed that the
-current CR-108 login UI can detect SMS verification but lacks the older
-worktree's manual send/input/submit flow.
+CR-110 is implemented and verified on current `main` as a focused regression
+fix after live Douyin QR testing showed that the CR-108 login UI could detect
+SMS verification but lacked the older worktree's manual send/input/submit flow.
 
 - [x] Record CR-110 in `CHANGE_REQUESTS.md` as a follow-up regression fix,
       without rewriting CR-108 historical verification.
@@ -1650,6 +1650,96 @@ worktree's manual send/input/submit flow.
       validation.
 - [x] Verify the targeted red/green tests and the broader login regression
       subset.
+
+## CR-111 - Current-Main Documentation State Synchronization
+
+Planning status:
+
+CR-111 is a documentation-governance synchronization against clean
+`main@abb4d66`. It must not change product code, UI behavior, schema, runtime
+data, sensitive files, or the old server-login worktree.
+
+- [x] Register CR-111 in `CHANGE_REQUESTS.md`, `TEST_PLAN.md`, and
+      `TRACEABILITY.md` before synchronizing lifecycle labels.
+- [x] Compare every open task group and CR lifecycle label against current
+      main, code, task completion, traceability, and recorded test evidence.
+- [x] Mark the five CR-107 planning items complete because the matching
+      implementation checklist and verification evidence are complete.
+- [x] Synchronize verified CR lifecycle labels without changing accepted,
+      future, deferred, `Needs Confirmation`, operator-gated, or partially
+      verified work.
+- [x] Repair `CURRENT_STATE.md` pre-merge wording and keep Phase 5.1P as the
+      first unblocked lane.
+- [x] Add the missing CR-052 traceability row and CR-066 lifecycle status.
+- [x] Add a failing documentation-check regression test, then scope
+      `Needs Confirmation` parsing to one CR section and rerun it green.
+- [x] Document the manual semantic lifecycle review boundary without claiming
+      that `scripts/check_docs.py` already automates it.
+- [x] Run documentation consistency, machine-readable dry-run validation,
+      relevant tests, Docker Compose configuration, and `git diff --check`.
+- [x] Append CR-111 evidence to `TEST_RESULTS.md` and close this task block
+      only after all checks pass.
+
+## CR-112 - Local Browser Auto-Sync Cookie Acquisition
+
+Planning status:
+
+CR-112 is a proposed new capability and remains `Needs Confirmation`. This
+documentation synchronization does not authorize product code, schema, UI,
+extension, Profile, Cookie, connector, runtime, deployment, or database
+changes. Phase 5.1P remains the first unblocked lane, and CR-112 does not
+preempt CR-070 / Phase 5.2 while its sequencing is unconfirmed.
+
+Documentation synchronization:
+
+- [x] Register CR-112 in `CHANGE_REQUESTS.md` with background, purpose,
+      classification, proposed boundaries, non-goals, dependencies,
+      confirmations, and acceptance criteria.
+- [x] Keep the reviewed master roadmap and four goal packets under
+      `docs/superpowers/plans/` and link them from formal governance docs.
+- [x] Add proposed account/security and local/server boundaries to
+      `ACCOUNT_ENVIRONMENT.md` and `SERVER_DEPLOYMENT.md` without changing
+      accepted V1 behavior.
+- [x] Add CR-112 planning/future tests and traceability while preserving
+      Phase 5.1P, CR-047, and CR-070 ownership.
+- [x] Run documentation consistency, whitespace validation, and focused
+      independent read-only review; then append exact evidence to
+      `TEST_RESULTS.md`.
+- [x] Record the audit correction: loopback requires server-side peer and
+      Origin enforcement plus reverse-proxy exclusion; preserving
+      `runner.py --cookies` carries a pre-existing process-argument exposure
+      that requires an explicit Packet C decision gate.
+- [x] Re-run documentation checks and focused Claude Code review after the
+      audit remediation; close only when no blocking or material plan issue
+      remains.
+- [x] Stage and commit all five CR-112 plan files and all formal CR-112
+      references atomically; do not deliver a partial plan/governance set.
+
+Future gated work:
+
+- [ ] Obtain explicit confirmation for same-host local scope, project-owned
+      extension/connector direction, login-material authority, and sequencing
+      relative to CR-070.
+- [ ] Obtain an explicit security decision for the current raw Cookie
+      subprocess-argument exposure: secure child-secret transport under an
+      accepted owner, or time-bounded local-only risk acceptance with no
+      production-security claim.
+- [ ] Complete Phase 5.1P, Phase 5.1A-D, and the Phase 5.1 acceptance gate
+      under CR-047 before CR-112 product implementation.
+- [ ] Place Packet B after CR-070 / Phase 5.2 by default, or record a later
+      accepted decision that changes sequencing without reopening history.
+- [ ] Execute Packet B as a disposable protocol/compatibility spike and require
+      Chrome and Edge to prove Service Worker load, authenticated registration,
+      exact pairing, and one synthetic Cookie roundtrip.
+- [ ] In Packet B, prove the connector rejects non-loopback socket peers,
+      ignores spoofed forwarding headers for authorization, requires the exact
+      stable extension Origin, remains unmounted when disabled, and is excluded
+      from reverse-proxy forwarding.
+- [ ] Start Packet C only after Packet B passes and data-model/migration,
+      distribution, runtime, permission, and security decisions are accepted.
+- [ ] Start Packet D only after Packet C tests pass; verify clean-computer
+      bootstrap, multi-account isolation, restart/failure/rollback matrices,
+      and server QR non-regression.
 
 ## Phase 14 - Run Center Data Model Preparation
 
@@ -2376,21 +2466,20 @@ visual refinement.
 
 ## Phase 21 - Formal Console Page-Level UI/UX Refinement
 
-Planning status:
+Lifecycle status:
 
-CR-040 is an accepted frontend-only page-level UI/UX refinement phase for the
-formal `/monitor` console. This phase must not reopen CR-033, must not replace
-the formal console with the static prototype, and must not mark any UI code
-work complete until implementation and verification are actually done. The
-implementation baseline is the latest formal `/monitor` console on `main`:
+CR-040 / Phase 21 is implemented, verified, merged, and closed as a
+frontend-only page-level UI/UX refinement for the formal `/monitor` console.
+It does not reopen CR-033 or replace the formal console with the static
+prototype. The protected implementation baseline on current `main` is:
 one top-level `任务中心`, default task/report grouping, `运行记录` as the
 run-record subview, Run Detail with `概览` / `采集日志` / `采集内容` /
 `AI 评估` / `报告` / `邮件交付`, CR-071/CR-072 enhanced controls,
 CR-073 drawer scroll normalization, and CR-074 top-bar refresh behavior.
-Phase 21 may refine visual hierarchy, color, density, spacing, contrast, and
-state feedback, but it must not restore the old separate Run Center / Report
-Center structure or change Task Center, Run Detail, drawer, modal, menu,
-select/date, close, scroll, or routing logic without a separate accepted CR.
+Future UI work must use a separate accepted follow-up CR and must not restore
+the old separate Run Center / Report Center structure or change Task Center,
+Run Detail, drawer, modal, menu, select/date, close, scroll, or routing logic
+without that explicit boundary.
 
 - [x] Create `docs/FORMAL_CONSOLE_UI_REFINEMENT_PLAN.md` with complete
       execution guidance for what to do, where to do it, how to test it, how to

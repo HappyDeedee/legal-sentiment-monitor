@@ -2,6 +2,165 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-19 - CR-112 Cross-Validation Audit Remediation
+
+Environment: local Windows workspace `E:\myproject\MediaCrawler`, branch
+`main`, code baseline `abb4d66`.
+
+Result:
+
+- A broad Claude Code review initially returned `READY`, but a focused
+  evidence challenge showed that it had treated review-prompt requirements as
+  repository facts. Claude corrected its verdict to `BLOCKED`.
+- Added an exact server-side loopback contract: authorize from the ASGI socket
+  peer, ignore forwarded headers for locality, require the exact stable
+  extension Origin, reject before WebSocket protocol state, leave the route
+  unmounted with 404 when disabled, and deny the connector path in reverse
+  proxies.
+- Classified current `runner.py --cookies` use as a pre-existing process-argument
+  secret-exposure risk. Packet C now requires either accepted secure
+  child-secret transport ownership or a time-bounded local-only risk acceptance
+  with owner, expiry, environment limit, and no production-security claim.
+- Required all five plan files and their formal CR-112 references to be staged
+  and committed atomically. The staged diff contained all five plans and every
+  formal CR-112 reference in the same governance package.
+- Synchronized the new contracts across requirement, tasks, current state,
+  traceability, test plan, account environment, server deployment, and the
+  master/Packet B/Packet C/Packet D plans.
+
+Verification:
+
+- `uv run python scripts/check_docs.py` passed: `PASS docs consistency`.
+- `uv run pytest tests/test_documentation_checks.py -q -p no:cacheprovider
+  --basetemp .codex_tmp/pytest-cr112-audit-gap-fix` passed: 1 passed.
+- `git diff --check` passed with only existing Windows LF-to-CRLF warnings.
+- CR-112 plan trailing-whitespace scan returned no matches.
+- Final focused Claude Code read-only re-review returned `READY`, closed all
+  three prior findings, and reported no blocking or material refinement.
+
+Delivery evidence:
+
+- `git diff --cached --name-only` and `git diff --cached --check` confirmed all
+  five plan files and their formal references were staged together with no
+  whitespace error before the governance commit was created.
+
+Proof boundary:
+
+- This remediation changes planning and governance documents only. It does not
+  prove or implement connector routing, extension Origin enforcement, Cookie
+  transport, browser compatibility, local login, or deployment behavior.
+
+## 2026-07-19 - CR-112 Proposed Documentation Synchronization
+
+Environment: local Windows workspace `E:\myproject\MediaCrawler`, branch
+`main`, code baseline `abb4d66`; local `main` and `origin/main` were `0/0`
+before this documentation synchronization.
+
+Result:
+
+- Registered CR-112 as a `New Capability` with status `Needs Confirmation` in
+  the formal requirement, task, current-state, traceability, and test chain.
+- Kept the reviewed master roadmap and four goal packets under the established
+  `docs/superpowers/plans/` location and linked them from formal governance.
+- Added explicitly proposed account/security and local/server boundaries to
+  `ACCOUNT_ENVIRONMENT.md` and `SERVER_DEPLOYMENT.md` without changing accepted
+  QR, manual Cookie, runner, Profile, or production behavior.
+- Preserved Phase 5.1P as the current read-only lane, Phase 5.1A-D ownership
+  under CR-047, and the accepted CR-070 / Phase 5.2 position after CR-047.
+  CR-112 remains future-gated and requires a later accepted sequencing
+  decision before Packet B starts.
+- Left `DECISIONS.md` unchanged for CR-112 because same-host scope,
+  project-owned connector/extension direction, login-material authority, and
+  sequencing remain unconfirmed.
+- No CR-112 product code, schema, UI, extension, Profile, Cookie, connector,
+  runtime, deployment, database, or sensitive-data change was made.
+
+Verification:
+
+- `uv run python scripts/check_docs.py` passed: `PASS docs consistency`.
+- `uv run pytest tests/test_documentation_checks.py -q -p no:cacheprovider
+  --basetemp .codex_tmp/pytest-cr112-doc-sync` passed: 1 passed.
+- `git diff --check` passed; Git reported only existing Windows LF-to-CRLF
+  working-copy warnings.
+- Trailing-whitespace scan across the `docs/superpowers/plans/` directory
+  returned no
+  matches; all five CR-112 plan files end with LF.
+- Focused Claude Code read-only governance review used only `Read`, `Grep`, and
+  `Glob` and returned `READY`, with no blocking findings or material
+  refinements.
+
+Proof boundary:
+
+- These checks prove documentation structure, status, sequencing, links, and
+  planning consistency only.
+- They do not prove extension loading, authenticated pairing, Cookie transfer,
+  clean-computer bootstrap, Chrome/Edge compatibility, real platform login,
+  headless Bridge support, server deployment, or production acceptance.
+
+## 2026-07-12 - CR-111 Current-Main Documentation State Synchronization
+
+Environment: local Windows workspace `E:\myproject\MediaCrawler`, branch
+`main`, code baseline `abb4d66`. The local `origin/main` tracking reference
+matched the baseline before this documentation-only batch.
+
+Result:
+
+- Synchronized CR lifecycle labels, open-task state, current-state prose,
+  traceability, test planning, execution guidance, and affected frontend
+  specialist documents with current-main code and recorded verification.
+- Closed the five stale CR-107 planning duplicates, added the missing CR-052
+  traceability row and CR-066 status, and classified CR-035 as implemented but
+  only partially verified because Phase 7.1D remains operator-gated.
+- Recorded Phase 21A-P and CR-107 through CR-110 as closed current-main history.
+  Phase 5.1P remains the first unblocked lane; Phase 5.1A-D, Phase 5.2,
+  CR-092, CR-093, CR-094, CR-106B, CR-037, and Phase 7.1D retain their existing
+  dependency, future, confirmation, deferred, or operator gates.
+- Preserved older append-only result entries, including CR-109's historical
+  pending-at-that-time wording. The full current-suite result below supersedes
+  that pending verification state without rewriting history.
+- Fixed `scripts/check_docs.py` so `Status: Needs Confirmation` is parsed only
+  inside its owning CR section. Before the fix, the new regression fixture
+  falsely attributed CR-106B's status to the preceding verified CR-095; after
+  the fix, only CR-106B is reported.
+- After CR-111 closure, `TASKS.md` contains 130 unchecked items, all in explicit
+  future, dependency-blocked, `Needs Confirmation`, deferred, or
+  operator-gated lanes.
+
+Verification:
+
+- `uv run pytest tests/test_monitoring_mvp.py tests/test_documentation_checks.py
+  -q -p no:cacheprovider --basetemp
+  .codex_tmp/pytest-full-doc-sync-rerun`
+  passed: 351 passed, 3 deprecation warnings.
+- `uv run python scripts/check_docs.py` passed: `PASS docs consistency`.
+- `uv run python -m py_compile scripts/check_docs.py` passed.
+- `node --check api/webui/monitor/monitor.js` passed.
+- Independent parse of the inline script in `api/monitor_web/index.html`
+  passed: 1 inline script parsed.
+- `docker compose config --quiet` passed.
+- `git diff --check` passed; Git reported only expected Windows LF-to-CRLF
+  working-copy warnings.
+- Plugin Markdown consistency audit returned `valid=true`, no errors, no
+  warnings, and 14 intentionally retained `needs_confirmation` items.
+- Machine-readable documentation dry-run exported six files under ignored
+  `.codex_tmp` without modifying repository documents; validation returned
+  `valid=true`, no errors, no warnings, and 14 retained confirmation items.
+- Focused independent read-only cross-review returned `NO BLOCKING FINDINGS`.
+
+Limitations:
+
+- This batch changes governance documents and documentation-check tooling only.
+  It does not change product behavior, UI, schema, runtime data, deployment
+  state, account profiles, cookies, proxy configuration, local databases, or
+  sensitive files.
+- Compose configuration validation is packaging evidence only; it does not
+  prove that this Windows host can start Linux containers or that production
+  deployment is accepted.
+- Unit/static/document checks do not add new real-platform, SMTP,
+  AI-provider, recipient-delivery, or production-pilot evidence.
+- The unmerged server-login worktree was not modified, merged, reset, cleaned,
+  or deleted.
+
 ## 2026-06-26 - CR-110 QR Login SMS Verification Manual Submission Regression Fix
 
 Environment: local Windows worktree `E:\myproject\MediaCrawler`, branch

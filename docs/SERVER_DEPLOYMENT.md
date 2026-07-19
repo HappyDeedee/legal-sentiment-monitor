@@ -49,6 +49,62 @@ The Windows helper scripts in the repository should follow the same rule:
 `MONITOR_HOST` controls the bind address, `MONITOR_PORT` controls the port,
 and `MONITOR_BROWSER_URL` overrides only the browser destination.
 
+## Proposed CR-112 Local Browser Auto-Sync Boundary
+
+Status: `Needs Confirmation`. This is a proposed local Windows capability and
+does not change the accepted production/server deployment boundary.
+
+Proposed V1 topology:
+
+```text
+monitor FastAPI service + project-owned connector route + managed browser
+on the same Windows computer
+```
+
+- The connector is a feature-gated WebSocket module in the existing Python
+  3.11 FastAPI process, not a separate Python 3.12 product service.
+- The extension connects through `127.0.0.1` and the effective monitor port.
+  Non-loopback and cross-host endpoints remain disabled.
+- The WebSocket handler authorizes locality from the ASGI socket peer
+  (`websocket.client.host` / `scope["client"]`) using a literal IP loopback
+  check. It rejects an empty, unparsable, or non-loopback peer before accepting
+  the socket, even when FastAPI listens on `0.0.0.0`.
+- `X-Forwarded-For`, `Forwarded`, and similar proxy headers are ignored for the
+  loopback authorization decision. A future trusted-proxy/remote topology
+  requires a separate accepted CR rather than broadening this route.
+- The handshake requires the exact allowlisted
+  `chrome-extension://<stable-extension-id>` Origin. Missing, opaque, or
+  unexpected Origins and invalid peers are rejected before protocol state or
+  Cookie access.
+- The standard monitor installation contains the project-owned extension and
+  creates its per-session managed copy automatically. The operator does not
+  install an extension manually, create a personal Chrome Profile, use a Google
+  account, place a connector binary, or install Python 3.12.
+- Browser resolution is valid explicit executable, Chrome, Edge, then supported
+  Chromium. Chrome is preferred when Chrome and Edge both exist.
+- The feature is disabled by default. Disabled or unhealthy state must not
+  mount a usable connector path, load the extension, generate pairing tokens,
+  choose another account/client, or alter QR/manual Cookie behavior.
+- Disabled startup does not mount `/api/monitor/cookie-bridge/ws`, so direct
+  HTTP/WebSocket access receives 404. When enabled, invalid peer or Origin is
+  rejected before WebSocket acceptance and must not create session, client,
+  pairing, audit-success, or Cookie-read state.
+
+Production remains server-first:
+
+- production continues to use the server-started QR browser and persisted
+  server Profile;
+- local Chrome/Edge auto-sync evidence is not production acceptance;
+- remote Bridge, browser-on-operator/monitor-on-server topology, cross-host
+  Cookie transport, and headless Bridge remain outside the proposed V1 scope;
+- a headless compatibility result may be recorded as supported or unsupported
+  without changing the server QR production baseline.
+
+CR-112 compatibility, implementation, and deployment packets remain gated by
+confirmation, Phase 5.1 acceptance, the existing CR-070 sequence or a later
+accepted sequencing decision, project-owned protocol proof, data-model and
+migration approval, and clean-computer acceptance.
+
 ## Required Persistent Data
 
 Persist and back up:
@@ -168,6 +224,15 @@ Required behavior:
 - forward client IP headers where audit logs need them;
 - restrict CORS to trusted origins;
 - avoid exposing internal diagnostic routes publicly.
+- deny and do not forward `/api/monitor/cookie-bridge/` in every production or
+  remotely reachable reverse-proxy configuration, including WebSocket upgrade
+  handling. The local extension connects directly to the loopback monitor
+  endpoint and never through the public proxy.
+
+CR-112 acceptance includes negative probes through the machine LAN address and
+configured reverse proxy, plus spoofed `X-Forwarded-For`/`Forwarded` headers.
+All must fail before connector protocol state. Only a direct loopback peer with
+the exact extension Origin may proceed to pairing authentication.
 
 ## Public Exposure Boundary
 

@@ -1,8 +1,9 @@
 # Frontend Architecture
 
-This document is the technical reference for the Phase 10-18 console
-optimization roadmap. It defines the accepted frontend stack, layout strategy,
-responsive behavior, and component boundaries before UI implementation begins.
+This document is the technical and regression reference for the completed
+Phase 10-18 console optimization roadmap. It records the verified frontend
+stack, layout strategy, responsive behavior, and component boundaries that
+later follow-up work must preserve unless a separate decision changes them.
 
 ## Status
 
@@ -67,8 +68,8 @@ Future planning boundary:
 
 - CR-092 records a future `/monitor-next` frontend migration evaluation in
   `MONITOR_NEXT_FRONTEND_PLAN.md`. It does not change the accepted current
-  `/monitor` Vanilla/no-build stack, Phase 21 visual work, or existing monitor
-  API contracts.
+  `/monitor` Vanilla/no-build stack, the closed Phase 21 visual baseline, or
+  existing monitor API contracts.
 - Future `/monitor-next` candidates may evaluate Vite, TypeScript, Vue, React,
   and ToB component libraries only as a separate confirmed architecture lane.
   They must coexist with `/monitor` until page, permission, interaction,

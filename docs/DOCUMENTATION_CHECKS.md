@@ -68,6 +68,31 @@ The command should be safe to run locally and in CI. It should not modify files.
     CR-091 owns open-todo MECE lane separation, while CR-095 owns atomic goal
     execution, iteration, and acceptance rules.
 
+## Manual Semantic Baseline Review
+
+`scripts/check_docs.py` validates implemented structural and reference rules.
+It does not currently prove that every lifecycle label or prose statement is
+semantically current. Before close-out, merge, or a new execution lane, perform
+the Todo Baseline Review Gate manually and record the evidence when needed.
+
+The manual review must compare:
+
+- each `CHANGE_REQUESTS.md` status with current code, completed tasks,
+  `TRACEABILITY.md`, and `TEST_RESULTS.md`;
+- unchecked `TASKS.md` items with current-main behavior, including duplicate
+  planning and implementation checklists;
+- `CURRENT_STATE.md` wording with the actual branch/commit state so merged work
+  is not described as an active worktree and completed work is not described
+  as the next lane;
+- `Needs Confirmation`, deferred, future-only, operator-gated, partially
+  verified, and historical work so none is promoted by cleanup alone;
+- proof levels separately: documentation consistency, unit/static tests,
+  server-like checks, packaging/configuration checks, and real pilot evidence.
+
+Until a future accepted change adds equivalent executable checks, report this
+as manual semantic evidence rather than as coverage provided by
+`scripts/check_docs.py`.
+
 ## Suggested Output
 
 ```text

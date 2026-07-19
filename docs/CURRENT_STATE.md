@@ -1,6 +1,31 @@
 # Current State
 
-Last updated: 2026-06-22
+Last updated: 2026-07-19
+
+## Current Baseline
+
+- Code baseline: clean `main@abb4d66`, matching the current local
+  `origin/main` tracking reference.
+- Phase 21 and CR-107 through CR-110 are merged current-main history, not
+  active working-tree implementation.
+- CR-111 verified and synchronized human-readable governance state only; it did
+  not change
+  product code, schema, UI behavior, runtime data, sensitive files, or the old
+  server-login worktree.
+- CR-112 is registered as a proposed local browser auto-sync Cookie-acquisition
+  capability with status `Needs Confirmation`. Its reviewed roadmap and four
+  goal packets are documentation artifacts only; no CR-112 product code,
+  schema, UI, extension, Profile, Cookie, connector, runtime, deployment, or
+  database change is active.
+- The current execution lane is Phase 5.1P, a documentation/read-only
+  compatibility preflight.
+- Phase 5.1A-D and its acceptance gate remain blocked by Phase 5.1P. CR-070 /
+  Phase 5.2 remains blocked by verified CR-047 provider binding and requested /
+  effective runtime snapshots. CR-092 and CR-094 remain `Needs Confirmation`,
+  CR-112 remains `Needs Confirmation`, CR-093 remains future-only, CR-037
+  remains deferred, and Phase 7.1D remains operator-gated.
+- The unmerged server-login worktree is historical/source evidence only and is
+  not a current-main completion source or a branch to merge directly.
 
 ## Current Phase
 
@@ -13,8 +38,8 @@ Phase 6 - Server Login Flow is complete and verified locally. Phase 7 - Runs,
 Reports, And AI is complete and verified locally. Phase 8 - Server-Like
 Validation is complete and verified through an isolated server-like service
 process. Phase 9 - Security And Operations is complete and verified locally.
-Phase 10-18 console optimization planning has been accepted as the next
-roadmap. Phase 10 - Frontend Architecture And Technology Decision is complete
+The Phase 10-18 console optimization roadmap is complete. Phase 10 - Frontend
+Architecture And Technology Decision is complete
 as a documentation and architecture decision phase. Phase 10.5 - Phase 10-18
 Global Plan Review Gate is complete and found no P0/P1 blockers after the
 granularity refinements. Phase 11 - Frontend Design System is complete and
@@ -473,19 +498,19 @@ administrator plus normal-user Task Center/Run Detail paths at desktop,
 tablet, and mobile viewports.
 CR-035
 Run Lifecycle Finalization And AI Stuck
-Recovery Regression Fix is accepted as a follow-up for the completed Phase 7
-responsibility area; Phase 7 remains a historical verified snapshot, while
-Phase 7.1 is the accepted regression-fix task block for the newly observed
-stuck-run class. Phase 7.1A-C is now implemented and verified locally: new
+Recovery Regression Fix is implemented as a follow-up for the completed Phase
+7 responsibility area; Phase 7 remains a historical verified snapshot, while
+Phase 7.1A-C is the verified regression-fix scope for the newly observed
+stuck-run class and Phase 7.1D remains operator-gated. New
 runs persist `crawl_runs.job_id`, compatible legacy summary-based reads and
 dry-run backfill are available, run finalization is idempotent, terminal
 statuses are protected from stale writers, Phase 7.1 lifecycle heartbeats are
 persisted in `crawl_runs.summary`, stale Phase 7.1 rows can recover as
 `interrupted` without auto-repairing older historical rows, AI item
 timeout/exception/invalid-result paths fall back to `pending_review`, and
-partial/manual-review reports can still be generated. CR-036 Test And Local Email Delivery Safety Regression Fix is
-accepted as a follow-up for the completed
-Phase 17 email-delivery responsibility area after two unexpected real
+partial/manual-review reports can still be generated. CR-036 Test And Local
+Email Delivery Safety Regression Fix is verified as a follow-up for the
+completed Phase 17 email-delivery responsibility area after two unexpected real
 `日报 海安律所` emails were traced to temporary test/local run records and
 unmocked SMTP delivery. Phase 17 remains a historical verified snapshot, while
 Phase 17.1 is the accepted regression-fix task block for preventing tests and
@@ -511,22 +536,21 @@ presets that wrap the system-generated report body. Historical unexpected
 email evidence is confirmed to be preserved by default. CR-037 Role-Based
 Email Delivery Governance And Quotas is deferred as a future capability for
 administrator-managed normal-user send/resend policy and quotas. CR-040 Formal
-Console Page-Level UI/UX Refinement is accepted as Phase 21, a frontend-only
-implementation phase with `docs/FORMAL_CONSOLE_UI_REFINEMENT_PLAN.md` as the
-execution-plan reference. The Phase 21 plan was rebaselined on 2026-06-19
-against the current formal `/monitor` console after CR-051, CR-053, CR-069,
-CR-071, CR-072, CR-073, and CR-074. Broad CR-040 page-level visual refinement
-remains open, but the current Task Center / Run Detail behavior is now the
-baseline: one top-level `任务中心`, default task/report grouping, `运行记录`
-as the run-record subview, Run Detail's six sections, enhanced select/date
-menus, `.drawer-scroll-body`, and the shared top-bar refresh icon must not be
-undone by Phase 21. Phase 21 may refine colors, contrast, spacing, density,
-status styling, loading/empty/error/focus states, and responsive wrapping, but
-must not restore separate top-level Run Center / Report Center pages or change
-Task Center, Run Detail, drawer, modal, row-menu, select/date, close, scroll,
-or routing logic without a separate accepted CR. The Phase 21 plan now
-explicitly treats prototype-observed layout collapse as a hard production
-verification risk rather than confirmed current production breakage: dashboard
+Console Page-Level UI/UX Refinement is implemented, verified, merged, and
+closed as Phase 21A-P, with
+`docs/FORMAL_CONSOLE_UI_REFINEMENT_PLAN.md` retained as its execution and
+regression reference. The Phase 21 plan was rebaselined on 2026-06-19 against
+the formal `/monitor` console after CR-051, CR-053, CR-069, CR-071, CR-072,
+CR-073, and CR-074. The current Task Center / Run Detail behavior is the
+protected baseline: one top-level `任务中心`, default task/report grouping,
+`运行记录` as the run-record subview, Run Detail's six sections, enhanced
+select/date menus, `.drawer-scroll-body`, and the shared top-bar refresh icon
+must not be undone. A follow-up may refine the console only through a separate
+accepted CR and must not restore separate top-level Run Center / Report Center
+pages or change Task Center, Run Detail, drawer, modal, row-menu, select/date,
+close, scroll, or routing logic implicitly. The Phase 21 plan treats
+prototype-observed layout collapse as a hard production verification risk
+rather than confirmed current production breakage: dashboard
 cards, closed-loop tracks, dense status cards, resource cards, Task Center /
 Run Detail surfaces, and secondary overlays must not squeeze text into one-
 character vertical columns, overlap content, hide primary actions, or create
@@ -560,8 +584,8 @@ configured global default recipients when no explicit target is supplied,
 returns recipient count/source metadata, and shows that count/source in the
 frontend while preserving the warning that SMTP acceptance is not recipient
 inbox proof.
-CR-045 AI Evaluation Accuracy And Unevaluated Lead Status Clarity is accepted
-as a new Phase 7.2 follow-up regression fix after live pilot inspection found
+CR-045 AI Evaluation Accuracy And Unevaluated Lead Status Clarity is verified
+as a Phase 7.2 follow-up regression fix after live pilot inspection found
 that timeout-leftover content without `ai_evaluations` rows could be displayed
 as "no risk" and broad target-bearing keywords could recall many unrelated
 refund/legal posts. Phase 7 and Phase 7.1 remain historical snapshots. Phase
@@ -624,16 +648,16 @@ mail logs, users, runtime settings, or business history. V1 creates a new
 target account/profile on import and exports avatar metadata only. This is
 documentation planning only; no export/import code, schema migration, package
 artifact, real profile, cookie, proxy, or login state has been changed.
-CR-091 Open Todo MECE Rebaseline And Phase 5.1 Preflight Gate is accepted as a
-documentation-governance batch. The current open work is now explicitly
-separated into an active Phase 21 frontend visual lane, a Phase 5.1 Preflight
-documentation/read-only compatibility lane, the later Phase 5.1 account
-identity implementation body, the Phase 5.1 acceptance lane, Phase 5.2 /
-CR-070 after CR-047 provider/effective snapshot verification, and independent
-deferred items such as CR-037, the unrendered Users And Permissions page, and
-Phase 7.1D historical repair. This batch changes task sequencing only; it does
-not change code, UI, database schema, runtime data, account profiles, cookies,
-proxy configuration, crawler behavior, or deployment configuration.
+CR-091 Open Todo MECE Rebaseline And Phase 5.1 Preflight Gate is verified as a
+documentation-governance batch. It separates the closed Phase 21 frontend
+baseline, the next Phase 5.1P documentation/read-only compatibility lane, the
+later Phase 5.1 account identity implementation body and acceptance gate,
+Phase 5.2 / CR-070 after CR-047 provider/effective snapshot verification, and
+independent deferred or gated items such as CR-037, the unrendered Users And
+Permissions page, and Phase 7.1D historical repair. This batch changes task
+sequencing only; it does not change code, UI, database schema, runtime data,
+account profiles, cookies, proxy configuration, crawler behavior, or
+deployment configuration.
 CR-092, CR-093, and CR-094 are added as future independent backlog lanes after
 the CR-091 rebaseline. CR-092 covers future `/monitor-next` frontend stack
 migration planning in `docs/MONITOR_NEXT_FRONTEND_PLAN.md` and is not a Phase
@@ -642,12 +666,13 @@ boundary planning; its product boundary is accepted, but exact route/mount and
 reverse-proxy behavior still needs confirmation after read-only audit. CR-094
 covers future crawler provider architecture in
 `docs/CRAWLER_PROVIDER_ARCHITECTURE.md` and is separate from Phase 5.1P, which
-remains only the current MediaCrawler/CDP/BrowserEnvironmentProvider
-compatibility preflight. These three backlog lanes do not block Phase 21,
-Phase 5.1P, CR-047/Phase 5.1, or CR-070/Phase 5.2, and they do not change
+  remains only the current MediaCrawler/CDP/BrowserEnvironmentProvider
+  compatibility preflight. These three backlog lanes do not reopen the closed
+  Phase 21 baseline or block Phase 5.1P, CR-047/Phase 5.1, or CR-070/Phase 5.2,
+  and they do not change
 code, UI, schema, runtime data, routes, crawler behavior, account profiles,
 cookies, proxies, or deployment configuration.
-CR-095 Atomic Goal Execution Governance And Readiness Gate is accepted as a
+CR-095 Atomic Goal Execution Governance And Readiness Gate is verified as a
 documentation-governance layer on top of the CR-091 lane separation. It adds
 `docs/GOAL_EXECUTION_GUIDELINES.md` as the source for goal packet structure,
 atomicity rules, current execution lanes, test iteration loop, acceptance
@@ -847,25 +872,17 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   delivery, and every AI evaluation record; report lead rows with `run_id`
   can return to the originating run detail without turning Report Center into
   a global lead workbench.
-- Phase 21 - Formal Console Page-Level UI/UX Refinement: accepted but not
-  fully implemented. The focused CR-048/CR-049 frontend information-
-  architecture subset and later CR-051/CR-053/CR-069/CR-071/CR-072/CR-073/
-  CR-074 Task Center, Run Detail, dropdown/date, drawer-scroll, and refresh
-  refinements are verified and now form the current Phase 21 baseline. A
-  focused Phase 21A/B/C visual pass has started for the shell, navigation,
-  top-right account control, development-copy cleanup, and Operations Home
-  density; the second-level navigation hover regression is fixed so hover is
-  pure neutral gray and selected state remains teal, including collapsed
-  sidebar hover, and CR-075 verifies the desktop/tablet/mobile navigation
-  breakpoint model without reintroducing mobile `打开导航` at 1024px/1169px or
-  breaking the 390px mobile drawer/header. CR-077 closes the follow-up mobile
-  header cascade regression in the live formal page's final inline style layer.
-  The broader Phase 21 page-level
-  visual refinement workstreams for Monitoring,
-  Platform Accounts, Proxies, AI Access, AI Rules, Mail Templates, Runtime
-  Strategy, conservative Task Center visual polish, overlay/Run Detail freeze
-  verification, System Diagnostics, Login, and cross-page verification remain
-  open.
+- Phase 21 - Formal Console Page-Level UI/UX Refinement: implemented, verified,
+  merged, and closed through Phase 21A-P. The CR-048/CR-049 information-
+  architecture subset and CR-051/CR-053/CR-069/CR-071/CR-072/CR-073/CR-074
+  Task Center, Run Detail, dropdown/date, drawer-scroll, and refresh behavior
+  form the protected baseline. Shell, navigation, account control, Operations
+  Home, Monitoring, Platform Accounts, Proxies, AI Access, AI Rules, Mail
+  Configuration, Mail Templates, Runtime Strategy, Task Center, overlays, Run
+  Detail, System Diagnostics, Login, responsive behavior, and cross-page
+  verification are complete for the recorded scope. CR-075 through CR-085 and
+  CR-086 through CR-090 remain verified follow-up history, not open Phase 21
+  implementation.
 - Minimum Usable Pilot Acceptance Gate: satisfied for first usable pilot. CR-036 /
   Phase 17.1A-B email side-effect safety and CR-035/Phase 7.1A-C run
   lifecycle/AI fallback/partial-report safety are implemented, locally
@@ -910,6 +927,10 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   and `reports` section are removed. Current Task Center rows expose only
   `详情`; report preview, downloads, resend, delivery history, and lead
   inspection are reached through Run Detail.
+- CR-052 - Task Center Row Action Deduplication: complete and verified.
+  First-level Task Center rows do not duplicate run-log or report-preview
+  actions already owned by Run Detail; current grouped and flat rows retain the
+  single `详情` drilldown.
 - CR-053 - Task Center Field Priority And Global Select Alignment: complete
   and verified. Flat Task Center rows front-load `任务 ID` and `运行 ID`;
   grouped rows hide duplicated `任务 ID` and front-load `运行 ID`; status cells
@@ -980,14 +1001,14 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   BrowserEnvironmentProvider, MediaCrawler CDP, QR login, Cookie validation,
   login-state check, manual run, scheduler run, runner, and requested/effective
   snapshot compatibility boundary.
-- CR-091 - Open Todo MECE Rebaseline And Phase 5.1 Preflight Gate: accepted as
-  a documentation-governance sequencing update. It keeps Phase 21 separate as a
-  frontend visual-only lane, makes Phase 5.1P the next account-environment
-  gate before schema/code implementation, moves container/server-like and
-  BrowserEnvironmentProvider work into the Phase 5.1 development/acceptance
-  baseline rather than a separate parallel big task, and delays CR-070 /
-  Phase 5.2 until CR-047 provider binding plus effective runtime snapshot are
-  verified.
+- CR-091 - Open Todo MECE Rebaseline And Phase 5.1 Preflight Gate: verified as
+  a documentation-governance sequencing update. It keeps closed Phase 21 as
+  the protected frontend baseline, makes Phase 5.1P the next
+  account-environment gate before schema/code implementation, moves
+  container/server-like and BrowserEnvironmentProvider work into the Phase 5.1
+  development/acceptance baseline rather than a separate parallel big task,
+  and delays CR-070 / Phase 5.2 until CR-047 provider binding plus effective
+  runtime snapshot are verified.
 - CR-048 - Report Center Lead Detail Information Architecture: focused
   frontend batch complete and verified. Report Center uses explicit
   report-scoped "查看线索" actions and a scoped lead drawer; Run Center also
@@ -1136,11 +1157,10 @@ separate follow-up work.
   optimization, regression fix, or documentation-governance change, and must
   include background, purpose, boundaries, related tasks, and acceptance
   criteria.
-- CR-031 Run Center Realtime Progress Visibility has been accepted:
-  active runs should show provisional collection progress before platform
-  subprocess completion, AI progress should update during long evaluation
-  batches, and frontend polling should continue while visible runs remain
-  active. Phase 19B-19D is now implemented and verified: progress stays in
+- CR-031 Run Center Realtime Progress Visibility is implemented and verified:
+  active runs show provisional collection progress before platform subprocess
+  completion, AI progress updates during long evaluation batches, and frontend
+  polling continues while visible runs remain active. Phase 19B-19D progress stays in
   `crawl_runs.summary`, final collection/AI counts keep their existing
   semantics, and the Run Center shows active progress without hiding stop,
   log, lead, archive, or restore actions.
@@ -1174,17 +1194,15 @@ separate follow-up work.
   authority, normal-user email send/resend restrictions, and possible daily
   quotas may be needed later. It is not part of the immediate CR-036 safety
   fix.
-- CR-040 Formal Console Page-Level UI/UX Refinement has been accepted as Phase
-  21. The standalone execution plan defines per-page preservation rules,
-  allowed visual changes, testing, verification, and acceptance criteria. It is
-  now rebaselined on the current Task Center / Run Detail console rather than
-  the older separate Run Center / Report Center structure. The focused CR-048/
-  CR-049 information-architecture subset plus the verified CR-051, CR-053,
-  CR-069, CR-071, CR-072, CR-073, and CR-074 frontend refinements are baseline
-  behavior; the broader Phase 21 page-level visual refinement remains open and
-  does not reopen CR-033.
-- CR-034 Run Detail And AI Evaluation Traceability has been accepted as a
-  run-center optimization with data-model implications. Phase 20B-D plus the
+- CR-040 Formal Console Page-Level UI/UX Refinement is implemented, verified,
+  merged, and closed as Phase 21. Its per-page preservation rules, visual
+  changes, tests, and acceptance evidence are based on the current Task Center /
+  Run Detail console rather than the older separate Run Center / Report Center
+  structure. The focused CR-048/CR-049 information-architecture subset plus
+  verified CR-051, CR-053, CR-069, CR-071, CR-072, CR-073, and CR-074 behavior
+  remain protected baseline behavior and do not reopen CR-033.
+- CR-034 Run Detail And AI Evaluation Traceability is implemented and verified
+  as a run-center optimization with data-model implications. Phase 20B-D plus the
   remaining Phase 20E backlink are implemented and verified: new AI
   evaluations store trace snapshots, scoped run-detail and per-evaluation APIs
   expose role-safe detail, Run Center opens run detail, and report leads with
@@ -1192,16 +1210,25 @@ separate follow-up work.
 
 ## In Progress
 
-- Phase 10-18
-  console optimization is complete and verified through Phase 18B. Phase 19A
-  documentation governance is complete, and Phase 19B-19D run-center realtime
-  progress is implemented and verified. Phase 7.1A-C, Phase 7.2A-D, CR-043,
-  CR-044, CR-045, CR-050, and Phase 20B-E are implemented and verified; Phase
-  7.1D remains gated. Phase 21 is accepted but not fully implemented; the
-  verified CR-048/CR-049/CR-051/CR-053/CR-069/CR-071/CR-072/CR-073/CR-074
-  frontend behavior is the current baseline. CR-075 is accepted as the
-  documentation-only MECE sequencing update for the next open work. CR-037 is
-  deferred.
+- CR-111 documentation synchronization is verified and closed against
+  `main@abb4d66`. Phase 10-21, CR-091, CR-095, and CR-107 through CR-110 are
+  complete through their recorded scope. No implementation lane is active;
+  the next unblocked project lane is Phase 5.1P read-only preflight, and no
+  Phase 5.1 schema/code work starts before it passes. Phase 7.1D remains
+  operator-gated, CR-037 remains deferred, CR-092 and CR-094 remain `Needs
+  Confirmation`, and CR-093 remains a future independent backlog lane.
+- CR-112 planning is synchronized as a proposed new capability. The same-host
+  local-desktop topology, project-owned extension/in-process Python 3.11
+  connector, QR/Profile versus Cookie/encrypted-material authority split, and
+  sequencing relative to CR-070 still require confirmation. CR-112 does not
+  change the current first lane or preempt the accepted CR-070 sequence.
+- The latest focused audit corrected an earlier over-broad `READY` result.
+  CR-112 documentation now requires server-side socket-peer and extension-Origin
+  enforcement, reverse-proxy route exclusion, explicit classification of the
+  existing raw Cookie subprocess-argument risk, and atomic delivery of the five
+  plans with all formal references. Final focused Claude Code re-review returned
+  `READY` with no blocking or material plan issue. CR-112 is ready for user
+  confirmation, while implementation and atomic-delivery gates remain open.
 
 ## Known Risks
 
@@ -1209,6 +1236,16 @@ separate follow-up work.
   field for existing login/crawler code paths, but new identity and path
   resolution are `profile_key` based and customer-facing responses mask real
   paths.
+- Cookie-mode runs currently pass decrypted Cookie material through
+  `runner.py --cookies`; OS process listings and diagnostics may expose that
+  argument. This is a pre-existing security risk. CR-112 Packet C remains
+  gated on either accepted secure child-secret transport ownership or an
+  explicit time-bounded local-only risk acceptance with no production claim.
+- The proposed in-process connector shares a FastAPI service that may listen on
+  `0.0.0.0`. Client use of `127.0.0.1` alone does not enforce locality; future
+  implementation must reject non-loopback socket peers, ignore forwarded
+  headers for authorization, require the exact extension Origin, and remain
+  excluded from reverse proxies.
 - Current system is closer to a single-team MVP than a production multi-user
   system.
 - Server-side QR/login capability and profile persistence now have automated
@@ -1283,10 +1320,9 @@ separate follow-up work.
   without saved trace rows remain limited-context and cannot be treated as
   having exact input snapshots.
 - CR-048/CR-049 focused frontend information architecture is verified and
-  preserved by Phase 20E: Report Center lead drawers remain report/run-scoped
-  shortcuts rather than a standalone global lead workbench, and delivery
-  history remains a scoped secondary drawer. The full Phase 21 visual
-  refinement remains open.
+  preserved by Phase 20E and the closed Phase 21 baseline: Report Center lead
+  drawers remain report/run-scoped shortcuts rather than a standalone global
+  lead workbench, and delivery history remains a scoped secondary drawer.
 - Phase 18B report-center task grouping is implemented and verified. The
   current frontend has the complete Phase 11-12 foundation and Phase 13A data
   contract: local static module
@@ -1428,16 +1464,13 @@ separate follow-up work.
   aggregation and product semantics change, even though it would not require a
   new schema field. Until accepted, CR-106A treats the Operations Home mail
   module as report-level delivery state from `reports.email_status`.
-- CR-107 is the next accepted deployment/startup ergonomics optimization. It
-  will add a Windows one-click launcher that starts the service and opens the
-  browser URL separately from the bind host, so local operators can use the
-  same entry point whether the service binds to `127.0.0.1` or `0.0.0.0`.
-- CR-107 is now implemented in the working tree: the new Windows one-click
-  launcher starts the service, waits for `/api/health`, and opens a browser
-  URL that is separate from the bind host. `start_webui.bat` remains a local
-  entry point, `start_monitor_service.bat` remains service-only, and the new
+- CR-107 is implemented and verified on current `main`: the Windows one-click
+  launcher starts the service, waits for `/api/health`, and opens a browser URL
+  that is separate from the bind host. `start_webui.bat` remains a local entry
+  point, `start_monitor_service.bat` remains service-only, and
   `start_monitor_oneclick.bat` handles the combined flow.
-- CR-108 is implemented in the working tree after the documentation-first gate:
+- CR-108 is implemented and verified on current `main` after the
+  documentation-first gate:
   Docker/server packaging has been selectively migrated with server-like
   defaults, QR sessions and local login windows are mutually exclusive for the
   same `profile_key` or resolved runtime profile path, and local Windows
@@ -1456,22 +1489,24 @@ separate follow-up work.
   server-login worktree
   `C:\Users\Administrator\.codex\worktrees\1d0a\MediaCrawler` remains
   historical/source material only; its Tencent server QR/SMS evidence and
-  Douyin exact `验证` SMS submit selector were reviewed but not revalidated or
-  migrated as a current-main SMS submission feature in this CR-108 batch.
-- CR-109 is implemented in the working tree as a narrow Monitoring page UI
-  cleanup: the standalone "采集规则说明" disclosure below the task table has
+  Douyin exact `验证` SMS submit selector were reviewed but not migrated in the
+  CR-108 batch; the later CR-110 regression fix owns current-main manual SMS
+  submission behavior.
+- CR-109 is implemented and verified on current `main` as a narrow Monitoring
+  page UI cleanup: the standalone "采集规则说明" disclosure below the task table has
   been removed, along with CSS that only styled that deleted disclosure. Task
   filters, task table, drawer workflow, backend APIs, login, reports, AI,
   email, and permissions are unchanged.
-- CR-110 is implemented in the working tree as a focused CR-108 follow-up
-  regression fix: server-side QR login now has manual SMS verification
+- CR-110 is implemented and verified on current `main` as a focused CR-108
+  follow-up regression fix: server-side QR login has manual SMS verification
   request/submission routes, the account login modal shows a compact
   send/input/submit/continue-confirm panel when `verification_type` is `sms`,
   and the Douyin `#uc-second-verify` path prefers the exact visible `验证`
   submit control instead of send/resend controls. This restores the manual SMS
   loop only; it does not receive SMS automatically, bypass captcha/SMS/slider/
   device checks, or migrate the older worktree's diagnostics UI.
-- Email delivery-history UI and report task grouping are accepted directions.
+- Email delivery-history UI and report task grouping are verified current
+  behavior.
   Run visibility/noise-filtering data fields are active schema features after
   Phase 14, archive/restore APIs, pagination, and filters are active after
   Phase 15A, frontend run-center controls are active after Phase 15B, and
@@ -1492,8 +1527,8 @@ separate follow-up work.
 
 Next allowed implementation order:
 
-Before opening any non-trivial item below, create or confirm the CR-081 goal
-packet from `docs/GOAL_EXECUTION_GUIDELINES.md`: owner CR/phase, baseline,
+Before opening any non-trivial item below, create or confirm a CR-095-compatible
+goal packet from `docs/GOAL_EXECUTION_GUIDELINES.md`: owner CR/phase, baseline,
 scope, out-of-scope, hard boundaries, start gate, expected touch surface,
 execution steps, tests, acceptance, rollback/recovery, documentation updates,
 and stop conditions.
@@ -1520,24 +1555,30 @@ and stop conditions.
 4. implement CR-070/Phase 5.2 account-environment export/import only after
    CR-047 provider binding and requested/effective runtime snapshot behavior
    are implemented and verified;
-5. keep CR-092 `/monitor-next` planning, CR-093 MediaCrawler public exposure
+5. keep CR-112 local browser auto-sync Cookie acquisition as a future
+   `Needs Confirmation` lane. Its Packet B compatibility spike, Packet C local
+   implementation, and Packet D clean-computer/deployment acceptance must not
+   start before required confirmations and gates pass. CR-070 keeps its current
+   accepted position after CR-047 unless a later accepted sequencing decision
+   explicitly changes that order;
+6. keep CR-092 `/monitor-next` planning, CR-093 MediaCrawler public exposure
    boundary, and CR-094 crawler provider architecture as future independent
    backlog lanes. They may receive read-only planning or documentation
    refinement, but they must not be treated as current implementation work,
    Phase 21 work, Phase 5.1P prerequisites, or CR-070 prerequisites without a
    later accepted decision;
-6. keep the documentation-governance cleanup complete: future backlog and
+7. keep the documentation-governance cleanup complete: future backlog and
    governance CRs were renumbered to CR-091 through CR-095 while completed
    Phase 21 historical CRs kept their original identifiers;
-7. keep Phase 17.1D historical orphan email evidence closed as read-only
+8. keep Phase 17.1D historical orphan email evidence closed as read-only
    dry-run/checklist/runbook work unless the operator explicitly approves a
    backup, rollback, and mutation path;
-8. handle CR-035/Phase 7.1D historical run remediation only when the operator
+9. handle CR-035/Phase 7.1D historical run remediation only when the operator
    explicitly approves the dry-run, backup, rollback, and repair path; it is a
    conditional operations task, not a normal feature batch;
-9. keep CR-037 role-based email governance and the currently unrendered Users
+10. keep CR-037 role-based email governance and the currently unrendered Users
    And Permissions page as separate future/new-capability work until confirmed;
-10. prepare broader production pilot handoff and deployment-specific validation
+11. prepare broader production pilot handoff and deployment-specific validation
    for additional live credentials after the first usable pilot baseline.
 
 Test gate hardening recorded:
@@ -1567,6 +1608,12 @@ Test gate hardening recorded:
   visual polish; and crawler provider architecture cannot become the
   Phase 5.1P prerequisite unless a later accepted decision changes the
   roadmap.
+- CR-112 is also separate from Phase 5.1P and CR-047 ownership. It reuses their
+  future provider output only after Phase 5.1 acceptance and remains behind
+  confirmation, compatibility, security, migration, and sequencing gates.
+- CR-112 plan artifacts and formal references form one documentation delivery
+  unit. All five plans and their formal references were staged and committed
+  together as the CR-112 governance package.
 - CR-095 requires atomic goal packets and the iteration rule before future
   non-trivial work starts. A goal should not advance while targeted tests,
   required broader checks, documentation consistency, acceptance gates, or
@@ -1580,6 +1627,10 @@ Lowest-risk parallel execution lane:
    provider, runtime, profile, cookie, proxy, crawler, deployment, or database
    changes before the preflight is explicitly accepted. Phase 5.1 code/schema
    implementation should wait for the preflight result.
+
+CR-112 may receive documentation refinement while it is `Needs Confirmation`,
+but it is not a parallel implementation lane and does not alter the lowest-risk
+Phase 5.1P preflight priority.
 
 Do not run Phase 19 and Phase 20 in parallel, and do not run more than one
 frontend worktree that edits the formal console shell at the same time.
