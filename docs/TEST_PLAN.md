@@ -248,6 +248,30 @@ requested/effective runtime snapshot contract.
   editing, explicit locked change/reset flow, and login/check disabling for
   `requires_relogin` and `resetting`, with no seed, runtime snapshot, Cookie,
   raw Profile path, proxy credential, CDP, or noVNC exposure.
+- Phase 5.1D provider tests verify exact executable precedence, `profile_key`
+  path derivation, all-eight-state managed/legacy boundaries, locked proxy
+  override rejection, explicit direct policy, bound-proxy availability, and
+  no managed local-browser auto-detection.
+- Phase 5.1D snapshot tests verify recursive secret/path rejection, exact safe
+  shape and size, account/resolution/attempt binding, field-scoped mismatch
+  values, safe persistence, and compact administrator API/UI output.
+- Phase 5.1D direct browser tests verify QR, Profile, Cookie, and visible login
+  consume the same plan; proxy proof finishes before a context is returned;
+  mismatches, proof errors, and browser disconnects persist safe failure and
+  stop before login/crawl continuation.
+- Phase 5.1D Runner tests verify manual and scheduler triggers resolve the same
+  account environment after locks, each retry gets a unique attempt, the
+  internal plan is at most 8192 UTF-8 bytes and absent from argv/log summaries,
+  process proxy/default Profile variables are removed, result files are
+  atomic/fresh/bound, and output ingest waits for successful persistence.
+- Phase 5.1D CDP/platform tests verify the exact awaited pre-navigation CDP
+  command sequence, exact executable/Profile/proxy/headless launch, all seven
+  platform cores using the managed proxy/context/prepare/verify adapters, no
+  dynamic proxy pool, and no managed CDP-to-standard fallback.
+- Phase 5.1D deployment/static tests verify only the executable and proxy-probe
+  operator settings appear in environment examples; internal plan/result
+  handoff variables remain absent. Inline monitor JavaScript must parse after
+  the compact runtime summary is added.
 - QR login, Cookie validation, and login-state checks resolve the same
   `profile_key`, account identity, proxy policy, user agent, timezone, locale,
   accept-language, viewport/screen, device flags, and provider mode.

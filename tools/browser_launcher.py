@@ -116,8 +116,19 @@ class BrowserLauncher:
 
         raise RuntimeError(f"Cannot find available port, tried {start_port} to {port-1}")
 
-    def launch_browser(self, browser_path: str, debug_port: int, headless: bool = False,
-                      user_data_dir: Optional[str] = None) -> subprocess.Popen:
+    def launch_browser(
+        self,
+        browser_path: str,
+        debug_port: int,
+        headless: bool = False,
+        user_data_dir: Optional[str] = None,
+        proxy_server: Optional[str] = None,
+        user_agent: Optional[str] = None,
+        language: Optional[str] = None,
+        window_size: Optional[Tuple[int, int]] = None,
+        device_scale_factor: Optional[float] = None,
+        managed: bool = False,
+    ) -> subprocess.Popen:
         """
         Launch browser process
         """
@@ -160,9 +171,23 @@ class BrowserLauncher:
         if user_data_dir:
             args.append(f"--user-data-dir={user_data_dir}")
 
-        utils.logger.info(f"[BrowserLauncher] Launching browser: {browser_path}")
-        utils.logger.info(f"[BrowserLauncher] Debug port: {debug_port}")
-        utils.logger.info(f"[BrowserLauncher] Headless mode: {headless}")
+        if proxy_server:
+            args.append(f"--proxy-server={proxy_server}")
+        if user_agent:
+            args.append(f"--user-agent={user_agent}")
+        if language:
+            args.append(f"--lang={language}")
+        if window_size:
+            args.append(f"--window-size={int(window_size[0])},{int(window_size[1])}")
+        if device_scale_factor:
+            args.append(f"--force-device-scale-factor={float(device_scale_factor)}")
+
+        if managed:
+            utils.logger.info("[BrowserLauncher] Launching managed browser environment")
+        else:
+            utils.logger.info(f"[BrowserLauncher] Launching browser: {browser_path}")
+            utils.logger.info(f"[BrowserLauncher] Debug port: {debug_port}")
+            utils.logger.info(f"[BrowserLauncher] Headless mode: {headless}")
 
         try:
             # On Windows, use CREATE_NEW_PROCESS_GROUP to prevent Ctrl+C from affecting subprocess

@@ -12,6 +12,11 @@ from typing import Any
 from playwright.async_api import BrowserContext, Page, Playwright, async_playwright
 
 from tools import utils
+from tools.browser_environment import (
+    BrowserEnvironmentError,
+    launch_managed_browser_context,
+    verify_managed_page,
+)
 
 from .login_browser import PLATFORM_LOGIN_URLS, build_login_browser_command
 from .mediacrawler_login import (
@@ -116,22 +121,36 @@ async def _start_qrcode_login_session_with_profile_once(
     context: BrowserContext | None = None
     try:
         playwright = await async_playwright().start()
-        profile_path = Path(command["profile_path"])
-        profile_path.mkdir(parents=True, exist_ok=True)
-        launch_options: dict[str, Any] = {
-            "user_data_dir": str(profile_path),
-            "executable_path": command["browser_path"],
-            "accept_downloads": True,
-            "headless": headless,
-            "viewport": {"width": 1920, "height": 1080},
-            "user_agent": utils.get_user_agent(),
-        }
-        if command.get("proxy_url"):
-            launch_options["proxy"] = {"server": str(command.get("proxy_url") or "")}
-        context = await playwright.chromium.launch_persistent_context(**launch_options)
+        managed_plan = command.get("_browser_environment_plan")
+        if managed_plan is not None:
+            managed_session = await launch_managed_browser_context(playwright, managed_plan)
+            context = managed_session.context
+        else:
+            profile_path = Path(command["profile_path"])
+            profile_path.mkdir(parents=True, exist_ok=True)
+            launch_options: dict[str, Any] = {
+                "user_data_dir": str(profile_path),
+                "executable_path": command["browser_path"],
+                "accept_downloads": True,
+                "headless": headless,
+                "viewport": {"width": 1920, "height": 1080},
+                "user_agent": utils.get_user_agent(),
+            }
+            if command.get("proxy_url"):
+                launch_options["proxy"] = {"server": str(command.get("proxy_url") or "")}
+            context = await playwright.chromium.launch_persistent_context(**launch_options)
         page = context.pages[0] if context.pages else await context.new_page()
         page.set_default_timeout(timeout)
         await page.goto(QR_SELECTORS[platform]["url"], wait_until="domcontentloaded", timeout=timeout)
+        if managed_plan is not None:
+            provider_result = await verify_managed_page(context, page)
+            if provider_result is None or not provider_result.ok:
+                await _close_context(playwright, context)
+                return {
+                    **_failure(platform, command, "浏览器账号环境校验未通过，请重新生成二维码。"),
+                    "_browser_environment_plan": managed_plan,
+                    "_browser_environment_result": provider_result,
+                }
         login_adapter = _build_mediacrawler_login_adapter(platform, context, page)
         await _prepare_login_page(platform, page, timeout, login_adapter)
         login_baseline = await _login_baseline(platform, context)
@@ -199,6 +218,18 @@ async def _start_qrcode_login_session_with_profile_once(
     except asyncio.CancelledError:
         await _close_context(playwright, context)
         raise
+    except BrowserEnvironmentError as exc:
+        await _close_context(playwright, context)
+        result = _failure(platform, command, "浏览器账号环境校验失败，请重新生成二维码。")
+        managed_plan = command.get("_browser_environment_plan")
+        provider_result = getattr(exc, "browser_environment_result", None)
+        if managed_plan is not None and provider_result is not None:
+            result = {
+                **result,
+                "_browser_environment_plan": managed_plan,
+                "_browser_environment_result": provider_result,
+            }
+        return result
     except Exception as exc:
         await _close_context(playwright, context)
         return _failure(platform, command, _brief_exception_message(exc))

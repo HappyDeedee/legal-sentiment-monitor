@@ -10,6 +10,7 @@ from .mediacrawler_login import get_mediacrawler_login_capability
 from .normalizer import PLATFORM_LABELS
 from .platform_status import PROFILE_DIRS, PROJECT_ROOT
 from tools.browser_launcher import BrowserLauncher
+from tools.browser_environment import BrowserEnvironmentPlan
 
 
 PLATFORM_LOGIN_URLS = {
@@ -39,6 +40,41 @@ def build_login_browser_command(platform: str, debug_port: int | None = None) ->
     }
 
 
+def build_managed_login_browser_command(
+    plan: BrowserEnvironmentPlan,
+    debug_port: int | None = None,
+) -> dict[str, Any]:
+    platform = plan.platform
+    if platform not in PROFILE_DIRS:
+        raise ValueError("unsupported platform")
+    port = int(debug_port or os.environ.get(f"MONITOR_LOGIN_DEBUG_PORT_{platform.upper()}") or _default_port(platform))
+    return {
+        "browser_path": plan.browser_executable_path,
+        "profile_path": plan.profile_path,
+        "profile_key": plan.profile_key,
+        "debug_port": port,
+        "login_url": PLATFORM_LOGIN_URLS[platform],
+        "platform": platform,
+        "platform_label": PLATFORM_LABELS.get(platform, platform),
+        "login_capability_source": "平台采集服务",
+        "account_id": plan.account_id,
+        "proxy_id": plan.proxy_id,
+        "proxy_url": plan.proxy_url,
+        "user_agent": plan.user_agent,
+        "timezone": plan.timezone,
+        "locale": plan.locale,
+        "accept_language": plan.accept_language,
+        "screen_width": plan.screen_width,
+        "screen_height": plan.screen_height,
+        "viewport_width": plan.viewport_width,
+        "viewport_height": plan.viewport_height,
+        "device_scale_factor": plan.device_scale_factor,
+        "is_mobile": plan.is_mobile,
+        "has_touch": plan.has_touch,
+        "_browser_environment_plan": plan,
+    }
+
+
 def open_login_browser(platform: str) -> dict[str, Any]:
     command = build_login_browser_command(platform)
     return open_login_browser_with_command(command)
@@ -56,6 +92,14 @@ def open_login_browser_with_command(command: dict[str, Any]) -> dict[str, Any]:
         f"--user-data-dir={command['profile_path']}",
         command["login_url"],
     ]
+    if command.get("user_agent"):
+        args.insert(-1, f"--user-agent={command['user_agent']}")
+    if command.get("locale"):
+        args.insert(-1, f"--lang={command['locale']}")
+    if command.get("viewport_width") and command.get("viewport_height"):
+        args.insert(-1, f"--window-size={int(command['viewport_width'])},{int(command['viewport_height'])}")
+    if command.get("device_scale_factor"):
+        args.insert(-1, f"--force-device-scale-factor={float(command['device_scale_factor'])}")
     if command.get("proxy_url"):
         args.insert(-1, f"--proxy-server={command['proxy_url']}")
     creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
@@ -72,8 +116,29 @@ def open_login_browser_with_command(command: dict[str, Any]) -> dict[str, Any]:
         command["profile_path"],
         str(command.get("profile_key") or ""),
     )
+    public_command = {
+        key: value
+        for key, value in command.items()
+        if key
+        not in {
+            "_browser_environment_plan",
+            "browser_path",
+            "proxy_url",
+            "user_agent",
+            "timezone",
+            "locale",
+            "accept_language",
+            "screen_width",
+            "screen_height",
+            "viewport_width",
+            "viewport_height",
+            "device_scale_factor",
+            "is_mobile",
+            "has_touch",
+        }
+    }
     return {
-        **command,
+        **public_command,
         "pid": process.pid,
         "message": f"已打开{command['platform_label']}登录窗口，请完成登录后关闭该窗口，再回后台刷新状态并运行采集",
     }

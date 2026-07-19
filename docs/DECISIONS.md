@@ -644,3 +644,9 @@ short `Superseded by` note rather than deleting history.
   authority, and raw-Cookie argv disposition. CR-112 remains `Needs
   Confirmation` for same-host V1 scope, project-owned extension/connector
   delivery, and sequencing relative to CR-070.
+- Confirmed for CR-047 / Phase 5.1D: the pre-lock proxy priority remains task
+  proxy, account proxy, then default network. After an account identity is
+  locked, a null `proxy_id` is an explicit direct-network policy rather than a
+  task-proxy or default-network fallback; a non-null `proxy_id` is an
+  account-bound policy whose browser-routed region must be proven. This does
+  not authorize task-level proxy overrides or change CR-112/CR-070 ownership.

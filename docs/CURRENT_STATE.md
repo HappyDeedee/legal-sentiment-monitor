@@ -4,8 +4,8 @@ Last updated: 2026-07-19
 
 ## Current Baseline
 
-- Phase 5.1C branch baseline: clean `main@100001e`, matching `origin/main` when
-  the isolated implementation worktree was opened.
+- Current merged baseline: clean `main@2adf661`, matching `origin/main` after
+  Phase 5.1C PR #4 integration and post-merge verification.
 - Phase 5.1A code/tests are complete on
   `codex/phase-5.1a-account-identity-schema`: all 24 additive fields, three
   workspace-scoped indexes, idempotent legacy migration, and boolean read
@@ -26,8 +26,19 @@ Last updated: 2026-07-19
   and reset routes use that authority. CR-113 forwards safe QR draft region and
   template-family choices. Focused tests pass (`17 passed`) and the full
   monitor suite passes (`378 passed`). Python compile, documentation gates,
-  browser checks, and the independent Claude Code full-diff review pass. Branch
-  integration and post-merge verification remain before Phase 5.1D code starts.
+  browser checks, and the independent Claude Code full-diff review pass. PR #4
+  is merged and the same `378`-test, compile, and documentation gates pass on
+  merged `main@2adf661`.
+- Phase 5.1D browser/runtime binding is implemented and technically verified
+  on `codex/phase-5.1d-browser-runtime-binding` from `main@2adf661`. One
+  immutable account-derived plan now binds QR/Profile/Cookie/visible login,
+  manual/scheduler Runner attempts, all seven platform cores, and launch-owned
+  CDP to the same browser, `profile_key`, proxy policy, and identity. Safe
+  effective results are account/resolution/attempt-bound and persisted before
+  success or output ingest. Focused tests pass (`131 passed`) and the complete
+  monitoring suite passes (`484 passed`); compile, docs, JavaScript parse,
+  desktop/mobile browser checks, and independent Claude Code review also pass.
+  Commit/PR integration and post-merge verification remain open.
 - Phase 21 and CR-107 through CR-110 are merged current-main history, not
   active working-tree implementation.
 - CR-111 verified and synchronized human-readable governance state only; it did
@@ -57,8 +68,10 @@ Last updated: 2026-07-19
   split without changing product code, schema, UI, runtime data, Profiles,
   Cookies, proxies, crawler behavior, browser processes, deployment, or the
   database.
-- Phase 5.1A-C are implemented and independently verified. Phase 5.1D and the
-  Phase 5.1 acceptance gate remain serially gated. CR-070 / Phase 5.2 remains blocked
+- Phase 5.1A-C are implemented, merged, and independently verified. Phase 5.1D
+  is technically verified on its isolated branch and awaits integration; the
+  separate Phase 5.1 server-like acceptance gate remains next. CR-070 / Phase
+  5.2 remains blocked
   by implemented and verified CR-047 provider binding and requested/effective
   runtime snapshots. CR-092 and CR-094 remain `Needs Confirmation`, CR-112
   remains `Needs Confirmation`, CR-093 remains future-only, CR-037 remains
@@ -670,11 +683,11 @@ the documentation now adds the Phase 5.1 generation algorithm, deterministic
 template-selection rule, template catalog, fail-closed enforcement rules,
 Playwright/CDP provider contract, identity lifecycle state machine, runtime
 snapshot shape, audit events, and test-safety tripwires. These are
-now implemented and independently verified through Phase 5.1C:
+now implemented and independently verified through Phase 5.1D:
 additive storage/read compatibility, deterministic generation/fail-closed
-validation, and lifecycle/lock/reset/audit behavior are code and test evidence.
-Phase 5.1D provider/runtime binding and final server-like acceptance remain
-open.
+validation, lifecycle/lock/reset/audit behavior, and provider/runtime binding
+are code and test evidence. Phase 5.1D integration and final server-like
+acceptance remain open.
 CR-070 Account Environment Export And Import Package is accepted as a Phase
 5.2 new capability for moving a single platform account environment between
 deployments. It extends the CR-047 identity model with metadata-only and slim
@@ -1044,7 +1057,8 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   the container/server-like, BrowserEnvironmentProvider, MediaCrawler CDP, QR
   login, Cookie validation, login-state check, manual run, scheduler run,
   runner, and requested/effective snapshot compatibility boundary. Phase 5.1D
-  is the next implementation unit; final acceptance remains gated.
+  is technically verified on its isolated branch; integration and final
+  server-like acceptance remain gated.
 - CR-091 - Open Todo MECE Rebaseline And Phase 5.1 Preflight Gate: verified as
   a documentation-governance sequencing update. It keeps closed Phase 21 as
   the protected frontend baseline and established Phase 5.1P as the
@@ -1258,8 +1272,10 @@ separate follow-up work.
 - CR-111 documentation synchronization is verified and closed against
   `main@abb4d66`. Phase 10-21, CR-091, CR-095, and CR-107 through CR-110 are
   complete through their recorded scope. Phase 5.1P is now also verified as a
-  documentation/read-only preflight. Phase 5.1A-C are implemented and
-  independently verified, and Phase 5.1D is the next serial unit. Phase
+  documentation/read-only preflight. Phase 5.1A-C are implemented, merged, and
+  independently verified; Phase 5.1D is technically verified and awaits
+  integration. The Phase 5.1 server-like acceptance packet is the next serial
+  unit. Phase
   7.1D remains operator-gated, CR-037 remains deferred, CR-092 and
   CR-094 remain `Needs Confirmation`, and CR-093 remains a future independent
   backlog lane.
@@ -1595,13 +1611,11 @@ and stop conditions.
    one immutable BrowserEnvironmentProvider plan/result, requested/effective
    probes, fail-closed proxy/Profile/browser behavior, diagnostic-only local
    fallbacks, and no CR-112 ownership transfer;
-3. integrate the independently verified CR-047/Phase 5.1C unit, then implement
-   Phase 5.1D using the
-   confirmed policy that locked account
-   environments reject task-level proxy overrides and using container/server-
-   like execution as the development and acceptance baseline. Stop if
-   implementation requires a second browser, Profile, proxy, or identity
-   authority, or cannot prove a required effective value;
+3. integrate the technically verified CR-047/Phase 5.1D unit, rerun its
+   post-merge gates, then execute the separate Phase 5.1 server-like acceptance
+   packet. Locked account environments must still reject task-level proxy
+   overrides, and acceptance must stop if it needs a second browser, Profile,
+   proxy, or identity authority or cannot prove a required effective value;
 4. implement CR-070/Phase 5.2 account-environment export/import only after
    CR-047 provider binding and requested/effective runtime snapshot behavior
    are implemented and verified;
@@ -1674,9 +1688,10 @@ Lowest-risk parallel execution lane:
 1. Phase 21 frontend-only page-level refinement is merged and closed on
    `main`. Phase 5.1P is verified as read-only document/code-path mapping.
    Phase 5.1A additive account identity and Phase 5.1B deterministic
-   generation/validation and Phase 5.1C lifecycle are independently verified.
-   Phase 5.1D is the next serial implementation lane after Phase 5.1C branch
-   integration and post-merge verification.
+   generation/validation and Phase 5.1C lifecycle are independently verified,
+   merged, and rechecked. Phase 5.1D browser/runtime binding is technically
+   verified and awaits integration; the separate server-like acceptance packet
+   follows post-merge verification.
 
 CR-112 may receive documentation refinement while it is `Needs Confirmation`,
 but it is not a parallel implementation lane and does not alter the verified
@@ -1702,8 +1717,10 @@ Phase 5.1C implementation and independent verification on 2026-07-19:
   `git diff --check`, and desktop/mobile browser checks passed;
 - the independent Claude Code full-diff review returned `PASS` with no
   blocking finding, material finding, or missing high-value test;
-- branch integration and post-merge verification remain before Phase 5.1D
-  code starts.
+- PR #4 merged as `main@2adf661`; post-merge full monitoring tests passed
+  (`378 passed`), Python compile passed, `scripts/check_docs.py` passed, the
+  documentation regression passed (`1 passed`), and local `main` matches
+  `origin/main`.
 
 Phase 17.1D historical orphan email evidence verification on 2026-06-18:
 

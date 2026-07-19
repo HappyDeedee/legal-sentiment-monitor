@@ -5900,6 +5900,38 @@ def update_social_account_check_state(
     return get_social_account(account_id) or {}
 
 
+def update_social_account_identity_runtime_snapshot(
+    account_id: int,
+    snapshot: dict[str, Any],
+) -> dict[str, Any]:
+    from tools.browser_environment import BrowserEnvironmentError, validate_safe_runtime_snapshot
+
+    validated = validate_safe_runtime_snapshot(snapshot)
+    snapshot_account = validated["account"]
+    payload = json.dumps(validated, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    now = utc_now()
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT id, workspace_id, platform FROM social_accounts WHERE id=?",
+            (account_id,),
+        ).fetchone()
+        if not row or (
+            int(snapshot_account["account_id"]) != int(row["id"])
+            or int(snapshot_account["workspace_id"]) != int(row["workspace_id"])
+            or str(snapshot_account["platform"]) != str(row["platform"])
+        ):
+            raise BrowserEnvironmentError("account_identity_snapshot_mismatch", "account")
+        conn.execute(
+            """
+            UPDATE social_accounts
+            SET identity_runtime_snapshot_json=?, updated_at=?
+            WHERE id=?
+            """,
+            (payload, now, account_id),
+        )
+    return get_social_account(account_id) or {}
+
+
 def list_proxy_profiles(masked: bool = True) -> list[dict[str, Any]]:
     with get_conn() as conn:
         rows = conn.execute("SELECT * FROM proxy_profiles ORDER BY id DESC").fetchall()

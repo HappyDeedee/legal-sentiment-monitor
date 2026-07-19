@@ -191,7 +191,8 @@ INSERT and persists them as `identity_state = generated` in the same
 transaction. Existing account UPDATEs preserve identity columns and do not
 silently backfill legacy rows. Phase 5.1C now implements lifecycle/locking/
 reset/audit transitions without adding another schema migration; Phase 5.1D
-still owns provider/runtime binding and effective snapshots. The fields make
+now implements provider/runtime binding and effective snapshots without
+another schema migration. The fields make
 the browser identity inputs explicit and persistent:
 
 - `environment_region`: customer-safe region bucket used for consistency
@@ -224,10 +225,17 @@ the browser identity inputs explicit and persistent:
   `draft`, `generated`, `validated`, `login_in_progress`, `locked`, `active`,
   `requires_relogin`, or `resetting`;
 - `identity_runtime_snapshot_json`: customer-safe requested/effective runtime
-  snapshot for Playwright/CDP launches, including provider metadata, effective
-  UA/timezone/locale/viewport/screen/device/proxy-region values, unsupported
-  field list, and `fallback_used` flag. It must not contain cookies, proxy
-  credentials, raw profile paths, CDP endpoints, or noVNC tokens.
+  snapshot for Playwright/CDP launches. Phase 5.1D validates exact top-level
+  and nested keys, account/resolution/attempt binding, bounded scalar values,
+  field-scoped mismatch evidence, and a 64 KiB serialized limit before the
+  existing column is updated. It records provider/browser/Profile-key/proxy
+  proof, requested/effective managed values, supported probes, unsupported
+  fields, `fallback_used`, status, and validation time. Recursive validation
+  rejects cookies, proxy URLs/credentials, raw Profile or executable paths,
+  CDP/WebSocket URLs, debug ports, noVNC tokens, commands, environment dumps,
+  fingerprint seeds, probe URLs, external IPs, and raw exception text. The
+  administrator API derives a compact allowlisted summary and never returns
+  the raw JSON column.
 
 `proxy_id` remains the account-bound stable proxy policy field. After CR-047
 locks an account identity, task-level proxy overrides are rejected for that

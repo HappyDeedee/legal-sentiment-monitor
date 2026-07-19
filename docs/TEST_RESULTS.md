@@ -2,6 +2,87 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-19 - Phase 5.1D Browser Runtime Binding Pre-Merge Verification
+
+Environment: isolated Windows worktree
+`C:\Users\Administrator\.codex\worktrees\phase51d-MediaCrawler`, branch
+`codex/phase-5.1d-browser-runtime-binding`, starting from merged
+`main@2adf661`.
+
+Result:
+
+- Added one immutable account-derived browser environment plan and one
+  recursively validated safe result. Exact executable precedence,
+  `profile_key` path derivation, all-eight-state legacy/managed boundaries,
+  explicit-direct/account-bound proxy policy, and browser-routed region proof
+  now fail closed.
+- QR login, Profile checks, ephemeral Cookie validation, visible development
+  login, manual/scheduler Runner attempts, all seven MediaCrawler platform
+  cores, `BrowserLauncher`, and launch-owned CDP consume the same plan before
+  first platform navigation. Managed connect-existing CDP, local detector,
+  dynamic proxy pool, generic Profile, process proxy, and CDP-to-standard
+  fallback do not override the plan.
+- Runner handoff is capped at 8192 UTF-8 bytes, consumed once, removed from the
+  child environment, and bound to a unique attempt. The child atomically writes
+  a safe result; the parent validates account/workspace/platform/action/
+  resolution/attempt/time, persists it while locks are held, and blocks output
+  ingest on missing, stale, malformed, unsafe, or failed evidence.
+- The administrator Platform Accounts drawer now shows one compact safe runtime
+  row with localized provider/mode and mismatch field labels. Raw snapshots,
+  requested/effective values, probes, Profile/executable paths, proxy endpoint,
+  CDP/debug values, fingerprint seed, and command data remain hidden.
+
+Verification:
+
+- Focused Phase 5.1B-D selection passed: `131 passed, 353 deselected`.
+- Complete monitoring regression passed: `484 passed` with three pre-existing
+  deprecation warnings.
+- Python compile passed for every changed Python module.
+- `node --check api/webui/monitor/monitor.js` passed; the current inline monitor
+  script parsed successfully (`1` inline script block).
+- `uv run python scripts/check_docs.py` passed; documentation regression passed
+  (`1 passed`); `git diff --check` passed with only expected Windows
+  LF-to-CRLF notices.
+- Desktop `1440x900` and mobile `390x844` local-Chrome UI checks passed with no
+  console/page error, horizontal page/drawer overflow, summary/form overlap, or
+  secret/path/endpoint display. The UI check used only a fresh `.codex_tmp`
+  database and fake safe account response; it did not open a managed account
+  Profile, proxy, or platform.
+- Independent Claude Code read-only full-diff review returned `PASS` with no
+  blocking or material correctness, security, scope, test, or documentation
+  finding. Its optional retry-boundary and restart/size-proof suggestions were
+  followed by focused regression tests.
+
+Proof boundary:
+
+- This proves Phase 5.1D technical behavior under mocked/fake browser, proxy,
+  probe, child, and platform boundaries. It does not prove real platform login
+  or crawl, real proxy egress, container/systemd restart persistence, or
+  production handoff. Those remain in the separate Phase 5.1 server-like
+  acceptance packet. CR-070, CR-094, and CR-112 remain outside this package.
+- Commit/PR integration and post-merge re-verification remain open.
+
+## 2026-07-19 - Phase 5.1C Merge And Post-Merge Close-Out
+
+Environment: local and remote `main@2adf661` after Phase 5.1C PR #4.
+
+Result:
+
+- `codex/phase-5.1c-account-identity-lifecycle@f855ec4` was pushed, reviewed in
+  PR #4, merged with a merge commit, and synchronized to local `main`.
+- Post-merge full monitoring regression passed (`378 passed`) with the same
+  three pre-existing deprecation warnings.
+- Post-merge Python compile passed for the Phase 5.1C runtime modules.
+- `scripts/check_docs.py` passed and the documentation regression passed
+  (`1 passed`).
+- Local `main` and `origin/main` both resolve to `2adf661` with a clean worktree.
+
+Proof boundary:
+
+- This closes Phase 5.1C branch integration and unlocks Phase 5.1D. Provider
+  runtime binding, effective probes, proxy transport proof, runtime snapshots,
+  Runner/CDP reuse, and final server-like Phase 5.1 acceptance remain open.
+
 ## 2026-07-19 - Phase 5.1C Account Identity Lifecycle And CR-113
 
 Environment: isolated Windows worktree

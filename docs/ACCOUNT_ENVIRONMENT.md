@@ -20,6 +20,10 @@ Rules:
 - after CR-047 locks an account identity, task-level proxy overrides are
   rejected for that locked account environment, and proxy changes require
   explicit reset/re-login;
+- after CR-047 locks an account identity, a null `proxy_id` means an explicit
+  direct-network policy, not task-proxy or default-network fallback. A bound
+  `proxy_id` is account-owned and requires browser-routed region proof before
+  the identity can be treated as active;
 - login and crawling should use the same proxy when a proxy is bound.
 
 Accepted CR-047 target rule:
@@ -121,9 +125,9 @@ inserted account after its stable ID and `profile_key` exist; existing account
 UPDATEs are never silently backfilled or regenerated. Phase 5.1C makes SQLite
 the authority for persisted validation/login/lock/reset/audit transitions and
 connects QR, visible-browser, Cookie, Profile, verification-code, administrator
-check, cancellation, configuration-change, and reset paths. Phase 5.1D still
-owns mandatory provider/runtime binding, effective-value probes, proxy
-transport proof, and snapshots. Identity locks only after account-level QR,
+check, cancellation, configuration-change, and reset paths. Phase 5.1D now
+implements mandatory provider/runtime binding, effective-value probes, proxy
+transport proof, and safe snapshots. Identity locks only after account-level QR,
 Cookie, or Profile verification succeeds. Silent edits after successful login
 remain disallowed; changing a locked identity requires the explicit
 reset/re-login flow with audit logging.
@@ -409,15 +413,94 @@ Suggested error reasons:
 - `account_identity_snapshot_mismatch`;
 - `account_identity_requires_relogin`.
 
+## Provider Runtime Binding
+
+Phase 5.1D uses one immutable `BrowserEnvironmentPlan` as the browser,
+Profile, proxy, and identity authority for managed QR login, Cookie
+validation, Profile checks, visible development login, manual/scheduler crawl,
+Runner child processes, all seven platform cores, and launch-owned CDP.
+
+Provider rules:
+
+- a non-empty `MONITOR_BROWSER_EXECUTABLE` is authoritative; an invalid path
+  fails closed. When it is empty, the pinned Playwright Chromium executable is
+  used and recorded as `playwright_bundled`; managed paths do not run local
+  Chrome/Edge auto-detection;
+- persistent Profile paths are always derived from `profile_key` under
+  `MONITOR_ACCOUNT_PROFILE_ROOT`. Stored legacy paths and platform-generic
+  directories are not managed launch inputs;
+- Cookie validation resolves the same account identity but uses an ephemeral
+  context. Turning a Cookie into a durable Profile remains CR-112 work;
+- `draft` without the generated-identity marker is the only explicit legacy
+  adapter state and cannot claim Phase 5.1 fidelity. `generated`, `validated`,
+  `login_in_progress`, `locked`, and `active` require a managed plan.
+  `requires_relogin` and `resetting` reject launch; a generated identity left
+  in `draft` also fails closed;
+- launch-owned managed CDP applies UA/language, timezone, locale, device
+  metrics, and touch settings before a platform's first navigation, then
+  verifies the page. Managed connect-existing CDP and CDP-to-standard fallback
+  are rejected;
+- a direct policy has no proxy proof request and records
+  `effect_proof=not_applicable`. An account-bound proxy is sent to both the
+  browser and HTTP client, and a browser-routed region probe must pass before
+  the context is returned to a login or crawler caller;
+- the proxy probe URL has no default. Its JSON `region` must exactly match the
+  account's safe `proxy_region_snapshot`; timeout is controlled by
+  `MONITOR_BROWSER_PROXY_PROBE_TIMEOUT_MS`, default `30000` milliseconds.
+  Navigation, response, shape, or region failure stops the attempt;
+- every Runner attempt gets a new `attempt_id`. The serialized internal plan
+  is capped at 8192 UTF-8 bytes, consumed once, cached in memory, and removed
+  from the child environment together with process proxy variables before
+  browser launch;
+- the child writes a validated safe result to a PID-specific temporary file
+  and atomically replaces the destination. The parent accepts it only when
+  account, workspace, platform, action, trigger, resolution, attempt, and
+  validation time match the current attempt; missing, stale, malformed, or
+  unsafe results block output ingestion even if the child exits successfully;
+- internal plan/result environment variables, proxy secrets, executable and
+  Profile paths are never deployment settings, logs, API fields, or persisted
+  runtime snapshot values.
+
+Phase 5.1D does not implement CR-112 Cookie-to-Profile promotion,
+`profile_runtime_version`, internal `profile_only` login mode, exit code 42,
+or raw-Cookie argument retirement. It also does not implement CR-070 or a new
+browser provider.
+
 ## Runtime Snapshot
 
 Add `identity_runtime_snapshot_json` to store requested and effective values.
 The snapshot is customer-safe and redacted.
 
-Snapshot shape:
+Snapshot shape (exact top-level contract):
 
 ```json
 {
+  "contract_version": 1,
+  "resolution_id": "opaque",
+  "attempt_id": "opaque",
+  "action": "crawl",
+  "trigger_source": "manual",
+  "account": {
+    "workspace_id": 1,
+    "account_id": 1429,
+    "platform": "dy",
+    "identity_state": "active"
+  },
+  "browser": {
+    "family": "chromium",
+    "version": "126.0.6478.183",
+    "source": "playwright_bundled"
+  },
+  "profile": {
+    "profile_key": "1/dy/acc_1429",
+    "mode": "persistent"
+  },
+  "proxy": {
+    "policy": "account_bound",
+    "proxy_id": 7,
+    "region": "CN_MAINLAND",
+    "effect_proof": "passed"
+  },
   "requested": {
     "identity_template": "CN_WIN_CHROME_1920",
     "browser_platform": "windows",
@@ -450,22 +533,28 @@ Snapshot shape:
   },
   "provider": {
     "name": "playwright",
-    "mode": "launch",
-    "version": "v1"
+    "mode": "cdp_launch",
+    "version": "1.45.0"
   },
   "probes": {
-    "navigator.userAgent": "...",
-    "navigator.language": "...",
-    "navigator.languages": ["..."],
-    "Intl.DateTimeFormat().resolvedOptions().timeZone": "...",
-    "window.screen": {"width": 1920, "height": 1080},
-    "window.innerSize": {"width": 1920, "height": 963},
-    "window.devicePixelRatio": 1,
-    "navigator.maxTouchPoints": 0,
-    "navigator.webdriver": true
+    "navigator_user_agent": "...",
+    "navigator_language": "zh-CN",
+    "navigator_languages": ["zh-CN", "zh"],
+    "timezone": "Asia/Shanghai",
+    "screen_width": 1920,
+    "screen_height": 1080,
+    "viewport_width": 1920,
+    "viewport_height": 963,
+    "device_scale_factor": 1,
+    "max_touch_points": 0,
+    "is_mobile": false,
+    "webdriver": true
   },
-  "unsupported_fields": [],
+  "unsupported_fields": ["canvas", "webgl", "fonts", "plugins"],
+  "mismatch_evidence": [],
   "fallback_used": false,
+  "ok": true,
+  "reason": "",
   "validated_at": "2026-06-18T00:00:00Z"
 }
 ```
@@ -480,8 +569,20 @@ Rules:
   fabricating an effective value;
 - `unsupported_fields` is allowed only for future/provider-dependent or
   metadata-only fields that are explicitly documented as not managed in V1;
-- the snapshot must not include cookies, proxy credentials, raw profile paths,
-  CDP endpoints, or noVNC session tokens.
+- exact keys, scalar types, enum values, account binding, identifier formats,
+  and the 64 KiB serialized limit are validated before persistence;
+- recursive validation rejects cookies, proxy URLs/credentials, raw Profile or
+  executable paths, CDP/WebSocket URLs, debug ports, noVNC tokens, commands,
+  environment dumps, fingerprint seeds, probe URLs, external IPs, and raw
+  exception text;
+- each mismatch entry has exactly `field`, `requested`, and `effective`.
+  `field` must be a documented managed field and both values must pass that
+  field's bounded scalar normalizer; arbitrary nested objects, URI schemes,
+  and absolute/UNC paths are rejected;
+- the administrator API/UI receives only the compact allowlisted provider,
+  browser, Profile-key, proxy-proof, validation-time, fallback, unsupported
+  count, and mismatch-field-name summary. Raw requested/effective/probe values
+  are not returned.
 
 ## Audit And Diagnostics
 
@@ -507,9 +608,9 @@ Each audit event should record:
 - validation or launch failure reason;
 - snapshot reference or diff summary.
 
-Admin diagnostics should surface the last runtime snapshot, the validation
-reason for the last failure, and the effective-vs-requested diff without
-showing secrets or raw paths.
+Admin diagnostics surface only the compact safe runtime summary and mismatch
+field names. Detailed requested/effective values and probes remain internal
+even when the stored snapshot itself passes the recursive allowlist.
 
 ## Account Environment Export And Import
 

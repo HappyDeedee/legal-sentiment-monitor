@@ -29,6 +29,16 @@ from playwright.async_api import Browser, BrowserContext, Playwright
 
 import config
 from tools.browser_launcher import BrowserLauncher
+from tools.browser_environment import (
+    BrowserEnvironmentError,
+    BrowserEnvironmentPlan,
+    bind_managed_context,
+    browser_environment_failure_result,
+    managed_proxy_formats,
+    plan_from_environment,
+    prove_managed_proxy,
+    write_browser_environment_result,
+)
 from tools import utils
 
 
@@ -45,7 +55,8 @@ class CDPBrowserManager:
     CDP browser manager, responsible for launching and managing browsers connected via CDP
     """
 
-    def __init__(self):
+    def __init__(self, plan: BrowserEnvironmentPlan | None = None):
+        self.managed_plan = plan or plan_from_environment(required=False)
         self.launcher = BrowserLauncher()
         self.browser: Optional[Browser] = None
         self.browser_context: Optional[BrowserContext] = None
@@ -113,6 +124,20 @@ class CDPBrowserManager:
         Launch browser and connect via CDP
         """
         try:
+            if self.managed_plan is not None:
+                if self.managed_plan.launch_mode != "cdp_launch" or config.CDP_CONNECT_EXISTING:
+                    raise BrowserEnvironmentError(
+                        "account_identity_provider_unsupported",
+                        "cdp_connect_existing",
+                    )
+                expected_proxy, _ = managed_proxy_formats()
+                if playwright_proxy != expected_proxy:
+                    raise BrowserEnvironmentError(
+                        "account_identity_snapshot_mismatch",
+                        "proxy",
+                    )
+                user_agent = self.managed_plan.user_agent
+                headless = self.managed_plan.headless
             if config.CDP_CONNECT_EXISTING:
                 # Connect to an existing browser that already has remote debugging enabled
                 return await self._connect_existing_browser(playwright, playwright_proxy, user_agent)
@@ -137,10 +162,39 @@ class CDPBrowserManager:
                 playwright_proxy, user_agent
             )
 
+            if self.managed_plan is not None:
+                bind_managed_context(browser_context, self.managed_plan)
+                await prove_managed_proxy(browser_context, self.managed_plan)
+
             self.browser_context = browser_context
             return browser_context
 
         except Exception as e:
+            if self.managed_plan is not None:
+                if isinstance(e, BrowserEnvironmentError):
+                    failure = e
+                else:
+                    failure = BrowserEnvironmentError(
+                        "account_identity_provider_browser_crashed",
+                        "cdp",
+                    )
+                if not hasattr(failure, "browser_environment_result"):
+                    failure.browser_environment_result = browser_environment_failure_result(
+                        self.managed_plan,
+                        failure.reason,
+                        proxy_effect=(
+                            "failed"
+                            if self.managed_plan.proxy_policy == "account_bound"
+                            else "not_applicable"
+                        ),
+                    )
+                write_browser_environment_result(failure.browser_environment_result)
+                utils.logger.error(
+                    "[CDPBrowserManager] Managed CDP browser launch failed: "
+                    + failure.reason
+                )
+                await self.cleanup()
+                raise failure from e
             utils.logger.error(f"[CDPBrowserManager] CDP browser launch failed: {e}")
             await self.cleanup()
             raise
@@ -206,6 +260,9 @@ class CDPBrowserManager:
         """
         Get browser path
         """
+        if self.managed_plan is not None:
+            return self.managed_plan.browser_executable_path
+
         # Prefer user-defined path
         if config.CUSTOM_BROWSER_PATH and os.path.isfile(config.CUSTOM_BROWSER_PATH):
             utils.logger.info(
@@ -261,7 +318,14 @@ class CDPBrowserManager:
         """
         # Set user data directory (if save login state is enabled)
         user_data_dir = None
-        if config.SAVE_LOGIN_STATE:
+        if self.managed_plan is not None:
+            user_data_dir = self.managed_plan.profile_path
+            if not os.path.isdir(user_data_dir):
+                raise BrowserEnvironmentError(
+                    "account_identity_requires_relogin",
+                    "profile_key",
+                )
+        elif config.SAVE_LOGIN_STATE:
             user_data_dir = resolve_cdp_user_data_dir(config.PLATFORM)
             os.makedirs(user_data_dir, exist_ok=True)
             utils.logger.info(f"[CDPBrowserManager] User data directory: {user_data_dir}")
@@ -270,8 +334,20 @@ class CDPBrowserManager:
         self.launcher.browser_process = self.launcher.launch_browser(
             browser_path=browser_path,
             debug_port=self.debug_port,
-            headless=headless,
+            headless=self.managed_plan.headless if self.managed_plan else headless,
             user_data_dir=user_data_dir,
+            proxy_server=self.managed_plan.proxy_url if self.managed_plan else None,
+            user_agent=self.managed_plan.user_agent if self.managed_plan else None,
+            language=self.managed_plan.locale if self.managed_plan else None,
+            window_size=(
+                (self.managed_plan.viewport_width, self.managed_plan.viewport_height)
+                if self.managed_plan
+                else None
+            ),
+            device_scale_factor=(
+                self.managed_plan.device_scale_factor if self.managed_plan else None
+            ),
+            managed=self.managed_plan is not None,
         )
 
         # Wait for browser to be ready
@@ -323,7 +399,7 @@ class CDPBrowserManager:
         Connect to browser via CDP
         """
         try:
-            if config.CDP_CONNECT_EXISTING:
+            if config.CDP_CONNECT_EXISTING and self.managed_plan is None:
                 ws_url = await self._get_browser_websocket_url(self.debug_port)
                 utils.logger.info(f"[CDPBrowserManager] Connecting to existing browser via CDP: {ws_url}")
                 utils.logger.info(
@@ -481,7 +557,7 @@ class CDPBrowserManager:
                     self.browser = None
 
             # Close browser process (skip if connected to existing browser - we didn't launch it)
-            if config.CDP_CONNECT_EXISTING:
+            if config.CDP_CONNECT_EXISTING and self.managed_plan is None:
                 utils.logger.info(
                     "[CDPBrowserManager] Connected to existing browser, skipping process cleanup"
                 )
