@@ -50,6 +50,15 @@ Last updated: 2026-07-19
   material finding. Post-merge full (`485 passed`), focused (`132 passed`),
   compile, and documentation gates also pass. The Phase 5.1 server-like
   acceptance packet is now the active unit; no real acceptance action has run.
+- CR-115 is the active narrow follow-up on
+  `codex/cr-115-server-like-temp-cleanup` from `main@808822a`. Two Phase 5.1
+  Task 3 Windows lower-strength preflight runs reproduced residual temporary
+  SQLite/WAL files after otherwise successful checks. The bounded cleanup,
+  structured failure result, and retention boundaries are implemented; four
+  focused tests, a real 12-check lower-strength rerun, the `538`-test suite,
+  path-safe temporary output, compile, and independent read-only review pass.
+  PR integration and post-merge verification remain open, so Task 3 is paused
+  at this checkpoint.
 - Phase 21 and CR-107 through CR-110 are merged current-main history, not
   active working-tree implementation.
 - CR-111 verified and synchronized human-readable governance state only; it did

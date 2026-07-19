@@ -57,6 +57,7 @@ def main() -> int:
 
     results: list[dict[str, Any]] = []
     process: subprocess.Popen[str] | None = None
+    completed = False
     try:
         process = _start_service(env, args.host, port, data_dir / "uvicorn-1.log")
         _wait_for_health(base_url)
@@ -86,17 +87,49 @@ def main() -> int:
         )
         _record(results, "local_chrome_not_required_for_validation", True, "validation used HTTP service and headless browser check only")
         _verify_headless_browser(results)
-        print(json.dumps({"ok": all(item["ok"] for item in results), "data_dir": str(data_dir), "checks": results}, ensure_ascii=False, indent=2))
-        return 0 if all(item["ok"] for item in results) else 1
+        completed = True
     except Exception as exc:
         _record(results, "server_like_validation_exception", False, f"{type(exc).__name__}: {exc}")
-        print(json.dumps({"ok": False, "data_dir": str(data_dir), "checks": results}, ensure_ascii=False, indent=2))
-        return 1
     finally:
         if process:
             _stop_service(process)
         if not args.data_dir and not args.keep_data:
-            shutil.rmtree(data_dir, ignore_errors=True)
+            try:
+                _remove_temporary_validation_data(data_dir)
+            except OSError as exc:
+                _record(
+                    results,
+                    "temporary_data_cleanup",
+                    False,
+                    f"{type(exc).__name__}: generated temporary validation data could not be removed after bounded retries",
+                )
+            else:
+                _record(
+                    results,
+                    "temporary_data_cleanup",
+                    True,
+                    "generated temporary validation data removed",
+                )
+    ok = completed and all(item["ok"] for item in results)
+    data_reference = str(data_dir) if args.data_dir or args.keep_data else data_dir.name
+    print(json.dumps({"ok": ok, "data_dir": data_reference, "checks": results}, ensure_ascii=False, indent=2))
+    return 0 if ok else 1
+
+
+def _remove_temporary_validation_data(data_dir: Path, attempts: int = 10, delay_seconds: float = 0.1) -> None:
+    last_error: OSError | None = None
+    for attempt in range(attempts):
+        try:
+            shutil.rmtree(data_dir)
+            return
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            last_error = exc
+            if attempt + 1 < attempts:
+                time.sleep(delay_seconds)
+    if last_error is not None:
+        raise last_error
 
 
 def _start_service(env: dict[str, str], host: str, port: int, log_path: Path) -> subprocess.Popen[str]:

@@ -2,6 +2,43 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-20 - CR-115 Server-Like Temporary Data Cleanup
+
+Environment: isolated worktree `codex/cr-115-server-like-temp-cleanup` from
+merged `main@808822a`.
+
+Result:
+
+- Two default Windows lower-strength preflight runs completed all prior 11
+  checks but reproducibly left generated SQLite/WAL files. Both residual
+  directories were removed after diagnosis and no generated runtime artifact
+  entered Git.
+- Root cause was one final
+  `shutil.rmtree(data_dir, ignore_errors=True)`: a transient Windows lock was
+  silently ignored and success JSON was printed before cleanup finalization.
+- The script now stops the service, retries cleanup for a bounded interval,
+  records `temporary_data_cleanup`, and only then prints one final JSON result.
+  Permanent cleanup failure is path-safe and returns nonzero. Explicit
+  `--data-dir` and `--keep-data` still retain data by request; default temporary
+  mode returns only the generated directory name, not an absolute local path.
+
+Verification:
+
+- RED: one focused test failed because the old script made only one ignored
+  removal attempt instead of retrying to the third synthetic success.
+- Focused CR-115 tests: `4 passed, 534 deselected`.
+- Real lower-strength preflight: `12` checks passed, including
+  `temporary_data_cleanup`; the generated directory was absent after exit.
+- Complete monitoring regression: `538 passed` with three existing warnings.
+- Python compile and independent read-only review pass. PR integration and
+  post-merge verification remain open.
+
+Proof boundary:
+
+- This verifies synthetic/local validator cleanup only. Docker/Linux remains
+  the Phase 5.1 acceptance baseline, and no real account, Cookie, Profile,
+  proxy, platform, restart, or crawl acceptance action ran.
+
 ## 2026-07-19 - Phase 5.1 Acceptance Evidence Checker Task 2
 
 Environment: isolated worktree `codex/phase-5.1-server-like-acceptance` from

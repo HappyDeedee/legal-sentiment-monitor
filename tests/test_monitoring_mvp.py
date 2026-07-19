@@ -357,6 +357,115 @@ def _phase_5_1_acceptance_evidence_module():
     return __import__("scripts.phase_5_1_acceptance_evidence", fromlist=["*"])
 
 
+def _server_like_validation_module():
+    script_path = Path(__file__).resolve().parents[1] / "scripts" / "server_like_validation.py"
+    assert script_path.is_file(), "server-like validation script is missing"
+    return __import__("scripts.server_like_validation", fromlist=["*"])
+
+
+def _stub_server_like_validation(module, monkeypatch, data_dir):
+    monkeypatch.setattr(module.sys, "argv", ["server_like_validation.py"])
+    monkeypatch.setattr(module.tempfile, "mkdtemp", lambda **_kwargs: str(data_dir))
+    monkeypatch.setattr(module, "_free_port", lambda _host: 8123)
+    monkeypatch.setattr(module, "_start_service", lambda *_args, **_kwargs: object())
+    monkeypatch.setattr(module, "_stop_service", lambda _process: None)
+    monkeypatch.setattr(module, "_wait_for_health", lambda _base_url: None)
+    monkeypatch.setattr(module, "_verify_monitor_page", lambda _base_url: None)
+    monkeypatch.setattr(module, "_login", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(module, "_assert_local_login_disabled", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(module, "_create_same_platform_accounts", lambda *_args, **_kwargs: [1, 2])
+    monkeypatch.setattr(module, "_verify_profile_paths", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(module, "_verify_locks", lambda *_args, **_kwargs: None)
+    monkeypatch.setattr(
+        module,
+        "_api",
+        lambda *_args, **_kwargs: {"accounts": [{"id": 1}, {"id": 2}]},
+    )
+    monkeypatch.setattr(module, "_verify_headless_browser", lambda _results: None)
+    monkeypatch.setattr(module.time, "sleep", lambda _seconds: None)
+
+
+def test_cr115_server_like_validation_retries_temporary_data_cleanup(tmp_path, monkeypatch, capsys):
+    module = _server_like_validation_module()
+    data_dir = tmp_path / "server-like-data"
+    attempts = 0
+    real_rmtree = module.shutil.rmtree
+
+    def flaky_rmtree(path, *args, **kwargs):
+        nonlocal attempts
+        attempts += 1
+        if attempts < 3:
+            if kwargs.get("ignore_errors"):
+                return None
+            raise PermissionError("synthetic transient Windows lock")
+        return real_rmtree(path, *args, **kwargs)
+
+    _stub_server_like_validation(module, monkeypatch, data_dir)
+    monkeypatch.setattr(module.shutil, "rmtree", flaky_rmtree)
+
+    exit_code = module.main()
+    result = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert attempts == 3
+    assert not data_dir.exists()
+    assert any(
+        item["name"] == "temporary_data_cleanup" and item["ok"] is True
+        for item in result["checks"]
+    )
+
+
+def test_cr115_server_like_validation_reports_permanent_cleanup_failure(tmp_path, monkeypatch, capsys):
+    module = _server_like_validation_module()
+    data_dir = tmp_path / "server-like-data"
+    attempts = 0
+
+    def locked_rmtree(_path, *_args, **_kwargs):
+        nonlocal attempts
+        attempts += 1
+        raise PermissionError("synthetic permanent Windows lock")
+
+    _stub_server_like_validation(module, monkeypatch, data_dir)
+    monkeypatch.setattr(module.shutil, "rmtree", locked_rmtree)
+
+    exit_code = module.main()
+    result = json.loads(capsys.readouterr().out)
+    cleanup = next(item for item in result["checks"] if item["name"] == "temporary_data_cleanup")
+
+    assert exit_code == 1
+    assert result["ok"] is False
+    assert attempts == 10
+    assert cleanup["ok"] is False
+    assert str(data_dir) not in cleanup["detail"]
+    assert str(data_dir) not in json.dumps(result)
+    assert result["data_dir"] == data_dir.name
+
+
+@pytest.mark.parametrize("retention_mode", ["data_dir", "keep_data"])
+def test_cr115_server_like_validation_preserves_requested_data_retention(
+    tmp_path,
+    monkeypatch,
+    capsys,
+    retention_mode,
+):
+    module = _server_like_validation_module()
+    data_dir = tmp_path / "server-like-data"
+    _stub_server_like_validation(module, monkeypatch, data_dir)
+    argv = ["server_like_validation.py", "--keep-data"]
+    if retention_mode == "data_dir":
+        argv = ["server_like_validation.py", "--data-dir", str(data_dir)]
+    monkeypatch.setattr(module.sys, "argv", argv)
+
+    exit_code = module.main()
+    result = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert result["ok"] is True
+    assert data_dir.exists()
+    assert result["data_dir"] == str(data_dir.resolve())
+    assert not any(item["name"] == "temporary_data_cleanup" for item in result["checks"])
+
+
 def _phase_5_1_acceptance_action(
     *,
     action,
