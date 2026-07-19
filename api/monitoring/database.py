@@ -354,6 +354,30 @@ def init_db() -> None:
                 profile_key TEXT NOT NULL DEFAULT '',
                 profile_path TEXT NOT NULL DEFAULT '',
                 proxy_id INTEGER,
+                environment_region TEXT NOT NULL DEFAULT '',
+                browser_platform TEXT NOT NULL DEFAULT '',
+                identity_template TEXT NOT NULL DEFAULT '',
+                fingerprint_seed TEXT NOT NULL DEFAULT '',
+                user_agent TEXT NOT NULL DEFAULT '',
+                timezone TEXT NOT NULL DEFAULT '',
+                locale TEXT NOT NULL DEFAULT '',
+                accept_language TEXT NOT NULL DEFAULT '',
+                screen_width INTEGER,
+                screen_height INTEGER,
+                viewport_width INTEGER,
+                viewport_height INTEGER,
+                device_scale_factor REAL,
+                is_mobile INTEGER NOT NULL DEFAULT 0,
+                has_touch INTEGER NOT NULL DEFAULT 0,
+                identity_generator_name TEXT NOT NULL DEFAULT '',
+                identity_generator_version TEXT NOT NULL DEFAULT '',
+                identity_environment_version TEXT NOT NULL DEFAULT '',
+                proxy_region_snapshot TEXT NOT NULL DEFAULT '',
+                browser_environment_locked_at TEXT,
+                browser_environment_lock_reason TEXT NOT NULL DEFAULT '',
+                requires_relogin INTEGER NOT NULL DEFAULT 0,
+                identity_state TEXT NOT NULL DEFAULT 'draft',
+                identity_runtime_snapshot_json TEXT NOT NULL DEFAULT '',
                 is_draft INTEGER NOT NULL DEFAULT 0,
                 platform_account_id TEXT NOT NULL DEFAULT '',
                 platform_account_name TEXT NOT NULL DEFAULT '',
@@ -599,6 +623,7 @@ def init_db() -> None:
         _ensure_column(conn, "social_accounts", "platform_identity_checked_at", "TEXT")
         _migrate_raw_contents_unique_by_job(conn)
         _ensure_phase_05_schema(conn)
+        _ensure_phase_51_account_identity_schema(conn)
         mark_selftest_jobs_internal(conn)
         conn.execute(
             "INSERT OR IGNORE INTO ai_configs (id, updated_at) VALUES (1, ?)",
@@ -974,6 +999,47 @@ def _ensure_phase_05_schema(conn: sqlite3.Connection) -> None:
             ON resource_locks(resource_type, resource_id, expires_at);
         CREATE INDEX IF NOT EXISTS idx_resource_lock_cleanup
             ON resource_locks(expires_at);
+        """
+    )
+
+
+def _ensure_phase_51_account_identity_schema(conn: sqlite3.Connection) -> None:
+    columns = (
+        ("environment_region", "TEXT NOT NULL DEFAULT ''"),
+        ("browser_platform", "TEXT NOT NULL DEFAULT ''"),
+        ("identity_template", "TEXT NOT NULL DEFAULT ''"),
+        ("fingerprint_seed", "TEXT NOT NULL DEFAULT ''"),
+        ("user_agent", "TEXT NOT NULL DEFAULT ''"),
+        ("timezone", "TEXT NOT NULL DEFAULT ''"),
+        ("locale", "TEXT NOT NULL DEFAULT ''"),
+        ("accept_language", "TEXT NOT NULL DEFAULT ''"),
+        ("screen_width", "INTEGER"),
+        ("screen_height", "INTEGER"),
+        ("viewport_width", "INTEGER"),
+        ("viewport_height", "INTEGER"),
+        ("device_scale_factor", "REAL"),
+        ("is_mobile", "INTEGER NOT NULL DEFAULT 0"),
+        ("has_touch", "INTEGER NOT NULL DEFAULT 0"),
+        ("identity_generator_name", "TEXT NOT NULL DEFAULT ''"),
+        ("identity_generator_version", "TEXT NOT NULL DEFAULT ''"),
+        ("identity_environment_version", "TEXT NOT NULL DEFAULT ''"),
+        ("proxy_region_snapshot", "TEXT NOT NULL DEFAULT ''"),
+        ("browser_environment_locked_at", "TEXT"),
+        ("browser_environment_lock_reason", "TEXT NOT NULL DEFAULT ''"),
+        ("requires_relogin", "INTEGER NOT NULL DEFAULT 0"),
+        ("identity_state", "TEXT NOT NULL DEFAULT 'draft'"),
+        ("identity_runtime_snapshot_json", "TEXT NOT NULL DEFAULT ''"),
+    )
+    for column, definition in columns:
+        _ensure_column(conn, "social_accounts", column, definition)
+    conn.executescript(
+        """
+        CREATE INDEX IF NOT EXISTS idx_social_accounts_identity_state
+            ON social_accounts(workspace_id, identity_state);
+        CREATE INDEX IF NOT EXISTS idx_social_accounts_requires_relogin
+            ON social_accounts(workspace_id, requires_relogin);
+        CREATE INDEX IF NOT EXISTS idx_social_accounts_identity_template
+            ON social_accounts(workspace_id, identity_template);
         """
     )
 
@@ -5460,6 +5526,9 @@ def _row_to_pool_item(row: dict[str, Any], masked: bool = True) -> dict[str, Any
     row["cookies"] = mask_secret(encrypted) if masked else raw_cookies
     row["has_cookies"] = bool(raw_cookies)
     row["is_draft"] = bool(row.get("is_draft"))
+    row["requires_relogin"] = bool(row.get("requires_relogin"))
+    row["is_mobile"] = bool(row.get("is_mobile"))
+    row["has_touch"] = bool(row.get("has_touch"))
     try:
         profile_env = account_profile_environment(row)
     except ValueError:

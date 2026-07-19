@@ -46,7 +46,8 @@ account + action
 | --- | --- | --- |
 | Phase 21 | historical/already completed | Merged and closed on current `main`; it is not reopened here. |
 | Phase 5.1P | current, completed by this preflight | The packet and all mapping tasks are executed by this document. |
-| Phase 5.1A | current, next eligible | May start after this documentation gate; scope remains additive account identity data. |
+| Phase 5.1A | completed and verified | Its additive account identity data-model packet is implemented and independently reviewed. |
+| Phase 5.1B | current, next eligible | May start after the verified Phase 5.1A data-model boundary; scope remains deterministic generation and fail-closed validation. |
 | Phase 5.1B-D | current, dependency-gated | Must execute in order after the preceding Phase 5.1 unit passes. |
 | Phase 5.1 acceptance | current, dependency-gated | Requires server-like requested/effective, proxy-effect, manual/scheduler, and CDP proof. |
 | CR-070 / Phase 5.2 | current, dependency-gated | Remains blocked until all CR-047 provider binding and effective snapshots are verified. |
@@ -444,7 +445,8 @@ diagnostics but cannot individually satisfy this acceptance.
 ## Phase 5.1 Handoff
 
 Phase 5.1A-D can proceed without another provider-authority decision under
-these boundaries:
+these boundaries. Phase 5.1A is now implemented and independently verified;
+Phase 5.1B is next:
 
 1. **5.1A:** add only the accepted additive identity/snapshot fields and keep
    existing accounts readable without guessed backfill.

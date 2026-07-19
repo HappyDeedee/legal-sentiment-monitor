@@ -90,10 +90,10 @@ should not be used as the primary identity for new account environments.
 
 ### Accepted Phase 5.1 - Add Account Identity Fields
 
-Status: Accepted for CR-047. Phase 5.1P is verified and Phase 5.1A is the next
-implementation unit. The additive migration below has not run on the current
-baseline and must extend the existing `profile_key` model with a persisted,
-locked account identity for each platform account.
+Status: implemented and independently verified in the isolated Phase 5.1A
+worktree against `main@8b55c2a`. The additive migration extends the existing
+`profile_key` model with storage for a persisted, locked account identity while
+leaving generation, validation, locking, and runtime binding to Phase 5.1B-D.
 
 Additive fields for `social_accounts`:
 
@@ -146,6 +146,9 @@ Migration and compatibility:
 - existing rows added by migration start as `identity_state = draft` with
   empty identity fields; they are readable but cannot launch through CR-047
   locked-identity paths until regenerated and re-logged in;
+- nullable dimension and scale fields use SQL `NULL` for not generated, while
+  `TEXT NOT NULL DEFAULT ''` fields use an empty string for not generated;
+  Phase 5.1B validation must distinguish `NULL` from numeric zero;
 - do not move old profile directories during this migration;
 - keep `proxy_id` as the account-bound stable proxy policy field and reject
   task-level proxy overrides for locked account environments; changing the
@@ -163,6 +166,12 @@ Migration and compatibility:
   `idx_social_accounts_identity_template`;
 - do not expose raw profile paths, cookies, proxy credentials, CDP endpoints,
   noVNC sessions, or fingerprint-debug output through customer-facing APIs.
+
+Phase 5.1A implementation uses one idempotent
+`_ensure_phase_51_account_identity_schema` helper, reuses the existing
+`_ensure_column` migration authority, and creates each documented index as a
+non-unique workspace-scoped index. Reopening the same database is a no-op for
+existing columns and indexes.
 
 ### Proposed CR-112 - Persistent Profile Promotion And Bridge Metadata
 

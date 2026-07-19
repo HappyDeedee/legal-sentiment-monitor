@@ -12,8 +12,8 @@ server path and manual Cookie input as a collapsed advanced option.
 
 **Baseline:** originally reviewed against `main@abb4d66`; Phase 5.1P was later
 verified against `main@459237f` on 2026-07-19. `CR-111` is already used. The
-proposed requirement identifier is `CR-112`. Phase 5.1A is now the first
-unblocked CR-047 implementation unit.
+proposed requirement identifier is `CR-112`. Phase 5.1A is implemented and
+independently verified; Phase 5.1B is now the next CR-047 unit.
 
 **Review lane:** Deep. The roadmap touches browser processes, extension
 distribution, authentication material, account identity, durable state,
@@ -53,7 +53,7 @@ Packet documents:
 | Label | Current evidence | Classification | Documentation action | Protected behavior | Readiness |
 |---|---|---|---|---|---|
 | Phase 5.1P | `docs/TASKS.md` and `docs/phase-5.1p-browser-entrypoint-map.md` record verified completion | Completed read-only preflight | Keep as Packet A evidence and provider boundary | No code, schema, Profile, Cookie, proxy, or runtime mutation | Complete |
-| Phase 5.1A-D | Phase 5.1P gate passed; Phase 5.1A is next | Current, serially dependency-gated | Keep under CR-047 | One provider output and requested/effective snapshots | Phase 5.1A ready; B-D gated in order |
+| Phase 5.1A-D | Phase 5.1P and Phase 5.1A verified; Phase 5.1B is next | Current, serially dependency-gated | Keep under CR-047 | One provider output and requested/effective snapshots | Phase 5.1B ready; C-D gated in order |
 | Phase 5.1 acceptance | Gated by Phase 5.1A-D | Current dependency-gated | Keep under CR-047 | Server-like proof; no diagnostic fallback presented as identity proof | Blocked |
 | Proposed CR-112 | Registered in formal governance with status `Needs Confirmation` | Needs Confirmation | Keep linked plans proposed until scope and sequencing are accepted | Current QR and manual Cookie flows | Not implementation-ready |
 | CookieBridge source | Temporary source under `.codex_tmp`; extension loads a Service Worker but did not register in the observed black-box run | Needs Baseline | Evaluate in Packet B only | No product dependency on unproved connector behavior | Future-valid |

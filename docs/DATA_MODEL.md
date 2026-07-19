@@ -184,10 +184,11 @@ direction is to use new `profile_key` profiles and require old low-volume
 accounts to re-login instead of preserving long-term legacy path compatibility.
 The inline lock fields protect both the account and its `profile_key`.
 
-CR-047 account identity fields are accepted for future implementation, not yet
-active in the current schema unless the Phase 5.1 migration has run. The
-fields make the browser identity inputs for a platform account explicit and
-persistent:
+CR-047 account identity fields are implemented by Phase 5.1A as an additive
+schema migration. They become active when `init_db()` opens a database. Phase
+5.1A adds storage and read compatibility only; generation, validation,
+locking, and runtime binding remain Phase 5.1B-D. The fields make the browser
+identity inputs for a platform account explicit and persistent:
 
 - `environment_region`: customer-safe region bucket used for consistency
   checks, such as `CN_MAINLAND`, `HK`, or `SG`;
@@ -237,6 +238,18 @@ The migration should be additive, should keep existing accounts readable, and
 should not expose raw profile paths, cookies, proxy
 credentials, CDP endpoints, noVNC sessions, or fingerprint-debug internals
 through normal-user APIs.
+
+Phase 5.1A compatibility defaults:
+
+- existing and new ungenerated rows use `identity_state = draft`;
+- text identity fields use `''` for not generated;
+- nullable dimension and scale fields use SQL `NULL` for not generated;
+- `is_mobile`, `has_touch`, and `requires_relogin` use SQLite `0` and are
+  returned as Python booleans by account readers;
+- migration does not derive identity values, change `proxy_id`, move a
+  Profile, rewrite encrypted Cookies, or change existing timestamps;
+- workspace-scoped non-unique indexes cover `identity_state`,
+  `requires_relogin`, and `identity_template` operational queries.
 
 ### Proposed CR-112 Profile Runtime And Promotion Metadata
 

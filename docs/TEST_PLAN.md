@@ -28,9 +28,10 @@ governance goal.
   acceptance criteria, rollback or recovery, documentation updates, and stop
   conditions.
 - The packet follows the current execution order unless a later accepted
-  decision changes it: Phase 21 is merged and closed on `main`, Phase 5.1P is
-  verified, Phase 5.1A is next, then Phase 5.1B-D, Phase 5.1 acceptance, and
-  CR-070 / Phase 5.2 after CR-047 provider/effective snapshot verification.
+  decision changes it: Phase 21 is merged and closed on `main`, Phase 5.1P and
+  Phase 5.1A are verified, Phase 5.1B is next, then Phase 5.1C-D, Phase 5.1
+  acceptance, and CR-070 / Phase 5.2 after CR-047 provider/effective snapshot
+  verification.
 - Phase 21 packets remain frontend-visual only and preserve Task Center, Run
   Detail, drawer, modal, row-menu, select/date, close, scroll, refresh,
   routing, owner-scope, and permission behavior unless a separate accepted CR
@@ -212,6 +213,15 @@ requested/effective runtime snapshot contract.
 
 - Verified Phase 5.1P review evidence maps every current login and crawl
   entrypoint before Phase 5.1A schema/code implementation starts.
+- Phase 5.1A fresh-schema tests verify all 24 accepted account identity fields,
+  their exact safe defaults, and three non-unique workspace-scoped indexes
+  with the documented column order.
+- Phase 5.1A existing-schema tests run the additive helper twice and verify it
+  preserves account status, `profile_key`, legacy Profile path, proxy binding,
+  encrypted Cookie value, and timestamps without guessed identity backfill.
+- Phase 5.1A read tests verify false SQLite flags become Python booleans,
+  nullable dimension/scale fields remain `None`, and masked detail/list reads
+  do not expose raw Profile paths.
 - QR login, Cookie validation, and login-state checks resolve the same
   `profile_key`, account identity, proxy policy, user agent, timezone, locale,
   accept-language, viewport/screen, device flags, and provider mode.
@@ -1587,9 +1597,9 @@ Documentation-stage checks:
 - Before delivery, verify all five plan files and every CR-112 formal reference
   including `DATA_MODEL.md` and `SCHEMA_MIGRATION.md` are staged in one atomic
   commit; a partial commit fails the documentation acceptance gate.
-- Verify Phase 5.1P remains recorded as verified, Phase 5.1A-D remains owned by
-  CR-047 with Phase 5.1A next, and CR-112 does not preempt the accepted CR-070
-  / Phase 5.2 sequence without a later accepted decision.
+- Verify Phase 5.1P and Phase 5.1A remain recorded as verified, Phase 5.1B-D
+  remains owned by CR-047 with Phase 5.1B next, and CR-112 does not preempt the
+  accepted CR-070 / Phase 5.2 sequence without a later accepted decision.
 - Verify account/security and deployment sections are explicitly proposed and
   do not change the current server-first QR acceptance boundary.
 - Verify `DECISIONS.md`, CR-112, account-environment guidance, and all five

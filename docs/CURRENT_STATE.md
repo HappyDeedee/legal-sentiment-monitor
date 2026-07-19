@@ -4,9 +4,14 @@ Last updated: 2026-07-19
 
 ## Current Baseline
 
-- Repository baseline before the Phase 5.1P documentation update: clean
-  `main@459237f`,
-  matching the current local `origin/main` tracking reference.
+- Current synchronized baseline: clean `main@8b55c2a`, matching `origin/main`
+  before the isolated Phase 5.1A implementation worktree was opened.
+- Phase 5.1A code/tests are complete on
+  `codex/phase-5.1a-account-identity-schema`: all 24 additive fields, three
+  workspace-scoped indexes, idempotent legacy migration, and boolean read
+  normalization are implemented. Focused tests and the full `352`-test monitor
+  suite pass; the final independent read-only review returned `READY` with no
+  finding.
 - Phase 21 and CR-107 through CR-110 are merged current-main history, not
   active working-tree implementation.
 - CR-111 verified and synchronized human-readable governance state only; it did
@@ -36,8 +41,9 @@ Last updated: 2026-07-19
   split without changing product code, schema, UI, runtime data, Profiles,
   Cookies, proxies, crawler behavior, browser processes, deployment, or the
   database.
-- Phase 5.1A is the next eligible execution unit. Phase 5.1B-D and the Phase
-  5.1 acceptance gate remain serially gated. CR-070 / Phase 5.2 remains blocked
+- Phase 5.1A is implemented and independently verified. Phase 5.1B is the next
+  eligible unit; Phase 5.1C-D and the Phase 5.1 acceptance gate remain serially
+  gated. CR-070 / Phase 5.2 remains blocked
   by implemented and verified CR-047 provider binding and requested/effective
   runtime snapshots. CR-092 and CR-094 remain `Needs Confirmation`, CR-112
   remains `Needs Confirmation`, CR-093 remains future-only, CR-037 remains
@@ -1002,8 +1008,8 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   lock-storage decisions are accepted; Phase 5 account environment runtime and
   Phase 6 login-flow runtime are complete.
 - CR-047 / Phase 5.1 - Account Identity Fidelity: accepted; Phase 5.1P is
-  verified and Phase 5.1A implementation is next. Confirmed scope includes
-  persisted per-account identity fields,
+  verified and Phase 5.1A additive schema/read compatibility is implemented
+  and independently verified. Confirmed remaining scope includes
   profile-trace versus database-identity responsibility split, stable Account
   Identity Generator, fail-closed Account Identity Validator, China mainland
   region/timezone/locale/accept-language defaults, identity generation before
@@ -1018,8 +1024,8 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   `identity_state`, audit events, and test tripwires. Phase 5.1P has confirmed
   the container/server-like, BrowserEnvironmentProvider, MediaCrawler CDP, QR
   login, Cookie validation, login-state check, manual run, scheduler run,
-  runner, and requested/effective snapshot compatibility boundary; Phase 5.1A
-  schema/code implementation has not yet started in this baseline.
+  runner, and requested/effective snapshot compatibility boundary. Phase 5.1B
+  generation/validation has not started.
 - CR-091 - Open Todo MECE Rebaseline And Phase 5.1 Preflight Gate: verified as
   a documentation-governance sequencing update. It keeps closed Phase 21 as
   the protected frontend baseline and established Phase 5.1P as the
@@ -1233,9 +1239,9 @@ separate follow-up work.
 - CR-111 documentation synchronization is verified and closed against
   `main@abb4d66`. Phase 10-21, CR-091, CR-095, and CR-107 through CR-110 are
   complete through their recorded scope. Phase 5.1P is now also verified as a
-  documentation/read-only preflight. No product implementation lane is active;
-  Phase 5.1A is the next unblocked unit, while Phase 5.1B-D remain serially
-  gated. Phase 7.1D remains operator-gated, CR-037 remains deferred, CR-092 and
+  documentation/read-only preflight. Phase 5.1A is implemented and independently
+  verified; Phase 5.1B is next and Phase 5.1C-D remain serially gated. Phase
+  7.1D remains operator-gated, CR-037 remains deferred, CR-092 and
   CR-094 remain `Needs Confirmation`, and CR-093 remains a future independent
   backlog lane.
 - CR-112 planning is synchronized as a proposed new capability. The same-host
@@ -1570,12 +1576,12 @@ and stop conditions.
    one immutable BrowserEnvironmentProvider plan/result, requested/effective
    probes, fail-closed proxy/Profile/browser behavior, diagnostic-only local
    fallbacks, and no CR-112 ownership transfer;
-3. implement CR-047/Phase 5.1A next, then Phase 5.1B-D in order, using the
-   confirmed policy that locked account environments reject task-level proxy
-   overrides and using container/server-like execution as the development and
-   acceptance baseline. Stop if implementation requires a second browser,
-   Profile, proxy, or identity authority, or cannot prove a required effective
-   value;
+3. implement CR-047/Phase 5.1B next, then Phase 5.1C-D in order using the
+   confirmed policy that locked account
+   environments reject task-level proxy overrides and using container/server-
+   like execution as the development and acceptance baseline. Stop if
+   implementation requires a second browser, Profile, proxy, or identity
+   authority, or cannot prove a required effective value;
 4. implement CR-070/Phase 5.2 account-environment export/import only after
    CR-047 provider binding and requested/effective runtime snapshot behavior
    are implemented and verified;
@@ -1647,13 +1653,13 @@ Lowest-risk parallel execution lane:
 
 1. Phase 21 frontend-only page-level refinement is merged and closed on
    `main`. Phase 5.1P is verified as read-only document/code-path mapping.
-   Phase 5.1A is now the lowest-risk active implementation lane and must stay
-   within its additive account-identity data-model packet; Phase 5.1B-D remain
-   gated by serial verification.
+   Phase 5.1A additive account identity is verified. Phase 5.1B is now the
+   lowest-risk active implementation lane; Phase 5.1C-D remain gated by serial
+   verification.
 
 CR-112 may receive documentation refinement while it is `Needs Confirmation`,
 but it is not a parallel implementation lane and does not alter the verified
-Phase 5.1P boundary or Phase 5.1A priority.
+Phase 5.1P/Phase 5.1A boundary or Phase 5.1B priority.
 
 Do not run Phase 19 and Phase 20 in parallel, and do not run more than one
 frontend worktree that edits the formal console shell at the same time.
