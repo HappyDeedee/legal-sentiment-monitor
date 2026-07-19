@@ -52,7 +52,9 @@ and `MONITOR_BROWSER_URL` overrides only the browser destination.
 ## Proposed CR-112 Local Browser Auto-Sync Boundary
 
 Status: `Needs Confirmation`. This is a proposed local Windows capability and
-does not change the accepted production/server deployment boundary.
+does not change the accepted production/server deployment boundary. Every
+normative CR-112 statement in this section is a future acceptance contract, not
+evidence that the connector/extension/schema exists in current code.
 
 Proposed V1 topology:
 
@@ -61,8 +63,10 @@ monitor FastAPI service + project-owned connector route + managed browser
 on the same Windows computer
 ```
 
-- The connector is a feature-gated WebSocket module in the existing Python
-  3.11 FastAPI process, not a separate Python 3.12 product service.
+- The connector is a feature-gated WebSocket route mounted in the existing
+  Python 3.11 FastAPI process, not a separate Python 3.12 product service. The
+  service may bind on `0.0.0.0`; locality comes from socket-peer enforcement,
+  not a claim that this in-process route has its own loopback-only listener.
 - The extension connects through `127.0.0.1` and the effective monitor port.
   Non-loopback and cross-host endpoints remain disabled.
 - The WebSocket handler authorizes locality from the ASGI socket peer
@@ -80,15 +84,51 @@ on the same Windows computer
   creates its per-session managed copy automatically. The operator does not
   install an extension manually, create a personal Chrome Profile, use a Google
   account, place a connector binary, or install Python 3.12.
+- The extension uses packaged manifest-key material so Chrome, Edge,
+  per-session copies, and clean installations produce the same allowlisted ID
+  and Origin. Its manifest excludes `<all_urls>` and unrelated host access.
 - Browser resolution is valid explicit executable, Chrome, Edge, then supported
   Chromium. Chrome is preferred when Chrome and Edge both exist.
+- The 2026-07-19 confirmed login-material sub-decision applies inside this
+  otherwise proposed capability: QR and accepted Cookie login converge on the
+  account-bound persistent Profile resolved from `profile_key`. Encrypted
+  Cookie remains bootstrap/refresh/recovery/migration material.
+- An existing active Profile uses the fixed-path promotion journal from
+  `ACCOUNT_ENVIRONMENT.md`: same-volume candidate/rollback artifacts,
+  active-path recheck, database commit, and startup recovery. Failed or
+  ambiguous promotion preserves prior data or blocks only that account as
+  `recovery_required`.
+- The candidate is fresh from the locked Phase 5.1 provider inputs rather than
+  a clone of the active Profile. Before active-path recheck, one-time
+  extension/config material is removed and the Profile is opened in a crawler-
+  equivalent environment so a deleted session extension path cannot become a
+  runtime dependency.
+- After successful Profile preparation, managed crawler children receive no
+  raw Cookie through argv. Clean-computer acceptance includes process
+  inspection for this guarantee.
 - The feature is disabled by default. Disabled or unhealthy state must not
   mount a usable connector path, load the extension, generate pairing tokens,
   choose another account/client, or alter QR/manual Cookie behavior.
-- Disabled startup does not mount `/api/monitor/cookie-bridge/ws`, so direct
-  HTTP/WebSocket access receives 404. When enabled, invalid peer or Origin is
+- Packet C is layered: C.1 is the shared advanced-manual/Bridge
+  Cookie-to-Profile promotion service, C.2 is Bridge connector/extension/API/UI,
+  and C.3 is the internal profile-only runner. The Bridge flag controls C.2
+  only. After C.3 acceptance, disabling Bridge preserves C.1/C.3 and never
+  restores raw Cookie argv.
+- Only C.2 route/UI/readiness/extension/pairing code reads the Bridge flag. C.1
+  startup recovery/manual Cookie and C.3 command/child/platform guards remain
+  active independently. C.3 deployment pauses new runs, migrates or blocks
+  every version-0 Cookie account, and resumes only after no such account is
+  runnable; later version-0 runs fail before child spawn.
+- Disabled startup does not mount `/api/monitor/cookie-bridge/ws`. A normal
+  HTTP probe receives 404; with the pinned Starlette/Uvicorn baseline, an
+  unmatched WebSocket upgrade receives 403 before acceptance. Packet B fixes
+  the packaged-runtime expectation. When enabled, invalid peer or Origin is
   rejected before WebSocket acceptance and must not create session, client,
   pairing, audit-success, or Cookie-read state.
+- The reviewed baseline is FastAPI `0.110.2` and Uvicorn `0.29.0` from exact
+  project pins plus Starlette `0.37.2` from `uv.lock`. HTTP/WebSocket status is
+  regression evidence; route absence and zero connector protocol state remain
+  mandatory if dependencies change.
 
 Production remains server-first:
 
@@ -105,6 +145,14 @@ confirmation, Phase 5.1 acceptance, the existing CR-070 sequence or a later
 accepted sequencing decision, project-owned protocol proof, data-model and
 migration approval, and clean-computer acceptance.
 
+Before serving account checks, login, reset, export, or crawl after startup,
+the monitor must reconcile non-terminal Profile-promotion journals. An
+ambiguous operation blocks only the affected account as `recovery_required`;
+it never guesses which directory is active or deletes the remaining copies.
+The same startup lifecycle runs due committed-rollback cleanup, and a periodic
+worker plus pre-refresh check enforces the 24-hour/at-most-one rule even for an
+idle account.
+
 ## Required Persistent Data
 
 Persist and back up:
@@ -117,6 +165,13 @@ run logs
 secret/encryption key
 monitor.yaml if used
 ```
+
+CR-112 candidate/rollback operation directories and connector credentials are
+excluded from ordinary backups and CR-070 exports. The fixed committed active
+Profile is backed up only after no promotion is non-terminal and operation
+cleanup has removed any retained rollback/active marker. A restore that
+contains a non-terminal promotion journal runs the same recovery gate before
+account use.
 
 Never commit runtime data or real secrets to Git.
 

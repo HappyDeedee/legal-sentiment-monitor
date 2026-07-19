@@ -238,6 +238,133 @@ should not expose raw profile paths, cookies, proxy
 credentials, CDP endpoints, noVNC sessions, or fingerprint-debug internals
 through normal-user APIs.
 
+### Proposed CR-112 Profile Runtime And Promotion Metadata
+
+Status: proposed and `Needs Confirmation` with CR-112. These fields and tables
+are not part of the current schema or accepted Phase 5.1 migration.
+
+Additive `social_accounts` fields proposed for Packet C:
+
+```text
+cookie_source TEXT NOT NULL DEFAULT ''
+profile_runtime_version INTEGER NOT NULL DEFAULT 0
+profile_ready_at TEXT
+```
+
+`profile_runtime_version = 0` means current/legacy Cookie execution and never
+proves that a Profile is ready. Version `1` means the fixed active Profile has
+passed the CR-112 candidate promotion and active-path recheck and may use the
+internal profile-only crawler contract. Migration must not guess or silently
+backfill version `1`. After the C.3 cutover, a `login_type=cookie` row at
+version `0` is non-runnable, uses `identity_state=requires_relogin` plus the
+existing limited/non-active pool status, and is rejected before child spawn;
+there is no schema or command-builder fallback to raw Cookie argv.
+
+Proposed durable promotion journal:
+
+```text
+account_profile_promotions
+  id INTEGER PRIMARY KEY
+  workspace_id INTEGER NOT NULL
+  account_id INTEGER NOT NULL
+  login_session_id INTEGER
+  profile_key TEXT NOT NULL
+  state TEXT NOT NULL
+  had_active_profile INTEGER NOT NULL DEFAULT 0
+  previous_binding_id INTEGER
+  candidate_binding_id INTEGER
+  cookie_source TEXT NOT NULL DEFAULT ''
+  failure_category TEXT NOT NULL DEFAULT ''
+  recovery_action TEXT NOT NULL DEFAULT ''
+  created_by INTEGER
+  created_at TEXT NOT NULL
+  candidate_ready_at TEXT
+  swap_started_at TEXT
+  active_moved_at TEXT
+  candidate_moved_at TEXT
+  active_rechecked_at TEXT
+  committed_at TEXT
+  finalized_at TEXT
+  cleanup_after TEXT
+  updated_at TEXT NOT NULL
+```
+
+Allowed states are `preparing`, `candidate_ready`, `swapping`,
+`active_recheck`, `committed`, `rolling_back`, `rolled_back`, `failed`, and
+`recovery_required`. `committed`, `rolled_back`, `failed`, and
+`recovery_required` are terminal; the last state still blocks account use. One
+account may have only one non-terminal promotion, and a retained rollback
+artifact blocks a new promotion until cleanup succeeds. The row stores opaque
+IDs and redacted categories, not raw Profile paths, Cookies, pairing tokens,
+credentials, proxy secrets, or browser endpoints. Candidate and rollback paths
+are derived under the internal Profile operation root from validated
+account/session/operation IDs.
+
+`active_moved_at` is written only after active-to-rollback rename succeeds;
+`candidate_moved_at` is written only after candidate-to-active rename succeeds.
+The database checkpoint may lag one completed same-volume rename, so recovery
+also validates the operation marker and exact directory-shape table in
+`ACCOUNT_ENVIRONMENT.md`. The account/Cookie/binding update and journal
+`committed` transition share one database transaction and are the sole commit
+authority.
+
+Proposed connector binding table:
+
+```text
+cookie_bridge_bindings
+  id INTEGER PRIMARY KEY
+  workspace_id INTEGER NOT NULL
+  account_id INTEGER NOT NULL
+  profile_key TEXT NOT NULL
+  login_session_id INTEGER NOT NULL
+  profile_promotion_id INTEGER NOT NULL
+  client_id TEXT NOT NULL
+  credential_hash TEXT NOT NULL
+  credential_version INTEGER NOT NULL DEFAULT 1
+  protocol_version TEXT NOT NULL
+  status TEXT NOT NULL
+  bound_at TEXT NOT NULL
+  last_authenticated_at TEXT
+  rotated_at TEXT
+  revoked_at TEXT
+  created_at TEXT NOT NULL
+  updated_at TEXT NOT NULL
+```
+
+`client_id` and binding metadata are administrator-internal. Customer APIs and
+ordinary diagnostics expose only a customer-safe lifecycle/health status and
+timestamps. Only credential hashes are stored. Account/Profile reset or
+account deletion revokes every binding for that `profile_key`. Binding status
+is `pending|active|revoked`: a Bridge candidate receives a session-scoped
+pending credential that may serve only its exact login-session requests. A
+Bridge promotion commit activates it and revokes the previous active binding
+in the same database transaction. A manual-Cookie promotion creates no
+candidate binding and revokes the previous active binding on commit because
+that binding belongs to the rollback Profile. Rollback revokes any pending
+candidate credential and preserves the previous active binding.
+
+Proposed `login_sessions` linkage fields are `cookie_source`,
+`profile_promotion_id`, and `connector_binding_id`. They link one session to
+one exact promotion/binding without storing Cookie material or raw paths.
+
+Recommended constraints/indexes:
+
+```text
+unique active promotion per account for non-terminal states
+idx_profile_promotions_state on account_profile_promotions(state, updated_at)
+idx_profile_promotions_account on account_profile_promotions(account_id, created_at)
+unique cookie_bridge_bindings(profile_key, client_id)
+unique active cookie_bridge_binding per profile_key where status='active'
+unique pending cookie_bridge_binding per profile_promotion_id where status='pending'
+idx_cookie_bridge_bindings_account on cookie_bridge_bindings(account_id, status)
+idx_cookie_bridge_bindings_session on cookie_bridge_bindings(login_session_id, profile_promotion_id)
+```
+
+CR-112 audit events reference account ID, login session ID, promotion ID,
+binding ID, actor, trigger source, requested/effective provider summary,
+terminal state, and redacted recovery result. They never include raw Profile
+paths or secret values.
+
 CR-070 adds an accepted account-environment export/import capability. The
 account row remains the source of truth after import, but package creation and
 import need audit-safe metadata. The package manifest may contain the selected
@@ -259,6 +386,14 @@ downloads, screenshots, temporary files, and duplicated or regenerable browser
 artifacts by default. The encrypted payload may contain a source proxy
 host/IP plus port hint for target-side mapping, but it must not contain proxy
 username, password, token, authentication header, or provider secret.
+
+If CR-112 is implemented before CR-070, export reads only committed account
+metadata and the fixed active Profile. It excludes `account_profile_promotions`
+rows, candidate/rollback operation directories, `cookie_bridge_bindings`
+credentials, pairing/session tokens, and connector cache. Import creates a new
+target Profile through the target-side validation/promotion path rather than
+copying a source operation journal. Export triggers due cleanup and is blocked
+until any retained rollback and active-Profile operation marker are gone.
 
 CR-094 provider architecture is future planning only. The current data model
 does not add provider tables, provider-profile binding tables, capability

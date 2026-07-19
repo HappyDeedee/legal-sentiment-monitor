@@ -2,6 +2,110 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-19 - CR-112 Deep Plan Cross-Validation And Contract Closure
+
+Environment: local Windows workspace `E:\myproject\MediaCrawler`, branch
+`main`, code baseline `28c0da5`. Review and remediation changed documentation
+only; CR-112 remains `Needs Confirmation` and Phase 5.1P remains not started.
+
+Result:
+
+- Claude Code supplemented-document round 1, read-only (`Read,Grep,Glob`),
+  returned `BLOCKED` for incomplete Profile promotion crash consistency,
+  raw-Cookie argv retirement, Bridge-off rollback, structured Cookie fidelity,
+  connector topology, and restart/finalization ownership.
+- The documents now define a fresh candidate, fixed active path, same-volume
+  rename-before-checkpoint ordering, operation marker and directory-shape
+  recovery table, one account/Cookie/binding commit authority, conditional
+  Bridge/manual binding rotation, startup/periodic/pre-refresh cleanup, and
+  export/backup blocking while operation artifacts remain.
+- C.3 now has an executable parent/child contract: keep `--lt cookie`, add
+  hidden `--monitor_profile_only true`, pass the exact provider environment,
+  reject/clear Cookie material, guard before login classes and fallback, map
+  only `ProfileLoginRequired` to exit code 42, and activate through a paused
+  migration with no runnable version-0 Cookie account.
+- `MONITOR_COOKIE_BRIDGE_ENABLED` is owned only by C.2 route/UI/readiness/
+  extension/pairing paths. C.1 manual validation/promotion/recovery and C.3
+  runtime remain independent when it is false, so rollback never restores raw
+  Cookie argv.
+- Packet B/D coverage now includes stable manifest-key extension identity,
+  least-privilege host access, structured Cookie fields/limits, session-copy
+  cleanup, crawler-equivalent Profile restart, clean-computer behavior, and
+  QR non-regression.
+- Round 2 identified useful interface, cutover, cleanup, and flag-boundary
+  refinements. Its claim that checkpoint plus directory inspection was
+  inherently contradictory was rejected and replaced by explicit ordering and
+  a deterministic recovery table.
+- Round 3 incorrectly required future CR-112 code and a completed Phase 5.1P
+  map before approving a future plan. Proposed/not-current wording and the
+  not-started Phase 5.1P boundary were made explicit. Round 4 corrected the
+  verdict to `READY` with `BLOCKERS=None` and
+  `MATERIAL REFINEMENTS=None`. Final complete-diff round 5 returned the same
+  result after formal state/task/result/traceability synchronization.
+
+Verification:
+
+- `uv run python .codex_tmp/probe_unmounted_websocket.py` passed against the
+  pinned stack and printed `fastapi=0.110.2 starlette=0.37.2 uvicorn=0.29.0
+  http=404 websocket=403`.
+- `uv run python scripts/check_docs.py` passed: `PASS docs consistency`.
+- `uv run pytest tests/test_documentation_checks.py -q -p no:cacheprovider
+  --basetemp .codex_tmp/pytest-cr112-deep-plan-final` passed: 1 passed.
+- `git diff --check` passed with only Windows LF-to-CRLF warnings.
+- Final Claude Code complete-diff read-only review returned `READY` with no
+  blocker or material refinement.
+
+Proof boundary:
+
+- This proves the supplemented plan/governance chain is internally executable
+  after its explicit confirmations and packet gates. It does not implement or
+  prove CR-112 schema, connector, extension loading, real Cookie transfer,
+  Profile promotion, profile-only crawling, or platform login behavior.
+
+## 2026-07-19 - CR-112 Persistent Profile Login-Material Decision Sync
+
+Environment: local Windows workspace `E:\myproject\MediaCrawler`, branch
+`main`, code baseline `28c0da5`.
+
+Result:
+
+- Recorded the user-confirmed CR-112 sub-decision that QR and accepted Cookie
+  login converge on the same account-bound persistent Profile. Encrypted,
+  platform-verified Cookie remains bootstrap, refresh, recovery, and migration
+  material rather than the sole normal runtime authority.
+- Required Bridge and advanced manual Cookie acquisition to use the same
+  Cookie-to-Profile validation/persistence service. Existing active Profiles
+  require a staged or equivalently reversible refresh so failed validation or
+  persistence preserves the previous active Profile and encrypted Cookie.
+- Superseded the earlier proposed time-bounded argv-risk acceptance option.
+  The accepted target prepares and validates the persistent Profile before
+  crawler launch and requires process-inspection proof that managed crawler
+  child argv contains no raw Cookie.
+- Kept current `runner.py --cookies`, ephemeral Cookie account checks, and
+  generic MediaCrawler fallback Profiles classified as current-code evidence
+  for Phase 5.1P. No product code, schema, runtime data, Profile, Cookie,
+  browser process, connector, proxy, or database state was changed.
+- Kept CR-112 as `Needs Confirmation` for same-host scope, project-owned
+  extension/connector delivery, and sequencing relative to CR-070.
+
+Verification:
+
+- `uv run python scripts/check_docs.py` passed: `PASS docs consistency`.
+- `uv run pytest tests/test_documentation_checks.py -q -p no:cacheprovider
+  --basetemp .codex_tmp/pytest-cr112-profile-authority-final` passed: 1 passed.
+- `git diff --check` passed with only Windows LF-to-CRLF warnings.
+- A first independent read-only review found stale `--cookies` preservation,
+  Packet B ownership, and missing result-chain wording. Those findings were
+  remediated. Focused read-only re-review returned `READY` with no remaining
+  blocker or material conflict.
+
+Proof boundary:
+
+- These checks prove documentation consistency and decision traceability only.
+  They do not implement or prove persistent Cookie Profiles, reversible Profile
+  promotion, raw-Cookie argv removal, extension pairing, or real-platform
+  login behavior.
+
 ## 2026-07-19 - CR-112 Cross-Validation Audit Remediation
 
 Environment: local Windows workspace `E:\myproject\MediaCrawler`, branch

@@ -327,6 +327,16 @@ scheduler runs, runner behavior, and MediaCrawler CDP launch/reconnect.
 - [ ] Document which current paths launch a server-side browser, attach to an
       existing CDP endpoint, reuse a profile, validate login state, or fall
       back to MediaCrawler defaults.
+- [ ] Map current Cookie account validation, Profile persistence, raw argv/env,
+      MediaCrawler login branches, and CDP-to-standard generic Profile fallback.
+      Record the exact adapter a future CR-112 internal `profile_only` mode
+      would need to replace managed `login_type=cookie` child execution, while
+      keeping current QR/Profile execution separate, without implementing or
+      assigning that mode to CR-047.
+- [ ] Map Cookie CLI defaults, `main.py` error handling, each platform's
+      login-state/login-class branch, CDP fallback, runner exit/log mapping, and
+      existing Profile environment variables needed by the future hidden flag
+      and reserved relogin exit contract.
 - [ ] Define the BrowserEnvironmentProvider contract that Phase 5.1
       implementation must use for all login and crawl entrypoints.
 - [ ] Confirm which identity fields the existing Playwright/CDP provider can
@@ -1714,16 +1724,26 @@ Documentation synchronization:
       remains.
 - [x] Stage and commit all five CR-112 plan files and all formal CR-112
       references atomically; do not deliver a partial plan/governance set.
+- [x] Record the 2026-07-19 user-confirmed login-material decision: QR and
+      accepted Cookie login converge on the same account-bound persistent
+      Profile; encrypted Cookie remains bootstrap/refresh/recovery/migration
+      material; failed refresh preserves the prior Profile and Cookie; the
+      target child argv contains no raw Cookie.
+- [x] Verify the persistent-Profile decision sync with documentation
+      consistency, the focused documentation regression test, whitespace
+      validation, stale-contract scanning, and independent read-only review.
+- [x] Deep-cross-validate the supplemented CR-112 plan with Claude Code and
+      iterate to `READY`: define fresh-candidate crash recovery, operation
+      marker/directory matrix, Bridge/manual binding rotation, exact hidden
+      profile-only parent/child contract and cutover, C.2-only flag ownership,
+      timed cleanup/export blocking, structured Cookie/extension packaging,
+      pinned HTTP/WebSocket baseline evidence, and explicit proposed/not-started
+      status boundaries.
 
 Future gated work:
 
 - [ ] Obtain explicit confirmation for same-host local scope, project-owned
-      extension/connector direction, login-material authority, and sequencing
-      relative to CR-070.
-- [ ] Obtain an explicit security decision for the current raw Cookie
-      subprocess-argument exposure: secure child-secret transport under an
-      accepted owner, or time-bounded local-only risk acceptance with no
-      production-security claim.
+      extension/connector direction, and sequencing relative to CR-070.
 - [ ] Complete Phase 5.1P, Phase 5.1A-D, and the Phase 5.1 acceptance gate
       under CR-047 before CR-112 product implementation.
 - [ ] Place Packet B after CR-070 / Phase 5.2 by default, or record a later
@@ -1733,13 +1753,40 @@ Future gated work:
       exact pairing, and one synthetic Cookie roundtrip.
 - [ ] In Packet B, prove the connector rejects non-loopback socket peers,
       ignores spoofed forwarding headers for authorization, requires the exact
-      stable extension Origin, remains unmounted when disabled, and is excluded
-      from reverse-proxy forwarding.
+      stable extension Origin, remains unmounted when disabled (HTTP 404 and
+      pinned-baseline unmatched-WebSocket 403), and is excluded from reverse-
+      proxy forwarding.
+- [ ] In Packet B, fix structured Cookie Protocol V1 fields and Chrome/Edge
+      limits and prove domain/path/security attributes survive exact routing and
+      temporary Profile restart without touching real account material.
+- [ ] In Packet B, prove manifest-key-derived extension ID stability, least-
+      privilege host permissions, and session-extension/config cleanup followed
+      by crawler-equivalent Profile restart without a missing-path dependency.
 - [ ] Start Packet C only after Packet B passes and data-model/migration,
       distribution, runtime, permission, and security decisions are accepted.
+- [ ] Packet C.1: implement the shared Bridge/manual canonical Cookie service,
+      fixed-active-path promotion journal, same-volume candidate/rollback swap,
+      active-path recheck, restart recovery, bounded cleanup, and existing
+      account migration without enabling Bridge. Candidates are fresh provider
+      outputs and never clone/mutate the active Profile before `swapping`;
+      recovery follows the commit-authority/directory-shape/operation-marker
+      table and cleanup runs after success, on timer/startup, and before refresh.
+- [ ] Packet C.2: implement the feature-gated connector/extension/pairing/API/UI
+      flow on C.1, including exact pending/active/revoked binding rotation;
+      feature-off must unmount only C.2 and preserve advanced manual Cookie.
+      Only C.2 router/UI/readiness/extension/pairing code may read the flag.
+- [ ] Packet C.3: implement the internal profile-only runner, migrate or mark
+      every `login_type=cookie` account, reject login/generic/default-network
+      fallback, and retire raw Cookie argv/env with process-inspection proof.
+      Use hidden `--monitor_profile_only`, exact provider env, Cookie clearing,
+      exit-code-42 relogin mapping, and a paused maintenance cutover with no
+      runnable version-0 account. Existing QR/Profile execution remains
+      regression-protected. Accepted rollback preserves C.1/C.3 and never
+      restores argv exposure.
 - [ ] Start Packet D only after Packet C tests pass; verify clean-computer
-      bootstrap, multi-account isolation, restart/failure/rollback matrices,
-      and server QR non-regression.
+      bootstrap, multi-account isolation, promotion checkpoint crash/restart,
+      C.1/C.2/C.3 rollback, process inspection, structured Cookie fidelity,
+      server QR non-regression, and bounded operation-artifact cleanup.
 
 ## Phase 14 - Run Center Data Model Preparation
 

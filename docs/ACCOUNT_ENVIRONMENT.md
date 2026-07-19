@@ -1168,25 +1168,288 @@ Proposed login model:
 - keep manual Cookie entry as a collapsed advanced option rather than an
   automatic fallback.
 
-Proposed authority split:
+Confirmed CR-112 authority split (2026-07-19):
 
 - `social_account` plus `profile_key` remains account identity authority;
-- QR execution remains authoritative on the persistent server Profile;
-- Cookie execution remains authoritative on encrypted, platform-verified Cookie
-  material passed through the current runner contract;
-- a managed local Profile supports Cookie acquisition and browser state but
-  does not silently turn Cookie mode into Profile-only execution;
+- QR and accepted Cookie login both converge on the persistent Profile resolved
+  from `profile_key`; that Profile is the normal browser session and crawl
+  environment for both login modes;
+- encrypted, platform-verified Cookie material is retained as bootstrap,
+  refresh, recovery, and migration material rather than the sole normal
+  runtime authority;
 - connector cache and extension observations are temporary acquisition state,
   not durable login authority.
 
 The current runner contract passes decrypted Cookie material through
 `runner.py --cookies`. That value can be visible in OS process arguments and
 diagnostic tools even though it is encrypted at rest and redacted from product
-logs/UI. CR-112 treats this as a pre-existing security risk, not as proof of
-end-to-end secret isolation. Packet C stays gated until an accepted decision
-either assigns a secure child-secret transport change to an explicit owner or
-records a time-bounded local-only risk acceptance with owner, expiry,
-environment limit, and excluded production claims.
+logs/UI. CR-112 treats this as a pre-existing current-code risk. The confirmed
+target prepares and validates the persistent Profile before crawler launch and
+does not pass raw Cookie through child argv. Packet C must assign migration,
+compatibility, rollback, and test ownership, and process inspection must prove
+the raw value is absent before acceptance.
+
+### Proposed CR-112 V1 Profile Promotion Protocol
+
+Status: proposed Packet C implementation contract. It is not active schema or
+runtime behavior while CR-112 remains `Needs Confirmation`. Present-tense
+normative wording in this section defines future acceptance behavior only;
+current code still uses the baseline paths identified below and in Phase 5.1P.
+
+V1 keeps one fixed active runtime path:
+
+```text
+active_profile_path = resolve_account_profile_path(profile_key)
+```
+
+Candidate and rollback directories are operation artifacts, not alternative
+Profile authorities. They are derived from validated account/session IDs under
+an internal same-volume root such as
+`{ACCOUNT_PROFILE_ROOT}/.profile_ops/{account_id}/{login_session_id}/` and are
+never returned by the provider, UI, customer APIs, exports, backups, or normal
+crawler launches. Raw paths are not stored in audit or customer-visible data.
+Before candidate launch, its root receives a project-owned operation marker
+containing only promotion ID, account ID, a `profile_key` hash, and
+`role=candidate`. The marker moves with the candidate into the fixed active
+path, distinguishes it from the untouched predecessor during recovery, and is
+removed only after commit plus any required rollback cleanup (or committed
+finalization when no predecessor existed). It contains no path or secret.
+
+Packet C uses a durable `account_profile_promotions` journal and the existing
+account/Profile lock. The journal stores opaque operation IDs, account ID,
+`profile_key`, login session ID, previous/candidate binding IDs, whether an
+active Profile existed, state, timestamps, recovery result, and redacted
+failure category. It stores no raw Cookie, credential, proxy secret, or
+unrestricted path.
+
+Journal states:
+
+```text
+preparing -> candidate_ready -> swapping -> active_recheck -> committed
+                                      \-> rolling_back -> rolled_back
+terminal failure: failed | recovery_required
+```
+
+Promotion sequence:
+
+1. Hold the account/Profile lock and create a `preparing` journal row before
+   filesystem mutation. Reject a second promotion for the same `profile_key`.
+2. Verify the operation root is writable, on the same filesystem as the active
+   path, and has sufficient free space. Close every browser using the active
+   Profile, but leave that Profile byte-for-byte untouched. Initialize a fresh
+   candidate through the Phase 5.1 provider with the same locked account
+   identity/browser/proxy inputs. Do not clone the active Profile or its
+   extension storage into the candidate.
+3. Launch only the candidate Profile, acquire or inject the candidate Cookie,
+   validate the exact platform identity and effective browser environment, then
+   close the browser and wait for all Profile handles to be released. A Bridge
+   candidate receives a session-scoped `pending` connector binding that is
+   valid only for the exact login session/request; a manual-Cookie candidate
+   receives no connector binding. Mark the journal `candidate_ready` only after
+   validation succeeds.
+4. Mark `swapping`. If an active Profile exists, rename it to the operation's
+   rollback directory; only after that rename returns successfully, persist
+   `active_moved_at`. Rename the candidate directory to the fixed active path;
+   only after that rename returns successfully, persist `candidate_moved_at`.
+   Both renames must remain on the same filesystem. An open-handle, antivirus,
+   permission, or rename error triggers rollback before any account row is
+   activated. A checkpoint is durable progress evidence, not a substitute for
+   directory inspection: a crash can occur after either rename and before its
+   following database write.
+5. Remove one-time pairing/config material, then reopen the fixed active path
+   through the same provider in the crawler-equivalent environment, without
+   Bridge injection arguments or a session extension copy. Repeat the platform
+   identity/effective-environment check and verify extension cleanup did not
+   make the Profile depend on a missing temporary path. Mark `active_recheck`
+   only after that check passes and all handles close again. For Bridge, the
+   only permitted extension residue is Profile-local `client_id` plus the
+   pending reconnect credential; token, generated config, response cache,
+   extension process, and live socket are absent. Manual Cookie leaves no
+   Bridge extension state.
+6. In one database transaction, update the encrypted verified Cookie,
+   `cookie_source`, account/profile-ready metadata, account status, audit
+   linkage, and journal state `committed`. For a Bridge promotion, activate the
+   candidate Profile's pending connector binding. For Bridge and manual
+   promotions, revoke any previous active binding because it belongs to the
+   rollback Profile; a manual promotion intentionally leaves the new active
+   Profile unpaired. The filesystem swap deliberately precedes this
+   transaction; the journal makes the cross-boundary operation recoverable
+   rather than pretending it is one atomic transaction.
+7. On any failure before the commit, move a candidate already occupying the
+   fixed active path back to its operation quarantine before renaming the
+   rollback directory to the fixed path. Leave the previous account row,
+   encrypted Cookie, and active binding unchanged, and revoke any candidate
+   pending binding. For a new account with no prior active Profile, remove the
+   uncommitted active candidate and keep the account draft/unusable.
+
+Restart recovery runs before login, account checks, or crawls can use an
+account with a non-terminal journal. The journal `committed` state, written in
+the same database transaction as the account/Cookie/binding changes, decides
+whether old or new account state wins. For every non-committed row, the old
+account/Profile wins. Recovery permits only these filesystem shapes, using the
+candidate operation marker to identify the fixed-path contents:
+
+| Database result | Fixed active | Candidate | Rollback | Recovery |
+| --- | --- | --- | --- | --- |
+| not committed, predecessor existed | predecessor | candidate | absent | discard/quarantine candidate; keep predecessor |
+| not committed, predecessor existed | absent | candidate | predecessor | rename rollback to fixed active; discard/quarantine candidate |
+| not committed, predecessor existed | marked candidate | absent | predecessor | move marked candidate to quarantine; rename rollback to fixed active |
+| not committed, new account | absent | candidate | absent | discard/quarantine candidate; keep account draft |
+| not committed, new account | marked candidate | absent | absent | move marked candidate to quarantine; keep account draft |
+| committed | committed fixed Profile | absent | optional predecessor | keep fixed Profile; perform bounded cleanup |
+
+The checkpoint may lag the corresponding directory shape by exactly one
+completed rename. A checkpoint ahead of filesystem evidence, a marker from a
+different operation/account, an unmarked fixed path where the table requires a
+candidate, duplicate directories, or any other shape is contradictory evidence
+and enters `recovery_required`. Recovery does not infer success from timestamps
+or choose the newest directory.
+
+State handling then follows:
+
+- `preparing` or `candidate_ready`: the previous active path remains
+  authoritative; close stale processes and remove or resume only the candidate;
+- `swapping` or `active_recheck` without a committed database transaction: the
+  previous account row wins; restore the rollback directory, quarantine the
+  candidate/new active directory, preserve the previous active binding, revoke
+  any candidate pending binding, and finalize `rolled_back`;
+- `committed`: the fixed active path and committed account row win; the
+  candidate binding is active only for a Bridge source, any predecessor is
+  revoked, and cleanup may continue idempotently;
+- missing, duplicate, locked, or contradictory directory evidence: mark the
+  operation `recovery_required`, set the account `requires_relogin`, block
+  login/crawl, and preserve every remaining directory for operator-safe
+  diagnosis. Contradictory binding state is handled the same way. Recovery
+  never guesses or deletes the only usable Profile.
+
+Cancellation before `swapping` removes the candidate after handles close.
+Cancellation at or after `swapping` is recorded but reaches a terminal result
+only after commit or rollback completes. Repeated finalization is a no-op.
+
+`committed`, `rolled_back`, `failed`, and `recovery_required` are terminal
+journal states; `recovery_required` still blocks account use. At most one
+rollback directory is retained per account. Candidate artifacts are deleted
+after terminal failure. A successful post-promotion managed run enqueues
+immediate committed-rollback cleanup; independently, a startup and periodic
+cleanup worker scans `cleanup_after <= now` so the 24-hour path runs even when
+the scheduler/account is idle. A new promotion first performs the same due-
+cleanup attempt and is rejected while an earlier rollback artifact remains.
+Cleanup takes the account/Profile lock, requires no browser process, removes
+the operation marker only after rollback cleanup succeeds or committed
+finalization completes for an account with no predecessor, and never deletes
+the fixed active path.
+Cleanup failure keeps artifact count bounded at one,
+blocks another refresh, and raises a redacted readiness alert requiring
+operator remediation.
+
+CR-070 exports only the fixed committed active Profile and committed account
+metadata. It excludes candidate/rollback directories, non-terminal journals,
+pairing credentials, and connector cache. Export first runs due operation
+cleanup and is blocked while a rollback artifact or operation marker remains,
+so internal promotion metadata is not packaged.
+
+### Proposed CR-112 Internal Runtime Contract
+
+Customer-facing login types remain `qrcode` and `cookie`. Packet C adds an
+internal crawler mode such as `profile_only`; it is not a third product login
+type. CR-112 V1 uses it to replace managed `login_type=cookie` crawler child
+execution after migration. Existing QR/Profile execution remains on its
+current customer login type and is regression-protected; routing QR accounts
+through the same internal mode would require a later explicit decision.
+
+For `profile_only`:
+
+- the monitor verifies `profile_runtime_version >= 1`, a committed Profile
+  promotion, the account/Profile lock, and current platform login state before
+  child launch;
+- `_build_crawler_cmd` keeps `--lt cookie`, adds one hidden non-product flag
+  `--monitor_profile_only true`, and omits `--cookies`; `_build_crawler_env`
+  passes the exact Phase 5.1 provider result through the existing Profile/
+  browser/proxy environment plus account ID, `profile_key`, promotion ID, and
+  runtime version, but no raw Cookie;
+- the child parser accepts that hidden flag only with `--lt cookie`, rejects an
+  explicit `--cookies`, clears any process/default `config.COOKIES`, and
+  rejects missing or inconsistent provider/account metadata before creating a
+  crawler;
+- the child opens that Profile, repeats a lightweight platform login-state
+  check in each platform adapter, and starts crawling only when it succeeds;
+- a failed child-side check raises one internal `ProfileLoginRequired` before
+  constructing QR, Cookie, or phone login code; `main.py` maps it to reserved
+  exit code `42`, and `runner.py` maps only that code to a redacted typed
+  `requires_relogin` account/run result;
+- missing/expired Profile, CDP failure, provider mismatch, generic/shared
+  Profile fallback, default-network fallback, empty Cookie injection, and
+  unexpected QR opening all fail closed.
+
+C.3 is a maintenance cutover, not a per-account compatibility fallback:
+
+1. stop scheduler and new manual runs, then enumerate every
+   `login_type=cookie` account;
+2. keep already committed/version-1 accounts, migrate the remaining usable
+   accounts through C.1, and mark every failed/unverified version-0 account
+   `requires_relogin` and non-runnable;
+3. deploy/activate the C.3 command-builder and child guards only after no
+   runnable Cookie account remains at version 0;
+4. after activation, `login_type=cookie` plus version 1 always uses
+   `profile_only`; version 0 is rejected before child spawn. No mixed-mode or
+   hidden `--cookies` fallback exists.
+
+Packet C is delivered in three serial sub-packets:
+
+1. **C.1 Profile service:** add the shared manual/Bridge Cookie-to-Profile
+   validator, promotion journal, restart recovery, and account migration. No
+   Bridge UI or connector is enabled.
+2. **C.2 Bridge acquisition:** add the feature-gated connector, extension,
+   pairing, APIs, and UI on top of C.1.
+3. **C.3 Profile-only runner:** migrate every usable `login_type=cookie`
+   account to
+   `profile_runtime_version >= 1`, mark invalid accounts `requires_relogin`,
+   enable the internal profile-only child contract, prove no raw Cookie argv,
+   and then retire the managed-account `--cookies` path.
+
+`MONITOR_COOKIE_BRIDGE_ENABLED` controls C.2 only. Turning it off unmounts the
+connector and hides/stops Bridge acquisition while C.1 manual Cookie support
+and C.3 profile-only execution remain active. Before C.3 acceptance, deployment
+may stay on the unchanged current baseline; after C.3 acceptance, rollback does
+not restore raw Cookie argv. A release that cannot preserve C.1 and C.3 is not
+an accepted CR-112 rollback.
+
+The Bridge flag may be read only by C.2 route inclusion, C.2 UI/capability and
+readiness, and C.2 extension/pairing launch code. It is not read by canonical
+Cookie validation, Profile promotion/recovery/cleanup, advanced manual Cookie,
+C.3 command construction, the child profile-only guard, or platform login-
+fallback prevention. Importing a C.1 or C.3 module must not activate C.2 or
+fail because the Bridge flag is false.
+
+### Proposed CR-112 Cookie Protocol V1
+
+Bridge transport uses a versioned structured Cookie payload, not a flattened
+Cookie header string. Each record requires `name`, `value`, `domain`, and
+`path`; optional fields are `expires`, `http_only`, `secure`, `same_site`,
+`host_only`, and `partition_key` when the selected browser/provider can prove
+support. Packet B must fix the exact supported-field and size/count limits for
+Chrome and Edge before Packet C starts.
+
+Protocol rules:
+
+- request and response include protocol version, request ID, binding ID,
+  platform, account/Profile claim, expiry, and the structured Cookie array;
+- accept domains only from the selected platform's documented allowlist;
+- preserve distinct `(name, domain, path, partition_key)` tuples and reject an
+  exact duplicate tuple, malformed scope, unrelated domain, oversized frame,
+  unsupported required attribute, or unsupported protocol version;
+- do not silently drop an attribute that changes Cookie scope or security;
+- validate bounded record count, per-record serialized size, and total frame
+  size using limits recorded by Packet B;
+- redact all Cookie values and scope details from logs, UI, audit summaries,
+  diagnostics, test snapshots, and review evidence.
+
+Advanced manual input keeps the existing plain Cookie-header string at the UI
+boundary. The shared C.1 service parses it into the same canonical internal
+record model with platform domain/path defaults before validation and Profile
+injection. Manual input does not claim attributes that the string cannot carry;
+Bridge and manual acquisition share validation/promotion logic after
+canonicalization, not necessarily the same wire format.
 
 Proposed account and pairing flow:
 
@@ -1194,27 +1457,38 @@ Proposed account and pairing flow:
    `profile_key` exist before browser launch;
 2. hold the account/Profile lock for the full browser-sync session;
 3. launch a visible application-managed Chrome or Edge persistent Profile;
-4. inject a short-lived single-use pairing token only into that managed
-   Profile's project-owned extension session;
-5. atomically bind the token to login session, account, Profile, platform, and
-   extension `client_id`, then issue a rotatable Profile-scoped reconnect
-   credential;
+4. initialize a fresh candidate rather than cloning the active Profile, and
+   inject a short-lived single-use pairing token only into that candidate's
+   project-owned extension session;
+5. atomically bind the token to login session, promotion, account, Profile,
+   platform, and extension `client_id`, then issue a rotatable pending
+   Profile-scoped reconnect credential;
 6. route Cookie requests only through exact binding/request ids and reject
    first/newest/only-client selection, replay, stale/late responses, wrong
    origin, wrong Profile, and wrong platform;
-7. validate platform identity before atomically replacing encrypted Cookie
-   material and activation metadata;
-8. preserve the previous verified Cookie on every failure path and finalize
-   browser, waiters, locks, and ephemeral extension files idempotently.
+7. inject the Bridge- or manually sourced candidate Cookie into an
+   account-bound persistent Profile and validate the exact platform identity
+   in that same Profile;
+8. for an existing active account, use the fixed-path promotion journal above
+   so failed validation, swap, active recheck, or database persistence restores
+   the prior active Profile and verified encrypted Cookie or blocks safely as
+   `recovery_required`;
+9. after validation and crawler-equivalent recheck, commit encrypted Cookie
+   material, source, identity and activation metadata plus the conditional
+   binding rotation, close and flush the promoted Profile, and finalize
+   browser, waiters, locks, and ephemeral extension files idempotently;
+10. launch later crawler runs from that persistent Profile without raw Cookie
+    in child-process arguments.
 
 The connector handshake derives locality from the server-side socket peer,
 not forwarded headers; it requires a parseable loopback peer and the exact
 stable extension Origin before acceptance. Client URL validation alone is not
 an account or transport security boundary.
 
-The project-owned extension/connector direction, same-host scope, authority
-split, additive data model, and sequencing relative to CR-070 require explicit
-confirmation. Detailed roadmap and goal packets are linked from CR-112 in
+The persistent-Profile authority and no-raw-Cookie-argv target are confirmed.
+The project-owned extension/connector direction, same-host scope, additive data
+model, and sequencing relative to CR-070 still require explicit confirmation.
+Detailed roadmap and goal packets are linked from CR-112 in
 `CHANGE_REQUESTS.md`.
 
 ## Login State Machine

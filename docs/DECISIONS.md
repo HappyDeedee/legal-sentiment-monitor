@@ -577,3 +577,30 @@ short `Superseded by` note rather than deleting history.
   first implementation; backend trend buckets require a later accepted CR.
   When normal-user views hide administrator resource health, the remaining
   lower dashboard modules must reflow without a blank resource slot.
+
+## 2026-07-19
+
+- Confirmed for CR-112: QR login and accepted Cookie login converge on the
+  same application-managed persistent Profile resolved from
+  `social_account.profile_key`. The persistent Profile is the normal browser
+  session and crawl environment for both login modes.
+- Confirmed for CR-112: a Bridge- or manually supplied Cookie is bootstrap,
+  refresh, recovery, and migration material. The monitor injects the candidate
+  Cookie into an account-bound persistent Profile, validates the exact platform
+  identity in that Profile, and activates the result only after validation.
+  The verified Cookie is also retained through the encrypted account store;
+  connector cache is never durable login authority.
+- Confirmed for CR-112: an existing active Profile must not be damaged by a
+  failed Cookie refresh. Packet C must use a staged or equivalently reversible
+  Profile update and preserve the previously active Profile and verified
+  encrypted Cookie when validation or persistence fails.
+- Confirmed for CR-112: the target managed-account crawl path does not pass raw
+  Cookie material in child-process arguments. The monitor prepares and
+  validates the persistent Profile before crawler launch, and acceptance must
+  prove through process inspection that raw Cookie is absent from child argv.
+  Current `runner.py --cookies` behavior remains baseline evidence until the
+  approved migration is implemented; it is not the CR-112 target contract.
+- This confirmation resolves only CR-112 Profile persistence, login-material
+  authority, and raw-Cookie argv disposition. CR-112 remains `Needs
+  Confirmation` for same-host V1 scope, project-owned extension/connector
+  delivery, and sequencing relative to CR-070.

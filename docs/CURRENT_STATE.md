@@ -4,8 +4,8 @@ Last updated: 2026-07-19
 
 ## Current Baseline
 
-- Code baseline: clean `main@abb4d66`, matching the current local
-  `origin/main` tracking reference.
+- Code baseline before this documentation update: clean `main@28c0da5`,
+  matching the current local `origin/main` tracking reference.
 - Phase 21 and CR-107 through CR-110 are merged current-main history, not
   active working-tree implementation.
 - CR-111 verified and synchronized human-readable governance state only; it did
@@ -14,11 +14,23 @@ Last updated: 2026-07-19
   server-login worktree.
 - CR-112 is registered as a proposed local browser auto-sync Cookie-acquisition
   capability with status `Needs Confirmation`. Its reviewed roadmap and four
-  goal packets are documentation artifacts only; no CR-112 product code,
-  schema, UI, extension, Profile, Cookie, connector, runtime, deployment, or
-  database change is active.
-- The current execution lane is Phase 5.1P, a documentation/read-only
-  compatibility preflight.
+  goal packets and every normative CR-112 schema/runtime/protocol statement are
+  future acceptance contracts, not current implementation evidence. The
+  2026-07-19
+  persistent-Profile/login-material sub-decision is recorded, but no CR-112
+  product code, schema, UI, extension, Profile, Cookie, connector, runtime,
+  deployment, or database change is active.
+- CR-112 deep plan cross-validation ended after five Claude Code read-only
+  rounds with no blocking or material refinement. The review closed crash
+  recovery, profile-only cutover, feature-flag isolation, binding rotation,
+  extension cleanup, structured Cookie, and deployment proof gaps. This is a
+  future execution-contract review result, not CR-112 acceptance or
+  implementation evidence.
+- Phase 5.1P is the next eligible execution lane, a
+  documentation/read-only compatibility preflight. It has not started in this
+  worktree: its tasks remain unchecked and its browser-entrypoint map output
+  artifact has not yet been generated. This CR-112 plan review does not
+  complete or partially credit Phase 5.1P.
 - Phase 5.1A-D and its acceptance gate remain blocked by Phase 5.1P. CR-070 /
   Phase 5.2 remains blocked by verified CR-047 provider binding and requested /
   effective runtime snapshots. CR-092 and CR-094 remain `Needs Confirmation`,
@@ -1219,16 +1231,20 @@ separate follow-up work.
   Confirmation`, and CR-093 remains a future independent backlog lane.
 - CR-112 planning is synchronized as a proposed new capability. The same-host
   local-desktop topology, project-owned extension/in-process Python 3.11
-  connector, QR/Profile versus Cookie/encrypted-material authority split, and
-  sequencing relative to CR-070 still require confirmation. CR-112 does not
-  change the current first lane or preempt the accepted CR-070 sequence.
-- The latest focused audit corrected an earlier over-broad `READY` result.
+  connector, and sequencing relative to CR-070 still require confirmation.
+  The 2026-07-19 login-material sub-decision is confirmed: QR and accepted
+  Cookie login converge on the same account-bound persistent Profile;
+  encrypted Cookie remains bootstrap/refresh/recovery/migration material; a
+  failed refresh preserves the prior Profile and Cookie; and the target
+  managed crawler child argv contains no raw Cookie. CR-112 does not change
+  the current first lane or preempt the accepted CR-070 sequence.
+- The latest focused audit corrected an earlier over-broad positive result.
   CR-112 documentation now requires server-side socket-peer and extension-Origin
   enforcement, reverse-proxy route exclusion, explicit classification of the
   existing raw Cookie subprocess-argument risk, and atomic delivery of the five
-  plans with all formal references. Final focused Claude Code re-review returned
-  `READY` with no blocking or material plan issue. CR-112 is ready for user
-  confirmation, while implementation and atomic-delivery gates remain open.
+  plans with all formal references. The final focused Claude Code re-review
+  found no blocking or material plan issue. CR-112 still awaits user
+  confirmation, and implementation and atomic-delivery gates remain open.
 
 ## Known Risks
 
@@ -1238,9 +1254,11 @@ separate follow-up work.
   paths.
 - Cookie-mode runs currently pass decrypted Cookie material through
   `runner.py --cookies`; OS process listings and diagnostics may expose that
-  argument. This is a pre-existing security risk. CR-112 Packet C remains
-  gated on either accepted secure child-secret transport ownership or an
-  explicit time-bounded local-only risk acceptance with no production claim.
+  argument. This is a pre-existing security risk in current code. The accepted
+  CR-112 target prepares and validates the persistent Profile before crawler
+  launch and requires process-inspection proof that child argv contains no raw
+  Cookie. The risk remains present until Packet C implements and verifies that
+  migration.
 - The proposed in-process connector shares a FastAPI service that may listen on
   `0.0.0.0`. Client use of `127.0.0.1` alone does not enforce locality; future
   implementation must reject non-loopback socket peers, ignore forwarded

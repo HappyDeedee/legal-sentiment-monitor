@@ -1584,22 +1584,32 @@ Documentation-stage checks:
 - Verify the five plan artifacts remain planning/goal packets and are linked
   from formal governance documents.
 - Before delivery, verify all five plan files and every CR-112 formal reference
-  are staged in one atomic commit; a partial commit fails the documentation
-  acceptance gate.
+  including `DATA_MODEL.md` and `SCHEMA_MIGRATION.md` are staged in one atomic
+  commit; a partial commit fails the documentation acceptance gate.
 - Verify Phase 5.1P remains the first unblocked lane, Phase 5.1A-D remains
   owned by CR-047, and CR-112 does not preempt the accepted CR-070 / Phase 5.2
   sequence without a later accepted decision.
 - Verify account/security and deployment sections are explicitly proposed and
   do not change the current server-first QR acceptance boundary.
+- Verify `DECISIONS.md`, CR-112, account-environment guidance, and all five
+  plan files agree on the confirmed sub-decision: both login modes converge on
+  one account-bound persistent Profile, encrypted Cookie is
+  bootstrap/refresh/recovery/migration material, failed refresh preserves the
+  prior Profile and Cookie, and managed crawler child argv contains no raw
+  Cookie after Packet C.
 - Run `uv run python scripts/check_docs.py`, `git diff --check`, a trailing
   whitespace/end-of-file check for the five new plan files, and focused
   independent read-only review.
 
 Future fake/unit/integration tests if CR-112 is accepted:
 
-- Feature disabled by default must leave the connector route unmounted and
-  return 404, load no extension, create no pairing token, and show no active
-  auto-sync action.
+- Feature disabled by default must leave the connector route unmounted: a
+  normal HTTP probe returns 404 and the pinned Starlette/Uvicorn baseline
+  rejects unmatched WebSocket upgrade with 403 before acceptance. It loads no
+  extension, creates no pairing token, and shows no active auto-sync action.
+  Baseline assertions use FastAPI `0.110.2`, Uvicorn `0.29.0`, and locked
+  Starlette `0.37.2`; dependency changes require re-audit while route absence
+  and zero connector protocol state remain invariant.
 - Provider tests must prove valid explicit executable, Chrome, Edge, and
   supported Chromium precedence and reject invalid explicit paths or locked
   account fallback to another browser, Profile, proxy, user agent, or network.
@@ -1614,46 +1624,113 @@ Future fake/unit/integration tests if CR-112 is accepted:
   `chrome-extension://<extension-id>` value and reject missing, opaque, or
   unexpected Origins before any session, client, pairing, audit-success, or
   Cookie-read state exists.
+- Packaging tests must prove manifest-key-derived extension ID/Origin stability
+  across Chrome, Edge, ephemeral copies, paths with spaces, and clean installs;
+  manifest permissions exclude `<all_urls>` and unrelated hosts.
 - State-machine tests must cover success, failure, timeout, cancellation,
   browser close, Bridge offline, service restart, connector reconnect, late
   response rejection, idempotent finalization, lock release, and ephemeral
   extension-config cleanup.
+- Promotion-state tests must cover every transition from `preparing` through
+  `committed`/`rolled_back`, including cancellation at/after `swapping`, service
+  kill before and after each directory move/database transaction, and startup
+  recovery before account use.
+- Recovery-table tests must cover every permitted committed/non-committed
+  fixed/candidate/rollback shape, one-checkpoint-lag after each rename, wrong or
+  missing operation marker, checkpoint-ahead evidence, and every contradictory
+  shape entering `recovery_required` without deleting a directory.
 - Multi-account tests must run Account A/Profile A/client X and Account
   B/Profile B/client Y concurrently with reversed registration/response order
   and prove no first/newest/only-client selection or Cookie leakage.
+- Candidate-binding tests must prove a rollback Profile cannot reconnect with
+  the promoted binding: a Bridge candidate credential stays pending and exact-
+  session-only before commit, Bridge commit activates candidate/revokes
+  previous atomically, manual commit creates no candidate binding and revokes
+  previous, and rollback revokes candidate/preserves previous.
 - Cookie validation/persistence tests must reject wrong-platform or wrong-account
-  material, preserve the previous verified Cookie on failure, and commit
-  verified ciphertext, source, identity snapshot, binding metadata, and status
-  atomically.
+  material, initialize an account-bound persistent Profile, preserve the
+  previous fixed active Profile and verified Cookie through journaled
+  candidate/rollback recovery, and commit verified ciphertext, source,
+  identity snapshot, binding/profile-ready metadata, account status, and
+  journal state together after the active-path recheck.
+- Promotion filesystem tests must cover new-account/no-active-path, existing
+  active Profile, same-volume enforcement, disk full, open handles,
+  antivirus/permission rename failure, missing/duplicate directories, cleanup
+  failure, at-most-one rollback copy, and never deleting the only usable
+  Profile. Contradictory evidence produces `recovery_required` and blocks use.
+- Cleanup tests must trigger rollback deletion after the first successful run,
+  through startup/periodic `cleanup_after` scan with an idle account, and before
+  a new promotion/export/backup; failed cleanup retains one artifact and blocks
+  refresh/export rather than packaging an operation marker.
+- Candidate-isolation tests must prove the fresh candidate uses the locked
+  Phase 5.1 inputs without cloning or mutating the active Profile/extension
+  storage before `swapping`. Cleanup tests remove one-time extension/config
+  material and reopen without Bridge arguments, rejecting any missing-path or
+  reconnect dependency.
+- Restart tests must prove a successfully initialized Cookie Profile remains
+  usable after browser and monitor restart and is the Profile reused by manual
+  and scheduled crawler runs.
+- Internal profile-only tests must prove missing/expired/unverified Profile,
+  child login-state failure, CDP/provider mismatch, generic Profile fallback,
+  default network, empty/stale Cookie, and unexpected QR all fail before crawl
+  with typed `requires_relogin` behavior for migrated `login_type=cookie`
+  accounts. Existing QR/Profile execution remains a separate regression path.
+- Parent/child contract tests must prove `--lt cookie` plus hidden
+  `--monitor_profile_only true`, no `--cookies`, no Cookie environment value,
+  exact provider/account/promotion metadata, explicit/default Cookie clearing,
+  and reserved exit code `42` mapping only for `ProfileLoginRequired`.
+- C.3 cutover tests pause new runs, recover an interrupted migration, require
+  zero runnable version-0 Cookie accounts before activation, route version 1
+  through profile-only, and reject version 0 before child spawn with no argv
+  fallback.
+- C.1/C.2/C.3 tests must prove the Bridge flag controls C.2 only: route absent,
+  HTTP 404/WebSocket 403 on the pinned baseline, no extension/UI/pairing when
+  off, advanced manual Cookie still works through C.1, accepted profile-only
+  runs still use C.3, and raw argv is not restored.
+- Flag-ownership tests instrument configuration reads/imports and prove only
+  C.2 router/UI/readiness/extension/pairing code reads the Bridge flag; C.1 and
+  C.3 import and execute successfully while it is false.
+- Structured Cookie Protocol V1 tests must cover protocol version, request and
+  binding correlation, platform domain allowlist, distinct name/domain/path/
+  partition tuples, exact duplicates, malformed scope, unsupported required
+  attributes, structured-to-Profile fidelity, and Packet B-fixed record/frame
+  limits. Advanced manual strings must canonicalize into the shared validator
+  without claiming unavailable attributes.
 - A global tripwire must prove standard tests cannot reach real browsers, real
   platform accounts, real connector endpoints, or real Cookie material even
   when production-like environment variables are present.
-- The accepted Cookie subprocess decision must be testable: secure transport
-  selection requires process inspection proving raw Cookie is absent from
-  child argv; temporary local-only risk acceptance requires a current owner,
-  expiry, environment boundary, and a test/documentation tripwire against
-  production-security claims.
+- Process inspection must prove raw Cookie is absent from managed crawler child
+  argv after the persistent-Profile transition. Command builders, diagnostics,
+  logs, and failure output must not contain the raw value.
 
 Future opt-in and acceptance tests if CR-112 is accepted:
 
 - Chrome and Edge tests require `MONITOR_ALLOW_REAL_BROWSER_TESTS=1` and use
   synthetic Cookie fixtures. Each browser must prove four separate milestones:
   extension Service Worker, authenticated WebSocket registration, exact
-  login-session/client/Profile pairing, and one correlated Cookie roundtrip.
+  login-session/client/Profile pairing, and one correlated structured Cookie
+  roundtrip with domain/path/security attributes preserved after Profile
+  restart.
 - Clean-Windows acceptance must prove the standard monitor installation contains
   the project-owned extension and in-process Python 3.11 connector support;
   the operator performs no extension/connector file placement, personal Chrome
   Profile setup, Google login, or Python 3.12 installation.
+- The same clean-computer matrix must prove stable extension ID/Origin,
+  least-privilege permissions, session-extension cleanup, and crawler-equivalent
+  Profile restart without Bridge launch arguments.
 - LAN-address and configured reverse-proxy probes must fail before WebSocket
   protocol state, including WebSocket upgrade attempts. Reverse-proxy
   configuration checks must prove `/api/monitor/cookie-bridge/` is denied and
   not forwarded; the exact extension Origin over direct loopback is the only
   network path that may proceed to pairing authentication.
 - A local real-platform pilot requires explicit operator opt-in and redacted
-  evidence, and proves only the tested local machine/account flow.
+  evidence, and proves only the tested local machine/account flow. It must also
+  prove exact-account Profile persistence and reuse after restart.
 - Server-like regression must keep the connector feature disabled by default
   and verify server-started QR login, manual SMS handling, Profile persistence,
-  account checks, manual/scheduler runs, and crawler execution.
+  account checks, C.1 advanced manual Cookie, C.3 profile-only Cookie-account
+  manual/scheduler runs, no raw argv, unchanged QR-account execution, and
+  crawler execution.
 - Headless Bridge results are reported separately as supported or unsupported;
   they do not replace the server QR production acceptance boundary.
 
