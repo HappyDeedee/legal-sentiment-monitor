@@ -351,6 +351,758 @@ def test_pilot_gate_c_evidence_rejects_additional_secret_patterns(field_value):
     assert any(issue.code == "sensitive_value" and issue.path == "$.redaction.notes" for issue in issues)
 
 
+def _phase_5_1_acceptance_evidence_module():
+    script_path = Path(__file__).resolve().parents[1] / "scripts" / "phase_5_1_acceptance_evidence.py"
+    assert script_path.is_file(), "Phase 5.1 acceptance evidence checker is missing"
+    return __import__("scripts.phase_5_1_acceptance_evidence", fromlist=["*"])
+
+
+def _phase_5_1_acceptance_action(
+    *,
+    action,
+    trigger_source,
+    account_reference,
+    runtime_reference,
+    resolution_reference,
+    attempt_reference,
+    environment_digest,
+    observed_at,
+    provider_mode,
+):
+    return {
+        "action": action,
+        "trigger_source": trigger_source,
+        "account_reference": account_reference,
+        "runtime_reference": runtime_reference,
+        "resolution_reference": resolution_reference,
+        "attempt_reference": attempt_reference,
+        "environment_digest": environment_digest,
+        "observed_at": observed_at,
+        "provider_mode": provider_mode,
+        "browser_source": "playwright_bundled",
+        "proxy_effect": "passed",
+        "fallback_used": False,
+        "mismatch_count": 0,
+    }
+
+
+def _complete_phase_5_1_acceptance_evidence():
+    module = _phase_5_1_acceptance_evidence_module()
+    payload = module.build_template(now=datetime(2026, 7, 19, 12, 0, tzinfo=timezone.utc))
+    qr_digest = "sha256:" + "a" * 64
+    cookie_digest = "sha256:" + "b" * 64
+    payload["status"] = "passed"
+    payload["baseline"].update(
+        {
+            "commit": "a" * 40,
+            "environment_type": "docker",
+            "environment_reference": "phase51 acceptance docker run 20260719",
+            "operator_reference": "acceptance operator record 20260719",
+            "reviewer_reference": "independent reviewer record 20260719",
+            "run_window_started_at": "2026-07-19T12:05:00+00:00",
+            "run_window_ended_at": "2026-07-19T13:00:00+00:00",
+            "checked_at": "2026-07-19T13:01:00+00:00",
+        }
+    )
+    payload["environment"].update(
+        {
+            "service_started": True,
+            "web_admin_login": True,
+            "server_browser_owned": True,
+            "browser_source": "playwright_bundled",
+            "browser_family": "chromium",
+            "browser_version": "126.0.0.0",
+            "persistent_data_root": True,
+            "persistent_profile_root": True,
+            "local_window_disabled": True,
+            "connect_existing_disabled": True,
+            "restart_completed": True,
+        }
+    )
+    payload["accounts"]["qr"].update(
+        {
+            "platform": "dy",
+            "account_reference": "phase51 acceptance qr account 101",
+            "acceptance_labeled": True,
+        }
+    )
+    payload["accounts"]["cookie"].update(
+        {
+            "platform": "dy",
+            "account_reference": "phase51 acceptance cookie account 102",
+            "acceptance_labeled": True,
+        }
+    )
+    payload["login_actions"] = [
+        _phase_5_1_acceptance_action(
+            action="qr_login",
+            trigger_source="qrcode_login",
+            account_reference=payload["accounts"]["qr"]["account_reference"],
+            runtime_reference="runtime result qr 201",
+            resolution_reference="resolution qr 201",
+            attempt_reference="attempt qr 201",
+            environment_digest=qr_digest,
+            observed_at="2026-07-19T12:10:00+00:00",
+            provider_mode="persistent_launch",
+        ),
+        _phase_5_1_acceptance_action(
+            action="cookie_validation",
+            trigger_source="cookie_validation",
+            account_reference=payload["accounts"]["cookie"]["account_reference"],
+            runtime_reference="runtime result cookie 202",
+            resolution_reference="resolution cookie 202",
+            attempt_reference="attempt cookie 202",
+            environment_digest=cookie_digest,
+            observed_at="2026-07-19T12:12:00+00:00",
+            provider_mode="ephemeral_cookie_validation",
+        ),
+        _phase_5_1_acceptance_action(
+            action="login_check",
+            trigger_source="profile_validation",
+            account_reference=payload["accounts"]["qr"]["account_reference"],
+            runtime_reference="runtime result profile before 203",
+            resolution_reference="resolution profile before 203",
+            attempt_reference="attempt profile before 203",
+            environment_digest=qr_digest,
+            observed_at="2026-07-19T12:15:00+00:00",
+            provider_mode="persistent_launch",
+        ),
+        _phase_5_1_acceptance_action(
+            action="login_check",
+            trigger_source="profile_validation",
+            account_reference=payload["accounts"]["qr"]["account_reference"],
+            runtime_reference="runtime result profile after 204",
+            resolution_reference="resolution profile after 204",
+            attempt_reference="attempt profile after 204",
+            environment_digest=qr_digest,
+            observed_at="2026-07-19T12:25:00+00:00",
+            provider_mode="persistent_launch",
+        ),
+    ]
+    payload["restart"].update(
+        {
+            "restarted_at": "2026-07-19T12:20:00+00:00",
+            "lock_timestamp_before": "2026-07-19T12:09:00+00:00",
+            "lock_timestamp_after": "2026-07-19T12:09:00+00:00",
+            "environment_digest_before": qr_digest,
+            "environment_digest_after": qr_digest,
+            "profile_login_survived": True,
+        }
+    )
+    payload["proxy"].update(
+        {
+            "account_bound": True,
+            "region_reference": "CN_MAINLAND",
+            "browser_region_proof_passed": True,
+            "no_task_or_default_override": True,
+        }
+    )
+    payload["crawl_actions"] = []
+    for index, (trigger_source, observed_at) in enumerate(
+        [
+            ("manual", "2026-07-19T12:30:00+00:00"),
+            ("scheduler", "2026-07-19T12:40:00+00:00"),
+            ("cli_manual", "2026-07-19T12:50:00+00:00"),
+        ],
+        start=301,
+    ):
+        item = _phase_5_1_acceptance_action(
+            action="crawl",
+            trigger_source=trigger_source,
+            account_reference=payload["accounts"]["qr"]["account_reference"],
+            runtime_reference=f"runtime result crawl {index}",
+            resolution_reference=f"resolution crawl {index}",
+            attempt_reference=f"attempt crawl {index}",
+            environment_digest=qr_digest,
+            observed_at=observed_at,
+            provider_mode="cdp_launch",
+        )
+        item.update(
+            {
+                "run_reference": f"crawl run {index}",
+                "terminal_status": "completed",
+                "pages": 1,
+                "accepted_items": 1,
+                "duration_seconds": 60,
+            }
+        )
+        payload["crawl_actions"].append(item)
+    payload["runtime_authority"].update(
+        {
+            "safe_results_collected": True,
+            "browser_source_managed": True,
+            "profile_reference_matched": True,
+            "proxy_policy_account_bound": True,
+            "provider_mode_launch_owned": True,
+            "mismatch_evidence_empty": True,
+            "fallback_used_false": True,
+            "child_result_matched_before_ingest": True,
+        }
+    )
+    payload["bounds"].update(
+        {
+            "serial_execution": True,
+            "all_terminal": True,
+            "max_pages": 1,
+            "max_accepted_items": 10,
+            "timeout_seconds": 300,
+        }
+    )
+    payload["redaction"].update(
+        {
+            "checked_surfaces": [
+                "safe_runtime_results",
+                "account_api",
+                "run_summaries",
+                "logs",
+                "evidence_file",
+            ],
+            "no_sensitive_values_found": True,
+            "filled_evidence_outside_git": True,
+            "evidence_reference": "redaction review phase51 20260719",
+        }
+    )
+    payload["attestations"].update(
+        {
+            "operator_observed": True,
+            "reviewer_cross_checked": True,
+            "notes": "all references cross checked against the acceptance deployment",
+        }
+    )
+    return payload
+
+
+def test_phase_5_1_acceptance_evidence_template_is_incomplete_and_side_effect_free(tmp_path):
+    module = _phase_5_1_acceptance_evidence_module()
+    target = tmp_path / "phase_5_1_acceptance.json"
+
+    module.write_template(target, now=datetime(2026, 7, 19, 12, 0, tzinfo=timezone.utc))
+    payload = json.loads(target.read_text(encoding="utf-8"))
+    issues = module.validate_evidence(payload, now=datetime(2026, 7, 19, 13, 5, tzinfo=timezone.utc))
+
+    assert payload["schema_version"] == "phase_5_1_acceptance_v1"
+    assert payload["status"] == "incomplete"
+    assert payload["baseline"]["template_created_at"] == "2026-07-19T12:00:00+00:00"
+    assert issues
+    assert {issue.code for issue in issues} >= {"status", "required_true", "required_text"}
+
+
+def test_phase_5_1_acceptance_evidence_example_matches_generated_template_shape():
+    module = _phase_5_1_acceptance_evidence_module()
+    example_path = Path(__file__).resolve().parents[1] / "docs" / "phase-5.1-server-like-acceptance.example.json"
+    example = json.loads(example_path.read_text(encoding="utf-8"))
+    generated = module.build_template(now=datetime(2026, 7, 19, 0, 0, tzinfo=timezone.utc))
+
+    def shape(value):
+        if isinstance(value, dict):
+            return {key: shape(child) for key, child in value.items()}
+        if isinstance(value, list):
+            return [shape(value[0])] if value else []
+        return type(value)
+
+    assert shape(example) == shape(generated)
+    assert example["status"] == "incomplete"
+    assert module.validate_evidence(
+        example,
+        now=datetime(2026, 7, 19, 0, 5, tzinfo=timezone.utc),
+    )
+
+
+def test_phase_5_1_acceptance_evidence_accepts_complete_redacted_evidence():
+    module = _phase_5_1_acceptance_evidence_module()
+    payload = _complete_phase_5_1_acceptance_evidence()
+
+    assert module.validate_evidence(
+        payload,
+        now=datetime(2026, 7, 19, 13, 5, tzinfo=timezone.utc),
+    ) == []
+
+
+def test_phase_5_1_acceptance_evidence_pure_helper_keeps_expected_commit_optional():
+    module = _phase_5_1_acceptance_evidence_module()
+    payload = _complete_phase_5_1_acceptance_evidence()
+
+    assert module.validate_evidence(
+        payload,
+        expected_commit=None,
+        now=datetime(2026, 7, 19, 13, 5, tzinfo=timezone.utc),
+    ) == []
+
+
+def test_phase_5_1_acceptance_evidence_requires_exact_trigger_sources():
+    module = _phase_5_1_acceptance_evidence_module()
+    payload = _complete_phase_5_1_acceptance_evidence()
+    payload["crawl_actions"][2]["trigger_source"] = "cli"
+
+    issues = module.validate_evidence(payload, now=datetime(2026, 7, 19, 13, 5, tzinfo=timezone.utc))
+
+    assert any(issue.code == "trigger_sources" and issue.path == "crawl_actions" for issue in issues)
+
+
+def test_phase_5_1_acceptance_evidence_requires_exact_action_counts():
+    module = _phase_5_1_acceptance_evidence_module()
+    payload = _complete_phase_5_1_acceptance_evidence()
+    payload["login_actions"].pop()
+    payload["crawl_actions"].pop()
+
+    issues = module.validate_evidence(payload, now=datetime(2026, 7, 19, 13, 5, tzinfo=timezone.utc))
+    issue_paths = {issue.path for issue in issues if issue.code == "action_count"}
+
+    assert issue_paths == {"login_actions", "crawl_actions"}
+
+
+def test_phase_5_1_acceptance_evidence_rejects_invalid_chronology():
+    module = _phase_5_1_acceptance_evidence_module()
+    payload = _complete_phase_5_1_acceptance_evidence()
+    payload["restart"]["restarted_at"] = "2026-07-19T12:55:00+00:00"
+
+    issues = module.validate_evidence(payload, now=datetime(2026, 7, 19, 13, 5, tzinfo=timezone.utc))
+
+    assert any(issue.code == "chronology" and issue.path == "restart.restarted_at" for issue in issues)
+
+
+@pytest.mark.parametrize(
+    "lock_timestamp",
+    [
+        "2026-07-19T12:04:00+00:00",
+        "2026-07-19T12:21:00+00:00",
+    ],
+)
+def test_phase_5_1_acceptance_evidence_requires_lock_inside_window_before_restart(lock_timestamp):
+    module = _phase_5_1_acceptance_evidence_module()
+    payload = _complete_phase_5_1_acceptance_evidence()
+    payload["restart"]["lock_timestamp_before"] = lock_timestamp
+    payload["restart"]["lock_timestamp_after"] = lock_timestamp
+
+    issues = module.validate_evidence(
+        payload,
+        now=datetime(2026, 7, 19, 13, 5, tzinfo=timezone.utc),
+    )
+
+    assert any(
+        issue.code == "chronology" and issue.path == "restart.lock_timestamp_before"
+        for issue in issues
+    )
+
+
+def test_phase_5_1_acceptance_evidence_requires_logins_before_restart_and_crawls_after_profile_recheck():
+    module = _phase_5_1_acceptance_evidence_module()
+    payload = _complete_phase_5_1_acceptance_evidence()
+    payload["login_actions"][0]["observed_at"] = "2026-07-19T12:21:00+00:00"
+    payload["login_actions"][1]["observed_at"] = "2026-07-19T12:22:00+00:00"
+    payload["crawl_actions"][0]["observed_at"] = "2026-07-19T12:18:00+00:00"
+    payload["crawl_actions"][1]["observed_at"] = "2026-07-19T12:22:00+00:00"
+
+    issues = module.validate_evidence(
+        payload,
+        now=datetime(2026, 7, 19, 13, 5, tzinfo=timezone.utc),
+    )
+    chronology_paths = {issue.path for issue in issues if issue.code == "chronology"}
+
+    assert "login_actions.0.observed_at" in chronology_paths
+    assert "login_actions.1.observed_at" in chronology_paths
+    assert "crawl_actions.0.observed_at" in chronology_paths
+    assert "crawl_actions.1.observed_at" in chronology_paths
+
+
+def test_phase_5_1_acceptance_evidence_rejects_future_check_timestamp():
+    module = _phase_5_1_acceptance_evidence_module()
+    payload = _complete_phase_5_1_acceptance_evidence()
+    payload["baseline"]["checked_at"] = "2026-07-19T13:06:00+00:00"
+
+    issues = module.validate_evidence(payload, now=datetime(2026, 7, 19, 13, 5, tzinfo=timezone.utc))
+
+    assert any(issue.code == "chronology" and issue.path == "baseline.checked_at" for issue in issues)
+
+
+def test_phase_5_1_acceptance_evidence_requires_stable_restart_and_trigger_digest():
+    module = _phase_5_1_acceptance_evidence_module()
+    payload = _complete_phase_5_1_acceptance_evidence()
+    payload["restart"]["lock_timestamp_after"] = "2026-07-19T12:20:00+00:00"
+    payload["crawl_actions"][1]["environment_digest"] = "sha256:" + "c" * 64
+
+    issues = module.validate_evidence(payload, now=datetime(2026, 7, 19, 13, 5, tzinfo=timezone.utc))
+    codes = {issue.code for issue in issues}
+
+    assert "restart_lock" in codes
+    assert "stable_digest" in codes
+
+
+def test_phase_5_1_acceptance_evidence_requires_unique_action_references():
+    module = _phase_5_1_acceptance_evidence_module()
+    payload = _complete_phase_5_1_acceptance_evidence()
+    payload["crawl_actions"][1]["resolution_reference"] = payload["crawl_actions"][0]["resolution_reference"]
+
+    issues = module.validate_evidence(payload, now=datetime(2026, 7, 19, 13, 5, tzinfo=timezone.utc))
+
+    assert any(issue.code == "duplicate_reference" and "resolution_reference" in issue.path for issue in issues)
+
+
+def test_phase_5_1_acceptance_evidence_enforces_fixed_run_bounds():
+    module = _phase_5_1_acceptance_evidence_module()
+    payload = _complete_phase_5_1_acceptance_evidence()
+    payload["bounds"]["serial_execution"] = False
+    payload["crawl_actions"][0].update({"pages": 0, "accepted_items": 0, "duration_seconds": 0})
+    payload["crawl_actions"][1].update({"pages": 2, "accepted_items": 11, "duration_seconds": 301})
+
+    issues = module.validate_evidence(payload, now=datetime(2026, 7, 19, 13, 5, tzinfo=timezone.utc))
+    issue_paths = {issue.path for issue in issues}
+
+    assert "bounds.serial_execution" in issue_paths
+    assert "crawl_actions.0.pages" in issue_paths
+    assert "crawl_actions.0.accepted_items" in issue_paths
+    assert "crawl_actions.0.duration_seconds" in issue_paths
+    assert "crawl_actions.1.pages" in issue_paths
+    assert "crawl_actions.1.accepted_items" in issue_paths
+    assert "crawl_actions.1.duration_seconds" in issue_paths
+
+
+def test_phase_5_1_acceptance_evidence_rejects_wrong_provider_modes_and_cookie_crawl():
+    module = _phase_5_1_acceptance_evidence_module()
+    payload = _complete_phase_5_1_acceptance_evidence()
+    payload["login_actions"][0]["provider_mode"] = "cdp_launch"
+    payload["crawl_actions"][0]["provider_mode"] = "persistent_launch"
+    payload["crawl_actions"][1]["account_reference"] = payload["accounts"]["cookie"]["account_reference"]
+
+    issues = module.validate_evidence(payload, now=datetime(2026, 7, 19, 13, 5, tzinfo=timezone.utc))
+    codes = {issue.code for issue in issues}
+
+    assert "login_actions" in codes
+    assert "provider_mode" in codes
+    assert any(
+        issue.code == "account_reference"
+        and issue.path == "crawl_actions.1.account_reference"
+        and "QR/Profile" in issue.message
+        for issue in issues
+    )
+
+
+def test_phase_5_1_acceptance_evidence_requires_all_redaction_surfaces():
+    module = _phase_5_1_acceptance_evidence_module()
+    payload = _complete_phase_5_1_acceptance_evidence()
+    payload["redaction"]["checked_surfaces"] = ["safe_runtime_results", "account_api"]
+
+    issues = module.validate_evidence(payload, now=datetime(2026, 7, 19, 13, 5, tzinfo=timezone.utc))
+
+    assert any(
+        issue.code == "redaction_surfaces"
+        and "logs" in issue.message
+        and "run_summaries" in issue.message
+        and "evidence_file" in issue.message
+        for issue in issues
+    )
+
+
+@pytest.mark.parametrize(
+    "value",
+    [
+        "Cookie: sessionid=abcdef123456",
+        "https://user:pass@proxy.example.com:8080",
+        "http://proxy.example.com:8080",
+        "地址http://user:pass@proxy.example.test:8080",
+        "ws://127.0.0.1:9222/devtools/browser/abc",
+        r"C:\server\profiles\dy\acc_12",
+        "C:/server/profiles/dy/acc_12",
+        r"\\server\share\profiles\dy\acc_12",
+        "//server/share/profiles/dy/acc_12",
+        "/app/monitor_data/account_profiles/1/dy/acc_12",
+        "/srv/monitor/profiles/dy/acc_12",
+        "/usr/local/share/monitor/profiles/acc_12",
+        "/srv/客户/profile",
+        "profile:/srv/data/profile",
+        "MONITOR_BROWSER_ENVIRONMENT_PLAN={secret payload}",
+        "--user-data-dir=/app/profile --proxy-server=http://proxy.invalid",
+    ],
+)
+def test_phase_5_1_acceptance_evidence_rejects_sensitive_values(value):
+    module = _phase_5_1_acceptance_evidence_module()
+    payload = _complete_phase_5_1_acceptance_evidence()
+    payload["attestations"]["notes"] = value
+
+    issues = module.validate_evidence(payload, now=datetime(2026, 7, 19, 13, 5, tzinfo=timezone.utc))
+
+    assert any(issue.code == "sensitive_value" and issue.path == "$.attestations.notes" for issue in issues)
+
+
+def test_phase_5_1_acceptance_evidence_allows_normal_slash_delimited_attestation_text():
+    module = _phase_5_1_acceptance_evidence_module()
+    payload = _complete_phase_5_1_acceptance_evidence()
+    payload["attestations"]["notes"] = "操作员/复核员已确认"
+
+    assert module.validate_evidence(
+        payload,
+        now=datetime(2026, 7, 19, 13, 5, tzinfo=timezone.utc),
+    ) == []
+
+
+def test_phase_5_1_acceptance_evidence_rejects_sensitive_keys_and_placeholders():
+    module = _phase_5_1_acceptance_evidence_module()
+    payload = _complete_phase_5_1_acceptance_evidence()
+    payload["runtime_authority"]["browser_process_argv"] = "redacted"
+    payload["accounts"]["cookie"]["password"] = "redacted"
+    payload["baseline"]["reviewer_reference"] = "TBD"
+
+    issues = module.validate_evidence(payload, now=datetime(2026, 7, 19, 13, 5, tzinfo=timezone.utc))
+    codes = {issue.code for issue in issues}
+
+    assert "sensitive_key" in codes
+    assert any(issue.code == "required_text" and issue.path == "baseline.reviewer_reference" for issue in issues)
+
+
+def test_phase_5_1_acceptance_evidence_rejects_wrong_baseline_and_environment_enums():
+    module = _phase_5_1_acceptance_evidence_module()
+    payload = _complete_phase_5_1_acceptance_evidence()
+    payload["baseline"]["commit"] = "27389a8"
+    payload["baseline"]["environment_type"] = "windows_local"
+    payload["environment"]["browser_source"] = "diagnostic_auto_detect"
+    payload["environment"]["browser_version"] = "126"
+
+    issues = module.validate_evidence(payload, now=datetime(2026, 7, 19, 13, 5, tzinfo=timezone.utc))
+    issue_paths = {issue.path for issue in issues}
+
+    assert "baseline.commit" in issue_paths
+    assert "baseline.environment_type" in issue_paths
+    assert "environment.browser_source" in issue_paths
+    assert "environment.browser_version" in issue_paths
+
+
+def test_phase_5_1_acceptance_evidence_rejects_system_managed_browser_sources():
+    module = _phase_5_1_acceptance_evidence_module()
+    payload = _complete_phase_5_1_acceptance_evidence()
+    payload["environment"]["browser_source"] = "system_managed"
+    payload["login_actions"][0]["browser_source"] = "system_managed"
+
+    issues = module.validate_evidence(
+        payload,
+        now=datetime(2026, 7, 19, 13, 5, tzinfo=timezone.utc),
+    )
+    issue_paths = {issue.path for issue in issues if issue.code == "enum"}
+
+    assert "environment.browser_source" in issue_paths
+    assert "login_actions.0.browser_source" in issue_paths
+
+
+def test_phase_5_1_acceptance_evidence_requires_distinct_accounts_and_one_browser_source():
+    module = _phase_5_1_acceptance_evidence_module()
+    payload = _complete_phase_5_1_acceptance_evidence()
+    payload["accounts"]["cookie"]["account_reference"] = payload["accounts"]["qr"]["account_reference"]
+    payload["login_actions"][1]["account_reference"] = payload["accounts"]["qr"]["account_reference"]
+    payload["crawl_actions"][0]["browser_source"] = "explicit"
+
+    issues = module.validate_evidence(
+        payload,
+        now=datetime(2026, 7, 19, 13, 5, tzinfo=timezone.utc),
+    )
+
+    assert any(
+        issue.code == "account_reference" and issue.path == "accounts.cookie.account_reference"
+        for issue in issues
+    )
+    assert any(
+        issue.code == "browser_source" and issue.path == "crawl_actions.0.browser_source"
+        for issue in issues
+    )
+
+
+def test_phase_5_1_acceptance_evidence_rejects_whitespace_only_account_distinction():
+    module = _phase_5_1_acceptance_evidence_module()
+    payload = _complete_phase_5_1_acceptance_evidence()
+    payload["accounts"]["cookie"]["account_reference"] = (
+        payload["accounts"]["qr"]["account_reference"] + " "
+    )
+    payload["login_actions"][1]["account_reference"] = payload["accounts"]["cookie"]["account_reference"]
+
+    issues = module.validate_evidence(
+        payload,
+        now=datetime(2026, 7, 19, 13, 5, tzinfo=timezone.utc),
+    )
+
+    assert any(
+        issue.code == "account_reference" and issue.path == "accounts.cookie.account_reference"
+        for issue in issues
+    )
+
+
+def test_phase_5_1_acceptance_evidence_requires_explicit_deployed_commit_match():
+    module = _phase_5_1_acceptance_evidence_module()
+    payload = _complete_phase_5_1_acceptance_evidence()
+
+    issues = module.validate_evidence(
+        payload,
+        expected_commit="f" * 40,
+        now=datetime(2026, 7, 19, 13, 5, tzinfo=timezone.utc),
+    )
+
+    assert any(
+        issue.code == "baseline"
+        and issue.path == "baseline.commit"
+        and "expected deployed commit" in issue.message
+        for issue in issues
+    )
+
+
+def test_phase_5_1_acceptance_evidence_cli_requires_expected_commit(tmp_path, capsys):
+    module = _phase_5_1_acceptance_evidence_module()
+    evidence_path = tmp_path / "phase_5_1_acceptance.json"
+    evidence_path.write_text(
+        json.dumps(_complete_phase_5_1_acceptance_evidence()),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        module.main(["--check", str(evidence_path)])
+
+    assert exc_info.value.code == 2
+    assert "--expected-commit must be the exact lowercase 40-character deployed Git commit" in capsys.readouterr().err
+
+
+@pytest.mark.parametrize(
+    "invalid_commit",
+    [
+        "",
+        "a" * 7,
+        "A" * 40,
+        "g" * 40,
+    ],
+)
+def test_phase_5_1_acceptance_evidence_cli_rejects_invalid_expected_commit(
+    tmp_path,
+    capsys,
+    invalid_commit,
+):
+    module = _phase_5_1_acceptance_evidence_module()
+    evidence_path = tmp_path / "phase_5_1_acceptance.json"
+    evidence_path.write_text(
+        json.dumps(_complete_phase_5_1_acceptance_evidence()),
+        encoding="utf-8",
+    )
+
+    with pytest.raises(SystemExit) as exc_info:
+        module.main(
+            [
+                "--check",
+                str(evidence_path),
+                "--expected-commit",
+                invalid_commit,
+            ]
+        )
+
+    assert exc_info.value.code == 2
+    assert "--expected-commit must be the exact lowercase 40-character deployed Git commit" in capsys.readouterr().err
+
+
+def test_phase_5_1_acceptance_evidence_cli_rejects_deployed_commit_mismatch(tmp_path, capsys):
+    module = _phase_5_1_acceptance_evidence_module()
+    evidence_path = tmp_path / "phase_5_1_acceptance.json"
+    evidence_path.write_text(
+        json.dumps(_complete_phase_5_1_acceptance_evidence()),
+        encoding="utf-8",
+    )
+
+    exit_code = module.main(
+        ["--check", str(evidence_path), "--expected-commit", "f" * 40]
+    )
+    result = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 1
+    assert result["ok"] is False
+    assert any(
+        issue["code"] == "baseline" and issue["path"] == "baseline.commit"
+        for issue in result["issues"]
+    )
+
+
+def test_phase_5_1_acceptance_evidence_cli_accepts_matching_deployed_commit(tmp_path, capsys):
+    module = _phase_5_1_acceptance_evidence_module()
+    payload = _complete_phase_5_1_acceptance_evidence()
+    evidence_path = tmp_path / "phase_5_1_acceptance.json"
+    evidence_path.write_text(json.dumps(payload), encoding="utf-8")
+
+    exit_code = module.main(
+        [
+            "--check",
+            str(evidence_path),
+            "--expected-commit",
+            payload["baseline"]["commit"],
+        ]
+    )
+    result = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 0
+    assert result["ok"] is True
+    assert result["issues"] == []
+
+
+def test_phase_5_1_acceptance_evidence_cli_returns_structured_missing_file_error(tmp_path, capsys):
+    module = _phase_5_1_acceptance_evidence_module()
+
+    exit_code = module.main(
+        [
+            "--check",
+            str(tmp_path / "missing.json"),
+            "--expected-commit",
+            "a" * 40,
+        ]
+    )
+    result = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 1
+    assert result["ok"] is False
+    assert result["issues"] == [
+        {
+            "code": "input",
+            "path": "evidence_file",
+            "message": "evidence file could not be read",
+        }
+    ]
+
+
+@pytest.mark.parametrize(
+    ("content", "expected_issue"),
+    [
+        (
+            "{invalid",
+            {
+                "code": "invalid_json",
+                "path": "evidence_file",
+                "message": "evidence file must contain valid JSON",
+            },
+        ),
+        (
+            "[]",
+            {
+                "code": "shape",
+                "path": "evidence_file",
+                "message": "evidence file must contain a JSON object",
+            },
+        ),
+    ],
+)
+def test_phase_5_1_acceptance_evidence_cli_returns_structured_invalid_content_error(
+    tmp_path,
+    capsys,
+    content,
+    expected_issue,
+):
+    module = _phase_5_1_acceptance_evidence_module()
+    evidence_path = tmp_path / "invalid.json"
+    evidence_path.write_text(content, encoding="utf-8")
+
+    exit_code = module.main(
+        [
+            "--check",
+            str(evidence_path),
+            "--expected-commit",
+            "a" * 40,
+        ]
+    )
+    result = json.loads(capsys.readouterr().out)
+
+    assert exit_code == 1
+    assert result["ok"] is False
+    assert result["issues"] == [expected_issue]
+
+
 def test_ai_endpoint_builder_handles_v1_and_full_paths():
     assert _build_endpoint("https://api.openai.com", "/v1/chat/completions") == "https://api.openai.com/v1/chat/completions"
     assert _build_endpoint("https://api.openai.com/v1", "/v1/chat/completions") == "https://api.openai.com/v1/chat/completions"

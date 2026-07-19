@@ -2,6 +2,128 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-19 - Phase 5.1 Acceptance Evidence Checker Task 2
+
+Environment: isolated worktree `codex/phase-5.1-server-like-acceptance` from
+`main@27389a8`.
+
+Result:
+
+- Added pure `phase_5_1_acceptance_v1` template/check validation and an
+  incomplete committed example. The checker performs no database, browser,
+  Profile, proxy, platform, network, process, or crawler action.
+- Deterministic RED produced `15 failed` because the checker did not exist.
+  GREEN now covers template shape, required groups, exact four login and three
+  crawl actions, real code trigger sources `manual|scheduler|cli_manual`,
+  action/reference uniqueness, chronology, no-future check time, restart lock
+  and digest stability, exact provider modes, QR-only crawls, one page, 1-10
+  accepted items, 1-300 seconds, redaction surfaces, placeholders, managed
+  browser enums, and nested sensitive keys/values.
+- Template generation succeeds. Checking the generated `status=incomplete`
+  template exits nonzero with explicit missing evidence; that is the required
+  pre-real-run behavior.
+- A follow-up baseline-lifecycle check found that Task 1's historical
+  `main@27389a8` cannot be an implied post-merge acceptance default. Formal
+  `--check` now requires the exact deployed full commit through
+  `--expected-commit`, compares it to `baseline.commit`, and rejects missing,
+  empty, abbreviated, uppercase, non-hex, and mismatched values. The pure
+  helper keeps the expected commit optional for synthetic validation.
+- Final checker hardening restricts formal browser sources to `explicit` or
+  `playwright_bundled`, binds every action source to the acceptance environment,
+  requires separate whitespace-normalized QR/Cookie account references,
+  requires QR/Cookie actions before restart and all crawls after the
+  post-restart Profile check, and keeps lock timestamps inside the run window
+  before restart. Unreadable, invalid, or non-object evidence returns a
+  structured path-safe error.
+- Redaction coverage now rejects credentialed and bare network/CDP URLs,
+  drive-letter and UNC paths with either separator, Unicode Unix paths, and
+  paths after punctuation without rejecting ordinary text such as
+  `操作员/复核员已确认`.
+
+Verification:
+
+- Targeted checker tests: `49 passed, 485 deselected`.
+- Phase 5.1 focused regression: `183 passed, 351 deselected`.
+- Complete monitoring regression: `534 passed` with the same three existing
+  deprecation warnings.
+- Python compile, documentation regression (`1 passed`),
+  `scripts/check_docs.py`, CLI help, and `git diff --check` pass.
+- Independent Claude Code full review initially found missing action skeletons,
+  zero-work crawl acceptance, and test gaps. After adding explicit skeletons,
+  positive lower bounds, and negative coverage, focused re-review returned
+  `PASS` with no remaining blocking or material finding.
+- A later focused deployed-commit review requested direct malformed-value
+  coverage and an explicit stale-baseline warning. After both were added, its
+  focused re-review returned `PASS` with no blocking or material finding.
+- The final independent complete-diff review found browser-source, chronology,
+  input-error, path-redaction, and normalized-account-reference gaps. Their RED
+  runs reproduced `8`, `8`, and `4` failures across three hardening rounds;
+  after the narrow fixes and focused re-reviews, the reviewer returned `PASS`
+  with no remaining blocking or material finding.
+
+Proof boundary:
+
+- The checker proves evidence shape, chronology, internal consistency, fixed
+  bounds, and redaction. It does not authenticate external actions. No real
+  Phase 5.1 login, Cookie, Profile, proxy, browser, deployment, restart, or
+  crawl evidence exists yet.
+
+## 2026-07-19 - Phase 5.1 Server-Like Acceptance Packet Review
+
+Environment: isolated documentation worktree
+`codex/phase-5.1-server-like-acceptance` from clean `main@27389a8`.
+
+Result:
+
+- Created the atomic Phase 5.1 server-like acceptance packet and synchronized
+  CR-114 post-merge close-out state.
+- Deep Claude Code read-only review initially reported three blockers: checker
+  sequencing clarity, unsafe mandatory process inspection, and missing
+  ephemeral-Cookie versus CR-112 ownership classification.
+- The revised packet makes Task 2 checker completion mandatory before real
+  actions, uses existing persisted safe runtime results as formal authority
+  proof, keeps raw process inspection optional/transient, and explicitly keeps
+  Cookie promotion plus raw-Cookie argv retirement under CR-112.
+- The packet now validates exact baseline, acceptance-only labels, configured
+  proxy probe, chronology, unique action references, trigger-source set,
+  restart lock timestamp/digest, fixed crawl bounds, and operator/reviewer
+  attestations. Focused Claude Code re-review returned `READY` with no remaining
+  blocking or material finding.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`: `PASS docs consistency`.
+- Documentation regression: `1 passed`.
+- `git diff --check`: only expected Windows LF-to-CRLF notices.
+
+Proof boundary:
+
+- This proves the packet is ready for Task 2 checker implementation. It is not
+  real server-like acceptance; no account, proxy, Profile, Cookie, platform,
+  browser, Docker/systemd runtime, or crawl was opened.
+
+## 2026-07-19 - CR-114 Merge And Post-Merge Close-Out
+
+Environment: local and remote `main@27389a8` after CR-114 PR #6.
+
+Result:
+
+- `codex/cr-114-browser-binding-object-identity@c7611a4` merged through PR #6
+  as merge commit `27389a8`, then synchronized to local `main`.
+- Post-merge full monitoring regression passed (`485 passed`) with the same
+  three pre-existing deprecation warnings; focused Phase 5.1B-D regression
+  passed (`132 passed, 353 deselected`).
+- Documentation regression passed (`1 passed`),
+  `scripts/check_docs.py` returned `PASS docs consistency`, Python compile
+  passed for the changed runtime/test modules, and `git diff --check` passed.
+
+Proof boundary:
+
+- CR-114 is closed and the separate Phase 5.1 server-like acceptance packet
+  may start. No real platform account, proxy, Profile, browser, container,
+  systemd service, or restart acceptance evidence was created by this
+  post-merge run.
+
 ## 2026-07-19 - CR-114 Object-Scoped Browser Runtime Binding
 
 Environment: isolated Windows worktree

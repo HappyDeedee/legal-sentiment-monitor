@@ -4,8 +4,8 @@ Last updated: 2026-07-19
 
 ## Current Baseline
 
-- Current merged baseline: clean `main@86e9d02`, matching `origin/main` after
-  Phase 5.1D PR #5 integration and post-merge verification.
+- Current merged baseline: clean `main@27389a8`, matching `origin/main` after
+  CR-114 PR #6 integration and post-merge verification.
 - Phase 5.1A code/tests are complete on
   `codex/phase-5.1a-account-identity-schema`: all 24 additive fields, three
   workspace-scoped indexes, idempotent legacy migration, and boolean read
@@ -39,8 +39,7 @@ Last updated: 2026-07-19
   the complete monitoring suite passes (`484 passed`); compile, docs,
   JavaScript parse, desktop/mobile browser checks, and independent Claude Code
   review also pass.
-- CR-114 is the active follow-up regression fix on
-  `codex/cr-114-browser-binding-object-identity` from `main@86e9d02`. A fresh
+- CR-114 is merged and post-merge verified through PR #6 on `main@27389a8`. A fresh
   worktree exposed that process-global Context/Page caches keyed only by
   Python object ID could collide after ID reuse, mix Context plans, or skip CDP
   preparation. The fix binds plan/runtime/page preparation to the exact object
@@ -48,8 +47,9 @@ Last updated: 2026-07-19
   (`7 passed`), focused Phase 5.1B-D selection (`132 passed`), and full monitor
   suite (`485 passed`) pass. Python compile, documentation gates, and the
   independent Claude Code full-diff review also pass with no blocking or
-  material finding. PR integration and post-merge verification remain open,
-  so server-like acceptance has not started.
+  material finding. Post-merge full (`485 passed`), focused (`132 passed`),
+  compile, and documentation gates also pass. The Phase 5.1 server-like
+  acceptance packet is now the active unit; no real acceptance action has run.
 - Phase 21 and CR-107 through CR-110 are merged current-main history, not
   active working-tree implementation.
 - CR-111 verified and synchronized human-readable governance state only; it did
@@ -79,9 +79,19 @@ Last updated: 2026-07-19
   split without changing product code, schema, UI, runtime data, Profiles,
   Cookies, proxies, crawler behavior, browser processes, deployment, or the
   database.
-- Phase 5.1A-D are implemented, merged, and independently verified. CR-114 is
-  the only active follow-up before the separate Phase 5.1 server-like
-  acceptance gate. CR-070 / Phase 5.2 remains blocked
+- Phase 5.1A-D and CR-114 are implemented, merged, and independently verified.
+  The separate Phase 5.1 server-like acceptance gate is now active under
+  `docs/superpowers/plans/2026-07-19-phase-5.1-server-like-acceptance.md`.
+  Deep Claude Code review initially found process-proof and CR-112 boundary
+  gaps; the revised packet uses existing safe runtime results, makes raw
+  process inspection optional, and explicitly separates ephemeral Cookie
+  validation from CR-112 promotion/argv retirement. Focused re-review returned
+  `READY`. Task 2 evidence-checker TDD is complete: the pure checker/template,
+  incomplete example, explicit deployed-commit CLI binding, 49 targeted tests,
+  183 Phase 5.1 tests, 534 full tests, compile/docs gates, and independent
+  read-only review pass. Task 3 environment preflight is next; no real
+  account/proxy/platform action has run and Tasks 4-7 remain operator-gated.
+  CR-070 / Phase 5.2 remains blocked
   by implemented and verified CR-047 provider binding and requested/effective
   runtime snapshots. CR-092 and CR-094 remain `Needs Confirmation`, CR-112
   remains `Needs Confirmation`, CR-093 remains future-only, CR-037 remains
@@ -696,8 +706,8 @@ snapshot shape, audit events, and test-safety tripwires. These are
 now implemented and independently verified through Phase 5.1D:
 additive storage/read compatibility, deterministic generation/fail-closed
 validation, lifecycle/lock/reset/audit behavior, and provider/runtime binding
-are code and test evidence. Phase 5.1D integration and post-merge verification
-are complete; CR-114 integration and final server-like acceptance remain open.
+are code and test evidence. Phase 5.1D and CR-114 integration/post-merge
+verification are complete; final server-like acceptance remains open.
 CR-070 Account Environment Export And Import Package is accepted as a Phase
 5.2 new capability for moving a single platform account environment between
 deployments. It extends the CR-047 identity model with metadata-only and slim
@@ -1067,8 +1077,8 @@ value redaction, resource-alert diagnostics, backup guidance, disk-space
   the container/server-like, BrowserEnvironmentProvider, MediaCrawler CDP, QR
   login, Cookie validation, login-state check, manual run, scheduler run,
   runner, and requested/effective snapshot compatibility boundary. Phase 5.1D
-  is merged and post-merge verified; CR-114 integration and final server-like
-  acceptance remain gated.
+  and CR-114 are merged and post-merge verified; final server-like acceptance
+  remains gated.
 - CR-091 - Open Todo MECE Rebaseline And Phase 5.1 Preflight Gate: verified as
   a documentation-governance sequencing update. It keeps closed Phase 21 as
   the protected frontend baseline and established Phase 5.1P as the
@@ -1282,10 +1292,9 @@ separate follow-up work.
 - CR-111 documentation synchronization is verified and closed against
   `main@abb4d66`. Phase 10-21, CR-091, CR-095, and CR-107 through CR-110 are
   complete through their recorded scope. Phase 5.1P is now also verified as a
-  documentation/read-only preflight. Phase 5.1A-D are implemented, merged, and
-  independently verified. CR-114 is the active object-identity regression fix;
-  after it merges, the Phase 5.1 server-like acceptance packet is the next
-  serial unit. Phase
+  documentation/read-only preflight. Phase 5.1A-D and CR-114 are implemented,
+  merged, and independently verified. The Phase 5.1 server-like acceptance
+  packet is the active serial unit. Phase
   7.1D remains operator-gated, CR-037 remains deferred, CR-092 and
   CR-094 remain `Needs Confirmation`, and CR-093 remains a future independent
   backlog lane.
@@ -1698,9 +1707,8 @@ Lowest-risk parallel execution lane:
    `main`. Phase 5.1P is verified as read-only document/code-path mapping.
    Phase 5.1A additive account identity and Phase 5.1B deterministic
    generation/validation, Phase 5.1C lifecycle, and Phase 5.1D browser/runtime
-   binding are independently verified, merged, and rechecked. CR-114 is the
-   active follow-up; the separate server-like acceptance packet follows its
-   post-merge verification.
+   binding and CR-114 object-scoped follow-up are independently verified,
+   merged, and rechecked. The separate server-like acceptance packet is active.
 
 CR-112 may receive documentation refinement while it is `Needs Confirmation`,
 but it is not a parallel implementation lane and does not alter the verified

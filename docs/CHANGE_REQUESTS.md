@@ -4656,7 +4656,7 @@ Module: browser environment runtime binding and CDP page preparation
 
 Type: Regression Fix
 
-Status: Implemented
+Status: Verified
 
 Background:
 
@@ -4707,7 +4707,11 @@ Verification:
   full monitoring suite passes (`485 passed`). Python compile, documentation
   consistency/regression, and independent Claude Code full-diff review pass
   with no blocking or material finding. PR integration and post-merge
-  re-verification remain open.
+  re-verification initially remained open.
+- PR #6 merged the fix as `main@27389a8`. Post-merge full monitoring tests
+  pass (`485 passed`), focused Phase 5.1B-D tests pass (`132 passed`), and
+  compile/documentation gates pass. CR-114 is closed; the separate Phase 5.1
+  server-like acceptance packet is now the next unit.
 
 ## CR-056 - Filter Dropdown Alignment Regression Fix
 
