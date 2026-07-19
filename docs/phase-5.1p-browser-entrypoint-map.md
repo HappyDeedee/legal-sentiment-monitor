@@ -5,24 +5,27 @@ Owner: CR-047 / Phase 5.1P
 Evidence baseline: clean `main@459237f`, matching `origin/main`, before this
 documentation-only result was written
 Review date: 2026-07-19
-Current progress: Phase 5.1A-C verified, merged, and rechecked; Phase 5.1D
-browser/runtime binding is technically verified pending integration. The
-separate Phase 5.1 server-like acceptance gate remains next.
+Current progress: Phase 5.1A-D are verified, merged, and rechecked through
+`main@86e9d02`. CR-114 is the active follow-up object-identity regression fix;
+the separate Phase 5.1 server-like acceptance gate follows its integration.
 
 ## Result
 
-Phase 5.1P passes as a mapping and contract gate. The current runtime does not
-yet satisfy CR-047 account identity fidelity, but every current browser, login,
-validation, monitor-run, child-process, CDP, and fallback path is classified.
+Phase 5.1P passes as a mapping and contract gate. The preflight baseline
+runtime did not yet satisfy CR-047 account identity fidelity, but every
+browser, login, validation, monitor-run, child-process, CDP, and fallback path
+was classified.
 The formal monitor paths can consume one immutable
 `BrowserEnvironmentProvider` plan and one requested/effective evidence result
 without adding another account, Profile, proxy, or browser authority.
 
 This preflight made no code, schema, UI, runtime-data, database, Profile,
 Cookie, proxy, crawler, browser-process, or deployment change. Phase 5.1A-D
-have since passed their technical implementation and independent-review gates;
-Phase 5.1D still awaits integration. The Phase 5.1 acceptance gate must prove
-the behavior described here in a container/server-like environment.
+have since passed their technical implementation, independent-review,
+integration, and post-merge gates. CR-114 must integrate before the Phase 5.1
+acceptance gate proves the behavior described here in a container/server-like
+environment. All `Current state` columns below remain historical
+`main@459237f` preflight evidence, not a description of `main@86e9d02`.
 
 The central current-state finding is split authority:
 
@@ -51,8 +54,9 @@ account + action
 | Phase 5.1P | current, completed by this preflight | The packet and all mapping tasks are executed by this document. |
 | Phase 5.1A | completed and verified | Its additive account identity data-model packet is implemented and independently reviewed. |
 | Phase 5.1B | completed and verified | Exact deterministic generation, fail-closed validation, safe creation controls, redaction, and test tripwires are implemented. |
-| Phase 5.1C-D | current, dependency-gated | Phase 5.1C is merged and verified; Phase 5.1D browser/runtime binding is technically verified pending integration. |
-| Phase 5.1 acceptance | current, dependency-gated | Requires server-like requested/effective, proxy-effect, manual/scheduler, and CDP proof. |
+| Phase 5.1C-D | historical/already completed | Both units are merged and post-merge verified through `main@86e9d02`. |
+| CR-114 | current, dependency-gated | Object-scoped Context/Page binding follow-up must integrate and pass post-merge checks. |
+| Phase 5.1 acceptance | current, dependency-gated | Starts after CR-114 and requires server-like requested/effective, proxy-effect, manual/scheduler, and CDP proof. |
 | CR-070 / Phase 5.2 | current, dependency-gated | Remains blocked until all CR-047 provider binding and effective snapshots are verified. |
 | CR-112 | future, `Needs Confirmation` | May reuse the CR-047 provider contract later; no Bridge/Profile-promotion/profile-only implementation is assigned to CR-047. |
 | CR-092 and CR-094 | future, `Needs Confirmation` | Not Phase 5.1P prerequisites. |
@@ -447,9 +451,8 @@ diagnostics but cannot individually satisfy this acceptance.
 
 ## Phase 5.1 Handoff
 
-Phase 5.1A-D can proceed without another provider-authority decision under
-these boundaries. Phase 5.1A-C are implemented, merged, and independently
-verified; Phase 5.1D is technically verified pending integration:
+Phase 5.1A-D required no additional provider-authority decision under these
+boundaries and are now implemented, merged, and independently verified:
 
 1. **5.1A:** add only the accepted additive identity/snapshot fields and keep
    existing accounts readable without guessed backfill.
@@ -460,7 +463,9 @@ verified; Phase 5.1D is technically verified pending integration:
 4. **5.1D:** implement the provider plan/result, canonical executable resolver,
    caller adapters, child handoff, probes, snapshot, proxy proof, and removal
    of silent E14 fallback for locked identities.
-5. **Acceptance:** run the server-like matrix above before calling any locked
+5. **CR-114:** integrate and post-merge verify object-scoped Context/Page
+   binding so numeric object-ID reuse cannot mix plans or skip preparation.
+6. **Acceptance:** run the server-like matrix above before calling any locked
    identity active or starting CR-070.
 
 Stop Phase 5.1 and record `Needs Confirmation` if implementation discovers

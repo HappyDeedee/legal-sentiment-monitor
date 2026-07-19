@@ -113,6 +113,8 @@ Status values:
 - CR-110: QR Login SMS Verification Manual Submission Regression Fix
 - CR-111: Current-Main Documentation State Synchronization
 - CR-112: Local Browser Auto-Sync Cookie Acquisition
+- CR-113: QR Draft Account Identity Choice Forwarding
+- CR-114: Browser Runtime Binding Object Identity Collision Regression Fix
 - CR-096: AI Evaluation Postprocessing Scope Reduction
 - CR-075: Responsive Navigation Interaction Consistency
 - CR-076: Mobile Header Layout Resilience Regression Fix
@@ -4643,6 +4645,69 @@ Verification:
 - The focused CR-113/Phase 5.1C selection and full monitoring suite pass in
   the isolated Phase 5.1C worktree. Python compile, documentation gates,
   browser checks, and the independent Claude Code full-diff review also pass.
+
+## CR-114 - Browser Runtime Binding Object Identity Collision Regression Fix
+
+Date: 2026-07-19
+
+Source: clean-worktree baseline verification after Phase 5.1D PR #5 merged.
+
+Module: browser environment runtime binding and CDP page preparation
+
+Type: Regression Fix
+
+Status: Implemented
+
+Background:
+
+Phase 5.1D stored BrowserContext plans, runtime proof state, and prepared Page
+markers in process-global collections keyed only by Python `id(...)`. Python
+may reuse an integer ID after an old object is released. A new Context could
+therefore read another Context's plan, or a new CDP Page could be mistaken for
+an already prepared Page and skip the required pre-navigation identity
+commands. A fresh-worktree full-suite run exposed this as one intermittent
+`Emulation.setUserAgentOverride` fail-closed test failure.
+
+Requirements:
+
+- Bind the immutable plan and mutable proof state to the exact BrowserContext
+  object rather than a process-global numeric ID.
+- Bind CDP preparation to the exact Page plus the current resolution and
+  attempt, so a reused object ID or a rebound Page cannot skip preparation.
+- Fail closed with the existing provider error family if a provider object
+  cannot retain the binding.
+- Preserve the exact CDP command order, requested/effective proof, safe result
+  handling, and managed no-fallback behavior from Phase 5.1D.
+- Add a deterministic regression that simulates repeated numeric object IDs
+  and proves both Contexts use their own plans and both Pages are prepared.
+
+Scope boundary:
+
+- This follow-up changes only in-process BrowserContext/Page binding and its
+  regression coverage. It does not change schema, API, UI, account identity
+  fields, Profile/Cookie/proxy data, login types, deployment settings, or the
+  CR-112/CR-070 boundaries.
+- Phase 5.1D remains merged history. CR-114 owns this newly discovered defect
+  and must merge before the separate Phase 5.1 server-like acceptance run.
+
+Acceptance:
+
+- The deterministic repeated-ID regression fails on the merged Phase 5.1D
+  implementation and passes after the object-scoped binding change.
+- Focused Phase 5.1B-D and full monitoring regressions pass serially.
+- Python compile, documentation checks, independent read-only review, PR
+  integration, and post-merge verification pass before server-like acceptance
+  starts.
+
+Verification:
+
+- RED reproduced deterministically with one failing repeated-ID regression.
+- The regression plus adjacent CDP preparation/failure checks pass (`7
+  passed`), the focused Phase 5.1B-D selection passes (`132 passed`), and the
+  full monitoring suite passes (`485 passed`). Python compile, documentation
+  consistency/regression, and independent Claude Code full-diff review pass
+  with no blocking or material finding. PR integration and post-merge
+  re-verification remain open.
 
 ## CR-056 - Filter Dropdown Alignment Regression Fix
 

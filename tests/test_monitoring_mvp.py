@@ -3763,6 +3763,75 @@ def test_phase_5_1d_cdp_command_failure_blocks_navigation(failing_method, tmp_pa
     assert navigations == []
 
 
+def test_phase_5_1d_context_and_page_bindings_survive_reused_object_ids(tmp_path, monkeypatch):
+    from dataclasses import replace
+
+    import tools.browser_environment as browser_environment
+
+    first_plan = _phase_5_1d_plan(
+        tmp_path,
+        monkeypatch,
+        action="crawl",
+        launch_mode="cdp_launch",
+    )
+    second_plan = replace(
+        first_plan,
+        resolution_id="resolution-second",
+        attempt_id="attempt-second",
+        user_agent=f"{first_plan.user_agent} second",
+    )
+    sent_commands = {"first": [], "second": []}
+
+    class FakeCDPSession:
+        def __init__(self, label):
+            self.label = label
+
+        async def send(self, method, params):
+            sent_commands[self.label].append((method, params))
+
+    class FakeContext:
+        def __init__(self, label):
+            self.label = label
+
+        def on(self, event, callback):
+            pass
+
+        async def new_cdp_session(self, page):
+            return FakeCDPSession(self.label)
+
+    class FakePage:
+        pass
+
+    first_context = FakeContext("first")
+    second_context = FakeContext("second")
+    first_page = FakePage()
+    second_page = FakePage()
+
+    monkeypatch.setattr(browser_environment, "id", lambda value: 1, raising=False)
+    browser_environment.bind_managed_context(first_context, first_plan)
+    browser_environment.bind_managed_context(second_context, second_plan)
+
+    asyncio.run(browser_environment.prepare_managed_page(first_context, first_page))
+    asyncio.run(browser_environment.prepare_managed_page(second_context, second_page))
+
+    assert sent_commands["first"][0] == (
+        "Emulation.setUserAgentOverride",
+        {
+            "userAgent": first_plan.user_agent,
+            "acceptLanguage": first_plan.accept_language,
+            "platform": first_plan.browser_platform,
+        },
+    )
+    assert sent_commands["second"][0] == (
+        "Emulation.setUserAgentOverride",
+        {
+            "userAgent": second_plan.user_agent,
+            "acceptLanguage": second_plan.accept_language,
+            "platform": second_plan.browser_platform,
+        },
+    )
+
+
 def test_phase_5_1d_cdp_manager_launches_only_exact_managed_environment(tmp_path, monkeypatch):
     from tools.browser_environment import managed_proxy_formats, reset_browser_environment_cache_for_tests
     from tools.cdp_browser import CDPBrowserManager

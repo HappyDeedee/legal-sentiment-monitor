@@ -2,6 +2,71 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-19 - CR-114 Object-Scoped Browser Runtime Binding
+
+Environment: isolated Windows worktree
+`C:\Users\Administrator\.codex\worktrees\phase51-acceptance-MediaCrawler`,
+branch `codex/cr-114-browser-binding-object-identity`, starting from merged
+`main@86e9d02`.
+
+Result:
+
+- A fresh-worktree baseline exposed one intermittent Phase 5.1D CDP failure:
+  the first `Emulation.setUserAgentOverride` failure case did not raise because
+  process-global Context/Page state trusted reusable Python object IDs.
+- Added a deterministic repeated-ID regression. RED failed because the first
+  Context consumed the second Context's plan; the same collision could also
+  make the second Page look already prepared.
+- Replaced numeric-ID plan, runtime, and prepared-page collections with exact
+  object-scoped state. Page preparation is bound to both `resolution_id` and
+  `attempt_id`; unsupported object binding fails closed.
+
+Verification:
+
+- Deterministic RED: `1 failed` for
+  `test_phase_5_1d_context_and_page_bindings_survive_reused_object_ids`.
+- GREEN regression plus adjacent CDP preparation/failure checks: `7 passed`.
+- Focused Phase 5.1B-D selection: `132 passed, 353 deselected`.
+- Complete monitoring regression: `485 passed` with the same three pre-existing
+  deprecation warnings.
+- Python compile passed for the changed runtime/test modules. Documentation
+  consistency returned `PASS docs consistency`; documentation regression
+  passed (`1 passed`); `git diff --check` reported only expected Windows
+  LF-to-CRLF notices.
+- Independent Claude Code read-only full-diff review returned `PASS` with no
+  blocking or material finding. PR integration and post-merge verification
+  remain open.
+
+Proof boundary:
+
+- This proves object identity reuse no longer mixes managed plans or skips CDP
+  page preparation under automated coverage. It does not add real platform,
+  proxy, Profile, container, or restart acceptance evidence.
+
+## 2026-07-19 - Phase 5.1D Merge And Post-Merge Close-Out
+
+Environment: local and remote `main@86e9d02` after Phase 5.1D PR #5.
+
+Result:
+
+- `codex/phase-5.1d-browser-runtime-binding@ca4be74` was pushed and merged by
+  PR #5 as merge commit `86e9d02`, then synchronized to local `main`.
+- Post-merge full monitoring regression passed (`484 passed`) with the same
+  three pre-existing deprecation warnings; the focused Phase 5.1B-D selection
+  passed (`131 passed, 353 deselected`).
+- Documentation regression passed (`1 passed`) and
+  `scripts/check_docs.py` returned `PASS docs consistency`.
+- Python compile passed for every Phase 5.1D changed Python module;
+  `monitor.js` and the one inline monitor script parsed; `git diff --check`
+  passed.
+
+Proof boundary:
+
+- This closes Phase 5.1D branch integration. It does not prove real platform
+  login/crawl, real bound-proxy egress, container/systemd restart persistence,
+  or production handoff. CR-114 is a later follow-up regression and must merge
+  before the separate server-like acceptance packet starts.
+
 ## 2026-07-19 - Phase 5.1D Browser Runtime Binding Pre-Merge Verification
 
 Environment: isolated Windows worktree
