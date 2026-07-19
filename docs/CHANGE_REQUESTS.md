@@ -266,7 +266,7 @@ Reason:
 The project is now governed by documents. Incorrect assumptions in documents can
 mislead future coding agents and create product or architecture drift.
 
-Status: Implemented
+Status: Verified
 
 Related tasks:
 
@@ -4781,7 +4781,12 @@ Verification:
   than an absolute local path.
 - The complete monitor suite passes (`538 passed`) with the same three existing
   warnings. Python compile and independent read-only review pass. PR integration
-  and post-merge verification remain open.
+  and post-merge verification initially remained open.
+- PR #8 merged CR-115 as `main@84cabff`. Post-merge CR-115 tests pass (`4
+  passed`), the complete monitor suite passes (`538 passed`), all 12 real
+  lower-strength checks pass, the safe generated directory reference is not an
+  absolute path, the generated directory is absent after exit, and
+  compile/documentation gates pass. CR-115 is closed.
 
 ## CR-056 - Filter Dropdown Alignment Regression Fix
 

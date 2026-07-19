@@ -2,6 +2,65 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-20 - Phase 5.1 Task 3 Local And Deployment Preflight
+
+Environment: clean merged `main@84cabff` plus the isolated
+`codex/phase-5.1-server-like-preflight` worktree.
+
+Result:
+
+- Exact local merged commit and clean worktrees were verified. Docker CLI
+  `29.5.3`, Docker Compose `v5.1.4`, and `docker compose config --quiet` pass.
+- Docker Desktop was started once for diagnosis. It remained `starting`; its
+  current-boot error log reported no installed WSL distribution and no
+  `docker-desktop` distribution, so the `desktop-linux` daemon was not
+  reachable. The stuck Desktop/backend processes were stopped after diagnosis.
+- The project-pinned host Playwright Chromium `127.0.6533.17`, build `1124`, was
+  installed for the permitted Windows lower-strength check. The corrected
+  `scripts/server_like_validation.py` passes all 12 checks and removes its
+  generated directory before exit.
+- Compose/Dockerfile configuration points data, browser data, and account
+  Profiles at persistent container paths; sets QR/crawler headless mode;
+  disables the local login window and connect-existing CDP; and leaves the
+  browser executable and proxy probe explicitly configurable. No actual
+  container or persistent mount was started.
+
+Gate result:
+
+- `operator-blocked`, not passed. This machine does not currently provide a
+  usable Docker/Linux environment. No deployed checkout was created, so no
+  formal `RUNTIME_COMMIT` was set. No dedicated acceptance account, account-
+  bound proxy, configured exact-region probe, Profile, Cookie, platform login,
+  restart, or crawl action ran.
+- Task 3 must resume on a working Docker/Linux host with dedicated resources.
+  Tasks 4-7 and CR-070 remain blocked by the real acceptance gate.
+
+Proof boundary:
+
+- Compose parsing, host Chromium, and the Windows HTTP-service validator are
+  lower-strength diagnostics only. They do not prove the Docker/Linux browser,
+  real proxy egress, persistent Profile restart, or real trigger matrix.
+
+## 2026-07-20 - CR-115 Merge And Post-Merge Close-Out
+
+Environment: clean merged `main@84cabff` after PR #8.
+
+Result:
+
+- PR #8 merged `codex/cr-115-server-like-temp-cleanup@4be7e37` as
+  `main@84cabff`.
+- Post-merge CR-115 tests pass (`4 passed, 534 deselected`), the complete
+  monitoring suite passes (`538 passed`) with the same three existing warnings,
+  and the real lower-strength validator passes all 12 checks.
+- Its default output contains only a safe generated directory name; the
+  generated directory is absent after exit. Documentation consistency/
+  regression and Python compile pass, and merged `main` is clean.
+
+Proof boundary:
+
+- CR-115 is closed. Its Windows cleanup proof does not upgrade Task 3 to real
+  Docker/Linux acceptance.
+
 ## 2026-07-20 - CR-115 Server-Like Temporary Data Cleanup
 
 Environment: isolated worktree `codex/cr-115-server-like-temp-cleanup` from
