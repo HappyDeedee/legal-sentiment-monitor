@@ -14,7 +14,22 @@ from .account_environment import (
     default_account_profile_key,
     resolve_account_profile_path,
 )
-from .account_identity import generate_account_identity, validate_account_identity
+from .account_identity import (
+    IDENTITY_LOCKED_STATES,
+    IDENTITY_PRELOGIN_STATES,
+    IDENTITY_STATE_ACTIVE,
+    IDENTITY_STATE_DRAFT,
+    IDENTITY_STATE_GENERATED,
+    IDENTITY_STATE_LOCKED,
+    IDENTITY_STATE_LOGIN_IN_PROGRESS,
+    IDENTITY_STATE_REQUIRES_RELOGIN,
+    IDENTITY_STATE_RESETTING,
+    IDENTITY_STATE_VALIDATED,
+    AccountIdentityError,
+    generate_account_identity,
+    identity_template_family,
+    validate_account_identity,
+)
 from .auth import generate_session_token, hash_password, hash_session_token, verify_password
 from .mediacrawler_login import LOGIN_TYPE_LABELS, PLATFORM_LOGIN_TYPES, SUPPORTED_MONITOR_PLATFORMS, get_mediacrawler_login_capability
 from .login_status import (
@@ -70,6 +85,7 @@ LEAD_STATUS_LABELS = {
     "unevaluated": "未评估",
     "limited_context": "上下文有限",
 }
+_IDENTITY_AUDIT_UNSET = object()
 
 
 def utc_now() -> str:
@@ -5051,7 +5067,11 @@ def list_social_accounts(masked: bool = True, include_drafts: bool = False) -> l
     return [_row_to_pool_item(dict(row), masked=masked) for row in rows]
 
 
-def save_social_account(payload: dict[str, Any], account_id: int | None = None) -> dict[str, Any]:
+def save_social_account(
+    payload: dict[str, Any],
+    account_id: int | None = None,
+    actor_id: int | None = None,
+) -> dict[str, Any]:
     name = (payload.get("name") or "").strip()
     platform = (payload.get("platform") or "").strip()
     if not name:
@@ -5148,6 +5168,7 @@ def save_social_account(payload: dict[str, Any], account_id: int | None = None) 
                 proxy_region_snapshot=str(payload.get("proxy_region_snapshot") or "CN_MAINLAND"),
                 template_family=str(payload.get("identity_template_family") or "auto"),
                 updated_at=now,
+                user_id=actor_id,
             )
     return get_social_account(target_id) or {}
 
@@ -5162,6 +5183,7 @@ def _generate_new_social_account_identity(
     proxy_region_snapshot: str,
     template_family: str,
     updated_at: str,
+    user_id: int | None = None,
 ) -> None:
     generated = generate_account_identity(
         workspace_id=workspace_id,
@@ -5186,6 +5208,445 @@ def _generate_new_social_account_identity(
         },
         bound_proxy_exists=bound_proxy_exists,
     )
+    _write_generated_identity(
+        conn,
+        account_id,
+        generated,
+        identity_state=IDENTITY_STATE_GENERATED,
+        updated_at=updated_at,
+    )
+    _record_identity_audit(
+        conn,
+        "identity_generated",
+        {
+            "id": account_id,
+            "workspace_id": workspace_id,
+            "platform": platform,
+            "identity_state": IDENTITY_STATE_DRAFT,
+            "identity_template": "",
+            "proxy_region_snapshot": "",
+            "proxy_id": proxy_id,
+        },
+        {
+            **generated,
+            "id": account_id,
+            "workspace_id": workspace_id,
+            "platform": platform,
+            "identity_state": IDENTITY_STATE_GENERATED,
+            "proxy_id": proxy_id,
+        },
+        trigger_source="account_create",
+        reason="identity_generated",
+        user_id=user_id,
+    )
+
+
+def prepare_social_account_identity_login(
+    account_id: int,
+    *,
+    trigger_source: str,
+    user_id: int | None = None,
+    allow_prepared_validation: bool = False,
+) -> dict[str, Any]:
+    now = utc_now()
+    with get_conn() as conn:
+        account = _identity_account_row(conn, account_id)
+        state = str(account.get("identity_state") or IDENTITY_STATE_DRAFT)
+        if allow_prepared_validation:
+            if state != IDENTITY_STATE_LOGIN_IN_PROGRESS:
+                raise AccountIdentityError("account_identity_login_conflict", "identity_state")
+            _validate_persisted_identity(conn, account)
+            return _row_to_pool_item(account, masked=True)
+        if state == IDENTITY_STATE_REQUIRES_RELOGIN or account.get("requires_relogin"):
+            raise AccountIdentityError("account_identity_requires_relogin", "identity_state")
+        if state in {IDENTITY_STATE_LOGIN_IN_PROGRESS, IDENTITY_STATE_RESETTING}:
+            raise AccountIdentityError("account_identity_login_conflict", "identity_state")
+        if state == IDENTITY_STATE_DRAFT:
+            generated = _generate_identity_for_account(
+                conn,
+                account,
+                proxy_id=_safe_int(account.get("proxy_id")) or None,
+                proxy_region_snapshot=str(account.get("proxy_region_snapshot") or "CN_MAINLAND"),
+                template_family=identity_template_family(account.get("identity_template")),
+            )
+            _write_generated_identity(
+                conn,
+                account_id,
+                generated,
+                identity_state=IDENTITY_STATE_GENERATED,
+                updated_at=now,
+            )
+            generated_row = _identity_account_row(conn, account_id)
+            _record_identity_audit(
+                conn,
+                "identity_generated",
+                account,
+                generated_row,
+                trigger_source=trigger_source,
+                reason="identity_generated",
+                user_id=user_id,
+            )
+            account = generated_row
+            state = IDENTITY_STATE_GENERATED
+        if state == IDENTITY_STATE_GENERATED:
+            _validate_persisted_identity(conn, account)
+            conn.execute(
+                "UPDATE social_accounts SET identity_state=?, last_error='', updated_at=? WHERE id=?",
+                (IDENTITY_STATE_VALIDATED, now, account_id),
+            )
+            validated = _identity_account_row(conn, account_id)
+            _record_identity_audit(
+                conn,
+                "identity_validated",
+                account,
+                validated,
+                trigger_source=trigger_source,
+                reason="identity_validated",
+                user_id=user_id,
+            )
+            account = validated
+            state = IDENTITY_STATE_VALIDATED
+        if state not in {IDENTITY_STATE_VALIDATED, *IDENTITY_LOCKED_STATES}:
+            raise AccountIdentityError("account_identity_login_conflict", "identity_state")
+        _validate_persisted_identity(conn, account)
+        conn.execute(
+            "UPDATE social_accounts SET identity_state=?, updated_at=? WHERE id=?",
+            (IDENTITY_STATE_LOGIN_IN_PROGRESS, now, account_id),
+        )
+    return get_social_account(account_id) or {}
+
+
+def complete_social_account_identity_login(
+    account_id: int,
+    *,
+    ok: bool,
+    trigger_source: str,
+    lock_reason: str = "",
+    failure_reason: str = "",
+    user_id: int | None = None,
+) -> dict[str, Any]:
+    now = utc_now()
+    with get_conn() as conn:
+        account = _identity_account_row(conn, account_id)
+        if str(account.get("identity_state") or "") != IDENTITY_STATE_LOGIN_IN_PROGRESS:
+            if not ok:
+                return _row_to_pool_item(account, masked=True)
+            raise AccountIdentityError("account_identity_login_conflict", "identity_state")
+        if ok:
+            _validate_persisted_identity(conn, account)
+            reason = str(lock_reason or "identity_validation_success")
+            conn.execute(
+                """
+                UPDATE social_accounts SET identity_state=?, browser_environment_locked_at=?,
+                    browser_environment_lock_reason=?, requires_relogin=0, status='active',
+                    last_error='', last_used_at=?, updated_at=? WHERE id=?
+                """,
+                (IDENTITY_STATE_LOCKED, now, reason, now, now, account_id),
+            )
+            locked = _identity_account_row(conn, account_id)
+            _record_identity_audit(
+                conn,
+                "identity_locked",
+                account,
+                locked,
+                trigger_source=trigger_source,
+                reason=reason,
+                user_id=user_id,
+            )
+            conn.execute(
+                "UPDATE social_accounts SET identity_state=?, updated_at=? WHERE id=?",
+                (IDENTITY_STATE_ACTIVE, now, account_id),
+            )
+            active = _identity_account_row(conn, account_id)
+            _record_identity_audit(
+                conn,
+                "identity_activated",
+                locked,
+                active,
+                trigger_source=trigger_source,
+                reason=reason,
+                user_id=user_id,
+            )
+        else:
+            target_state = (
+                IDENTITY_STATE_ACTIVE
+                if account.get("browser_environment_locked_at")
+                and account.get("browser_environment_lock_reason")
+                else IDENTITY_STATE_VALIDATED
+            )
+            reason = str(failure_reason or "identity_login_failed")
+            conn.execute(
+                "UPDATE social_accounts SET identity_state=?, last_error=?, updated_at=? WHERE id=?",
+                (target_state, customer_safe_text(reason), now, account_id),
+            )
+            failed = _identity_account_row(conn, account_id)
+            _record_identity_audit(
+                conn,
+                "identity_launch_failed",
+                account,
+                failed,
+                trigger_source=trigger_source,
+                reason=reason,
+                user_id=user_id,
+            )
+    return get_social_account(account_id) or {}
+
+
+def apply_social_account_identity_configuration(
+    account_id: int,
+    *,
+    proxy_id: int | None,
+    proxy_region_snapshot: str,
+    template_family: str,
+    trigger_source: str,
+    user_id: int | None = None,
+) -> dict[str, Any]:
+    now = utc_now()
+    with get_conn() as conn:
+        account = _identity_account_row(conn, account_id)
+        state = str(account.get("identity_state") or IDENTITY_STATE_DRAFT)
+        if state == IDENTITY_STATE_LOGIN_IN_PROGRESS:
+            raise AccountIdentityError("account_identity_login_conflict", "identity_state")
+        if state in {IDENTITY_STATE_REQUIRES_RELOGIN, IDENTITY_STATE_RESETTING}:
+            raise AccountIdentityError("account_identity_requires_relogin", "identity_state")
+        _require_identity_proxy(conn, proxy_id)
+        if state in IDENTITY_LOCKED_STATES:
+            conn.execute(
+                """
+                UPDATE social_accounts SET identity_state=?, requires_relogin=1,
+                    last_error=?, updated_at=? WHERE id=?
+                """,
+                (
+                    IDENTITY_STATE_REQUIRES_RELOGIN,
+                    "账号环境变更需要重置并重新登录",
+                    now,
+                    account_id,
+                ),
+            )
+            marked = _identity_account_row(conn, account_id)
+            _record_identity_audit(
+                conn,
+                "identity_requires_relogin",
+                account,
+                marked,
+                trigger_source=trigger_source,
+                reason="locked_identity_change_requested",
+                user_id=user_id,
+                new_proxy_id=proxy_id,
+                new_proxy_region_snapshot=proxy_region_snapshot,
+            )
+            return _row_to_pool_item(marked, masked=True)
+        if state not in IDENTITY_PRELOGIN_STATES:
+            raise AccountIdentityError("account_identity_login_conflict", "identity_state")
+        _clear_identity_fields(
+            conn,
+            account_id,
+            proxy_id=proxy_id,
+            identity_state=IDENTITY_STATE_DRAFT,
+            updated_at=now,
+        )
+        draft = _identity_account_row(conn, account_id)
+        generated = _generate_identity_for_account(
+            conn,
+            draft,
+            proxy_id=proxy_id,
+            proxy_region_snapshot=proxy_region_snapshot,
+            template_family=template_family,
+        )
+        _write_generated_identity(
+            conn,
+            account_id,
+            generated,
+            identity_state=IDENTITY_STATE_GENERATED,
+            updated_at=now,
+        )
+        generated_row = _identity_account_row(conn, account_id)
+        _record_identity_audit(
+            conn,
+            "identity_generated",
+            account,
+            generated_row,
+            trigger_source=trigger_source,
+            reason="identity_configuration_changed",
+            user_id=user_id,
+        )
+        _validate_persisted_identity(conn, generated_row)
+        conn.execute(
+            "UPDATE social_accounts SET identity_state=?, updated_at=? WHERE id=?",
+            (IDENTITY_STATE_VALIDATED, now, account_id),
+        )
+        validated = _identity_account_row(conn, account_id)
+        _record_identity_audit(
+            conn,
+            "identity_validated",
+            generated_row,
+            validated,
+            trigger_source=trigger_source,
+            reason="identity_configuration_validated",
+            user_id=user_id,
+        )
+    return get_social_account(account_id) or {}
+
+
+def reset_social_account_identity(
+    account_id: int,
+    *,
+    proxy_id: int | None,
+    proxy_region_snapshot: str,
+    template_family: str,
+    trigger_source: str = "admin_reset",
+    user_id: int | None = None,
+) -> dict[str, Any]:
+    now = utc_now()
+    with get_conn() as conn:
+        account = _identity_account_row(conn, account_id)
+        if account.get("locked_by_run_id") is not None or str(account.get("identity_state") or "") in {
+            IDENTITY_STATE_LOGIN_IN_PROGRESS,
+            IDENTITY_STATE_RESETTING,
+        }:
+            raise AccountIdentityError("account_identity_reset_blocked", "identity_state")
+        _require_identity_proxy(conn, proxy_id)
+        conn.execute(
+            "UPDATE social_accounts SET identity_state=?, updated_at=? WHERE id=?",
+            (IDENTITY_STATE_RESETTING, now, account_id),
+        )
+        resetting = _identity_account_row(conn, account_id)
+        _record_identity_audit(
+            conn,
+            "identity_reset_requested",
+            account,
+            resetting,
+            trigger_source=trigger_source,
+            reason="admin_reset_requested",
+            user_id=user_id,
+            new_proxy_id=proxy_id,
+            new_proxy_region_snapshot=proxy_region_snapshot,
+        )
+        _clear_identity_fields(
+            conn,
+            account_id,
+            proxy_id=proxy_id,
+            identity_state=IDENTITY_STATE_DRAFT,
+            updated_at=now,
+        )
+        conn.execute(
+            "UPDATE social_accounts SET status='standby', last_error='' WHERE id=?",
+            (account_id,),
+        )
+        draft = _identity_account_row(conn, account_id)
+        _record_identity_audit(
+            conn,
+            "identity_reset_completed",
+            resetting,
+            draft,
+            trigger_source=trigger_source,
+            reason="admin_reset_completed",
+            user_id=user_id,
+        )
+        generated = _generate_identity_for_account(
+            conn,
+            draft,
+            proxy_id=proxy_id,
+            proxy_region_snapshot=proxy_region_snapshot,
+            template_family=template_family,
+        )
+        _write_generated_identity(
+            conn,
+            account_id,
+            generated,
+            identity_state=IDENTITY_STATE_GENERATED,
+            updated_at=now,
+        )
+        generated_row = _identity_account_row(conn, account_id)
+        _record_identity_audit(
+            conn,
+            "identity_generated",
+            draft,
+            generated_row,
+            trigger_source=trigger_source,
+            reason="identity_regenerated_after_reset",
+            user_id=user_id,
+        )
+        _validate_persisted_identity(conn, generated_row)
+        conn.execute(
+            "UPDATE social_accounts SET identity_state=?, updated_at=? WHERE id=?",
+            (IDENTITY_STATE_VALIDATED, now, account_id),
+        )
+        validated = _identity_account_row(conn, account_id)
+        _record_identity_audit(
+            conn,
+            "identity_validated",
+            generated_row,
+            validated,
+            trigger_source=trigger_source,
+            reason="identity_validated_after_reset",
+            user_id=user_id,
+        )
+    return get_social_account(account_id) or {}
+
+
+def _identity_account_row(conn: sqlite3.Connection, account_id: int) -> dict[str, Any]:
+    row = conn.execute("SELECT * FROM social_accounts WHERE id=?", (account_id,)).fetchone()
+    if not row:
+        raise ValueError("account not found")
+    return dict(row)
+
+
+def _require_identity_proxy(conn: sqlite3.Connection, proxy_id: int | None) -> None:
+    if proxy_id is not None and conn.execute(
+        "SELECT 1 FROM proxy_profiles WHERE id=?", (proxy_id,)
+    ).fetchone() is None:
+        raise ValueError("proxy not found")
+
+
+def _generate_identity_for_account(
+    conn: sqlite3.Connection,
+    account: dict[str, Any],
+    *,
+    proxy_id: int | None,
+    proxy_region_snapshot: str,
+    template_family: str,
+) -> dict[str, Any]:
+    _require_identity_proxy(conn, proxy_id)
+    generated = generate_account_identity(
+        workspace_id=int(account.get("workspace_id") or DEFAULT_WORKSPACE_ID),
+        platform=str(account.get("platform") or ""),
+        account_id=int(account["id"]),
+        proxy_region_snapshot=proxy_region_snapshot,
+        template_family=template_family,
+    )
+    validate_account_identity(
+        {
+            **generated,
+            "id": int(account["id"]),
+            "workspace_id": int(account.get("workspace_id") or DEFAULT_WORKSPACE_ID),
+            "platform": str(account.get("platform") or ""),
+            "proxy_id": proxy_id,
+            "identity_state": IDENTITY_STATE_GENERATED,
+            "requires_relogin": False,
+        },
+        bound_proxy_exists=True,
+    )
+    return generated
+
+
+def _validate_persisted_identity(conn: sqlite3.Connection, account: dict[str, Any]) -> None:
+    proxy_id = _safe_int(account.get("proxy_id")) or None
+    validate_account_identity(
+        account,
+        bound_proxy_exists=proxy_id is None
+        or conn.execute("SELECT 1 FROM proxy_profiles WHERE id=?", (proxy_id,)).fetchone() is not None,
+    )
+
+
+def _write_generated_identity(
+    conn: sqlite3.Connection,
+    account_id: int,
+    generated: dict[str, Any],
+    *,
+    identity_state: str,
+    updated_at: str,
+) -> None:
     conn.execute(
         """
         UPDATE social_accounts SET
@@ -5193,32 +5654,92 @@ def _generate_new_social_account_identity(
             user_agent=?, timezone=?, locale=?, accept_language=?, screen_width=?, screen_height=?,
             viewport_width=?, viewport_height=?, device_scale_factor=?, is_mobile=?, has_touch=?,
             identity_generator_name=?, identity_generator_version=?, identity_environment_version=?,
-            proxy_region_snapshot=?, identity_state='generated', updated_at=?
+            proxy_region_snapshot=?, identity_state=?, requires_relogin=0, updated_at=?
         WHERE id=?
         """,
         (
-            generated["environment_region"],
-            generated["browser_platform"],
-            generated["identity_template"],
-            generated["fingerprint_seed"],
-            generated["user_agent"],
-            generated["timezone"],
-            generated["locale"],
-            generated["accept_language"],
-            generated["screen_width"],
-            generated["screen_height"],
-            generated["viewport_width"],
-            generated["viewport_height"],
-            generated["device_scale_factor"],
-            1 if generated["is_mobile"] else 0,
-            1 if generated["has_touch"] else 0,
-            generated["identity_generator_name"],
-            generated["identity_generator_version"],
-            generated["identity_environment_version"],
-            generated["proxy_region_snapshot"],
-            updated_at,
-            account_id,
+            generated["environment_region"], generated["browser_platform"],
+            generated["identity_template"], generated["fingerprint_seed"],
+            generated["user_agent"], generated["timezone"], generated["locale"],
+            generated["accept_language"], generated["screen_width"],
+            generated["screen_height"], generated["viewport_width"],
+            generated["viewport_height"], generated["device_scale_factor"],
+            1 if generated["is_mobile"] else 0, 1 if generated["has_touch"] else 0,
+            generated["identity_generator_name"], generated["identity_generator_version"],
+            generated["identity_environment_version"], generated["proxy_region_snapshot"],
+            identity_state, updated_at, account_id,
         ),
+    )
+
+
+def _clear_identity_fields(
+    conn: sqlite3.Connection,
+    account_id: int,
+    *,
+    proxy_id: int | None,
+    identity_state: str,
+    updated_at: str,
+) -> None:
+    conn.execute(
+        """
+        UPDATE social_accounts SET proxy_id=?, environment_region='', browser_platform='',
+            identity_template='', fingerprint_seed='', user_agent='', timezone='', locale='',
+            accept_language='', screen_width=NULL, screen_height=NULL, viewport_width=NULL,
+            viewport_height=NULL, device_scale_factor=NULL, is_mobile=0, has_touch=0,
+            identity_generator_name='', identity_generator_version='',
+            identity_environment_version='', proxy_region_snapshot='',
+            browser_environment_locked_at=NULL, browser_environment_lock_reason='',
+            requires_relogin=0, identity_state=?, identity_runtime_snapshot_json='', updated_at=?
+        WHERE id=?
+        """,
+        (proxy_id, identity_state, updated_at, account_id),
+    )
+
+
+def _record_identity_audit(
+    conn: sqlite3.Connection,
+    action_type: str,
+    old: dict[str, Any],
+    new: dict[str, Any],
+    *,
+    trigger_source: str,
+    reason: str,
+    user_id: int | None,
+    new_proxy_id: int | None | object = _IDENTITY_AUDIT_UNSET,
+    new_proxy_region_snapshot: str | None = None,
+) -> None:
+    account_id = int(new.get("id") or old.get("id") or 0)
+    workspace_id = int(new.get("workspace_id") or old.get("workspace_id") or DEFAULT_WORKSPACE_ID)
+    details = {
+        "trigger_source": str(trigger_source or "system"),
+        "account_id": account_id,
+        "workspace_id": workspace_id,
+        "platform": str(new.get("platform") or old.get("platform") or ""),
+        "identity_template": str(new.get("identity_template") or old.get("identity_template") or ""),
+        "old_identity_state": str(old.get("identity_state") or IDENTITY_STATE_DRAFT),
+        "new_identity_state": str(new.get("identity_state") or IDENTITY_STATE_DRAFT),
+        "old_proxy_region_snapshot": str(old.get("proxy_region_snapshot") or ""),
+        "new_proxy_region_snapshot": str(
+            new_proxy_region_snapshot
+            if new_proxy_region_snapshot is not None
+            else new.get("proxy_region_snapshot") or ""
+        ),
+        "old_proxy_id": _safe_int(old.get("proxy_id")) or None,
+        "new_proxy_id": (
+            new_proxy_id
+            if new_proxy_id is not _IDENTITY_AUDIT_UNSET
+            else _safe_int(new.get("proxy_id")) or None
+        ),
+        "reason": str(reason or ""),
+    }
+    _record_audit_log(
+        conn,
+        workspace_id,
+        user_id,
+        action_type,
+        "social_account",
+        str(account_id),
+        details,
     )
 
 

@@ -3581,6 +3581,11 @@
                       </select>
                     </div>
                   </div>
+                  <div id="social_account_identity_status" class="notice">保存账号后生成独立账号环境。</div>
+                  <div class="row">
+                    <button id="account_identity_change_button" class="secondary" type="button" onclick="beginAccountIdentityChange()" style="display:none">更改环境</button>
+                    <button id="account_identity_reset_button" class="danger" type="button" data-feedback-bound="1" onclick="resetCurrentAccountIdentity()" style="display:none">重置并重新登录</button>
+                  </div>
                 </details>
                 </details>
               </div>
@@ -4293,6 +4298,7 @@
     const socialAccountCache = new Map();
     const selectedSocialAccountIds = new Set();
     const checkingSocialAccountIds = new Set();
+    let accountIdentityChangeMode = false;
     const proxyProfileCache = new Map();
     const aiProfileCache = new Map();
     const aiRuleProfileCache = new Map();
@@ -6647,6 +6653,8 @@
     function platformStatusCell(p){ if(p.login_window_open) return `<span class="status">登录窗口未关闭</span><div class="small">请关闭窗口后刷新状态，再运行采集。</div>`; if(p.login_type==='cookie' && !p.has_cookies) return '<span class="status">Cookie 待填写</span><div class="small">保存 Cookie 后才能使用 Cookie 登录。</div>'; if(p.needs_login) return `<span class="status">需重新登录</span><div class="small">${esc(compactPlatformError(p.last_error)||'请重新登录该平台账号')}</div>`; return '<span class="status ok">可运行</span>'; }
     function compactPlatformError(error){ const text=String(error||''); if(!text) return ''; const lower=text.toLowerCase(); if(text.includes('登录态失效') || lower.includes('no login') || lower.includes('unauthenticated') || lower.includes('login state result: false')) return '平台登录态可能失效，请重新登录该平台账号。'; if(text.includes('登录窗口未关闭')) return '登录窗口未关闭，请关闭后刷新状态。'; return cleanCustomerText(text.split('; see ')[0].slice(0,160)); }
     async function saveCurrentPlatformCookieLogin(){
+      const current=socialAccountCache.get(Number(val('social_account_id')||0));
+      if(!ensureAccountIdentityCanLogin(current)) return;
       const cookies=val('social_account_cookie_input');
       const clearCookies=document.getElementById('social_account_clear_cookie').checked;
       if(!cookies && !clearCookies){ toast('请粘贴当前账号 Cookie，或勾选清空已保存 Cookie'); return; }
@@ -6667,6 +6675,8 @@
       });
     }
     async function openPlatformLoginBrowser(platform, accountId=null, triggerButton=null){
+      const account=accountId ? socialAccountCache.get(Number(accountId)) : null;
+      if(accountId && !ensureAccountIdentityCanLogin(account)) return;
       if(!localLoginWindowAllowed(platform)){
         toast('当前仅支持网页二维码登录，请使用网页二维码完成登录');
         return;
@@ -6684,6 +6694,8 @@
       });
     }
     async function startLoginSessionFromForm(){
+      const current=socialAccountCache.get(Number(val('social_account_id')||0));
+      if(current && !ensureAccountIdentityCanLogin(current)) return;
       await withActionButtonLoading('account_qrcode_button', '生成中...', async ()=>{
         stopLoginSessionPolling({closeRemote:true});
         const result=document.getElementById('login_session_result');
@@ -6724,6 +6736,7 @@
     }
     async function startLoginSessionForAccount(account){
       if(!account || !account.id){ toast('请先选择账号，或在新建账号中生成二维码登录'); return; }
+      if(!ensureAccountIdentityCanLogin(account)) return;
       const payload={platform:account.platform,account_id:account.id||null};
       const res=await api('/login-sessions',{method:'POST',body:JSON.stringify(payload)});
       if(!res.ok){ toast(await err(res)); return; }
@@ -6761,12 +6774,18 @@
       ) : '<div class="empty">当前账号还没有登录记录。</div>';
     }
     async function openLoginSessionBrowser(sessionId, platform, accountId=null, triggerButton=null){
+      const account=accountId ? socialAccountCache.get(Number(accountId)) : null;
+      if(accountId && !ensureAccountIdentityCanLogin(account)) return;
       if(!localLoginWindowAllowed(platform)){
         toast('当前仅支持网页二维码登录，请使用网页二维码完成登录');
         return;
       }
+      if(sessionId){
+        stopLoginSessionPolling();
+        const closeRes=await api('/login-sessions/'+Number(sessionId), {method:'DELETE'});
+        if(!closeRes.ok){ toast(await err(closeRes)); return; }
+      }
       await openPlatformLoginBrowser(platform, accountId || null, triggerButton);
-      if(sessionId) await pollLoginSession(Number(sessionId), triggerButton);
     }
     async function pollLoginSession(id, triggerButton=null){
       await withActionButtonLoading(triggerButton, '确认中...', async ()=>{
@@ -7107,6 +7126,7 @@
     }
     function updateAccountBulkToolbar(){
       const count=selectedSocialAccountIds.size;
+      const hasBlocked=[...selectedSocialAccountIds].some(id=>accountIdentityLoginBlocked(socialAccountCache.get(Number(id))));
       const countEl=document.getElementById('account_bulk_count');
       if(countEl) countEl.textContent = count ? `已选择 ${count} 个账号` : '未选择账号';
       ['account_bulk_check_btn','account_bulk_disable_btn','account_bulk_enable_btn','account_bulk_delete_btn'].forEach(id=>{
@@ -7116,6 +7136,11 @@
           btn.title = count===0 ? '请先勾选账号' : '';
         }
       });
+      const checkBtn=document.getElementById('account_bulk_check_btn');
+      if(checkBtn && hasBlocked){
+        checkBtn.disabled=true;
+        checkBtn.title='所选账号中有账号需要先重置环境';
+      }
     }
     function accountLedgerTable(accounts, selectedId){
       const rows=accounts.map(a=>accountLedgerRow(a, selectedId)).join('');
@@ -7166,9 +7191,10 @@
       }
       const id=Number(account.id);
       const checking=checkingSocialAccountIds.has(id);
+      const identityBlocked=accountIdentityLoginBlocked(account);
       menu.innerHTML=`
-        <button class="secondary" ${checking?'disabled':''} onclick="checkSocialAccountLogin(${id}); closeFloatingMenus();">${checking?'检测中':'检测登录态'}</button>
-        <button class="secondary" onclick="reloginSocialAccount(${id}); closeFloatingMenus();">重新登录</button>
+        <button class="secondary" ${(checking||identityBlocked)?'disabled':''} onclick="checkSocialAccountLogin(${id}); closeFloatingMenus();">${checking?'检测中':'检测登录态'}</button>
+        <button class="secondary" ${identityBlocked?'disabled':''} onclick="reloginSocialAccount(${id}); closeFloatingMenus();">重新登录</button>
         <button class="secondary" onclick="setSocialAccountStatus(${id}, '${account.status==='disabled'?'standby':'disabled'}'); closeFloatingMenus();">${account.status==='disabled'?'启用账号':'停用账号'}</button>
         <button class="danger" onclick="deleteSocialAccount(${id}); closeFloatingMenus();">删除账号</button>`;
       menu.classList.add('active');
@@ -7232,6 +7258,7 @@
       const lower=error.toLowerCase();
       const hasLoginSource=(account.login_type||'qrcode')==='cookie' ? !!account.has_cookies : accountProfileConfigured(account);
       if(account.status==='disabled') return {key:'disabled', label:'停用', cls:'bad', hint:'不会被采集任务使用'};
+      if(accountIdentityLoginBlocked(account)) return {key:'relogin', label:'需重置并重新登录', cls:'warn', hint:'账号环境变更后需要显式重置'};
       if(error.includes('滑块') || error.includes('验证码') || error.includes('短信') || lower.includes('captcha') || lower.includes('verify')) return {key:'verification', label:'需要人工验证', cls:'warn', hint:'进入重新登录处理平台验证'};
       if(!hasLoginSource) return {key:'relogin', label:'需重新登录', cls:'warn', hint:'缺少可复用登录态'};
       if(account.status==='limited' || error) return {key:'relogin', label:'需重新登录', cls:'warn', hint:'最近检测或登录存在异常'};
@@ -7273,14 +7300,139 @@
       if(['CN_WIN_CHROME_1920','CN_WIN_CHROME_1536','HK_DESKTOP_CHROME','SG_DESKTOP_CHROME'].includes(template)) return 'windows_chrome_desktop';
       return 'auto';
     }
+    function accountIdentityState(account){
+      if(account && account.requires_relogin) return 'requires_relogin';
+      return String((account && account.identity_state) || 'draft');
+    }
+    function accountIdentityStateLabel(state){
+      return ({
+        draft:'待生成',
+        generated:'已生成',
+        validated:'可登录',
+        login_in_progress:'登录处理中',
+        locked:'已锁定',
+        active:'已启用',
+        requires_relogin:'需重置并重新登录',
+        resetting:'正在重置'
+      })[String(state||'')] || '待配置';
+    }
+    function accountIdentityRegionLabel(region){
+      return ({CN_MAINLAND:'中国大陆',HK:'中国香港',SG:'新加坡'})[String(region||'')] || String(region||'未设置');
+    }
+    function accountIdentityEnvironmentSummary(account){
+      if(!account) return '待生成';
+      const state=accountIdentityStateLabel(accountIdentityState(account));
+      const template=account.identity_template || '待生成模板';
+      const region=accountIdentityRegionLabel(account.proxy_region_snapshot);
+      const browser=account.browser_platform || '待确定浏览器';
+      return `${state} / ${region} / ${template} / ${browser}`;
+    }
+    function accountIdentityPreloginState(account){
+      return ['draft','generated','validated'].includes(accountIdentityState(account));
+    }
+    function accountIdentityLoginBlocked(account){
+      return ['requires_relogin','resetting'].includes(accountIdentityState(account));
+    }
+    function ensureAccountIdentityCanLogin(account){
+      if(!account || !accountIdentityLoginBlocked(account)) return true;
+      toast(accountIdentityState(account)==='resetting' ? '账号环境正在重置，请稍后刷新' : '请先重置账号环境，再重新登录或验活');
+      return false;
+    }
     function setAccountIdentityControlsLocked(locked){
-      ['social_account_proxy_region','social_account_identity_template_family'].forEach(id=>{
+      ['social_account_proxy_id','social_account_proxy_region','social_account_identity_template_family'].forEach(id=>{
         const control=document.getElementById(id);
-        if(control) control.disabled=!!locked;
+        if(control){
+          control.disabled=!!locked;
+          if(control.tagName==='SELECT') syncFilterSelectButton(control);
+        }
+      });
+    }
+    function renderAccountIdentityStatus(account){
+      const statusEl=document.getElementById('social_account_identity_status');
+      const changeBtn=document.getElementById('account_identity_change_button');
+      const resetBtn=document.getElementById('account_identity_reset_button');
+      if(!account){
+        accountIdentityChangeMode=false;
+        setAccountIdentityControlsLocked(false);
+        if(statusEl){ statusEl.className='notice'; statusEl.textContent='保存账号后生成独立账号环境。'; }
+        if(changeBtn) changeBtn.style.display='none';
+        if(resetBtn) resetBtn.style.display='none';
+        return;
+      }
+      const state=accountIdentityState(account);
+      const prelogin=accountIdentityPreloginState(account);
+      const locked=['locked','active'].includes(state);
+      const requiresRelogin=state==='requires_relogin';
+      const resetting=state==='resetting';
+      setAccountIdentityControlsLocked(!(prelogin || (accountIdentityChangeMode && (locked || requiresRelogin))));
+      if(changeBtn){
+        changeBtn.style.display=locked ? 'inline-flex' : 'none';
+        changeBtn.textContent=accountIdentityChangeMode ? '正在更改环境' : '更改环境';
+        changeBtn.disabled=accountIdentityChangeMode;
+      }
+      if(resetBtn){
+        resetBtn.style.display=(locked || requiresRelogin || resetting) ? 'inline-flex' : 'none';
+        resetBtn.disabled=false;
+      }
+      if(!statusEl) return;
+      if(prelogin){
+        statusEl.className='notice';
+        statusEl.textContent=`${accountIdentityEnvironmentSummary(account)}。登录前可以调整区域、模板族和绑定代理。`;
+      } else if(locked && accountIdentityChangeMode){
+        statusEl.className='notice warn';
+        statusEl.textContent='请选择新的区域、模板族或代理，然后点击“重置并重新登录”。当前 Profile、Cookie 和账号身份会保留。';
+      } else if(locked){
+        statusEl.className='notice';
+        statusEl.textContent=`${accountIdentityEnvironmentSummary(account)}。当前环境已锁定，更改环境需要显式重置并重新登录。`;
+      } else if(requiresRelogin){
+        statusEl.className='notice warn';
+        statusEl.textContent='当前账号环境需要重置。选择目标区域、模板族和代理后，点击“重置并重新登录”。';
+      } else if(resetting){
+        statusEl.className='notice warn';
+        statusEl.textContent='账号环境正在重置，登录和验活暂时停用。';
+      } else {
+        statusEl.className='notice warn';
+        statusEl.textContent=`${accountIdentityStateLabel(state)}。请完成当前登录或验活操作。`;
+      }
+    }
+    function beginAccountIdentityChange(){
+      const accountId=Number(val('social_account_id')||0);
+      const account=socialAccountCache.get(accountId);
+      if(!account){ toast('请先打开已有账号详情'); return; }
+      const state=accountIdentityState(account);
+      if(state==='resetting'){ toast('账号环境正在重置，请稍后刷新'); return; }
+      if(['locked','active'].includes(state) && !confirm('更改账号环境后需要重新登录。现有 Profile、Cookie 和账号身份会保留，是否继续？')) return;
+      accountIdentityChangeMode=true;
+      renderAccountIdentityStatus(account);
+    }
+    async function resetCurrentAccountIdentity(){
+      const accountId=Number(val('social_account_id')||0);
+      const account=socialAccountCache.get(accountId);
+      if(!account){ toast('请先打开已有账号详情'); return; }
+      if(!confirm('确认按当前选择重置账号环境？重置后需要重新扫码或验活，现有 Profile、Cookie 和账号身份会保留。')) return;
+      await withActionButtonLoading('account_identity_reset_button', '重置中...', async ()=>{
+        const payload={
+          proxy_id:val('social_account_proxy_id'),
+          proxy_region_snapshot:val('social_account_proxy_region'),
+          identity_template_family:val('social_account_identity_template_family')
+        };
+        const res=await api('/social-accounts/'+accountId+'/identity/reset',{method:'POST',body:JSON.stringify(payload)});
+        if(!res.ok){ toast(await err(res)); return; }
+        const updated=(await res.json()).account;
+        syncAccountFromResponse(updated);
+        accountIdentityChangeMode=false;
+        editSocialAccount(accountId, true);
+        await Promise.all([loadAccountsPool(), loadDashboard(), loadReadiness()]);
+        toast('账号环境已重置，请重新登录或验活');
       });
     }
     async function saveSocialAccount(){
       if(!val('social_account_name').trim()){ toast('请先填写账号名称'); return; }
+      const existing=socialAccountCache.get(Number(val('social_account_id')||0));
+      if(existing && accountIdentityChangeMode && !accountIdentityPreloginState(existing)){
+        toast('环境变更请点击“重置并重新登录”完成');
+        return;
+      }
       await withActionButtonLoading('account_save_button', '保存中...', async ()=>{
         const saved=await persistSocialAccount();
         if(saved) toast('社媒账号已保存');
@@ -7310,7 +7462,7 @@
         last_error:val('social_account_last_error'),
         ...overrides
       };
-      if(!id){
+      if(!id || accountIdentityPreloginState(existing)){
         payload.proxy_region_snapshot=val('social_account_proxy_region');
         payload.identity_template_family=val('social_account_identity_template_family');
       }
@@ -7334,7 +7486,8 @@
       set('social_account_proxy_id', a.proxy_id||''); set('social_account_notes', a.notes||''); set('social_account_last_error', a.last_error||'');
       set('social_account_proxy_region', a.proxy_region_snapshot||'CN_MAINLAND');
       set('social_account_identity_template_family', accountIdentityTemplateFamily(a.identity_template||''));
-      setAccountIdentityControlsLocked(true);
+      accountIdentityChangeMode=accountIdentityState(a)==='requires_relogin';
+      renderAccountIdentityStatus(a);
       renderLoginModePanel();
       updateAccountDetailHeader(a);
       updateAccountModalActions(a);
@@ -7378,6 +7531,8 @@
     async function checkSocialAccountLogin(id, options={}){
       const accountId=Number(id);
       if(!accountId){ toast('账号无效'); return null; }
+      const account=socialAccountCache.get(accountId);
+      if(!ensureAccountIdentityCanLogin(account)) return null;
       if(checkingSocialAccountIds.has(accountId)) return null;
       checkingSocialAccountIds.add(accountId);
       renderAccountList();
@@ -7409,6 +7564,10 @@
     async function checkSelectedSocialAccountLogins(){
       const ids=[...selectedSocialAccountIds].map(Number).filter(Boolean);
       if(!ids.length){ toast('请先勾选账号'); return; }
+      if(ids.some(id=>accountIdentityLoginBlocked(socialAccountCache.get(Number(id))))){
+        toast('所选账号中有账号需要先重置环境');
+        return;
+      }
       toast(`正在检测 ${ids.length} 个账号登录态...`);
       ids.forEach(id=>checkingSocialAccountIds.add(Number(id)));
       renderAccountList();
@@ -7458,6 +7617,11 @@
     }
     async function reloginSocialAccount(id){
       openAccountMenuId=null;
+      const account=socialAccountCache.get(Number(id));
+      if(!ensureAccountIdentityCanLogin(account)){
+        editSocialAccount(id, true);
+        return;
+      }
       editSocialAccount(id, true);
       toast('请在账号详情中重新生成二维码或更新 Cookie');
     }
@@ -7481,6 +7645,7 @@
         toast('请先打开已有账号详情，或使用二维码登录完成后自动保存');
         return;
       }
+      if(!ensureAccountIdentityCanLogin(account)) return;
       if(!localLoginWindowAllowed(account.platform)){
         toast('当前仅支持网页二维码登录，请使用网页二维码完成登录');
         return;
@@ -7490,6 +7655,7 @@
     async function openAccountLoginBrowser(id){
       const account=socialAccountCache.get(Number(id));
       if(!account){ toast('账号池已刷新，请重新选择'); loadAccountsPool(); return; }
+      if(!ensureAccountIdentityCanLogin(account)) return;
       if(!localLoginWindowAllowed(account.platform)){
         toast('当前仅支持网页二维码登录，请使用网页二维码完成登录');
         return;
@@ -7500,6 +7666,7 @@
     async function startLoginSessionForAccountId(id){
       const account=socialAccountCache.get(Number(id));
       if(!account){ toast('账号池已刷新，请重新选择'); loadAccountsPool(); return; }
+      if(!ensureAccountIdentityCanLogin(account)) return;
       editSocialAccount(id, true);
       await startLoginSessionForAccount(account);
     }
@@ -7513,6 +7680,7 @@
         summary.innerHTML = account ? [
           accountSummaryItem('平台', formatPlatforms([account.platform])),
           accountSummaryItem('平台身份', accountIdentitySummary(account)),
+          accountSummaryItem('账号环境', accountIdentityEnvironmentSummary(account)),
           accountSummaryItem('可用性', accountAvailability(account).label),
           accountSummaryItem('最近验活', account.last_checked_at ? formatTime(account.last_checked_at) : '未检测'),
           accountSummaryItem('最近异常', account.last_error ? cleanCustomerText(account.last_error).slice(0,80) : '暂无异常')
@@ -7551,15 +7719,23 @@
       if(actions) actions.style.display='flex';
       if(saveBtn) saveBtn.style.display='inline-flex';
       if(deleteBtn) deleteBtn.style.display=isFormal?'inline-flex':'none';
+      renderAccountIdentityStatus(current || account);
       updateAccountLoginPrerequisites();
     }
     function updateAccountLoginPrerequisites(){
       const nameReady=!!val('social_account_name').trim();
+      const account=socialAccountCache.get(Number(val('social_account_id')||0));
+      const blocked=accountIdentityLoginBlocked(account);
+      const blockedTitle=blocked ? '请先重置账号环境并重新登录' : '';
       const qrButton=document.getElementById('account_qrcode_button');
       if(qrButton){
-        qrButton.disabled=!nameReady;
-        qrButton.title=nameReady?'':'请先填写账号名称';
+        qrButton.disabled=!nameReady || blocked;
+        qrButton.title=blockedTitle || (nameReady?'':'请先填写账号名称');
       }
+      ['account_local_login_button','account_cookie_save_button'].forEach(id=>{
+        const button=document.getElementById(id);
+        if(button){ button.disabled=blocked; button.title=blockedTitle; }
+      });
     }
     function setAccountPlatformLocked(locked, platform=''){
       const select=document.getElementById('social_account_platform');
@@ -7713,11 +7889,13 @@
       if(clearCookie) clearCookie.checked=false;
       set('social_account_platform','dy'); set('social_account_login_type','qrcode'); set('social_account_status','standby');
       set('social_account_proxy_region','CN_MAINLAND'); set('social_account_identity_template_family','auto');
+      accountIdentityChangeMode=false;
       setAccountIdentityControlsLocked(false);
       setAccountPlatformLocked(false);
       updateSocialLoginTypeOptions();
       updateAccountDetailHeader(null);
       updateAccountDerivedFields(null);
+      renderAccountIdentityStatus(null);
       updateAccountModalActions(null);
       renderLoginSessionResult(null);
       loadLoginSessions(0);
@@ -10209,6 +10387,9 @@
     function formatBytes(bytes){ const n=Number(bytes||0); if(n<1024) return `${n} B`; if(n<1024*1024) return `${(n/1024).toFixed(1)} KB`; return `${(n/1024/1024).toFixed(1)} MB`; }
     function cleanCustomerText(text){
       return String(text||'')
+        .replace(/account_identity_requires_relogin/g,'账号环境需要重置并重新登录')
+        .replace(/account_identity_login_conflict/g,'账号正在登录、验活或重置')
+        .replace(/account_identity_reset_blocked/g,'账号正在登录或被采集任务占用')
         .replace(new RegExp('Media'+'Crawler','g'),'采集服务')
         .replace(new RegExp('MONITOR_'+'SKIP_AI_API(?:=true|=false)?','g'),'AI 服务未启用')
         .replace(new RegExp('self'+'test-report','g'),'系统诊断报告')

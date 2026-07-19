@@ -1010,13 +1010,14 @@ def test_phase_5_1b_account_ui_only_submits_safe_identity_choices_for_new_accoun
         "social_account_fingerprint_seed",
     ):
         assert f'id="{forbidden_id}"' not in account_dialog
-    assert "if(!id){" in page
+    assert "if(!id || accountIdentityPreloginState(existing)){" in page
     assert "payload.proxy_region_snapshot=val('social_account_proxy_region')" in page
     assert "payload.identity_template_family=val('social_account_identity_template_family')" in page
     draft_login = page[page.index("async function startLoginSessionForDraft()") : page.index("async function startLoginSessionForAccount(")]
     assert "proxy_region_snapshot:val('social_account_proxy_region')" in draft_login
     assert "identity_template_family:val('social_account_identity_template_family')" in draft_login
-    assert "setAccountIdentityControlsLocked(true)" in page
+    assert "renderAccountIdentityStatus(a)" in page
+    assert "setAccountIdentityControlsLocked(!(prelogin ||" in page
     assert "setAccountIdentityControlsLocked(false)" in page
 
 
@@ -1051,6 +1052,908 @@ def test_phase_5_1b_test_tripwire_policy_requires_explicit_opt_ins(account_ident
             "TEST_ALLOW_REAL_PROXY": "true",
         }
     ) == {"blocked": False, "proxy_allowed": True}
+
+
+def test_phase_5_1c_identity_lifecycle_locks_only_after_verified_success(monkeypatch):
+    from api.monitoring.database import (
+        complete_social_account_identity_login,
+        list_audit_logs,
+        prepare_social_account_identity_login,
+    )
+
+    monkeypatch.setenv("MONITOR_ACCOUNT_IDENTITY_SEED_SALT", "phase-5.1c-lifecycle-salt")
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        account = save_social_account(
+            {"name": "Phase 5.1C QR", "platform": "dy", "login_type": "qrcode"}
+        )
+        assert account["identity_state"] == "generated"
+
+        prepared = prepare_social_account_identity_login(
+            account["id"], trigger_source="qrcode_login", user_id=7
+        )
+        assert prepared["identity_state"] == "login_in_progress"
+        assert prepared["browser_environment_locked_at"] is None
+
+        continued = prepare_social_account_identity_login(
+            account["id"],
+            trigger_source="qrcode_verification",
+            user_id=7,
+            allow_prepared_validation=True,
+        )
+        assert continued["identity_state"] == "login_in_progress"
+
+        active = complete_social_account_identity_login(
+            account["id"],
+            ok=True,
+            trigger_source="qrcode_login",
+            lock_reason="qrcode_login_success",
+            user_id=7,
+        )
+        assert active["identity_state"] == "active"
+        assert active["requires_relogin"] is False
+        assert active["browser_environment_locked_at"]
+        assert active["browser_environment_lock_reason"] == "qrcode_login_success"
+
+        audits = [
+            item for item in list_audit_logs(limit=30)
+            if item["resource_type"] == "social_account" and int(item["resource_id"]) == account["id"]
+        ]
+        actions = [item["action_type"] for item in reversed(audits)]
+        assert "identity_generated" in actions
+        assert "identity_validated" in actions
+        assert "identity_locked" in actions
+        assert "identity_activated" in actions
+        allowed_detail_keys = {
+            "trigger_source",
+            "account_id",
+            "workspace_id",
+            "platform",
+            "identity_template",
+            "old_identity_state",
+            "new_identity_state",
+            "old_proxy_region_snapshot",
+            "new_proxy_region_snapshot",
+            "old_proxy_id",
+            "new_proxy_id",
+            "reason",
+        }
+        for item in audits:
+            details = json.loads(item["details_json"])
+            assert set(details) == allowed_detail_keys
+            visible = json.dumps(details, ensure_ascii=False).lower()
+            for forbidden in (
+                "fingerprint_seed",
+                "cookie",
+                "proxy_url",
+                "profile_path",
+                "identity_runtime_snapshot_json",
+                "cdp",
+                "novnc",
+            ):
+                assert forbidden not in visible
+    finally:
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+
+def test_phase_5_1c_failure_recovery_distinguishes_unlocked_and_maintenance(monkeypatch):
+    from api.monitoring.account_identity import AccountIdentityError
+    from api.monitoring.database import (
+        complete_social_account_identity_login,
+        prepare_social_account_identity_login,
+    )
+
+    monkeypatch.setenv("MONITOR_ACCOUNT_IDENTITY_SEED_SALT", "phase-5.1c-failure-salt")
+    init_db()
+    snapshot = _snapshot_table("social_accounts")
+    try:
+        account = save_social_account(
+            {"name": "Phase 5.1C Failure", "platform": "dy", "login_type": "qrcode"}
+        )
+        prepare_social_account_identity_login(account["id"], trigger_source="qrcode_login")
+        failed = complete_social_account_identity_login(
+            account["id"],
+            ok=False,
+            trigger_source="qrcode_login",
+            failure_reason="qrcode_failed",
+        )
+        assert failed["identity_state"] == "validated"
+        assert failed["browser_environment_locked_at"] is None
+
+        prepare_social_account_identity_login(account["id"], trigger_source="profile_validation")
+        active = complete_social_account_identity_login(
+            account["id"],
+            ok=True,
+            trigger_source="profile_validation",
+            lock_reason="profile_validation_success",
+        )
+        original_lock = active["browser_environment_locked_at"]
+        prepare_social_account_identity_login(account["id"], trigger_source="qrcode_maintenance")
+        restored = complete_social_account_identity_login(
+            account["id"],
+            ok=False,
+            trigger_source="qrcode_maintenance",
+            failure_reason="timeout",
+        )
+        assert restored["identity_state"] == "active"
+        assert restored["browser_environment_locked_at"] == original_lock
+
+        prepare_social_account_identity_login(account["id"], trigger_source="qrcode_maintenance")
+        with pytest.raises(AccountIdentityError, match="account_identity_login_conflict"):
+            prepare_social_account_identity_login(account["id"], trigger_source="qrcode_duplicate")
+        complete_social_account_identity_login(
+            account["id"], ok=False, trigger_source="qrcode_maintenance", failure_reason="cancelled"
+        )
+
+        with get_conn() as conn:
+            conn.execute(
+                "UPDATE social_accounts SET identity_state='requires_relogin', requires_relogin=1 WHERE id=?",
+                (account["id"],),
+            )
+        with pytest.raises(AccountIdentityError, match="account_identity_requires_relogin"):
+            prepare_social_account_identity_login(account["id"], trigger_source="qrcode_login")
+    finally:
+        _restore_table("social_accounts", snapshot)
+
+
+def test_phase_5_1c_configuration_change_and_reset_preserve_login_material(monkeypatch):
+    from api.monitoring.account_identity import AccountIdentityError
+    from api.monitoring.database import (
+        apply_social_account_identity_configuration,
+        complete_social_account_identity_login,
+        prepare_social_account_identity_login,
+        reset_social_account_identity,
+    )
+
+    monkeypatch.setenv("MONITOR_ACCOUNT_IDENTITY_SEED_SALT", "phase-5.1c-reset-salt")
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "proxy_profiles": _snapshot_table("proxy_profiles"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        proxy = save_proxy_profile(
+            {"name": "Phase 5.1C SG", "proxy_url": "http://fixture.invalid:8080", "status": "active"}
+        )
+        account = save_social_account(
+            {
+                "name": "Phase 5.1C Cookie",
+                "platform": "dy",
+                "login_type": "cookie",
+                "cookies": "sessionid=phase51c_fixture",
+            }
+        )
+        with get_conn() as conn:
+            conn.execute(
+                """
+                UPDATE social_accounts SET platform_account_id='fixture_uid',
+                    platform_account_name='Fixture Account' WHERE id=?
+                """,
+                (account["id"],),
+            )
+        changed = apply_social_account_identity_configuration(
+            account["id"],
+            proxy_id=None,
+            proxy_region_snapshot="HK",
+            template_family="auto",
+            trigger_source="admin_prelogin_change",
+            user_id=8,
+        )
+        assert changed["identity_state"] == "validated"
+        assert changed["proxy_region_snapshot"] == "HK"
+        assert changed["identity_template"] == "HK_DESKTOP_CHROME"
+
+        prepare_social_account_identity_login(account["id"], trigger_source="cookie_validation")
+        with pytest.raises(AccountIdentityError, match="account_identity_login_conflict"):
+            apply_social_account_identity_configuration(
+                account["id"],
+                proxy_id=proxy["id"],
+                proxy_region_snapshot="SG",
+                template_family="auto",
+                trigger_source="admin_change_during_login",
+            )
+        active = complete_social_account_identity_login(
+            account["id"],
+            ok=True,
+            trigger_source="cookie_validation",
+            lock_reason="cookie_validation_success",
+        )
+        locked_template = active["identity_template"]
+        locked_proxy_id = active["proxy_id"]
+        marked = apply_social_account_identity_configuration(
+            account["id"],
+            proxy_id=proxy["id"],
+            proxy_region_snapshot="SG",
+            template_family="auto",
+            trigger_source="admin_locked_change",
+            user_id=8,
+        )
+        assert marked["identity_state"] == "requires_relogin"
+        assert marked["requires_relogin"] is True
+        assert marked["identity_template"] == locked_template
+        assert marked["proxy_id"] == locked_proxy_id
+        assert marked["proxy_region_snapshot"] == "HK"
+
+        with get_conn() as conn:
+            conn.execute("UPDATE social_accounts SET locked_by_run_id=999 WHERE id=?", (account["id"],))
+        with pytest.raises(AccountIdentityError, match="account_identity_reset_blocked"):
+            reset_social_account_identity(
+                account["id"],
+                proxy_id=proxy["id"],
+                proxy_region_snapshot="SG",
+                template_family="auto",
+                user_id=8,
+            )
+        with get_conn() as conn:
+            conn.execute("UPDATE social_accounts SET locked_by_run_id=NULL WHERE id=?", (account["id"],))
+
+        reset = reset_social_account_identity(
+            account["id"],
+            proxy_id=proxy["id"],
+            proxy_region_snapshot="SG",
+            template_family="auto",
+            user_id=8,
+        )
+        stored = get_social_account(account["id"], masked=False)
+        assert reset["identity_state"] == "validated"
+        assert reset["status"] == "standby"
+        assert reset["proxy_id"] == proxy["id"]
+        assert reset["proxy_region_snapshot"] == "SG"
+        assert reset["identity_template"] == "SG_DESKTOP_CHROME"
+        assert reset["browser_environment_locked_at"] is None
+        assert reset["browser_environment_lock_reason"] == ""
+        assert reset["requires_relogin"] is False
+        assert stored["cookies"] == "sessionid=phase51c_fixture"
+        assert stored["profile_key"] == account["profile_key"]
+        assert stored["platform_account_id"] == "fixture_uid"
+        assert stored["platform_account_name"] == "Fixture Account"
+    finally:
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+
+def test_phase_5_1c_cookie_check_owns_prepare_and_completion(monkeypatch):
+    monkeypatch.setenv("MONITOR_ACCOUNT_IDENTITY_SEED_SALT", "phase-5.1c-check-salt")
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        account = save_social_account(
+            {
+                "name": "Phase 5.1C Checked Cookie",
+                "platform": "dy",
+                "login_type": "cookie",
+                "cookies": "sessionid=fake_cookie",
+            }
+        )
+
+        async def fake_cookie_check(_account, _timeout_ms):
+            assert get_social_account(account["id"])["identity_state"] == "login_in_progress"
+            return {"ok": True, "status": "valid", "message": "ok", "identity": {}}
+
+        monkeypatch.setattr(account_check_module, "_check_cookie_account", fake_cookie_check)
+        result = asyncio.run(account_check_module.check_social_account_login(account["id"], actor_id=9))
+        assert result["ok"] is True
+        assert result["account"]["identity_state"] == "active"
+        assert result["account"]["browser_environment_lock_reason"] == "cookie_validation_success"
+    finally:
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+
+def test_phase_5_1c_qr_verification_reuses_prepared_identity(monkeypatch):
+    from api.monitoring.database import (
+        complete_social_account_identity_login,
+        prepare_social_account_identity_login,
+    )
+
+    monkeypatch.setenv("MONITOR_ACCOUNT_IDENTITY_SEED_SALT", "phase-5.1c-qr-salt")
+    init_db()
+    snapshots = {
+        "login_sessions": _snapshot_table("login_sessions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        account = save_social_account(
+            {"name": "Phase 5.1C QR Verify", "platform": "dy", "login_type": "qrcode"}
+        )
+        prepare_social_account_identity_login(account["id"], trigger_source="qrcode_login")
+        session = create_login_session(
+            {"platform": "dy", "account_id": account["id"], "status": "success"}
+        )
+        captured = {}
+
+        async def fake_check(account_id, timeout_ms=15000, allow_draft=False, identity_prepared=False, actor_id=None):
+            captured.update(
+                account_id=account_id,
+                allow_draft=allow_draft,
+                identity_prepared=identity_prepared,
+            )
+            completed = complete_social_account_identity_login(
+                account_id,
+                ok=True,
+                trigger_source="qrcode_login",
+                lock_reason="qrcode_login_success",
+            )
+            return {"ok": True, "account": completed}
+
+        monkeypatch.setattr(monitor_router, "check_social_account_login", fake_check)
+        verified_session, account_status = asyncio.run(monitor_router._verify_successful_login_session(session))
+        assert verified_session["status"] == "success"
+        assert account_status["identity_state"] == "active"
+        assert captured == {
+            "account_id": account["id"],
+            "allow_draft": True,
+            "identity_prepared": True,
+        }
+    finally:
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+
+def test_phase_5_1c_qr_start_prepares_and_delete_recovers_identity(monkeypatch):
+    monkeypatch.setenv("MONITOR_ACCOUNT_IDENTITY_SEED_SALT", "phase-5.1c-qr-route-salt")
+    init_db()
+    snapshots = {
+        "login_sessions": _snapshot_table("login_sessions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    seen = {}
+    try:
+        account = save_social_account(
+            {"name": "Phase 5.1C QR Route", "platform": "dy", "login_type": "qrcode"}
+        )
+
+        monkeypatch.setattr(monitor_router, "_open_login_window_for_command", lambda *args: {})
+
+        async def fake_start(session_id, platform, command):
+            seen["start_state"] = get_social_account(account["id"])["identity_state"]
+            return {
+                "ok": True,
+                "status": "waiting_qrcode",
+                "qr_image": "data:image/png;base64,phase51c",
+                "message": "请扫码登录",
+            }
+
+        async def fake_close(session_id):
+            seen["closed_session_id"] = int(session_id)
+
+        monkeypatch.setattr(monitor_router, "start_qrcode_login_session_with_profile", fake_start)
+        monkeypatch.setattr(monitor_router, "close_qrcode_login_session", fake_close)
+
+        created = asyncio.run(
+            monitor_router.create_platform_login_session(
+                {"platform": "dy", "account_id": account["id"]},
+                {"id": 13, "workspace_id": 1},
+            )
+        )
+
+        assert seen["start_state"] == "login_in_progress"
+        assert created["account_status"]["identity_state"] == "login_in_progress"
+        assert get_social_account(account["id"])["identity_state"] == "login_in_progress"
+
+        session_id = int(created["session"]["id"])
+        assert asyncio.run(
+            monitor_router.remove_login_session(
+                session_id,
+                {"id": 13, "workspace_id": 1},
+            )
+        ) == {"ok": True}
+        assert seen["closed_session_id"] == session_id
+        assert get_login_session(session_id) is None
+        assert get_social_account(account["id"])["identity_state"] == "validated"
+    finally:
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+
+def test_phase_5_1c_visible_browser_prepares_then_recovers_sync_failure(monkeypatch):
+    monkeypatch.setenv("MONITOR_ACCOUNT_IDENTITY_SEED_SALT", "phase-5.1c-visible-route-salt")
+    init_db()
+    snapshot = _snapshot_table("social_accounts")
+    seen = {}
+    try:
+        account = save_social_account(
+            {"name": "Phase 5.1C Visible", "platform": "dy", "login_type": "qrcode"}
+        )
+
+        def fake_command(platform, payload):
+            seen["command_state"] = get_social_account(account["id"])["identity_state"]
+            return {
+                "platform": platform,
+                "account_id": account["id"],
+                "profile_key": account["profile_key"],
+                "profile_path": account["profile_path"],
+            }
+
+        def fake_open(command):
+            seen["open_state"] = get_social_account(account["id"])["identity_state"]
+            raise RuntimeError("fixture browser start failed")
+
+        monkeypatch.setattr(monitor_router, "_login_browser_command_for_payload", fake_command)
+        monkeypatch.setattr(monitor_router, "open_login_browser_with_command", fake_open)
+
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(
+                monitor_router.platform_login_browser(
+                    "dy",
+                    {"account_id": account["id"]},
+                    {"id": 14, "workspace_id": 1},
+                )
+            )
+
+        assert exc_info.value.status_code == 500
+        assert seen == {
+            "command_state": "login_in_progress",
+            "open_state": "login_in_progress",
+        }
+        assert get_social_account(account["id"])["identity_state"] == "validated"
+    finally:
+        _restore_table("social_accounts", snapshot)
+
+
+def test_phase_5_1c_admin_check_continues_persisted_login_owner(monkeypatch):
+    from api.monitoring.database import prepare_social_account_identity_login
+
+    monkeypatch.setenv("MONITOR_ACCOUNT_IDENTITY_SEED_SALT", "phase-5.1c-admin-check-salt")
+    init_db()
+    snapshot = _snapshot_table("social_accounts")
+    captured = {}
+    try:
+        account = save_social_account(
+            {"name": "Phase 5.1C Admin Check", "platform": "dy", "login_type": "qrcode"}
+        )
+        prepare_social_account_identity_login(account["id"], trigger_source="visible_browser_login")
+
+        async def fake_check(
+            account_id,
+            timeout_ms=15000,
+            allow_draft=False,
+            identity_prepared=False,
+            actor_id=None,
+        ):
+            captured.update(
+                account_id=account_id,
+                allow_draft=allow_draft,
+                identity_prepared=identity_prepared,
+                actor_id=actor_id,
+            )
+            return {
+                "ok": False,
+                "status": "invalid",
+                "message": "fixture",
+                "account": get_social_account(account_id),
+            }
+
+        monkeypatch.setattr(monitor_router, "check_social_account_login", fake_check)
+
+        asyncio.run(
+            monitor_router.check_social_account(
+                account["id"],
+                {"id": 15, "workspace_id": 1},
+            )
+        )
+
+        assert captured == {
+            "account_id": account["id"],
+            "allow_draft": False,
+            "identity_prepared": True,
+            "actor_id": 15,
+        }
+    finally:
+        _restore_table("social_accounts", snapshot)
+
+
+def test_phase_5_1c_update_and_reset_routes_use_lifecycle_authority(monkeypatch):
+    from api.monitoring.database import (
+        complete_social_account_identity_login,
+        prepare_social_account_identity_login,
+    )
+
+    monkeypatch.setenv("MONITOR_ACCOUNT_IDENTITY_SEED_SALT", "phase-5.1c-route-reset-salt")
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        account = save_social_account(
+            {"name": "Phase 5.1C Route Reset", "platform": "dy", "login_type": "qrcode"}
+        )
+        prepare_social_account_identity_login(account["id"], trigger_source="profile_validation")
+        active = complete_social_account_identity_login(
+            account["id"],
+            ok=True,
+            trigger_source="profile_validation",
+            lock_reason="profile_validation_success",
+        )
+        original_template = active["identity_template"]
+
+        updated = asyncio.run(
+            monitor_router.update_social_account(
+                account["id"],
+                {
+                    "name": account["name"],
+                    "platform": "dy",
+                    "login_type": "qrcode",
+                    "status": "active",
+                    "proxy_id": None,
+                    "proxy_region_snapshot": "HK",
+                    "identity_template_family": "auto",
+                    "notes": "",
+                    "last_error": "",
+                },
+                {"id": 16, "workspace_id": 1},
+            )
+        )["account"]
+
+        assert updated["identity_state"] == "requires_relogin"
+        assert updated["requires_relogin"] is True
+        assert updated["identity_template"] == original_template
+        assert updated["proxy_region_snapshot"] == "CN_MAINLAND"
+
+        with get_conn() as conn:
+            conn.execute(
+                "UPDATE social_accounts SET locked_by_run_id=999 WHERE id=?",
+                (account["id"],),
+            )
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(
+                monitor_router.reset_social_account_identity_route(
+                    account["id"],
+                    {
+                        "proxy_id": None,
+                        "proxy_region_snapshot": "HK",
+                        "identity_template_family": "auto",
+                    },
+                    {"id": 16, "workspace_id": 1},
+                )
+            )
+        assert exc_info.value.status_code == 409
+        assert get_social_account(account["id"])["identity_state"] == "requires_relogin"
+
+        with get_conn() as conn:
+            conn.execute(
+                "UPDATE social_accounts SET locked_by_run_id=NULL WHERE id=?",
+                (account["id"],),
+            )
+        reset = asyncio.run(
+            monitor_router.reset_social_account_identity_route(
+                account["id"],
+                {
+                    "proxy_id": None,
+                    "proxy_region_snapshot": "HK",
+                    "identity_template_family": "auto",
+                },
+                {"id": 16, "workspace_id": 1},
+            )
+        )["account"]
+
+        assert reset["identity_state"] == "validated"
+        assert reset["status"] == "standby"
+        assert reset["proxy_region_snapshot"] == "HK"
+        assert reset["identity_template"] == "HK_DESKTOP_CHROME"
+    finally:
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+
+def test_phase_5_1c_qr_and_profile_checks_use_distinct_lock_reasons(monkeypatch):
+    from api.monitoring.database import prepare_social_account_identity_login
+
+    monkeypatch.setenv("MONITOR_ACCOUNT_IDENTITY_SEED_SALT", "phase-5.1c-lock-reason-salt")
+    init_db()
+    snapshot = _snapshot_table("social_accounts")
+    try:
+        async def fake_profile_check(account, timeout_ms):
+            return {"ok": True, "status": "valid", "message": "ok", "identity": {}}
+
+        monkeypatch.setattr(account_check_module, "_check_profile_account", fake_profile_check)
+
+        qr_account = save_social_account(
+            {"name": "Phase 5.1C QR Reason", "platform": "dy", "login_type": "qrcode"}
+        )
+        prepare_social_account_identity_login(qr_account["id"], trigger_source="qrcode_login")
+        qr_result = asyncio.run(
+            account_check_module.check_social_account_login(
+                qr_account["id"],
+                allow_draft=True,
+                identity_prepared=True,
+            )
+        )
+        assert qr_result["account"]["browser_environment_lock_reason"] == "qrcode_login_success"
+
+        profile_account = save_social_account(
+            {"name": "Phase 5.1C Profile Reason", "platform": "dy", "login_type": "qrcode"}
+        )
+        profile_result = asyncio.run(
+            account_check_module.check_social_account_login(profile_account["id"])
+        )
+        assert profile_result["account"]["browser_environment_lock_reason"] == "profile_validation_success"
+    finally:
+        _restore_table("social_accounts", snapshot)
+
+
+@pytest.mark.parametrize("route_name", ["submit", "request"])
+def test_phase_5_1c_verification_code_terminal_failure_recovers_identity(route_name, monkeypatch):
+    from api.monitoring.database import (
+        complete_social_account_identity_login,
+        prepare_social_account_identity_login,
+    )
+
+    monkeypatch.setenv("MONITOR_ACCOUNT_IDENTITY_SEED_SALT", "phase-5.1c-code-route-salt")
+    init_db()
+    snapshots = {
+        "login_sessions": _snapshot_table("login_sessions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        account = save_social_account(
+            {"name": f"Phase 5.1C Code {route_name}", "platform": "dy", "login_type": "qrcode"}
+        )
+        prepare_social_account_identity_login(account["id"], trigger_source="qrcode_login")
+        session = create_login_session(
+            {
+                "platform": "dy",
+                "account_id": account["id"],
+                "status": "needs_verification",
+            }
+        )
+
+        async def fake_code_action(*args, **kwargs):
+            return {
+                "active": False,
+                "success": False,
+                "status": "platform_error",
+                "message": "fixture verification failed",
+            }
+
+        async def fake_check(
+            account_id,
+            timeout_ms=15000,
+            allow_draft=False,
+            identity_prepared=False,
+            actor_id=None,
+        ):
+            assert identity_prepared is True
+            completed = complete_social_account_identity_login(
+                account_id,
+                ok=False,
+                trigger_source="qrcode_login",
+                failure_reason="platform_error",
+            )
+            return {
+                "ok": False,
+                "status": "platform_error",
+                "message": "fixture verification failed",
+                "account": completed,
+            }
+
+        monkeypatch.setattr(monitor_router, "check_social_account_login", fake_check)
+        monkeypatch.setattr(monitor_router, "list_platform_status", lambda: [])
+        if route_name == "submit":
+            monkeypatch.setattr(monitor_router, "submit_qrcode_login_verification_code", fake_code_action)
+            result = asyncio.run(
+                monitor_router.submit_login_session_verification_code(
+                    session["id"],
+                    {"code": "123456"},
+                    {"id": 17, "workspace_id": 1},
+                )
+            )
+        else:
+            monkeypatch.setattr(monitor_router, "request_qrcode_login_verification_code", fake_code_action)
+            result = asyncio.run(
+                monitor_router.request_login_session_verification_code(
+                    session["id"],
+                    {"id": 17, "workspace_id": 1},
+                )
+            )
+
+        assert result["session"]["status"] == "platform_error"
+        assert get_social_account(account["id"])["identity_state"] == "validated"
+    finally:
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+
+def test_phase_5_1c_confirm_draft_cannot_replace_locked_proxy(monkeypatch):
+    from api.monitoring.database import (
+        complete_social_account_identity_login,
+        prepare_social_account_identity_login,
+    )
+
+    monkeypatch.setenv("MONITOR_ACCOUNT_IDENTITY_SEED_SALT", "phase-5.1c-confirm-salt")
+    init_db()
+    snapshots = {
+        "proxy_profiles": _snapshot_table("proxy_profiles"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        proxy = save_proxy_profile(
+            {"name": "Phase 5.1C Confirm Proxy", "proxy_url": "http://fixture.invalid:8080"}
+        )
+        draft = database_module.create_draft_social_account(
+            {"name": "Phase 5.1C Confirm", "platform": "dy"}
+        )
+        prepare_social_account_identity_login(draft["id"], trigger_source="qrcode_login")
+        complete_social_account_identity_login(
+            draft["id"],
+            ok=True,
+            trigger_source="qrcode_login",
+            lock_reason="qrcode_login_success",
+        )
+
+        confirmed = asyncio.run(
+            monitor_router.confirm_account(
+                draft["id"],
+                {
+                    "name": draft["name"],
+                    "login_type": "qrcode",
+                    "status": "active",
+                    "proxy_id": proxy["id"],
+                },
+                {"id": 18, "workspace_id": 1},
+            )
+        )["account"]
+
+        assert confirmed["is_draft"] is False
+        assert confirmed["identity_state"] == "requires_relogin"
+        assert confirmed["requires_relogin"] is True
+        assert confirmed["proxy_id"] is None
+    finally:
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+
+def test_phase_5_1c_reset_rejects_persisted_resetting_state(monkeypatch):
+    from api.monitoring.account_identity import AccountIdentityError
+    from api.monitoring.database import reset_social_account_identity
+
+    monkeypatch.setenv("MONITOR_ACCOUNT_IDENTITY_SEED_SALT", "phase-5.1c-resetting-salt")
+    init_db()
+    snapshot = _snapshot_table("social_accounts")
+    try:
+        account = save_social_account(
+            {"name": "Phase 5.1C Resetting", "platform": "dy", "login_type": "qrcode"}
+        )
+        with get_conn() as conn:
+            conn.execute(
+                "UPDATE social_accounts SET identity_state='resetting' WHERE id=?",
+                (account["id"],),
+            )
+        with pytest.raises(AccountIdentityError, match="account_identity_reset_blocked"):
+            reset_social_account_identity(
+                account["id"],
+                proxy_id=None,
+                proxy_region_snapshot="CN_MAINLAND",
+                template_family="auto",
+            )
+        assert get_social_account(account["id"])["identity_state"] == "resetting"
+    finally:
+        _restore_table("social_accounts", snapshot)
+
+
+def test_phase_5_1c_locked_proxy_clear_audit_records_explicit_null(monkeypatch):
+    from api.monitoring.account_identity import identity_template_family
+    from api.monitoring.database import (
+        apply_social_account_identity_configuration,
+        complete_social_account_identity_login,
+        list_audit_logs,
+        prepare_social_account_identity_login,
+    )
+
+    monkeypatch.setenv("MONITOR_ACCOUNT_IDENTITY_SEED_SALT", "phase-5.1c-audit-null-salt")
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "proxy_profiles": _snapshot_table("proxy_profiles"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        proxy = save_proxy_profile(
+            {"name": "Phase 5.1C Audit Proxy", "proxy_url": "http://fixture.invalid:8080"}
+        )
+        account = save_social_account(
+            {
+                "name": "Phase 5.1C Audit Null",
+                "platform": "dy",
+                "login_type": "qrcode",
+                "proxy_id": proxy["id"],
+            }
+        )
+        prepare_social_account_identity_login(account["id"], trigger_source="profile_validation")
+        complete_social_account_identity_login(
+            account["id"],
+            ok=True,
+            trigger_source="profile_validation",
+            lock_reason="profile_validation_success",
+        )
+        apply_social_account_identity_configuration(
+            account["id"],
+            proxy_id=None,
+            proxy_region_snapshot=account["proxy_region_snapshot"],
+            template_family=identity_template_family(account["identity_template"]),
+            trigger_source="admin_locked_proxy_clear",
+        )
+
+        audit = next(
+            item
+            for item in list_audit_logs(limit=30)
+            if item["action_type"] == "identity_requires_relogin"
+            and int(item["resource_id"]) == account["id"]
+        )
+        details = json.loads(audit["details_json"])
+        assert details["old_proxy_id"] == proxy["id"]
+        assert details["new_proxy_id"] is None
+    finally:
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+
+def test_cr113_qr_draft_route_forwards_safe_identity_choices(monkeypatch):
+    captured = {}
+
+    def fake_create_draft(payload):
+        captured.update(payload)
+        raise ValueError("stop after capture")
+
+    monkeypatch.setattr(monitor_router, "create_draft_social_account", fake_create_draft)
+    with pytest.raises(HTTPException) as exc_info:
+        asyncio.run(
+            monitor_router.create_platform_login_session(
+                {
+                    "name": "CR-113 Draft",
+                    "platform": "dy",
+                    "proxy_id": "",
+                    "proxy_region_snapshot": "HK",
+                    "identity_template_family": "windows_chrome_desktop",
+                    "user_agent": "must-not-forward",
+                },
+                {"id": 10, "workspace_id": 1},
+            )
+        )
+    assert exc_info.value.status_code == 400
+    assert captured["proxy_region_snapshot"] == "HK"
+    assert captured["identity_template_family"] == "windows_chrome_desktop"
+    assert "user_agent" not in captured
+
+
+def test_phase_5_1c_account_ui_exposes_safe_reset_relogin_flow_only():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    account_dialog = page[page.index('id="account_dialog"') : page.index('<section id="proxies">')]
+    for marker in (
+        'id="social_account_identity_status"',
+        'id="account_identity_change_button"',
+        'id="account_identity_reset_button"',
+        "function accountIdentityStateLabel(",
+        "function beginAccountIdentityChange(",
+        "async function resetCurrentAccountIdentity(",
+        "'/social-accounts/'+accountId+'/identity/reset'",
+    ):
+        assert marker in account_dialog or marker in page
+    assert "account_identity_requires_relogin" in page
+    assert "requires_relogin" in page
+    bulk_toolbar = page[
+        page.index("function updateAccountBulkToolbar(") :
+        page.index("function accountLedgerTable(")
+    ]
+    identity_controls = page[
+        page.index("function setAccountIdentityControlsLocked(") :
+        page.index("function renderAccountIdentityStatus(")
+    ]
+    assert "const hasBlocked=" in bulk_toolbar
+    assert "if(checkBtn && hasBlocked)" in bulk_toolbar
+    assert "hasBlocked" not in identity_controls
+    for forbidden in ("fingerprint_seed", "identity_runtime_snapshot_json", "profile_runtime_path"):
+        assert forbidden not in account_dialog
 
 
 def test_phase_1_bootstrap_admin_login_session_and_user_management():
@@ -5544,7 +6447,13 @@ def test_login_session_failure_reconciles_successful_same_account_check_for_supp
                 "message": "二维码浏览器会话不在运行，请重新生成二维码或打开登录窗口。",
             }
 
-        async def fake_check_social_account_login(account_id, timeout_ms=15000, allow_draft=False):
+        async def fake_check_social_account_login(
+            account_id,
+            timeout_ms=15000,
+            allow_draft=False,
+            identity_prepared=False,
+            actor_id=None,
+        ):
             return {
                 "ok": True,
                 "account": update_social_account_check_state(
@@ -5596,7 +6505,13 @@ def test_login_session_failure_reconciliation_keeps_failure_when_account_check_f
                 "message": "二维码浏览器会话不在运行，请重新生成二维码或打开登录窗口。",
             }
 
-        async def fake_check_social_account_login(account_id, timeout_ms=15000, allow_draft=False):
+        async def fake_check_social_account_login(
+            account_id,
+            timeout_ms=15000,
+            allow_draft=False,
+            identity_prepared=False,
+            actor_id=None,
+        ):
             return {
                 "ok": False,
                 "message": "登录态无效或已失效，请重新扫码登录。",
@@ -7108,7 +8023,13 @@ def test_login_session_route_marks_existing_profile_success(monkeypatch):
             }
 
         monkeypatch.setattr(monitor_router, "start_qrcode_login_session_with_profile", fake_start_qrcode_login_session_with_profile)
-        async def fake_check_social_account_login(account_id, timeout_ms=15000, allow_draft=False):
+        async def fake_check_social_account_login(
+            account_id,
+            timeout_ms=15000,
+            allow_draft=False,
+            identity_prepared=False,
+            actor_id=None,
+        ):
             return {
                 "ok": True,
                 "account": get_social_account(account_id),
@@ -7142,7 +8063,13 @@ def test_login_session_success_requires_account_check(monkeypatch):
                 "profile_path": command["profile_path"],
             }
 
-        async def fake_check_social_account_login(account_id, timeout_ms=15000, allow_draft=False):
+        async def fake_check_social_account_login(
+            account_id,
+            timeout_ms=15000,
+            allow_draft=False,
+            identity_prepared=False,
+            actor_id=None,
+        ):
             return {
                 "ok": False,
                 "message": "登录态无效或已失效，请重新扫码登录。",

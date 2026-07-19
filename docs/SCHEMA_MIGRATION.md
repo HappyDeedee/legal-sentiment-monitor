@@ -94,7 +94,8 @@ Status: implemented and independently verified in the isolated Phase 5.1A
 worktree against `main@8b55c2a`. The additive migration extends the existing
 `profile_key` model with storage for a persisted, locked account identity while
 Phase 5.1B now supplies INSERT-only deterministic generation and validation.
-Locking/reset/audit and runtime binding remain Phase 5.1C-D.
+Phase 5.1C implements locking/reset/audit behavior without a new migration;
+provider/runtime binding remains Phase 5.1D.
 
 Additive fields for `social_accounts`:
 

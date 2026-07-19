@@ -114,16 +114,19 @@ Existing `profile_path` is a transition-only legacy field. New account
 environments must use `profile_key`, and old low-volume accounts can be
 re-created or re-logged in instead of receiving long-term compatibility logic.
 
-CR-047 is implemented through Phase 5.1B. Phase 5.1A supplies additive storage
-and compatible reads. Phase 5.1B automatically generates and validates the
-documented identity for each newly inserted account after its stable ID and
-`profile_key` exist; existing account UPDATEs are never silently backfilled or
-regenerated. Phase 5.1C still owns persisted validation/login/lock/reset/audit
-transitions, and Phase 5.1D still owns mandatory provider/runtime binding,
-effective-value probes, proxy transport proof, and snapshots. Identity must be
-locked only after successful QR login or accepted Cookie validation. Silent
-edits after successful login remain disallowed; changing a locked identity
-requires the explicit reset/re-login flow with audit logging.
+CR-047 is implemented and independently verified through Phase 5.1C. Phase
+5.1A supplies additive storage and compatible reads. Phase 5.1B
+automatically generates and validates the documented identity for each newly
+inserted account after its stable ID and `profile_key` exist; existing account
+UPDATEs are never silently backfilled or regenerated. Phase 5.1C makes SQLite
+the authority for persisted validation/login/lock/reset/audit transitions and
+connects QR, visible-browser, Cookie, Profile, verification-code, administrator
+check, cancellation, configuration-change, and reset paths. Phase 5.1D still
+owns mandatory provider/runtime binding, effective-value probes, proxy
+transport proof, and snapshots. Identity locks only after account-level QR,
+Cookie, or Profile verification succeeds. Silent edits after successful login
+remain disallowed; changing a locked identity requires the explicit
+reset/re-login flow with audit logging.
 
 Reference note:
 
@@ -244,8 +247,32 @@ Allowed transitions:
   input changes would make the current identity inconsistent.
 - `requires_relogin -> resetting -> draft` when an administrator performs an
   explicit audited reset/re-login flow.
-- Any validation failure returns the account to `draft` or leaves it in
-  `generated` with an error record; it must not silently continue to login.
+- An unlocked terminal login/check failure returns `login_in_progress` to
+  `validated`; a failed maintenance attempt that began from a locked/active
+  account restores `active` and preserves the previous lock.
+- Any generator/validator failure rolls back its transaction or leaves the
+  account outside login ownership; it must not silently continue to login.
+
+Phase 5.1C implementation boundary:
+
+- only the database lifecycle functions write `identity_state`,
+  `requires_relogin`, browser-environment lock metadata, and identity audit
+  events;
+- QR status `success` is provisional until the existing account-level check
+  succeeds; Cookie and Profile checks use the same prepare/complete authority;
+- pending QR/manual-verification states retain `login_in_progress`; terminal
+  QR, verification-code, synchronous launch, cancellation, and check failures
+  recover it explicitly;
+- administrator reset is rejected while a login or persisted account/run lock
+  owns the account. It has no force bypass;
+- reset preserves account ID, `profile_key`, legacy Profile metadata,
+  encrypted Cookie, platform identity, and Profile files. It clears generated
+  identity/lock/runtime-snapshot metadata, regenerates, validates, and ends in
+  `validated` plus account-pool status `standby`;
+- the administrator UI exposes only safe state/template/region/browser
+  summaries and the explicit reset/re-login consequence. It does not expose
+  seed, Cookie, proxy credential, raw Profile path, runtime snapshot, CDP, or
+  noVNC data.
 
 Template-family change rules:
 
@@ -463,6 +490,7 @@ Identity audit events:
 - `identity_generated`;
 - `identity_validated`;
 - `identity_locked`;
+- `identity_activated`;
 - `identity_requires_relogin`;
 - `identity_reset_requested`;
 - `identity_reset_completed`;

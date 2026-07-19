@@ -118,8 +118,8 @@ Current goal rhythm:
 2. Phase 5.1P documentation/read-only compatibility preflight is verified;
    keep `docs/phase-5.1p-browser-entrypoint-map.md` as its implementation
    boundary.
-3. Phase 5.1A-B are implemented and independently verified. Phase 5.1C is the
-   next active unit; Phase 5.1D remains serially gated.
+3. Phase 5.1A-C are implemented and independently verified. Phase 5.1D is the
+   next serial unit after Phase 5.1C integration and post-merge verification.
 4. Phase 5.1 acceptance gate.
 5. CR-070 / Phase 5.2A-E only after CR-047 provider/effective snapshot
    verification.

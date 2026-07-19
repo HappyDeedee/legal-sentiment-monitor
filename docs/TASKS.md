@@ -382,7 +382,9 @@ verified in the isolated `codex/phase-5.1a-account-identity-schema` worktree
 against `main@8b55c2a`. Focused tests passed (`2` Phase 5.1A tests and `7`
 schema/account regression tests), the full monitoring suite passed (`352
 passed`), and the final read-only review returned `READY` with no finding.
-Phase 5.1B is also implemented and verified; Phase 5.1C is next.
+Phase 5.1B is also implemented and verified. Phase 5.1C lifecycle work is
+implemented and independently verified; Phase 5.1D remains gated only by
+Phase 5.1C branch integration and post-merge verification.
 
 - [x] Start only after Phase 5.1P is complete and confirms the provider,
       MediaCrawler, and container/server-like compatibility boundary. Verified
@@ -416,7 +418,9 @@ Implementation status (2026-07-19): complete on
 `codex/phase-5.1b-account-identity-generator` against merged Phase 5.1A
 baseline `main@f8be522`. Focused Phase 5.1B tests pass (`9 passed`) and the
 full monitor suite passes (`361 passed`). Final independent diff review and
-integration evidence are recorded in `TEST_RESULTS.md`; Phase 5.1C is next.
+integration evidence are recorded in `TEST_RESULTS.md`. Phase 5.1C lifecycle
+work is implemented and independently verified; Phase 5.1D remains gated by
+Phase 5.1C branch integration and post-merge verification.
 
 - [x] Add an Account Identity Generator that uses workspace, platform,
       account, proxy/region policy, automatic template selection or a
@@ -463,24 +467,37 @@ integration evidence are recorded in `TEST_RESULTS.md`; Phase 5.1C is next.
 
 ### Phase 5.1C - Account Identity Locking And Re-Login
 
-- [ ] Implement the persisted `identity_state` lifecycle from
+Implementation status (2026-07-19): verified. Code, UI, CR-113, focused tests,
+the full `378`-test monitoring suite, Python compile, documentation gates,
+desktop/mobile browser checks, and an independent Claude Code full-diff review
+pass in `codex/phase-5.1c-account-identity-lifecycle` from `main@100001e`.
+Phase 5.1D has not started and remains gated by branch integration plus
+post-merge verification.
+
+- [x] Implement the persisted `identity_state` lifecycle from
       `ACCOUNT_ENVIRONMENT.md`: `draft`, `generated`, `validated`,
       `login_in_progress`, `locked`, `active`, `requires_relogin`, and
       `resetting`.
-- [ ] Implement the template-family change transitions from
+- [x] Implement the template-family change transitions from
       `ACCOUNT_ENVIRONMENT.md`: `draft` can regenerate, `generated` and
       `validated` return to `draft`, `login_in_progress` rejects changes, and
       `locked` or `active` requires `requires_relogin` plus reset/re-login.
-- [ ] Lock the browser-environment configuration after successful QR login or
+- [x] Lock the browser-environment configuration after successful QR login or
       accepted Cookie validation.
-- [ ] Block silent edits to locked environment fields.
-- [ ] Add an explicit administrator reset/re-login path for changing a locked
+- [x] Block silent edits to locked environment fields.
+- [x] Add an explicit administrator reset/re-login path for changing a locked
       environment, with audit logging and clear consequences.
-- [ ] Mark identity-template or proxy-region changes that invalidate an
+- [x] Mark identity-template or proxy-region changes that invalidate an
       existing locked identity as `requires_relogin` instead of silently
       changing future crawl launches.
-- [ ] Preserve one account/profile concurrency locks and server-side QR login
+- [x] Preserve one account/profile concurrency locks and server-side QR login
       behavior.
+- [x] Register and verify CR-113 so new-account QR draft creation forwards only
+      the accepted safe region and template-family choices.
+- [x] Complete the independent read-only full-diff review and documentation
+      consistency checks before marking Phase 5.1C technically verified.
+- [ ] Integrate the Phase 5.1C branch and complete post-merge verification
+      before starting Phase 5.1D code.
 
 ### Phase 5.1D - Login And Crawl Runtime Binding
 
@@ -1727,8 +1744,9 @@ Planning status:
 CR-112 is a proposed new capability and remains `Needs Confirmation`. This
 documentation synchronization does not authorize product code, schema, UI,
 extension, Profile, Cookie, connector, runtime, deployment, or database
-changes. Phase 5.1P and Phase 5.1A-B are verified and Phase 5.1C is next;
-CR-112 does not preempt CR-070 / Phase 5.2 while its sequencing is unconfirmed.
+changes. Phase 5.1P and Phase 5.1A-C are verified, and Phase 5.1D remains next
+after Phase 5.1C integration. CR-112 does not preempt CR-070 / Phase 5.2 while its sequencing is
+unconfirmed.
 
 Documentation synchronization:
 

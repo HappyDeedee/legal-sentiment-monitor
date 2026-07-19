@@ -647,11 +647,11 @@ Fields:
 - latest error.
 - recognized platform identity, including display name and avatar when
   available.
-- accepted future CR-047 account-identity summary: browser platform, identity
-  template, region, timezone/locale, screen/viewport/device class, environment
-  lock state, re-login state, and proxy binding state after Phase 5.1 is
-  implemented.
-- accepted future CR-047 pre-login advanced option: administrators may choose
+- CR-047 Phase 5.1A-C account-identity summary: safe browser platform,
+  identity template, region, environment lock/re-login state, and proxy binding
+  state are available now; Phase 5.1D still owns effective runtime proof and
+  safe requested/effective diagnostics.
+- accepted CR-047 pre-login advanced option: administrators may choose
   only a template family before first login; ordinary account creation uses
   automatic template selection.
 - proposed future CR-070 account package actions: administrator-only
@@ -665,7 +665,7 @@ Rules:
 
 - one platform account maps to one profile;
 - profile path is not shown to users;
-- future CR-047 implementation must keep one platform account mapped to one
+- CR-047 keeps one platform account mapped to one
   `profile_key` and one stable account identity;
 - account name is display-only and not profile identity;
 - login sessions are scoped to the current account;
@@ -731,9 +731,10 @@ Acceptance:
 - CR-047 account creation can proceed without manual template selection; if an
   administrator uses the advanced path, only the template family is selectable
   before first login.
-- after CR-047 is implemented, repeated login-state checks and crawl runs for
-  the same platform account reuse the same locked account identity unless an
-  administrator performs an explicit audited reset/re-login flow.
+- Phase 5.1C login-state checks reuse the same locked account identity unless
+  an administrator performs an explicit audited reset/re-login flow. Phase
+  5.1D and final Phase 5.1 acceptance still must prove all crawl launch paths
+  reuse the same effective environment.
 - after CR-070 is implemented, administrators can move an account environment
   to another deployment through a versioned, encrypted, audited package. Import
   succeeds as usable only after compatibility checks and login-state

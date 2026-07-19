@@ -213,6 +213,14 @@ Interaction rules:
   needs loading, success, and error feedback;
 - destructive or history-changing actions require confirmation;
 - disabled controls must explain why when the reason is business-relevant;
+- Platform Accounts shows a compact safe account-environment summary. Safe
+  proxy/region/template-family controls are editable before login, read-only
+  after lock, and unlocked after an explicit `更改环境` action only for the
+  `重置并重新登录` workflow.
+- `requires_relogin` and `resetting` disable QR, visible-browser, Cookie-save,
+  and single/bulk account-check actions with customer-safe guidance. The reset
+  action remains reachable and must state that Profile, Cookie, and platform
+  identity are preserved while login verification is required again.
 - more menus close on outside click, escape, successful action, and navigation
   change;
 - row action menus must not be clipped by table or scroll containers.

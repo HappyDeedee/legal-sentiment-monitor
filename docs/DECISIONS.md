@@ -597,6 +597,29 @@ short `Superseded by` note rather than deleting history.
   exist. Ordinary UPDATEs, including legacy draft-account updates, never
   regenerate or guess identity. Phase 5.1C owns explicit regeneration and
   state transitions.
+- Confirmed for CR-047 / Phase 5.1C: SQLite lifecycle functions are the only
+  authority for `identity_state`, `requires_relogin`, browser-environment lock
+  metadata, and identity audit writes. Routes and account checks request
+  transitions; they do not write parallel lifecycle state.
+- Confirmed for CR-047 / Phase 5.1C: QR status success does not lock an account
+  by itself. The account-level Profile check must pass first. Accepted QR,
+  Cookie, and Profile checks lock and activate the same persisted identity with
+  distinct safe reason codes.
+- Confirmed for CR-047 / Phase 5.1C: an unlocked terminal login failure returns
+  to `validated`; failed maintenance of a previously locked account restores
+  `active` and preserves the prior lock. Pending verification keeps
+  `login_in_progress`, and a second QR/visible-browser start conflicts until
+  the owning operation is completed or explicitly cancelled.
+- Confirmed for CR-047 / Phase 5.1C: locked proxy/region/template-family change
+  requests preserve current locked inputs and mark `requires_relogin`.
+  Administrator reset has no force bypass, rejects login/run ownership,
+  preserves account/Profile/Cookie/platform identity material, rebuilds only
+  generated environment fields, and ends `validated`/`standby` before a later
+  login or check can reactivate the account.
+- Confirmed for CR-047 sequencing: Phase 5.1D still owns provider launch
+  options, requested/effective probes, runtime snapshots, proxy transport
+  proof, Runner/CDP/default-fallback removal, and final server-like acceptance.
+  Phase 5.1C completion does not claim those surfaces.
 - Confirmed for CR-112: QR login and accepted Cookie login converge on the
   same application-managed persistent Profile resolved from
   `social_account.profile_key`. The persistent Profile is the normal browser
