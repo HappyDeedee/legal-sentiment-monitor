@@ -560,10 +560,11 @@ compile, and documentation gates pass.
 
 ### CR-115 - Server-Like Validation Temporary Data Cleanup Regression Fix
 
-Implementation status (2026-07-20): implemented and technically verified after two repeated Windows
+Implementation status (2026-07-20): verified and merged. Two repeated Windows
 lower-strength preflight runs on `main@808822a` left generated SQLite/WAL files
 because one `ignore_errors=True` removal silently lost a transient lock error.
-PR integration and post-merge verification remain open.
+PR #8 merged the bounded cleanup as `main@84cabff`; focused/full/real
+lower-strength/docs/compile gates pass after merge.
 
 - [x] Add a synthetic RED that simulates transient Windows removal failures.
 - [x] Retry bounded temporary cleanup after the validation service stops.
@@ -573,17 +574,21 @@ PR integration and post-merge verification remain open.
 - [x] Rerun the real lower-strength preflight and prove its generated directory
       is absent after exit.
 - [x] Complete focused/full/docs/compile and independent read-only review.
-- [ ] Merge this follow-up and complete post-merge verification before resuming
+- [x] Merge this follow-up and complete post-merge verification before resuming
       Phase 5.1 Task 3.
 
 ### Phase 5.1 Acceptance Gate - Runtime Snapshot And Server-Like Verification
 
-Execution status (2026-07-19): the atomic packet is documentation-consistent
+Execution status (2026-07-20): the atomic packet is documentation-consistent
 and independently reviewed `READY`. Task 2 evidence-checker TDD is implemented
 and independently reviewed `PASS`; its formal CLI requires the exact deployed
-commit and 49 targeted, 183 focused, and 534 full tests pass. Task 3 environment
-preflight is next. No real account/proxy/platform action has run; Tasks 4-7
-remain operator-gated.
+commit and 49 targeted, 183 focused, and 534 full tests pass. CR-115 is merged
+and post-merge verified with a current `538`-test full suite. Task 3 local
+preflight passes Compose parsing, pinned host Chromium, and the corrected
+12-check lower-strength validator, but stops operator-blocked because this
+machine has no WSL distribution or reachable Docker Linux engine. No container
+mount, `RUNTIME_COMMIT`, real proxy probe, account, or platform action exists;
+Tasks 4-7 remain operator-gated.
 
 - [x] Start only after Phase 5.1P and Phase 5.1A-D are complete and verified,
       and the CR-114 object-identity regression fix is merged and reverified.

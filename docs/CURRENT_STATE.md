@@ -1,11 +1,12 @@
 # Current State
 
-Last updated: 2026-07-19
+Last updated: 2026-07-20
 
 ## Current Baseline
 
-- Current merged baseline: clean `main@27389a8`, matching `origin/main` after
-  CR-114 PR #6 integration and post-merge verification.
+- Current merged baseline: clean `main@84cabff`, matching `origin/main` after
+  Phase 5.1 Task 2 PR #7 and CR-115 PR #8 integration and post-merge
+  verification.
 - Phase 5.1A code/tests are complete on
   `codex/phase-5.1a-account-identity-schema`: all 24 additive fields, three
   workspace-scoped indexes, idempotent legacy migration, and boolean read
@@ -50,15 +51,15 @@ Last updated: 2026-07-19
   material finding. Post-merge full (`485 passed`), focused (`132 passed`),
   compile, and documentation gates also pass. The Phase 5.1 server-like
   acceptance packet is now the active unit; no real acceptance action has run.
-- CR-115 is the active narrow follow-up on
-  `codex/cr-115-server-like-temp-cleanup` from `main@808822a`. Two Phase 5.1
+- CR-115 is merged and post-merge verified through PR #8 on `main@84cabff`.
+  Two Phase 5.1
   Task 3 Windows lower-strength preflight runs reproduced residual temporary
   SQLite/WAL files after otherwise successful checks. The bounded cleanup,
   structured failure result, and retention boundaries are implemented; four
   focused tests, a real 12-check lower-strength rerun, the `538`-test suite,
   path-safe temporary output, compile, and independent read-only review pass.
-  PR integration and post-merge verification remain open, so Task 3 is paused
-  at this checkpoint.
+  The same focused/full/12-check/docs/compile gates pass after merge, and the
+  generated directory is absent after exit. CR-115 is closed.
 - Phase 21 and CR-107 through CR-110 are merged current-main history, not
   active working-tree implementation.
 - CR-111 verified and synchronized human-readable governance state only; it did
@@ -98,8 +99,14 @@ Last updated: 2026-07-19
   `READY`. Task 2 evidence-checker TDD is complete: the pure checker/template,
   incomplete example, explicit deployed-commit CLI binding, 49 targeted tests,
   183 Phase 5.1 tests, 534 full tests, compile/docs gates, and independent
-  read-only review pass. Task 3 environment preflight is next; no real
-  account/proxy/platform action has run and Tasks 4-7 remain operator-gated.
+  read-only review pass. Task 3 local preflight reached its documented stop
+  condition on `main@84cabff`: Docker CLI `29.5.3`, Compose `v5.1.4`, and
+  Compose config are valid; the pinned host Playwright Chromium and corrected
+  12-check lower-strength validator pass. Docker Desktop could not create or
+  reach its Linux engine because this machine has no WSL distribution, so no
+  container browser, persistent mounts, `RUNTIME_COMMIT`, account-bound proxy
+  probe, or real account/platform action was started. Task 3 is
+  operator-blocked and Tasks 4-7 remain operator-gated.
   CR-070 / Phase 5.2 remains blocked
   by implemented and verified CR-047 provider binding and requested/effective
   runtime snapshots. CR-092 and CR-094 remain `Needs Confirmation`, CR-112
