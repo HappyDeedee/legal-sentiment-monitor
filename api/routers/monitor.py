@@ -13,6 +13,7 @@ from fastapi.responses import FileResponse, HTMLResponse
 from playwright.sync_api import sync_playwright
 
 from ..monitoring import ai
+from ..monitoring.account_environment import account_profile_environment
 from ..monitoring.account_identity import (
     IDENTITY_STATE_LOGIN_IN_PROGRESS,
     AccountIdentityError,
@@ -108,8 +109,9 @@ from ..monitoring.login_browser import (
     build_login_browser_command,
     build_managed_login_browser_command,
     open_login_browser_with_command,
+    probe_login_browser_session,
 )
-from ..monitoring.login_state import login_window_status
+from ..monitoring.login_state import login_window_status, record_login_window_reconciliation
 from ..monitoring.login_qrcode import (
     close_qrcode_login_session,
     _login_qr_headless,
@@ -157,6 +159,8 @@ AdminUser = Depends(require_role("administrator"))
 CurrentUser = Depends(require_authenticated_user)
 
 _LOGIN_SESSION_POLL_LOCKS: weakref.WeakValueDictionary[int, asyncio.Lock] = weakref.WeakValueDictionary()
+_LOGIN_BROWSER_OPEN_LOCKS: weakref.WeakValueDictionary[str, asyncio.Lock] = weakref.WeakValueDictionary()
+_VISIBLE_LOGIN_RECONCILE_LOCKS: weakref.WeakValueDictionary[str, asyncio.Lock] = weakref.WeakValueDictionary()
 
 
 def _login_session_poll_lock(session_id: int) -> asyncio.Lock:
@@ -164,6 +168,24 @@ def _login_session_poll_lock(session_id: int) -> asyncio.Lock:
     if lock is None:
         lock = asyncio.Lock()
         _LOGIN_SESSION_POLL_LOCKS[int(session_id)] = lock
+    return lock
+
+
+def _visible_login_reconcile_lock(platform: str, account_id: int) -> asyncio.Lock:
+    key = f"{platform}:{int(account_id)}"
+    lock = _VISIBLE_LOGIN_RECONCILE_LOCKS.get(key)
+    if lock is None:
+        lock = asyncio.Lock()
+        _VISIBLE_LOGIN_RECONCILE_LOCKS[key] = lock
+    return lock
+
+
+def _login_browser_open_lock(platform: str) -> asyncio.Lock:
+    key = str(platform or "")
+    lock = _LOGIN_BROWSER_OPEN_LOCKS.get(key)
+    if lock is None:
+        lock = asyncio.Lock()
+        _LOGIN_BROWSER_OPEN_LOCKS[key] = lock
     return lock
 
 
@@ -407,6 +429,17 @@ async def platform_status():
 async def platform_login_browser(platform: str, payload: dict[str, Any] | None = None, admin: dict[str, Any] = AdminUser):
     if not _local_login_window_allowed():
         raise HTTPException(status_code=403, detail="生产模式已关闭本地登录窗口，请使用网页登录二维码完成登录")
+    async with _login_browser_open_lock(platform):
+        if login_window_status(platform).get("is_open"):
+            raise HTTPException(status_code=409, detail="该平台已有登录窗口，请先完成或关闭当前窗口后重试")
+        return await _platform_login_browser_locked(platform, payload, admin)
+
+
+async def _platform_login_browser_locked(
+    platform: str,
+    payload: dict[str, Any] | None,
+    admin: dict[str, Any],
+) -> dict[str, Any]:
     request_payload = payload or {}
     account_id = _optional_positive_id(request_payload.get("account_id"), "account_id")
     prepared = False
@@ -436,10 +469,15 @@ async def platform_login_browser(platform: str, payload: dict[str, Any] | None =
             update_login_session_status(int(expired_session_id), LOGIN_STATE_TIMEOUT, switch_message)
             await close_qrcode_login_session(expired_session_id)
         result = open_login_browser_with_command(command)
+        if account_id:
+            result = {
+                **result,
+                "message": "登录窗口已打开，请在窗口中完成平台验证；系统将自动检测并保存登录状态。",
+            }
         if expired_session_ids:
             result = {
                 **result,
-                "message": switch_message,
+                "message": "已切换到登录窗口，请完成平台验证；系统将自动检测并保存登录状态。",
             }
         return _customer_view_login_session(result)
     except AccountIdentityError as exc:
@@ -469,6 +507,112 @@ async def platform_login_browser(platform: str, payload: dict[str, Any] | None =
                 user_id=_route_actor_id(admin),
             )
         raise HTTPException(status_code=500, detail=redact_sensitive(f"{type(exc).__name__}: {exc}"))
+
+
+@router.post("/platform-status/{platform}/login-browser/reconcile")
+async def reconcile_platform_login_browser(
+    platform: str,
+    payload: dict[str, Any] | None = None,
+    admin: dict[str, Any] = AdminUser,
+):
+    if not _local_login_window_allowed():
+        raise HTTPException(status_code=403, detail="生产模式已关闭本地登录窗口，请使用网页登录二维码完成登录")
+    account_id = _optional_positive_id((payload or {}).get("account_id"), "account_id")
+    if not account_id:
+        raise HTTPException(status_code=400, detail="请选择需要确认登录的账号")
+
+    async with _visible_login_reconcile_lock(platform, account_id):
+        account = get_social_account(account_id, masked=False)
+        if not account:
+            raise HTTPException(status_code=404, detail="账号不存在")
+        if str(account.get("platform") or "") != platform:
+            raise HTTPException(status_code=400, detail="账号平台与登录窗口不一致")
+
+        window = login_window_status(platform)
+        if not window.get("opened_at") or not _login_window_matches_account(window, account):
+            raise HTTPException(status_code=409, detail="未找到当前账号对应的登录窗口，请重新打开")
+
+        terminal = _visible_login_terminal_result(window, account_id, account)
+        if terminal:
+            return terminal
+
+        if window.get("is_open"):
+            try:
+                probe = await probe_login_browser_session(
+                    platform,
+                    int(window.get("debug_port") or 0),
+                    expected_pid=int(window.get("pid") or 0),
+                    close_when_logged_in=True,
+                )
+            except Exception:
+                if not _login_window_startup_grace(window):
+                    return _fail_visible_login_reconciliation(
+                        platform,
+                        window,
+                        account_id,
+                        admin,
+                        "无法连接当前登录窗口，请关闭窗口后重新打开。",
+                        login_window_open=True,
+                    )
+                return {
+                    "status": "waiting",
+                    "login_window_open": True,
+                    "message": "登录窗口正在启动，请稍候。",
+                }
+            if probe.get("process_matched") is False:
+                return _fail_visible_login_reconciliation(
+                    platform,
+                    window,
+                    account_id,
+                    admin,
+                    "登录窗口连接已变化，请关闭窗口后重新打开。",
+                    login_window_open=True,
+                )
+            if not probe.get("logged_in"):
+                return {
+                    "status": "waiting",
+                    "login_window_open": True,
+                    "message": "登录窗口正在运行，请继续完成平台验证。",
+                }
+            if not probe.get("close_requested"):
+                return {
+                    "status": "waiting",
+                    "login_window_open": True,
+                    "message": "已识别登录成功，正在保存账号登录状态。",
+                }
+            await _wait_for_login_window_close(platform, int(window.get("pid") or 0))
+            if login_window_status(platform).get("is_open"):
+                return {
+                    "status": "waiting",
+                    "login_window_open": True,
+                    "message": "已识别登录成功，正在保存账号登录状态。",
+                }
+
+        refreshed = get_social_account(account_id, masked=False) or account
+        check = await check_social_account_login(
+            account_id,
+            allow_draft=bool(refreshed.get("is_draft")),
+            identity_prepared=str(refreshed.get("identity_state") or "") == IDENTITY_STATE_LOGIN_IN_PROGRESS,
+            actor_id=_route_actor_id(admin),
+        )
+        safe_account = _customer_view_social_account(check.get("account") or get_social_account(account_id) or {})
+        if check.get("ok"):
+            result = {
+                "status": "success",
+                "login_window_open": False,
+                "message": "登录成功，当前账号登录状态已自动保存。",
+                "account": safe_account,
+            }
+            _persist_visible_login_reconciliation(platform, window, account_id, result)
+            return result
+        result = {
+            "status": "failed",
+            "login_window_open": False,
+            "message": customer_safe_text(str(check.get("message") or "登录状态未通过检测，请重新打开登录窗口。")),
+            "account": safe_account,
+        }
+        _persist_visible_login_reconciliation(platform, window, account_id, result)
+        return result
 
 
 @router.get("/platform-login-configs")
@@ -2231,6 +2375,111 @@ async def _login_browser_command_for_payload(
 def _playwright_chromium_executable_path() -> str:
     with sync_playwright() as playwright:
         return str(playwright.chromium.executable_path)
+
+
+def _login_window_matches_account(window: dict[str, Any], account: dict[str, Any]) -> bool:
+    window_key = str(window.get("profile_key") or "").strip()
+    account_key = str(account.get("profile_key") or "").strip()
+    if window_key and account_key:
+        return window_key == account_key
+    try:
+        expected_value = str(account_profile_environment(account).get("runtime_path") or "").strip()
+        actual_value = str(window.get("profile_path") or "").strip()
+        if not expected_value or not actual_value:
+            return False
+        expected_path = Path(expected_value).resolve()
+        actual_path = Path(actual_value).resolve()
+    except (OSError, RuntimeError, ValueError):
+        return False
+    return bool(str(expected_path) and str(actual_path) and expected_path == actual_path)
+
+
+def _visible_login_terminal_result(
+    window: dict[str, Any],
+    account_id: int,
+    account: dict[str, Any],
+) -> dict[str, Any] | None:
+    try:
+        reconciled_account_id = int(window.get("reconcile_account_id") or 0)
+    except (TypeError, ValueError):
+        return None
+    status = str(window.get("reconcile_status") or "")
+    if reconciled_account_id != int(account_id) or status not in {"success", "failed"}:
+        return None
+    default_message = (
+        "登录成功，当前账号登录状态已自动保存。"
+        if status == "success"
+        else "登录状态未通过检测，请重新打开登录窗口。"
+    )
+    return {
+        "status": status,
+        "login_window_open": bool(window.get("is_open")),
+        "message": customer_safe_text(str(window.get("reconcile_message") or default_message)),
+        "account": _customer_view_social_account(get_social_account(account_id) or account),
+    }
+
+
+def _login_window_startup_grace(window: dict[str, Any], seconds: float = 12.0) -> bool:
+    try:
+        opened_at = datetime.fromisoformat(str(window.get("opened_at") or "").replace("Z", "+00:00"))
+    except ValueError:
+        return False
+    if opened_at.tzinfo is None:
+        opened_at = opened_at.replace(tzinfo=timezone.utc)
+    age = (datetime.now(timezone.utc) - opened_at.astimezone(timezone.utc)).total_seconds()
+    return -60.0 <= age <= max(1.0, float(seconds))
+
+
+def _persist_visible_login_reconciliation(
+    platform: str,
+    window: dict[str, Any],
+    account_id: int,
+    result: dict[str, Any],
+) -> None:
+    try:
+        record_login_window_reconciliation(
+            platform,
+            str(window.get("opened_at") or ""),
+            account_id,
+            str(result.get("status") or ""),
+            customer_safe_text(str(result.get("message") or "")),
+        )
+    except (OSError, TypeError, ValueError):
+        return
+
+
+def _fail_visible_login_reconciliation(
+    platform: str,
+    window: dict[str, Any],
+    account_id: int,
+    admin: dict[str, Any],
+    message: str,
+    *,
+    login_window_open: bool,
+) -> dict[str, Any]:
+    account = _recover_prepared_account_identity(
+        account_id,
+        trigger_source="visible_browser_login",
+        failure_reason="visible_browser_ownership_failed",
+        user_id=_route_actor_id(admin),
+    ) or get_social_account(account_id)
+    result = {
+        "status": "failed",
+        "login_window_open": bool(login_window_open),
+        "message": customer_safe_text(message),
+        "account": _customer_view_social_account(account or {}),
+    }
+    _persist_visible_login_reconciliation(platform, window, account_id, result)
+    return result
+
+
+async def _wait_for_login_window_close(platform: str, pid: int, timeout_seconds: float = 6.0) -> None:
+    deadline = asyncio.get_running_loop().time() + max(0.5, float(timeout_seconds))
+    while asyncio.get_running_loop().time() < deadline:
+        status = login_window_status(platform)
+        if not status.get("is_open") or int(status.get("pid") or 0) != int(pid):
+            return
+        await asyncio.sleep(0.2)
 
 
 def _open_login_window_for_command(platform: str, command: dict[str, Any]) -> dict[str, Any]:

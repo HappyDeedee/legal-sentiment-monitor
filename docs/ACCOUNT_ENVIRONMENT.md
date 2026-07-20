@@ -474,6 +474,26 @@ Provider rules:
   Profile paths are never deployment settings, logs, API fields, or persisted
   runtime snapshot values.
 
+Local visible-login reconciliation rules:
+
+- one platform may own only one visible login window at a time because its
+  loopback debug port and runtime window record are platform-scoped;
+- the record binds platform, browser PID, loopback debug port, `profile_key`,
+  and window creation time. Reconciliation must match the account Profile and
+  prove through CDP process information that the endpoint belongs to the
+  recorded browser PID before inspecting login state or issuing
+  `Browser.close`;
+- only a page on the target platform domain may be checked. An unrelated page
+  is a waiting state, not a login-state fallback;
+- startup connection errors have a short bounded grace period. Ownership
+  mismatch or an unreachable endpoint after that period fails closed, restores
+  the prepared account lifecycle state, and gives an actionable retry message;
+- success or failure is stored against the exact window creation time and
+  account. Later polls return that terminal result without repeating the
+  account Profile check;
+- these rules apply only to the local/development visible-window fallback and
+  do not change the server-side QR production path.
+
 Phase 5.1D does not implement CR-112 Cookie-to-Profile promotion,
 `profile_runtime_version`, internal `profile_only` login mode, exit code 42,
 or raw-Cookie argument retirement. It also does not implement CR-070 or a new

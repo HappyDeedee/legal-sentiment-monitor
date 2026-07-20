@@ -2,6 +2,94 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-20 - CR-120/CR-121 Login And Collection Verification
+
+Environment: current `main` working tree with a restarted local service and a
+designated account's existing managed Profile.
+
+Result:
+
+- Account-specific local visible login now checks only the recorded loopback
+  browser session, waits while platform verification is incomplete, and runs
+  the normal Profile check after detected login or operator close.
+- Crawler `Accept-Language` evidence now belongs to the prepared managed page.
+  Background/restored CDP pages cannot overwrite it, and a real prepared-page
+  mismatch still fails closed.
+- The designated account remains active without a re-login requirement and
+  uses the same persistent Profile and project-selected Playwright Chromium.
+- A controlled real collection finished successfully and stored content;
+  failed platforms and mismatch evidence are empty.
+
+Verification:
+
+- RED reproduced both missing automatic frontend reconciliation and
+  background-page request-evidence contamination.
+- Focused CR-120 coverage passes (`14 passed`), including loopback-port and PID
+  ownership, one-window-per-platform serialization, waiting state, owned close,
+  final check after manual close, terminal idempotence, mismatched Profile
+  rejection, production disablement, and serial frontend scheduling.
+- Retry-policy tests explicitly isolate account selection and pass without
+  changing production Runner behavior or identity validation.
+- The complete monitoring regression passes (`590 passed`) with the same three
+  existing warnings. Python compile, inline/external JavaScript parse,
+  documentation consistency/regression, and `git diff --check` pass.
+- Live monitor acceptance opened the same account Profile, verified the CDP
+  browser PID, automatically
+  detected its authenticated state, closed the owned browser, completed the
+  Profile check, and showed automatic-save success without manual refresh.
+- A repeated terminal reconciliation returned the persisted success result
+  without changing the account's last-check timestamp.
+
+Proof boundary:
+
+- The live account was already authenticated, so the actual platform did not
+  issue a second-verification challenge. The waiting and operator-close paths
+  are covered deterministically by automated tests.
+- Verification records only browser source/version, account state, Profile
+  authority, safe language evidence, and pass/fail outcomes. Account IDs, run
+  IDs, exact Profile keys, raw Cookie values, local Profile paths, platform
+  secrets, collection counts, and collected content are excluded.
+
+## 2026-07-20 - CR-119 Platform Account Recent Error Compactness
+
+Environment: current `main` working tree with the running local service at
+`http://127.0.0.1:8080/monitor`.
+
+Result:
+
+- The labelled Platform Accounts recent-error card and basic-form warning are
+  constrained to one line with ellipses while complete customer-safe display
+  text remains in their titles and the advanced `异常记录` field.
+- The empty state remains `最近暂无异常。` and removes the prior account's title.
+- No backend API, schema, runtime account data, Profile, Cookie, proxy, browser,
+  login, crawler, permission, list, save, or advanced-field behavior changed.
+
+Verification:
+
+- RED: the new regression test failed on the old renderer because title and
+  one-line overflow markers were absent.
+- Focused/adjacent frontend selection: `3 passed, 572 deselected`.
+- Isolated complete monitoring regression: `575 passed` with the same three
+  existing deprecation warnings.
+- Inline monitor JavaScript parse, external monitor JavaScript check,
+  documentation consistency, and `git diff --check` pass.
+- Live desktop and `390x844` checks show `white-space: nowrap`, hidden overflow,
+  ellipses, stable display heights, complete titles and advanced value, zero
+  document/drawer horizontal overflow, visible fixed-footer account actions,
+  and no browser console warning/error.
+- At `390x844`, the labelled card has a `129` pixel client width and `264` pixel
+  scroll width, while the basic warning has a `269` pixel client width and
+  `332` pixel scroll width. Both visible one-line ellipsis paths are exercised.
+- A DOM-only `176`-character fixture proves the labelled card keeps an
+  `80`-character visible preview but a complete `176`-character title; the
+  basic warning keeps all `176` characters in both text and title. The page was
+  reloaded afterward, so the fixture did not persist.
+
+Proof boundary:
+
+- This is a display-only regression fix. The complete stored error remains
+  unchanged, and no real account record was edited during browser acceptance.
+
 ## 2026-07-20 - PR #10 Post-Merge Verification
 
 Environment: merged `main@cd640f0` after PR #10.

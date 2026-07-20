@@ -1649,6 +1649,45 @@ Implementation status:
 - [x] Verify the new launcher with targeted tests, docs consistency, and
       `git diff --check`.
 
+## CR-121 - Crawler Account Identity Snapshot Header Binding
+
+Implementation status (2026-07-20): verified. This is a crawler regression
+follow-up and does not reopen completed Phase 5.1 or CR-118.
+
+- [x] Register the observed designated-account mismatch and strict-validation
+      boundary.
+- [x] Add RED coverage for prepared-page versus background-page request
+      evidence.
+- [x] Scope request evidence to the prepared managed page.
+- [x] Re-run controlled collection and prove at least one stored content row.
+- [x] Run focused/full/docs/compile/diff gates and independent review.
+
+## CR-120 - Local Visible Login Automatic Reconciliation
+
+Implementation status (2026-07-20): verified. This is a local fallback
+follow-up and does not reopen completed Phase 5.1 or CR-118.
+
+- [x] Register the account-specific Profile authority and local-only boundary.
+- [x] Add RED coverage for the missing automatic reconciliation path.
+- [x] Add loopback CDP login-state probing and owned-window cleanup.
+- [x] Automatically run the normal account Profile check after detection or
+      operator close.
+- [x] Add serial frontend polling, stale-attempt guards, and safe UI states.
+- [x] Verify an already-authenticated local window through the live service.
+- [x] Run focused/full/docs/compile/diff gates and independent review.
+
+## CR-119 - Platform Account Recent Error Single-Line Truncation
+
+Implementation status (2026-07-20): verified as a bounded Platform Accounts
+frontend regression fix. It does not reopen completed Phase 3 or Phase 21.
+
+- [x] Register the regression, display boundary, and verification contract.
+- [x] Add RED coverage for one-line overflow and complete-text title handling.
+- [x] Truncate both account-detail recent-error displays to one visible line.
+- [x] Preserve the complete advanced error field and all account workflows.
+- [x] Run focused/full/static/docs/browser gates.
+- [x] Complete independent read-only review and close the CR.
+
 ## CR-118 - QR Login Success Monotonicity And Profile Restart Verification
 
 Implementation status (2026-07-20): merged through PR #10 on `main@cd640f0`

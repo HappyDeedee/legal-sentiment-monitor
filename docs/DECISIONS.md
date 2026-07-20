@@ -687,3 +687,24 @@ short `Superseded by` note rather than deleting history.
 - Confirmed for CR-116: v1 account identity rows are not rewritten in place.
   They fail closed as `account_identity_requires_relogin` and require the
   existing explicit audited reset/re-login flow before reuse.
+
+## 2026-07-20 - CR-120/CR-121 Local Login Reconciliation And Crawl Evidence
+
+- Confirmed for CR-120: local visible login is account-bound and uses the
+  already selected browser, `profile_key`, persistent Profile, proxy policy,
+  and platform. One platform owns at most one visible login window. The monitor
+  may inspect only the recorded loopback CDP port after CDP proves the browser
+  PID matches the recorded process, close only that browser, wait for Profile
+  release, and invoke the existing account-level Profile check. Terminal
+  reconciliation is bound to the window creation time and account so repeated
+  polls do not repeat validation. The Profile remains the login and crawl
+  authority; this follow-up does not promote raw Cookie text or change the
+  CR-112 connector boundary.
+- Confirmed for CR-120: completion detection is local/development-only. The
+  server QR flow remains the production path, and CAPTCHA, slider, SMS
+  receiving, and verification bypass remain outside the implementation.
+- Confirmed for CR-121: managed `Accept-Language` evidence is scoped to the
+  exact page prepared for the current browser attempt. Requests from restored
+  or background CDP pages cannot overwrite that evidence, while a mismatch on
+  the prepared page still fails closed as
+  `account_identity_snapshot_mismatch`.

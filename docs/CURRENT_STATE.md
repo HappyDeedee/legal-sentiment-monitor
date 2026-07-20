@@ -1,12 +1,27 @@
 # Current State
 
-Last updated: 2026-07-20
+Last updated: 2026-07-21
 
 ## Current Baseline
 
-- Current merged baseline: clean `main@a66b3f8`, matching `origin/main` after
-  Phase 5.1 Task 3 local/deployment preflight PR #9 recorded its Docker/Linux
-  operator blocker.
+- CR-119 is verified as a bounded frontend regression fix. The Platform
+  Accounts labelled recent-error card and basic-form warning now use one-line
+  ellipses and complete-text titles while preserving the advanced error field
+  and all account data/runtime behavior. Focused `3`, isolated full `575`,
+  browser, documentation, and whitespace gates pass.
+- CR-120 and CR-121 are verified follow-up fixes. Account-bound local visible
+  login now detects completion and automatically validates the same Profile,
+  verifies CDP ownership, and serializes one platform window, while crawler
+  request evidence is bound to the prepared managed page. Controlled live
+  login and collection checks pass with at least one stored row and no identity
+  mismatch. Focused CR-120 `14`, complete monitoring `590`, browser, compile,
+  JavaScript, documentation, and whitespace gates pass. Runtime identifiers
+  remain outside tracked documentation. Neither CR reopens completed Phase 5.1
+  or changes the server-first production boundary.
+- CR-119, CR-120, and CR-121 form the verified integration set based on
+  `main@3db8a81`. The base commit is recorded without predicting the eventual
+  merge commit; runtime account data and Profiles remain outside version
+  control.
 - Phase 5.1A code/tests are complete on
   `codex/phase-5.1a-account-identity-schema`: all 24 additive fields, three
   workspace-scoped indexes, idempotent legacy migration, and boolean read

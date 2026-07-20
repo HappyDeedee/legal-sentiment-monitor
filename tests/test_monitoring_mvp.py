@@ -95,7 +95,11 @@ from api.monitoring.login_browser import build_login_browser_command, open_login
 import api.monitoring.account_check as account_check_module
 import api.monitoring.login_qrcode as login_qrcode_module
 import api.monitoring.mediacrawler_login as mediacrawler_login_module
-from api.monitoring.login_state import login_window_status, record_login_window
+from api.monitoring.login_state import (
+    login_window_status,
+    record_login_window,
+    record_login_window_reconciliation,
+)
 from api.monitoring.mailer import REAL_EMAIL_BLOCKED_MESSAGE, build_report_email, render_report_email_preview, send_report, send_test_email
 from api.monitoring.normalizer import collect_platform_outputs, in_time_window, normalize_content, parse_jsonl_file, resolve_window
 from api.monitoring.platform_status import list_platform_status
@@ -3783,6 +3787,67 @@ def test_cr117_valid_browser_version_change_is_observed_without_environment_mism
     assert result.snapshot["mismatch_evidence"] == []
 
 
+def test_cr121_unprepared_cdp_page_cannot_overwrite_accept_language_evidence(tmp_path, monkeypatch):
+    from tools.browser_environment import bind_managed_context, prepare_managed_page, verify_managed_page
+
+    plan = _phase_5_1d_plan(tmp_path, monkeypatch, action="crawl", launch_mode="cdp_launch")
+
+    class FakeCDPSession:
+        async def send(self, method, params):
+            return None
+
+    class FakeBrowser:
+        version = plan.browser_version
+
+    class FakeContext:
+        browser = FakeBrowser()
+
+        def on(self, event, callback):
+            assert event == "request"
+            self.request_handler = callback
+
+        async def new_cdp_session(self, page):
+            return FakeCDPSession()
+
+    class FakePage:
+        def __init__(self):
+            self.init_scripts = []
+
+        async def add_init_script(self, script):
+            self.init_scripts.append(script)
+
+        async def evaluate(self, script):
+            return _phase_5_1d_effective_probe(plan)
+
+    class FakeFrame:
+        def __init__(self, page):
+            self.page = page
+
+    class FakeRequest:
+        def __init__(self, page, accept_language):
+            self.frame = FakeFrame(page)
+            self.headers = {"accept-language": accept_language}
+
+    context = FakeContext()
+    prepared_page = FakePage()
+    background_page = FakePage()
+    bind_managed_context(context, plan)
+    asyncio.run(prepare_managed_page(context, prepared_page))
+
+    context.request_handler(FakeRequest(prepared_page, plan.accept_language))
+    context.request_handler(FakeRequest(background_page, "en-US,en"))
+    result = asyncio.run(verify_managed_page(context, prepared_page))
+
+    assert result is not None and result.ok is True
+    assert result.snapshot["effective"]["accept_language"] == plan.accept_language
+    assert result.snapshot["mismatch_evidence"] == []
+    assert prepared_page.init_scripts == [
+        "(() => { const languages = Object.freeze([\"zh-CN\"]); Object.defineProperty(Navigator.prototype, "
+        "'languages', {get: () => languages, configurable: true}); })();"
+    ]
+    assert background_page.init_scripts == []
+
+
 def test_phase_5_1d_profile_cookie_and_visible_login_share_exact_plan(tmp_path, monkeypatch):
     from api.monitoring import account_environment
 
@@ -6066,6 +6131,7 @@ def test_phase_2_run_platform_uses_settings_for_retry_and_deadline(tmp_path, mon
             conn.execute("DELETE FROM system_settings")
         save_runtime_settings({"crawler_retry_count": 1, "crawler_retry_delay_seconds": 0})
         monkeypatch.setattr(runner_module, "list_platform_status", lambda: [{"platform": "dy", "login_window_open": False}])
+        monkeypatch.setattr(runner_module, "_resolve_platform_account_binding", lambda platform, job: None)
         monkeypatch.setattr(runner_module, "_run_crawler_attempt", fake_run_attempt)
 
         result = asyncio.run(runner_module.run_platform(job, run_id, "dy", tmp_path))
@@ -6424,6 +6490,30 @@ def test_login_window_status_removes_stale_pid_record(tmp_path, monkeypatch):
     assert (tmp_path / "login_windows" / "dy.json").exists()
 
 
+def test_cr120_login_window_reconciliation_is_idempotent_per_opened_window(tmp_path, monkeypatch):
+    monkeypatch.setattr("api.monitoring.login_state.LOGIN_STATE_DIR", tmp_path / "login_windows")
+    monkeypatch.setattr("api.monitoring.login_state._pid_exists", lambda pid: False)
+    opened = record_login_window("dy", 12345, 9323, str(tmp_path / "profile"), "1/dy/test")
+
+    record_login_window_reconciliation(
+        "dy",
+        opened["opened_at"],
+        77,
+        "success",
+        "登录成功，当前账号登录状态已自动保存。",
+    )
+
+    terminal = login_window_status("dy")
+    assert terminal["reconcile_account_id"] == 77
+    assert terminal["reconcile_status"] == "success"
+    assert terminal["reconciled_at"]
+
+    record_login_window("dy", 12346, 9323, str(tmp_path / "profile"), "1/dy/test")
+    refreshed = login_window_status("dy")
+    assert refreshed["reconcile_account_id"] is None
+    assert refreshed["reconcile_status"] is None
+
+
 def test_platform_status_clears_login_error_after_closed_login_window_profile_update(tmp_path, monkeypatch):
     login_state_dir = tmp_path / "login_windows"
     monkeypatch.setattr("api.monitoring.login_state.LOGIN_STATE_DIR", login_state_dir)
@@ -6604,6 +6694,545 @@ def test_login_browser_route_can_use_social_account_profile(tmp_path, monkeypatc
     finally:
         for table, snapshot in snapshots.items():
             _restore_table(table, snapshot)
+
+
+def test_cr120_login_browser_probe_uses_recorded_loopback_port_and_closes_on_success(monkeypatch):
+    from api.monitoring.login_browser import probe_login_browser_session
+
+    seen = {}
+
+    class FakePage:
+        url = "https://www.douyin.com/user/self"
+
+        def is_closed(self):
+            return False
+
+        def set_default_timeout(self, timeout):
+            seen["timeout"] = timeout
+
+    class FakeContext:
+        def __init__(self):
+            self.pages = []
+
+    context = FakeContext()
+    page = FakePage()
+    page.context = context
+    context.pages = [page]
+
+    class FakeSession:
+        async def send(self, method):
+            seen.setdefault("methods", []).append(method)
+            if method == "SystemInfo.getProcessInfo":
+                return {"processInfo": [{"type": "browser", "id": 12345}]}
+            return {}
+
+        async def detach(self):
+            seen["detached"] = True
+
+    class FakeBrowser:
+        contexts = [context]
+
+        async def new_browser_cdp_session(self):
+            return FakeSession()
+
+        def is_connected(self):
+            return True
+
+    class FakeChromium:
+        async def connect_over_cdp(self, url, timeout):
+            seen["url"] = url
+            seen["connect_timeout"] = timeout
+            return FakeBrowser()
+
+    class FakePlaywright:
+        chromium = FakeChromium()
+
+        async def stop(self):
+            seen["stopped"] = True
+
+    class FakeFactory:
+        async def start(self):
+            return FakePlaywright()
+
+    async def fake_is_logged_in(platform, browser_context, context_page, login_baseline=""):
+        assert platform == "dy"
+        assert browser_context is context
+        assert context_page is page
+        return True
+
+    monkeypatch.setattr("api.monitoring.login_browser.async_playwright", lambda: FakeFactory())
+    monkeypatch.setattr(login_qrcode_module, "_is_logged_in", fake_is_logged_in)
+
+    result = asyncio.run(
+        probe_login_browser_session(
+            "dy", 19323, expected_pid=12345, close_when_logged_in=True, timeout_ms=2500
+        )
+    )
+
+    assert result == {
+        "connected": True,
+        "process_matched": True,
+        "logged_in": True,
+        "close_requested": True,
+    }
+    assert seen["url"] == "http://127.0.0.1:19323"
+    assert seen["methods"] == ["SystemInfo.getProcessInfo", "Browser.close"]
+    assert seen["detached"] is True
+    assert seen["stopped"] is True
+
+
+def test_cr120_login_browser_probe_rejects_wrong_process(monkeypatch):
+    from api.monitoring.login_browser import probe_login_browser_session
+
+    seen = {"login_checked": False, "methods": []}
+
+    class FakePage:
+        url = "https://www.douyin.com/user/self"
+
+        def is_closed(self):
+            return False
+
+    page = FakePage()
+
+    class FakeContext:
+        pages = [page]
+
+    context = FakeContext()
+    page.context = context
+
+    class FakeSession:
+        async def send(self, method):
+            seen["methods"].append(method)
+            return {"processInfo": [{"type": "browser", "id": 54321}]}
+
+        async def detach(self):
+            seen["detached"] = True
+
+    class FakeBrowser:
+        contexts = [context]
+
+        async def new_browser_cdp_session(self):
+            return FakeSession()
+
+    class FakeChromium:
+        async def connect_over_cdp(self, url, timeout):
+            return FakeBrowser()
+
+    class FakePlaywright:
+        chromium = FakeChromium()
+
+        async def stop(self):
+            seen["stopped"] = True
+
+    class FakeFactory:
+        async def start(self):
+            return FakePlaywright()
+
+    async def unexpected_login_check(*args, **kwargs):
+        seen["login_checked"] = True
+        return True
+
+    monkeypatch.setattr("api.monitoring.login_browser.async_playwright", lambda: FakeFactory())
+    monkeypatch.setattr(login_qrcode_module, "_is_logged_in", unexpected_login_check)
+
+    result = asyncio.run(
+        probe_login_browser_session("dy", 19323, expected_pid=12345, close_when_logged_in=True)
+    )
+
+    assert result == {
+        "connected": True,
+        "process_matched": False,
+        "logged_in": False,
+        "close_requested": False,
+    }
+    assert seen["methods"] == ["SystemInfo.getProcessInfo"]
+    assert seen["login_checked"] is False
+    assert seen["detached"] is True
+    assert seen["stopped"] is True
+
+
+def test_cr120_login_browser_page_does_not_fallback_to_unrelated_domain():
+    from api.monitoring.login_browser import _login_browser_page
+
+    page = SimpleNamespace(url="https://example.com/", is_closed=lambda: False)
+    context = SimpleNamespace(pages=[page])
+
+    assert _login_browser_page([context], "dy") is None
+
+
+def test_cr120_reconcile_route_waits_then_validates_the_same_account(monkeypatch, tmp_path):
+    init_db()
+    snapshot = _snapshot_table("social_accounts")
+    state = {"open": True, "checked": 0}
+    try:
+        account = _login_test_account("dy", tmp_path)
+        database_module.prepare_social_account_identity_login(
+            int(account["id"]), trigger_source="visible_browser_login"
+        )
+        account = get_social_account(int(account["id"]), masked=False)
+        window = {
+            "is_open": True,
+            "pid": 12345,
+            "debug_port": 19323,
+            "opened_at": "2026-07-20T12:00:00+00:00",
+            "profile_key": account["profile_key"],
+            "profile_path": str(resolve_account_profile_path(str(account["profile_key"]))),
+        }
+
+        def fake_window_status(platform):
+            assert platform == "dy"
+            return {**window, "is_open": state["open"]}
+
+        async def fake_probe(platform, debug_port, expected_pid=None, close_when_logged_in=False):
+            assert (platform, debug_port, expected_pid, close_when_logged_in) == (
+                "dy",
+                19323,
+                12345,
+                True,
+            )
+            return {
+                "connected": True,
+                "process_matched": True,
+                "logged_in": True,
+                "close_requested": True,
+            }
+
+        async def fake_wait(platform, pid, timeout_seconds=6.0):
+            assert (platform, pid) == ("dy", 12345)
+            state["open"] = False
+
+        async def fake_check(account_id, **kwargs):
+            state["checked"] += 1
+            assert account_id == account["id"]
+            assert kwargs["identity_prepared"] is True
+            return {"ok": True, "status": "valid", "message": "ok", "account": account}
+
+        monkeypatch.setattr(monitor_router, "_local_login_window_allowed", lambda: True)
+        monkeypatch.setattr(monitor_router, "login_window_status", fake_window_status)
+        monkeypatch.setattr(monitor_router, "probe_login_browser_session", fake_probe)
+        monkeypatch.setattr(monitor_router, "_wait_for_login_window_close", fake_wait)
+        monkeypatch.setattr(monitor_router, "check_social_account_login", fake_check)
+
+        result = asyncio.run(
+            monitor_router.reconcile_platform_login_browser(
+                "dy", {"account_id": account["id"]}, {"id": 1, "role": "administrator"}
+            )
+        )
+
+        assert result["status"] == "success"
+        assert result["login_window_open"] is False
+        assert result["account"]["id"] == account["id"]
+        assert state["checked"] == 1
+    finally:
+        _restore_table("social_accounts", snapshot)
+
+
+def test_cr120_reconcile_route_keeps_manual_verification_waiting(monkeypatch, tmp_path):
+    init_db()
+    snapshot = _snapshot_table("social_accounts")
+    try:
+        account = _login_test_account("dy", tmp_path)
+        window = {
+            "is_open": True,
+            "pid": 12345,
+            "debug_port": 19323,
+            "opened_at": "2026-07-20T12:00:00+00:00",
+            "profile_key": account["profile_key"],
+            "profile_path": str(resolve_account_profile_path(str(account["profile_key"]))),
+        }
+
+        async def fake_probe(platform, debug_port, expected_pid=None, close_when_logged_in=False):
+            assert expected_pid == 12345
+            return {
+                "connected": True,
+                "process_matched": True,
+                "logged_in": False,
+                "close_requested": False,
+            }
+
+        async def unexpected_check(*args, **kwargs):
+            raise AssertionError("account check must wait for visible login completion")
+
+        monkeypatch.setattr(monitor_router, "_local_login_window_allowed", lambda: True)
+        monkeypatch.setattr(monitor_router, "login_window_status", lambda platform: window)
+        monkeypatch.setattr(monitor_router, "probe_login_browser_session", fake_probe)
+        monkeypatch.setattr(monitor_router, "check_social_account_login", unexpected_check)
+
+        result = asyncio.run(
+            monitor_router.reconcile_platform_login_browser(
+                "dy", {"account_id": account["id"]}, {"id": 1, "role": "administrator"}
+            )
+        )
+
+        assert result["status"] == "waiting"
+        assert result["login_window_open"] is True
+        assert "继续完成平台验证" in result["message"]
+    finally:
+        _restore_table("social_accounts", snapshot)
+
+
+def test_cr120_reconcile_route_fails_closed_when_cdp_process_does_not_match(monkeypatch, tmp_path):
+    init_db()
+    snapshot = _snapshot_table("social_accounts")
+    try:
+        account = _login_test_account("dy", tmp_path)
+        database_module.prepare_social_account_identity_login(
+            int(account["id"]), trigger_source="visible_browser_login"
+        )
+        account = get_social_account(int(account["id"]), masked=False)
+        window = {
+            "is_open": True,
+            "pid": 12345,
+            "debug_port": 19323,
+            "opened_at": "2026-07-20T12:00:00+00:00",
+            "profile_key": account["profile_key"],
+            "profile_path": str(resolve_account_profile_path(str(account["profile_key"]))),
+        }
+
+        async def fake_probe(platform, debug_port, **kwargs):
+            return {
+                "connected": True,
+                "process_matched": False,
+                "logged_in": False,
+                "close_requested": False,
+            }
+
+        async def unexpected_check(*args, **kwargs):
+            raise AssertionError("a mismatched CDP process must not validate the account")
+
+        monkeypatch.setattr(monitor_router, "_local_login_window_allowed", lambda: True)
+        monkeypatch.setattr(monitor_router, "login_window_status", lambda platform: window)
+        monkeypatch.setattr(monitor_router, "probe_login_browser_session", fake_probe)
+        monkeypatch.setattr(monitor_router, "check_social_account_login", unexpected_check)
+        monkeypatch.setattr(monitor_router, "record_login_window_reconciliation", lambda *args, **kwargs: None)
+
+        result = asyncio.run(
+            monitor_router.reconcile_platform_login_browser(
+                "dy", {"account_id": account["id"]}, {"id": 1, "role": "administrator"}
+            )
+        )
+
+        assert result["status"] == "failed"
+        assert result["login_window_open"] is True
+        assert "重新打开" in result["message"]
+        assert get_social_account(int(account["id"]))["identity_state"] != "login_in_progress"
+    finally:
+        _restore_table("social_accounts", snapshot)
+
+
+def test_cr120_reconcile_route_reports_unreachable_window_after_startup_grace(monkeypatch, tmp_path):
+    init_db()
+    snapshot = _snapshot_table("social_accounts")
+    try:
+        account = _login_test_account("dy", tmp_path)
+        database_module.prepare_social_account_identity_login(
+            int(account["id"]), trigger_source="visible_browser_login"
+        )
+        account = get_social_account(int(account["id"]), masked=False)
+        window = {
+            "is_open": True,
+            "pid": 12345,
+            "debug_port": 19323,
+            "opened_at": "2026-07-20T12:00:00+00:00",
+            "profile_key": account["profile_key"],
+            "profile_path": str(resolve_account_profile_path(str(account["profile_key"]))),
+        }
+
+        async def disconnected_probe(*args, **kwargs):
+            raise OSError("fixture CDP endpoint unavailable")
+
+        async def unexpected_check(*args, **kwargs):
+            raise AssertionError("an unreachable browser must not validate the account")
+
+        monkeypatch.setattr(monitor_router, "_local_login_window_allowed", lambda: True)
+        monkeypatch.setattr(monitor_router, "login_window_status", lambda platform: window)
+        monkeypatch.setattr(monitor_router, "probe_login_browser_session", disconnected_probe)
+        monkeypatch.setattr(monitor_router, "check_social_account_login", unexpected_check)
+        monkeypatch.setattr(monitor_router, "record_login_window_reconciliation", lambda *args, **kwargs: None)
+
+        result = asyncio.run(
+            monitor_router.reconcile_platform_login_browser(
+                "dy", {"account_id": account["id"]}, {"id": 1, "role": "administrator"}
+            )
+        )
+
+        assert result["status"] == "failed"
+        assert "无法连接" in result["message"]
+        assert get_social_account(int(account["id"]))["identity_state"] != "login_in_progress"
+    finally:
+        _restore_table("social_accounts", snapshot)
+
+
+def test_cr120_reconcile_route_waits_for_cdp_during_startup_grace(monkeypatch, tmp_path):
+    init_db()
+    snapshot = _snapshot_table("social_accounts")
+    seen = {"terminal_written": False}
+    try:
+        account = _login_test_account("dy", tmp_path)
+        database_module.prepare_social_account_identity_login(
+            int(account["id"]), trigger_source="visible_browser_login"
+        )
+        account = get_social_account(int(account["id"]), masked=False)
+        window = {
+            "is_open": True,
+            "pid": 12345,
+            "debug_port": 19323,
+            "opened_at": datetime.now(timezone.utc).isoformat(),
+            "profile_key": account["profile_key"],
+            "profile_path": str(resolve_account_profile_path(str(account["profile_key"]))),
+        }
+
+        async def starting_probe(*args, **kwargs):
+            raise OSError("fixture CDP endpoint still starting")
+
+        async def unexpected_check(*args, **kwargs):
+            raise AssertionError("startup grace must not validate the account yet")
+
+        def unexpected_terminal_write(*args, **kwargs):
+            seen["terminal_written"] = True
+
+        monkeypatch.setattr(monitor_router, "_local_login_window_allowed", lambda: True)
+        monkeypatch.setattr(monitor_router, "login_window_status", lambda platform: window)
+        monkeypatch.setattr(monitor_router, "probe_login_browser_session", starting_probe)
+        monkeypatch.setattr(monitor_router, "check_social_account_login", unexpected_check)
+        monkeypatch.setattr(monitor_router, "record_login_window_reconciliation", unexpected_terminal_write)
+
+        result = asyncio.run(
+            monitor_router.reconcile_platform_login_browser(
+                "dy", {"account_id": account["id"]}, {"id": 1, "role": "administrator"}
+            )
+        )
+
+        assert result["status"] == "waiting"
+        assert result["login_window_open"] is True
+        assert "正在启动" in result["message"]
+        assert seen["terminal_written"] is False
+        assert get_social_account(int(account["id"]))["identity_state"] == "login_in_progress"
+    finally:
+        _restore_table("social_accounts", snapshot)
+
+
+def test_cr120_reconcile_route_reuses_terminal_window_result(monkeypatch, tmp_path):
+    init_db()
+    snapshot = _snapshot_table("social_accounts")
+    try:
+        account = _login_test_account("dy", tmp_path)
+        window = {
+            "is_open": False,
+            "pid": None,
+            "debug_port": 19323,
+            "opened_at": "2026-07-20T12:00:00+00:00",
+            "closed_at": "2026-07-20T12:01:00+00:00",
+            "profile_key": account["profile_key"],
+            "profile_path": str(resolve_account_profile_path(str(account["profile_key"]))),
+            "reconcile_account_id": account["id"],
+            "reconcile_status": "success",
+            "reconcile_message": "登录成功，当前账号登录状态已自动保存。",
+        }
+
+        async def unexpected_check(*args, **kwargs):
+            raise AssertionError("a terminal window result must not repeat the Profile check")
+
+        monkeypatch.setattr(monitor_router, "_local_login_window_allowed", lambda: True)
+        monkeypatch.setattr(monitor_router, "login_window_status", lambda platform: window)
+        monkeypatch.setattr(monitor_router, "check_social_account_login", unexpected_check)
+
+        result = asyncio.run(
+            monitor_router.reconcile_platform_login_browser(
+                "dy", {"account_id": account["id"]}, {"id": 1, "role": "administrator"}
+            )
+        )
+
+        assert result["status"] == "success"
+        assert result["login_window_open"] is False
+        assert result["account"]["id"] == account["id"]
+    finally:
+        _restore_table("social_accounts", snapshot)
+
+
+def test_cr120_reconcile_route_checks_once_after_operator_closes_window(monkeypatch, tmp_path):
+    init_db()
+    snapshot = _snapshot_table("social_accounts")
+    seen = {"checked": 0}
+    try:
+        account = _login_test_account("dy", tmp_path)
+        database_module.prepare_social_account_identity_login(
+            int(account["id"]), trigger_source="visible_browser_login"
+        )
+        account = get_social_account(int(account["id"]), masked=False)
+        window = {
+            "is_open": False,
+            "pid": None,
+            "debug_port": 19323,
+            "opened_at": "2026-07-20T12:00:00+00:00",
+            "closed_at": "2026-07-20T12:01:00+00:00",
+            "profile_key": account["profile_key"],
+            "profile_path": str(resolve_account_profile_path(str(account["profile_key"]))),
+        }
+
+        async def unexpected_probe(*args, **kwargs):
+            raise AssertionError("a closed login window must proceed directly to the final Profile check")
+
+        async def fake_check(account_id, **kwargs):
+            seen["checked"] += 1
+            assert account_id == account["id"]
+            assert kwargs["identity_prepared"] is True
+            return {"ok": True, "status": "valid", "message": "ok", "account": account}
+
+        monkeypatch.setattr(monitor_router, "_local_login_window_allowed", lambda: True)
+        monkeypatch.setattr(monitor_router, "login_window_status", lambda platform: window)
+        monkeypatch.setattr(monitor_router, "probe_login_browser_session", unexpected_probe)
+        monkeypatch.setattr(monitor_router, "check_social_account_login", fake_check)
+
+        result = asyncio.run(
+            monitor_router.reconcile_platform_login_browser(
+                "dy", {"account_id": account["id"]}, {"id": 1, "role": "administrator"}
+            )
+        )
+
+        assert result["status"] == "success"
+        assert result["login_window_open"] is False
+        assert seen["checked"] == 1
+    finally:
+        _restore_table("social_accounts", snapshot)
+
+
+def test_cr120_reconcile_route_rejects_mismatched_profile_window(monkeypatch, tmp_path):
+    init_db()
+    snapshot = _snapshot_table("social_accounts")
+    try:
+        account = _login_test_account("dy", tmp_path)
+        window = {
+            "is_open": True,
+            "pid": 12345,
+            "debug_port": 19323,
+            "opened_at": "2026-07-20T12:00:00+00:00",
+            "profile_key": "1/dy/acc_other",
+            "profile_path": str(tmp_path / "other_profile"),
+        }
+
+        async def unexpected_probe(*args, **kwargs):
+            raise AssertionError("a mismatched Profile window must not be probed")
+
+        async def unexpected_check(*args, **kwargs):
+            raise AssertionError("a mismatched Profile window must not validate the account")
+
+        monkeypatch.setattr(monitor_router, "_local_login_window_allowed", lambda: True)
+        monkeypatch.setattr(monitor_router, "login_window_status", lambda platform: window)
+        monkeypatch.setattr(monitor_router, "probe_login_browser_session", unexpected_probe)
+        monkeypatch.setattr(monitor_router, "check_social_account_login", unexpected_check)
+
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(
+                monitor_router.reconcile_platform_login_browser(
+                    "dy", {"account_id": account["id"]}, {"id": 1, "role": "administrator"}
+                )
+            )
+
+        assert exc_info.value.status_code == 409
+        assert "当前账号对应的登录窗口" in str(exc_info.value.detail)
+    finally:
+        _restore_table("social_accounts", snapshot)
 
 
 def test_login_browser_command_supports_per_platform_port_env(tmp_path, monkeypatch):
@@ -10422,6 +11051,68 @@ def test_phase_6_production_mode_hides_local_login_window(monkeypatch):
         asyncio.run(monitor_router.platform_login_browser("dy", {}))
     assert exc.value.status_code == 403
     assert "网页登录二维码" in exc.value.detail
+    with pytest.raises(HTTPException) as reconcile_exc:
+        asyncio.run(
+            monitor_router.reconcile_platform_login_browser(
+                "dy", {"account_id": 1}, {"id": 1, "role": "administrator"}
+            )
+        )
+    assert reconcile_exc.value.status_code == 403
+
+
+def test_cr120_visible_login_serializes_one_window_per_platform(monkeypatch, tmp_path):
+    init_db()
+    snapshot = _snapshot_table("social_accounts")
+    state = {"window": {"is_open": False}, "opened": []}
+    try:
+        first = _login_test_account("dy", tmp_path)
+        second = _login_test_account("dy", tmp_path)
+
+        async def fake_command(platform, payload, **kwargs):
+            await asyncio.sleep(0.01)
+            account = get_social_account(int(payload["account_id"]), masked=False)
+            return {
+                "platform": platform,
+                "platform_label": "抖音",
+                "account_id": account["id"],
+                "profile_key": account["profile_key"],
+                "profile_path": str(resolve_account_profile_path(str(account["profile_key"]))),
+                "debug_port": 19323,
+                "login_url": "https://www.douyin.com/",
+            }
+
+        def fake_open(command):
+            state["opened"].append(command["account_id"])
+            state["window"] = {
+                "is_open": True,
+                "pid": 12345,
+                "debug_port": command["debug_port"],
+                "opened_at": "2026-07-20T12:00:00+00:00",
+                "profile_key": command["profile_key"],
+                "profile_path": command["profile_path"],
+            }
+            return {**command, "pid": 12345, "message": "ok"}
+
+        monkeypatch.setattr(monitor_router, "_local_login_window_allowed", lambda: True)
+        monkeypatch.setattr(monitor_router, "_login_browser_command_for_payload", fake_command)
+        monkeypatch.setattr(monitor_router, "login_window_status", lambda platform: state["window"])
+        monkeypatch.setattr(monitor_router, "open_login_browser_with_command", fake_open)
+
+        async def open_both():
+            return await asyncio.gather(
+                monitor_router.platform_login_browser("dy", {"account_id": first["id"]}),
+                monitor_router.platform_login_browser("dy", {"account_id": second["id"]}),
+                return_exceptions=True,
+            )
+
+        results = asyncio.run(open_both())
+
+        assert state["opened"] == [first["id"]]
+        assert isinstance(results[1], HTTPException)
+        assert results[1].status_code == 409
+        assert get_social_account(int(second["id"]))["identity_state"] != "login_in_progress"
+    finally:
+        _restore_table("social_accounts", snapshot)
 
 
 def test_cr108_qr_login_is_blocked_when_same_profile_login_window_is_open(monkeypatch, tmp_path):
@@ -17264,6 +17955,84 @@ def test_phase_21e_platform_accounts_visual_pass_preserves_account_workflow():
         assert forbidden not in accounts_section
 
 
+def test_cr119_platform_account_recent_error_summary_is_single_line_and_complete():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    header_start = page.index("function updateAccountDetailHeader(account)")
+    account_header = page[
+        header_start : page.index("function accountIdentitySummary", header_start)
+    ]
+    derived_start = page.index("function updateAccountDerivedFields(account)")
+    derived_fields = page[
+        derived_start : page.index("function updateAccountModalActions", derived_start)
+    ]
+
+    for marker in [
+        "const recentError=account && account.last_error ? cleanCustomerText(account.last_error) : '';",
+        "const recentErrorPreview=recentError ? recentError.slice(0,80) : '暂无异常';",
+        'class="account-summary-recent-error"',
+        'title="${esc(recentError)}"',
+        "${esc(recentErrorPreview)}",
+    ]:
+        assert marker in account_header
+    assert "accountSummaryItem('最近异常'" not in account_header
+    assert "cleanCustomerText(account.last_error).slice" not in account_header
+    assert 'title="${esc(recentErrorPreview)}"' not in account_header
+
+    for marker in [
+        "const errorText=cleanCustomerText(account.last_error);",
+        "errorSummary.textContent=errorText;",
+        "errorSummary.title=errorText;",
+        "errorSummary.removeAttribute('title');",
+    ]:
+        assert marker in derived_fields
+
+    summary_css_start = page.index(".account-error-summary {")
+    summary_css = page[summary_css_start : page.index("}", summary_css_start) + 1]
+    for marker in [
+        "max-width:100%;",
+        "min-width:0;",
+        "overflow:hidden;",
+        "text-overflow:ellipsis;",
+        "white-space:nowrap;",
+    ]:
+        assert marker in summary_css
+
+    header_css_start = page.index(".account-summary-recent-error span {")
+    header_css = page[header_css_start : page.index("}", header_css_start) + 1]
+    for marker in [
+        "max-width:100%;",
+        "min-width:0;",
+        "overflow:hidden;",
+        "text-overflow:ellipsis;",
+        "white-space:nowrap;",
+        "word-break:normal;",
+    ]:
+        assert marker in header_css
+
+    assert "set('social_account_last_error', a.last_error||'');" in page
+    assert "last_error:val('social_account_last_error')" in page
+
+
+def test_cr120_visible_login_frontend_reconciles_serially_without_manual_refresh():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    open_start = page.index("async function openPlatformLoginBrowser")
+    open_flow = page[open_start : page.index("async function startLoginSessionFromForm", open_start)]
+    reconcile_start = page.index("function startVisibleLoginReconciliation")
+    reconcile_flow = page[
+        reconcile_start : page.index("async function startLoginSessionFromForm", reconcile_start)
+    ]
+
+    assert "startVisibleLoginReconciliation(platform, Number(accountId))" in open_flow
+    assert "系统将自动检测并保存" in open_flow
+    assert "回到这里继续确认登录结果" not in open_flow
+    assert "/login-browser/reconcile" in reconcile_flow
+    assert "setTimeout" in reconcile_flow
+    assert "setInterval" not in reconcile_flow
+    assert "visibleLoginReconcileToken" in reconcile_flow
+    assert "loadAccountsPool()" in reconcile_flow
+    assert "loadReadiness()" in reconcile_flow
+
+
 def test_phase_21f_proxy_resources_visual_pass_preserves_proxy_workflow():
     page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
     css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
@@ -22589,6 +23358,7 @@ def test_run_platform_retries_transient_crawler_failure(tmp_path, monkeypatch):
     monkeypatch.setenv("MONITOR_CRAWLER_MAX_RETRIES", "1")
     monkeypatch.setenv("MONITOR_CRAWLER_RETRY_DELAY_SECONDS", "0")
     monkeypatch.setattr(runner_module, "list_platform_status", lambda: [{"platform": "dy", "login_window_open": False}])
+    monkeypatch.setattr(runner_module, "_resolve_platform_account_binding", lambda platform, job: None)
     monkeypatch.setattr(runner_module, "_run_crawler_attempt", fake_run_attempt)
 
     result = asyncio.run(runner_module.run_platform(job, 10001, "dy", tmp_path))
@@ -22700,6 +23470,7 @@ def test_run_platform_does_not_retry_login_required_error(tmp_path, monkeypatch)
     monkeypatch.setenv("MONITOR_CRAWLER_MAX_RETRIES", "3")
     monkeypatch.setenv("MONITOR_CRAWLER_RETRY_DELAY_SECONDS", "0")
     monkeypatch.setattr(runner_module, "list_platform_status", lambda: [{"platform": "dy", "login_window_open": False}])
+    monkeypatch.setattr(runner_module, "_resolve_platform_account_binding", lambda platform, job: None)
     monkeypatch.setattr(runner_module, "_run_crawler_attempt", fake_run_attempt)
 
     with pytest.raises(RuntimeError, match="failed after 1 attempt"):

@@ -217,6 +217,13 @@ Interaction rules:
   proxy/region/template-family controls are editable before login, read-only
   after lock, and unlocked after an explicit `更改环境` action only for the
   `重置并重新登录` workflow.
+- The Platform Accounts labelled recent-error card and basic-form warning stay
+  on one visible line with ellipses and complete-text titles. The advanced
+  error textarea remains the editable full-value surface.
+- Account-bound local visible login shows an in-progress state while the user
+  completes platform verification, then automatically saves the validated
+  Profile result. Closing the account drawer does not cancel reconciliation;
+  generic unbound local login remains status-only.
 - `requires_relogin` and `resetting` disable QR, visible-browser, Cookie-save,
   and single/bulk account-check actions with customer-safe guidance. The reset
   action remains reachable and must state that Profile, Cookie, and platform
