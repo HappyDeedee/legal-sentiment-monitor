@@ -1,8 +1,9 @@
 # Local Browser Auto-Sync Login Packet
 
 > Packet B and C.1-C.3 are verified within their recorded proof boundaries.
-> Packet D remains dependency-gated pending atomic C.3 delivery and designated
-> real-account evidence.
+> Packet D is in progress after C.3 commit `1d62677` and remains externally
+> gated by a completed designated-Douyin login and an approved project-managed
+> Xiaohongshu account.
 
 **Goal:** Add a default-off local browser login flow that automatically
 acquires and verifies Cookie material for the exact account while preserving

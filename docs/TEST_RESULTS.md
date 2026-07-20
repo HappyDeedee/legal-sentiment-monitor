@@ -2,6 +2,43 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-21 - CR-112 Packet D Real Acceptance Attempt
+
+Scope: live same-machine Windows preflight and one bounded designated-Douyin
+browser-sync attempt. No real Cookie or platform content is recorded here.
+
+Result: `External-Gated / Not Verified`. Packet D remains in progress.
+
+- Packet C.1-C.3 were already verified and C.3 was delivered atomically in
+  commit `1d62677` before this attempt.
+- The account inventory resolved exact Douyin account `5809`; the deployment
+  contained no Xiaohongshu account, so the mandatory
+  `DESIGNATED_XHS_ACCOUNT_ID` gate did not pass.
+- Account `5809` passed a real project-managed Profile identity/login check
+  before the attempt.
+- The direct browser-sync path opened its managed visible Chromium. Live
+  process inspection found a managed user-data directory and no Cookie
+  argument.
+- The operator did not complete the platform login within the bounded session
+  window. Login session `6032` ended as `timeout` and promotion `372` ended as
+  `failed`; no Cookie capture, administrator reveal/copy, candidate promotion,
+  or real crawl was claimed.
+- The owned Chromium process exited, no candidate Profile material remained,
+  and the account retained its previous active state and Profile authority.
+  A second real Profile identity/login check passed after the timeout.
+- Kuaishou remains `Deferred` and was not tested.
+- Post-attempt complete monitoring regression passed `642` tests with three
+  pre-existing deprecation warnings. Python compile, documentation consistency,
+  documentation regression, and `git diff --check` also passed.
+
+Resume gate:
+
+- Add and approve one project-managed Xiaohongshu account, then set its exact
+  `DESIGNATED_XHS_ACCOUNT_ID`.
+- Re-run the designated Douyin browser-sync session while the operator
+  completes the visible platform login, then continue the serial Douyin and
+  Xiaohongshu Packet D matrix.
+
 ## 2026-07-21 - CR-112 Packet C.3 Profile-Only Runner
 
 Scope: synthetic automated verification only. Real platform material, real OS

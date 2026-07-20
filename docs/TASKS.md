@@ -1928,8 +1928,10 @@ Acceptance approves the same-machine Windows scope, reuse-first/minimal-
 adaptation evaluation, CR-112-before-CR-070 order, Profile/Cookie authority,
   administrator Cookie reveal, and Douyin/Xiaohongshu Packet D matrix. Packet
   B and C.1-C.3 are verified within their recorded proof boundaries. Packet D
-  remains gated pending atomic C.3 delivery and designated real accounts. Phase 5.1P and Phase
-5.1A-D plus the current merged regression fixes are verified; the separate
+  was opened after C.3 commit `1d62677`, but real acceptance is externally
+  gated by the missing designated Xiaohongshu account and an unfinished
+  operator login in the designated Douyin browser. Phase 5.1P and Phase 5.1A-D
+  plus the current merged regression fixes are verified; the separate
 CR-047 Linux/server-like real acceptance remains operator-gated and is not
 closed by CR-112 local evidence.
 
@@ -2072,10 +2074,21 @@ Accepted decisions and gated execution:
       Python compile, and documentation/whitespace gates.
       Effective child command/environment inspection proves no synthetic Cookie reaches the
       effective argv/environment; real OS process inspection remains Packet D.
-- [ ] Start Packet D only after Packet C tests pass; verify clean-computer
-      bootstrap, multi-account isolation, promotion checkpoint crash/restart,
-      C.1/C.2/C.3 rollback, process inspection, structured Cookie fidelity,
-      server QR non-regression, and bounded operation-artifact cleanup.
+- [x] Start Packet D only after Packet C tests pass and C.3 is delivered
+      atomically in commit `1d62677`.
+- [ ] Complete the Packet D deployment matrix: clean-computer bootstrap,
+      multi-account isolation, promotion checkpoint crash/restart,
+      C.1/C.2/C.3 rollback, structured Cookie fidelity, server QR
+      non-regression, and bounded operation-artifact cleanup.
+- [x] Run the bounded 2026-07-21 Douyin preflight with designated account
+      `5809`: the existing Profile passed login checks before and after the
+      attempt; the managed Chromium process used a managed Profile and no
+      Cookie argument; the operator-login window timed out; the login session
+      and promotion ended safely; the browser process and candidate Profile
+      material were cleaned; and the original account/Profile stayed active.
+- [ ] Satisfy the real-account start gate. The current deployment has the
+      designated Douyin account `5809` but no Xiaohongshu account, so
+      `DESIGNATED_XHS_ACCOUNT_ID` cannot resolve to an approved account.
 - [ ] Packet D: use exact `DESIGNATED_DY_ACCOUNT_ID` and
       `DESIGNATED_XHS_ACCOUNT_ID` values; for each platform acquire the real
       Cookie through the selected direct managed-browser service, validate exact identity, exercise admin
@@ -2083,7 +2096,7 @@ Accepted decisions and gated execution:
       prove `fallback_used=false`, and persist at least one real content item
       through the normal monitor entry. Clear acquisition handles/state,
       restart the service, and re-prove Profile check plus bounded crawl.
-- [ ] Keep Kuaishou `Deferred`; do not count it as Packet D failure or claim it
+- [x] Keep Kuaishou `Deferred`; do not count it as Packet D failure or claim it
       was tested.
 
 ## Phase 14 - Run Center Data Model Preparation

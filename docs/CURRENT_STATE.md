@@ -122,8 +122,9 @@ Last updated: 2026-07-21
   Cookie-acquisition capability as of 2026-07-21. Its roadmap, four goal
   packets, and Packet B result define the selected implementation boundary;
   Packet C.1-C.3 implementations are verified within their recorded proof
-  boundaries. Packet D remains gated pending atomic C.3 delivery and designated
-  real-account acceptance.
+  boundaries, and C.3 is delivered in commit `1d62677`. Packet D is in progress
+  but its real acceptance is externally gated by designated-account and
+  operator-login prerequisites.
   Accepted decisions cover same-machine Windows,
   reuse-first/minimal-adaptation component evaluation, CR-112 before CR-070,
   Profile/Cookie authority, administrator Cookie reveal/copy, mandatory
@@ -162,6 +163,17 @@ Last updated: 2026-07-21
   adjacent `190`, and complete monitoring `642` tests pass; effective child
   command/environment
   inspection proves no synthetic Cookie reaches effective argv/environment.
+- Packet D live preflight used the approved Douyin account `5809`. Its existing
+  project-managed Profile passed identity/login checks before and after the
+  attempt. The direct managed-browser session opened without a Cookie process
+  argument, then timed out because the platform login was not completed in the
+  visible browser. The session and promotion ended in terminal failure states,
+  the owned browser process and candidate Profile material were cleaned, and
+  the active account/Profile remained usable. No real Cookie was captured,
+  revealed, promoted, or used for collection, so no Douyin Packet D content
+  result is claimed. The current database has no Xiaohongshu account, so an
+  exact `DESIGNATED_XHS_ACCOUNT_ID` cannot yet be supplied. Kuaishou remains
+  Deferred.
 - Phase 5.1P is complete as a documentation/read-only compatibility preflight.
   `docs/phase-5.1p-browser-entrypoint-map.md` maps the current QR, visible
   login, Cookie validation, Profile check, HTTP/CLI/scheduler run, runner,

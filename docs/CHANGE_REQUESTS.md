@@ -1934,8 +1934,11 @@ and immediate retained-rollback cleanup after a successful managed run.
 Packet C.3 implements and verifies the startup cutover, exact persisted
 Profile-only parent/child contract, typed re-login handling, seven-platform
 login guard, and managed crawler raw-Cookie argv/environment retirement within
-its automated/local proof boundary. Packet D remains gated pending atomic C.3
-delivery and designated real-account evidence.
+its automated/local proof boundary and is delivered in commit `1d62677`.
+Packet D is in progress but not verified: the designated Douyin preflight
+preserved the existing Profile after an operator-login timeout, while the
+current deployment has no Xiaohongshu account for the mandatory second real
+platform.
 
 Background:
 
@@ -2160,7 +2163,8 @@ Packet B Documentation And Review Acceptance:
 
 - CR-112 is consistently `Accepted / Dependency-Gated (Packet D)`. Packet B
   and C.1-C.3 are verified within their recorded proof boundaries; D remains
-  dependency-gated pending designated real-account acceptance.
+  dependency-gated pending a completed Douyin browser login and an approved
+  project-managed Xiaohongshu account.
 - Phase 5.1P and Phase 5.1A-D plus current merged regression fixes are recorded
   as verified. The separate CR-047 Linux/server-like real acceptance remains
   operator-gated, and CR-112-before-CR-070 sequencing is explicit.

@@ -11,14 +11,34 @@ QR non-regression across supported environments.
 
 ## Start Gates
 
-- [ ] Packet C implementation and fake/integration tests pass.
-- [ ] Distribution artifacts and runtime ownership are fixed and documented.
-- [ ] No real secret, Profile, Cookie, local database, or deployment-only
+- [x] Packet C implementation and fake/integration tests pass.
+- [x] Distribution artifacts and runtime ownership are fixed and documented.
+- [x] No real secret, Profile, Cookie, local database, or deployment-only
       configuration is included in artifacts.
 - [ ] `DESIGNATED_DY_ACCOUNT_ID` and `DESIGNATED_XHS_ACCOUNT_ID` name two
       explicit administrator-approved project-managed accounts in the
       acceptance deployment. Missing, wrong-platform, shared, or ambiguous IDs
       stop real acceptance before Cookie acquisition.
+
+## 2026-07-21 Live Gate Status
+
+Packet D is `In Progress / External-Gated`, not verified.
+
+- `DESIGNATED_DY_ACCOUNT_ID=5809` resolves one exact project-managed Douyin
+  account whose existing Profile passed identity/login checks before and after
+  the bounded attempt.
+- The direct managed-browser process used a managed user-data directory and no
+  Cookie argument. The session timed out because platform login was not
+  completed in the visible browser; its failed candidate was cleaned and the
+  previous active Profile remained authoritative.
+- The deployment contains no Xiaohongshu account, so
+  `DESIGNATED_XHS_ACCOUNT_ID` cannot resolve and the mandatory second-platform
+  workflow has not started.
+- No real Cookie capture, reveal/copy, promotion, `fallback_used=false` crawl,
+  or persisted real content item is claimed by this attempt.
+
+Resume after an approved project-managed Xiaohongshu account exists and the
+operator can complete the designated Douyin login in the visible browser.
 
 ## Clean-Computer Contract
 
@@ -111,7 +131,7 @@ Connector placement beyond the standard monitor installation.
       handles/state, restart the monitor service, revalidate each committed
       Profile, and complete one bounded minimal crawl per required platform
       without running browser auto-sync again.
-- [ ] Kuaishou is `Deferred`; its absence or unexecuted matrix row does not fail
+- [x] Kuaishou is `Deferred`; its absence or unexecuted matrix row does not fail
       Packet D and must not be reported as tested.
 - [ ] Server-like QR login, SMS verification handling, Profile persistence,
       account checks, manual/scheduler runs, and crawler execution regressions.
