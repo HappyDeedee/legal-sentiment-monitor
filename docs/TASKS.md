@@ -443,7 +443,7 @@ final server-like acceptance is active.
       region bundle.
 - [x] Add China mainland generation rules: `environment_region =
       CN_MAINLAND`, `timezone = Asia/Shanghai`, `locale = zh-CN`,
-      `accept_language = zh-CN,zh;q=0.9`, and a coherent desktop/mobile
+      `accept_language = zh-CN` for catalog v2, and a coherent desktop/mobile
       device template instead of province-level overfitting.
 - [x] Support a small template catalog such as `CN_WIN_CHROME_1920`,
       `CN_WIN_CHROME_1536`, `CN_MAC_CHROME_1440`, `CN_ANDROID_CHROME`,
@@ -576,6 +576,27 @@ lower-strength/docs/compile gates pass after merge.
 - [x] Complete focused/full/docs/compile and independent read-only review.
 - [x] Merge this follow-up and complete post-merge verification before resuming
       Phase 5.1 Task 3.
+
+### CR-116 - Persistent Context Runtime Proof Regression Fix
+
+Implementation status (2026-07-20): verified on
+`codex/cr-116-persistent-context-version-proof` before merge. A real local QR
+attempt on merged `main@a66b3f8` reproduced the Phase 5.1D effective-proof
+failure; the corrected flow now captures a QR image and closes cleanly. The
+completed Phase 5.1D history remains closed; CR-116 owns this regression.
+
+- [x] Add a deterministic RED for a persistent Playwright context whose
+      `context.browser` is `None`.
+- [x] Read the effective Chromium version from the exact page's CDP
+      `Browser.getVersion` response and detach the temporary session.
+- [x] Align catalog `1.1/v2` with pinned Playwright 1.45 Chromium metadata and
+      provider-effective locale; require explicit reset/re-login for v1.
+- [x] Preserve Browser-object proof, field-scoped version mismatch evidence,
+      fail-closed behavior, and existing QR/Profile/proxy ownership.
+- [x] Verify the real local managed flow reaches QR capture, then close the
+      diagnostic browser session without retaining QR or Cookie material.
+- [x] Run focused/full/compile/documentation gates and independent read-only
+      review before closing CR-116.
 
 ### Phase 5.1 Acceptance Gate - Runtime Snapshot And Server-Like Verification
 

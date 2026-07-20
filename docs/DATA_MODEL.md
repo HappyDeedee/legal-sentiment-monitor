@@ -219,6 +219,11 @@ the browser identity inputs explicit and persistent:
   Cookie login validation;
 - `browser_environment_lock_reason`: customer-safe reason such as
   `qrcode_login_success` or `cookie_validation_success`;
+
+CR-116 sets the current generated identity metadata to generator `1.1` and
+environment `v2`, aligned with pinned Playwright 1.45 Chromium. Existing v1
+rows remain stored as-is and require the explicit audited reset/re-login flow;
+they are not silently migrated or rewritten.
 - `requires_relogin`: marks locked accounts whose identity template or proxy
   region changed in a way that requires explicit administrator reset/re-login.
 - `identity_state`: lifecycle state for the CR-047 account identity, such as

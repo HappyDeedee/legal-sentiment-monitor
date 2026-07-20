@@ -2,6 +2,52 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-20 - CR-116 Persistent Context Runtime Proof Fix
+
+Environment: `codex/cr-116-persistent-context-version-proof` working tree from
+merged `main@a66b3f8`.
+
+Result:
+
+- The reproduced QR failure had three bounded causes: persistent Playwright
+  contexts expose `context.browser` as `None`; catalog v1 advertised Chromium
+  `126.0.6478.183` while pinned Playwright 1.45 runs `127.0.6533.17`; and
+  weighted `accept_language` values did not match the provider-effective
+  locale.
+- Persistent contexts now prove the effective version from the exact page's
+  temporary CDP `Browser.getVersion` result and require successful detach.
+  Ordinary contexts retain direct Browser-object proof, while missing,
+  malformed, mismatched, or cleanup-failed evidence remains fail closed.
+- The current catalog is generator `1.1`, environment `v2`, with Chromium and
+  locale-aligned values. Existing v1 rows require the explicit audited
+  reset/re-login path and are not silently rewritten.
+- Local account `4821` was explicitly reset to `1.1/v2` and remains
+  `identity_state=validated`, `status=standby`; its Profile and proxy binding
+  were preserved. No QR image or Cookie material was retained.
+- A fresh real managed Douyin QR probe returned `status=waiting_qrcode`,
+  `qr_image_generated=True`, and image length `1094`. Its diagnostic browser
+  session was closed immediately afterward.
+
+Verification:
+
+- Phase 5.1B-D/CR-116 focused selection: `135 passed`.
+- CDP cleanup and adjacent runtime checks after the final detach hardening:
+  `16 passed`.
+- Complete monitoring regression: `543 passed` with the same three existing
+  warnings.
+- Independent read-only review found only the missing TEST_RESULTS evidence
+  entry fixed here; its targeted `9 passed` and full `543 passed` runs found no
+  code, cleanup, migration-boundary, compatibility, or sensitive-data issue.
+- Python compile, documentation consistency, documentation regression
+  (`1 passed`), and `git diff --check` pass.
+
+Proof boundary:
+
+- CR-116 is verified before merge. This local Windows probe proves managed QR
+  capture and cleanup, not phone scanning, platform login success, restart
+  persistence, crawler success, or the separately operator-gated Docker/Linux
+  Phase 5.1 acceptance.
+
 ## 2026-07-20 - Phase 5.1 Task 3 Local And Deployment Preflight
 
 Environment: clean merged `main@84cabff` plus the isolated

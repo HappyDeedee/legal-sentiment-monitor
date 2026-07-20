@@ -276,6 +276,17 @@ requested/effective runtime snapshot contract.
   two BrowserContexts retain separate plans while both CDP Pages execute their
   own pre-navigation preparation. The test must fail against the merged
   Phase 5.1D ID-keyed collections and pass with object-scoped bindings.
+- CR-116 mirrors Playwright persistent-context behavior where
+  `BrowserContext.browser` is `None`. The regression must fail on the merged
+  Phase 5.1D version lookup, obtain the effective version from the exact page's
+  CDP `Browser.getVersion` product after the fix, detach the temporary CDP
+  session, and preserve fail-closed malformed/missing proof plus field-scoped
+  browser-version mismatch evidence.
+- CR-116 also reads Playwright's installed `browsers.json` without launching a
+  browser and proves every current catalog UA version matches the default
+  bundled Chromium version. Catalog `accept_language` must equal the locale
+  that Playwright exposes in both request and navigator probes; old v1 metadata
+  must return `account_identity_requires_relogin` without silent mutation.
 - Phase 5.1 acceptance-checker tests verify the incomplete template and example,
   exact QR/Cookie/Profile/manual/scheduler/`cli_manual` action matrix, unique
   references, chronology, restart lock/digest stability, managed provider
@@ -342,7 +353,7 @@ requested/effective runtime snapshot contract.
   and region.
 - China mainland proxy identities default to `environment_region =
   CN_MAINLAND`, `timezone = Asia/Shanghai`, `locale = zh-CN`, and
-  `accept_language = zh-CN,zh;q=0.9`, with coherent desktop or mobile device
+  `accept_language = zh-CN` for catalog v2, with coherent desktop or mobile device
   templates.
 - The Account Identity Validator rejects missing or contradictory identity
   fields and does not let locked accounts fall back to Playwright or process

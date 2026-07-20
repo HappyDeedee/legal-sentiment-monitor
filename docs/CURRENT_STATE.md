@@ -4,9 +4,9 @@ Last updated: 2026-07-20
 
 ## Current Baseline
 
-- Current merged baseline: clean `main@84cabff`, matching `origin/main` after
-  Phase 5.1 Task 2 PR #7 and CR-115 PR #8 integration and post-merge
-  verification.
+- Current merged baseline: clean `main@a66b3f8`, matching `origin/main` after
+  Phase 5.1 Task 3 local/deployment preflight PR #9 recorded its Docker/Linux
+  operator blocker.
 - Phase 5.1A code/tests are complete on
   `codex/phase-5.1a-account-identity-schema`: all 24 additive fields, three
   workspace-scoped indexes, idempotent legacy migration, and boolean read
@@ -60,6 +60,16 @@ Last updated: 2026-07-20
   path-safe temporary output, compile, and independent read-only review pass.
   The same focused/full/12-check/docs/compile gates pass after merge, and the
   generated directory is absent after exit. CR-115 is closed.
+- CR-116 is verified on `codex/cr-116-persistent-context-version-proof` before
+  merge. A real local `/monitor` QR attempt on `main@a66b3f8` exposed missing
+  persistent-Context browser proof plus catalog/runtime version and locale
+  drift. The fix uses exact-page CDP proof with mandatory detach, upgrades the
+  catalog to `1.1/v2`, and requires explicit reset/re-login for v1 rows. A
+  fresh managed Douyin probe reaches `waiting_qrcode` with an image and closes
+  cleanly; focused `135`, adjacent cleanup `16`, full `543`, compile,
+  documentation, and independent review gates pass. Phase 5.1D remains
+  historical, merge is still open, and server-like acceptance remains
+  separately operator-gated.
 - Phase 21 and CR-107 through CR-110 are merged current-main history, not
   active working-tree implementation.
 - CR-111 verified and synchronized human-readable governance state only; it did

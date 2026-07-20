@@ -115,6 +115,8 @@ Status values:
 - CR-112: Local Browser Auto-Sync Cookie Acquisition
 - CR-113: QR Draft Account Identity Choice Forwarding
 - CR-114: Browser Runtime Binding Object Identity Collision Regression Fix
+- CR-115: Server-Like Validation Temporary Data Cleanup Regression Fix
+- CR-116: Persistent Context Runtime Proof Regression Fix
 - CR-096: AI Evaluation Postprocessing Scope Reduction
 - CR-075: Responsive Navigation Interaction Consistency
 - CR-076: Mobile Header Layout Resilience Regression Fix
@@ -4787,6 +4789,102 @@ Verification:
   lower-strength checks pass, the safe generated directory reference is not an
   absolute path, the generated directory is absent after exit, and
   compile/documentation gates pass. CR-115 is closed.
+
+## CR-116 - Persistent Context Runtime Proof Regression Fix
+
+Date: 2026-07-20
+
+Source: local `/monitor` QR login failure reproduced on merged `main@a66b3f8`.
+
+Module: Phase 5.1 account identity catalog and managed requested/effective
+browser verification.
+
+Type: Regression Fix
+
+Status: Verified
+
+Background:
+
+The server-side QR browser starts and reaches the platform login page, but
+`verify_managed_page(...)` reads the effective browser version only from
+`BrowserContext.browser.version`. Playwright persistent contexts expose
+`context.browser` as `None`, so every managed persistent QR/Profile check is
+misclassified as `account_identity_provider_browser_crashed` before QR capture.
+After that defect was removed in a real diagnostic, strict proof correctly
+exposed two additional catalog/provider mismatches hidden by synthetic fakes:
+the catalog advertised Chromium `126.0.6478.183` while pinned Playwright 1.45
+runs `127.0.6533.17`, and weighted `accept_language` lists were reduced by the
+provider to the configured locale. The administrator UI therefore received a
+terminal session with no QR image even though the browser and platform page
+were available.
+
+Atomic goal packet:
+
+- Current baseline: clean merged `main@a66b3f8`; Phase 5.1D and CR-114 remain
+  verified history, while Phase 5.1 server-like acceptance remains operator-
+  gated.
+- In scope: prove the real Chromium version for persistent contexts through
+  the exact page's CDP `Browser.getVersion` response when no owning Browser
+  object is exposed; preserve the existing Browser-object path for ordinary
+  contexts; align the versioned identity catalog with pinned Playwright 1.45
+  runtime metadata and provider-effective locale; classify old catalog
+  versions as requiring explicit reset/re-login; add recurrence coverage and
+  rerun QR/provider regressions.
+- Out of scope: QR selectors, platform login semantics, API/UI contracts,
+  schema, template names/selection order/seed derivation, automatic account
+  data migration, Profile/Cookie/proxy data, browser selection, CR-112,
+  CR-070, and Docker/Linux acceptance.
+- Hard boundaries: do not trust the requested plan version as effective proof;
+  malformed or unavailable runtime version evidence still fails closed; no raw
+  path, Cookie, proxy credential, or exception enters runtime snapshots or UI.
+- Touch surface: `tools/browser_environment.py`,
+  `api/monitoring/account_identity.py`, `tests/test_monitoring_mvp.py`, and the
+  required governance documents only.
+- Execution: add RED tests that mirror `launch_persistent_context` and the old
+  catalog, implement bounded CDP proof and catalog `1.1/v2`, run focused and
+  full regressions, explicitly reset the affected local draft account, then
+  repeat real managed QR generation and close its browser session.
+- Acceptance: the RED fails on `main@a66b3f8`; Browser-object and persistent-
+  context version mismatch evidence remains field-scoped; the real local
+  managed flow reaches QR capture; focused/full/compile/docs gates and an
+  independent read-only review pass.
+- Rollback: before any explicit account reset, revert the helper, catalog,
+  regression, and CR-116 documentation. No schema rollback is needed. An
+  account explicitly reset to v2 must be reset/re-created again before running
+  reverted v1 code; it is never silently downgraded.
+- Stop conditions: stop if CDP cannot return a parseable Chromium product
+  version, if effective proof needs a requested-value fallback, or if the fix
+  changes login/Profile/proxy ownership beyond this defect.
+
+Expected baseline behavior:
+
+- Server-side persistent QR and Profile checks launch the account-bound Profile,
+  prove the actual browser version, continue to platform QR/status handling,
+  and fail closed only on real mismatch or unavailable proof.
+
+Recurrence-prevention test:
+
+- A synthetic Playwright persistent context with `context.browser is None`
+  must read `HeadlessChrome/VERSION` through `Browser.getVersion`, detach the
+  temporary CDP session, and produce a successful safe runtime snapshot.
+- A static test must bind every catalog UA version to Playwright's installed
+  default Chromium metadata and bind `accept_language` to the provider-
+  effective locale. A v1 account must fail closed with
+  `account_identity_requires_relogin`, not be silently rewritten.
+
+Verification:
+
+- Persistent and ordinary Context version paths, malformed/missing proof,
+  mismatch evidence, and mandatory CDP detach are covered. The Phase 5.1B-D/
+  CR-116 focused selection passes (`135 passed`), final adjacent cleanup tests
+  pass (`16 passed`), and the complete monitor suite passes (`543 passed`).
+- A fresh real local managed Douyin probe returns `waiting_qrcode` with a QR
+  image and closes its diagnostic browser immediately. Account `4821` remains
+  explicitly versioned `1.1/v2`, `validated`, and `standby`; no QR or Cookie
+  material was retained.
+- Python compile, documentation consistency/regression, `git diff --check`,
+  and independent read-only review pass. CR-116 is verified before merge; the
+  Docker/Linux Phase 5.1 acceptance gate remains separate.
 
 ## CR-056 - Filter Dropdown Alignment Regression Fix
 

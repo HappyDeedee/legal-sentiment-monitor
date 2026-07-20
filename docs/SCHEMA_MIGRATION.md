@@ -140,7 +140,7 @@ Migration and compatibility:
   login/crawl launch;
 - for China mainland proxies, use self-consistent defaults such as
   `environment_region = CN_MAINLAND`, `timezone = Asia/Shanghai`, `locale =
-  zh-CN`, and `accept_language = zh-CN,zh;q=0.9`;
+  zh-CN`, and `accept_language = zh-CN` for catalog v2;
 - lock the account identity after successful QR login or accepted Cookie
   validation;
 - keep existing accounts readable, do not silently backfill guessed identity

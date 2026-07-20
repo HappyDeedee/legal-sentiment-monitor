@@ -1523,11 +1523,15 @@ def test_phase_5_1a_additive_migration_preserves_legacy_account_without_backfill
 
 
 def test_phase_5_1b_template_catalog_expands_all_documented_rows_exactly():
-    from api.monitoring.account_identity import IDENTITY_TEMPLATE_CATALOG
+    from api.monitoring.account_identity import (
+        IDENTITY_ENVIRONMENT_VERSION,
+        IDENTITY_GENERATOR_VERSION,
+        IDENTITY_TEMPLATE_CATALOG,
+    )
 
     windows_ua = (
         "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-        "(KHTML, like Gecko) Chrome/126.0.6478.183 Safari/537.36"
+        "(KHTML, like Gecko) Chrome/127.0.6533.17 Safari/537.36"
     )
     expected = {
         "CN_WIN_CHROME_1920": {
@@ -1536,7 +1540,7 @@ def test_phase_5_1b_template_catalog_expands_all_documented_rows_exactly():
             "viewport_width": 1920, "viewport_height": 963,
             "device_scale_factor": 1, "is_mobile": False, "has_touch": False,
             "timezone": "Asia/Shanghai", "locale": "zh-CN",
-            "accept_language": "zh-CN,zh;q=0.9",
+            "accept_language": "zh-CN",
         },
         "CN_WIN_CHROME_1536": {
             "browser_platform": "windows", "user_agent": windows_ua,
@@ -1544,31 +1548,31 @@ def test_phase_5_1b_template_catalog_expands_all_documented_rows_exactly():
             "viewport_width": 1536, "viewport_height": 768,
             "device_scale_factor": 1, "is_mobile": False, "has_touch": False,
             "timezone": "Asia/Shanghai", "locale": "zh-CN",
-            "accept_language": "zh-CN,zh;q=0.9",
+            "accept_language": "zh-CN",
         },
         "CN_MAC_CHROME_1440": {
             "browser_platform": "macos",
             "user_agent": (
                 "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/126.0.6478.183 Safari/537.36"
+                "(KHTML, like Gecko) Chrome/127.0.6533.17 Safari/537.36"
             ),
             "screen_width": 1440, "screen_height": 900,
             "viewport_width": 1440, "viewport_height": 789,
             "device_scale_factor": 2, "is_mobile": False, "has_touch": False,
             "timezone": "Asia/Shanghai", "locale": "zh-CN",
-            "accept_language": "zh-CN,zh;q=0.9",
+            "accept_language": "zh-CN",
         },
         "CN_ANDROID_CHROME": {
             "browser_platform": "android",
             "user_agent": (
                 "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 "
-                "(KHTML, like Gecko) Chrome/126.0.6478.183 Mobile Safari/537.36"
+                "(KHTML, like Gecko) Chrome/127.0.6533.17 Mobile Safari/537.36"
             ),
             "screen_width": 1080, "screen_height": 2400,
             "viewport_width": 412, "viewport_height": 915,
             "device_scale_factor": 2.625, "is_mobile": True, "has_touch": True,
             "timezone": "Asia/Shanghai", "locale": "zh-CN",
-            "accept_language": "zh-CN,zh;q=0.9",
+            "accept_language": "zh-CN",
         },
         "HK_DESKTOP_CHROME": {
             "browser_platform": "windows", "user_agent": windows_ua,
@@ -1576,7 +1580,7 @@ def test_phase_5_1b_template_catalog_expands_all_documented_rows_exactly():
             "viewport_width": 1920, "viewport_height": 963,
             "device_scale_factor": 1, "is_mobile": False, "has_touch": False,
             "timezone": "Asia/Hong_Kong", "locale": "zh-HK",
-            "accept_language": "zh-HK,zh;q=0.9,en;q=0.8",
+            "accept_language": "zh-HK",
         },
         "SG_DESKTOP_CHROME": {
             "browser_platform": "windows", "user_agent": windows_ua,
@@ -1584,12 +1588,36 @@ def test_phase_5_1b_template_catalog_expands_all_documented_rows_exactly():
             "viewport_width": 1440, "viewport_height": 789,
             "device_scale_factor": 1, "is_mobile": False, "has_touch": False,
             "timezone": "Asia/Singapore", "locale": "en-SG",
-            "accept_language": "en-SG,en;q=0.9,zh;q=0.7",
+            "accept_language": "en-SG",
         },
     }
     assert tuple(item["identity_template"] for item in IDENTITY_TEMPLATE_CATALOG) == tuple(expected)
+    assert IDENTITY_GENERATOR_VERSION == "1.1"
+    assert IDENTITY_ENVIRONMENT_VERSION == "v2"
     for item in IDENTITY_TEMPLATE_CATALOG:
         assert {key: item[key] for key in expected[item["identity_template"]]} == expected[item["identity_template"]]
+
+
+def test_cr116_catalog_matches_pinned_playwright_chromium_metadata():
+    import playwright
+
+    from api.monitoring.account_identity import IDENTITY_TEMPLATE_CATALOG
+
+    metadata_path = Path(playwright.__file__).resolve().parent / "driver" / "package" / "browsers.json"
+    metadata = json.loads(metadata_path.read_text(encoding="utf-8"))
+    chromium = next(
+        item
+        for item in metadata["browsers"]
+        if item.get("name") == "chromium" and item.get("installByDefault") is True
+    )
+    expected_version = str(chromium["browserVersion"])
+    catalog_versions = {
+        item["user_agent"].split("Chrome/", 1)[1].split(" ", 1)[0]
+        for item in IDENTITY_TEMPLATE_CATALOG
+    }
+
+    assert catalog_versions == {expected_version}
+    assert all(item["accept_language"] == item["locale"] for item in IDENTITY_TEMPLATE_CATALOG)
 
 
 def test_phase_5_1b_generator_uses_documented_hmac_and_family_filters():
@@ -1746,6 +1774,43 @@ def test_phase_5_1b_validator_fails_closed_for_missing_and_contradictory_fields(
     assert exc_info.value.reason == "account_identity_requires_relogin"
 
 
+def test_cr116_old_identity_catalog_version_requires_explicit_relogin():
+    from api.monitoring.account_identity import (
+        AccountIdentityError,
+        generate_account_identity,
+        validate_account_identity,
+    )
+
+    generated = generate_account_identity(
+        workspace_id=1,
+        platform="dy",
+        account_id=52,
+        proxy_region_snapshot="CN_MAINLAND",
+        template_family="windows_chrome_desktop",
+        seed_salt=b"cr116-old-catalog-salt",
+    )
+    account = {
+        **generated,
+        "id": 52,
+        "workspace_id": 1,
+        "platform": "dy",
+        "proxy_id": None,
+        "identity_state": "validated",
+        "requires_relogin": False,
+        "identity_generator_version": "1.0",
+        "identity_environment_version": "v1",
+    }
+
+    with pytest.raises(AccountIdentityError) as exc_info:
+        validate_account_identity(account, seed_salt=b"cr116-old-catalog-salt")
+
+    assert exc_info.value.reason == "account_identity_requires_relogin"
+    assert exc_info.value.fields == (
+        "identity_generator_version",
+        "identity_environment_version",
+    )
+
+
 def test_phase_5_1b_new_account_generation_is_transactional_and_updates_do_not_backfill(monkeypatch):
     monkeypatch.setenv("MONITOR_ACCOUNT_IDENTITY_SEED_SALT", "phase-5.1b-database-salt")
     init_db()
@@ -1771,8 +1836,8 @@ def test_phase_5_1b_new_account_generation_is_transactional_and_updates_do_not_b
         assert stored["user_agent"] != "request-controlled-user-agent"
         assert stored["fingerprint_seed"] != "request-controlled-seed"
         assert stored["identity_generator_name"] == "mediacrawler_account_identity"
-        assert stored["identity_generator_version"] == "1.0"
-        assert stored["identity_environment_version"] == "v1"
+        assert stored["identity_generator_version"] == "1.1"
+        assert stored["identity_environment_version"] == "v2"
 
         with get_conn() as conn:
             conn.execute(
@@ -3702,7 +3767,7 @@ def test_phase_5_1d_profile_cookie_and_visible_login_share_exact_plan(tmp_path, 
             self.closed = True
 
     class FakeBrowser:
-        version = "126.0.6478.183"
+        version = account["user_agent"].split("Chrome/", 1)[1].split(" ", 1)[0]
 
         def __init__(self):
             self.closed = False
@@ -4575,6 +4640,116 @@ def test_phase_5_1d_cdp_prepares_exact_commands_before_navigation_and_writes_res
         "screenWidth": plan.screen_width,
         "screenHeight": plan.screen_height,
     }
+
+
+def test_cr116_persistent_context_uses_cdp_browser_version_proof(tmp_path, monkeypatch):
+    from tools.browser_environment import launch_managed_browser_context, verify_managed_page
+
+    plan = _phase_5_1d_plan(tmp_path, monkeypatch)
+    events = []
+
+    class FakeRequest:
+        headers = {"accept-language": plan.accept_language}
+
+    class FakeCDPSession:
+        async def send(self, method):
+            events.append(("send", method))
+            return {"product": f"HeadlessChrome/{plan.browser_version}"}
+
+        async def detach(self):
+            events.append(("detach",))
+
+    class FakePage:
+        async def goto(self, *args, **kwargs):
+            context.request_handler(FakeRequest())
+
+        async def evaluate(self, script):
+            return _phase_5_1d_effective_probe(plan)
+
+    page = FakePage()
+
+    class FakeContext:
+        pages = []
+        browser = None
+
+        def on(self, event, callback):
+            self.request_handler = callback
+
+        async def new_cdp_session(self, used_page):
+            assert used_page is page
+            events.append(("attach",))
+            return FakeCDPSession()
+
+    context = FakeContext()
+
+    class FakeChromium:
+        async def launch_persistent_context(self, **kwargs):
+            return context
+
+    class FakePlaywright:
+        chromium = FakeChromium()
+
+    session = asyncio.run(launch_managed_browser_context(FakePlaywright(), plan))
+    asyncio.run(page.goto("https://platform.invalid"))
+    result = asyncio.run(verify_managed_page(session.context, page))
+
+    assert result is not None and result.ok is True
+    assert result.snapshot["browser"]["version"] == plan.browser_version
+    assert events == [
+        ("attach",),
+        ("send", "Browser.getVersion"),
+        ("detach",),
+    ]
+
+
+def test_cr116_persistent_context_rejects_malformed_cdp_browser_version():
+    from tools.browser_environment import _effective_browser_version
+
+    events = []
+
+    class FakeCDPSession:
+        async def send(self, method):
+            events.append(("send", method))
+            return {"product": "HeadlessChrome/not-a-version"}
+
+        async def detach(self):
+            events.append(("detach",))
+
+    class FakeContext:
+        browser = None
+
+        async def new_cdp_session(self, page):
+            events.append(("attach",))
+            return FakeCDPSession()
+
+    with pytest.raises(TypeError, match="missing browser version"):
+        asyncio.run(_effective_browser_version(FakeContext(), object()))
+
+    assert events == [
+        ("attach",),
+        ("send", "Browser.getVersion"),
+        ("detach",),
+    ]
+
+
+def test_cr116_persistent_context_detach_failure_is_fail_closed():
+    from tools.browser_environment import _effective_browser_version
+
+    class FakeCDPSession:
+        async def send(self, method):
+            return {"product": "HeadlessChrome/127.0.6533.17"}
+
+        async def detach(self):
+            raise RuntimeError("synthetic detach failure")
+
+    class FakeContext:
+        browser = None
+
+        async def new_cdp_session(self, page):
+            return FakeCDPSession()
+
+    with pytest.raises(RuntimeError, match="synthetic detach failure"):
+        asyncio.run(_effective_browser_version(FakeContext(), object()))
 
 
 @pytest.mark.parametrize(

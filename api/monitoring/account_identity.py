@@ -12,8 +12,8 @@ from .security import load_or_create_secret_key
 
 
 IDENTITY_GENERATOR_NAME = "mediacrawler_account_identity"
-IDENTITY_GENERATOR_VERSION = "1.0"
-IDENTITY_ENVIRONMENT_VERSION = "v1"
+IDENTITY_GENERATOR_VERSION = "1.1"
+IDENTITY_ENVIRONMENT_VERSION = "v2"
 IDENTITY_SEED_DOMAIN = b"MediaCrawler/account-identity/seed/v1"
 
 IDENTITY_STATE_DRAFT = "draft"
@@ -51,7 +51,7 @@ TEMPLATE_FAMILIES = {
 
 _WINDOWS_CHROME_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
-    "(KHTML, like Gecko) Chrome/126.0.6478.183 Safari/537.36"
+    "(KHTML, like Gecko) Chrome/127.0.6533.17 Safari/537.36"
 )
 
 
@@ -75,7 +75,7 @@ IDENTITY_TEMPLATE_CATALOG: tuple[Mapping[str, Any], ...] = (
         has_touch=False,
         timezone="Asia/Shanghai",
         locale="zh-CN",
-        accept_language="zh-CN,zh;q=0.9",
+        accept_language="zh-CN",
     ),
     _template(
         identity_template="CN_WIN_CHROME_1536",
@@ -92,7 +92,7 @@ IDENTITY_TEMPLATE_CATALOG: tuple[Mapping[str, Any], ...] = (
         has_touch=False,
         timezone="Asia/Shanghai",
         locale="zh-CN",
-        accept_language="zh-CN,zh;q=0.9",
+        accept_language="zh-CN",
     ),
     _template(
         identity_template="CN_MAC_CHROME_1440",
@@ -101,7 +101,7 @@ IDENTITY_TEMPLATE_CATALOG: tuple[Mapping[str, Any], ...] = (
         browser_platform="macos",
         user_agent=(
             "Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/126.0.6478.183 Safari/537.36"
+            "(KHTML, like Gecko) Chrome/127.0.6533.17 Safari/537.36"
         ),
         screen_width=1440,
         screen_height=900,
@@ -112,7 +112,7 @@ IDENTITY_TEMPLATE_CATALOG: tuple[Mapping[str, Any], ...] = (
         has_touch=False,
         timezone="Asia/Shanghai",
         locale="zh-CN",
-        accept_language="zh-CN,zh;q=0.9",
+        accept_language="zh-CN",
     ),
     _template(
         identity_template="CN_ANDROID_CHROME",
@@ -121,7 +121,7 @@ IDENTITY_TEMPLATE_CATALOG: tuple[Mapping[str, Any], ...] = (
         browser_platform="android",
         user_agent=(
             "Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 "
-            "(KHTML, like Gecko) Chrome/126.0.6478.183 Mobile Safari/537.36"
+            "(KHTML, like Gecko) Chrome/127.0.6533.17 Mobile Safari/537.36"
         ),
         screen_width=1080,
         screen_height=2400,
@@ -132,7 +132,7 @@ IDENTITY_TEMPLATE_CATALOG: tuple[Mapping[str, Any], ...] = (
         has_touch=True,
         timezone="Asia/Shanghai",
         locale="zh-CN",
-        accept_language="zh-CN,zh;q=0.9",
+        accept_language="zh-CN",
     ),
     _template(
         identity_template="HK_DESKTOP_CHROME",
@@ -149,7 +149,7 @@ IDENTITY_TEMPLATE_CATALOG: tuple[Mapping[str, Any], ...] = (
         has_touch=False,
         timezone="Asia/Hong_Kong",
         locale="zh-HK",
-        accept_language="zh-HK,zh;q=0.9,en;q=0.8",
+        accept_language="zh-HK",
     ),
     _template(
         identity_template="SG_DESKTOP_CHROME",
@@ -166,7 +166,7 @@ IDENTITY_TEMPLATE_CATALOG: tuple[Mapping[str, Any], ...] = (
         has_touch=False,
         timezone="Asia/Singapore",
         locale="en-SG",
-        accept_language="en-SG,en;q=0.9,zh;q=0.7",
+        accept_language="en-SG",
     ),
 )
 
@@ -315,6 +315,18 @@ def validate_account_identity(
         raise AccountIdentityError("account_identity_locked_proxy_override", "proxy_id")
     if value.get("proxy_id") not in (None, "", 0) and bound_proxy_exists is not True:
         raise AccountIdentityError("account_identity_missing", "proxy_id")
+    if value.get("identity_generator_name") != IDENTITY_GENERATOR_NAME:
+        raise AccountIdentityError("account_identity_contradiction", "identity_generator_name")
+    stale_version_fields = tuple(
+        field
+        for field, expected in (
+            ("identity_generator_version", IDENTITY_GENERATOR_VERSION),
+            ("identity_environment_version", IDENTITY_ENVIRONMENT_VERSION),
+        )
+        if value.get(field) != expected
+    )
+    if stale_version_fields:
+        raise AccountIdentityError("account_identity_requires_relogin", *stale_version_fields)
 
     template_name = str(value.get("identity_template") or "")
     template = IDENTITY_TEMPLATE_BY_NAME.get(template_name)
@@ -343,12 +355,6 @@ def validate_account_identity(
     ).hexdigest()[:32]
     if value.get("fingerprint_seed") != expected_seed:
         contradictions.append("fingerprint_seed")
-    if value.get("identity_generator_name") != IDENTITY_GENERATOR_NAME:
-        contradictions.append("identity_generator_name")
-    if value.get("identity_generator_version") != IDENTITY_GENERATOR_VERSION:
-        contradictions.append("identity_generator_version")
-    if value.get("identity_environment_version") != IDENTITY_ENVIRONMENT_VERSION:
-        contradictions.append("identity_environment_version")
     if _positive_number(value.get("device_scale_factor")) is None:
         contradictions.append("device_scale_factor")
     if _positive_int_or_none(value.get("viewport_width")) is None or _positive_int_or_none(value.get("viewport_height")) is None:
