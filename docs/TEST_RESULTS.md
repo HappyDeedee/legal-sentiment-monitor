@@ -2,6 +2,29 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-20 - CR-116 Through CR-118 Operator Acceptance
+
+Environment: `codex/cr-117-playwright-chromium-bootstrap` at the reviewed and
+pushed integration head.
+
+Result:
+
+- Operator manual acceptance for the current local browser/login workflow is
+  `PASS`, and the CR-116 through CR-118 integration set is approved for main.
+- Existing automated evidence remains unchanged: the isolated monitoring suite
+  passes `574` tests; the complete `tests` collection passes `597` tests with
+  one documented pre-existing XHS Store factory assertion outside this diff.
+- Documentation consistency, syntax/compile, whitespace, sensitive-data, real
+  Profile restart, QR terminal-state, cleanup, and independent review gates
+  pass.
+
+Proof boundary:
+
+- This acceptance does not replace the separate clean-Windows machine test for
+  a real Playwright Chromium download when no Chrome, Edge, Chromium, or
+  Playwright browser is installed. Docker/Linux and complete Phase 5.1
+  server-like acceptance remain separate gates.
+
 ## 2026-07-20 - CR-118 QR Success Monotonicity And Profile Restart Verification
 
 Environment: `codex/cr-117-playwright-chromium-bootstrap`, with the final

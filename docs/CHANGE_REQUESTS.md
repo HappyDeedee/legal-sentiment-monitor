@@ -4805,7 +4805,7 @@ frontend polling, and post-restart Profile verification.
 
 Type: Regression Fix
 
-Status: Verified (pre-merge)
+Status: Verified
 
 Background:
 
@@ -5087,7 +5087,7 @@ Verification:
   explicitly versioned `1.1/v2`, `validated`, and `standby`; no QR or Cookie
   material was retained.
 - Python compile, documentation consistency/regression, `git diff --check`,
-  and independent read-only review pass. CR-116 is verified before merge; the
+  and independent read-only review pass. CR-116 is verified and approved for integration; the
   Docker/Linux Phase 5.1 acceptance gate remains separate.
 
 ## CR-056 - Filter Dropdown Alignment Regression Fix

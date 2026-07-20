@@ -579,8 +579,8 @@ lower-strength/docs/compile gates pass after merge.
 
 ### CR-116 - Persistent Context Runtime Proof Regression Fix
 
-Implementation status (2026-07-20): verified on
-`codex/cr-116-persistent-context-version-proof` before merge. A real local QR
+Implementation status (2026-07-20): verified and included in the integration
+set approved for main. A real local QR
 attempt on merged `main@a66b3f8` reproduced the Phase 5.1D effective-proof
 failure; the corrected flow now captures a QR image and closes cleanly. The
 completed Phase 5.1D history remains closed; CR-116 owns this regression.
@@ -1651,7 +1651,7 @@ Implementation status:
 
 ## CR-118 - QR Login Success Monotonicity And Profile Restart Verification
 
-Implementation status (2026-07-20): verified before merge on
+Implementation status (2026-07-20): verified and operator-approved for main integration on
 `codex/cr-117-playwright-chromium-bootstrap` as a bounded Phase 5.1 login-flow
 regression found by a designated local test account. Its post-restart session remains
 successful after later polls and normal browser cleanup.
@@ -1673,7 +1673,7 @@ successful after later polls and normal browser cleanup.
 
 ## CR-117 - Windows Local Browser Selection And Playwright Chromium Bootstrap
 
-Implementation status (2026-07-20): verified before merge on
+Implementation status (2026-07-20): verified and operator-approved for main integration on
 `codex/cr-117-playwright-chromium-bootstrap`. The implementation adds one
 stable local browser selection per deployment, preserves existing Profiles,
 treats valid version changes as telemetry, and keeps server/Docker/per-account/

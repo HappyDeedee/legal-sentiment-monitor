@@ -60,17 +60,16 @@ Last updated: 2026-07-20
   path-safe temporary output, compile, and independent read-only review pass.
   The same focused/full/12-check/docs/compile gates pass after merge, and the
   generated directory is absent after exit. CR-115 is closed.
-- CR-116 is verified on `codex/cr-116-persistent-context-version-proof` before
-  merge. A real local `/monitor` QR attempt on `main@a66b3f8` exposed missing
+- CR-116 is verified and included in the CR-117/CR-118 integration set approved
+  for main. A real local `/monitor` QR attempt on `main@a66b3f8` exposed missing
   persistent-Context browser proof plus catalog/runtime version and locale
   drift. The fix uses exact-page CDP proof with mandatory detach, upgrades the
   catalog to `1.1/v2`, and requires explicit reset/re-login for v1 rows. A
   fresh managed Douyin probe reaches `waiting_qrcode` with an image and closes
   cleanly; focused `135`, adjacent cleanup `16`, full `543`, compile,
   documentation, and independent review gates pass. Phase 5.1D remains
-  historical, merge is still open, and server-like acceptance remains
-  separately operator-gated.
-- CR-117 is verified before merge on
+  historical, and server-like acceptance remains separately operator-gated.
+- CR-117 is verified and operator-approved for main integration on
   `codex/cr-117-playwright-chromium-bootstrap`. The accepted local-first target
   is now implemented as a persisted deployment browser selection: explicit
   configuration, Chrome, Edge, supported Chromium, installed Playwright
@@ -84,7 +83,7 @@ Last updated: 2026-07-20
   independent full-diff review gates pass. Docker, service-only discovery/
   automatic installation, per-account browser choice, CR-112, and
   operator-gated Phase 5.1 acceptance are unchanged.
-- CR-118 is verified before merge. Persisted login-session success is now an
+- CR-118 is verified and operator-approved for main integration. Persisted login-session success is now an
   atomic monotonic state; QR creation, GET polling, verification-code POSTs,
   and deletion share one session lock; terminal reads skip closed-browser
   polling; stale frontend callbacks cannot clear a newer session; and existing
