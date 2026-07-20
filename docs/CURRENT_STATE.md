@@ -4,9 +4,9 @@ Last updated: 2026-07-20
 
 ## Current Baseline
 
-- Current merged baseline: clean `main@84cabff`, matching `origin/main` after
-  Phase 5.1 Task 2 PR #7 and CR-115 PR #8 integration and post-merge
-  verification.
+- Current merged baseline: clean `main@a66b3f8`, matching `origin/main` after
+  Phase 5.1 Task 3 local/deployment preflight PR #9 recorded its Docker/Linux
+  operator blocker.
 - Phase 5.1A code/tests are complete on
   `codex/phase-5.1a-account-identity-schema`: all 24 additive fields, three
   workspace-scoped indexes, idempotent legacy migration, and boolean read
@@ -60,6 +60,42 @@ Last updated: 2026-07-20
   path-safe temporary output, compile, and independent read-only review pass.
   The same focused/full/12-check/docs/compile gates pass after merge, and the
   generated directory is absent after exit. CR-115 is closed.
+- CR-116 is verified and included in the CR-117/CR-118 integration set approved
+  for main. A real local `/monitor` QR attempt on `main@a66b3f8` exposed missing
+  persistent-Context browser proof plus catalog/runtime version and locale
+  drift. The fix uses exact-page CDP proof with mandatory detach, upgrades the
+  catalog to `1.1/v2`, and requires explicit reset/re-login for v1 rows. A
+  fresh managed Douyin probe reaches `waiting_qrcode` with an image and closes
+  cleanly; focused `135`, adjacent cleanup `16`, full `543`, compile,
+  documentation, and independent review gates pass. Phase 5.1D remains
+  historical, and server-like acceptance remains separately operator-gated.
+- CR-117 is verified and operator-approved for main integration on
+  `codex/cr-117-playwright-chromium-bootstrap`. The accepted local-first target
+  is now implemented as a persisted deployment browser selection: explicit
+  configuration, Chrome, Edge, supported Chromium, installed Playwright
+  Chromium, then automatic Playwright installation. Existing Profiles preserve
+  their prior Playwright authority; later browser installation cannot switch a
+  saved selection; and
+  runtime browser version changes are evidence rather than standalone login
+  failures. Cross-process locking, semantic manifest checks, and Chrome/Edge/
+  Chromium source evidence are active. Focused `26`, combined Phase 5.1/CR
+  `137`, full monitoring `566`, compile, docs, real temporary Chrome/Edge, and
+  independent full-diff review gates pass. Docker, service-only discovery/
+  automatic installation, per-account browser choice, CR-112, and
+  operator-gated Phase 5.1 acceptance are unchanged.
+- CR-118 is verified and operator-approved for main integration. Persisted login-session success is now an
+  atomic monotonic state; QR creation, GET polling, verification-code POSTs,
+  and deletion share one session lock; terminal reads skip closed-browser
+  polling; stale frontend callbacks cannot clear a newer session; and existing
+  Profiles are checked before new QR
+  preparation. After the final service restart, the designated local test
+  account remained active through the same persisted profile key on Playwright bundled Chromium
+  `127.0.6533.17` with no fallback, mismatch, or re-login requirement. Real
+  login session remained `success` after later polls and normal browser
+  cleanup. Adjacent `58`, combined Phase 5.1/CR `224`, isolated full monitoring
+  `574`, syntax, docs, diff, runtime-log, browser-cleanup, and independent
+  review gates pass. This does not close the separate Docker/Linux Phase 5.1
+  acceptance gate.
 - Phase 21 and CR-107 through CR-110 are merged current-main history, not
   active working-tree implementation.
 - CR-111 verified and synchronized human-readable governance state only; it did

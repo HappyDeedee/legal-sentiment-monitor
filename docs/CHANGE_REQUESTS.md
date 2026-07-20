@@ -115,6 +115,10 @@ Status values:
 - CR-112: Local Browser Auto-Sync Cookie Acquisition
 - CR-113: QR Draft Account Identity Choice Forwarding
 - CR-114: Browser Runtime Binding Object Identity Collision Regression Fix
+- CR-115: Server-Like Validation Temporary Data Cleanup Regression Fix
+- CR-116: Persistent Context Runtime Proof Regression Fix
+- CR-117: Windows Local Browser Selection And Playwright Chromium Bootstrap
+- CR-118: QR Login Success Monotonicity And Profile Restart Verification
 - CR-096: AI Evaluation Postprocessing Scope Reduction
 - CR-075: Responsive Navigation Interaction Consistency
 - CR-076: Mobile Header Layout Resilience Regression Fix
@@ -4787,6 +4791,304 @@ Verification:
   lower-strength checks pass, the safe generated directory reference is not an
   absolute path, the generated directory is absent after exit, and
   compile/documentation gates pass. CR-115 is closed.
+
+## CR-118 - QR Login Success Monotonicity And Profile Restart Verification
+
+Date: 2026-07-20
+
+Source: a designated local test account completed QR login and account-level Profile
+validation, but the final frontend poll replaced the successful login-session
+record with `qrcode_failed` after the QR browser closed normally.
+
+Module: QR login-session polling, persisted login-session transitions, local
+frontend polling, and post-restart Profile verification.
+
+Type: Regression Fix
+
+Status: Verified
+
+Background:
+
+The QR success path closes its browser handle before the account-level Profile
+check finishes. The frontend currently uses an asynchronous `setInterval`, so
+a second poll can overlap that check or arrive immediately after success. The
+backend treats the missing browser handle as `qrcode_failed` and allows the
+persisted `success` record to be overwritten, even though the account identity
+is already locked/active and its Profile check passed.
+
+Requirements:
+
+- A persisted login-session `success` state is monotonic. Later timeout,
+  browser-closed, QR-failed, or platform-error updates must preserve its status,
+  success message, QR evidence, and update timestamp.
+- Reading a terminal login session must return the stored terminal result
+  without polling a closed QR browser or repeating account verification.
+- QR creation, concurrent reads, verification-code submission/request, and
+  deletion for one login session must share one lock so browser polling and
+  account verification have a single transition decision at a time.
+- Frontend QR polling must schedule the next request only after the current
+  request finishes; overlapping interval callbacks are not allowed, and a
+  stale callback must not clear a newer active login session.
+- QR startup must check whether the existing persistent Profile is already
+  logged in before preparing a new login dialog or QR code.
+- Timed-out or cancelled QR polling steps must cancel and await their child
+  task so browser cleanup cannot leave an unobserved asynchronous exception.
+- Failure sessions and pending-to-success reconciliation keep their existing
+  behavior. Account identity locks, Profile ownership, Provider snapshots,
+  browser selection, proxy policy, and QR cleanup remain unchanged.
+- Restart the current service after the fix and run the normal account-level
+  login check for the designated test account. Verify the same `profile_key` remains active,
+  the persisted Profile supplies login material, the Provider result passes
+  with `fallback_used=false`, and no re-login is required.
+
+Acceptance:
+
+- Deterministic RED/GREEN tests cover database success monotonicity, terminal
+  route lookup without browser polling, and serial frontend polling.
+- Existing QR failure, timeout, verification, account reconciliation, and
+  Phase 5.1 focused tests continue to pass.
+- A real post-restart check for the designated test account succeeds with its existing
+  Profile and Playwright Chromium selection; no Cookie value, raw Profile path,
+  or other sensitive runtime material is written to project documentation.
+- Full monitoring, compile, documentation, diff, and independent review gates
+  pass before CR-118 is marked verified.
+
+Verification:
+
+- Deterministic RED/GREEN coverage proves terminal route lookup skips browser
+  polling, persisted success rejects a later failure atomically, frontend
+  polling is serial, and an existing Profile is checked before QR preparation.
+- The GET/GET and POST/GET concurrency batches each first fail (`2 failed`)
+  and pass after the bounded fixes. Adjacent QR/login coverage passes (`58
+  passed`), combined Phase 5.1 and CR-113 through CR-118 coverage passes (`224
+  passed`), and the isolated full monitoring regression passes (`574 passed`).
+- After restarting the final service build, the designated test account remained
+  `active` with the same persisted profile key, reused Playwright bundled Chromium
+  `127.0.6533.17` in persistent mode, reported no fallback or mismatch, and did
+  not require re-login.
+- The post-restart real login session remained `success` after later frontend
+  polls and normal browser cleanup. The service error-log scan and residual
+  Playwright browser-process count were both zero.
+- Python/JavaScript syntax, documentation consistency/regression, and
+  whitespace checks pass. No Cookie value, QR payload, secret, or raw Profile
+  path is recorded here.
+
+Rollback:
+
+- Revert only the CR-118 route/database/frontend/test/documentation changes.
+  The account Profile and browser-selection manifest are existing runtime data
+  and are not removed by rollback.
+
+## CR-117 - Windows Local Browser Selection And Playwright Chromium Bootstrap
+
+Date: 2026-07-20
+
+Source: confirmed request to prefer an available local browser on a newly
+cloned Windows checkout, preserve that choice for its Profiles, and repair a
+fully missing browser environment before starting `/monitor`.
+
+Module: Windows local startup, deployment-local browser selection, managed
+provider resolution, and runtime version evidence.
+
+Type: Existing Feature Optimization
+
+Status: Verified
+
+Background:
+
+CR-107 intentionally excluded dependency bootstrap. Always installing
+Playwright Chromium would be reproducible but would unnecessarily download
+another browser for a local-first deployment that already has Chrome or Edge.
+Browser selection is safe when it is made once, persisted for the deployment,
+and used to create every independent account Profile. Browser version changes
+are normal runtime evidence and must not force re-login by themselves.
+
+Requirements:
+
+- On a clean local deployment with no saved selection or existing Profile
+  data, browser precedence is: valid `MONITOR_BROWSER_EXECUTABLE`, stable local
+  Chrome, stable local Edge, supported local Chromium, installed Playwright
+  Chromium, then automatic Playwright Chromium installation.
+- The selected executable, source, and channel are persisted in a versioned
+  deployment-local manifest under `MONITOR_DATA_DIR`. Every account keeps its
+  own `profile_key` Profile, while the deployment uses one stable browser
+  selection for those Profiles.
+- A saved selection is authoritative on later starts. A newly installed
+  higher-priority browser must not change it. A missing saved system/explicit
+  browser stops startup instead of reusing the Profile with another browser.
+- Existing Profile data without a manifest is a compatibility boundary: a
+  valid explicit executable may establish the binding; otherwise the current
+  Playwright Chromium authority is persisted, even when Chrome or Edge exists.
+- When the selected fallback is Playwright Chromium and its pinned executable
+  is missing, the local launcher automatically runs only
+  `python -m playwright install chromium` through the active project
+  interpreter, leaves installer progress visible, and verifies the executable
+  before starting the service.
+- Installer launch failure, nonzero exit, post-install probe failure, or a
+  still-missing executable stops startup with a readable retry command:
+  `uv run playwright install chromium`.
+- Effective browser version remains mandatory runtime evidence, but a valid
+  version change alone is non-blocking. Missing/malformed version proof and all
+  other identity/Profile/proxy mismatches remain fail closed.
+- `start_monitor_oneclick.bat` and `start_webui.bat` must check `uv` and run the
+  shared local preflight. Their existing detached/foreground service lifecycle,
+  host, port, and browser-URL behavior stays unchanged.
+
+Scope boundary:
+
+- This is a CR-107 follow-up, not a rewrite of its verified history.
+- Local browser discovery applies only to the two Windows local launchers.
+  Docker keeps its Playwright base image and the service-only launcher keeps
+  its operator-managed Playwright prerequisite boundary. Both may reuse an
+  already persisted deployment selection for the same data directory.
+- This CR does not use a personal/default browser Profile, support per-account
+  browser choice, migrate a Profile between browser channels, or implement
+  CR-112/CookieBridge.
+- No new production dependency, SQLite schema field, frontend setting,
+  administrator permission, or secret is introduced. The manifest is local
+  runtime data and raw executable paths remain outside customer APIs/logs.
+
+Acceptance:
+
+- Unit tests cover clean Chrome/Edge/Chromium priority, persisted selection,
+  legacy-Profile preservation, explicit conflicts, missing saved browsers,
+  installed/missing Playwright Chromium, automatic installation, installer and
+  post-install failures, version-change telemetry, and both local launchers
+  without a real download, browser launch, port, or service process.
+- Existing CR-107 launcher tests continue to pass.
+- Both local batch entry points contain the `uv` prerequisite check and use the
+  shared Python preflight; service-only/Docker behavior remains unchanged.
+- Focused/full monitoring, Python compile, documentation consistency, and
+  independent read-only review pass before CR-117 is closed.
+
+Rollback:
+
+- Revert the browser-selection/provider/startup changes, tests, and CR-117
+  documentation. Preserve or explicitly remove the runtime manifest according
+  to the browser used by existing Profiles; reverting a system-browser Profile
+  directly to Playwright may require reset/re-login. Playwright caches are not
+  removed automatically.
+
+Verification: implementation, runtime probes, and independent full-diff review
+are complete.
+
+Current verification evidence:
+
+- Revised contract RED: `16 failed, 4 passed`; the separate Edge product RED
+  reproduced rejection of real `Edg/150.0.4078.83` CDP evidence.
+- Final CR-117-focused selection passes (`26 passed`); combined Phase 5.1D,
+  CR-116, CR-117, and CR-107 launcher coverage passes (`137 passed`).
+- Complete monitoring regression passes (`566 passed`) with the same three
+  existing warnings. The complete `tests` collection reports `589 passed` and
+  one independently reproducible pre-existing XHS Store factory assertion
+  outside this diff.
+- Real temporary-Profile launches pass for local Chrome
+  `150.0.7871.125` and Edge `150.0.4078.83`. Clean temporary selection chooses
+  `system_chrome`; read-only resolution of existing local Profile data keeps
+  `playwright_bundled`; no real selection manifest or Profile was written.
+- The designated compatibility account remains `validated`/`standby`, does not require re-login, and
+  retains its configured Profile. Local `/api/health` remains `ok`.
+- Python compile, documentation consistency/regression, and
+  `git diff --check` pass. Independent code review returns `PASS FOR CODE` after
+  complete call-chain, concurrency, manifest, service-only boundary, and Edge
+  compatibility inspection. Final full-diff and documentation review returns
+  `FINAL PASS` with no remaining finding or content leakage.
+
+## CR-116 - Persistent Context Runtime Proof Regression Fix
+
+Date: 2026-07-20
+
+Source: local `/monitor` QR login failure reproduced on merged `main@a66b3f8`.
+
+Module: Phase 5.1 account identity catalog and managed requested/effective
+browser verification.
+
+Type: Regression Fix
+
+Status: Verified
+
+Background:
+
+The server-side QR browser starts and reaches the platform login page, but
+`verify_managed_page(...)` reads the effective browser version only from
+`BrowserContext.browser.version`. Playwright persistent contexts expose
+`context.browser` as `None`, so every managed persistent QR/Profile check is
+misclassified as `account_identity_provider_browser_crashed` before QR capture.
+After that defect was removed in a real diagnostic, strict proof correctly
+exposed two additional catalog/provider mismatches hidden by synthetic fakes:
+the catalog advertised Chromium `126.0.6478.183` while pinned Playwright 1.45
+runs `127.0.6533.17`, and weighted `accept_language` lists were reduced by the
+provider to the configured locale. The administrator UI therefore received a
+terminal session with no QR image even though the browser and platform page
+were available.
+
+Atomic goal packet:
+
+- Current baseline: clean merged `main@a66b3f8`; Phase 5.1D and CR-114 remain
+  verified history, while Phase 5.1 server-like acceptance remains operator-
+  gated.
+- In scope: prove the real Chromium version for persistent contexts through
+  the exact page's CDP `Browser.getVersion` response when no owning Browser
+  object is exposed; preserve the existing Browser-object path for ordinary
+  contexts; align the versioned identity catalog with pinned Playwright 1.45
+  runtime metadata and provider-effective locale; classify old catalog
+  versions as requiring explicit reset/re-login; add recurrence coverage and
+  rerun QR/provider regressions.
+- Out of scope: QR selectors, platform login semantics, API/UI contracts,
+  schema, template names/selection order/seed derivation, automatic account
+  data migration, Profile/Cookie/proxy data, browser selection, CR-112,
+  CR-070, and Docker/Linux acceptance.
+- Hard boundaries: do not trust the requested plan version as effective proof;
+  malformed or unavailable runtime version evidence still fails closed; no raw
+  path, Cookie, proxy credential, or exception enters runtime snapshots or UI.
+- Touch surface: `tools/browser_environment.py`,
+  `api/monitoring/account_identity.py`, `tests/test_monitoring_mvp.py`, and the
+  required governance documents only.
+- Execution: add RED tests that mirror `launch_persistent_context` and the old
+  catalog, implement bounded CDP proof and catalog `1.1/v2`, run focused and
+  full regressions, explicitly reset the affected local draft account, then
+  repeat real managed QR generation and close its browser session.
+- Acceptance: the RED fails on `main@a66b3f8`; Browser-object and persistent-
+  context version mismatch evidence remains field-scoped; the real local
+  managed flow reaches QR capture; focused/full/compile/docs gates and an
+  independent read-only review pass.
+- Rollback: before any explicit account reset, revert the helper, catalog,
+  regression, and CR-116 documentation. No schema rollback is needed. An
+  account explicitly reset to v2 must be reset/re-created again before running
+  reverted v1 code; it is never silently downgraded.
+- Stop conditions: stop if CDP cannot return a parseable Chromium product
+  version, if effective proof needs a requested-value fallback, or if the fix
+  changes login/Profile/proxy ownership beyond this defect.
+
+Expected baseline behavior:
+
+- Server-side persistent QR and Profile checks launch the account-bound Profile,
+  prove the actual browser version, continue to platform QR/status handling,
+  and fail closed only on real mismatch or unavailable proof.
+
+Recurrence-prevention test:
+
+- A synthetic Playwright persistent context with `context.browser is None`
+  must read `HeadlessChrome/VERSION` through `Browser.getVersion`, detach the
+  temporary CDP session, and produce a successful safe runtime snapshot.
+- A static test must bind every catalog UA version to Playwright's installed
+  default Chromium metadata and bind `accept_language` to the provider-
+  effective locale. A v1 account must fail closed with
+  `account_identity_requires_relogin`, not be silently rewritten.
+
+Verification:
+
+- Persistent and ordinary Context version paths, malformed/missing proof,
+  mismatch evidence, and mandatory CDP detach are covered. The Phase 5.1B-D/
+  CR-116 focused selection passes (`135 passed`), final adjacent cleanup tests
+  pass (`16 passed`), and the complete monitor suite passes (`543 passed`).
+- A fresh real local managed Douyin probe returns `waiting_qrcode` with a QR
+  image and closes its diagnostic browser immediately. The designated compatibility account remains
+  explicitly versioned `1.1/v2`, `validated`, and `standby`; no QR or Cookie
+  material was retained.
+- Python compile, documentation consistency/regression, `git diff --check`,
+  and independent read-only review pass. CR-116 is verified and approved for integration; the
+  Docker/Linux Phase 5.1 acceptance gate remains separate.
 
 ## CR-056 - Filter Dropdown Alignment Regression Fix
 

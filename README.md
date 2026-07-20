@@ -19,16 +19,20 @@
 
 ## 快速启动
 
-在项目根目录启动后台：
-
-```powershell
-.\start_webui.bat
-```
-
-Windows 一键启动并自动打开浏览器：
+Windows 本地一键启动并自动打开后台：
 
 ```powershell
 .\start_monitor_oneclick.bat
+```
+
+本地启动需要先安装 `uv`。首次启动会固定选择一个项目浏览器：有效的
+`MONITOR_BROWSER_EXECUTABLE` 优先，其次依次检查本机 Chrome、Edge、
+Chromium 和已安装的 Playwright Chromium；全部缺失时自动安装 Playwright
+Chromium。选择结果保存在本机运行数据中，后续不会因为安装了另一个浏览器
+而切换已有账号的 Profile。自动安装失败时，可以手工重试：
+
+```powershell
+uv run playwright install chromium
 ```
 
 打开管理后台：
@@ -48,7 +52,7 @@ http://127.0.0.1:8080/monitor
 传入浏览器 URL。
 
 `start_webui.bat` 也会尊重 `MONITOR_HOST`、`MONITOR_PORT` 和
-`MONITOR_BROWSER_URL`。
+`MONITOR_BROWSER_URL`，并在前台启动服务前执行同一浏览器预检。
 
 `start_monitor_service.bat` 只启动服务，不自动打开浏览器。
 

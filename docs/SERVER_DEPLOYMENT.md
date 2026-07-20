@@ -49,6 +49,39 @@ The Windows helper scripts in the repository should follow the same rule:
 `MONITOR_HOST` controls the bind address, `MONITOR_PORT` controls the port,
 and `MONITOR_BROWSER_URL` overrides only the browser destination.
 
+`start_monitor_oneclick.bat` and `start_webui.bat` require `uv` and run the
+shared local browser preflight before service startup:
+
+1. An existing deployment selection is reused. A matching explicit
+   `MONITOR_BROWSER_EXECUTABLE` may confirm it; a conflicting explicit path or
+   missing saved system/explicit browser stops startup.
+2. A clean deployment without Profile data selects a valid explicit browser,
+   then Chrome, Edge, supported Chromium, or installed Playwright Chromium.
+3. Existing Profile data without a manifest preserves a valid explicit browser
+   when configured; otherwise it binds to Playwright Chromium.
+4. When the selected Playwright Chromium is absent, the launcher runs
+   `python -m playwright install chromium` through the active project
+   interpreter. Installation output remains visible and the executable is
+   checked again before service startup.
+5. Installer failure or failed post-install verification stops startup and
+   returns `uv run playwright install chromium`.
+
+The selection manifest stores only a contract version, browser source/channel,
+and local executable path under `MONITOR_DATA_DIR`; it is not customer-facing.
+Its sibling lock file is a transient cross-process synchronization artifact,
+not selection data. The complete read/select/write transaction is locked so
+concurrent local/service starts return the same browser.
+All account Profiles remain separate by `profile_key` but share this stable
+deployment browser. Browser version updates are recorded after launch and do
+not change the selection. The service-only script retains operator-managed
+prerequisites, and Docker retains its pinned Playwright base image.
+
+To intentionally change browser channel, stop the service, reset/re-login the
+affected account Profiles, remove `MONITOR_DATA_DIR/browser_selection.json`,
+set the desired explicit executable if needed, and run a local preflight again.
+Deleting only the manifest while retaining system-browser Profile data is not
+a supported migration path.
+
 ## Proposed CR-112 Local Browser Auto-Sync Boundary
 
 Status: `Needs Confirmation`. This is a proposed local Windows capability and

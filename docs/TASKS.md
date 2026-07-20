@@ -443,7 +443,7 @@ final server-like acceptance is active.
       region bundle.
 - [x] Add China mainland generation rules: `environment_region =
       CN_MAINLAND`, `timezone = Asia/Shanghai`, `locale = zh-CN`,
-      `accept_language = zh-CN,zh;q=0.9`, and a coherent desktop/mobile
+      `accept_language = zh-CN` for catalog v2, and a coherent desktop/mobile
       device template instead of province-level overfitting.
 - [x] Support a small template catalog such as `CN_WIN_CHROME_1920`,
       `CN_WIN_CHROME_1536`, `CN_MAC_CHROME_1440`, `CN_ANDROID_CHROME`,
@@ -576,6 +576,27 @@ lower-strength/docs/compile gates pass after merge.
 - [x] Complete focused/full/docs/compile and independent read-only review.
 - [x] Merge this follow-up and complete post-merge verification before resuming
       Phase 5.1 Task 3.
+
+### CR-116 - Persistent Context Runtime Proof Regression Fix
+
+Implementation status (2026-07-20): verified and included in the integration
+set approved for main. A real local QR
+attempt on merged `main@a66b3f8` reproduced the Phase 5.1D effective-proof
+failure; the corrected flow now captures a QR image and closes cleanly. The
+completed Phase 5.1D history remains closed; CR-116 owns this regression.
+
+- [x] Add a deterministic RED for a persistent Playwright context whose
+      `context.browser` is `None`.
+- [x] Read the effective Chromium version from the exact page's CDP
+      `Browser.getVersion` response and detach the temporary session.
+- [x] Align catalog `1.1/v2` with pinned Playwright 1.45 Chromium metadata and
+      provider-effective locale; require explicit reset/re-login for v1.
+- [x] Preserve Browser-object proof, field-scoped version mismatch evidence,
+      fail-closed behavior, and existing QR/Profile/proxy ownership.
+- [x] Verify the real local managed flow reaches QR capture, then close the
+      diagnostic browser session without retaining QR or Cookie material.
+- [x] Run focused/full/compile/documentation gates and independent read-only
+      review before closing CR-116.
 
 ### Phase 5.1 Acceptance Gate - Runtime Snapshot And Server-Like Verification
 
@@ -1627,6 +1648,54 @@ Implementation status:
       `docs/SERVER_DEPLOYMENT.md`.
 - [x] Verify the new launcher with targeted tests, docs consistency, and
       `git diff --check`.
+
+## CR-118 - QR Login Success Monotonicity And Profile Restart Verification
+
+Implementation status (2026-07-20): verified and operator-approved for main integration on
+`codex/cr-117-playwright-chromium-bootstrap` as a bounded Phase 5.1 login-flow
+regression found by a designated local test account. Its post-restart session remains
+successful after later polls and normal browser cleanup.
+
+- [x] Record the real account/session evidence and regression boundary.
+- [x] Add RED tests for terminal route lookup, persisted success monotonicity,
+      and serial frontend polling.
+- [x] Preserve successful login-session status and skip closed-browser polling
+      for terminal sessions.
+- [x] Serialize QR creation, concurrent GET polling, verification-code POSTs,
+      and deletion for one session; prevent stale frontend callbacks from
+      clearing a newer active session.
+- [x] Check an existing persistent Profile before preparing a new QR login and
+      cancel/await bounded polling tasks during timeout or cleanup.
+- [x] Replace overlapping frontend interval polling with serial scheduling.
+- [x] Restart the service and verify the designated test account through its existing
+      `profile_key` Profile without re-login.
+- [x] Run focused/full/docs/compile/diff gates and independent review.
+
+## CR-117 - Windows Local Browser Selection And Playwright Chromium Bootstrap
+
+Implementation status (2026-07-20): verified and operator-approved for main integration on
+`codex/cr-117-playwright-chromium-bootstrap`. The implementation adds one
+stable local browser selection per deployment, preserves existing Profiles,
+treats valid version changes as telemetry, and keeps server/Docker/per-account/
+CR-112 boundaries. Final independent full-diff review returns `FINAL PASS`.
+
+- [x] Register the accepted requirement, scope, test boundary, and traceability
+      before changing startup code.
+- [x] Add deterministic tests for local browser priority, persisted selection,
+      existing-Profile compatibility, missing/conflicting saved browsers,
+      Playwright repair, and non-blocking valid version changes.
+- [x] Implement the versioned deployment-local browser selection manifest and
+      connect it to the managed Provider.
+- [x] Update both Windows local launchers to run the shared browser preflight
+      without changing their service lifecycle.
+- [x] Add a readable `uv` prerequisite check to the combined batch launcher.
+- [x] Preserve CR-107 host/port/browser URL behavior and service-only/Docker
+      boundaries.
+- [x] Update startup/account/data-model documentation and record focused/full/
+      docs/compile/real-read-only selection evidence.
+- [x] Verify runtime browser version changes remain observable but do not force
+      re-login when all other environment probes pass.
+- [x] Complete final independent read-only review before closing CR-117.
 
 ## CR-108 - Local/Server Login Initialization And Verification Flow Hardening
 

@@ -276,6 +276,17 @@ requested/effective runtime snapshot contract.
   two BrowserContexts retain separate plans while both CDP Pages execute their
   own pre-navigation preparation. The test must fail against the merged
   Phase 5.1D ID-keyed collections and pass with object-scoped bindings.
+- CR-116 mirrors Playwright persistent-context behavior where
+  `BrowserContext.browser` is `None`. The regression must fail on the merged
+  Phase 5.1D version lookup, obtain the effective version from the exact page's
+  CDP `Browser.getVersion` product after the fix, detach the temporary CDP
+  session, and preserve fail-closed malformed/missing proof plus field-scoped
+  browser-version mismatch evidence.
+- CR-116 also reads Playwright's installed `browsers.json` without launching a
+  browser and proves every current catalog UA version matches the default
+  bundled Chromium version. Catalog `accept_language` must equal the locale
+  that Playwright exposes in both request and navigator probes; old v1 metadata
+  must return `account_identity_requires_relogin` without silent mutation.
 - Phase 5.1 acceptance-checker tests verify the incomplete template and example,
   exact QR/Cookie/Profile/manual/scheduler/`cli_manual` action matrix, unique
   references, chronology, restart lock/digest stability, managed provider
@@ -342,7 +353,7 @@ requested/effective runtime snapshot contract.
   and region.
 - China mainland proxy identities default to `environment_region =
   CN_MAINLAND`, `timezone = Asia/Shanghai`, `locale = zh-CN`, and
-  `accept_language = zh-CN,zh;q=0.9`, with coherent desktop or mobile device
+  `accept_language = zh-CN` for catalog v2, with coherent desktop or mobile device
   templates.
 - The Account Identity Validator rejects missing or contradictory identity
   fields and does not let locked accounts fall back to Playwright or process
@@ -1506,6 +1517,73 @@ Run the relevant parts of this checklist after each Phase 11 batch:
   not start a real browser or open a real port.
 - Documentation tests should confirm the quick-start instructions mention the
   one-click Windows launcher and the remote-access override behavior.
+
+## CR-118 QR Login Success Monotonicity And Profile Restart Tests
+
+- Persisted `success` is a monotonic login-session terminal state. A later
+  `qrcode_failed`, timeout, or platform-error update returns the existing row
+  without changing status, message, QR image, or `updated_at`.
+- GET of an already terminal login session returns its persisted result and
+  current account state without calling the QR browser poller or account check.
+- Concurrent GETs for one pending session share one serialized poll and account
+  verification. A second request that starts during the first verification
+  must read the resulting terminal success instead of polling a closed browser.
+- Verification-code submission and request POSTs share the same session lock
+  with GET. A GET started during either POST's successful verification must not
+  poll the already-closed browser. QR creation and deletion use the same lock.
+- Pending login sessions retain existing QR polling, verification, failure
+  reconciliation, and successful account-level Profile-check behavior.
+- QR startup checks an already authenticated persistent Profile before
+  preparing a login dialog or QR code.
+- A bounded QR polling timeout/cancellation cancels and awaits its child task;
+  browser cleanup produces no unobserved `TargetClosedError` task.
+- The frontend login-session loop uses one serial timeout only after the prior
+  request settles; it has no asynchronous `setInterval` in that loop. If a new
+  login session starts while an older request is in flight, the stale callback
+  must return without clearing the new session's active ID or timer.
+- Real local verification restarts the service before checking the designated test account,
+  then proves the same `profile_key`, persistent Profile, browser source,
+  `fallback_used=false`, active identity, and `requires_relogin=false`.
+- The real check records only safe counts, states, versions, and timestamps.
+  Cookie values, raw Profile paths, QR data, and platform secrets stay outside
+  documentation and logs.
+- Final gates include adjacent QR tests, Phase 5.1 focused tests, complete
+  monitoring regression, compile, documentation consistency/regression,
+  `git diff --check`, and independent read-only review.
+
+## CR-117 Windows Local Browser Selection And Chromium Bootstrap Tests
+
+- A clean local deployment must choose valid explicit configuration, Chrome,
+  Edge, supported Chromium, installed Playwright Chromium, then Playwright
+  installation in that order. Chrome must win when Chrome and Edge both exist.
+- The versioned manifest must be written atomically and reused before discovery.
+  Later browser installation must not alter it. Missing saved system/explicit
+  browsers and explicit conflicts with Profile data must fail closed.
+- The complete read/select/write transaction must be cross-process locked. A
+  concurrent local-system selection and service-only Playwright selection must
+  return one identical persisted result.
+- Existing Profile data without a manifest must preserve a valid explicit
+  executable or bind to Playwright Chromium, never a newly detected browser.
+- A missing selected Playwright Chromium must run the active interpreter with
+  `-m playwright install chromium`, keep output attached to the console, then
+  re-resolve and verify the executable before service spawn.
+- Installer nonzero exit, launch error, post-install probe error, and
+  post-install absence must stop without starting a service and must include
+  the exact manual retry command.
+- A valid runtime browser version different from the generated UA version must
+  be recorded as effective evidence without a mismatch or re-login result.
+  Chrome and Edge `Edg/...` CDP products must both parse. Missing/malformed
+  version evidence and other field mismatches remain errors.
+- Tests must use temporary manifests, fake paths, and subprocess results. They
+  must not
+  download a browser, open a browser, bind a port, start FastAPI, inspect user
+  browser profiles, or alter Playwright's real cache.
+- Existing `windows_oneclick_launcher` tests must remain green. Static tests
+  must prove both local batch launchers check `uv` and run the shared preflight
+  while service-only/Docker entry points remain unchanged.
+- Final gates are focused CR-107/CR-117 tests, complete monitoring regression,
+  Python compile, documentation consistency/regression, `git diff --check`,
+  and independent read-only full-diff review including artifact leakage.
 
 ## CR-108 Local/Server Login Initialization And Verification Flow Hardening Tests
 

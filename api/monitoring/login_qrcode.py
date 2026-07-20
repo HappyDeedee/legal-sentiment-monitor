@@ -151,10 +151,7 @@ async def _start_qrcode_login_session_with_profile_once(
                     "_browser_environment_plan": managed_plan,
                     "_browser_environment_result": provider_result,
                 }
-        login_adapter = _build_mediacrawler_login_adapter(platform, context, page)
-        await _prepare_login_page(platform, page, timeout, login_adapter)
         login_baseline = await _login_baseline(platform, context)
-
         if await _is_logged_in(platform, context, page, login_baseline):
             await _close_context(playwright, context)
             return {
@@ -172,6 +169,8 @@ async def _start_qrcode_login_session_with_profile_once(
                 "message": "当前 Profile 已经登录，不需要重新扫码。",
             }
 
+        login_adapter = _build_mediacrawler_login_adapter(platform, context, page)
+        await _prepare_login_page(platform, page, timeout, login_adapter)
         qr_image = await _find_login_qrcode(page, platform, timeout, login_adapter)
         if not qr_image:
             verification = await _detect_manual_verification(platform, page)
@@ -950,10 +949,18 @@ async def _cookie_dict(context: BrowserContext) -> dict[str, Any]:
 
 
 async def _bounded_poll_step(awaitable: Any, timeout_seconds: float, fallback: Any) -> Any:
+    task = asyncio.ensure_future(awaitable)
     try:
-        return await asyncio.wait_for(awaitable, timeout=max(0.001, timeout_seconds))
-    except TimeoutError:
+        done, _ = await asyncio.wait({task}, timeout=max(0.001, timeout_seconds))
+        if done:
+            return task.result()
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
         return fallback
+    except asyncio.CancelledError:
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        raise
 
 
 async def _is_logged_in(platform: str, context: BrowserContext, page: Page, login_baseline: str = "") -> bool:

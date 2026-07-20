@@ -32,7 +32,15 @@ _IDENTITY_STATES = frozenset(
     }
 )
 _BROWSER_SOURCES = frozenset(
-    {"explicit", "playwright_bundled", "system_managed", "diagnostic_auto_detect"}
+    {
+        "explicit",
+        "playwright_bundled",
+        "system_managed",
+        "system_chrome",
+        "system_edge",
+        "system_chromium",
+        "diagnostic_auto_detect",
+    }
 )
 _PROFILE_MODES = frozenset({"persistent", "ephemeral_cookie_validation"})
 _PROXY_POLICIES = frozenset({"account_bound", "direct"})
@@ -160,6 +168,9 @@ _LOCALE_RE = re.compile(r"^[A-Za-z]{2,8}(?:-[A-Za-z0-9]{2,8})?$")
 _TIMEZONE_RE = re.compile(r"^(?:UTC|[A-Za-z_+\-]+(?:/[A-Za-z0-9_+\-]+)+)$")
 _ACCEPT_LANGUAGE_RE = re.compile(r"^[A-Za-z0-9,;=.\- ]{1,256}$")
 _VERSION_RE = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._+\-]{0,63}$")
+_CHROMIUM_PRODUCT_VERSION_RE = re.compile(
+    r"(?:HeadlessChrome|Chrome|Chromium|HeadlessEdg|Edg)/(\d+(?:\.\d+){0,3})"
+)
 _ABSOLUTE_PATH_RE = re.compile(r"^(?:[A-Za-z]:[\\/]|\\\\|/)")
 _URI_SCHEME_RE = re.compile(r"^[A-Za-z][A-Za-z0-9+.-]*://")
 
@@ -429,10 +440,7 @@ async def verify_managed_page(context: Any, page: Any) -> BrowserEnvironmentResu
             raise TypeError("invalid probe result")
         runtime = _context_runtime_state(context)
         accept_language = str(runtime.get("accept_language") or "")
-        browser = getattr(context, "browser", None)
-        browser_version = str(getattr(browser, "version", "") or "")
-        if not browser_version:
-            raise TypeError("missing browser version")
+        browser_version = await _effective_browser_version(context, page)
         effective = {
             "user_agent": str(probes.get("user_agent") or ""),
             "timezone": str(probes.get("timezone") or ""),
@@ -461,7 +469,6 @@ async def verify_managed_page(context: Any, page: Any) -> BrowserEnvironmentResu
             ("device_scale_factor", float(plan.device_scale_factor), float(effective["device_scale_factor"])),
             ("has_touch", plan.has_touch, effective["has_touch"]),
             ("is_mobile", plan.is_mobile, effective["is_mobile"]),
-            ("browser_version", plan.browser_version, browser_version),
         )
         mismatch_evidence = [
             {"field": field_name, "requested": requested_value, "effective": effective_value}
@@ -546,6 +553,26 @@ async def verify_managed_page(context: Any, page: Any) -> BrowserEnvironmentResu
             proxy_effect=str(runtime.get("proxy_effect_proof") or "failed"),
         )
         raise failure from exc
+
+
+async def _effective_browser_version(context: Any, page: Any) -> str:
+    browser = getattr(context, "browser", None)
+    browser_version = str(getattr(browser, "version", "") or "").strip()
+    if browser_version:
+        return browser_version
+
+    cdp_session = await context.new_cdp_session(page)
+    try:
+        version_payload = await cdp_session.send("Browser.getVersion")
+    finally:
+        await cdp_session.detach()
+    if not isinstance(version_payload, dict):
+        raise TypeError("invalid browser version response")
+    product = str(version_payload.get("product") or "")
+    match = _CHROMIUM_PRODUCT_VERSION_RE.search(product)
+    if not match:
+        raise TypeError("missing browser version")
+    return match.group(1)
 
 
 def browser_environment_failure_result(

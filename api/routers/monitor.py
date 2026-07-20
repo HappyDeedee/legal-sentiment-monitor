@@ -3,6 +3,7 @@ from __future__ import annotations
 import asyncio
 import os
 import re
+import weakref
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any
@@ -154,6 +155,16 @@ router = APIRouter(
 
 AdminUser = Depends(require_role("administrator"))
 CurrentUser = Depends(require_authenticated_user)
+
+_LOGIN_SESSION_POLL_LOCKS: weakref.WeakValueDictionary[int, asyncio.Lock] = weakref.WeakValueDictionary()
+
+
+def _login_session_poll_lock(session_id: int) -> asyncio.Lock:
+    lock = _LOGIN_SESSION_POLL_LOCKS.get(int(session_id))
+    if lock is None:
+        lock = asyncio.Lock()
+        _LOGIN_SESSION_POLL_LOCKS[int(session_id)] = lock
+    return lock
 
 
 def _route_actor(user: Any) -> dict[str, Any] | None:
@@ -1268,6 +1279,8 @@ async def create_platform_login_session(payload: dict[str, Any], admin: dict[str
     platform = payload.get("platform")
     prepared_account_id: int | None = None
     identity_prepared = False
+    session_lock: asyncio.Lock | None = None
+    session_lock_acquired = False
     try:
         if not payload.get("account_id"):
             draft = create_draft_social_account(
@@ -1364,6 +1377,9 @@ async def create_platform_login_session(payload: dict[str, Any], admin: dict[str
                 "message": "正在生成登录二维码。",
             }
         )
+        session_lock = _login_session_poll_lock(int(session["id"]))
+        await session_lock.acquire()
+        session_lock_acquired = True
         _audit_admin(admin, "create_login_session", "login_session", session.get("id"), {"platform": platform, "account_id": payload.get("account_id")})
         qr_result = await start_qrcode_login_session_with_profile(int(session["id"]), str(platform), command)
         provider_plan = qr_result.pop("_browser_environment_plan", None)
@@ -1375,11 +1391,11 @@ async def create_platform_login_session(payload: dict[str, Any], admin: dict[str
         verification_image = ""
         account_status = None
         if qr_result.get("already_logged_in"):
-            session = update_login_session_status(
-                int(session["id"]),
-                LOGIN_STATE_SUCCESS,
-                str(qr_result.get("message") or "当前 Profile 已经登录"),
-            )
+            session = {
+                **session,
+                "status": LOGIN_STATE_SUCCESS,
+                "message": str(qr_result.get("message") or "当前 Profile 已经登录"),
+            }
             session, account_status = await _verify_successful_login_session(session)
         else:
             next_status = _login_state_from_qr_result(qr_result)
@@ -1445,43 +1461,64 @@ async def create_platform_login_session(payload: dict[str, Any], admin: dict[str
             status_code=500,
             detail=customer_safe_text(redact_sensitive(f"{type(exc).__name__}: {exc}")),
         )
+    finally:
+        if session_lock_acquired and session_lock is not None:
+            session_lock.release()
 
 
 @router.get("/login-sessions/{session_id}")
 async def login_session(session_id: int, admin: dict[str, Any] = AdminUser):
     init_db()
+    async with _login_session_poll_lock(session_id):
+        return await _login_session_locked(session_id)
+
+
+async def _login_session_locked(session_id: int) -> dict[str, Any]:
     session = get_login_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="login session not found")
     original_status = str(session.get("status") or "")
     platform = session.get("platform")
-    qr_poll = await poll_qrcode_login_session(session_id)
     verification_image = ""
     account_status = None
-    if qr_poll.get("success"):
-        session = update_login_session_status(session_id, LOGIN_STATE_SUCCESS, str(qr_poll.get("message") or "登录成功"))
-        session, account_status = await _verify_successful_login_session(session)
+    if normalize_login_state(original_status) in TERMINAL_LOGIN_STATES:
+        qr_poll = {
+            "active": False,
+            "success": False,
+            "status": normalize_login_state(original_status),
+            "message": str(session.get("message") or ""),
+        }
+        account_status = get_social_account(int(session.get("account_id") or 0)) if session.get("account_id") else None
     else:
-        current_status = normalize_login_state(session.get("status"))
-        next_status = _login_state_from_qr_poll(qr_poll, current_status, session)
-        if _should_reconcile_login_failure(current_status, next_status, qr_poll):
-            session, account_status = await _reconcile_login_session_with_account_check(session, qr_poll, next_status)
+        qr_poll = await poll_qrcode_login_session(session_id)
+        if qr_poll.get("success"):
+            session = {
+                **session,
+                "status": LOGIN_STATE_SUCCESS,
+                "message": str(qr_poll.get("message") or "登录成功"),
+            }
+            session, account_status = await _verify_successful_login_session(session)
         else:
-            if next_status != current_status or qr_poll.get("qr_image"):
-                session = update_login_session_status(
-                    session_id,
-                    next_status,
-                    str(qr_poll.get("message") or _default_login_state_message(next_status)),
-                    str(qr_poll.get("qr_image") or ""),
-                )
-            elif (
-                qr_poll.get("message")
-                and current_status in PENDING_LOGIN_STATES
-                and not _qr_initialization_still_pending(current_status, qr_poll)
-            ):
-                session = {**session, "status": current_status, "message": qr_poll.get("message")}
+            current_status = normalize_login_state(session.get("status"))
+            next_status = _login_state_from_qr_poll(qr_poll, current_status, session)
+            if _should_reconcile_login_failure(current_status, next_status, qr_poll):
+                session, account_status = await _reconcile_login_session_with_account_check(session, qr_poll, next_status)
             else:
-                session = {**session, "status": current_status}
+                if next_status != current_status or qr_poll.get("qr_image"):
+                    session = update_login_session_status(
+                        session_id,
+                        next_status,
+                        str(qr_poll.get("message") or _default_login_state_message(next_status)),
+                        str(qr_poll.get("qr_image") or ""),
+                    )
+                elif (
+                    qr_poll.get("message")
+                    and current_status in PENDING_LOGIN_STATES
+                    and not _qr_initialization_still_pending(current_status, qr_poll)
+                ):
+                    session = {**session, "status": current_status, "message": qr_poll.get("message")}
+                else:
+                    session = {**session, "status": current_status}
     if account_status is None and normalize_login_state(original_status) in TERMINAL_LOGIN_STATES and not qr_poll.get("success"):
         account_status = get_social_account(int(session.get("account_id") or 0)) if session.get("account_id") else None
     elif account_status is None:
@@ -1516,13 +1553,22 @@ async def login_session(session_id: int, admin: dict[str, Any] = AdminUser):
 @router.post("/login-sessions/{session_id}/verification-code")
 async def submit_login_session_verification_code(session_id: int, payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     init_db()
+    async with _login_session_poll_lock(session_id):
+        return await _submit_login_session_verification_code_locked(session_id, payload)
+
+
+async def _submit_login_session_verification_code_locked(session_id: int, payload: dict[str, Any]) -> dict[str, Any]:
     session = get_login_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="login session not found")
     qr_poll = await submit_qrcode_login_verification_code(session_id, str(payload.get("code") or ""))
     account_status = None
     if qr_poll.get("success"):
-        session = update_login_session_status(session_id, LOGIN_STATE_SUCCESS, str(qr_poll.get("message") or "登录成功"))
+        session = {
+            **session,
+            "status": LOGIN_STATE_SUCCESS,
+            "message": str(qr_poll.get("message") or "登录成功"),
+        }
         session, account_status = await _verify_successful_login_session(session)
     else:
         current_status = normalize_login_state(session.get("status"))
@@ -1573,13 +1619,22 @@ async def submit_login_session_verification_code(session_id: int, payload: dict[
 @router.post("/login-sessions/{session_id}/verification-code/request")
 async def request_login_session_verification_code(session_id: int, admin: dict[str, Any] = AdminUser):
     init_db()
+    async with _login_session_poll_lock(session_id):
+        return await _request_login_session_verification_code_locked(session_id)
+
+
+async def _request_login_session_verification_code_locked(session_id: int) -> dict[str, Any]:
     session = get_login_session(session_id)
     if not session:
         raise HTTPException(status_code=404, detail="login session not found")
     qr_poll = await request_qrcode_login_verification_code(session_id)
     account_status = None
     if qr_poll.get("success"):
-        session = update_login_session_status(session_id, LOGIN_STATE_SUCCESS, str(qr_poll.get("message") or "登录成功"))
+        session = {
+            **session,
+            "status": LOGIN_STATE_SUCCESS,
+            "message": str(qr_poll.get("message") or "登录成功"),
+        }
         session, account_status = await _verify_successful_login_session(session)
     else:
         current_status = normalize_login_state(session.get("status"))
@@ -1630,7 +1685,13 @@ async def request_login_session_verification_code(session_id: int, admin: dict[s
 async def _verify_successful_login_session(session: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None]:
     account_id = int(session.get("account_id") or 0)
     if not account_id:
-        return session, None
+        verified_session = update_login_session_status(
+            int(session["id"]),
+            LOGIN_STATE_SUCCESS,
+            str(session.get("message") or "登录成功"),
+            str(session.get("qr_image") or ""),
+        )
+        return verified_session, None
     try:
         check = await check_social_account_login(
             account_id,
@@ -1720,6 +1781,11 @@ async def _reconcile_login_session_with_account_check(
 
 @router.delete("/login-sessions/{session_id}")
 async def remove_login_session(session_id: int, admin: dict[str, Any] = AdminUser):
+    async with _login_session_poll_lock(session_id):
+        return await _remove_login_session_locked(session_id, admin)
+
+
+async def _remove_login_session_locked(session_id: int, admin: dict[str, Any]) -> dict[str, bool]:
     session = get_login_session(session_id)
     await close_qrcode_login_session(session_id)
     if session:

@@ -17,6 +17,7 @@ from tools.browser_environment import (
 
 from .account_environment import account_profile_environment
 from .account_identity import AccountIdentityError, validate_account_identity
+from .browser_selection import BrowserSelectionError, resolve_browser_selection
 
 
 _MANAGED_STATES = frozenset({"generated", "validated", "login_in_progress", "locked", "active"})
@@ -218,6 +219,20 @@ def _resolve_proxy(
 
 
 def _resolve_executable(*, playwright_executable_path: str, diagnostic: bool) -> tuple[str, str]:
+    if not diagnostic:
+        try:
+            selection = resolve_browser_selection(
+                playwright_executable_path,
+                allow_system=False,
+                persist=True,
+            )
+        except BrowserSelectionError as exc:
+            raise BrowserEnvironmentError(
+                "account_identity_provider_unsupported",
+                "browser_executable",
+            ) from exc
+        return str(selection.executable_path), selection.source
+
     explicit = str(os.environ.get("MONITOR_BROWSER_EXECUTABLE") or "").strip().strip('"')
     candidate = explicit or str(playwright_executable_path or "").strip().strip('"')
     source = "explicit" if explicit else ("diagnostic_auto_detect" if diagnostic else "playwright_bundled")

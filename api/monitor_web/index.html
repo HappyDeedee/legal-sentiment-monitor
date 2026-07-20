@@ -6806,24 +6806,30 @@
           return isLoginSessionTerminal(data.session.status);
         };
         if(await update()){
+          if(activeLoginSessionId !== Number(id)) return;
           activeLoginSessionId=null;
           await loadLoginSessions();
           if(lastStatus==='success') toast('登录成功，当前账号登录态已保存');
           return;
         }
         let rounds=60;
-        loginSessionPollTimer=setInterval(async()=>{
-          rounds -= 1;
-          const done=await update();
-          if(done || rounds<=0){
-            clearInterval(loginSessionPollTimer);
+        const scheduleNextLoginSessionPoll=()=>{
+          loginSessionPollTimer=setTimeout(async()=>{
             loginSessionPollTimer=null;
-            activeLoginSessionId=null;
-            await loadLoginSessions();
-            if(lastStatus==='success') toast('登录成功，当前账号登录态已保存');
-            else if(rounds<=0) toast('登录确认超时，请重新生成二维码或打开登录窗口处理');
-          }
-        }, 3000);
+            rounds -= 1;
+            const done=await update();
+            if(activeLoginSessionId !== Number(id)) return;
+            if(done || rounds<=0){
+              activeLoginSessionId=null;
+              await loadLoginSessions();
+              if(lastStatus==='success') toast('登录成功，当前账号登录态已保存');
+              else if(rounds<=0) toast('登录确认超时，请重新生成二维码或打开登录窗口处理');
+              return;
+            }
+            scheduleNextLoginSessionPoll();
+          }, 3000);
+        };
+        scheduleNextLoginSessionPoll();
       });
     }
     async function submitLoginVerificationCode(sessionId, triggerButton=null){
@@ -7572,7 +7578,7 @@
     function stopLoginSessionPolling(options={}){
       const sessionId=activeLoginSessionId;
       if(loginSessionPollTimer){
-        clearInterval(loginSessionPollTimer);
+        clearTimeout(loginSessionPollTimer);
         loginSessionPollTimer=null;
       }
       activeLoginSessionId=null;

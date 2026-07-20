@@ -209,7 +209,7 @@ China mainland proxy rule:
 - `environment_region = CN_MAINLAND`;
 - `timezone = Asia/Shanghai`;
 - `locale = zh-CN`;
-- `accept_language = zh-CN,zh;q=0.9`;
+- `accept_language = zh-CN` for current catalog v2;
 - use a coherent desktop or mobile device template;
 - avoid province-level browser overfitting. Prefer stable proxy region/ISP,
   device family, browser family, and language/timezone consistency.
@@ -297,7 +297,9 @@ Template-family change rules:
 
 ## Identity Generation Specification
 
-Phase 5.1 generator v1 is deterministic and template-driven:
+Phase 5.1 generator 1.1 is deterministic and template-driven. CR-116 keeps the
+v1 seed-derivation domain and selection algorithm while correcting the runtime
+catalog to environment v2:
 
 - generator implementation authority is
   `api/monitoring/account_identity.py`;
@@ -339,20 +341,26 @@ Phase 5.1 generator v1 is deterministic and template-driven:
 - no random fallback:
   the same input tuple must always produce the same output row.
 
-Template catalog v1:
+Template catalog v2:
 
-The values below are the Phase 5.1 v1 catalog. If the bundled browser version
-is upgraded later, a new `identity_environment_version` and generator version
-must be recorded instead of mutating locked identities in place.
+The values below are generator `1.1`, environment `v2`, aligned with pinned
+Playwright 1.45 Chromium metadata and the provider-effective locale. Catalog
+v1 rows remain readable but require explicit reset/re-login; they are not
+silently rewritten. The catalog `user_agent` remains generator-owned and
+locked. A compatible browser executable upgrade does not change that catalog
+row or require another identity version by itself; its actual runtime version
+is recorded separately. Changing a catalog-owned field still requires a new
+`identity_environment_version` and generator version instead of mutating
+locked identities in place.
 
 | Template | browser_platform | user_agent | screen | viewport | scale | mobile | touch | timezone | locale | accept_language |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
-| `CN_WIN_CHROME_1920` | `windows` | `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.183 Safari/537.36` | `1920x1080` | `1920x963` | `1` | `false` | `false` | `Asia/Shanghai` | `zh-CN` | `zh-CN,zh;q=0.9` |
-| `CN_WIN_CHROME_1536` | `windows` | `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.183 Safari/537.36` | `1536x864` | `1536x768` | `1` | `false` | `false` | `Asia/Shanghai` | `zh-CN` | `zh-CN,zh;q=0.9` |
-| `CN_MAC_CHROME_1440` | `macos` | `Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.183 Safari/537.36` | `1440x900` | `1440x789` | `2` | `false` | `false` | `Asia/Shanghai` | `zh-CN` | `zh-CN,zh;q=0.9` |
-| `CN_ANDROID_CHROME` | `android` | `Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.183 Mobile Safari/537.36` | `1080x2400` | `412x915` | `2.625` | `true` | `true` | `Asia/Shanghai` | `zh-CN` | `zh-CN,zh;q=0.9` |
-| `HK_DESKTOP_CHROME` | `windows` | `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.183 Safari/537.36` | `1920x1080` | `1920x963` | `1` | `false` | `false` | `Asia/Hong_Kong` | `zh-HK` | `zh-HK,zh;q=0.9,en;q=0.8` |
-| `SG_DESKTOP_CHROME` | `windows` | `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/126.0.6478.183 Safari/537.36` | `1440x900` | `1440x789` | `1` | `false` | `false` | `Asia/Singapore` | `en-SG` | `en-SG,en;q=0.9,zh;q=0.7` |
+| `CN_WIN_CHROME_1920` | `windows` | `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.6533.17 Safari/537.36` | `1920x1080` | `1920x963` | `1` | `false` | `false` | `Asia/Shanghai` | `zh-CN` | `zh-CN` |
+| `CN_WIN_CHROME_1536` | `windows` | `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.6533.17 Safari/537.36` | `1536x864` | `1536x768` | `1` | `false` | `false` | `Asia/Shanghai` | `zh-CN` | `zh-CN` |
+| `CN_MAC_CHROME_1440` | `macos` | `Mozilla/5.0 (Macintosh; Intel Mac OS X 14_5) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.6533.17 Safari/537.36` | `1440x900` | `1440x789` | `2` | `false` | `false` | `Asia/Shanghai` | `zh-CN` | `zh-CN` |
+| `CN_ANDROID_CHROME` | `android` | `Mozilla/5.0 (Linux; Android 14; Pixel 7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.6533.17 Mobile Safari/537.36` | `1080x2400` | `412x915` | `2.625` | `true` | `true` | `Asia/Shanghai` | `zh-CN` | `zh-CN` |
+| `HK_DESKTOP_CHROME` | `windows` | `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.6533.17 Safari/537.36` | `1920x1080` | `1920x963` | `1` | `false` | `false` | `Asia/Hong_Kong` | `zh-HK` | `zh-HK` |
+| `SG_DESKTOP_CHROME` | `windows` | `Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/127.0.6533.17 Safari/537.36` | `1440x900` | `1440x789` | `1` | `false` | `false` | `Asia/Singapore` | `en-SG` | `en-SG` |
 
 Template rules:
 
@@ -422,10 +430,15 @@ Runner child processes, all seven platform cores, and launch-owned CDP.
 
 Provider rules:
 
-- a non-empty `MONITOR_BROWSER_EXECUTABLE` is authoritative; an invalid path
-  fails closed. When it is empty, the pinned Playwright Chromium executable is
-  used and recorded as `playwright_bundled`; managed paths do not run local
-  Chrome/Edge auto-detection;
+- the provider consumes one validated deployment browser selection. Windows
+  local launchers may establish it from explicit configuration, Chrome, Edge,
+  supported Chromium, or Playwright; service-only/Docker defaults remain
+  Playwright. Sources are recorded as `explicit`, `system_chrome`,
+  `system_edge`, `system_chromium`, or `playwright_bundled`;
+- a saved deployment selection is authoritative and a missing saved executable
+  fails closed. Existing Profiles without a manifest retain explicit authority
+  when supplied and otherwise bind to Playwright, preventing cross-browser
+  Profile reuse during upgrade;
 - persistent Profile paths are always derived from `profile_key` under
   `MONITOR_ACCOUNT_PROFILE_ROOT`. Stored legacy paths and platform-generic
   directories are not managed launch inputs;
@@ -488,7 +501,7 @@ Snapshot shape (exact top-level contract):
   },
   "browser": {
     "family": "chromium",
-    "version": "126.0.6478.183",
+    "version": "127.0.6533.17",
     "source": "playwright_bundled"
   },
   "profile": {
@@ -507,7 +520,7 @@ Snapshot shape (exact top-level contract):
     "user_agent": "...",
     "timezone": "Asia/Shanghai",
     "locale": "zh-CN",
-    "accept_language": "zh-CN,zh;q=0.9",
+    "accept_language": "zh-CN",
     "screen_width": 1920,
     "screen_height": 1080,
     "viewport_width": 1920,
@@ -734,7 +747,7 @@ Required `manifest.json` fields:
     "profile_key": "1/dy/acc_123"
   },
   "compatibility": {
-    "identity_environment_version": "v1",
+    "identity_environment_version": "v2",
     "provider_name": "playwright",
     "provider_mode": "launch",
     "slim_profile_format": "zip-v1"
@@ -1191,7 +1204,7 @@ Safe audit example:
     "source_platform": "dy",
     "source_account_id": "redacted-source-id",
     "target_account_id": 789,
-    "identity_environment_version": "v1",
+    "identity_environment_version": "v2",
     "provider_name": "playwright",
     "compatibility_result": "matched",
     "login_verification_result": "requires_relogin",

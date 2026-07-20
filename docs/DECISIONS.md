@@ -650,3 +650,40 @@ short `Superseded by` note rather than deleting history.
   task-proxy or default-network fallback; a non-null `proxy_id` is an
   account-bound policy whose browser-routed region must be proven. This does
   not authorize task-level proxy overrides or change CR-112/CR-070 ownership.
+
+## 2026-07-20
+
+- Confirmed for CR-117: a clean Windows local deployment selects one browser in
+  this order: valid explicit executable, Chrome, Edge, supported Chromium,
+  installed Playwright Chromium, then automatic Playwright Chromium install.
+  The versioned selection manifest is deployment-local and authoritative for
+  every independent account Profile on later starts. Cross-process locking
+  covers the complete read/select/write transaction. A missing saved browser
+  fails closed; a newly installed higher-priority browser does not replace it.
+- Confirmed for CR-117: existing Profile data without a selection manifest
+  preserves the pre-CR-117 authority: valid explicit executable when supplied,
+  otherwise Playwright Chromium. Browser-channel migration is an explicit
+  reset/re-login operation, not an automatic fallback.
+- Confirmed for CR-117: actual browser version remains required and is recorded
+  in the runtime snapshot, but version change by itself is non-blocking. Other
+  managed identity, Profile, proxy, malformed-version, and proof failures stay
+  fail closed. This changes runtime compatibility, not the generated account
+  identity catalog.
+- Confirmed for CR-117: both Windows local launchers run the shared preflight.
+  Automatic installation uses the active interpreter and only the `chromium`
+  target. Docker and service-only automatic installation remain unchanged.
+
+- Confirmed for CR-116: Playwright persistent contexts do not expose an owning
+  `Browser` object. Effective Chromium version proof uses the exact page's
+  temporary CDP `Browser.getVersion` response and immediately detaches. The
+  requested plan version is not an evidence fallback; absent or malformed CDP
+  evidence still fails closed.
+- Confirmed for CR-116: the current account identity catalog is generator
+  `1.1`, environment `v2`. It keeps the six template names, deterministic
+  selection order, seed derivation domain, Profile ownership, and proxy policy,
+  while aligning UA version with pinned Playwright 1.45 Chromium
+  `127.0.6533.17` and aligning `accept_language` with the provider-effective
+  locale (`zh-CN`, `zh-HK`, or `en-SG`).
+- Confirmed for CR-116: v1 account identity rows are not rewritten in place.
+  They fail closed as `account_identity_requires_relogin` and require the
+  existing explicit audited reset/re-login flow before reuse.
