@@ -97,6 +97,10 @@ Phase 5.1B now supplies INSERT-only deterministic generation and validation.
 Phase 5.1C implements locking/reset/audit behavior without a new migration;
 provider/runtime binding remains Phase 5.1D.
 
+CR-117 adds a versioned deployment-local browser selection manifest and does
+not add or migrate SQLite columns. Existing Profile data without the manifest
+keeps the pre-CR-117 explicit-or-Playwright authority.
+
 Additive fields for `social_accounts`:
 
 ```text

@@ -59,6 +59,10 @@ class BrowserLauncher:
                 # Edge paths
                 os.path.expandvars(r"%PROGRAMFILES%\Microsoft\Edge\Application\msedge.exe"),
                 os.path.expandvars(r"%PROGRAMFILES(X86)%\Microsoft\Edge\Application\msedge.exe"),
+                # Chromium paths
+                os.path.expandvars(r"%PROGRAMFILES%\Chromium\Application\chrome.exe"),
+                os.path.expandvars(r"%PROGRAMFILES(X86)%\Chromium\Application\chrome.exe"),
+                os.path.expandvars(r"%LOCALAPPDATA%\Chromium\Application\chrome.exe"),
                 # Chrome Beta/Dev/Canary
                 os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome Beta\Application\chrome.exe"),
                 os.path.expandvars(r"%LOCALAPPDATA%\Google\Chrome Dev\Application\chrome.exe"),

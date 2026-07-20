@@ -10,11 +10,18 @@ from dataclasses import dataclass
 from pathlib import Path
 from urllib.request import urlopen
 
+from .browser_selection import (
+    BrowserSelection,
+    BrowserSelectionError,
+    resolve_browser_selection,
+)
+
 
 ROOT = Path(__file__).resolve().parents[2]
 DEFAULT_BIND_HOST = "0.0.0.0"
 DEFAULT_PORT = 8080
 LOCAL_BROWSER_HOST = "127.0.0.1"
+MANUAL_BROWSER_INSTALL_COMMAND = "uv run playwright install chromium"
 
 
 @dataclass(frozen=True)
@@ -66,15 +73,62 @@ def start_oneclick(bind_host: str | None, port: int, browser_url: str | None = N
         raise
 
 
+def ensure_oneclick_browser() -> Path:
+    try:
+        selection = _resolve_local_browser_selection()
+    except BrowserSelectionError as exc:
+        if exc.reason != "playwright_missing":
+            raise RuntimeError(str(exc)) from exc
+    except Exception as exc:
+        raise RuntimeError(
+            f"检查 Playwright Chromium 失败，请执行：{MANUAL_BROWSER_INSTALL_COMMAND}"
+        ) from exc
+    else:
+        return selection.executable_path
+
+    print(
+        "未检测到可用的本机浏览器，正在自动下载安装 Playwright Chromium。",
+        flush=True,
+    )
+
+    try:
+        result = subprocess.run(
+            [sys.executable, "-m", "playwright", "install", "chromium"],
+            cwd=ROOT,
+            check=False,
+        )
+    except OSError as exc:
+        raise RuntimeError(
+            f"Playwright Chromium 安装失败，请检查环境后执行：{MANUAL_BROWSER_INSTALL_COMMAND}"
+        ) from exc
+    if result.returncode != 0:
+        raise RuntimeError(
+            f"Playwright Chromium 安装失败，请检查网络或代理后执行：{MANUAL_BROWSER_INSTALL_COMMAND}"
+        )
+
+    try:
+        selection = _resolve_local_browser_selection()
+    except BrowserSelectionError as exc:
+        raise RuntimeError(
+            f"安装后检查 Playwright Chromium 失败，请执行：{MANUAL_BROWSER_INSTALL_COMMAND}"
+        ) from exc
+    return selection.executable_path
+
+
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(description="Windows one-click launcher for /monitor")
     parser.add_argument("--host", default=os.environ.get("MONITOR_HOST", DEFAULT_BIND_HOST))
     parser.add_argument("--port", type=int, default=int(os.environ.get("MONITOR_PORT", DEFAULT_PORT)))
     parser.add_argument("--browser-url", default=os.environ.get("MONITOR_BROWSER_URL"))
     parser.add_argument("--health-timeout-seconds", type=float, default=float(os.environ.get("MONITOR_STARTUP_HEALTH_TIMEOUT_SECONDS", 45.0)))
+    parser.add_argument("--browser-preflight-only", action="store_true")
     args = parser.parse_args(argv)
 
     try:
+        browser_path = ensure_oneclick_browser()
+        if args.browser_preflight_only:
+            print(f"浏览器预检通过: {browser_path.name}")
+            return 0
         plan = start_oneclick(args.host, args.port, args.browser_url, args.health_timeout_seconds)
     except Exception as exc:
         print(f"启动失败: {type(exc).__name__}: {exc}", file=sys.stderr)
@@ -84,6 +138,21 @@ def main(argv: list[str] | None = None) -> int:
     print(f"健康检查: {plan.probe_url}")
     print(f"浏览器地址: {plan.browser_url}")
     return 0
+
+
+def _playwright_chromium_executable_path() -> Path:
+    from playwright.sync_api import sync_playwright
+
+    with sync_playwright() as playwright:
+        return Path(playwright.chromium.executable_path).expanduser().resolve()
+
+
+def _resolve_local_browser_selection() -> BrowserSelection:
+    return resolve_browser_selection(
+        _playwright_chromium_executable_path(),
+        allow_system=True,
+        persist=True,
+    )
 
 
 def _wait_for_health(probe_url: str, process: subprocess.Popen[str], health_timeout_seconds: float) -> None:

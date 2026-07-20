@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+import multiprocessing
 import os
 import re
 import smtplib
@@ -10,6 +11,7 @@ import sys
 import uuid
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
+from types import SimpleNamespace
 
 import httpx
 import pytest
@@ -121,6 +123,34 @@ from api.monitoring.scheduler import _is_due, next_run_at, scheduler_disabled_re
 from tools.cdp_browser import resolve_cdp_user_data_dir
 from scripts.pilot_gate_c_evidence import build_template, validate_evidence, write_template
 from scripts.review_orphan_email_evidence import build_orphan_email_evidence_review, main as review_orphan_email_main
+
+
+def _cr117_browser_selection_worker(
+    selection_path,
+    profile_root,
+    playwright_path,
+    system_path,
+    allow_system,
+    start_event,
+    result_queue,
+):
+    try:
+        from api.monitoring import browser_selection
+
+        os.environ.pop("MONITOR_BROWSER_EXECUTABLE", None)
+        browser_selection.BROWSER_SELECTION_PATH = Path(selection_path)
+        browser_selection.ACCOUNT_PROFILE_ROOT = Path(profile_root)
+        browser_selection._detect_system_browser_paths = lambda: [Path(system_path)]
+        if not start_event.wait(timeout=20):
+            raise RuntimeError("selection worker start timeout")
+        selected = browser_selection.resolve_browser_selection(
+            playwright_path,
+            allow_system=allow_system,
+            persist=True,
+        )
+        result_queue.put(("ok", selected.source, str(selected.executable_path)))
+    except BaseException as exc:
+        result_queue.put(("error", type(exc).__name__, str(exc)))
 
 
 def _monitor_section(page: str, section_id: str) -> str:
@@ -3641,7 +3671,6 @@ def test_phase_5_1d_proxy_proof_fails_before_platform_navigation(case, expected_
         ("device_scale_factor", 2.0),
         ("has_touch", True),
         ("is_mobile", True),
-        ("browser_version", "125.0.0.0"),
     ],
 )
 def test_phase_5_1d_page_probe_records_field_scoped_mismatch(field, mutated_value, tmp_path, monkeypatch):
@@ -3657,8 +3686,6 @@ def test_phase_5_1d_page_probe_records_field_scoped_mismatch(field, mutated_valu
         request_headers["accept-language"] = mutated_value
     elif field == "has_touch":
         probe["max_touch_points"] = 1
-    elif field == "browser_version":
-        browser_version = mutated_value
     else:
         probe[field] = mutated_value
 
@@ -3702,11 +3729,58 @@ def test_phase_5_1d_page_probe_records_field_scoped_mismatch(field, mutated_valu
     assert result.snapshot["mismatch_evidence"] == [
         {
             "field": field,
-            "requested": getattr(plan, field if field != "browser_version" else "browser_version"),
+            "requested": getattr(plan, field),
             "effective": mutated_value,
         }
     ]
     assert set(result.snapshot["mismatch_evidence"][0]) == {"field", "requested", "effective"}
+
+
+def test_cr117_valid_browser_version_change_is_observed_without_environment_mismatch(tmp_path, monkeypatch):
+    from tools.browser_environment import launch_managed_browser_context, verify_managed_page
+
+    plan = _phase_5_1d_plan(tmp_path, monkeypatch)
+    probe = _phase_5_1d_effective_probe(plan)
+    observed_version = "138.0.7204.50"
+
+    class FakeRequest:
+        headers = {"accept-language": plan.accept_language}
+
+    class FakePage:
+        async def goto(self, *args, **kwargs):
+            context.request_handler(FakeRequest())
+
+        async def evaluate(self, script):
+            return probe
+
+    class FakeBrowser:
+        version = observed_version
+
+    class FakeContext:
+        pages = []
+        browser = FakeBrowser()
+
+        def on(self, event, callback):
+            self.request_handler = callback
+
+    context = FakeContext()
+
+    class FakeChromium:
+        async def launch_persistent_context(self, **kwargs):
+            return context
+
+    class FakePlaywright:
+        chromium = FakeChromium()
+
+    session = asyncio.run(launch_managed_browser_context(FakePlaywright(), plan))
+    page = FakePage()
+    asyncio.run(page.goto("https://platform.invalid"))
+    result = asyncio.run(verify_managed_page(session.context, page))
+
+    assert result is not None and result.ok is True
+    assert result.reason == ""
+    assert result.snapshot["browser"]["version"] == observed_version
+    assert result.snapshot["mismatch_evidence"] == []
 
 
 def test_phase_5_1d_profile_cookie_and_visible_login_share_exact_plan(tmp_path, monkeypatch):
@@ -4725,6 +4799,34 @@ def test_cr116_persistent_context_rejects_malformed_cdp_browser_version():
     with pytest.raises(TypeError, match="missing browser version"):
         asyncio.run(_effective_browser_version(FakeContext(), object()))
 
+    assert events == [
+        ("attach",),
+        ("send", "Browser.getVersion"),
+        ("detach",),
+    ]
+
+
+def test_cr117_persistent_edge_context_accepts_edge_cdp_version_product():
+    from tools.browser_environment import _effective_browser_version
+
+    events = []
+
+    class FakeCDPSession:
+        async def send(self, method):
+            events.append(("send", method))
+            return {"product": "Edg/150.0.4078.83"}
+
+        async def detach(self):
+            events.append(("detach",))
+
+    class FakeContext:
+        browser = None
+
+        async def new_cdp_session(self, page):
+            events.append(("attach",))
+            return FakeCDPSession()
+
+    assert asyncio.run(_effective_browser_version(FakeContext(), object())) == "150.0.4078.83"
     assert events == [
         ("attach",),
         ("send", "Browser.getVersion"),
@@ -6580,6 +6682,502 @@ def test_windows_oneclick_launcher_opens_browser_after_health(monkeypatch):
     assert seen["env_port"] == "8080"
     assert seen["env_browser_url"] == "http://10.0.0.12:8080/monitor"
     assert seen["opened"] == "http://10.0.0.12:8080/monitor"
+
+
+def test_cr117_clean_local_selection_prefers_chrome_and_persists(tmp_path, monkeypatch):
+    from api.monitoring import browser_selection
+
+    chrome = tmp_path / "Google" / "Chrome" / "chrome.exe"
+    edge = tmp_path / "Microsoft" / "Edge" / "msedge.exe"
+    playwright_browser = tmp_path / "playwright" / "chrome.exe"
+    for path in (chrome, edge, playwright_browser):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"synthetic browser")
+    manifest = tmp_path / "data" / "browser_selection.json"
+    monkeypatch.delenv("MONITOR_BROWSER_EXECUTABLE", raising=False)
+    monkeypatch.setattr(browser_selection, "BROWSER_SELECTION_PATH", manifest)
+    monkeypatch.setattr(browser_selection, "ACCOUNT_PROFILE_ROOT", tmp_path / "profiles")
+    monkeypatch.setattr(browser_selection, "_detect_system_browser_paths", lambda: [chrome, edge])
+
+    selected = browser_selection.resolve_browser_selection(
+        str(playwright_browser), allow_system=True, persist=True
+    )
+
+    assert selected.executable_path == chrome.resolve()
+    assert selected.source == "system_chrome"
+    assert selected.channel == "chrome"
+    assert json.loads(manifest.read_text(encoding="utf-8")) == {
+        "browser_channel": "chrome",
+        "browser_source": "system_chrome",
+        "contract_version": 1,
+        "executable_path": str(chrome.resolve()),
+    }
+
+
+@pytest.mark.parametrize(
+    ("system_name", "expected_source", "expected_channel"),
+    [
+        ("msedge.exe", "system_edge", "edge"),
+        ("chromium.exe", "system_chromium", "chromium"),
+        (None, "playwright_bundled", "playwright"),
+    ],
+)
+def test_cr117_clean_local_selection_uses_edge_chromium_then_playwright(
+    system_name,
+    expected_source,
+    expected_channel,
+    tmp_path,
+    monkeypatch,
+):
+    from api.monitoring import browser_selection
+
+    playwright_browser = tmp_path / "playwright" / "chrome.exe"
+    playwright_browser.parent.mkdir(parents=True)
+    playwright_browser.write_bytes(b"synthetic Playwright")
+    system_paths = []
+    if system_name:
+        system_browser = tmp_path / system_name
+        system_browser.write_bytes(b"synthetic system browser")
+        system_paths.append(system_browser)
+    monkeypatch.delenv("MONITOR_BROWSER_EXECUTABLE", raising=False)
+    monkeypatch.setattr(browser_selection, "BROWSER_SELECTION_PATH", tmp_path / "selection.json")
+    monkeypatch.setattr(browser_selection, "ACCOUNT_PROFILE_ROOT", tmp_path / "profiles")
+    monkeypatch.setattr(browser_selection, "_detect_system_browser_paths", lambda: system_paths)
+
+    selected = browser_selection.resolve_browser_selection(
+        str(playwright_browser), allow_system=True, persist=True
+    )
+
+    assert selected.source == expected_source
+    assert selected.channel == expected_channel
+
+
+def test_cr117_saved_selection_wins_and_missing_saved_browser_fails(tmp_path, monkeypatch):
+    from api.monitoring import browser_selection
+
+    chrome = tmp_path / "chrome.exe"
+    edge = tmp_path / "msedge.exe"
+    playwright_browser = tmp_path / "playwright" / "chrome.exe"
+    for path in (chrome, edge, playwright_browser):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"synthetic browser")
+    monkeypatch.delenv("MONITOR_BROWSER_EXECUTABLE", raising=False)
+    monkeypatch.setattr(browser_selection, "BROWSER_SELECTION_PATH", tmp_path / "selection.json")
+    monkeypatch.setattr(browser_selection, "ACCOUNT_PROFILE_ROOT", tmp_path / "profiles")
+    monkeypatch.setattr(browser_selection, "_detect_system_browser_paths", lambda: [edge])
+    initial = browser_selection.resolve_browser_selection(
+        str(playwright_browser), allow_system=True, persist=True
+    )
+    assert initial.source == "system_edge"
+
+    monkeypatch.setattr(browser_selection, "_detect_system_browser_paths", lambda: [chrome, edge])
+    assert browser_selection.resolve_browser_selection(
+        str(playwright_browser), allow_system=True, persist=True
+    ) == initial
+
+    edge.unlink()
+    with pytest.raises(browser_selection.BrowserSelectionError) as exc_info:
+        browser_selection.resolve_browser_selection(
+            str(playwright_browser), allow_system=True, persist=True
+        )
+    assert exc_info.value.reason == "saved_browser_missing"
+
+
+def test_cr117_invalid_selection_manifest_fails_closed(tmp_path, monkeypatch):
+    from api.monitoring import browser_selection
+
+    browser = tmp_path / "not-a-browser.exe"
+    browser.write_bytes(b"synthetic browser")
+    manifest = tmp_path / "selection.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "contract_version": 1,
+                "browser_source": "system_chrome",
+                "browser_channel": "chrome",
+                "executable_path": str(browser),
+            }
+        ),
+        encoding="utf-8",
+    )
+    monkeypatch.delenv("MONITOR_BROWSER_EXECUTABLE", raising=False)
+    monkeypatch.setattr(browser_selection, "BROWSER_SELECTION_PATH", manifest)
+    monkeypatch.setattr(browser_selection, "ACCOUNT_PROFILE_ROOT", tmp_path / "profiles")
+    monkeypatch.setattr(
+        browser_selection,
+        "_detect_system_browser_paths",
+        lambda: (_ for _ in ()).throw(AssertionError("invalid manifest must not fall back")),
+    )
+
+    with pytest.raises(browser_selection.BrowserSelectionError) as exc_info:
+        browser_selection.resolve_browser_selection(browser, allow_system=True, persist=True)
+    assert exc_info.value.reason == "selection_manifest_invalid"
+
+
+def test_cr117_windows_detector_includes_standard_chromium_install_path(tmp_path, monkeypatch):
+    from tools import browser_launcher
+
+    program_files = tmp_path / "Program Files"
+    program_files_x86 = tmp_path / "Program Files (x86)"
+    local_app_data = tmp_path / "LocalAppData"
+    chromium = local_app_data / "Chromium" / "Application" / "chrome.exe"
+    chromium.parent.mkdir(parents=True)
+    chromium.write_bytes(b"synthetic Chromium")
+    monkeypatch.setenv("PROGRAMFILES", str(program_files))
+    monkeypatch.setenv("PROGRAMFILES(X86)", str(program_files_x86))
+    monkeypatch.setenv("LOCALAPPDATA", str(local_app_data))
+    monkeypatch.setattr(browser_launcher.os, "access", lambda path, mode: Path(path).is_file())
+    launcher = browser_launcher.BrowserLauncher()
+    launcher.system = "Windows"
+
+    assert str(chromium) in launcher.detect_browser_paths()
+
+
+def test_cr117_concurrent_first_selection_returns_one_persisted_browser(tmp_path):
+    chrome = tmp_path / "chrome.exe"
+    playwright_browser = tmp_path / "playwright" / "chrome.exe"
+    chrome.write_bytes(b"synthetic Chrome")
+    playwright_browser.parent.mkdir(parents=True)
+    playwright_browser.write_bytes(b"synthetic Playwright")
+    selection_path = tmp_path / "browser_selection.json"
+    profile_root = tmp_path / "profiles"
+    context = multiprocessing.get_context("spawn")
+    start_event = context.Event()
+    result_queue = context.Queue()
+    processes = [
+        context.Process(
+            target=_cr117_browser_selection_worker,
+            args=(
+                str(selection_path),
+                str(profile_root),
+                str(playwright_browser),
+                str(chrome),
+                allow_system,
+                start_event,
+                result_queue,
+            ),
+        )
+        for allow_system in (True, False)
+    ]
+    for process in processes:
+        process.start()
+    start_event.set()
+    results = [result_queue.get(timeout=30) for _ in processes]
+    for process in processes:
+        process.join(timeout=30)
+        if process.is_alive():
+            process.terminate()
+            process.join(timeout=5)
+
+    assert all(process.exitcode == 0 for process in processes)
+    assert all(result[0] == "ok" for result in results), results
+    assert len({(result[1], result[2]) for result in results}) == 1
+    manifest = json.loads(selection_path.read_text(encoding="utf-8"))
+    assert (manifest["browser_source"], manifest["executable_path"]) == (
+        results[0][1],
+        results[0][2],
+    )
+
+
+def test_cr117_saved_playwright_selection_repairs_only_to_current_pinned_path(tmp_path, monkeypatch):
+    from api.monitoring import browser_selection
+
+    old_browser = tmp_path / "old-playwright" / "chrome.exe"
+    current_browser = tmp_path / "current-playwright" / "chrome.exe"
+    current_browser.parent.mkdir(parents=True)
+    current_browser.write_bytes(b"synthetic current Playwright")
+    manifest = tmp_path / "selection.json"
+    manifest.write_text(
+        json.dumps(
+            {
+                "contract_version": 1,
+                "browser_source": "playwright_bundled",
+                "browser_channel": "playwright",
+                "executable_path": str(old_browser.resolve()),
+            }
+        ),
+        encoding="utf-8",
+    )
+    chrome = tmp_path / "chrome.exe"
+    chrome.write_bytes(b"synthetic Chrome")
+    monkeypatch.delenv("MONITOR_BROWSER_EXECUTABLE", raising=False)
+    monkeypatch.setattr(browser_selection, "BROWSER_SELECTION_PATH", manifest)
+    monkeypatch.setattr(browser_selection, "ACCOUNT_PROFILE_ROOT", tmp_path / "profiles")
+    monkeypatch.setattr(browser_selection, "_detect_system_browser_paths", lambda: [chrome])
+
+    selected = browser_selection.resolve_browser_selection(
+        current_browser, allow_system=True, persist=True
+    )
+
+    assert selected.source == "playwright_bundled"
+    assert selected.executable_path == current_browser.resolve()
+    assert json.loads(manifest.read_text(encoding="utf-8"))["executable_path"] == str(
+        current_browser.resolve()
+    )
+
+
+def test_cr117_existing_profile_without_manifest_preserves_playwright(tmp_path, monkeypatch):
+    from api.monitoring import browser_selection
+
+    chrome = tmp_path / "chrome.exe"
+    playwright_browser = tmp_path / "playwright" / "chrome.exe"
+    profile_root = tmp_path / "profiles"
+    chrome.write_bytes(b"synthetic Chrome")
+    playwright_browser.parent.mkdir(parents=True)
+    playwright_browser.write_bytes(b"synthetic Playwright")
+    profile_file = profile_root / "1" / "dy" / "acc_1" / "Default" / "Cookies"
+    profile_file.parent.mkdir(parents=True)
+    profile_file.write_bytes(b"synthetic profile")
+    monkeypatch.delenv("MONITOR_BROWSER_EXECUTABLE", raising=False)
+    monkeypatch.setattr(browser_selection, "BROWSER_SELECTION_PATH", tmp_path / "selection.json")
+    monkeypatch.setattr(browser_selection, "ACCOUNT_PROFILE_ROOT", profile_root)
+    monkeypatch.setattr(browser_selection, "_detect_system_browser_paths", lambda: [chrome])
+
+    selected = browser_selection.resolve_browser_selection(
+        str(playwright_browser), allow_system=True, persist=True
+    )
+
+    assert selected.source == "playwright_bundled"
+    assert selected.executable_path == playwright_browser.resolve()
+
+
+def test_cr117_managed_provider_reuses_saved_system_browser_selection(tmp_path, monkeypatch):
+    from api.monitoring import account_environment, browser_selection
+    from api.monitoring.browser_environment_provider import resolve_account_browser_environment
+
+    chrome = tmp_path / "chrome.exe"
+    playwright_browser = tmp_path / "playwright" / "chrome.exe"
+    chrome.write_bytes(b"synthetic Chrome")
+    playwright_browser.parent.mkdir(parents=True)
+    playwright_browser.write_bytes(b"synthetic Playwright")
+    profile_root = tmp_path / "profiles"
+    monkeypatch.setattr(browser_selection, "BROWSER_SELECTION_PATH", tmp_path / "selection.json")
+    monkeypatch.setattr(browser_selection, "ACCOUNT_PROFILE_ROOT", profile_root)
+    monkeypatch.setattr(account_environment, "ACCOUNT_PROFILE_ROOT", profile_root)
+    monkeypatch.setattr(browser_selection, "_detect_system_browser_paths", lambda: [chrome])
+    monkeypatch.setenv("MONITOR_BROWSER_PROXY_PROBE_URL", "https://probe.invalid/region")
+    browser_selection.resolve_browser_selection(
+        str(playwright_browser), allow_system=True, persist=True
+    )
+    monkeypatch.setattr(
+        browser_selection,
+        "_detect_system_browser_paths",
+        lambda: (_ for _ in ()).throw(AssertionError("Provider must not discover system browsers")),
+    )
+
+    plan = resolve_account_browser_environment(
+        _phase_5_1d_persisted_account(),
+        action="login_check",
+        trigger_source="profile_validation",
+        headless=True,
+        launch_mode="persistent_launch",
+        proxy=_phase_5_1d_active_proxy(),
+        playwright_executable_path=str(playwright_browser),
+    )
+
+    assert plan.browser_executable_path == str(chrome.resolve())
+    assert plan.browser_source == "system_chrome"
+    assert Path(plan.profile_path) == profile_root / "1" / "dy" / "acc_5101"
+
+
+def test_cr117_explicit_browser_conflict_with_bound_profiles_fails(tmp_path, monkeypatch):
+    from api.monitoring import browser_selection
+
+    chrome = tmp_path / "chrome.exe"
+    edge = tmp_path / "msedge.exe"
+    playwright_browser = tmp_path / "playwright" / "chrome.exe"
+    for path in (chrome, edge, playwright_browser):
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_bytes(b"synthetic browser")
+    profile_root = tmp_path / "profiles"
+    monkeypatch.setattr(browser_selection, "BROWSER_SELECTION_PATH", tmp_path / "selection.json")
+    monkeypatch.setattr(browser_selection, "ACCOUNT_PROFILE_ROOT", profile_root)
+    monkeypatch.setattr(browser_selection, "_detect_system_browser_paths", lambda: [])
+    monkeypatch.setenv("MONITOR_BROWSER_EXECUTABLE", str(chrome))
+    selected = browser_selection.resolve_browser_selection(
+        str(playwright_browser), allow_system=True, persist=True
+    )
+    assert selected.source == "explicit"
+
+    profile_root.mkdir()
+    (profile_root / "profile.marker").write_text("bound", encoding="utf-8")
+    monkeypatch.setenv("MONITOR_BROWSER_EXECUTABLE", str(edge))
+    with pytest.raises(browser_selection.BrowserSelectionError) as exc_info:
+        browser_selection.resolve_browser_selection(
+            str(playwright_browser), allow_system=True, persist=True
+        )
+    assert exc_info.value.reason == "selection_conflict"
+
+
+def test_cr117_invalid_explicit_browser_fails_without_discovery(tmp_path, monkeypatch):
+    from api.monitoring import browser_selection
+
+    monkeypatch.setenv("MONITOR_BROWSER_EXECUTABLE", str(tmp_path / "missing-chrome.exe"))
+    monkeypatch.setattr(browser_selection, "BROWSER_SELECTION_PATH", tmp_path / "selection.json")
+    monkeypatch.setattr(browser_selection, "ACCOUNT_PROFILE_ROOT", tmp_path / "profiles")
+    monkeypatch.setattr(
+        browser_selection,
+        "_detect_system_browser_paths",
+        lambda: (_ for _ in ()).throw(AssertionError("explicit path must not fall back")),
+    )
+
+    with pytest.raises(browser_selection.BrowserSelectionError) as exc_info:
+        browser_selection.resolve_browser_selection(
+            str(tmp_path / "playwright.exe"), allow_system=True
+        )
+    assert exc_info.value.reason == "explicit_browser_missing"
+
+
+def test_cr117_local_browser_skips_playwright_install(tmp_path, monkeypatch):
+    from api.monitoring.browser_selection import BrowserSelection
+
+    chrome = tmp_path / "chrome.exe"
+    chrome.write_bytes(b"synthetic Chrome")
+    selection = BrowserSelection(chrome.resolve(), "system_chrome", "chrome")
+    monkeypatch.setattr(
+        api_monitoring_startup_launcher,
+        "_resolve_local_browser_selection",
+        lambda: selection,
+    )
+    monkeypatch.setattr(
+        api_monitoring_startup_launcher.subprocess,
+        "run",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("installer must not run")),
+    )
+
+    assert api_monitoring_startup_launcher.ensure_oneclick_browser() == chrome.resolve()
+
+
+def test_cr117_missing_playwright_installs_automatically_then_rechecks(tmp_path, monkeypatch, capsys):
+    from api.monitoring.browser_selection import BrowserSelection, BrowserSelectionError
+
+    bundled_browser = tmp_path / "playwright" / "chrome.exe"
+    installer_calls = []
+    resolution_calls = 0
+
+    def resolve_selection():
+        nonlocal resolution_calls
+        resolution_calls += 1
+        if resolution_calls == 1:
+            raise BrowserSelectionError("playwright_missing", "missing Playwright")
+        return BrowserSelection(bundled_browser.resolve(), "playwright_bundled", "playwright")
+
+    def fake_install(command, **kwargs):
+        installer_calls.append((command, kwargs))
+        bundled_browser.parent.mkdir()
+        bundled_browser.write_bytes(b"synthetic Playwright")
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr(api_monitoring_startup_launcher, "_resolve_local_browser_selection", resolve_selection)
+    monkeypatch.setattr(api_monitoring_startup_launcher.subprocess, "run", fake_install)
+
+    assert api_monitoring_startup_launcher.ensure_oneclick_browser() == bundled_browser.resolve()
+    assert "正在自动下载安装" in capsys.readouterr().out
+    assert installer_calls == [
+        (
+            [sys.executable, "-m", "playwright", "install", "chromium"],
+            {"cwd": api_monitoring_startup_launcher.ROOT, "check": False},
+        )
+    ]
+
+
+@pytest.mark.parametrize("failure_mode", ["launch", "nonzero", "postcheck"])
+def test_cr117_playwright_install_failures_stop_with_retry_command(failure_mode, monkeypatch):
+    from api.monitoring.browser_selection import BrowserSelectionError
+
+    resolution_calls = 0
+
+    def resolve_selection():
+        nonlocal resolution_calls
+        resolution_calls += 1
+        if resolution_calls == 1:
+            raise BrowserSelectionError("playwright_missing", "missing Playwright")
+        raise BrowserSelectionError("playwright_missing", "still missing Playwright")
+
+    def fake_install(*args, **kwargs):
+        if failure_mode == "launch":
+            raise OSError("synthetic installer launch failure")
+        return SimpleNamespace(returncode=7 if failure_mode == "nonzero" else 0)
+
+    monkeypatch.setattr(api_monitoring_startup_launcher, "_resolve_local_browser_selection", resolve_selection)
+    monkeypatch.setattr(api_monitoring_startup_launcher.subprocess, "run", fake_install)
+
+    with pytest.raises(RuntimeError, match="uv run playwright install chromium"):
+        api_monitoring_startup_launcher.ensure_oneclick_browser()
+
+
+def test_cr117_main_checks_browser_before_starting_service(monkeypatch):
+    events = []
+    plan = build_launch_plan("127.0.0.1", 18080)
+    monkeypatch.setattr(
+        api_monitoring_startup_launcher,
+        "ensure_oneclick_browser",
+        lambda: events.append("browser"),
+    )
+    monkeypatch.setattr(
+        api_monitoring_startup_launcher,
+        "start_oneclick",
+        lambda *args, **kwargs: events.append("service") or plan,
+    )
+
+    assert api_monitoring_startup_launcher.main(["--host", "127.0.0.1", "--port", "18080"]) == 0
+    assert events == ["browser", "service"]
+
+
+def test_cr117_preflight_only_does_not_start_service(monkeypatch):
+    events = []
+    monkeypatch.setattr(
+        api_monitoring_startup_launcher,
+        "ensure_oneclick_browser",
+        lambda: events.append("browser") or Path("chrome.exe"),
+    )
+    monkeypatch.setattr(
+        api_monitoring_startup_launcher,
+        "start_oneclick",
+        lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("service must not start")),
+    )
+
+    assert api_monitoring_startup_launcher.main(["--browser-preflight-only"]) == 0
+    assert events == ["browser"]
+
+
+def test_cr117_main_browser_preflight_failure_stops_before_service(monkeypatch, capsys):
+    def fail_preflight():
+        raise RuntimeError("synthetic browser install failure")
+
+    def forbidden(*args, **kwargs):
+        raise AssertionError("service must not start after browser preflight failure")
+
+    monkeypatch.setattr(api_monitoring_startup_launcher, "ensure_oneclick_browser", fail_preflight)
+    monkeypatch.setattr(api_monitoring_startup_launcher, "start_oneclick", forbidden)
+
+    assert api_monitoring_startup_launcher.main([]) == 1
+    assert "synthetic browser install failure" in capsys.readouterr().err
+
+
+def test_cr117_local_batches_check_uv_and_share_browser_preflight():
+    oneclick = Path("start_monitor_oneclick.bat").read_text(encoding="utf-8")
+    normalized = oneclick.lower()
+    launcher_index = normalized.index("uv run python -m api.monitoring.startup_launcher")
+    exit_code_index = normalized.index('set "startup_exit_code=%errorlevel%"')
+    pause_index = normalized.index("pause", exit_code_index)
+    exit_index = normalized.index("exit /b %startup_exit_code%")
+
+    assert "where uv" in normalized
+    assert "api.monitoring.startup_launcher" in oneclick
+    assert normalized.index("where uv") < launcher_index
+    assert launcher_index < exit_code_index < pause_index < exit_index
+
+    webui = Path("start_webui.bat").read_text(encoding="utf-8").lower()
+    webui_preflight = webui.index(
+        "uv run python -m api.monitoring.startup_launcher --browser-preflight-only"
+    )
+    webui_service = webui.index("uv run uvicorn api.main:app")
+    assert "where uv" in webui
+    assert webui.index("where uv") < webui_preflight < webui_service
+
+    service_only = Path("start_monitor_service.bat").read_text(encoding="utf-8").lower()
+    assert "browser-preflight-only" not in service_only
 
 
 def test_job_validation_rejects_operator_input_errors():
@@ -10099,6 +10697,302 @@ def test_terminal_login_session_lookup_does_not_downgrade_checked_account(monkey
     assert refreshed["last_checked_at"]
 
 
+def test_cr118_successful_login_session_lookup_skips_closed_browser_poll(monkeypatch, tmp_path):
+    init_db()
+    snapshots = {
+        "login_sessions": _snapshot_table("login_sessions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        account = save_social_account(
+            {
+                "name": "CR-118 successful QR account",
+                "platform": "dy",
+                "login_type": "qrcode",
+                "status": "active",
+                "profile_path": str(tmp_path / "dy_profile"),
+            }
+        )
+        update_social_account_check_state(int(account["id"]), True, "登录态有效")
+        session = create_login_session(
+            {
+                "platform": "dy",
+                "account_id": account["id"],
+                "login_url": "https://www.douyin.com/",
+                "profile_path": account["profile_path"],
+            }
+        )
+        succeeded = monitor_router.update_login_session_status(
+            int(session["id"]),
+            "success",
+            "登录成功，账号已通过验活。",
+        )
+        poll_calls = 0
+
+        async def fake_poll_qrcode_login_session(session_id):
+            nonlocal poll_calls
+            poll_calls += 1
+            return {
+                "active": False,
+                "success": False,
+                "status": "qrcode_failed",
+                "message": "二维码浏览器会话不在运行，请重新生成二维码或打开登录窗口。",
+            }
+
+        monkeypatch.setattr(monitor_router, "poll_qrcode_login_session", fake_poll_qrcode_login_session)
+        monkeypatch.setattr(monitor_router, "list_platform_status", lambda: [])
+
+        polled = asyncio.run(monitor_router.login_session(int(session["id"])))
+        persisted = get_login_session(int(session["id"]))
+        refreshed = get_social_account(int(account["id"]))
+    finally:
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+    assert poll_calls == 0
+    assert polled["session"]["status"] == "success"
+    assert persisted["status"] == "success"
+    assert persisted["message"] == succeeded["message"]
+    assert refreshed["status"] == "active"
+    assert refreshed["last_error"] == ""
+
+
+def test_cr118_concurrent_login_session_gets_share_one_poll_and_verification(monkeypatch, tmp_path):
+    init_db()
+    snapshots = {
+        "login_sessions": _snapshot_table("login_sessions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        account = save_social_account(
+            {
+                "name": "CR-118 concurrent QR account",
+                "platform": "dy",
+                "login_type": "qrcode",
+                "status": "active",
+                "profile_path": str(tmp_path / "dy_profile"),
+            }
+        )
+        session = create_login_session(
+            {
+                "platform": "dy",
+                "account_id": account["id"],
+                "login_url": "https://www.douyin.com/",
+                "profile_path": account["profile_path"],
+            }
+        )
+        poll_calls = 0
+        verification_started = asyncio.Event()
+        release_verification = asyncio.Event()
+
+        async def fake_poll_qrcode_login_session(session_id):
+            nonlocal poll_calls
+            poll_calls += 1
+            if poll_calls == 1:
+                return {
+                    "active": False,
+                    "success": True,
+                    "status": "success",
+                    "message": "登录成功，Profile 已保存。",
+                }
+            return {
+                "active": False,
+                "success": False,
+                "status": "qrcode_failed",
+                "message": "二维码浏览器会话不在运行，请重新生成二维码。",
+            }
+
+        async def fake_check_social_account_login(account_id, **kwargs):
+            verification_started.set()
+            await release_verification.wait()
+            return {"ok": True, "account": get_social_account(account_id)}
+
+        monkeypatch.setattr(monitor_router, "poll_qrcode_login_session", fake_poll_qrcode_login_session)
+        monkeypatch.setattr(monitor_router, "check_social_account_login", fake_check_social_account_login)
+        monkeypatch.setattr(monitor_router, "list_platform_status", lambda: [])
+
+        async def exercise_concurrent_gets():
+            first = asyncio.create_task(monitor_router.login_session(int(session["id"])))
+            await asyncio.wait_for(verification_started.wait(), timeout=1)
+            second = asyncio.create_task(monitor_router.login_session(int(session["id"])))
+            await asyncio.sleep(0)
+            second_was_serialized = not second.done()
+            release_verification.set()
+            responses = await asyncio.gather(first, second)
+            return second_was_serialized, responses
+
+        second_was_serialized, responses = asyncio.run(exercise_concurrent_gets())
+        persisted = get_login_session(int(session["id"]))
+    finally:
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+    assert second_was_serialized is True
+    assert poll_calls == 1
+    assert [response["session"]["status"] for response in responses] == ["success", "success"]
+    assert persisted["status"] == "success"
+
+
+@pytest.mark.parametrize("verification_action", ["submit", "request"])
+def test_cr118_verification_post_and_get_share_session_lock(verification_action, monkeypatch, tmp_path):
+    init_db()
+    snapshots = {
+        "login_sessions": _snapshot_table("login_sessions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        account = save_social_account(
+            {
+                "name": f"CR-118 {verification_action} QR account",
+                "platform": "dy",
+                "login_type": "qrcode",
+                "status": "active",
+                "profile_path": str(tmp_path / "dy_profile"),
+            }
+        )
+        session = create_login_session(
+            {
+                "platform": "dy",
+                "account_id": account["id"],
+                "login_url": "https://www.douyin.com/",
+                "profile_path": account["profile_path"],
+            }
+        )
+        verification_started = asyncio.Event()
+        release_verification = asyncio.Event()
+        poll_calls = 0
+
+        async def fake_verification_action(*args, **kwargs):
+            return {
+                "active": False,
+                "success": True,
+                "status": "success",
+                "message": "登录成功，Profile 已保存。",
+            }
+
+        async def fake_poll_qrcode_login_session(session_id):
+            nonlocal poll_calls
+            poll_calls += 1
+            return {
+                "active": False,
+                "success": False,
+                "status": "qrcode_failed",
+                "message": "二维码浏览器会话不在运行，请重新生成二维码。",
+            }
+
+        async def fake_check_social_account_login(account_id, **kwargs):
+            verification_started.set()
+            await release_verification.wait()
+            return {"ok": True, "account": get_social_account(account_id)}
+
+        monkeypatch.setattr(monitor_router, "poll_qrcode_login_session", fake_poll_qrcode_login_session)
+        monkeypatch.setattr(monitor_router, "check_social_account_login", fake_check_social_account_login)
+        monkeypatch.setattr(monitor_router, "list_platform_status", lambda: [])
+        if verification_action == "submit":
+            monkeypatch.setattr(
+                monitor_router,
+                "submit_qrcode_login_verification_code",
+                fake_verification_action,
+            )
+        else:
+            monkeypatch.setattr(
+                monitor_router,
+                "request_qrcode_login_verification_code",
+                fake_verification_action,
+            )
+
+        async def exercise_post_and_get():
+            if verification_action == "submit":
+                post = asyncio.create_task(
+                    monitor_router.submit_login_session_verification_code(
+                        int(session["id"]),
+                        {"code": "123456"},
+                    )
+                )
+            else:
+                post = asyncio.create_task(
+                    monitor_router.request_login_session_verification_code(int(session["id"]))
+                )
+            await asyncio.wait_for(verification_started.wait(), timeout=1)
+            get = asyncio.create_task(monitor_router.login_session(int(session["id"])))
+            await asyncio.sleep(0)
+            get_was_serialized = not get.done()
+            release_verification.set()
+            responses = await asyncio.gather(post, get)
+            return get_was_serialized, responses
+
+        get_was_serialized, responses = asyncio.run(exercise_post_and_get())
+        persisted = get_login_session(int(session["id"]))
+    finally:
+        for table, snapshot in snapshots.items():
+            _restore_table(table, snapshot)
+
+    assert get_was_serialized is True
+    assert poll_calls == 0
+    assert [response["session"]["status"] for response in responses] == ["success", "success"]
+    assert persisted["status"] == "success"
+
+
+def test_cr118_persisted_success_rejects_late_failure_transition(tmp_path):
+    init_db()
+    snapshot = _snapshot_table("login_sessions")
+    try:
+        session = create_login_session(
+            {
+                "platform": "dy",
+                "login_url": "https://www.douyin.com/",
+                "profile_path": str(tmp_path / "dy_profile"),
+            }
+        )
+        succeeded = monitor_router.update_login_session_status(
+            int(session["id"]),
+            "success",
+            "登录成功，账号已通过验活。",
+            "data:image/png;base64,success-evidence",
+        )
+        late_failure = monitor_router.update_login_session_status(
+            int(session["id"]),
+            "qrcode_failed",
+            "二维码浏览器会话不在运行，请重新生成二维码。",
+            "data:image/png;base64,late-failure",
+        )
+    finally:
+        _restore_table("login_sessions", snapshot)
+
+    assert late_failure["status"] == "success"
+    assert late_failure["message"] == succeeded["message"]
+    assert late_failure["qr_image"] == succeeded["qr_image"]
+    assert late_failure["updated_at"] == succeeded["updated_at"]
+
+
+def test_cr118_frontend_qrcode_polling_is_serial():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    start = page.index("async function pollLoginSession")
+    end = page.index("async function submitLoginVerificationCode", start)
+    polling_source = page[start:end]
+
+    assert "setInterval" not in polling_source
+    assert "setTimeout" in polling_source
+    assert "scheduleNextLoginSessionPoll" in polling_source
+
+
+def test_cr118_stale_frontend_poll_cannot_clear_a_new_login_session():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    start = page.index("async function pollLoginSession")
+    end = page.index("async function submitLoginVerificationCode", start)
+    polling_source = page[start:end]
+
+    initial_done = polling_source.index("if(await update()){")
+    initial_clear = polling_source.index("activeLoginSessionId=null;", initial_done)
+    initial_block = polling_source[initial_done:initial_clear]
+    assert "if(activeLoginSessionId !== Number(id)) return;" in initial_block
+
+    timer_done = polling_source.index("const done=await update();")
+    timer_clear = polling_source.index("activeLoginSessionId=null;", timer_done)
+    timer_block = polling_source[timer_done:timer_clear]
+    assert "if(activeLoginSessionId !== Number(id)) return;" in timer_block
+
+
 def test_default_login_session_does_not_turn_manual_failure_into_success(monkeypatch, tmp_path):
     init_db()
     snapshot = _snapshot_table("login_sessions")
@@ -10633,6 +11527,79 @@ def test_qrcode_start_prefers_qrcode_before_manual_verification(monkeypatch, tmp
         assert "find_qr" in events
     finally:
         asyncio.run(login_qrcode_module.close_qrcode_login_session(888001))
+
+
+def test_cr118_qrcode_start_checks_existing_profile_before_preparing_login(monkeypatch, tmp_path):
+    events: list[str] = []
+
+    class FakePage:
+        def __init__(self):
+            self.context = None
+
+        def set_default_timeout(self, timeout):
+            events.append("timeout")
+
+        async def goto(self, *args, **kwargs):
+            events.append("goto")
+
+    class FakeContext:
+        def __init__(self):
+            self.pages = [FakePage()]
+            self.pages[0].context = self
+
+        async def new_page(self):
+            page = FakePage()
+            page.context = self
+            self.pages.append(page)
+            return page
+
+        async def close(self):
+            events.append("close")
+
+        async def cookies(self):
+            return []
+
+    class FakeChromium:
+        async def launch_persistent_context(self, **kwargs):
+            return FakeContext()
+
+    class FakePlaywright:
+        chromium = FakeChromium()
+
+        async def stop(self):
+            events.append("stop")
+
+    class FakePlaywrightFactory:
+        async def start(self):
+            return FakePlaywright()
+
+    async def fake_is_logged_in(platform, context, page, login_baseline=""):
+        events.append("check")
+        return True
+
+    async def fake_prepare_login_page(platform, page, timeout, login_adapter=None):
+        events.append("prepare")
+        raise AssertionError("existing Profile must be checked before QR preparation")
+
+    monkeypatch.setattr(login_qrcode_module, "async_playwright", lambda: FakePlaywrightFactory())
+    monkeypatch.setattr(login_qrcode_module, "_is_logged_in", fake_is_logged_in)
+    monkeypatch.setattr(login_qrcode_module, "_prepare_login_page", fake_prepare_login_page)
+
+    result = asyncio.run(
+        login_qrcode_module.start_qrcode_login_session_with_profile(
+            888002,
+            "dy",
+            {
+                "profile_path": str(tmp_path / "dy_profile"),
+                "browser_path": "chrome",
+            },
+        )
+    )
+
+    assert result["ok"] is True
+    assert result["already_logged_in"] is True
+    assert result["status"] == "success"
+    assert events == ["timeout", "goto", "check", "close", "stop"]
 
 
 def test_qrcode_start_has_outer_timeout_and_closes_half_initialized_browser(monkeypatch, tmp_path):

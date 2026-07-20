@@ -346,9 +346,12 @@ Template catalog v2:
 The values below are generator `1.1`, environment `v2`, aligned with pinned
 Playwright 1.45 Chromium metadata and the provider-effective locale. Catalog
 v1 rows remain readable but require explicit reset/re-login; they are not
-silently rewritten. If the bundled browser version is upgraded later, another
-`identity_environment_version` and generator version must be recorded instead
-of mutating locked identities in place.
+silently rewritten. The catalog `user_agent` remains generator-owned and
+locked. A compatible browser executable upgrade does not change that catalog
+row or require another identity version by itself; its actual runtime version
+is recorded separately. Changing a catalog-owned field still requires a new
+`identity_environment_version` and generator version instead of mutating
+locked identities in place.
 
 | Template | browser_platform | user_agent | screen | viewport | scale | mobile | touch | timezone | locale | accept_language |
 | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |
@@ -427,10 +430,15 @@ Runner child processes, all seven platform cores, and launch-owned CDP.
 
 Provider rules:
 
-- a non-empty `MONITOR_BROWSER_EXECUTABLE` is authoritative; an invalid path
-  fails closed. When it is empty, the pinned Playwright Chromium executable is
-  used and recorded as `playwright_bundled`; managed paths do not run local
-  Chrome/Edge auto-detection;
+- the provider consumes one validated deployment browser selection. Windows
+  local launchers may establish it from explicit configuration, Chrome, Edge,
+  supported Chromium, or Playwright; service-only/Docker defaults remain
+  Playwright. Sources are recorded as `explicit`, `system_chrome`,
+  `system_edge`, `system_chromium`, or `playwright_bundled`;
+- a saved deployment selection is authoritative and a missing saved executable
+  fails closed. Existing Profiles without a manifest retain explicit authority
+  when supplied and otherwise bind to Playwright, preventing cross-browser
+  Profile reuse during upgrade;
 - persistent Profile paths are always derived from `profile_key` under
   `MONITOR_ACCOUNT_PROFILE_ROOT`. Stored legacy paths and platform-generic
   directories are not managed launch inputs;

@@ -2,6 +2,121 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-20 - CR-118 QR Success Monotonicity And Profile Restart Verification
+
+Environment: `codex/cr-117-playwright-chromium-bootstrap`, with the final
+service build restarted locally before the real account check.
+
+Result:
+
+- Persisted login-session `success` is now updated atomically and cannot be
+  replaced by a later failure after normal QR browser cleanup.
+- QR creation, concurrent GETs, verification-code submission/request, and
+  deletion for one session share one lock around browser polling and account
+  verification. A stale frontend callback returns without clearing a newer
+  active login session.
+- GET of a terminal login session returns its stored result and account state
+  without polling a closed QR browser. A success candidate is persisted only
+  after account-level verification succeeds.
+- Frontend QR polling is serial. QR startup checks an existing persistent
+  Profile before preparing a new login dialog, and bounded polling tasks are
+  cancelled and awaited during timeout or cleanup.
+
+Verification:
+
+- Initial monotonicity/route/frontend RED: `3 failed, 566 deselected`.
+- Existing-Profile precheck RED: `1 failed, 569 deselected`.
+- GET/GET concurrency RED: `2 failed, 570 deselected`; focused
+  GREEN: `2 passed, 570 deselected`.
+- Verification POST/GET concurrency RED: `2 failed, 572 deselected`; focused
+  GREEN: `2 passed, 572 deselected`.
+- Final adjacent QR/login selection: `58 passed, 516 deselected`.
+- Combined Phase 5.1/CR-113 through CR-118 selection:
+  `224 passed, 350 deselected`.
+- Complete monitoring regression with an isolated `MONITOR_DATA_DIR`:
+  `574 passed` with three existing warnings.
+- A preliminary non-isolated run produced three test-data contamination
+  failures and was excluded from acceptance. The isolated full run above is
+  the canonical regression result.
+- Python compile, inline JavaScript parse, documentation consistency,
+  documentation regression (`1 passed`), and `git diff --check` pass.
+
+Real runtime evidence:
+
+- The final service build was restarted before the Profile login check. The
+  designated local test account remained active through the same persisted
+  profile key with `requires_relogin=false`.
+- The effective provider is Playwright `1.45.0` persistent launch using bundled
+  Chromium `127.0.6533.17`; `fallback_used=false` and mismatch count is zero.
+- The post-restart real login session reached `success` and remained
+  successful after later frontend polls. The service error-log scan found zero
+  matching exceptions and the residual Playwright browser-process count was
+  zero.
+
+Proof boundary:
+
+- This verifies the local Windows persistent Profile, QR/login-session state,
+  service restart, and browser cleanup paths. It does not replace crawler,
+  proxy, scheduler, CLI, Docker, or Linux acceptance. No Cookie value, raw
+  Profile path, QR data, password, or secret is recorded.
+
+## 2026-07-20 - CR-117 Local Browser Selection And Chromium Bootstrap
+
+Environment: `codex/cr-117-playwright-chromium-bootstrap` based on CR-116
+commit `88441e0`.
+
+Result:
+
+- Clean Windows local selection uses explicit configuration, Chrome, Edge,
+  supported Chromium, installed Playwright Chromium, then Playwright install.
+  The versioned manifest is reused under a cross-process transaction lock.
+- Existing Profile data without a manifest preserves explicit or Playwright
+  authority. Saved system/explicit browser loss, explicit conflict, malformed
+  manifest, and source/channel/path contradiction fail closed.
+- The managed Provider reuses the saved selection without system discovery on
+  service-only paths. Both local batch launchers run the shared preflight while
+  preserving their prior detached/foreground service lifecycle.
+- Actual browser version remains mandatory snapshot evidence. Valid version
+  changes are non-blocking; malformed/missing proof and all other managed field
+  mismatches remain blocking. Edge `Edg/...` CDP evidence is supported.
+
+Verification:
+
+- Revised contract RED: `16 failed, 4 passed, 540 deselected`.
+- Edge product RED: `1 failed, 561 deselected`.
+- Final CR-117-focused selection: `26 passed, 540 deselected`.
+- Combined Phase 5.1D/CR-116/CR-117/CR-107 selection:
+  `137 passed, 429 deselected`.
+- Complete monitoring regression: `566 passed` with three existing warnings.
+- Documentation regression: `1 passed`; documentation consistency, Python
+  compile, and `git diff --check` pass.
+- Complete `tests` collection: `589 passed, 1 failed`. The remaining
+  `TestXhsStoreFactory.test_create_excel_store` assertion expects
+  `XhsExcelStoreImplement` while the current factory returns `ExcelStoreBase`;
+  the same result reproduces through a direct Python call without CR-117 code
+  or its pytest fixture.
+
+Real runtime evidence:
+
+- Local discovery returns Chrome before Edge. Temporary persistent Profiles
+  launch Chrome `150.0.7871.125` and Edge `150.0.4078.83` successfully and
+  expose `Chrome/...` and `Edg/...` CDP products respectively.
+- A clean temporary deployment selects `system_chrome` and writes its temporary
+  manifest. Read-only resolution of the existing local account Profile root
+  selects `playwright_bundled`; the real manifest remains absent.
+- The designated compatibility account remains `validated`/`standby`, has a configured Profile, and
+  does not require re-login. `http://127.0.0.1:8080/api/health` returns `ok`.
+- Independent full-diff code review returns `PASS FOR CODE`; final complete
+  diff and documentation review returns `FINAL PASS` with no remaining finding
+  or content leakage.
+
+Proof boundary:
+
+- Automatic download uses fake subprocess results; no real browser cache was
+  removed or downloaded. Real browser launches used temporary Profiles and did
+  not navigate to a platform. Docker/Linux Phase 5.1 acceptance remains
+  separately operator-gated.
+
 ## 2026-07-20 - CR-116 Persistent Context Runtime Proof Fix
 
 Environment: `codex/cr-116-persistent-context-version-proof` working tree from
@@ -21,7 +136,7 @@ Result:
 - The current catalog is generator `1.1`, environment `v2`, with Chromium and
   locale-aligned values. Existing v1 rows require the explicit audited
   reset/re-login path and are not silently rewritten.
-- Local account `4821` was explicitly reset to `1.1/v2` and remains
+- The designated local compatibility account was explicitly reset to `1.1/v2` and remains
   `identity_state=validated`, `status=standby`; its Profile and proxy binding
   were preserved. No QR image or Cookie material was retained.
 - A fresh real managed Douyin QR probe returned `status=waiting_qrcode`,

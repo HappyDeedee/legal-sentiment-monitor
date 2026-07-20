@@ -1649,6 +1649,54 @@ Implementation status:
 - [x] Verify the new launcher with targeted tests, docs consistency, and
       `git diff --check`.
 
+## CR-118 - QR Login Success Monotonicity And Profile Restart Verification
+
+Implementation status (2026-07-20): verified before merge on
+`codex/cr-117-playwright-chromium-bootstrap` as a bounded Phase 5.1 login-flow
+regression found by a designated local test account. Its post-restart session remains
+successful after later polls and normal browser cleanup.
+
+- [x] Record the real account/session evidence and regression boundary.
+- [x] Add RED tests for terminal route lookup, persisted success monotonicity,
+      and serial frontend polling.
+- [x] Preserve successful login-session status and skip closed-browser polling
+      for terminal sessions.
+- [x] Serialize QR creation, concurrent GET polling, verification-code POSTs,
+      and deletion for one session; prevent stale frontend callbacks from
+      clearing a newer active session.
+- [x] Check an existing persistent Profile before preparing a new QR login and
+      cancel/await bounded polling tasks during timeout or cleanup.
+- [x] Replace overlapping frontend interval polling with serial scheduling.
+- [x] Restart the service and verify the designated test account through its existing
+      `profile_key` Profile without re-login.
+- [x] Run focused/full/docs/compile/diff gates and independent review.
+
+## CR-117 - Windows Local Browser Selection And Playwright Chromium Bootstrap
+
+Implementation status (2026-07-20): verified before merge on
+`codex/cr-117-playwright-chromium-bootstrap`. The implementation adds one
+stable local browser selection per deployment, preserves existing Profiles,
+treats valid version changes as telemetry, and keeps server/Docker/per-account/
+CR-112 boundaries. Final independent full-diff review returns `FINAL PASS`.
+
+- [x] Register the accepted requirement, scope, test boundary, and traceability
+      before changing startup code.
+- [x] Add deterministic tests for local browser priority, persisted selection,
+      existing-Profile compatibility, missing/conflicting saved browsers,
+      Playwright repair, and non-blocking valid version changes.
+- [x] Implement the versioned deployment-local browser selection manifest and
+      connect it to the managed Provider.
+- [x] Update both Windows local launchers to run the shared browser preflight
+      without changing their service lifecycle.
+- [x] Add a readable `uv` prerequisite check to the combined batch launcher.
+- [x] Preserve CR-107 host/port/browser URL behavior and service-only/Docker
+      boundaries.
+- [x] Update startup/account/data-model documentation and record focused/full/
+      docs/compile/real-read-only selection evidence.
+- [x] Verify runtime browser version changes remain observable but do not force
+      re-login when all other environment probes pass.
+- [x] Complete final independent read-only review before closing CR-117.
+
 ## CR-108 - Local/Server Login Initialization And Verification Flow Hardening
 
 Lifecycle status:

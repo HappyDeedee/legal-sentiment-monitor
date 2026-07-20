@@ -70,6 +70,33 @@ Last updated: 2026-07-20
   documentation, and independent review gates pass. Phase 5.1D remains
   historical, merge is still open, and server-like acceptance remains
   separately operator-gated.
+- CR-117 is verified before merge on
+  `codex/cr-117-playwright-chromium-bootstrap`. The accepted local-first target
+  is now implemented as a persisted deployment browser selection: explicit
+  configuration, Chrome, Edge, supported Chromium, installed Playwright
+  Chromium, then automatic Playwright installation. Existing Profiles preserve
+  their prior Playwright authority; later browser installation cannot switch a
+  saved selection; and
+  runtime browser version changes are evidence rather than standalone login
+  failures. Cross-process locking, semantic manifest checks, and Chrome/Edge/
+  Chromium source evidence are active. Focused `26`, combined Phase 5.1/CR
+  `137`, full monitoring `566`, compile, docs, real temporary Chrome/Edge, and
+  independent full-diff review gates pass. Docker, service-only discovery/
+  automatic installation, per-account browser choice, CR-112, and
+  operator-gated Phase 5.1 acceptance are unchanged.
+- CR-118 is verified before merge. Persisted login-session success is now an
+  atomic monotonic state; QR creation, GET polling, verification-code POSTs,
+  and deletion share one session lock; terminal reads skip closed-browser
+  polling; stale frontend callbacks cannot clear a newer session; and existing
+  Profiles are checked before new QR
+  preparation. After the final service restart, the designated local test
+  account remained active through the same persisted profile key on Playwright bundled Chromium
+  `127.0.6533.17` with no fallback, mismatch, or re-login requirement. Real
+  login session remained `success` after later polls and normal browser
+  cleanup. Adjacent `58`, combined Phase 5.1/CR `224`, isolated full monitoring
+  `574`, syntax, docs, diff, runtime-log, browser-cleanup, and independent
+  review gates pass. This does not close the separate Docker/Linux Phase 5.1
+  acceptance gate.
 - Phase 21 and CR-107 through CR-110 are merged current-main history, not
   active working-tree implementation.
 - CR-111 verified and synchronized human-readable governance state only; it did

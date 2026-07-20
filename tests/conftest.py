@@ -79,6 +79,23 @@ def smtp_tripwire(monkeypatch):
     monkeypatch.setattr(smtplib, "SMTP_SSL", BlockedSMTP)
 
 
+@pytest.fixture(autouse=True)
+def browser_selection_tripwire(monkeypatch, tmp_path):
+    from api.monitoring import browser_selection
+
+    monkeypatch.delenv("MONITOR_BROWSER_EXECUTABLE", raising=False)
+    monkeypatch.setattr(
+        browser_selection,
+        "BROWSER_SELECTION_PATH",
+        tmp_path / "browser_selection.json",
+    )
+    monkeypatch.setattr(
+        browser_selection,
+        "ACCOUNT_PROFILE_ROOT",
+        tmp_path / "account_profiles",
+    )
+
+
 def _env_enabled(name, environ=None):
     values = os.environ if environ is None else environ
     return str(values.get(name) or "").strip().lower() in {"1", "true", "yes", "on"}

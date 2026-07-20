@@ -6130,16 +6130,26 @@ def update_login_session_status(session_id: int, status: str, message: str = "",
     if status not in allowed:
         raise ValueError("invalid login session status")
     with get_conn() as conn:
-        row = conn.execute("SELECT id FROM login_sessions WHERE id=?", (session_id,)).fetchone()
-        if not row:
-            raise ValueError("login session not found")
-        conn.execute(
+        cursor = conn.execute(
             """
             UPDATE login_sessions SET status=?, message=?, qr_image=COALESCE(NULLIF(?, ''), qr_image), updated_at=?
-            WHERE id=?
+            WHERE id=? AND (?=? OR status<>?)
             """,
-            (status, message, qr_image, utc_now(), session_id),
+            (
+                status,
+                message,
+                qr_image,
+                utc_now(),
+                session_id,
+                status,
+                LOGIN_STATE_SUCCESS,
+                LOGIN_STATE_SUCCESS,
+            ),
         )
+        if cursor.rowcount == 0:
+            row = conn.execute("SELECT id FROM login_sessions WHERE id=?", (session_id,)).fetchone()
+            if not row:
+                raise ValueError("login session not found")
     return get_login_session(session_id) or {}
 
 
