@@ -1518,6 +1518,73 @@ Run the relevant parts of this checklist after each Phase 11 batch:
 - Documentation tests should confirm the quick-start instructions mention the
   one-click Windows launcher and the remote-access override behavior.
 
+## CR-121 Crawler Account Identity Snapshot Header Tests
+
+- A prepared managed page and an unprepared background page must not share
+  request-header evidence. A background `en-US,en` request must not overwrite
+  a prepared `zh-CN` request.
+- A mismatch emitted by the prepared page itself must still produce
+  `account_identity_snapshot_mismatch` with field-scoped safe evidence.
+- The child crawler plan/result binding, persisted runtime snapshot, and
+  account/profile/platform identity checks remain strict and unchanged.
+- A real designated-account run must finish with a successful Douyin platform
+  result and at least one persisted content row; a failed run must retain its
+  safe error evidence for diagnosis.
+- Final gates include focused provider/runner tests, the complete monitoring
+  regression, Python compile, documentation consistency/regression,
+  `git diff --check`, and independent read-only review.
+
+## CR-120 Local Visible Login Automatic Reconciliation Tests
+
+- The account-specific visible-login route must return the same browser,
+  `profile_key`, Profile, proxy policy, and platform binding used by QR and
+  crawl plans.
+- A loopback CDP probe must inspect only the recorded live process and return
+  a waiting result while the platform still requires manual verification.
+- Concurrent visible-login requests for different accounts on one platform
+  must serialize; only one window may open on the platform's fixed debug port.
+- CDP browser process information must match the recorded PID before login
+  inspection or browser close, and an unrelated page must not become a target
+  platform fallback.
+- A detected logged-in state must close only the owned browser, wait for
+  Profile release, and invoke the normal account-level Profile check once.
+- A window closed before detection must trigger one automatic final check;
+  an unrelated/mismatched process or debug port must fail closed.
+- A completed window result is idempotent, and an unreachable endpoint after
+  the startup grace period returns an actionable failure instead of indefinite
+  verification guidance.
+- Frontend reconciliation uses serial `setTimeout` scheduling, bounded
+  attempts, stale-account/session guards, and remains active if the drawer is
+  closed. It must not use an overlapping `setInterval` loop.
+- Generic platform login without an account binding remains status-only, and
+  production/server QR behavior remains unchanged. Production mode rejects
+  both visible-window open and reconciliation routes.
+- Live local verification must prove automatic detection and safe account
+  state persistence without recording raw Cookie values, Profile paths, or
+  platform secrets in logs or documentation.
+- Final gates include focused login-browser/route tests, the complete
+  monitoring regression, inline JavaScript parse, documentation consistency,
+  `git diff --check`, browser checks, and independent read-only review.
+
+## CR-119 Platform Account Recent Error Compactness Tests
+
+- The labelled `.account-summary-recent-error` card and basic-form
+  `social_account_error_summary` each use one visible line with
+  `overflow: hidden`, `text-overflow: ellipsis`, and `white-space: nowrap`
+  without widening the account drawer.
+- Populated displays expose their complete customer-safe display text through
+  titles. The basic-form empty state removes any stale title and remains
+  `最近暂无异常。`.
+- The advanced `social_account_last_error` textarea keeps the complete value;
+  save payloads, account list rows, warning state, login controls, and account
+  actions remain unchanged.
+- Browser checks cover desktop and narrow widths, verify stable heights for
+  both displays, no document horizontal overflow or overlap, reachable
+  advanced full text, and reachable fixed-footer actions.
+- Final gates include focused frontend coverage, complete monitoring
+  regression, inline JavaScript parse, documentation consistency/regression,
+  `git diff --check`, and independent read-only review.
+
 ## CR-118 QR Login Success Monotonicity And Profile Restart Tests
 
 - Persisted `success` is a monotonic login-session terminal state. A later

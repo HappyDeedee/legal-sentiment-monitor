@@ -50,6 +50,7 @@ def login_window_status(platform: str) -> dict[str, Any]:
             "closed_at": data.get("closed_at") or closed_at,
             "profile_path": data.get("profile_path"),
             "profile_key": data.get("profile_key"),
+            **_reconciliation_state(data),
         }
     return {
         "is_open": is_open,
@@ -59,6 +60,41 @@ def login_window_status(platform: str) -> dict[str, Any]:
         "closed_at": data.get("closed_at"),
         "profile_path": data.get("profile_path"),
         "profile_key": data.get("profile_key"),
+        **_reconciliation_state(data),
+    }
+
+
+def record_login_window_reconciliation(
+    platform: str,
+    opened_at: str,
+    account_id: int,
+    status: str,
+    message: str,
+) -> dict[str, Any]:
+    state = str(status or "").strip()
+    if state not in {"success", "failed"}:
+        raise ValueError("invalid reconciliation status")
+    data = _read_state(platform)
+    if not data or str(data.get("opened_at") or "") != str(opened_at or ""):
+        return {}
+    data.update(
+        {
+            "reconcile_account_id": int(account_id),
+            "reconcile_status": state,
+            "reconcile_message": str(message or ""),
+            "reconciled_at": datetime.now(timezone.utc).isoformat(),
+        }
+    )
+    _state_path(platform).write_text(json.dumps(data, ensure_ascii=False), encoding="utf-8")
+    return data
+
+
+def _reconciliation_state(data: dict[str, Any]) -> dict[str, Any]:
+    return {
+        "reconcile_account_id": data.get("reconcile_account_id"),
+        "reconcile_status": data.get("reconcile_status"),
+        "reconcile_message": data.get("reconcile_message"),
+        "reconciled_at": data.get("reconciled_at"),
     }
 
 

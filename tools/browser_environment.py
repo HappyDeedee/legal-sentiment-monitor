@@ -692,6 +692,16 @@ async def prepare_managed_page(context: Any, page: Any) -> None:
         session = await context.new_cdp_session(page)
         for method, params in commands:
             await session.send(method, params)
+        add_init_script = getattr(page, "add_init_script", None)
+        if callable(add_init_script):
+            languages = json.dumps(_accept_language_tags(plan.accept_language), ensure_ascii=False)
+            await add_init_script(
+                script=(
+                    "(() => { const languages = Object.freeze("
+                    f"{languages}); Object.defineProperty(Navigator.prototype, 'languages', "
+                    "{get: () => languages, configurable: true}); })();"
+                )
+            )
         _mark_page_prepared(page, plan)
     except Exception as exc:
         failure = BrowserEnvironmentError("account_identity_provider_unsupported", "cdp_page_prepare")
@@ -913,6 +923,21 @@ def _mark_page_prepared(page: Any, plan: BrowserEnvironmentPlan) -> None:
 
 def _attach_accept_language_recorder(context: Any) -> None:
     def record(request: Any) -> None:
+        missing = object()
+        try:
+            frame = getattr(request, "frame", missing)
+        except Exception:
+            return
+        if frame is not missing:
+            try:
+                request_page = getattr(frame, "page", None)
+            except Exception:
+                return
+            plan = _context_plan(context)
+            if request_page is None or plan is None:
+                return
+            if plan.launch_mode == "cdp_launch" and not _page_is_prepared(request_page, plan):
+                return
         headers = getattr(request, "headers", {})
         if not isinstance(headers, dict):
             return

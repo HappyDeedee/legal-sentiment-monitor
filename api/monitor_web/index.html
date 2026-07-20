@@ -224,6 +224,8 @@
     .account-detail-summary div { border:1px solid var(--line); border-radius:6px; background:#f8fafc; padding:8px; min-height:58px; }
     .account-detail-summary strong { display:block; font-size:13px; }
     .account-detail-summary span { display:block; margin-top:4px; color:var(--muted); font-size:12px; word-break:break-all; }
+    .account-summary-recent-error { min-width:0; }
+    .account-summary-recent-error span { max-width:100%; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap; word-break:normal; }
     .account-modal-grid { display:grid; grid-template-columns:1fr; gap:16px; align-items:start; }
     .account-section { border:1px solid var(--line); border-radius:8px; padding:14px; background:#fff; }
     .account-section h3 { display:flex; align-items:center; justify-content:space-between; gap:10px; margin-bottom:10px; }
@@ -233,7 +235,10 @@
     .account-flow-actions { position:relative; bottom:auto; z-index:5; border-top:1px solid var(--line); border-left:0; border-right:0; border-bottom:0; border-radius:0; background:#fff; padding:14px 18px; margin:16px 0 0; display:flex; justify-content:space-between; align-items:center; gap:12px; flex-wrap:wrap; }
     .account-flow-actions .row { flex:0 0 auto; justify-content:flex-end; }
     .account-readonly-field { border:1px solid var(--line); border-radius:6px; background:#f8fafc; padding:9px 10px; min-height:38px; color:var(--muted); word-break:break-all; }
-    .account-error-summary { border:1px solid var(--line); border-radius:8px; background:#fbfdff; padding:10px 12px; color:var(--muted); margin-top:8px; }
+    .account-error-summary {
+      max-width:100%; min-width:0; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;
+      border:1px solid var(--line); border-radius:8px; background:#fbfdff; padding:10px 12px; color:var(--muted); margin-top:8px;
+    }
     .login-card { background:#fbfdff; border-color:#bfdbfe; }
     .login-card-grid { display:grid; grid-template-columns:1fr; gap:14px; align-items:start; }
     .login-method-guide { border:1px solid var(--line); border-radius:8px; padding:12px; background:#fff; }
@@ -4311,6 +4316,8 @@
     let runPollInFlight = false;
     let loginSessionPollTimer = null;
     let activeLoginSessionId = null;
+    let visibleLoginReconcileTimer = null;
+    let visibleLoginReconcileToken = 0;
     let emailPreviewTimer = null;
     let openJobMenuId = null;
     let openAIRuleMenuId = null;
@@ -6650,7 +6657,7 @@
       const profileNote=p.profile_exists ? '登录态已配置，可供任务复用。' : '尚未发现可用网页登录态。';
       return `${profile}<div class="small">${esc(profileSource)}</div>${proxy}<div class="small">${esc(profileNote)}</div><div style="height:4px"></div>${cookie}`;
     }
-    function platformStatusCell(p){ if(p.login_window_open) return `<span class="status">登录窗口未关闭</span><div class="small">请关闭窗口后刷新状态，再运行采集。</div>`; if(p.login_type==='cookie' && !p.has_cookies) return '<span class="status">Cookie 待填写</span><div class="small">保存 Cookie 后才能使用 Cookie 登录。</div>'; if(p.needs_login) return `<span class="status">需重新登录</span><div class="small">${esc(compactPlatformError(p.last_error)||'请重新登录该平台账号')}</div>`; return '<span class="status ok">可运行</span>'; }
+    function platformStatusCell(p){ if(p.login_window_open) return `<span class="status">登录窗口验证中</span><div class="small">完成平台验证后，系统会自动保存登录状态。</div>`; if(p.login_type==='cookie' && !p.has_cookies) return '<span class="status">Cookie 待填写</span><div class="small">保存 Cookie 后才能使用 Cookie 登录。</div>'; if(p.needs_login) return `<span class="status">需重新登录</span><div class="small">${esc(compactPlatformError(p.last_error)||'请重新登录该平台账号')}</div>`; return '<span class="status ok">可运行</span>'; }
     function compactPlatformError(error){ const text=String(error||''); if(!text) return ''; const lower=text.toLowerCase(); if(text.includes('登录态失效') || lower.includes('no login') || lower.includes('unauthenticated') || lower.includes('login state result: false')) return '平台登录态可能失效，请重新登录该平台账号。'; if(text.includes('登录窗口未关闭')) return '登录窗口未关闭，请关闭后刷新状态。'; return cleanCustomerText(text.split('; see ')[0].slice(0,160)); }
     async function saveCurrentPlatformCookieLogin(){
       const current=socialAccountCache.get(Number(val('social_account_id')||0));
@@ -6674,6 +6681,71 @@
         renderLoginModePanel();
       });
     }
+    function stopVisibleLoginReconciliation(){
+      if(visibleLoginReconcileTimer){
+        clearTimeout(visibleLoginReconcileTimer);
+        visibleLoginReconcileTimer=null;
+      }
+      visibleLoginReconcileToken += 1;
+    }
+    function visibleLoginResultNote(message, tone=''){
+      const result=document.getElementById('login_session_result');
+      if(result) result.innerHTML=`<div class="small ${tone}">${esc(cleanCustomerText(message||''))}</div>`;
+    }
+    function startVisibleLoginReconciliation(platform, accountId){
+      stopVisibleLoginReconciliation();
+      const numericAccountId=Number(accountId||0);
+      if(!numericAccountId) return;
+      const token=visibleLoginReconcileToken;
+      let rounds=120;
+      const finish=()=>{
+        if(visibleLoginReconcileTimer){
+          clearTimeout(visibleLoginReconcileTimer);
+          visibleLoginReconcileTimer=null;
+        }
+        if(visibleLoginReconcileToken===token) visibleLoginReconcileToken += 1;
+      };
+      const update=async()=>{
+        if(visibleLoginReconcileToken!==token) return;
+        rounds -= 1;
+        try{
+          const res=await api('/platform-status/'+encodeURIComponent(platform)+'/login-browser/reconcile',{method:'POST',body:JSON.stringify({account_id:numericAccountId})});
+          if(visibleLoginReconcileToken!==token) return;
+          if(!res.ok){ visibleLoginResultNote(await err(res),'warn'); finish(); return; }
+          const data=await res.json();
+          if(data.account) syncAccountFromResponse(data.account);
+          await loadPlatformStatus();
+          if(visibleLoginReconcileToken!==token) return;
+          if(data.status==='waiting' && rounds>0){
+            visibleLoginResultNote(data.message||'请继续完成平台验证，系统会自动确认登录状态。');
+            visibleLoginReconcileTimer=setTimeout(()=>{
+              visibleLoginReconcileTimer=null;
+              update();
+            },2000);
+            return;
+          }
+          finish();
+          await Promise.all([loadAccountsPool(),loadDashboard(),loadReadiness()]);
+          renderLoginModePanel();
+          if(data.status==='success'){
+            visibleLoginResultNote(data.message||'登录成功，当前账号登录状态已自动保存。','ok');
+            toast('登录成功，当前账号登录状态已自动保存');
+          } else if(rounds<=0){
+            visibleLoginResultNote('自动确认超时，请重新打开登录窗口处理。','warn');
+            toast('自动确认登录状态超时');
+          } else {
+            visibleLoginResultNote(data.message||'登录状态未通过检测，请重新打开登录窗口处理。','warn');
+            toast(data.message||'登录状态未通过检测');
+          }
+        }catch(error){
+          if(visibleLoginReconcileToken!==token) return;
+          finish();
+          visibleLoginResultNote('自动确认登录状态失败，请重新打开登录窗口处理。','warn');
+          toast('自动确认登录状态失败');
+        }
+      };
+      update();
+    }
     async function openPlatformLoginBrowser(platform, accountId=null, triggerButton=null){
       const account=accountId ? socialAccountCache.get(Number(accountId)) : null;
       if(accountId && !ensureAccountIdentityCanLogin(account)) return;
@@ -6682,15 +6754,17 @@
         return;
       }
       await withActionButtonLoading(triggerButton, '打开中...', async ()=>{
+        stopVisibleLoginReconciliation();
         const result=document.getElementById('login_session_result');
         if(result) result.innerHTML=`<div class="login-flow-card">${loadingNote('正在打开平台登录窗口...')}</div>`;
         const body=accountId ? JSON.stringify({account_id:accountId}) : JSON.stringify({});
         const res=await api('/platform-status/'+platform+'/login-browser',{method:'POST',body});
         if(!res.ok){ toast(await err(res)); return; }
         const data=await res.json();
-        if(result) result.innerHTML='<div class="small">登录窗口已打开。请在窗口中完成登录后，回到这里继续确认登录结果。</div>';
+        if(result) result.innerHTML=`<div class="small">${esc(data.message||'登录窗口已打开，系统将自动检测并保存登录状态。')}</div>`;
         toast(data.message || '网页登录窗口已打开');
         await loadPlatformStatus();
+        if(accountId) startVisibleLoginReconciliation(platform, Number(accountId));
       });
     }
     async function startLoginSessionFromForm(){
@@ -7700,6 +7774,9 @@
       if(titleEl) titleEl.textContent = account ? account.name : '新建账号';
       const empty=document.getElementById('account_detail_empty');
       const summary=document.getElementById('account_detail_summary');
+      const recentError=account && account.last_error ? cleanCustomerText(account.last_error) : '';
+      const recentErrorPreview=recentError ? recentError.slice(0,80) : '暂无异常';
+      const recentErrorTitle=recentError ? ` title="${esc(recentError)}"` : '';
       if(empty) empty.style.display = account ? 'none' : 'block';
       if(summary){
         summary.innerHTML = account ? [
@@ -7709,7 +7786,7 @@
           accountSummaryItem('运行实况', accountRuntimeEnvironmentSummary(account)),
           accountSummaryItem('可用性', accountAvailability(account).label),
           accountSummaryItem('最近验活', account.last_checked_at ? formatTime(account.last_checked_at) : '未检测'),
-          accountSummaryItem('最近异常', account.last_error ? cleanCustomerText(account.last_error).slice(0,80) : '暂无异常')
+          `<div class="account-summary-recent-error"><strong>最近异常</strong><span${recentErrorTitle}>${esc(recentErrorPreview)}</span></div>`
         ].join('') : '';
       }
       updateAccountDerivedFields(account);
@@ -7727,11 +7804,14 @@
       if(source) source.innerHTML = account ? accountLoginSourceBadge(account) : '<span class="muted">保存后生成</span>';
       if(errorSummary){
         if(account && account.last_error){
+          const errorText=cleanCustomerText(account.last_error);
           errorSummary.className='account-error-summary notice warn';
-          errorSummary.textContent=cleanCustomerText(account.last_error);
+          errorSummary.textContent=errorText;
+          errorSummary.title=errorText;
         } else {
           errorSummary.className='account-error-summary';
           errorSummary.textContent='最近暂无异常。';
+          errorSummary.removeAttribute('title');
         }
       }
     }

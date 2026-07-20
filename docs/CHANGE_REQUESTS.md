@@ -119,6 +119,7 @@ Status values:
 - CR-116: Persistent Context Runtime Proof Regression Fix
 - CR-117: Windows Local Browser Selection And Playwright Chromium Bootstrap
 - CR-118: QR Login Success Monotonicity And Profile Restart Verification
+- CR-119: Platform Account Recent Error Single-Line Truncation
 - CR-096: AI Evaluation Postprocessing Scope Reduction
 - CR-075: Responsive Navigation Interaction Consistency
 - CR-076: Mobile Header Layout Resilience Regression Fix
@@ -4791,6 +4792,230 @@ Verification:
   lower-strength checks pass, the safe generated directory reference is not an
   absolute path, the generated directory is absent after exit, and
   compile/documentation gates pass. CR-115 is closed.
+
+## CR-121 - Crawler Account Identity Snapshot Header Binding
+
+Date: 2026-07-20
+
+Source: a designated local test-account crawler run failed with
+`managed browser environment failed: account_identity_snapshot_mismatch` even
+though the account Profile, browser source, User-Agent, locale, viewport, and
+stored identity were valid. The persisted runtime evidence identified only an
+`accept_language` mismatch: the crawl observed `en-US,en` after the managed
+plan requested `zh-CN`.
+
+Module: managed browser environment request evidence and the account-bound
+crawler/CDP entry point.
+
+Type: Regression Fix
+
+Status: Verified
+
+Requirements:
+
+- Associate `Accept-Language` evidence with the exact managed page that was
+  prepared for the account attempt.
+- Ignore requests from restored, background, or otherwise unprepared pages
+  in the same CDP browser context.
+- Keep strict field comparison and fail-closed behavior for a real mismatch;
+  do not normalize away an actual account-environment difference.
+- Preserve the account's browser selection, `profile_key`, Profile, proxy
+  policy, identity catalog, and persisted Cookie material.
+
+Acceptance:
+
+- A deterministic regression test fails before the fix when a background page
+  overwrites the prepared page's language evidence.
+- The same test passes after the fix and still rejects a mismatch on the
+  prepared page itself.
+- The designated local test account completes a real Douyin collection attempt
+  with at least one stored content row and no
+  `account_identity_snapshot_mismatch`.
+- Existing QR/Profile/Cookie validation and browser-version telemetry tests
+  remain green.
+
+Verification:
+
+- RED reproduced the cross-page contamination: an unprepared background CDP
+  page could replace the prepared page's `Accept-Language` evidence.
+- GREEN scopes request evidence to the prepared CDP page and injects the
+  account language list before page scripts run. Prepared-page mismatches still
+  fail closed, while persistent Profile checks keep their existing evidence
+  path.
+- A controlled local run completed Douyin collection successfully and stored
+  content. Its persisted result has no failed platform or identity mismatch.
+- The final account snapshot remains active on the same Profile and
+  project-selected Playwright Chromium, with matching requested/effective
+  language evidence and no mismatch evidence.
+- Focused CR-120 coverage passes (`14 passed`), the complete monitoring suite
+  passes (`590 passed`) with three existing warnings, and compile, JavaScript,
+  documentation, whitespace, and live-browser gates pass.
+
+Boundary:
+
+- This change does not weaken identity validation, change browser priority,
+  migrate accounts, or promote raw Cookie text into a new authority.
+- Server-like production acceptance remains governed by the existing Phase
+  5.1 acceptance packet.
+
+Rollback:
+
+- Revert the request-evidence change, its regression tests, and this CR's
+  documentation. No account or database migration is required.
+
+## CR-120 - Local Visible Login Automatic Reconciliation
+
+Date: 2026-07-20
+
+Source: the local QR fallback opens the account browser window correctly but
+leaves the operator responsible for returning to the page, refreshing status,
+and manually checking the account after platform second verification.
+
+Module: local account-specific browser login fallback, loopback CDP probing,
+account Profile validation, and Platform Accounts login status UI.
+
+Type: Existing Feature Optimization / Regression Fix
+
+Status: Verified
+
+Requirements:
+
+- Open the browser selected by the account environment and the same
+  `profile_key` Profile already used by QR login and crawling.
+- While the owned local window is open, periodically inspect only that
+  account's browser session through its loopback CDP port.
+- Serialize visible login per platform and prove that the CDP endpoint belongs
+  to the recorded browser PID before inspecting or closing it.
+- When the platform reports a completed login, close the owned browser
+  session, wait for Profile release, run the normal account-level Profile
+  validation, and persist the account identity/runtime result.
+- If the operator closes the window first, perform one automatic final
+  validation; no return-to-page refresh or manual `检查登录` click is needed.
+- Keep the persistent Profile as the QR/local-login/crawl authority. This
+  change does not store raw browser Cookie values as a new authority and does
+  not implement CAPTCHA, slider, SMS receiving, or verification bypass.
+- Keep production/server QR behavior unchanged; local visible-window support
+  remains development/local-only.
+
+Acceptance:
+
+- RED coverage proves the old flow only displayed a manual-refresh message
+  and had no reconciliation poll.
+- Account-specific browser/Profile binding, same-account QR contention, and
+  safe loopback-only CDP connection are covered by tests.
+- A live local window that is already logged in is detected automatically,
+  closed by the owning flow, and followed by a successful Profile check.
+- A live window that is still in second verification remains in a waiting
+  state; a failed/closed/expired window produces an actionable safe result
+  without overwriting a previously valid Profile.
+- Different accounts cannot open simultaneous visible windows on one platform;
+  unrelated processes/pages fail closed, and repeated terminal reconciliation
+  does not repeat the Profile check.
+- Serial frontend polling cannot overlap, stale callbacks cannot affect a
+  newer account attempt, and drawer navigation does not stop reconciliation.
+- The designated local test account's real collection acceptance is performed
+  after the same service restart and browser/Profile validation gates.
+
+Verification:
+
+- RED proved the old frontend had only manual return/refresh guidance and no
+  visible-login reconciliation loop.
+- Tests cover recorded loopback-port probing, waiting during manual platform
+  verification, owned-window cleanup, one final check after operator close,
+  mismatched Profile rejection, serial bounded frontend polling, and stale
+  attempt protection.
+- Live monitor verification opened the designated account's selected
+  Playwright Chromium and same persistent Profile. The frontend detected the
+  already authenticated state, closed the owned window, ran the normal Profile
+  check, and displayed automatic-save success without a manual refresh.
+- CDP process ownership is verified against the recorded browser PID before
+  login inspection or `Browser.close`. One platform permits one visible login
+  window at a time, and a completed window result is idempotent.
+- The account remained `active`, `requires_relogin=false`, with no last error;
+  no raw Cookie value, local Profile path, or platform secret was written to
+  tracked files or verification text.
+- The forced second-verification waiting branch is covered deterministically;
+  live verification used an already authenticated account and did not force a
+  new platform challenge.
+- Focused CR-120 coverage passes (`14 passed`), the complete monitoring suite
+  passes (`590 passed`) with three existing warnings, and compile, JavaScript,
+  documentation, whitespace, and live-browser gates pass.
+
+Boundary:
+
+- Generic platform login without an `account_id` remains a status-only local
+  window flow because there is no account to bind or activate.
+- The endpoint accepts only the recorded local loopback debug port for the
+  matching platform/Profile state; it does not connect to arbitrary browsers.
+
+Rollback:
+
+- Revert the reconciliation endpoint, frontend timer, tests, and this CR's
+  documentation. Existing manual local login and server QR flows remain
+  available.
+
+## CR-119 - Platform Account Recent Error Single-Line Truncation
+
+Date: 2026-07-20
+
+Source: the Platform Accounts detail form lets its labelled recent-error card
+and full recent-error warning wrap onto multiple lines, so a long runtime error
+can make the account form unnecessarily tall.
+
+Module: Platform Accounts account-detail drawer and its recent-error displays.
+
+Type: Regression Fix
+
+Status: Verified
+
+Requirements:
+
+- Keep both the labelled recent-error card and basic-form warning summary to
+  one visible line.
+- Use an ellipsis when the customer-safe error text exceeds the available
+  width, and expose the complete summary through the element title.
+- Keep the full stored value and the advanced `异常记录` textarea unchanged.
+- Preserve the empty `最近暂无异常。` state, warning treatment, account save
+  behavior, API payload, permissions, and account list behavior.
+- Do not change backend APIs, database schema, account runtime state, Profile,
+  Cookie, proxy, browser, login, or crawler behavior.
+
+Acceptance:
+
+- Static regression coverage locks the one-line overflow rules and complete
+  title handling for both populated and empty summary states.
+- A long recent error no longer increases either display's height or the drawer
+  width, while complete text remains available in titles and the advanced
+  field.
+- Desktop and narrow-screen browser checks show no overlap, horizontal page
+  overflow, or hidden account actions.
+- Focused frontend tests, the monitoring regression, JavaScript parse,
+  documentation consistency, and whitespace checks pass.
+
+Verification:
+
+- RED failed because the old renderer had neither complete-text title handling
+  nor a one-line overflow contract. Focused GREEN and adjacent Platform
+  Accounts/Proxy Resources coverage pass (`3 passed`).
+- The isolated complete monitoring suite passes (`575 passed`) with the same
+  three existing deprecation warnings. Inline JavaScript parse,
+  `node --check api/webui/monitor/monitor.js`, documentation consistency, and
+  whitespace checks pass.
+- Live `/monitor` checks pass at the default desktop viewport and `390x844`.
+  At narrow width the labelled card has a `129` pixel client width and `264`
+  pixel full-text width; the basic warning has a `269` pixel client width and
+  `332` pixel full-text width. Both ellipsis paths are exercised; display
+  heights remain stable, titles and advanced value remain complete,
+  document/drawer horizontal overflow are zero, fixed-footer actions remain
+  visible, and browser console warnings/errors are empty.
+- A non-persistent DOM-only `176`-character fixture renders an `80`-character
+  labelled-card preview with the full `176` characters in its title. The basic
+  warning text and title both retain all `176` characters. Reload clears the
+  fixture without writing account data.
+Rollback:
+
+- Revert only the CR-119 account-summary CSS, frontend title handling, test,
+  and documentation changes. No runtime data migration or cleanup is needed.
 
 ## CR-118 - QR Login Success Monotonicity And Profile Restart Verification
 
