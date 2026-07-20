@@ -1,19 +1,22 @@
 # Cross-Computer Browser Login And CookieBridge Roadmap
 
-> Planning artifact only. This roadmap does not approve code, schema, runtime,
-> extension, or deployment changes. Execute only the packet whose start gate is
-> open in the current project documents.
+> Accepted, dependency-gated roadmap. Acceptance approves the documented
+> product direction, sequencing, and packet boundaries; it is not evidence that
+> Packet B, C, or D has started or passed. Execute only the packet whose start
+> gate is open in the current project documents.
 
 **Goal:** Add an optional local-desktop browser login flow that opens a
 project-managed Chrome or Edge Profile, acquires Cookies through a
-project-owned CookieBridge-compatible connector, verifies the exact account,
-and saves it without manual Cookie copying. Preserve QR login as the primary
-server path and manual Cookie input as a collapsed advanced option.
+Packet-B-selected CookieBridge-compatible Extension/Connector path, verifies
+the exact account, and saves it without manual Cookie copying. Preserve QR
+login as the primary server path and manual Cookie input as a collapsed
+advanced option.
 
-**Baseline:** originally reviewed against `main@abb4d66`; Phase 5.1P was later
-verified against `main@459237f` on 2026-07-19. `CR-111` is already used. The
-proposed requirement identifier is `CR-112`. Phase 5.1A is implemented and
-independently verified; Phase 5.1B is now the next CR-047 unit.
+**Baseline:** rebaselined on 2026-07-21 against clean
+`main@2ea2c1e96675297e302368b1226ec7aac05f2bb1`. Phase 5.1P, Phase 5.1A-D,
+and CR-114 through CR-121 are merged and verified within their recorded proof
+boundaries. The separate CR-047 Linux/server-like real acceptance remains
+operator-gated and is not relabeled by this local Windows roadmap.
 
 **Review lane:** Deep. The roadmap touches browser processes, extension
 distribution, authentication material, account identity, durable state,
@@ -30,16 +33,21 @@ The current authoritative order is:
 
 1. Keep Packet A, the verified Phase 5.1P read-only preflight under CR-047, as
    the provider compatibility boundary.
-2. Complete the existing Phase 5.1A-D implementation and Phase 5.1 acceptance
-   gate under CR-047. This roadmap does not duplicate or reorder that work.
-3. Preserve CR-070 / Phase 5.2 as the currently accepted lane after CR-047.
-4. CR-112 is registered as `Needs Confirmation`; a later accepted decision
-   must place Packet B relative to CR-070 before Packet B starts.
-5. Execute Packet B, the connector compatibility, pairing, and protocol spike,
-   only after its confirmation and sequencing gates pass.
-6. Accept the distribution/runtime decisions and then execute Packet C,
+2. Preserve the completed Phase 5.1A-D implementation and run the latest-main
+   local provider/preflight unit that is achievable on this Windows host. This
+   scoped gate proves the inherited local browser/Profile authority only; it
+   does not close the separate CR-047 Linux/server-like real acceptance.
+3. Execute CR-112 before CR-070. Packet B is disposable and synthetic; Packet C
+   and D implement and accept the same-machine Windows capability while the
+   connector remains disabled in server production by default.
+4. Execute Packet B, the reuse-first connector/extension compatibility,
+   pairing, and protocol spike.
+5. Use Packet B evidence to select direct reuse, minimal adaptation, or one
+   focused replacement for each component, then execute Packet C,
    the local browser auto-sync feature.
-7. Execute Packet D, the clean-computer and deployment acceptance matrix.
+6. Execute Packet D, including mandatory real Douyin and Xiaohongshu
+   acceptance. Kuaishou is deferred.
+7. Execute CR-070 against only committed CR-112 Profile/account state.
 
 Packet documents:
 
@@ -53,20 +61,22 @@ Packet documents:
 | Label | Current evidence | Classification | Documentation action | Protected behavior | Readiness |
 |---|---|---|---|---|---|
 | Phase 5.1P | `docs/TASKS.md` and `docs/phase-5.1p-browser-entrypoint-map.md` record verified completion | Completed read-only preflight | Keep as Packet A evidence and provider boundary | No code, schema, Profile, Cookie, proxy, or runtime mutation | Complete |
-| Phase 5.1A-D | Phase 5.1P and Phase 5.1A-C verified and merged; Phase 5.1D is active | Current, serially dependency-gated | Keep under CR-047 | One provider output and requested/effective snapshots | Complete Phase 5.1D |
-| Phase 5.1 acceptance | Gated by Phase 5.1A-D | Current dependency-gated | Keep under CR-047 | Server-like proof; no diagnostic fallback presented as identity proof | Blocked |
-| Proposed CR-112 | Registered in formal governance with status `Needs Confirmation` | Needs Confirmation | Keep linked plans proposed until scope and sequencing are accepted | Current QR and manual Cookie flows | Not implementation-ready |
-| CookieBridge source | Temporary source under `.codex_tmp`; extension loads a Service Worker but did not register in the observed black-box run | Needs Baseline | Evaluate in Packet B only | No product dependency on unproved connector behavior | Future-valid |
-| CR-070 / Phase 5.2 | Starts after CR-047 provider/snapshot verification | Deferred dependency | Do not absorb into CR-112 | Existing import/export ownership | Future-only |
+| Phase 5.1A-D | Merged provider, identity, lifecycle, runtime binding, and regression fixes through CR-121 on current main | Historical/already completed | Keep closed; consume the provider contract | One account/browser/Profile/proxy authority and requested/effective snapshots | Ready dependency |
+| Phase 5.1 server-like acceptance | Task 3 is operator-gated because this host has no Docker/Linux runtime, dedicated proxy probe, or acceptance fixtures | Operator-gated CR-047 work | Keep open and separate; do not claim local evidence closes it | Server production remains QR-first and no diagnostic fallback is production proof | Operator-only |
+| CR-112 | User decisions and the scoped Windows gate are accepted/verified on 2026-07-21; no Packet B/C/D implementation exists yet | Accepted / Dependency-Gated | Atomically commit the validated documents, then start Packet B | Existing QR, manual Cookie, Profile, and permission behavior | Packet B ready after document commit |
+| CookieBridge reference | Ignored temporary snapshot and prior disposable Service Worker observations exist; product compatibility, licensing, pairing, and exact roundtrip are unproved | Needs Baseline | Evaluate reuse-first in Packet B and produce a component decision matrix | No product dependency on unproved or restricted-source behavior | Packet B only |
+| Current schema/API/UI | No promotion/binding schema or connector module; account APIs strip Cookie and manual UI never reveals it; runner still uses `--cookies` | Current baseline gap | Implement only in Packet C after Packet B | Existing storage encryption and administrator account boundary | Dependency-gated |
+| CR-070 / Phase 5.2 | Accepted export/import capability, not implemented | Deferred behind CR-112 by accepted decision | Preserve ownership and consume only committed CR-112 state later | No export of operation or connector secrets | Future-only |
 | CR-092 to CR-094 | Independent future architecture lanes | Future-only | Keep separate | No hidden prerequisite or parallel account/provider system | Future-only |
 
 Browser and login evidence on the current baseline:
 
-- `tools/browser_launcher.py` detects Chrome before Edge and Chromium.
-- `login_browser.py`, `login_qrcode.py`, and `account_check.py` still resolve or
-  consume browser paths independently.
-- `MONITOR_BROWSER_EXECUTABLE` is documented but is not yet one uniformly
-  consumed login/runtime authority.
+- CR-117 selects one deployment browser using explicit executable, Chrome,
+  Edge, supported Chromium, installed Playwright Chromium, then automatic
+  Playwright Chromium installation, and persists the choice locally.
+- CR-120 binds local visible login to the selected browser, account
+  `profile_key`, and owned CDP process. CR-121 preserves exact prepared-page
+  identity evidence for real crawls.
 - `runner.py` passes decrypted saved Cookie material through `--cookies` for
   `login_type=cookie`. Phase 5.1P mapped that current baseline without
   changing it; Packet C owns the later confirmed migration to persistent
@@ -80,10 +90,8 @@ Browser and login evidence on the current baseline:
 
 ## 3. Accepted Planning Decisions
 
-These decisions define the roadmap. The persistent-Profile/login-material
-sub-decision was confirmed on 2026-07-19. Recording the remaining CR-112 scope
-as accepted still requires the repository's normal confirmation and
-documentation process.
+These decisions define the accepted roadmap. `Accepted` approves direction;
+`In Progress` and `Verified` remain packet-specific evidence states.
 
 ### 3.1 Login model and UI order
 
@@ -158,7 +166,7 @@ agent, or default network.
 
 ### 3.4 V1 placement and transport
 
-V1 browser auto-sync is local-desktop and same-host only:
+V1 browser auto-sync is local-desktop and same-machine Windows only:
 
 ```text
 monitor service + managed browser + connector service
@@ -201,17 +209,21 @@ not replace the QR production baseline.
 
 ### 3.5 Distribution and runtime
 
-The source under `.codex_tmp` is evaluation evidence only. Product integration
-must use one accepted route:
+The source under `.codex_tmp` is evaluation evidence only. Packet B begins with
+reuse-first, minimal-adaptation analysis and assigns one result to each
+Extension, Connector, and protocol component:
 
-1. written permission granting the intended use and distribution; or
-2. a project-owned compatible extension and connector implementation based on
-   the observed protocol requirements, without copying restricted source.
+1. `direct reuse` when behavior, distribution, runtime, and license fit;
+2. `minimal adaptation` when a bounded adapter can satisfy the accepted
+   pairing/security contract without broad ownership transfer; or
+3. `single-component replacement` when direct reuse/adaptation cannot meet the
+   contract or distribution boundary.
 
-The plan defaults to route 2. No third-party extension/server source is copied,
-bundled, modified, or shipped before the decision is recorded. Packet B may
-run read-only inspection and disposable black-box tests against the temporary
-artifact.
+No final component ownership is chosen before Packet B evidence. Restricted
+source is not copied into product paths without compatible permission. Packet B
+may run read-only inspection and disposable black-box tests against the ignored
+temporary artifact and may build independent disposable adapters under ignored
+paths.
 
 The Python 3.12 reference server is a disposable Packet B dependency only. The
 V1 product connector runs inside the existing Python 3.11 FastAPI service; it
@@ -235,6 +247,25 @@ implementation plan is approved, and process inspection must prove the raw
 Cookie is absent before acceptance. The current contract remains baseline
 evidence until then, not the target behavior.
 
+### 3.7 Administrator Cookie reveal
+
+The normal account list/detail remains masked. An authenticated administrator
+may explicitly request the complete Cookie for one selected account through a
+dedicated POST reveal endpoint. The response uses `Cache-Control: no-store,
+private`, `Pragma: no-cache`, and no validator; normal users receive HTTP 403.
+The frontend keeps the value in transient page memory only, masks it by
+default, reveals it through an eye control, copies only after an explicit
+click, shows copy feedback, and clears the transient value on account change,
+drawer close, navigation, or timeout.
+
+The Cookie itself never enters URL/query text, browser local/session/IndexedDB
+storage, logs, audit details, diagnostics, screenshots, subprocess argv, or
+subprocess environment. A redacted audit event may record that an
+administrator invoked reveal/copy for an account, but it contains no response
+body, Cookie fragment, scope, or hash. Copying intentionally places the value
+on the operating-system clipboard at the administrator's request; the UI must
+state success without echoing the value.
+
 ## 4. Pairing And Multi-Account Contract
 
 The current reference `client_id` is not sufficient account identity. V1 uses
@@ -255,7 +286,7 @@ only connected client implicitly.
    it to `login_session_id`, `social_account_id`, `profile_key`, platform, and
    the initiating actor.
 3. Packet B selects and proves the browser-bound bootstrap mechanism. The
-   current candidate is an ephemeral copy of the project-owned unpacked
+   current candidate is an ephemeral copy of the Packet-B-selected managed
    extension whose generated `bridge_config.json` contains the loopback
    endpoint, protocol version, and one-time token. Only the managed candidate
    browser receives this extension path, and Packet B must prove that removing
@@ -459,19 +490,28 @@ implementation decision.
 **Exit:** all existing login/crawl/CDP entrypoints and requested/effective
 provider fields are mapped without runtime mutation.
 
-### Existing Phase 5.1A-D and acceptance
+### Existing Phase 5.1A-D and scoped local gate
 
-This existing CR-047 work now runs from Phase 5.1A through Phase 5.1D and
-acceptance before Packet B. Its current project tasks remain authoritative.
+Phase 5.1A-D and their merged follow-up regressions are complete. Before
+Packet B, rerun the currently achievable latest-main local provider/preflight
+unit and record its proof boundary. The still-open Linux/server-like real
+acceptance remains owned by CR-047 and is not presented as passed.
 
-**Exit:** one BrowserEnvironmentProvider output and runtime snapshot contract
-are verified across server-like login and crawl paths.
+**Exit:** the local unit confirms one selected browser/Profile/provider
+authority on this Windows host without mutating real account material. The
+result explicitly says it is not CR-047 server production acceptance.
+
+**2026-07-21 evidence:** `docker compose config --quiet` passed; the shared
+one-click browser preflight resolved the persisted `chrome.exe`; isolated
+`scripts/server_like_validation.py` passed all 12 checks including restart and
+temporary-data cleanup; and the focused Phase 5.1/CR-116-121 regression passed
+`234` tests. No real account, Cookie, Profile, proxy, or platform action ran.
 
 ### Packet B: compatibility, pairing, and protocol spike
 
-Starts after Phase 5.1 acceptance, CR-112 acceptance, and an explicit
-sequencing decision relative to CR-070. It may inspect the temporary reference
-and run disposable black-box tests. It does not change
+Starts after CR-112 acceptance, the latest-main scoped local gate, and the
+accepted CR-112-before-CR-070 sequencing decision. It may inspect the temporary
+reference and run disposable black-box tests. It does not change
 product schema, APIs, UI, Profiles, or deployment.
 
 Packet B must also prove server-side loopback peer enforcement,
@@ -479,9 +519,11 @@ forwarded-header spoof rejection, exact extension Origin validation, disabled
 HTTP 404/WebSocket 403 behavior on the pinned runtime, and reverse-proxy
 exclusion before Packet C can start.
 
-**Exit:** a project-owned protocol and packaging decision exists, and a
-prototype proves extension Service Worker, WebSocket authentication,
-token-to-client pairing, and one exact Cookie request/response roundtrip.
+**Exit:** the component matrix records `direct reuse`, `minimal adaptation`, or
+`single-component replacement` with evidence for Extension, Connector, and
+protocol; a prototype proves extension Service Worker, WebSocket
+authentication, token-to-client pairing, and one exact Cookie
+request/response roundtrip.
 
 ### Packet C: local browser auto-sync implementation
 
@@ -511,8 +553,10 @@ managed crawler children use the fixed verified Profile with no raw Cookie.
 Starts after Packet C targeted and integration tests pass.
 
 **Exit:** clean Windows computer setup, browser matrix, failure/restart matrix,
-rollback, and server QR non-regression are verified. Headless Bridge remains a
-separate result and does not weaken the server-first boundary.
+rollback, and server QR non-regression are verified. Designated Douyin and
+Xiaohongshu accounts each persist at least one real content item through the
+normal monitor path with `fallback_used=false`; Kuaishou is deferred. Headless
+Bridge remains a separate result and does not weaken the server-first boundary.
 
 ## 8. Verification Matrix
 
@@ -521,7 +565,7 @@ separate result and does not weaken the server-first boundary.
 | Standard pytest | Fake | Fake/temp Profile | No | Yes | State machine, pairing, replay, isolation, cleanup |
 | Local diagnostics | Fake or disposable loopback | Installed browser | No | Yes | Provider resolution and extension registration |
 | Opt-in browser smoke | Disposable loopback | Chrome and Edge | No | Explicit opt-in | Service Worker + authenticated registration + roundtrip |
-| Local pilot | Loopback product connector | Managed visible browser | Yes | Operator opt-in | Exact account validation, encrypted Cookie persistence, Profile restart reuse, and no raw Cookie argv |
+| Local pilot | Loopback product connector | Managed visible browser | Yes | Operator opt-in and designated account ID | Exact account validation, encrypted Cookie persistence, Profile restart reuse, and no raw Cookie argv |
 | Server-like regression | Disabled | Bundled/headless QR browser | Platform as existing plan permits | Existing gates | QR flow and crawl non-regression |
 | Production | Disabled for V1 | Server-started browser | Yes | Existing server policy | QR login remains primary acceptance path |
 
@@ -606,12 +650,13 @@ Must eventually happen:
 
 ## 10. Documentation And Traceability
 
-CR-112 is registered in `CHANGE_REQUESTS.md` as a new capability with `Needs
-Confirmation` and linked to `TASKS.md`, `TRACEABILITY.md`, and `TEST_PLAN.md`.
-The persistent-Profile authority and no-raw-Cookie-argv target are confirmed.
-Do not mark the full CR accepted until the local scope, distribution route,
-pairing protocol, server QR boundary, and sequencing relative to CR-070 are
-confirmed.
+CR-112 is registered in `CHANGE_REQUESTS.md` as an `Accepted /
+Dependency-Gated` new capability and linked to `TASKS.md`, `TRACEABILITY.md`,
+and `TEST_PLAN.md`. Same-machine Windows scope, reuse-first/minimal-adaptation
+evaluation, CR-112-before-CR-070 sequencing, Profile authority, administrator
+Cookie reveal, and the Douyin/Xiaohongshu real-acceptance matrix are confirmed.
+Do not call a packet `In Progress` before its start gate or `Verified` before
+its packet evidence passes.
 
 Each packet updates `CURRENT_STATE.md`, `TASKS.md`, `TEST_RESULTS.md`, and
 `TRACEABILITY.md` only for evidence actually produced. Phase 5.1 historical

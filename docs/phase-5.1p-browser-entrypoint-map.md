@@ -9,6 +9,11 @@ Current progress: Phase 5.1A-D and CR-114 are verified, merged, and rechecked
 through `main@27389a8`. The separate Phase 5.1 server-like acceptance packet is
 the active unit.
 
+2026-07-21 status note: the table below preserves its 2026-07-19 baseline
+classification. CR-112 is now `Accepted / Dependency-Gated`, executes before
+CR-070, and reuses this provider boundary; no CR-112 implementation is added to
+the historical Phase 5.1P packet.
+
 ## Result
 
 Phase 5.1P passes as a mapping and contract gate. The preflight baseline
@@ -58,8 +63,8 @@ account + action
 | Phase 5.1C-D | historical/already completed | Both units are merged and post-merge verified through `main@86e9d02`. |
 | CR-114 | historical/already completed | Object-scoped Context/Page binding is merged and post-merge verified on `main@27389a8`. |
 | Phase 5.1 acceptance | current/operator-gated | The atomic packet requires server-like requested/effective, proxy-effect, manual/scheduler/CLI, restart, and CDP proof. |
-| CR-070 / Phase 5.2 | current, dependency-gated | Remains blocked until all CR-047 provider binding and effective snapshots are verified. |
-| CR-112 | future, `Needs Confirmation` | May reuse the CR-047 provider contract later; no Bridge/Profile-promotion/profile-only implementation is assigned to CR-047. |
+| CR-070 / Phase 5.2 | future, dependency-gated | Current accepted order places it after CR-112 Packet D; it later consumes only committed CR-112 account/Profile state. |
+| CR-112 | historical 2026-07-19 classification was future/`Needs Confirmation`; current status is `Accepted / Dependency-Gated` | Reuses the CR-047 provider contract; no Bridge/Profile-promotion/profile-only implementation is assigned to CR-047. |
 | CR-092 and CR-094 | future, `Needs Confirmation` | Not Phase 5.1P prerequisites. |
 | CR-093 | future, accepted boundary with pending implementation decisions | Its future route-exposure work owns public treatment of legacy `/api/crawler`; it does not block this map. |
 | CR-037 and Users And Permissions page | deferred/future | Independent capability work. |
@@ -398,8 +403,8 @@ effective result; merely passing a value into a helper is not proof.
 
 ## CR-112 Profile-Only Adapter Boundary
 
-CR-112 remains `Needs Confirmation`. The following exact future adapter is
-already recorded in accepted planning artifacts and is mapped here without
+CR-112 is now `Accepted / Dependency-Gated`. The following exact future adapter
+is recorded in accepted planning artifacts and remains mapped here without
 implementation or ownership transfer:
 
 1. Current `_build_crawler_cmd` keeps `--lt cookie` and raw `--cookies` for

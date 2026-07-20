@@ -177,7 +177,9 @@ Goal readiness tasks:
 - [x] Record the current serial execution rhythm: Phase 21 merged and closed on
       `main`, Phase 5.1P read-only preflight, Phase 5.1A-D implementation,
       Phase 5.1 acceptance, then CR-070 / Phase 5.2 after CR-047
-      provider/effective snapshot verification.
+      provider/effective snapshot verification. This is the historical CR-095
+      baseline; the accepted 2026-07-21 decision now places CR-112 Packet B/C/D
+      before CR-070.
 - [x] Make Phase 5.1 goal-ready as serial units: preflight, data model,
       generator/validator, locking/re-login, runtime binding, and acceptance
       gate.
@@ -634,7 +636,8 @@ Tasks 4-7 remain operator-gated.
       provider summaries, without cookies, proxy credentials, raw profile
       paths, CDP endpoints, noVNC tokens, or fingerprint-debug output.
 - [ ] Record the Phase 5.1 acceptance evidence in `docs/TEST_RESULTS.md`
-      before CR-070 / Phase 5.2 can start.
+      before closing the CR-047 gate. Under the accepted 2026-07-21 sequence,
+      this does not start CR-070; CR-070 still waits for CR-112 Packet D.
 
 ### Phase 5.1E - Optional CloakBrowser-Style Provider Evaluation
 
@@ -665,9 +668,11 @@ Planning status:
 
 CR-070 is an accepted new capability for account-environment migration. It does
 not reopen Phase 5 or CR-047. It depends on the `profile_key` account model and
-must not start until CR-047 provider binding and requested/effective runtime
-snapshot behavior are implemented and verified. It should reuse CR-047
-identity fields only after they exist. Because the capability can move cookies,
+must not start until CR-112 Packet D is verified. The required CR-047 provider
+binding and requested/effective runtime snapshot implementation already exists;
+the separate CR-047 Linux/server-like real acceptance remains independently
+operator-gated. CR-070 should reuse only committed CR-112 Profile/account state
+and CR-047 identity fields. Because the capability can move cookies,
 browser profile traces, and platform account metadata between deployments,
 implementation must remain administrator-only, encrypted, audited, and
 fail-closed.
@@ -1917,13 +1922,14 @@ data, sensitive files, or the old server-login worktree.
 
 Planning status:
 
-CR-112 is a proposed new capability and remains `Needs Confirmation`. This
-documentation synchronization does not authorize product code, schema, UI,
-extension, Profile, Cookie, connector, runtime, deployment, or database
-changes. Phase 5.1P and Phase 5.1A-D are verified and merged; CR-114 remains a
-separate follow-up pending integration before final server-like acceptance.
-CR-112 does not preempt CR-070 / Phase 5.2 while its sequencing is
-unconfirmed.
+CR-112 is an `Accepted / Dependency-Gated` new capability as of 2026-07-21.
+Acceptance approves the same-machine Windows scope, reuse-first/minimal-
+adaptation evaluation, CR-112-before-CR-070 order, Profile/Cookie authority,
+administrator Cookie reveal, and Douyin/Xiaohongshu Packet D matrix. It does
+not mean Packet B/C/D is `In Progress` or `Verified`. Phase 5.1P and Phase
+5.1A-D plus the current merged regression fixes are verified; the separate
+CR-047 Linux/server-like real acceptance remains operator-gated and is not
+closed by CR-112 local evidence.
 
 Documentation synchronization:
 
@@ -1947,8 +1953,9 @@ Documentation synchronization:
 - [x] Re-run documentation checks and focused Claude Code review after the
       audit remediation; close only when no blocking or material plan issue
       remains.
-- [x] Stage and commit all five CR-112 plan files and all formal CR-112
-      references atomically; do not deliver a partial plan/governance set.
+- [x] The 2026-07-19 proposed-plan package staged and committed all five CR-112
+      plan files and its formal references atomically. The 2026-07-21 accepted
+      rebaseline has its own open atomic-commit gate below.
 - [x] Record the 2026-07-19 user-confirmed login-material decision: QR and
       accepted Cookie login converge on the same account-bound persistent
       Profile; encrypted Cookie remains bootstrap/refresh/recovery/migration
@@ -1964,19 +1971,44 @@ Documentation synchronization:
       timed cleanup/export blocking, structured Cookie/extension packaging,
       pinned HTTP/WebSocket baseline evidence, and explicit proposed/not-started
       status boundaries.
+- [x] Rebaseline CR-112 on 2026-07-21 against
+      `main@2ea2c1e96675297e302368b1226ec7aac05f2bb1`, synchronize the accepted
+      decisions and TODO classifications across formal documents and Packet
+      B/C/D.
 
-Future gated work:
+Accepted decisions and gated execution:
 
-- [ ] Obtain explicit confirmation for same-host local scope, project-owned
-      extension/connector direction, and sequencing relative to CR-070.
+- [x] Confirm same-machine Windows V1 scope; keep remote/cross-host Bridge out.
+- [x] Confirm reuse-first/minimal-adaptation evaluation for Extension,
+      Connector, and protocol; Packet B evidence selects direct reuse, minimal
+      adaptation, or one focused component replacement.
+- [x] Confirm CR-112 executes before CR-070.
+- [x] Confirm Profile as normal crawl-login authority and encrypted Cookie as
+      initialization/refresh/recovery/migration material.
+- [x] Confirm administrator-only complete Cookie reveal/copy with default mask,
+      no-store response, normal-user 403, and no Cookie in Storage, URL, logs,
+      audit details, diagnostics, argv, or environment.
+- [x] Confirm Douyin and Xiaohongshu as mandatory Packet D real platforms and
+      Kuaishou as Deferred.
 - [x] Complete Phase 5.1P under CR-047 before CR-112 product implementation.
-- [ ] Complete Phase 5.1A-D and the Phase 5.1 acceptance gate under CR-047
-      before CR-112 product implementation.
-- [ ] Place Packet B after CR-070 / Phase 5.2 by default, or record a later
-      accepted decision that changes sequencing without reopening history.
+- [x] Complete Phase 5.1A-D and current merged provider/login/crawl regression
+      fixes. Keep the separate CR-047 Linux/server-like real acceptance
+      operator-gated and do not present CR-112 local proof as its completion.
+- [x] Rerun the latest-main scoped Windows provider/preflight unit before
+      Packet B: Compose configuration passed, deployment browser preflight
+      resolved persisted Chrome, isolated server-like validation passed all 12
+      checks with cleanup, and the Phase 5.1/CR-116-121 focused regression
+      passed (`234 passed`). This proves only the local inherited authority and
+      does not close CR-047 Linux/server-like acceptance.
+- [ ] Commit the complete 2026-07-21 CR-112 decision, governance, specialist,
+      and Packet B/C/D plan set atomically before marking Packet B
+      `In Progress`.
 - [ ] Execute Packet B as a disposable protocol/compatibility spike and require
       Chrome and Edge to prove Service Worker load, authenticated registration,
       exact pairing, and one synthetic Cookie roundtrip.
+- [ ] Produce the Packet B Extension/Connector/protocol matrix with direct
+      reuse, minimal adaptation, or single-component replacement plus license,
+      runtime, distribution, and contract evidence.
 - [ ] In Packet B, prove the connector rejects non-loopback socket peers,
       ignores spoofed forwarding headers for authorization, requires the exact
       stable extension Origin, remains unmounted when disabled (HTTP 404 and
@@ -2001,6 +2033,11 @@ Future gated work:
       flow on C.1, including exact pending/active/revoked binding rotation;
       feature-off must unmount only C.2 and preserve advanced manual Cookie.
       Only C.2 router/UI/readiness/extension/pairing code may read the flag.
+- [ ] Packet C.2: implement the administrator-only Cookie reveal POST endpoint
+      and default-masked eye/copy UI. Return no-store/no-cache, reject normal
+      users with 403, keep standard account payloads masked, and prove Cookie
+      material never enters browser persistent Storage, URL, logs, audit
+      details, diagnostics, child argv, or child environment.
 - [ ] Packet C.3: implement the internal profile-only runner, migrate or mark
       every `login_type=cookie` account, reject login/generic/default-network
       fallback, and retire raw Cookie argv/env with process-inspection proof.
@@ -2013,6 +2050,15 @@ Future gated work:
       bootstrap, multi-account isolation, promotion checkpoint crash/restart,
       C.1/C.2/C.3 rollback, process inspection, structured Cookie fidelity,
       server QR non-regression, and bounded operation-artifact cleanup.
+- [ ] Packet D: use exact `DESIGNATED_DY_ACCOUNT_ID` and
+      `DESIGNATED_XHS_ACCOUNT_ID` values; for each platform acquire the real
+      Cookie through Extension, validate exact identity, exercise admin
+      reveal/copy, inject only that Cookie into a fresh candidate, restart,
+      prove `fallback_used=false`, and persist at least one real content item
+      through the normal monitor entry. Clean Extension temporary material,
+      restart the service, and re-prove Profile check plus bounded crawl.
+- [ ] Keep Kuaishou `Deferred`; do not count it as Packet D failure or claim it
+      was tested.
 
 ## Phase 14 - Run Center Data Model Preparation
 

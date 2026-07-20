@@ -1327,14 +1327,14 @@ Not included in V1:
 
 Verification states must be returned to the UI rather than bypassed.
 
-## Proposed CR-112 Local Browser Auto-Sync Cookie Acquisition
+## Accepted CR-112 Local Browser Auto-Sync Cookie Acquisition
 
-Status: `Needs Confirmation`. This section records a proposed future account
-login optimization only. It does not change the current V1 QR/Cookie contract,
-Phase 5.1P priority, CR-047 ownership, schema, runtime, Profile, Cookie, or
-server acceptance behavior.
+Status: `Accepted / Dependency-Gated`. This section defines the approved
+same-machine Windows account contract. It does not claim Packet B/C/D is in
+progress or verified, does not close CR-047 Linux/server-like acceptance, and
+does not change runtime behavior until the owning packet implements it.
 
-Proposed login model:
+Accepted login model:
 
 - keep `qrcode` and `cookie` as the only backend login types;
 - use `cookie_source=bridge|manual` as Cookie provenance;
@@ -1365,12 +1365,12 @@ does not pass raw Cookie through child argv. Packet C must assign migration,
 compatibility, rollback, and test ownership, and process inspection must prove
 the raw value is absent before acceptance.
 
-### Proposed CR-112 V1 Profile Promotion Protocol
+### Accepted CR-112 V1 Profile Promotion Protocol
 
-Status: proposed Packet C implementation contract. It is not active schema or
-runtime behavior while CR-112 remains `Needs Confirmation`. Present-tense
-normative wording in this section defines future acceptance behavior only;
-current code still uses the baseline paths identified below and in Phase 5.1P.
+Status: accepted Packet C contract, dependency-gated by Packet B and Packet C
+start gates. It is not active schema or runtime behavior yet. Present-tense
+normative wording defines required implementation behavior; current code still
+uses the baseline paths identified below and in Phase 5.1P.
 
 V1 keeps one fixed active runtime path:
 
@@ -1524,7 +1524,7 @@ pairing credentials, and connector cache. Export first runs due operation
 cleanup and is blocked while a rollback artifact or operation marker remains,
 so internal promotion metadata is not packaged.
 
-### Proposed CR-112 Internal Runtime Contract
+### Accepted CR-112 Internal Runtime Contract
 
 Customer-facing login types remain `qrcode` and `cookie`. Packet C adds an
 internal crawler mode such as `profile_only`; it is not a third product login
@@ -1597,7 +1597,7 @@ C.3 command construction, the child profile-only guard, or platform login-
 fallback prevention. Importing a C.1 or C.3 module must not activate C.2 or
 fail because the Bridge flag is false.
 
-### Proposed CR-112 Cookie Protocol V1
+### Accepted CR-112 Cookie Protocol V1
 
 Bridge transport uses a versioned structured Cookie payload, not a flattened
 Cookie header string. Each record requires `name`, `value`, `domain`, and
@@ -1627,7 +1627,7 @@ injection. Manual input does not claim attributes that the string cannot carry;
 Bridge and manual acquisition share validation/promotion logic after
 canonicalization, not necessarily the same wire format.
 
-Proposed account and pairing flow:
+Accepted account and pairing flow:
 
 1. reuse `create_draft_social_account` for a new account so account id and
    `profile_key` exist before browser launch;
@@ -1635,7 +1635,7 @@ Proposed account and pairing flow:
 3. launch a visible application-managed Chrome or Edge persistent Profile;
 4. initialize a fresh candidate rather than cloning the active Profile, and
    inject a short-lived single-use pairing token only into that candidate's
-   project-owned extension session;
+   Packet-B-selected managed extension session;
 5. atomically bind the token to login session, promotion, account, Profile,
    platform, and extension `client_id`, then issue a rotatable pending
    Profile-scoped reconnect credential;
@@ -1661,9 +1661,24 @@ not forwarded headers; it requires a parseable loopback peer and the exact
 stable extension Origin before acceptance. Client URL validation alone is not
 an account or transport security boundary.
 
-The persistent-Profile authority and no-raw-Cookie-argv target are confirmed.
-The project-owned extension/connector direction, same-host scope, additive data
-model, and sequencing relative to CR-070 still require explicit confirmation.
+Administrator Cookie reveal is a narrow exception to standard masked account
+responses. A dedicated POST endpoint may return the complete decrypted Cookie
+for one selected account only to an authenticated administrator. It returns
+HTTP 403 to a normal user and applies `Cache-Control: no-store, private`,
+`Pragma: no-cache`, and no validator. The frontend masks by default, fetches
+only after explicit reveal, stores the value only in transient page memory,
+supports explicit eye and copy controls with feedback, and clears the value on
+account switch, close, navigation, and timeout. The Cookie never enters URL,
+localStorage, sessionStorage, IndexedDB, logs, audit details, diagnostics,
+screenshots, subprocess argv, or subprocess environment. Redacted access audit
+may record actor/account/action/result only.
+
+The persistent-Profile authority, no-raw-Cookie-argv target, same-machine
+Windows scope, CR-112-before-CR-070 order, and administrator reveal boundary
+are confirmed. Extension, Connector, and protocol use reuse-first/minimal-
+adaptation evaluation; Packet B evidence selects direct reuse, minimal
+adaptation, or one focused component replacement without weakening this
+contract.
 Detailed roadmap and goal packets are linked from CR-112 in
 `CHANGE_REQUESTS.md`.
 

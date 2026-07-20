@@ -224,6 +224,16 @@ Interaction rules:
   completes platform verification, then automatically saves the validated
   Profile result. Closing the account drawer does not cancel reconciliation;
   generic unbound local login remains status-only.
+- CR-112 keeps QR as the default login method, shows same-machine browser
+  auto-sync only when enabled and healthy, and keeps manual Cookie input in a
+  collapsed advanced section without opening it automatically after Bridge
+  failure.
+- In the administrator Platform Account form, the complete Cookie field is
+  masked by default. Use an eye icon to reveal/hide and a copy icon to copy;
+  both controls need tooltips and clear success/error feedback. Fetch the value
+  only after explicit reveal, never render it in HTML attributes or URLs, keep
+  it only in transient page memory, and clear it on account switch, drawer
+  close, navigation, or timeout. Normal-user UI contains no reveal/copy entry.
 - `requires_relogin` and `resetting` disable QR, visible-browser, Cookie-save,
   and single/bulk account-check actions with customer-safe guidance. The reset
   action remains reachable and must state that Profile, Cookie, and platform

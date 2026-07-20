@@ -663,6 +663,11 @@ Fields:
 - proposed future CR-070 package operation status: export/import in progress,
   ready for download, failed, cancelled, expired, deleted, active after import,
   or requires re-login after import.
+- accepted/dependency-gated CR-112 account login actions: QR remains default;
+  same-machine Windows browser auto-sync is the normal Cookie workflow when
+  enabled and healthy; manual Cookie input remains collapsed advanced; an
+  administrator may explicitly reveal/copy one selected account's complete
+  Cookie from a default-masked field.
 
 Rules:
 
@@ -679,7 +684,14 @@ Rules:
   fall back to the placeholder when the avatar cannot be fetched safely.
 - account-identity summaries must not expose raw profile paths, cookies,
   proxy credentials, local command lines, CDP endpoints, noVNC sessions, or
-    fingerprint-debug output.
+  fingerprint-debug output. The only Cookie exception is the explicit CR-112
+  administrator reveal POST response; standard list/detail payloads stay
+  masked.
+- CR-112 Cookie reveal is administrator-only, returns HTTP 403 to normal users,
+  uses no-store/no-cache headers, and keeps the value only in transient page
+  memory. It must not enter URL, browser persistent Storage, logs, audit
+  details, diagnostics, screenshots, subprocess argv, or subprocess
+  environment.
 - normal users must not choose account identity templates or browser
   environment fields; administrators must not edit individual UA, viewport,
   screen, timezone, locale, accept-language, device-scale, mobile, or touch
@@ -738,6 +750,11 @@ Acceptance:
   an administrator performs an explicit audited reset/re-login flow. Phase
   5.1D and final Phase 5.1 acceptance still must prove all crawl launch paths
   reuse the same effective environment.
+- After CR-112 Packet D, designated Douyin and Xiaohongshu accounts each prove
+  exact Extension acquisition, administrator reveal/copy, fresh candidate
+  injection, restart identity verification, `fallback_used=false`, and at
+  least one persisted real content item through the normal monitor entry.
+  Kuaishou remains Deferred.
 - after CR-070 is implemented, administrators can move an account environment
   to another deployment through a versioned, encrypted, audited package. Import
   succeeds as usable only after compatibility checks and login-state

@@ -79,7 +79,9 @@ menu_permissions
 ```
 
 Do not return password hashes, session tokens, cookies, profile paths, API keys,
-SMTP passwords, proxy credentials, or deployment paths.
+SMTP passwords, proxy credentials, or deployment paths through standard APIs.
+The only Cookie exception is the accepted CR-112 administrator-only explicit
+reveal POST endpoint described below.
 
 ## Authorization Dependencies
 
@@ -148,6 +150,14 @@ Record minimal audit logs for:
 - administrator-triggered report resend.
 
 Audit logs must not contain plaintext secrets.
+
+CR-112 adds one administrator-only POST endpoint that reveals the complete
+decrypted Cookie for one exact social account after normal session and role
+authorization. Normal users receive HTTP 403. Success and error responses set
+`Cache-Control: no-store, private` and `Pragma: no-cache`, omit cache
+validators, and never place Cookie material in the URL. Standard account APIs
+remain masked. Access audit may record actor, account ID, action, result, and
+timestamp, but no Cookie value, fragment, scope, hash, or response body.
 
 CR-070 account package endpoints are administrator-only resource APIs. They
 must reject normal users at the authorization dependency layer, not only hide

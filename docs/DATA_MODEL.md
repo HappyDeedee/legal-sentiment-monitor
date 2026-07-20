@@ -299,12 +299,13 @@ Phase 5.1B write rules:
 - `fingerprint_seed` and raw `identity_runtime_snapshot_json` remain internal
   and are removed from customer-facing account responses.
 
-### Proposed CR-112 Profile Runtime And Promotion Metadata
+### Accepted CR-112 Profile Runtime And Promotion Metadata
 
-Status: proposed and `Needs Confirmation` with CR-112. These fields and tables
-are not part of the current schema or accepted Phase 5.1 migration.
+Status: `Accepted / Dependency-Gated` with CR-112. These fields and tables are
+not part of the current schema until Packet C migration begins and passes its
+gates; they are not part of the historical Phase 5.1 migration.
 
-Additive `social_accounts` fields proposed for Packet C:
+Additive `social_accounts` fields accepted for Packet C:
 
 ```text
 cookie_source TEXT NOT NULL DEFAULT ''
@@ -321,7 +322,7 @@ version `0` is non-runnable, uses `identity_state=requires_relogin` plus the
 existing limited/non-active pool status, and is rejected before child spawn;
 there is no schema or command-builder fallback to raw Cookie argv.
 
-Proposed durable promotion journal:
+Accepted durable promotion journal:
 
 ```text
 account_profile_promotions
@@ -369,7 +370,7 @@ also validates the operation marker and exact directory-shape table in
 `committed` transition share one database transaction and are the sole commit
 authority.
 
-Proposed connector binding table:
+Accepted connector binding table:
 
 ```text
 cookie_bridge_bindings
@@ -404,7 +405,7 @@ candidate binding and revokes the previous active binding on commit because
 that binding belongs to the rollback Profile. Rollback revokes any pending
 candidate credential and preserves the previous active binding.
 
-Proposed `login_sessions` linkage fields are `cookie_source`,
+Accepted `login_sessions` linkage fields are `cookie_source`,
 `profile_promotion_id`, and `connector_binding_id`. They link one session to
 one exact promotion/binding without storing Cookie material or raw paths.
 
@@ -425,6 +426,13 @@ CR-112 audit events reference account ID, login session ID, promotion ID,
 binding ID, actor, trigger source, requested/effective provider summary,
 terminal state, and redacted recovery result. They never include raw Profile
 paths or secret values.
+
+The administrator Cookie reveal capability adds no plaintext column and never
+persists a reveal copy. It decrypts the existing `cookies_encrypted` field for
+one explicit, authorized POST response only. Standard account readers and
+list/detail APIs remain masked. Access audit may store actor, account ID,
+action, result, and timestamp, but no Cookie value, fragment, scope, hash, or
+response body.
 
 CR-070 adds an accepted account-environment export/import capability. The
 account row remains the source of truth after import, but package creation and
@@ -448,7 +456,7 @@ artifacts by default. The encrypted payload may contain a source proxy
 host/IP plus port hint for target-side mapping, but it must not contain proxy
 username, password, token, authentication header, or provider secret.
 
-If CR-112 is implemented before CR-070, export reads only committed account
+Because CR-112 executes before CR-070, export reads only committed account
 metadata and the fixed active Profile. It excludes `account_profile_promotions`
 rows, candidate/rollback operation directories, `cookie_bridge_bindings`
 credentials, pairing/session tokens, and connector cache. Import creates a new

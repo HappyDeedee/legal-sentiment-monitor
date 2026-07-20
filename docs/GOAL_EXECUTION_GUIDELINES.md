@@ -75,23 +75,23 @@ decision:
    runs, runner behavior, and MediaCrawler CDP launch/reconnect.
 3. Phase 5.1A additive account identity data model is implemented and
    independently verified.
-4. Implement Phase 5.1B next. Scope is identity generation and validation.
-5. Implement Phase 5.1C only after Phase 5.1B passes. Scope is locking,
-   reset, re-login, audit, and state transitions.
-6. Implement Phase 5.1D only after Phase 5.1C passes. Scope is login and crawl
-   runtime binding to the same provider output.
-7. Close Phase 5.1 only after the acceptance gate proves requested/effective
+4. Keep completed Phase 5.1B-D and their follow-up regressions closed as
+   verified history.
+5. Close the separate CR-047 Linux/server-like acceptance only after its gate
+   proves requested/effective
    runtime snapshots, provider metadata, proxy effect proof or fail-closed
    behavior, manual/scheduler reuse, MediaCrawler CDP binding, and
    container/server-like validation.
-8. Start CR-070 / Phase 5.2 only after CR-047 provider binding and effective
-   runtime snapshots are implemented and verified. Execute Phase 5.2A-E in
+6. Execute accepted CR-112 Packet B, C, and D serially. Packet B begins only
+   after its validated plan documents are committed atomically; local CR-112
+   proof does not close the CR-047 server-like gate.
+7. Start CR-070 / Phase 5.2 only after CR-112 Packet D is verified. Execute Phase 5.2A-E in
    order: package contract/security, export flow, import flow,
    post-import/recovery, then test safety and verification.
-9. Keep CR-092, CR-093, and CR-094 as future independent backlog lanes. They do
+8. Keep CR-092, CR-093, and CR-094 as future independent backlog lanes. They do
    not block Phase 21, Phase 5.1P, Phase 5.1, or CR-070, and they cannot be
    treated as hidden prerequisites without a later accepted decision.
-10. Keep CR-037, Users And Permissions page work, and Phase 7.1D historical
+9. Keep CR-037, Users And Permissions page work, and Phase 7.1D historical
     remediation as separate deferred or operator-gated items.
 
 ## Test Iteration Loop

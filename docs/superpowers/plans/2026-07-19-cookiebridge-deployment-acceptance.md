@@ -1,7 +1,8 @@
 # CookieBridge Deployment And Acceptance Packet
 
-> Future acceptance packet. It validates the local feature on clean computers
-> and protects the server-first QR baseline. It does not promote local browser
+> Accepted, dependency-gated acceptance packet. It validates the same-machine
+> Windows feature on clean computers and with designated real accounts while
+> protecting the server-first QR baseline. It does not promote local browser
 > evidence into production proof.
 
 **Goal:** Prove repeatable installation, browser selection, failure isolation,
@@ -13,6 +14,10 @@ rollback, and QR non-regression across supported environments.
 - [ ] Distribution artifacts and runtime ownership are fixed and documented.
 - [ ] No real secret, Profile, Cookie, local database, or deployment-only
       configuration is included in artifacts.
+- [ ] `DESIGNATED_DY_ACCOUNT_ID` and `DESIGNATED_XHS_ACCOUNT_ID` name two
+      explicit administrator-approved project-managed accounts in the
+      acceptance deployment. Missing, wrong-platform, shared, or ambiguous IDs
+      stop real acceptance before Cookie acquisition.
 
 ## Clean-Computer Contract
 
@@ -21,7 +26,7 @@ The supported Windows installer/startup path must:
 - detect a valid explicit browser, then Chrome, then Edge, then Chromium;
 - report the selected executable/family/source without raw sensitive paths in
   customer-facing UI;
-- include the project-owned extension in the standard monitor installation and
+- include the Packet-B-selected extension in the standard monitor installation and
   generate its ephemeral session copy automatically;
 - preserve one packaged manifest-key-derived extension ID/Origin across Chrome,
   Edge, ephemeral copies, and clean computers, with no `<all_urls>` or unrelated
@@ -100,6 +105,29 @@ installs no Python 3.12 runtime or separate connector service.
       regression checks while route absence/zero protocol state are invariant.
 - [ ] Local pilot verifies one real platform account at a time with redacted
       evidence and explicit operator approval.
+- [ ] Real Douyin acceptance uses only `DESIGNATED_DY_ACCOUNT_ID`: acquire the
+      current Cookie from its project-managed logged-in Profile through the
+      Extension, prove the exact platform/account identity, reveal and copy it
+      through the administrator UI, inject only that Cookie into a fresh
+      candidate Profile, restart and verify identity, then use the normal
+      monitor collection entry to persist at least one real content item.
+- [ ] Real Xiaohongshu acceptance repeats the same serial workflow using only
+      `DESIGNATED_XHS_ACCOUNT_ID` and persists at least one real content item.
+- [ ] Fresh candidates copy no predecessor LocalStorage, cache, Service Worker,
+      extension credential storage, or other Profile files. Only the Cookie
+      acquired for the exact designated account is injected before validation.
+- [ ] Both real crawls prove the designated account/Profile/provider/proxy
+      authority, `fallback_used=false`, and no anonymous, generic Profile,
+      other-account, task-proxy, process-default, or default-network fallback.
+- [ ] Transient process inspection proves no plaintext Cookie in crawler child
+      argv or environment. Committed evidence records only booleans, digests,
+      timestamps, and internal IDs, never the Cookie or raw command line.
+- [ ] After both platform checks, remove Extension session/config/cache
+      material, restart the monitor service, revalidate each committed Profile,
+      and complete one bounded minimal crawl per required platform without the
+      Extension being present or connected.
+- [ ] Kuaishou is `Deferred`; its absence or failed unexecuted matrix row does
+      not fail this Packet D. It must not be reported as tested.
 - [ ] Server-like QR login, SMS verification handling, Profile persistence,
       account checks, manual/scheduler runs, and crawler execution regressions.
 
@@ -146,6 +174,12 @@ Proof labels:
 
 - Clean Windows setup succeeds with Chrome-first and Edge fallback without
   manual Profile/extension setup.
+- The designated Douyin and Xiaohongshu accounts each complete Extension
+  acquisition, exact-account validation, administrator reveal/copy, fresh
+  candidate injection, Profile restart verification, and persistence of at
+  least one real content item through the normal monitor entry.
+- Both required platform runs show `fallback_used=false`; Kuaishou remains
+  explicitly `Deferred` and is not counted as a failure.
 - Cookie acquisition persists the exact account Profile across restart, and
   process inspection finds no raw Cookie in managed crawler child argv.
 - Failure, restart, concurrency, upgrade, and rollback matrices pass.
@@ -158,6 +192,21 @@ Proof labels:
 - Feature-off state has no connector/extension side effects.
 - Documentation, installer/deployment examples, tests, and evidence agree.
 - Independent read-only review finds no blocking or material acceptance gap.
+
+## Real Acceptance Evidence Boundary
+
+Real acceptance runs serially: Douyin first, then Xiaohongshu. Before each run,
+resolve the designated environment variable to one exact account row and prove
+the platform matches. The normal monitor account lock covers acquisition,
+candidate injection, validation, promotion, restart check, and bounded crawl.
+No account discovery, first-account selection, or fallback is accepted.
+
+The administrator reveal/copy check is observed in the frontend but evidence
+contains only `reveal_succeeded`, `copy_succeeded`, account ID, actor ID,
+timestamp, and response-header booleans. Screenshots, console output, HAR files,
+traces, logs, and audit details must not contain the Cookie. The intentional OS
+clipboard copy is cleared by the acceptance operator after observation and is
+not persisted by the product.
 
 ## Stop And Rollback
 

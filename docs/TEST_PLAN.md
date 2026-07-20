@@ -29,8 +29,9 @@ governance goal.
   conditions.
 - The packet follows the current execution order unless a later accepted
   decision changes it: Phase 21, Phase 5.1A-D, and CR-114 are merged and
-  verified, then Phase 5.1 acceptance and
-  CR-070 / Phase 5.2 after CR-047 provider/effective snapshot verification.
+  verified; CR-047 Linux/server-like acceptance remains operator-gated;
+  accepted CR-112 Packet B/C/D run serially; then CR-070 / Phase 5.2 starts
+  only after CR-112 Packet D verification.
 - Phase 21 packets remain frontend-visual only and preserve Task Center, Run
   Detail, drawer, modal, row-menu, select/date, close, scroll, refresh,
   routing, owner-scope, and permission behavior unless a separate accepted CR
@@ -42,8 +43,9 @@ governance goal.
 - Phase 5.1 implementation packets run in order and do not start until
   the verified Phase 5.1P map confirms the BrowserEnvironmentProvider and
   requested/effective snapshot boundary.
-- CR-070 / Phase 5.2 packets do not start before CR-047 provider binding and
-  effective runtime snapshot behavior are implemented and verified.
+- CR-070 / Phase 5.2 packets do not start before CR-112 Packet D is verified.
+  They consume only committed account/Profile state and exclude CR-112
+  operation and connector secrets.
 - CR-092, CR-093, and CR-094 packets remain future independent backlog work and
   are not treated as hidden prerequisites for Phase 21, Phase 5.1P, Phase 5.1,
   or CR-070.
@@ -1808,31 +1810,36 @@ Required code-stage checks:
 
 Documentation-stage checks:
 
-- Verify CR-112 is classified as a `New Capability` with status
-  `Needs Confirmation` in `CHANGE_REQUESTS.md`, `TASKS.md`,
+- Verify CR-112 is classified as a `New Capability` with status `Accepted /
+  Dependency-Gated` in `CHANGE_REQUESTS.md`, `TASKS.md`,
   `CURRENT_STATE.md`, and `TRACEABILITY.md`.
 - Verify the five plan artifacts remain planning/goal packets and are linked
   from formal governance documents.
 - Before delivery, verify all five plan files and every CR-112 formal reference
   including `DATA_MODEL.md` and `SCHEMA_MIGRATION.md` are staged in one atomic
   commit; a partial commit fails the documentation acceptance gate.
-- Verify Phase 5.1P and Phase 5.1A-D remain recorded as verified and merged,
-  CR-114 remains the separate post-5.1D regression owner,
-  and CR-112 does not preempt the accepted CR-070 / Phase 5.2 sequence without
-  a later accepted decision.
-- Verify account/security and deployment sections are explicitly proposed and
-  do not change the current server-first QR acceptance boundary.
+- Verify Phase 5.1P and Phase 5.1A-D plus current follow-up regressions remain
+  recorded as verified and merged, the separate CR-047 Linux/server-like real
+  acceptance remains operator-gated, and accepted sequencing places CR-112
+  before CR-070 without claiming that local evidence closes CR-047.
+- Verify account/security and deployment sections are explicitly accepted/
+  dependency-gated and do not change the current server-first QR acceptance
+  boundary before implementation evidence exists.
 - Verify `DECISIONS.md`, CR-112, account-environment guidance, and all five
   plan files agree on the confirmed sub-decision: both login modes converge on
   one account-bound persistent Profile, encrypted Cookie is
   bootstrap/refresh/recovery/migration material, failed refresh preserves the
   prior Profile and Cookie, and managed crawler child argv contains no raw
   Cookie after Packet C.
+- Verify every formal CR-112 document and Packet B/C/D agrees on same-machine
+  Windows scope, reuse-first/minimal-adaptation evaluation, Packet-B-selected
+  component ownership, administrator full-Cookie reveal/copy security boundary,
+  mandatory Douyin/Xiaohongshu real acceptance, and Kuaishou Deferred status.
 - Run `uv run python scripts/check_docs.py`, `git diff --check`, a trailing
   whitespace/end-of-file check for the five new plan files, and focused
   independent read-only review.
 
-Future fake/unit/integration tests if CR-112 is accepted:
+Packet C fake/unit/integration tests after its start gates pass:
 
 - Feature disabled by default must leave the connector route unmounted: a
   normal HTTP probe returns 404 and the pinned Starlette/Uvicorn baseline
@@ -1933,8 +1940,16 @@ Future fake/unit/integration tests if CR-112 is accepted:
 - Process inspection must prove raw Cookie is absent from managed crawler child
   argv after the persistent-Profile transition. Command builders, diagnostics,
   logs, and failure output must not contain the raw value.
+- Administrator Cookie reveal tests must prove the dedicated POST endpoint
+  returns the exact selected-account Cookie only to administrators, returns
+  HTTP 403 to normal users, applies `Cache-Control: no-store, private` and
+  `Pragma: no-cache`, and leaves standard account responses masked. Frontend
+  tests must prove default mask, eye reveal/hide, copy feedback, transient
+  clearing, no normal-user entry, and no Cookie in localStorage,
+  sessionStorage, IndexedDB, URL, logs, audit details, diagnostics, argv, or
+  environment.
 
-Future opt-in and acceptance tests if CR-112 is accepted:
+Packet B/D opt-in and real acceptance tests after their start gates pass:
 
 - Chrome and Edge tests require `MONITOR_ALLOW_REAL_BROWSER_TESTS=1` and use
   synthetic Cookie fixtures. Each browser must prove four separate milestones:
@@ -1943,7 +1958,7 @@ Future opt-in and acceptance tests if CR-112 is accepted:
   roundtrip with domain/path/security attributes preserved after Profile
   restart.
 - Clean-Windows acceptance must prove the standard monitor installation contains
-  the project-owned extension and in-process Python 3.11 connector support;
+  the Packet-B-selected extension and in-process Python 3.11 connector support;
   the operator performs no extension/connector file placement, personal Chrome
   Profile setup, Google login, or Python 3.12 installation.
 - The same clean-computer matrix must prove stable extension ID/Origin,
@@ -1954,9 +1969,18 @@ Future opt-in and acceptance tests if CR-112 is accepted:
   configuration checks must prove `/api/monitor/cookie-bridge/` is denied and
   not forwarded; the exact extension Origin over direct loopback is the only
   network path that may proceed to pairing authentication.
-- A local real-platform pilot requires explicit operator opt-in and redacted
-  evidence, and proves only the tested local machine/account flow. It must also
-  prove exact-account Profile persistence and reuse after restart.
+- Packet D requires explicit `DESIGNATED_DY_ACCOUNT_ID` and
+  `DESIGNATED_XHS_ACCOUNT_ID`. For each account serially, acquire the real
+  Cookie through the Extension from the project-managed Profile, verify exact
+  platform/account identity, exercise administrator reveal/copy, inject only
+  that Cookie into a fresh candidate with no predecessor LocalStorage/cache/
+  Service Worker copy, restart and recheck identity, and persist at least one
+  real content item through the normal monitor entry.
+- Both required real platform runs must prove `fallback_used=false`, no
+  anonymous/generic/other-account/default-network fallback, and no plaintext
+  Cookie in child argv or environment. After Extension temporary cleanup and
+  service restart, Profile checks and one bounded crawl per required platform
+  must still pass. Kuaishou is Deferred and does not fail Packet D.
 - Server-like regression must keep the connector feature disabled by default
   and verify server-started QR login, manual SMS handling, Profile persistence,
   account checks, C.1 advanced manual Cookie, C.3 profile-only Cookie-account

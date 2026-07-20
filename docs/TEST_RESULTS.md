@@ -2,6 +2,74 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-21 - CR-112 Scoped Windows Provider Gate
+
+Environment: `codex/cr-112-cookiebridge-integration` on the product-code
+baseline `main@2ea2c1e96675297e302368b1226ec7aac05f2bb1`. Tests used only
+temporary/synthetic state.
+
+Result:
+
+- `docker compose config --quiet` passed.
+- The shared Windows one-click browser preflight passed and resolved the
+  persisted deployment selection to `chrome.exe`.
+- The default isolated `scripts/server_like_validation.py` run passed all 12
+  checks, including HTTP service startup, administrator login, QR capability,
+  production local-window blocking, separate same-platform Profiles, account/
+  proxy locks, service restart persistence, headless Playwright Chromium, and
+  temporary-data cleanup.
+- Focused Phase 5.1 and CR-116 through CR-121 regression coverage passed:
+  `234 passed, 356 deselected`.
+- An earlier explicit test directory was retained by documented explicit-path
+  behavior, then removed through the script's bounded cleanup helper after its
+  resolved path was verified inside `.codex_tmp`; no residual test directory
+  remains.
+
+Proof boundary:
+
+- This is the scoped Windows local gate for starting disposable Packet B. It
+  does not close the separate CR-047 Docker/Linux server-like real acceptance.
+- No real account, Cookie, production Profile, proxy probe, crawler platform,
+  or external content action ran. The existing monitor service was not
+  replaced or stopped by this gate.
+
+## 2026-07-21 - CR-112 Accepted Plan Documentation Verification
+
+Environment: `codex/cr-112-cookiebridge-integration`, based on clean
+`main@2ea2c1e96675297e302368b1226ec7aac05f2bb1`. Documentation-only change;
+no product code, schema, UI, browser, Profile, Cookie, proxy, database, or
+runtime process was modified.
+
+Result:
+
+- CR-112 was reclassified consistently as `Accepted / Dependency-Gated`.
+- Same-machine Windows scope, reuse-first/minimal-adaptation component
+  evaluation, CR-112-before-CR-070 sequencing, Profile authority, encrypted
+  Cookie support role, administrator full-Cookie reveal boundary, mandatory
+  Douyin/Xiaohongshu Packet D platforms, and Kuaishou `Deferred` were synced
+  across the formal governance documents and Packet B/C/D.
+- The separate CR-047 Linux/server-like real acceptance remains
+  operator-gated. The next executable unit is the latest-main scoped Windows
+  provider/preflight gate; it does not claim CR-047 production acceptance.
+
+Verification:
+
+- `uv run python scripts/check_docs.py`: `PASS docs consistency`.
+- `uv run python -m pytest tests/test_documentation_checks.py -q -p
+  no:cacheprovider --basetemp=.codex_tmp/cr112-plan-docs-round0`: `1 passed`.
+- After evidence synchronization, the same documentation test with
+  `--basetemp=.codex_tmp/cr112-plan-docs-round1`: `1 passed`.
+- `git diff --check`: passed; Git emitted only the existing Windows LF/CRLF
+  normalization warnings.
+
+Proof boundary:
+
+- This entry proves documentation consistency and baseline classification
+  only. It does not prove Packet B compatibility, any
+  Packet C implementation, or the Packet D real Douyin/Xiaohongshu workflow.
+- No real account Cookie, Profile, browser, connector, platform action, or
+  filled acceptance evidence was accessed or committed.
+
 ## 2026-07-20 - CR-120/CR-121 Login And Collection Verification
 
 Environment: current `main` working tree with a restarted local service and a

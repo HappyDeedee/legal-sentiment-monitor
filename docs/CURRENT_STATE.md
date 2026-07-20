@@ -118,20 +118,22 @@ Last updated: 2026-07-21
   not change
   product code, schema, UI behavior, runtime data, sensitive files, or the old
   server-login worktree.
-- CR-112 is registered as a proposed local browser auto-sync Cookie-acquisition
-  capability with status `Needs Confirmation`. Its reviewed roadmap and four
-  goal packets and every normative CR-112 schema/runtime/protocol statement are
-  future acceptance contracts, not current implementation evidence. The
-  2026-07-19
-  persistent-Profile/login-material sub-decision is recorded, but no CR-112
-  product code, schema, UI, extension, Profile, Cookie, connector, runtime,
-  deployment, or database change is active.
-- CR-112 deep plan cross-validation ended after five Claude Code read-only
-  rounds with no blocking or material refinement. The review closed crash
-  recovery, profile-only cutover, feature-flag isolation, binding rotation,
-  extension cleanup, structured Cookie, and deployment proof gaps. This is a
-  future execution-contract review result, not CR-112 acceptance or
-  implementation evidence.
+- CR-112 is an `Accepted / Dependency-Gated` local browser auto-sync Cookie-
+  acquisition capability as of 2026-07-21. Its roadmap and four goal packets
+  define approved future behavior, but Packet B/C/D product code, schema, UI,
+  Extension, Connector, Profile promotion, runtime, deployment, and database
+  changes have not started. Accepted decisions cover same-machine Windows,
+  reuse-first/minimal-adaptation component evaluation, CR-112 before CR-070,
+  Profile/Cookie authority, administrator Cookie reveal/copy, mandatory
+  Douyin/Xiaohongshu real acceptance, and Kuaishou deferral.
+- The accepted CR-112 contract defines crash recovery, profile-only cutover,
+  feature-flag isolation, binding rotation, extension cleanup, structured
+  Cookie, and deployment proof boundaries. None is Packet B/C/D implementation
+  evidence yet. The scoped Windows provider/preflight gate now passes:
+  Compose configuration, persisted Chrome selection, 12-check isolated
+  server-like validation with cleanup, and `234` focused Phase 5.1/CR-116-121
+  tests pass. This local evidence does not close CR-047 Linux/server-like
+  acceptance. Packet B waits only for the atomic documentation commit.
 - Phase 5.1P is complete as a documentation/read-only compatibility preflight.
   `docs/phase-5.1p-browser-entrypoint-map.md` maps the current QR, visible
   login, Cookie validation, Profile check, HTTP/CLI/scheduler run, runner,
@@ -159,11 +161,10 @@ Last updated: 2026-07-21
   container browser, persistent mounts, `RUNTIME_COMMIT`, account-bound proxy
   probe, or real account/platform action was started. Task 3 is
   operator-blocked and Tasks 4-7 remain operator-gated.
-  CR-070 / Phase 5.2 remains blocked
-  by implemented and verified CR-047 provider binding and requested/effective
-  runtime snapshots. CR-092 and CR-094 remain `Needs Confirmation`, CR-112
-  remains `Needs Confirmation`, CR-093 remains future-only, CR-037 remains
-  deferred, and Phase 7.1D remains operator-gated.
+  CR-070 / Phase 5.2 is now sequenced after CR-112 Packet D. CR-092 and CR-094
+  remain `Needs Confirmation`, CR-112 is `Accepted / Dependency-Gated`,
+  CR-093 remains future-only, CR-037 remains deferred, and Phase 7.1D remains
+  operator-gated.
 - The unmerged server-login worktree is historical/source evidence only and is
   not a current-main completion source or a branch to merge directly.
 
@@ -801,6 +802,9 @@ Permissions page, and Phase 7.1D historical repair. This batch changes task
 sequencing only; it does not change code, UI, database schema, runtime data,
 account profiles, cookies, proxy configuration, crawler behavior, or
 deployment configuration.
+That sentence records the 2026-06-19 CR-091 baseline. The accepted 2026-07-21
+decision supersedes only its future order: CR-112 Packet B/C/D now precede
+CR-070.
 CR-092, CR-093, and CR-094 are added as future independent backlog lanes after
 the CR-091 rebaseline. CR-092 covers future `/monitor-next` frontend stack
 migration planning in `docs/MONITOR_NEXT_FRONTEND_PLAN.md` and is not a Phase
@@ -1366,22 +1370,23 @@ separate follow-up work.
   7.1D remains operator-gated, CR-037 remains deferred, CR-092 and
   CR-094 remain `Needs Confirmation`, and CR-093 remains a future independent
   backlog lane.
-- CR-112 planning is synchronized as a proposed new capability. The same-host
-  local-desktop topology, project-owned extension/in-process Python 3.11
-  connector, and sequencing relative to CR-070 still require confirmation.
-  The 2026-07-19 login-material sub-decision is confirmed: QR and accepted
-  Cookie login converge on the same account-bound persistent Profile;
-  encrypted Cookie remains bootstrap/refresh/recovery/migration material; a
-  failed refresh preserves the prior Profile and Cookie; and the target
-  managed crawler child argv contains no raw Cookie. CR-112 does not change
-  the current first lane or preempt the accepted CR-070 sequence.
+- CR-112 is `Accepted / Dependency-Gated` as of 2026-07-21. Confirmed scope is
+  same-machine Windows; Extension, Connector, and protocol use reuse-first/
+  minimal-adaptation evaluation with final component ownership decided by
+  Packet B evidence; CR-112 executes before CR-070; Profile is normal crawl-
+  login authority and encrypted Cookie is initialization/refresh/recovery/
+  migration material; administrators may explicitly reveal/copy the complete
+  Cookie under a no-store and transient-memory boundary; Douyin and
+  Xiaohongshu are mandatory Packet D real platforms while Kuaishou is
+  Deferred. Packet B/C/D have not started and are not `Verified`.
 - The latest focused audit corrected an earlier over-broad positive result.
   CR-112 documentation now requires server-side socket-peer and extension-Origin
   enforcement, reverse-proxy route exclusion, explicit classification of the
   existing raw Cookie subprocess-argument risk, and atomic delivery of the five
   plans with all formal references. The final focused Claude Code re-review
-  found no blocking or material plan issue. CR-112 still awaits user
-  confirmation, and implementation and atomic-delivery gates remain open.
+  found no blocking or material plan issue on the older proposal. The previous
+  confirmation gaps are now closed by the 2026-07-21 decisions;
+  implementation, packet evidence, and atomic-delivery gates remain open.
 
 ## Known Risks
 
@@ -1396,6 +1401,10 @@ separate follow-up work.
   launch and requires process-inspection proof that child argv contains no raw
   Cookie. The risk remains present until Packet C implements and verifies that
   migration.
+- The accepted administrator reveal capability intentionally returns one full
+  Cookie only after an explicit administrator action. Until Packet C adds the
+  dedicated no-store POST boundary and transient-only UI, standard account
+  APIs remain masked and no full-Cookie reveal exists.
 - The proposed in-process connector shares a FastAPI service that may listen on
   `0.0.0.0`. Client use of `127.0.0.1` alone does not enforce locality; future
   implementation must reject non-loopback socket peers, ignore forwarded
@@ -1702,15 +1711,15 @@ and stop conditions.
    server-like acceptance packet. Locked account environments must still reject task-level proxy
    overrides, and acceptance must stop if it needs a second browser, Profile,
    proxy, or identity authority or cannot prove a required effective value;
-4. implement CR-070/Phase 5.2 account-environment export/import only after
-   CR-047 provider binding and requested/effective runtime snapshot behavior
-   are implemented and verified;
-5. keep CR-112 local browser auto-sync Cookie acquisition as a future
-   `Needs Confirmation` lane. Its Packet B compatibility spike, Packet C local
-   implementation, and Packet D clean-computer/deployment acceptance must not
-   start before required confirmations and gates pass. CR-070 keeps its current
-   accepted position after CR-047 unless a later accepted sequencing decision
-   explicitly changes that order;
+4. for accepted/dependency-gated CR-112, rerun the current achievable
+   latest-main Windows provider/preflight unit, atomically commit the validated
+   plans, then execute Packet B, Packet C, and Packet D in order. The local
+   evidence never closes or weakens the separate CR-047 Linux/server-like real
+   acceptance;
+5. implement CR-070/Phase 5.2 only after CR-112 Packet D closes. Export/import
+   consumes only committed Profile/account state and excludes CR-112 operation
+   journals, temporary Extension material, pairing secrets, and connector
+   cache;
 6. keep CR-092 `/monitor-next` planning, CR-093 MediaCrawler public exposure
    boundary, and CR-094 crawler provider architecture as future independent
    backlog lanes. They may receive read-only planning or documentation
@@ -1758,9 +1767,10 @@ Test gate hardening recorded:
   visual polish; and crawler provider architecture cannot become the
   Phase 5.1P prerequisite unless a later accepted decision changes the
   roadmap.
-- CR-112 is also separate from Phase 5.1P and CR-047 ownership. It reuses their
-  future provider output only after Phase 5.1 acceptance and remains behind
-  confirmation, compatibility, security, migration, and sequencing gates.
+- CR-112 is separate from Phase 5.1P and CR-047 ownership. It reuses the merged
+  Phase 5.1 provider output and remains behind its packet-specific
+  compatibility, security, migration, test, and real-acceptance gates. Its
+  local Windows proof does not close CR-047 server-like acceptance.
 - CR-112 plan artifacts and formal references form one documentation delivery
   unit. All five plans and their formal references were staged and committed
   together as the CR-112 governance package.
@@ -1778,9 +1788,9 @@ Lowest-risk parallel execution lane:
    binding and CR-114 object-scoped follow-up are independently verified,
    merged, and rechecked. The separate server-like acceptance packet is active.
 
-CR-112 may receive documentation refinement while it is `Needs Confirmation`,
-but it is not a parallel implementation lane and does not alter the verified
-Phase 5.1P/Phase 5.1A-D boundary or CR-114/acceptance sequencing.
+CR-112 is the accepted serial implementation lane before CR-070. Packet B/C/D
+must still advance one at a time and do not alter the verified Phase
+5.1P/Phase 5.1A-D history or the still-open CR-047 server-like acceptance.
 
 Do not run Phase 19 and Phase 20 in parallel, and do not run more than one
 frontend worktree that edits the formal console shell at the same time.

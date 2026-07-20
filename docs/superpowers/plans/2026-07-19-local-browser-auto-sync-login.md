@@ -1,7 +1,8 @@
 # Local Browser Auto-Sync Login Packet
 
-> Future implementation packet. Start only after the compatibility spike and
-> its distribution, runtime, pairing, and clean-computer decisions pass.
+> Accepted, dependency-gated implementation packet. Start only after Packet B
+> passes and selects the component reuse/adaptation/ownership matrix. `Accepted`
+> is not `In Progress` or `Verified`.
 
 **Goal:** Add a default-off local browser login flow that automatically
 acquires and verifies Cookie material for the exact account while preserving
@@ -9,12 +10,18 @@ existing QR and advanced manual Cookie behavior.
 
 ## Start Gates
 
-- [ ] Phase 5.1 acceptance is verified.
+- [x] Phase 5.1P and Phase 5.1A-D plus current merged regression fixes are
+      verified. The separate CR-047 Linux/server-like real acceptance remains
+      operator-gated and is not claimed by this same-machine Windows packet.
 - [ ] Packet B passes Chrome and Edge authenticated roundtrip tests.
-- [ ] CR-112 scope and project-owned connector/distribution route are accepted.
-- [ ] CR-112 sequencing relative to CR-070 is accepted.
-- [ ] Additive schema/migration, retention, and rollback rules are approved.
-- [ ] Exact API/UI state machine and permission checks are documented.
+- [x] CR-112 same-machine Windows scope is accepted. Packet B, rather than an
+      upfront ownership assumption, selects direct reuse, minimal adaptation,
+      or one focused replacement for each component.
+- [x] CR-112-before-CR-070 sequencing is accepted.
+- [x] Additive schema/migration, retention, and rollback rules are approved by
+      the accepted CR-112 specialist documents, subject to Packet B limits.
+- [x] Exact API/UI state machine and permission checks, including the narrow
+      administrator Cookie reveal boundary, are documented.
 - [x] The target raw-Cookie disposition is confirmed: prepare and validate the
       persistent Profile before crawler launch and pass no raw Cookie in child
       argv.
@@ -33,7 +40,7 @@ Expected new focused modules:
 - a feature-gated FastAPI WebSocket route backed by that module in the existing
   Python 3.11 monitor process;
 - `api/monitoring/login_browser_sync.py`: session state machine/finalizer;
-- project-owned extension and connector directories selected in Packet B;
+- Packet-B-selected extension and connector artifacts/directories;
 - focused unit/integration tests for provider, connector, and login sessions.
 
 Expected existing files:
@@ -46,6 +53,7 @@ Expected existing files:
   launch/login callers needed for one internal profile-only mode and reserved
   relogin exit mapping;
 - account login HTML/CSS/JavaScript only;
+- administrator-only Cookie reveal response handling in transient page memory;
 - configuration examples and specialist documentation.
 
 Do not change Task Center, Run Detail, reports, email, AI, roles, crawler
@@ -67,9 +75,22 @@ Persist additive metadata only after migration approval:
   effective browser/Profile/provider summary.
 
 Store raw Cookies only through the existing encrypted account mechanism. Store
-only pairing/credential hashes server-side. Customer APIs expose status and
-timestamps, not Cookie, token, credential, raw Profile path, proxy credential,
-CDP endpoint, or extension internals.
+only pairing/credential hashes server-side. Standard account APIs expose status
+and timestamps, not Cookie, token, credential, raw Profile path, proxy
+credential, CDP endpoint, or extension internals. The one exception is a
+dedicated administrator-only POST reveal response for the selected account;
+normal users receive HTTP 403.
+
+The reveal response carries the complete decrypted Cookie only in the response
+body, uses `Cache-Control: no-store, private`, `Pragma: no-cache`, no validator,
+and is never embedded in URL/query text. The frontend keeps it only in
+transient page memory, masks it by default, uses an eye control for display,
+copies only on an explicit click with feedback, and clears it on account
+change, drawer close, navigation, and timeout. Cookie material must not enter
+localStorage, sessionStorage, IndexedDB, logs, audit details, diagnostics,
+screenshots, subprocess arguments, or subprocess environment. Redacted access
+audit may record actor/account/action/result without any Cookie body, fragment,
+scope, or hash.
 
 The persistent Profile resolved from `profile_key` is the normal browser
 session and crawl environment for both QR and accepted Cookie login. Encrypted
@@ -91,7 +112,7 @@ must fix supported Chrome/Edge fields and limits before this packet starts.
 
 ### C.1 - Shared Cookie-To-Profile Service
 
-- [ ] Add backward-compatible schema reads and the proposed account fields,
+- [ ] Add backward-compatible schema reads and the accepted account fields,
       promotion journal, session linkage, indexes, and recovery queries.
 - [ ] Reuse `create_draft_social_account`; every operation has a real account
       ID and `profile_key` before filesystem or browser work.
@@ -156,6 +177,15 @@ must fix supported Chrome/Edge fields and limits before this packet starts.
 - [ ] Add authenticated start/status/cancel APIs and UI actions in this order:
       QR default, browser auto-sync, collapsed advanced manual Cookie. Bridge
       failure does not auto-open manual input.
+- [ ] Add an administrator-only Cookie reveal POST endpoint for one exact
+      `social_account`. Keep standard account responses masked; require the
+      normal monitor authorization dependency; return 403 to normal users and
+      `no-store`/`no-cache` headers on success and error responses.
+- [ ] Add the masked Cookie field, eye reveal/hide button, copy button, and copy
+      feedback to the administrator account form. Fetch only after explicit
+      reveal, keep the value out of browser persistent Storage and URLs, and
+      clear transient value/DOM state on close, navigation, account switch, and
+      timeout. Normal-user markup has no reveal or copy control.
 - [ ] Add customer-safe states for timeout, browser closed, extension
       unavailable, Bridge offline, validation, promotion, rollback, and
       `recovery_required`.
@@ -220,6 +250,10 @@ Standard tests use fakes and temporary Profiles:
 - connector and service restart/reconnect;
 - late response after finalization;
 - platform validation failure and prior Cookie preservation;
+- administrator Cookie reveal success, missing account handling, normal-user
+  HTTP 403, `no-store`/`no-cache` headers, standard-response masking, explicit
+  reveal/copy feedback, transient clearing, and absence from browser Storage,
+  URL, logs, audit details, diagnostics, argv, and environment;
 - failed refresh preserving the prior active Profile and restart-usable login;
 - first Cookie login creating a persistent Profile that remains valid after
   service/browser restart;
@@ -253,6 +287,9 @@ pilot and must not expose evidence secrets.
   browser, and see the exact account verified/saved without copying Cookie.
 - Two accounts remain isolated under concurrency, restart, and reversed order.
 - QR and advanced manual Cookie paths retain their existing behavior.
+- Administrators can explicitly reveal and copy the complete selected-account
+  Cookie from a default-masked field; normal users have no entry and receive
+  HTTP 403, and secret-leakage checks pass.
 - Bridge and manual Cookie acquisition initialize or refresh the same
   account-bound persistent Profile used by later crawler runs.
 - Process inspection proves managed crawler child argv contains no raw Cookie.

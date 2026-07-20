@@ -1922,12 +1922,13 @@ multi-account binding, local deployment, and login UI.
 
 Type: New Capability
 
-Status: Needs Confirmation
+Status: Accepted / Dependency-Gated
 
-Interpretation: except for the explicitly labeled 2026-07-19 confirmed
-login-material sub-decision, all CR-112 schema, runtime, connector, extension,
-protocol, migration, and acceptance wording below is proposed future contract,
-not current implementation or verification evidence.
+Interpretation: the product direction and packet boundaries were accepted on
+2026-07-21. `Accepted` does not mean Packet B/C/D has started or passed.
+Schema, runtime, connector, extension, protocol, migration, UI, and acceptance
+behavior remains dependency-gated until the owning packet begins and produces
+its required evidence.
 
 Background:
 
@@ -1943,12 +1944,13 @@ server, and is licensed for non-commercial learning use.
 
 Purpose:
 
-Plan an optional local-desktop workflow in which the monitor opens a dedicated
-application-managed Chrome or Edge Profile, the user completes normal platform
-login in that browser, a project-owned compatible extension synchronizes the
-exact account's Cookie material to a loopback connector, and the monitor
-validates and encrypts the Cookie without manual copy/paste. Preserve the
-server-first QR production boundary and the advanced manual Cookie path.
+Implement an optional same-machine Windows workflow in which the monitor opens
+a dedicated application-managed Chrome or Edge Profile, the user completes
+normal platform login in that browser, a Packet-B-selected CookieBridge-
+compatible Extension/Connector path synchronizes the exact account's Cookie
+material, and the monitor validates and encrypts the Cookie without manual
+copy/paste. Preserve the server-first QR production boundary and the advanced
+manual Cookie path.
 
 Proposed Product Boundary:
 
@@ -1966,10 +1968,12 @@ Proposed Product Boundary:
 - Resolve a valid explicit `MONITOR_BROWSER_EXECUTABLE` first, then Chrome,
   Edge, and supported Chromium. Chrome remains preferred when Chrome and Edge
   both exist.
-- Limit V1 auto-sync to a same-host Windows local-desktop topology. The
-  project-owned connector is proposed as a feature-gated WebSocket module in
-  the existing Python 3.11 FastAPI service and accepts extension connections
-  only through loopback.
+- Limit V1 auto-sync to a same-machine Windows local-desktop topology.
+  Extension, Connector, and protocol begin with reuse-first/minimal-adaptation
+  evaluation. Packet B evidence selects direct reuse, minimal adaptation, or
+  one focused component replacement. The target connector lifecycle remains a
+  feature-gated WebSocket module in the existing Python 3.11 FastAPI service
+  and accepts extension connections only through loopback.
 - Because the monitor service may listen on `0.0.0.0`, enforce locality from
   the server-side socket peer rather than only from the extension URL. Accept
   only a parseable loopback peer (`127.0.0.1` or `::1`), ignore
@@ -1991,6 +1995,15 @@ Proposed Product Boundary:
   and server-persisted Profile. Local Chrome/Edge success is not production
   acceptance. Remote/cross-host Bridge and headless Bridge support remain
   outside V1 unless a later accepted decision and test result add them.
+- Permit an administrator to explicitly reveal and copy the complete Cookie
+  for one selected account. The normal account list/detail remains masked;
+  the reveal endpoint is POST-only, administrator-only, returns no-store/no-
+  cache headers, and returns HTTP 403 to a normal user. The frontend defaults
+  to a mask and keeps the revealed value only in transient page memory.
+- Keep Cookie material out of URLs, localStorage, sessionStorage, IndexedDB,
+  logs, audit details, diagnostics, screenshots, subprocess argv, and
+  subprocess environment. Redacted audit metadata may record the reveal/copy
+  action without body, fragment, scope, or hash.
 
 Confirmed Identity And Login-Material Contract (2026-07-19):
 
@@ -2038,9 +2051,11 @@ Proposed Pairing And Security Contract:
   credential, raw Profile path, proxy secret, and extension internals from UI,
   logs, diagnostics, tests, and documentation evidence.
 - Treat the temporary third-party CookieBridge source as evaluation evidence
-  only. Product delivery requires written permission for the intended use or a
-  project-owned compatible implementation; the proposed default is a
-  project-owned implementation without copying restricted source.
+  only. Packet B performs reuse-first/minimal-adaptation measurement and
+  records a separate direct-reuse/minimal-adaptation/single-component-
+  replacement decision for Extension, Connector, and protocol. No component
+  ownership is selected before that evidence, and restricted source is not
+  copied into product paths without compatible permission.
 - Classify current `runner.py --cookies` behavior as a pre-existing secret
   exposure risk because decrypted Cookie material can appear in OS process
   arguments and diagnostics. The accepted CR-112 target removes raw Cookie
@@ -2084,13 +2099,16 @@ Dependencies And Sequencing:
 
 - Phase 5.1P is verified as a read-only preflight; its provider map remains the
   CR-047 implementation boundary.
-- Phase 5.1A-C are implemented and independently verified. Phase 5.1D and the Phase 5.1
-  acceptance gate remain owned by CR-047 and must complete before any CR-112
-  product implementation.
-- CR-070 / Phase 5.2 retains its currently accepted position after CR-047.
-  CR-112 does not preempt or silently reorder CR-070 while this CR is `Needs
-  Confirmation`; a later accepted sequencing decision must place the CR-112
-  compatibility spike and implementation packets.
+- Phase 5.1A-D and current merged regression fixes are implemented and
+  independently verified. The achievable latest-main Windows provider/
+  preflight unit passed on 2026-07-21 with Compose config, persisted Chrome
+  selection, 12 isolated server-like checks/cleanup, and 234 focused tests.
+  The separate CR-047 Linux/server-like real acceptance remains
+  operator-gated; CR-112 local evidence does not close it.
+- CR-112 executes before CR-070 / Phase 5.2. CR-070 later consumes only
+  committed CR-112 Profile/account state and excludes promotion journals,
+  operation directories, pairing secrets, Extension temporary material, and
+  connector cache.
 - CR-112 Packet B is a disposable compatibility/pairing/protocol spike only.
   It also fixes Cookie Protocol V1 fields and limits. Packet C contains serial
   C.1-C.3 local implementation. Packet D contains clean-computer and deployment
@@ -2119,11 +2137,15 @@ Required Confirmations:
 - Confirmed 2026-07-19: QR and Cookie login converge on the same account-bound
   persistent Profile; encrypted Cookie is bootstrap/refresh/recovery/migration
   material, and the target crawl path contains no raw Cookie in child argv.
-- Confirm the same-host Windows local-desktop scope for V1 auto-sync.
-- Confirm the project-owned extension and in-process Python 3.11 connector
-  direction, subject to Packet B compatibility proof.
-- Confirm CR-112 sequencing relative to the already accepted CR-070 / Phase 5.2
-  lane after CR-047 acceptance.
+- Confirmed 2026-07-21: same-machine Windows local-desktop scope for V1.
+- Confirmed 2026-07-21: reuse-first/minimal-adaptation evaluation, with final
+  Extension/Connector/protocol ownership selected by Packet B evidence.
+- Confirmed 2026-07-21: CR-112 executes before CR-070 / Phase 5.2.
+- Confirmed 2026-07-21: administrators may explicitly reveal and copy a full
+  Cookie under the no-store, transient-memory, no-secret-leakage boundary;
+  normal users receive 403 and have no UI entry.
+- Confirmed 2026-07-21: Douyin and Xiaohongshu are mandatory Packet D real
+  platforms; Kuaishou is Deferred.
 
 Related Plans:
 
@@ -2136,20 +2158,21 @@ Related Plans:
 Related Governance:
 
 - CR-112 task block in `TASKS.md`.
-- CR-112 proposed boundaries in `ACCOUNT_ENVIRONMENT.md` and
+- CR-112 accepted/dependency-gated boundaries in `ACCOUNT_ENVIRONMENT.md` and
   `SERVER_DEPLOYMENT.md`.
 - CR-112 planned tests in `TEST_PLAN.md`.
-- CR-112 proposed schema in `DATA_MODEL.md` and `SCHEMA_MIGRATION.md`.
+- CR-112 accepted/dependency-gated schema in `DATA_MODEL.md` and
+  `SCHEMA_MIGRATION.md`.
 - CR-112 row in `TRACEABILITY.md`.
 - CR-112 planning synchronization evidence in `TEST_RESULTS.md`.
 
 Acceptance For This Documentation Stage:
 
-- CR-112 remains `Needs Confirmation` and is not described as
-  implementation-ready.
-- Phase 5.1P and Phase 5.1A-C are recorded as verified, Phase 5.1D follows
-  Phase 5.1C integration, and CR-047 and CR-070 ownership and sequencing are
-  preserved.
+- CR-112 is consistently `Accepted / Dependency-Gated`; Packet B/C/D remain
+  not started and are not described as `In Progress` or `Verified`.
+- Phase 5.1P and Phase 5.1A-D plus current merged regression fixes are recorded
+  as verified. The separate CR-047 Linux/server-like real acceptance remains
+  operator-gated, and CR-112-before-CR-070 sequencing is explicit.
 - The five reviewed plan artifacts are linked from formal governance docs and
   distinguish roadmap readiness from future execution gates.
 - All five plan artifacts and their CR-112 formal references in
@@ -2161,12 +2184,12 @@ Acceptance For This Documentation Stage:
 - Account, security, local/server, distribution, runtime, testing, proof, and
   rollback boundaries agree across all affected documents.
 - The confirmed persistent-Profile authority decision is recorded in
-  `DECISIONS.md`; CR-112 remains `Needs Confirmation` only for its other open
-  product and sequencing decisions.
+  `DECISIONS.md` together with the accepted scope, component-selection,
+  sequencing, administrator Cookie reveal, and real-platform decisions.
 - Documentation consistency, whitespace validation, and focused independent
   read-only review pass.
 
-Implementation Acceptance If Later Confirmed:
+Packet Implementation Acceptance After Start Gates Pass:
 
 - Standard tests prove pairing, replay rejection, exact account routing,
   concurrent account isolation, timeout/cancellation/browser-close cleanup,
@@ -2195,10 +2218,19 @@ Implementation Acceptance If Later Confirmed:
   packaged-runtime pre-accept status (403 on the pinned baseline).
 - Process inspection proves the managed-account crawler child argv contains no
   raw Cookie after the persistent-Profile transition.
+- Administrator-only reveal tests prove complete Cookie display/copy from a
+  default mask, normal-user HTTP 403, no-store/no-cache responses, standard
+  response masking, transient clearing, and no Cookie in browser persistent
+  Storage, URL, logs, audit details, diagnostics, argv, or environment.
 - A clean Windows installation requires no manual extension/Profile setup or
   extra connector/Python runtime placement.
 - A local pilot verifies exact-account login, encrypted Cookie persistence,
   persistent Profile reuse after restart, and no sensitive evidence exposure.
+- Packet D separately designates Douyin and Xiaohongshu account IDs and proves
+  each Extension acquisition, administrator reveal/copy, fresh candidate
+  injection, restart identity check, `fallback_used=false`, and at least one
+  persisted real content item through the normal monitor entry. Kuaishou is
+  Deferred.
 - Existing server QR login, advanced manual Cookie login, account checks,
   scheduler/manual runs, and crawler behavior show no regression.
 
@@ -7797,6 +7829,11 @@ Scope boundary:
 - It builds on CR-047 account identity fields and the existing server-side
   profile root. It must not bypass CR-047 identity validation, locks,
   re-login rules, or proxy consistency.
+- Under the accepted 2026-07-21 sequence, implementation starts only after
+  CR-112 Packet D is verified. Export/import uses only the fixed committed
+  Profile and committed account metadata; it excludes promotion journals,
+  candidate/rollback directories, operation markers, pairing credentials,
+  temporary Extension material, and connector cache.
 
 Non-goals:
 
@@ -7878,6 +7915,10 @@ planning
 Type: Documentation Governance
 
 Status: Verified
+
+Historical sequencing note: this section records the 2026-06-19 baseline.
+Its Phase 5.1-before-CR-070 statements are not current start instructions. The
+accepted 2026-07-21 decision places CR-112 Packet B/C/D before CR-070.
 
 Background:
 
@@ -8306,6 +8347,10 @@ iteration, acceptance standards
 Type: Documentation Governance
 
 Status: Verified
+
+Historical sequencing note: this section records the 2026-06-19 baseline.
+The atomic-goal rules remain active, but the accepted 2026-07-21 decision
+supersedes its future CR-070 position with CR-112 Packet B/C/D before CR-070.
 
 Background:
 

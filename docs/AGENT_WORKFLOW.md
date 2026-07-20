@@ -118,12 +118,14 @@ Current goal rhythm:
 2. Phase 5.1P documentation/read-only compatibility preflight is verified;
    keep `docs/phase-5.1p-browser-entrypoint-map.md` as its implementation
    boundary.
-3. Phase 5.1A-C are implemented, merged, and independently verified. Phase
-   5.1D browser/runtime binding is the active serial unit.
-4. Phase 5.1 acceptance gate.
-5. CR-070 / Phase 5.2A-E only after CR-047 provider/effective snapshot
-   verification.
-6. CR-092, CR-093, and CR-094 remain future independent backlog lanes.
+3. Phase 5.1A-D and current follow-up regressions are implemented, merged, and
+   independently verified.
+4. The separate CR-047 Linux/server-like real acceptance remains
+   operator-gated; local Windows evidence does not close it.
+5. CR-112 Packet B, C, and D execute serially. Packet B starts only after the
+   accepted plan set is committed atomically.
+6. CR-070 / Phase 5.2A-E starts only after CR-112 Packet D is verified.
+7. CR-092, CR-093, and CR-094 remain future independent backlog lanes.
 
 Use the iteration rule from `docs/GOAL_EXECUTION_GUIDELINES.md`:
 pre-check, implement only the packet, run targeted checks, fix and rerun, run

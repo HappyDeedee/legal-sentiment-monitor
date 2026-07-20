@@ -82,17 +82,17 @@ set the desired explicit executable if needed, and run a local preflight again.
 Deleting only the manifest while retaining system-browser Profile data is not
 a supported migration path.
 
-## Proposed CR-112 Local Browser Auto-Sync Boundary
+## Accepted CR-112 Local Browser Auto-Sync Boundary
 
-Status: `Needs Confirmation`. This is a proposed local Windows capability and
-does not change the accepted production/server deployment boundary. Every
-normative CR-112 statement in this section is a future acceptance contract, not
-evidence that the connector/extension/schema exists in current code.
+Status: `Accepted / Dependency-Gated`. This is an accepted same-machine
+Windows capability and does not change the production/server deployment
+boundary. Normative CR-112 statements define Packet B/C/D acceptance; they are
+not evidence that the connector/extension/schema exists yet.
 
-Proposed V1 topology:
+Accepted V1 topology:
 
 ```text
-monitor FastAPI service + project-owned connector route + managed browser
+monitor FastAPI service + Packet-B-selected connector route + managed browser
 on the same Windows computer
 ```
 
@@ -113,7 +113,8 @@ on the same Windows computer
   `chrome-extension://<stable-extension-id>` Origin. Missing, opaque, or
   unexpected Origins and invalid peers are rejected before protocol state or
   Cookie access.
-- The standard monitor installation contains the project-owned extension and
+- The standard monitor installation contains the Packet-B-selected extension
+  artifact and
   creates its per-session managed copy automatically. The operator does not
   install an extension manually, create a personal Chrome Profile, use a Google
   account, place a connector binary, or install Python 3.12.
@@ -123,7 +124,7 @@ on the same Windows computer
 - Browser resolution is valid explicit executable, Chrome, Edge, then supported
   Chromium. Chrome is preferred when Chrome and Edge both exist.
 - The 2026-07-19 confirmed login-material sub-decision applies inside this
-  otherwise proposed capability: QR and accepted Cookie login converge on the
+  accepted capability: QR and accepted Cookie login converge on the
   account-bound persistent Profile resolved from `profile_key`. Encrypted
   Cookie remains bootstrap/refresh/recovery/migration material.
 - An existing active Profile uses the fixed-path promotion journal from
@@ -139,6 +140,11 @@ on the same Windows computer
 - After successful Profile preparation, managed crawler children receive no
   raw Cookie through argv. Clean-computer acceptance includes process
   inspection for this guarantee.
+- The administrator-only full-Cookie reveal is a dedicated POST response, not
+  a standard account field or deployment diagnostic. It uses no-store/no-cache
+  headers and must not enter reverse-proxy access logs with a body, browser
+  persistent Storage, URL, audit details, diagnostics, argv, or environment.
+  Normal users receive HTTP 403 and have no frontend entry.
 - The feature is disabled by default. Disabled or unhealthy state must not
   mount a usable connector path, load the extension, generate pairing tokens,
   choose another account/client, or alter QR/manual Cookie behavior.
@@ -169,14 +175,15 @@ Production remains server-first:
   server Profile;
 - local Chrome/Edge auto-sync evidence is not production acceptance;
 - remote Bridge, browser-on-operator/monitor-on-server topology, cross-host
-  Cookie transport, and headless Bridge remain outside the proposed V1 scope;
+  Cookie transport, and headless Bridge remain outside the accepted V1 scope;
 - a headless compatibility result may be recorded as supported or unsupported
   without changing the server QR production baseline.
 
 CR-112 compatibility, implementation, and deployment packets remain gated by
-confirmation, Phase 5.1 acceptance, the existing CR-070 sequence or a later
-accepted sequencing decision, project-owned protocol proof, data-model and
-migration approval, and clean-computer acceptance.
+their packet-specific provider, protocol, security, migration, test, and real-
+acceptance evidence. CR-112 executes before CR-070. The separate CR-047 Linux/
+server-like real acceptance remains operator-gated and CR-112 local proof does
+not close it.
 
 Before serving account checks, login, reset, export, or crawl after startup,
 the monitor must reconcile non-terminal Profile-promotion journals. An

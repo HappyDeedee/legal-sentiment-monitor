@@ -184,13 +184,14 @@ columns through one bounded identity UPDATE inside the new-account INSERT
 transaction. Existing rows and all account UPDATE paths keep their current
 identity values until the explicit Phase 5.1C lifecycle/reset flow runs.
 
-### Proposed CR-112 - Persistent Profile Promotion And Bridge Metadata
+### Accepted CR-112 - Persistent Profile Promotion And Bridge Metadata
 
-Status: proposed and `Needs Confirmation`. This is a Packet C additive
-migration after Phase 5.1 acceptance, not part of Phase 5.1P or the accepted
-CR-047 schema body.
+Status: `Accepted / Dependency-Gated`. This is a Packet C additive migration
+after Packet B fixes compatibility/protocol limits. It is not part of Phase
+5.1P or the historical CR-047 schema body, and it is not active schema until
+Packet C begins and migration tests pass.
 
-Proposed additions are specified in `DATA_MODEL.md`:
+Accepted Packet C additions are specified in `DATA_MODEL.md`:
 
 - `social_accounts.cookie_source`;
 - `social_accounts.profile_runtime_version` with safe default `0`;
@@ -269,6 +270,11 @@ Rollback boundaries:
 - schema deletion is never the first rollback. Older code must ignore additive
   fields/tables, and unresolved promotion journals must be finalized before a
   binary downgrade that cannot read them.
+
+The administrator full-Cookie reveal adds no plaintext schema field, cache
+table, or durable response copy. It reads the existing encrypted account value
+only after authorization and returns it through the dedicated no-store POST
+response. Audit schema stores only redacted access metadata.
 
 ### Accepted Phase 5.2 - Account Environment Export/Import Package
 

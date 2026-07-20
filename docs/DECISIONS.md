@@ -533,6 +533,9 @@ short `Superseded by` note rather than deleting history.
   closed on `main`, Phase 5.1P read-only preflight, Phase 5.1A-D
   implementation, Phase 5.1 acceptance, then CR-070 / Phase 5.2 after CR-047
   provider/effective snapshot verification.
+- Sequencing note: the CR-095 order above is the accepted 2026-06-19 baseline.
+  The 2026-07-21 CR-112 decision supersedes only its future CR-070 position:
+  CR-112 Packet B/C/D now execute before CR-070.
 
 ## 2026-06-20
 
@@ -708,3 +711,41 @@ short `Superseded by` note rather than deleting history.
   or background CDP pages cannot overwrite that evidence, while a mismatch on
   the prepared page still fails closed as
   `account_identity_snapshot_mismatch`.
+
+## 2026-07-21 - CR-112 Acceptance And Execution Order
+
+- Confirmed for CR-112: V1 browser auto-sync is a same-machine Windows
+  capability. The monitor service, managed Chrome or Edge process, extension,
+  and connector run on the same computer. Remote and cross-host Cookie
+  transport remain outside V1.
+- Confirmed for CR-112: Packet B starts from reuse-first, minimal-adaptation
+  evaluation of the existing CookieBridge Extension, Connector, and protocol.
+  Packet B evidence, including license and distribution constraints, decides
+  whether each component is reused directly, minimally adapted, or replaced as
+  one focused project component. Component ownership is not selected in
+  advance.
+- Confirmed for CR-112 sequencing: CR-112 executes before CR-070. CR-070 later
+  exports or imports only committed Profile/account state and must not package
+  CR-112 promotion journals, temporary extension material, pairing secrets, or
+  connector cache.
+- Confirmed for CR-112 login authority: the application-managed persistent
+  Profile resolved from `social_account.profile_key` is the normal crawl-login
+  authority. Encrypted Cookie remains initialization, refresh, recovery, and
+  migration material; connector cache is never durable authority.
+- Confirmed for CR-112 permissions: an administrator may explicitly reveal and
+  copy the complete decrypted Cookie for one selected social account. The
+  standard account list/detail remains masked. The reveal endpoint is
+  administrator-only, returns `Cache-Control: no-store`, and never places the
+  Cookie in URLs, browser persistent storage, logs, audit details, diagnostics,
+  subprocess arguments, or subprocess environment. Normal users have no UI
+  entry and receive HTTP 403.
+- Confirmed for CR-112 real acceptance: Douyin (`dy`) and Xiaohongshu (`xhs`)
+  are both mandatory Packet D platforms. Each must use its explicitly
+  designated account and normal monitor crawl entry to persist at least one
+  real content item with `fallback_used=false`. Kuaishou (`ks`) is deferred and
+  is not a Packet D failure condition.
+- Confirmed status semantics: CR-112 is `Accepted / Dependency-Gated` while its
+  plan is approved but implementation has not started. A packet becomes `In
+  Progress` only when its start gate passes and execution begins, and becomes
+  `Verified` only after its required tests, real evidence where specified,
+  documentation synchronization, and independent review pass.

@@ -171,6 +171,13 @@ variable `MONITOR_ALLOW_LOCAL_LOGIN_WINDOW`. It is not an editable runtime
 strategy setting because production acceptance must use the server-side web QR
 flow.
 
+CR-112 browser auto-sync is controlled by deployment-only
+`MONITOR_COOKIE_BRIDGE_ENABLED`, default `false`. It is not a browser template
+field or ordinary frontend runtime setting. When false, the connector route is
+unmounted and no extension, pairing token, or auto-sync action is activated;
+accepted advanced manual Cookie and profile-only runtime behavior remain
+independent of this flag.
+
 ## Database Storage
 
 Confirmed V1 direction:

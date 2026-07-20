@@ -1,7 +1,8 @@
 # CookieBridge Pairing And Compatibility Spike Packet
 
-> Future read-only/disposable spike. It does not modify product code, schema,
-> UI, deployment, account records, or durable Profiles.
+> Accepted, dependency-gated read-only/disposable spike. It does not modify
+> product code, schema, UI, deployment, account records, or durable Profiles.
+> Mark it `In Progress` only after all start gates below pass.
 
 **Goal:** Determine whether supported Chrome and Edge can automatically load a
 project-managed extension and complete an authenticated, exact-client Cookie
@@ -9,14 +10,18 @@ roundtrip suitable for a later local browser auto-sync feature.
 
 ## Start Gates
 
-- [ ] Phase 5.1P, Phase 5.1A-D, and Phase 5.1 acceptance are verified.
-- [x] Proposed CR-112 is registered as `Needs Confirmation`.
-      This checked item records documentation intake only and is not
-      implementation approval.
-- [ ] CR-112 is accepted and an explicit sequencing decision relative to
-      CR-070 permits Packet B to start.
-- [ ] The temporary third-party source is classified as evaluation-only.
-- [ ] Disposable browser/connector tests are explicitly allowed and use test
+- [x] Phase 5.1P and Phase 5.1A-D plus their current merged regression fixes
+      are verified. The separate Linux/server-like real acceptance remains
+      operator-gated and this spike does not claim to close it.
+- [x] CR-112 is `Accepted / Dependency-Gated` and executes before CR-070.
+- [x] The latest-main scoped Windows provider/preflight gate passed on
+      2026-07-21: Compose config, persisted Chrome selection, 12-check isolated
+      server-like validation/cleanup, and `234` focused provider/login/crawl
+      tests passed. This is local-only evidence and does not close CR-047.
+- [ ] The complete 2026-07-21 CR-112 decision, governance, specialist, and
+      Packet B/C/D plan set is committed atomically on this branch.
+- [x] The temporary third-party source is classified as evaluation-only.
+- [x] Disposable browser/connector tests are explicitly allowed and use test
       Profiles with no real account Cookies.
 
 ## Scope
@@ -25,8 +30,8 @@ Allowed:
 
 - read-only inspection of the temporary reference extension/server;
 - disposable Python 3.12 reference-server process for protocol observation;
-- generated test-only compatible extension/connector prototypes under ignored
-  temporary paths;
+- direct-reuse black-box evaluation, bounded minimal adapters, and independent
+  test-only replacement prototypes under ignored temporary paths;
 - Chrome and Edge test Profiles with synthetic platform Cookie fixtures.
 
 Excluded:
@@ -46,10 +51,12 @@ Excluded:
 - [ ] Compare every observed protocol field and trust boundary with the master
       pairing contract. When the reference protocol lacks token pairing,
       authenticated origin, exact binding, or request correlation, record the
-      gap as a project-owned implementation requirement rather than weakening
-      the master contract.
-- [ ] Record license and Python runtime evidence and choose the proposed product
-      route: written permission or project-owned compatible implementation.
+      gap as an explicit minimal-adaptation or single-component-replacement
+      requirement rather than weakening the master contract.
+- [ ] Record license, distribution, and Python runtime evidence. For Extension,
+      Connector, and protocol separately, classify the result as `direct
+      reuse`, `minimal adaptation`, or `single-component replacement`; do not
+      decide ownership before measurement.
 - [ ] Build a disposable protocol harness that can assert four independent
       milestones: Service Worker present, socket connected, exact client
       authenticated/registered, exact account-scoped Cookie roundtrip complete.
@@ -108,7 +115,13 @@ Excluded:
       product connector is an in-process Python 3.11 FastAPI module, not a
       separate binary or Python 3.12 runtime.
 - [ ] Produce `docs/cookiebridge-compatibility-spike-result.md` with PASS/FAIL
-      per milestone and proof limits.
+      per milestone, proof limits, and this component matrix:
+
+      | Component | Reference evidence | Contract gaps | License/runtime fit | Decision | Packet C owner |
+      | --- | --- | --- | --- | --- | --- |
+      | Extension | measured | measured | measured | direct reuse / minimal adaptation / single-component replacement | selected by evidence |
+      | Connector | measured | measured | measured | direct reuse / minimal adaptation / single-component replacement | selected by evidence |
+      | Protocol | measured | measured | measured | direct reuse / minimal adaptation / single-component replacement | selected by evidence |
 
 ## Exit Criteria
 
@@ -122,7 +135,8 @@ Excluded:
 - Pairing routes the exact managed Profile to one account session without user
   selection or implicit client choice.
 - Reconnect and revocation semantics are demonstrated with synthetic data.
-- The product implementation/distribution/runtime route is explicit.
+- The implementation/distribution/runtime route and ownership of each
+  Extension, Connector, and protocol component are explicit and evidence-based.
 - The extension ID is stable, permissions are least-privilege, and the selected
   bootstrap/cleanup mechanism leaves the promoted Profile crawler-usable after
   its session extension/config is gone.
@@ -130,10 +144,11 @@ Excluded:
   limits and shows that domain/path/security attributes survive the synthetic
   roundtrip and Profile restart.
 - Any material divergence from the unauthenticated reference protocol is
-  mapped to an explicit project-owned implementation and test requirement;
+  mapped to an explicit adaptation/replacement implementation and test requirement;
   Packet C never assumes the reference can provide the master pairing contract.
 - Clean-computer bootstrap requires no manual extension or Chrome Profile setup.
-- A read-only independent review finds no protocol, isolation, or proof gap.
+- A read-only independent review finds no protocol, isolation, component-
+  ownership, or proof gap.
 
 ## Stop Conditions
 
