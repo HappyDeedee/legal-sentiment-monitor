@@ -2,6 +2,27 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-20 - PR #10 Post-Merge Verification
+
+Environment: merged `main@cd640f0` after PR #10.
+
+Result:
+
+- CR-116, CR-117, and CR-118 are merged into `main`.
+- The post-merge isolated monitoring regression passes `574` tests with the
+  same three existing warnings.
+- Documentation consistency and regression (`1 passed`), Python compile,
+  inline JavaScript parse, and `git diff --check` pass.
+- At the start of this documentation-only state sync, local `main`,
+  `origin/main`, and `origin/HEAD` resolved to the merge commit. This follow-up
+  contains no product-code change.
+
+Proof boundary:
+
+- The documented pre-existing XHS Store factory assertion remains outside this
+  diff. Clean-Windows real browser download, Docker/Linux, and complete Phase
+  5.1 server-like acceptance remain separate gates.
+
 ## 2026-07-20 - CR-116 Through CR-118 Operator Acceptance
 
 Environment: `codex/cr-117-playwright-chromium-bootstrap` at the reviewed and
