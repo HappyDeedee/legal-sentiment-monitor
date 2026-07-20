@@ -1922,11 +1922,12 @@ data, sensitive files, or the old server-login worktree.
 
 Planning status:
 
-CR-112 is an `Accepted / Dependency-Gated` new capability as of 2026-07-21.
+CR-112 is an `Accepted / Verified (Packet B)` new capability as of 2026-07-21.
 Acceptance approves the same-machine Windows scope, reuse-first/minimal-
 adaptation evaluation, CR-112-before-CR-070 order, Profile/Cookie authority,
-administrator Cookie reveal, and Douyin/Xiaohongshu Packet D matrix. It does
-not mean Packet B/C/D is `In Progress` or `Verified`. Phase 5.1P and Phase
+  administrator Cookie reveal, and Douyin/Xiaohongshu Packet D matrix. Packet
+  B is verified; Packet C/D remain dependency-gated and are not started. Phase
+  5.1P and Phase
 5.1A-D plus the current merged regression fixes are verified; the separate
 CR-047 Linux/server-like real acceptance remains operator-gated and is not
 closed by CR-112 local evidence.
@@ -1966,11 +1967,10 @@ Documentation synchronization:
       validation, stale-contract scanning, and independent read-only review.
 - [x] Deep-cross-validate the supplemented CR-112 plan with Claude Code and
       iterate to `READY`: define fresh-candidate crash recovery, operation
-      marker/directory matrix, Bridge/manual binding rotation, exact hidden
+      marker/directory matrix, browser-sync/manual promotion, exact hidden
       profile-only parent/child contract and cutover, C.2-only flag ownership,
-      timed cleanup/export blocking, structured Cookie/extension packaging,
-      pinned HTTP/WebSocket baseline evidence, and explicit proposed/not-started
-      status boundaries.
+      timed cleanup/export blocking, structured Cookie acquisition, pinned
+      route-absence baseline evidence, and explicit status boundaries.
 - [x] Rebaseline CR-112 on 2026-07-21 against
       `main@2ea2c1e96675297e302368b1226ec7aac05f2bb1`, synchronize the accepted
       decisions and TODO classifications across formal documents and Packet
@@ -2000,39 +2000,44 @@ Accepted decisions and gated execution:
       checks with cleanup, and the Phase 5.1/CR-116-121 focused regression
       passed (`234 passed`). This proves only the local inherited authority and
       does not close CR-047 Linux/server-like acceptance.
-- [ ] Commit the complete 2026-07-21 CR-112 decision, governance, specialist,
+- [x] Commit the complete 2026-07-21 CR-112 decision, governance, specialist,
       and Packet B/C/D plan set atomically before marking Packet B
-      `In Progress`.
-- [ ] Execute Packet B as a disposable protocol/compatibility spike and require
-      Chrome and Edge to prove Service Worker load, authenticated registration,
-      exact pairing, and one synthetic Cookie roundtrip.
-- [ ] Produce the Packet B Extension/Connector/protocol matrix with direct
+      `In Progress`: commit `44baf78`.
+- [x] Execute Packet B as a disposable compatibility/acquisition spike. Measure
+      the reference Extension/Connector and prove the selected direct managed-
+      context acquisition on Chrome and Edge with synthetic Cookies only.
+- [x] Produce the Packet B Extension/Connector/protocol matrix with direct
       reuse, minimal adaptation, or single-component replacement plus license,
       runtime, distribution, and contract evidence.
-- [ ] In Packet B, prove the connector rejects non-loopback socket peers,
-      ignores spoofed forwarding headers for authorization, requires the exact
-      stable extension Origin, remains unmounted when disabled (HTTP 404 and
-      pinned-baseline unmatched-WebSocket 403), and is excluded from reverse-
-      proxy forwarding.
-- [ ] In Packet B, fix structured Cookie Protocol V1 fields and Chrome/Edge
+- [x] In Packet B, prove the rejected Cookie-bridge route remains absent in the
+      pinned runtime (HTTP 404 and unmatched-WebSocket 403). The selected V1
+      direct path mounts no WebSocket route and has no Origin/client/pairing
+      boundary.
+- [x] In Packet B, fix structured Cookie Protocol V1 fields and Chrome/Edge
       limits and prove domain/path/security attributes survive exact routing and
       temporary Profile restart without touching real account material.
-- [ ] In Packet B, prove manifest-key-derived extension ID stability, least-
-      privilege host permissions, and session-extension/config cleanup followed
-      by crawler-equivalent Profile restart without a missing-path dependency.
+- [x] Record that the reference Extension fails current Chrome managed loading,
+      has path-dependent unpacked identity, and loses structured Cookie scope;
+      select managed Playwright/CDP context as the Extension/Connector
+      replacement and clean every temporary Profile.
+- [x] Complete the required Packet B validation, documentation/whitespace
+      checks, and final gate; Packet B is `Verified` within its synthetic local
+      proof boundary.
+- [x] Commit the verified Packet B result and synchronized formal documents
+      atomically before marking Packet C `In Progress`.
 - [ ] Start Packet C only after Packet B passes and data-model/migration,
       distribution, runtime, permission, and security decisions are accepted.
-- [ ] Packet C.1: implement the shared Bridge/manual canonical Cookie service,
+- [ ] Packet C.1: implement the shared browser-sync/manual canonical Cookie service,
       fixed-active-path promotion journal, same-volume candidate/rollback swap,
       active-path recheck, restart recovery, bounded cleanup, and existing
       account migration without enabling Bridge. Candidates are fresh provider
       outputs and never clone/mutate the active Profile before `swapping`;
       recovery follows the commit-authority/directory-shape/operation-marker
       table and cleanup runs after success, on timer/startup, and before refresh.
-- [ ] Packet C.2: implement the feature-gated connector/extension/pairing/API/UI
-      flow on C.1, including exact pending/active/revoked binding rotation;
-      feature-off must unmount only C.2 and preserve advanced manual Cookie.
-      Only C.2 router/UI/readiness/extension/pairing code may read the flag.
+- [ ] Packet C.2: implement feature-gated direct exact-context acquisition/API/UI
+      on C.1; feature-off removes only C.2 and preserves advanced manual Cookie.
+      Only C.2 router/UI/readiness/managed-browser code may read
+      `MONITOR_BROWSER_COOKIE_SYNC_ENABLED`.
 - [ ] Packet C.2: implement the administrator-only Cookie reveal POST endpoint
       and default-masked eye/copy UI. Return no-store/no-cache, reject normal
       users with 403, keep standard account payloads masked, and prove Cookie
@@ -2052,10 +2057,10 @@ Accepted decisions and gated execution:
       server QR non-regression, and bounded operation-artifact cleanup.
 - [ ] Packet D: use exact `DESIGNATED_DY_ACCOUNT_ID` and
       `DESIGNATED_XHS_ACCOUNT_ID` values; for each platform acquire the real
-      Cookie through Extension, validate exact identity, exercise admin
+      Cookie through the selected direct managed-browser service, validate exact identity, exercise admin
       reveal/copy, inject only that Cookie into a fresh candidate, restart,
       prove `fallback_used=false`, and persist at least one real content item
-      through the normal monitor entry. Clean Extension temporary material,
+      through the normal monitor entry. Clear acquisition handles/state,
       restart the service, and re-prove Profile check plus bounded crawl.
 - [ ] Keep Kuaishou `Deferred`; do not count it as Packet D failure or claim it
       was tested.

@@ -226,7 +226,7 @@ Interaction rules:
   generic unbound local login remains status-only.
 - CR-112 keeps QR as the default login method, shows same-machine browser
   auto-sync only when enabled and healthy, and keeps manual Cookie input in a
-  collapsed advanced section without opening it automatically after Bridge
+  collapsed advanced section without opening it automatically after browser-sync
   failure.
 - In the administrator Platform Account form, the complete Cookie field is
   masked by default. Use an eye icon to reveal/hide and a copy icon to copy;

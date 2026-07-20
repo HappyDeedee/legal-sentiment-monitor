@@ -82,9 +82,10 @@ decision:
    runtime snapshots, provider metadata, proxy effect proof or fail-closed
    behavior, manual/scheduler reuse, MediaCrawler CDP binding, and
    container/server-like validation.
-6. Execute accepted CR-112 Packet B, C, and D serially. Packet B begins only
-   after its validated plan documents are committed atomically; local CR-112
-   proof does not close the CR-047 server-like gate.
+6. Execute accepted CR-112 Packet B, C, and D serially. Packet B is active
+   after atomic plan commit `44baf78` and selected direct managed-context
+   acquisition; Packet C waits for Packet B focused review and commit. Local
+   CR-112 proof does not close the CR-047 server-like gate.
 7. Start CR-070 / Phase 5.2 only after CR-112 Packet D is verified. Execute Phase 5.2A-E in
    order: package contract/security, export flow, import flow,
    post-import/recovery, then test safety and verification.

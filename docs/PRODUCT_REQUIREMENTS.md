@@ -663,7 +663,7 @@ Fields:
 - proposed future CR-070 package operation status: export/import in progress,
   ready for download, failed, cancelled, expired, deleted, active after import,
   or requires re-login after import.
-- accepted/dependency-gated CR-112 account login actions: QR remains default;
+- accepted CR-112 account login actions (Packet B verified): QR remains default;
   same-machine Windows browser auto-sync is the normal Cookie workflow when
   enabled and healthy; manual Cookie input remains collapsed advanced; an
   administrator may explicitly reveal/copy one selected account's complete
@@ -751,7 +751,7 @@ Acceptance:
   5.1D and final Phase 5.1 acceptance still must prove all crawl launch paths
   reuse the same effective environment.
 - After CR-112 Packet D, designated Douyin and Xiaohongshu accounts each prove
-  exact Extension acquisition, administrator reveal/copy, fresh candidate
+  exact managed-context acquisition, administrator reveal/copy, fresh candidate
   injection, restart identity verification, `fallback_used=false`, and at
   least one persisted real content item through the normal monitor entry.
   Kuaishou remains Deferred.

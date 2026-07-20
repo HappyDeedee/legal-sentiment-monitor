@@ -118,22 +118,32 @@ Last updated: 2026-07-21
   not change
   product code, schema, UI behavior, runtime data, sensitive files, or the old
   server-login worktree.
-- CR-112 is an `Accepted / Dependency-Gated` local browser auto-sync Cookie-
-  acquisition capability as of 2026-07-21. Its roadmap and four goal packets
-  define approved future behavior, but Packet B/C/D product code, schema, UI,
-  Extension, Connector, Profile promotion, runtime, deployment, and database
-  changes have not started. Accepted decisions cover same-machine Windows,
+- CR-112 is an `Accepted / Verified (Packet B)` local browser auto-sync
+  Cookie-acquisition capability as of 2026-07-21. Its roadmap, four goal
+  packets, and Packet B result define the selected implementation boundary;
+  Packet C/D product code, schema, UI, Profile promotion, runtime, deployment,
+  and database changes have not started. Accepted decisions cover same-machine Windows,
   reuse-first/minimal-adaptation component evaluation, CR-112 before CR-070,
   Profile/Cookie authority, administrator Cookie reveal/copy, mandatory
   Douyin/Xiaohongshu real acceptance, and Kuaishou deferral.
+- Packet B synthetic measurements are complete. Current branded Chrome did not
+  load the reference Extension; Edge loaded it but the reference roundtrip had
+  no account/Profile pairing and lost duplicate scope/security attributes.
+  Direct Playwright/CDP acquisition passed on Chrome and Edge with structured
+  attribute fidelity, restart persistence, two-Profile isolation, bounded
+  negative cases, and temporary cleanup. Packet B therefore selected the
+  managed context as the Extension/Connector replacement and an internal
+  structured protocol with `256` records, `8192` bytes per record, and
+  `1048576` bytes per payload. The Packet B result is complete within its
+  synthetic local proof scope.
 - The accepted CR-112 contract defines crash recovery, profile-only cutover,
-  feature-flag isolation, binding rotation, extension cleanup, structured
-  Cookie, and deployment proof boundaries. None is Packet B/C/D implementation
-  evidence yet. The scoped Windows provider/preflight gate now passes:
+  feature-flag isolation, exact context/session binding, structured Cookie,
+  and deployment proof boundaries. The scoped Windows provider/preflight gate passes:
   Compose configuration, persisted Chrome selection, 12-check isolated
   server-like validation with cleanup, and `234` focused Phase 5.1/CR-116-121
   tests pass. This local evidence does not close CR-047 Linux/server-like
-  acceptance. Packet B waits only for the atomic documentation commit.
+  acceptance. The atomic plan commit is `44baf78`; Packet B is verified and its
+  synchronized result is committed before Packet C starts.
 - Phase 5.1P is complete as a documentation/read-only compatibility preflight.
   `docs/phase-5.1p-browser-entrypoint-map.md` maps the current QR, visible
   login, Cookie validation, Profile check, HTTP/CLI/scheduler run, runner,
@@ -162,7 +172,7 @@ Last updated: 2026-07-21
   probe, or real account/platform action was started. Task 3 is
   operator-blocked and Tasks 4-7 remain operator-gated.
   CR-070 / Phase 5.2 is now sequenced after CR-112 Packet D. CR-092 and CR-094
-  remain `Needs Confirmation`, CR-112 is `Accepted / Dependency-Gated`,
+  remain `Needs Confirmation`, CR-112 is `Accepted / Verified (Packet B)`,
   CR-093 remains future-only, CR-037 remains deferred, and Phase 7.1D remains
   operator-gated.
 - The unmerged server-login worktree is historical/source evidence only and is
@@ -1365,28 +1375,26 @@ separate follow-up work.
   `main@abb4d66`. Phase 10-21, CR-091, CR-095, and CR-107 through CR-110 are
   complete through their recorded scope. Phase 5.1P is now also verified as a
   documentation/read-only preflight. Phase 5.1A-D and CR-114 are implemented,
-  merged, and independently verified. The Phase 5.1 server-like acceptance
-  packet is the active serial unit. Phase
+  merged, and independently verified. The separate Phase 5.1 Linux/server-like
+  acceptance remains operator-gated; CR-112 Packet B is the active local unit. Phase
   7.1D remains operator-gated, CR-037 remains deferred, CR-092 and
   CR-094 remain `Needs Confirmation`, and CR-093 remains a future independent
   backlog lane.
-- CR-112 is `Accepted / Dependency-Gated` as of 2026-07-21. Confirmed scope is
-  same-machine Windows; Extension, Connector, and protocol use reuse-first/
-  minimal-adaptation evaluation with final component ownership decided by
-  Packet B evidence; CR-112 executes before CR-070; Profile is normal crawl-
+- CR-112 is `Accepted / Verified (Packet B)` as of 2026-07-21. Confirmed
+  scope is same-machine Windows. Packet B selected the managed Playwright/CDP
+  context as the Extension/Connector replacement and a minimally adapted
+  structured Cookie protocol; CR-112 executes before CR-070; Profile is normal crawl-
   login authority and encrypted Cookie is initialization/refresh/recovery/
   migration material; administrators may explicitly reveal/copy the complete
   Cookie under a no-store and transient-memory boundary; Douyin and
   Xiaohongshu are mandatory Packet D real platforms while Kuaishou is
-  Deferred. Packet B/C/D have not started and are not `Verified`.
-- The latest focused audit corrected an earlier over-broad positive result.
-  CR-112 documentation now requires server-side socket-peer and extension-Origin
-  enforcement, reverse-proxy route exclusion, explicit classification of the
-  existing raw Cookie subprocess-argument risk, and atomic delivery of the five
-  plans with all formal references. The final focused Claude Code re-review
-  found no blocking or material plan issue on the older proposal. The previous
-  confirmation gaps are now closed by the 2026-07-21 decisions;
-  implementation, packet evidence, and atomic-delivery gates remain open.
+  Deferred. Packet B evidence is complete; Packet C/D have
+  not started.
+- Packet B proved the reference Extension/Connector path does not satisfy the
+  supported Chrome, exact binding, structured Cookie, runtime, or distribution
+  contract. The selected direct path adds no Cookie-bridge network route and
+  removes pairing/Origin/client-selection trust boundaries. Only the Packet B
+  result commit remains open before Packet C starts.
 
 ## Known Risks
 
@@ -1405,11 +1413,10 @@ separate follow-up work.
   Cookie only after an explicit administrator action. Until Packet C adds the
   dedicated no-store POST boundary and transient-only UI, standard account
   APIs remain masked and no full-Cookie reveal exists.
-- The proposed in-process connector shares a FastAPI service that may listen on
-  `0.0.0.0`. Client use of `127.0.0.1` alone does not enforce locality; future
-  implementation must reject non-loopback socket peers, ignore forwarded
-  headers for authorization, require the exact extension Origin, and remain
-  excluded from reverse proxies.
+- Packet B rejected the proposed in-process Connector/Extension network path.
+  The selected direct browser-context path has no Cookie-bridge route, client
+  registry, pairing, or Origin trust boundary; the rejected path remains absent
+  and its HTTP 404/WebSocket 403 baseline is retained as a tripwire.
 - Current system is closer to a single-team MVP than a production multi-user
   system.
 - Server-side QR/login capability and profile persistence now have automated
@@ -1718,8 +1725,7 @@ and stop conditions.
    acceptance;
 5. implement CR-070/Phase 5.2 only after CR-112 Packet D closes. Export/import
    consumes only committed Profile/account state and excludes CR-112 operation
-   journals, temporary Extension material, pairing secrets, and connector
-   cache;
+   journals and operation directories;
 6. keep CR-092 `/monitor-next` planning, CR-093 MediaCrawler public exposure
    boundary, and CR-094 crawler provider architecture as future independent
    backlog lanes. They may receive read-only planning or documentation

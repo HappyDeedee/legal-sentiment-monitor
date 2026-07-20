@@ -2,6 +2,57 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-21 - CR-112 Packet B Compatibility And Acquisition Spike
+
+Environment: `codex/cr-112-cookiebridge-integration` on
+`main@2ea2c1e96675297e302368b1226ec7aac05f2bb1` plus plan commit `44baf78`.
+Temporary Profiles and synthetic Cookie records only; no product code, schema,
+UI, database, durable Profile, real account, or platform request changed.
+
+Result: `Verified`.
+
+- Chrome `150.0.7871.125` did not load the target reference Extension through
+  the managed command-line path. Edge `150.0.4078.83` loaded it, but an Edge
+  roundtrip had no pairing token/Profile claim, returned a flattened string,
+  kept only one of two same-name/different-path records, and transported no
+  scope/security attributes.
+- Copying the unpacked reference Extension to a path with spaces and Chinese
+  characters changed its Extension ID. Static inspection also confirmed the
+  hardcoded `ws://localhost:8274/ws`, permissive Origin, optional/implicit
+  client selection, Python `>=3.12`, and non-commercial-learning license.
+- Direct managed-context acquisition passed on Chrome and Edge. Each browser
+  preserved three structured synthetic records, distinct same-name path tuples,
+  host-only/domain scope, HttpOnly, Secure, SameSite, Profile restart, and two-
+  Profile isolation without an Extension Service Worker.
+- Structured protocol tests accepted distinct scope and rejected six negative
+  cases. Limits are `256` records, `8192` serialized bytes per record, and
+  `1048576` serialized bytes per payload; unsupported `partition_key` fails
+  closed.
+- The pinned FastAPI `0.110.2` / Starlette `0.37.2` / Uvicorn `0.29.0`
+  no-route baseline returned HTTP `404` and unmatched WebSocket `403`.
+- Generated test Profiles were removed after browser close. No raw synthetic
+  Cookie values were written into tracked evidence.
+- Focused Claude Code re-review used only `Read`, `Grep`, and `Glob` and
+  returned `Overall verdict: READY`, `BLOCKERS: None`, and
+  `MATERIAL REFINEMENTS: None`.
+- `scripts/check_docs.py` passed, the focused documentation test passed (`1
+  passed`), and `git diff --check` passed with only Windows line-ending
+  warnings before final status synchronization.
+
+Component result:
+
+- Extension: `single-component replacement` by the existing managed
+  Playwright/CDP context.
+- Connector: `single-component replacement` by an in-process account-bound
+  acquisition service with no WebSocket route.
+- Protocol: `minimal adaptation` to internal structured Cookie Protocol V1.
+
+Proof boundary:
+
+- This proves the Packet B component selection on this Windows host. It does
+  not implement Packet C, prove real Douyin/Xiaohongshu accounts, close CR-047
+  Linux/server-like acceptance, or prove a second physical computer.
+
 ## 2026-07-21 - CR-112 Scoped Windows Provider Gate
 
 Environment: `codex/cr-112-cookiebridge-integration` on the product-code

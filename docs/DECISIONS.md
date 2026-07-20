@@ -627,12 +627,12 @@ short `Superseded by` note rather than deleting history.
   same application-managed persistent Profile resolved from
   `social_account.profile_key`. The persistent Profile is the normal browser
   session and crawl environment for both login modes.
-- Confirmed for CR-112: a Bridge- or manually supplied Cookie is bootstrap,
+- Confirmed for CR-112: a browser-sync- or manually supplied Cookie is bootstrap,
   refresh, recovery, and migration material. The monitor injects the candidate
   Cookie into an account-bound persistent Profile, validates the exact platform
   identity in that Profile, and activates the result only after validation.
   The verified Cookie is also retained through the encrypted account store;
-  connector cache is never durable login authority.
+  in-memory acquisition state is never durable login authority.
 - Confirmed for CR-112: an existing active Profile must not be damaged by a
   failed Cookie refresh. Packet C must use a staged or equivalently reversible
   Profile update and preserve the previously active Profile and verified
@@ -715,9 +715,8 @@ short `Superseded by` note rather than deleting history.
 ## 2026-07-21 - CR-112 Acceptance And Execution Order
 
 - Confirmed for CR-112: V1 browser auto-sync is a same-machine Windows
-  capability. The monitor service, managed Chrome or Edge process, extension,
-  and connector run on the same computer. Remote and cross-host Cookie
-  transport remain outside V1.
+  capability. The monitor service and managed Chrome or Edge process run on
+  the same computer. Remote and cross-host Cookie transport remain outside V1.
 - Confirmed for CR-112: Packet B starts from reuse-first, minimal-adaptation
   evaluation of the existing CookieBridge Extension, Connector, and protocol.
   Packet B evidence, including license and distribution constraints, decides
@@ -726,12 +725,12 @@ short `Superseded by` note rather than deleting history.
   advance.
 - Confirmed for CR-112 sequencing: CR-112 executes before CR-070. CR-070 later
   exports or imports only committed Profile/account state and must not package
-  CR-112 promotion journals, temporary extension material, pairing secrets, or
-  connector cache.
+  CR-112 promotion journals or operation directories.
 - Confirmed for CR-112 login authority: the application-managed persistent
   Profile resolved from `social_account.profile_key` is the normal crawl-login
   authority. Encrypted Cookie remains initialization, refresh, recovery, and
-  migration material; connector cache is never durable authority.
+  migration material; in-memory browser acquisition state is never durable
+  authority.
 - Confirmed for CR-112 permissions: an administrator may explicitly reveal and
   copy the complete decrypted Cookie for one selected social account. The
   standard account list/detail remains masked. The reveal endpoint is
@@ -744,8 +743,32 @@ short `Superseded by` note rather than deleting history.
   designated account and normal monitor crawl entry to persist at least one
   real content item with `fallback_used=false`. Kuaishou (`ks`) is deferred and
   is not a Packet D failure condition.
-- Confirmed status semantics: CR-112 is `Accepted / Dependency-Gated` while its
-  plan is approved but implementation has not started. A packet becomes `In
-  Progress` only when its start gate passes and execution begins, and becomes
+- Confirmed status semantics: CR-112 is `Accepted / Verified (Packet B)` after
+  the Packet B evidence and required validation passed. A packet
+  becomes `In Progress` only when its start gate passes and execution begins, and becomes
   `Verified` only after its required tests, real evidence where specified,
   documentation synchronization, and independent review pass.
+
+## 2026-07-21 - CR-112 Packet B Component Selection
+
+- Confirmed from the Packet B synthetic Windows measurements that the
+  reference Extension is not a V1 dependency: current branded Chrome does not
+  load it through the tested managed command-line path, Edge loading does not
+  provide account/Profile pairing, and the unpacked ID is not stable across
+  installation paths.
+- Confirmed that the reference Connector is not a V1 dependency: its
+  unauthenticated in-memory client selection and Python `>=3.12` runtime do not
+  satisfy the product account-binding or runtime boundary.
+- Selected the existing project-managed Playwright/CDP browser context as the
+  single-component replacement for Extension and Connector. Packet C receives
+  the live context handle from the locked account operation and captures
+  structured Cookies directly; it does not mount a Cookie-bridge WebSocket
+  route or install an Extension.
+- Selected a minimally adapted internal structured Cookie Protocol V1. Chrome
+  and Edge preserve domain/path/host-only/HttpOnly/Secure/SameSite fields and
+  distinct same-name scope tuples. Limits are `256` records, `8192` serialized
+  bytes per record, and `1048576` serialized bytes per acquisition payload;
+  unsupported `partition_key` fails closed.
+- Confirmed the result does not change the accepted Profile authority, manual
+  Cookie path, administrator reveal boundary, QR production path, CR-112 before
+  CR-070 order, or mandatory Douyin/Xiaohongshu Packet D acceptance.

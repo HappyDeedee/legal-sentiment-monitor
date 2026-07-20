@@ -1813,18 +1813,19 @@ Documentation-stage checks:
 - Verify CR-112 is classified as a `New Capability` with status `Accepted /
   Dependency-Gated` in `CHANGE_REQUESTS.md`, `TASKS.md`,
   `CURRENT_STATE.md`, and `TRACEABILITY.md`.
-- Verify the five plan artifacts remain planning/goal packets and are linked
-  from formal governance documents.
-- Before delivery, verify all five plan files and every CR-112 formal reference
-  including `DATA_MODEL.md` and `SCHEMA_MIGRATION.md` are staged in one atomic
-  commit; a partial commit fails the documentation acceptance gate.
+- Verify the five plan artifacts and
+  `docs/cookiebridge-compatibility-spike-result.md` are linked from formal
+  governance documents and preserve packet status boundaries.
+- Before Packet C, verify the Packet B result, material plan update, and every
+  CR-112 formal reference including `DATA_MODEL.md` and `SCHEMA_MIGRATION.md`
+  are staged in one atomic Packet B commit.
 - Verify Phase 5.1P and Phase 5.1A-D plus current follow-up regressions remain
   recorded as verified and merged, the separate CR-047 Linux/server-like real
   acceptance remains operator-gated, and accepted sequencing places CR-112
   before CR-070 without claiming that local evidence closes CR-047.
-- Verify account/security and deployment sections are explicitly accepted/
-  dependency-gated and do not change the current server-first QR acceptance
-  boundary before implementation evidence exists.
+- Verify CR-112 is `Accepted / Verified (Packet B)`, Packet C/D remain
+  dependency-gated, and the current server-first QR acceptance boundary is
+  unchanged before implementation evidence exists.
 - Verify `DECISIONS.md`, CR-112, account-environment guidance, and all five
   plan files agree on the confirmed sub-decision: both login modes converge on
   one account-bound persistent Profile, encrypted Cookie is
@@ -1833,7 +1834,7 @@ Documentation-stage checks:
   Cookie after Packet C.
 - Verify every formal CR-112 document and Packet B/C/D agrees on same-machine
   Windows scope, reuse-first/minimal-adaptation evaluation, Packet-B-selected
-  component ownership, administrator full-Cookie reveal/copy security boundary,
+  direct managed-context ownership, administrator full-Cookie reveal/copy security boundary,
   mandatory Douyin/Xiaohongshu real acceptance, and Kuaishou Deferred status.
 - Run `uv run python scripts/check_docs.py`, `git diff --check`, a trailing
   whitespace/end-of-file check for the five new plan files, and focused
@@ -1841,34 +1842,26 @@ Documentation-stage checks:
 
 Packet C fake/unit/integration tests after its start gates pass:
 
-- Feature disabled by default must leave the connector route unmounted: a
-  normal HTTP probe returns 404 and the pinned Starlette/Uvicorn baseline
-  rejects unmatched WebSocket upgrade with 403 before acceptance. It loads no
-  extension, creates no pairing token, and shows no active auto-sync action.
+- Feature disabled by default starts no acquisition browser and shows no active
+  auto-sync action. The rejected Cookie-bridge route remains unmounted in both
+  feature states: normal HTTP returns 404 and the pinned Starlette/Uvicorn
+  baseline rejects unmatched WebSocket upgrade with 403 before acceptance.
   Baseline assertions use FastAPI `0.110.2`, Uvicorn `0.29.0`, and locked
   Starlette `0.37.2`; dependency changes require re-audit while route absence
-  and zero connector protocol state remain invariant.
+  and zero WebSocket protocol state remain invariant.
 - Provider tests must prove valid explicit executable, Chrome, Edge, and
   supported Chromium precedence and reject invalid explicit paths or locked
   account fallback to another browser, Profile, proxy, user agent, or network.
-- Pairing tests must cover token expiry, replay, wrong extension origin,
-  wrong Profile/client credential, rotation, revocation, malformed frames, and
-  empty-binding rejection.
-- WebSocket boundary tests must derive locality only from the ASGI socket peer,
-  accept literal loopback peers, and reject empty/unparsable/non-loopback peers
-  before acceptance. Spoofed `X-Forwarded-For`, `Forwarded`, or similar headers
-  must not convert a non-loopback peer into an allowed peer.
-- Origin tests must require the exact stable
-  `chrome-extension://<extension-id>` value and reject missing, opaque, or
-  unexpected Origins before any session, client, pairing, audit-success, or
-  Cookie-read state exists.
-- Packaging tests must prove manifest-key-derived extension ID/Origin stability
-  across Chrome, Edge, ephemeral copies, paths with spaces, and clean installs;
-  manifest permissions exclude `<all_urls>` and unrelated hosts.
+- Acquisition-binding tests must cover stale/replayed request, wrong account,
+  `profile_key`, login session, promotion, provider resolution, attempt ID,
+  platform, generation, missing/closed context handle, and caller-supplied raw
+  Profile path rejection.
+- Route tripwires must prove no Cookie-bridge HTTP/WebSocket route is mounted
+  and that production-like proxy/host headers do not create one.
 - State-machine tests must cover success, failure, timeout, cancellation,
-  browser close, Bridge offline, service restart, connector reconnect, late
-  response rejection, idempotent finalization, lock release, and ephemeral
-  extension-config cleanup.
+  browser close, browser unavailable, service restart/interruption, late
+  result rejection, idempotent finalization, lock release, and acquisition-
+  context cleanup.
 - Promotion-state tests must cover every transition from `preparing` through
   `committed`/`rolled_back`, including cancellation at/after `swapping`, service
   kill before and after each directory move/database transaction, and startup
@@ -1877,19 +1870,14 @@ Packet C fake/unit/integration tests after its start gates pass:
   fixed/candidate/rollback shape, one-checkpoint-lag after each rename, wrong or
   missing operation marker, checkpoint-ahead evidence, and every contradictory
   shape entering `recovery_required` without deleting a directory.
-- Multi-account tests must run Account A/Profile A/client X and Account
-  B/Profile B/client Y concurrently with reversed registration/response order
-  and prove no first/newest/only-client selection or Cookie leakage.
-- Candidate-binding tests must prove a rollback Profile cannot reconnect with
-  the promoted binding: a Bridge candidate credential stays pending and exact-
-  session-only before commit, Bridge commit activates candidate/revokes
-  previous atomically, manual commit creates no candidate binding and revokes
-  previous, and rollback revokes candidate/preserves previous.
+- Multi-account tests must run Account A/Profile A/context X and Account
+  B/Profile B/context Y concurrently with reversed completion order and prove
+  no first/newest/only-context selection or Cookie leakage.
 - Cookie validation/persistence tests must reject wrong-platform or wrong-account
   material, initialize an account-bound persistent Profile, preserve the
   previous fixed active Profile and verified Cookie through journaled
   candidate/rollback recovery, and commit verified ciphertext, source,
-  identity snapshot, binding/profile-ready metadata, account status, and
+  identity snapshot, profile-ready metadata, account status, and
   journal state together after the active-path recheck.
 - Promotion filesystem tests must cover new-account/no-active-path, existing
   active Profile, same-volume enforcement, disk full, open handles,
@@ -1901,10 +1889,9 @@ Packet C fake/unit/integration tests after its start gates pass:
   a new promotion/export/backup; failed cleanup retains one artifact and blocks
   refresh/export rather than packaging an operation marker.
 - Candidate-isolation tests must prove the fresh candidate uses the locked
-  Phase 5.1 inputs without cloning or mutating the active Profile/extension
-  storage before `swapping`. Cleanup tests remove one-time extension/config
-  material and reopen without Bridge arguments, rejecting any missing-path or
-  reconnect dependency.
+  Phase 5.1 inputs without cloning or mutating active Profile storage before
+  `swapping`. Cleanup closes acquisition handles and reopens the fixed path
+  through the normal provider without capture hooks or Cookie injection.
 - Restart tests must prove a successfully initialized Cookie Profile remains
   usable after browser and monitor restart and is the Profile reused by manual
   and scheduled crawler runs.
@@ -1921,21 +1908,21 @@ Packet C fake/unit/integration tests after its start gates pass:
   zero runnable version-0 Cookie accounts before activation, route version 1
   through profile-only, and reject version 0 before child spawn with no argv
   fallback.
-- C.1/C.2/C.3 tests must prove the Bridge flag controls C.2 only: route absent,
-  HTTP 404/WebSocket 403 on the pinned baseline, no extension/UI/pairing when
-  off, advanced manual Cookie still works through C.1, accepted profile-only
+- C.1/C.2/C.3 tests must prove the browser-sync flag controls C.2 only: no
+  acquisition browser/UI when off, advanced manual Cookie still works through C.1, accepted profile-only
   runs still use C.3, and raw argv is not restored.
 - Flag-ownership tests instrument configuration reads/imports and prove only
-  C.2 router/UI/readiness/extension/pairing code reads the Bridge flag; C.1 and
+  C.2 router/UI/readiness/managed-browser code reads
+  `MONITOR_BROWSER_COOKIE_SYNC_ENABLED`; C.1 and
   C.3 import and execute successfully while it is false.
 - Structured Cookie Protocol V1 tests must cover protocol version, request and
-  binding correlation, platform domain allowlist, distinct name/domain/path/
+  session-generation correlation, platform domain allowlist, distinct name/domain/path/
   partition tuples, exact duplicates, malformed scope, unsupported required
   attributes, structured-to-Profile fidelity, and Packet B-fixed record/frame
   limits. Advanced manual strings must canonicalize into the shared validator
   without claiming unavailable attributes.
 - A global tripwire must prove standard tests cannot reach real browsers, real
-  platform accounts, real connector endpoints, or real Cookie material even
+  platform accounts, or real Cookie material even
   when production-like environment variables are present.
 - Process inspection must prove raw Cookie is absent from managed crawler child
   argv after the persistent-Profile transition. Command builders, diagnostics,
@@ -1952,41 +1939,36 @@ Packet C fake/unit/integration tests after its start gates pass:
 Packet B/D opt-in and real acceptance tests after their start gates pass:
 
 - Chrome and Edge tests require `MONITOR_ALLOW_REAL_BROWSER_TESTS=1` and use
-  synthetic Cookie fixtures. Each browser must prove four separate milestones:
-  extension Service Worker, authenticated WebSocket registration, exact
-  login-session/client/Profile pairing, and one correlated structured Cookie
-  roundtrip with domain/path/security attributes preserved after Profile
-  restart.
-- Clean-Windows acceptance must prove the standard monitor installation contains
-  the Packet-B-selected extension and in-process Python 3.11 connector support;
-  the operator performs no extension/connector file placement, personal Chrome
-  Profile setup, Google login, or Python 3.12 installation.
-- The same clean-computer matrix must prove stable extension ID/Origin,
-  least-privilege permissions, session-extension cleanup, and crawler-equivalent
-  Profile restart without Bridge launch arguments.
-- LAN-address and configured reverse-proxy probes must fail before WebSocket
-  protocol state, including WebSocket upgrade attempts. Reverse-proxy
-  configuration checks must prove `/api/monitor/cookie-bridge/` is denied and
-  not forwarded; the exact extension Origin over direct loopback is the only
-  network path that may proceed to pairing authentication.
+  synthetic Cookie fixtures. Each browser must prove exact managed-context
+  binding, structured Cookie fidelity, Profile restart, two-Profile isolation,
+  and temporary cleanup.
+- Clean-Windows acceptance must prove the standard monitor installation uses
+  the existing Playwright/CDP runtime; the operator performs no Extension/
+  Connector placement, personal Chrome Profile setup, Google login, or Python
+  3.12 installation.
+- The same clean-computer matrix must prove direct acquisition under paths with
+  spaces/Chinese characters and crawler-equivalent Profile restart without
+  capture hooks.
+- Route probes must prove `/api/monitor/cookie-bridge/` remains absent for HTTP
+  and WebSocket in both feature states.
 - Packet D requires explicit `DESIGNATED_DY_ACCOUNT_ID` and
   `DESIGNATED_XHS_ACCOUNT_ID`. For each account serially, acquire the real
-  Cookie through the Extension from the project-managed Profile, verify exact
+  Cookie through the selected direct managed-context service from the project-managed Profile, verify exact
   platform/account identity, exercise administrator reveal/copy, inject only
   that Cookie into a fresh candidate with no predecessor LocalStorage/cache/
   Service Worker copy, restart and recheck identity, and persist at least one
   real content item through the normal monitor entry.
 - Both required real platform runs must prove `fallback_used=false`, no
   anonymous/generic/other-account/default-network fallback, and no plaintext
-  Cookie in child argv or environment. After Extension temporary cleanup and
+  Cookie in child argv or environment. After acquisition-state cleanup and
   service restart, Profile checks and one bounded crawl per required platform
   must still pass. Kuaishou is Deferred and does not fail Packet D.
-- Server-like regression must keep the connector feature disabled by default
+- Server-like regression must keep browser sync disabled by default
   and verify server-started QR login, manual SMS handling, Profile persistence,
   account checks, C.1 advanced manual Cookie, C.3 profile-only Cookie-account
   manual/scheduler runs, no raw argv, unchanged QR-account execution, and
   crawler execution.
-- Headless Bridge results are reported separately as supported or unsupported;
+- Headless direct-acquisition results are reported separately as supported or unsupported;
   they do not replace the server QR production acceptance boundary.
 
 ## Phase 14 Run Center Data Model Tests

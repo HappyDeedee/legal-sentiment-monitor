@@ -1,12 +1,13 @@
-# CookieBridge Deployment And Acceptance Packet
+# Browser Cookie Sync Deployment And Acceptance Packet
 
 > Accepted, dependency-gated acceptance packet. It validates the same-machine
 > Windows feature on clean computers and with designated real accounts while
-> protecting the server-first QR baseline. It does not promote local browser
-> evidence into production proof.
+> protecting the server-first QR baseline. Local browser evidence is not
+> production proof.
 
-**Goal:** Prove repeatable installation, browser selection, failure isolation,
-rollback, and QR non-regression across supported environments.
+**Goal:** Prove repeatable installation, browser selection, exact managed-
+context Cookie acquisition, failure isolation, rollback, real collection, and
+QR non-regression across supported environments.
 
 ## Start Gates
 
@@ -23,47 +24,37 @@ rollback, and QR non-regression across supported environments.
 
 The supported Windows installer/startup path must:
 
-- detect a valid explicit browser, then Chrome, then Edge, then Chromium;
-- report the selected executable/family/source without raw sensitive paths in
+- detect a valid explicit browser, then Chrome, then Edge, then supported
+  Chromium, then the declared Playwright Chromium repair path;
+- report selected browser family/source without exposing sensitive raw paths in
   customer-facing UI;
-- include the Packet-B-selected extension in the standard monitor installation and
-  generate its ephemeral session copy automatically;
-- preserve one packaged manifest-key-derived extension ID/Origin across Chrome,
-  Edge, ephemeral copies, and clean computers, with no `<all_urls>` or unrelated
-  host permission;
-- create writable application-managed Profile and ephemeral runtime paths;
-- mount the connector route in the existing monitor service, connect through
-  the loopback URL, diagnose port conflicts, and enforce locality from the
-  server-side socket peer even when the service binds on `0.0.0.0`;
-- authorize connections from the server-side socket peer only, ignore
-  forwarded headers for locality, and require the exact stable extension
-  Origin before WebSocket acceptance;
-- mount/health-check the in-process connector route only when the feature flag
-  is enabled;
-- require no Google account, Chrome personal Profile, extension-store action,
-  developer mode toggle, or manual Cookie copy/paste;
-- preserve QR and advanced manual Cookie use when the feature is disabled.
-- leave the connector route unmounted when disabled: normal HTTP probe returns
-  404 and the pinned packaged runtime rejects unmatched WebSocket upgrade with
-  403 before acceptance; deny `/api/monitor/cookie-bridge/` in remotely
-  reachable reverse proxies.
+- create writable application-managed Profile and operation paths;
+- use the existing project Playwright/CDP runtime to retain the exact browser
+  context created for one locked account/session;
+- require no Google account, Chrome personal Profile, Extension installation,
+  browser developer-mode action, Connector service, Python 3.12 runtime, or
+  manual Cookie copy/paste;
+- leave `/api/monitor/cookie-bridge/` unmounted in both feature states; normal
+  HTTP returns 404 and unmatched WebSocket upgrade returns the pinned-runtime
+  pre-accept rejection 403;
+- preserve QR and advanced manual Cookie use when browser sync is disabled.
 
-Acceptance must start from a clean Windows computer with the documented Python
-3.11 monitor runtime and Chrome or Edge. Beyond the standard monitor
-installation, the operator performs no extension/connector file placement and
-installs no Python 3.12 runtime or separate connector service.
+Acceptance starts from a clean Windows computer with the documented Python
+3.11 monitor runtime and Chrome or Edge. The operator performs no Extension or
+Connector placement beyond the standard monitor installation.
 
 ## Acceptance Matrix
 
 - [ ] Windows with Chrome and Edge: explicit path first; otherwise Chrome.
-- [ ] Windows with Edge only: Edge selected and full synthetic roundtrip passes.
+- [ ] Windows with Edge only: Edge selected and full synthetic direct
+      acquisition passes.
 - [ ] Windows with supported Chromium only: declared compatibility result,
       without silently claiming Chrome/Edge equivalence.
-- [ ] Browser path, project path, and Profile path containing spaces and Chinese
+- [ ] Browser, project, Profile, and data paths containing spaces and Chinese
       characters.
-- [ ] Existing Profile lock, browser crash, connector crash, service restart,
-      port conflict, stale credential, revoked Profile, and read-only install
-      root with writable configured data directory.
+- [ ] Existing Profile lock, browser crash, service restart, stale session
+      generation, closed context, and read-only install root with writable
+      configured data directory.
 - [ ] Service kill, disk full, open Profile handle, antivirus/permission error,
       and restart at every candidate/swap/recheck/commit/rollback checkpoint;
       each case restores the previous active Profile or enters deterministic
@@ -71,125 +62,114 @@ installs no Python 3.12 runtime or separate connector service.
 - [ ] Checkpoint-lag/operation-marker directory matrix and due cleanup on
       startup, periodic timer, first successful run, and pre-refresh; idle
       accounts reach the 24-hour cleanup attempt without scheduler activity.
-- [ ] Two and more managed account Profiles, concurrent login attempts, and
-      restart with no cross-account Cookie response.
+- [ ] Two and more managed account Profiles, concurrent login attempts,
+      reversed completion order, and restart with no cross-account Cookie
+      result.
 - [ ] First Cookie login creates an account-bound persistent Profile; a later
       browser/service restart and crawler launch reuse it without raw Cookie in
-      child argv.
-- [ ] Session extension/config cleanup leaves the promoted Profile usable when
-      reopened without Bridge load arguments and produces no reconnect from a
-      deleted extension path.
+      child argv or environment.
 - [ ] Failed Cookie refresh leaves the previous active Profile and verified
       encrypted Cookie usable.
-- [ ] Bridge/manual commit and rollback produce the exact pending/active/revoked
-      binding state and never let the rollback Profile reconnect with the
-      promoted binding.
-- [ ] Feature disabled/unhealthy: no extension load and no implicit fallback.
-- [ ] C.1/C.2/C.3 rollback matrix: Bridge disabled unmounts only C.2;
+- [ ] Browser-sync/manual commit and rollback commit one verified candidate or
+      restore the predecessor without ambiguous dual-active state.
+- [ ] Feature disabled/unhealthy: no acquisition browser launch and no implicit
+      browser/Profile/account/Cookie/network fallback.
+- [ ] C.1/C.2/C.3 rollback matrix: browser sync disabled removes only C.2;
       advanced manual Cookie remains usable through C.1; accepted profile-only
       execution remains active; raw Cookie argv is not restored.
 - [ ] C.3 maintenance cutover pauses new runs, reaches zero runnable version-0
       Cookie accounts, proves hidden CLI/provider-env/exit-code wiring, resumes,
       and rejects any later version-0 account before child spawn.
-- [ ] Direct loopback plus exact extension Origin succeeds; LAN-address,
-      spoofed forwarded-header, reverse-proxy WebSocket upgrade, and
-      missing/wrong-Origin probes fail before connector protocol state.
-- [ ] Upgrade from a version without connector metadata. Binary downgrade is
-      allowed only after every promotion journal is terminal and the target
-      binary can preserve C.1/C.3 semantics; Bridge rollback otherwise disables
-      C.2 only, with QR/manual Cookie still usable and no argv restoration.
+- [ ] Upgrade from a version without acquisition/promotion metadata. Binary
+      downgrade is allowed only after every promotion journal is terminal and
+      the target binary preserves accepted C.1/C.3 semantics.
 - [ ] Standard pytest remains fake-only; real-browser tests require explicit
       opt-in and synthetic Cookies.
 - [ ] Packaged dependency assertion records FastAPI `0.110.2`, Uvicorn
       `0.29.0`, and locked Starlette `0.37.2`; HTTP 404/WebSocket 403 are
       regression checks while route absence/zero protocol state are invariant.
 - [ ] Local pilot verifies one real platform account at a time with redacted
-      evidence and explicit operator approval.
+      evidence and explicit designated account IDs.
 - [ ] Real Douyin acceptance uses only `DESIGNATED_DY_ACCOUNT_ID`: acquire the
-      current Cookie from its project-managed logged-in Profile through the
-      Extension, prove the exact platform/account identity, reveal and copy it
-      through the administrator UI, inject only that Cookie into a fresh
-      candidate Profile, restart and verify identity, then use the normal
-      monitor collection entry to persist at least one real content item.
+      current structured Cookie from its project-managed logged-in Profile
+      through the selected exact-context service, prove platform/account
+      identity, reveal and copy it through the administrator UI, inject only
+      that Cookie into a fresh candidate, restart and verify identity, then use
+      the normal monitor collection entry to persist at least one real item.
 - [ ] Real Xiaohongshu acceptance repeats the same serial workflow using only
-      `DESIGNATED_XHS_ACCOUNT_ID` and persists at least one real content item.
+      `DESIGNATED_XHS_ACCOUNT_ID` and persists at least one real item.
 - [ ] Fresh candidates copy no predecessor LocalStorage, cache, Service Worker,
-      extension credential storage, or other Profile files. Only the Cookie
-      acquired for the exact designated account is injected before validation.
-- [ ] Both real crawls prove the designated account/Profile/provider/proxy
+      IndexedDB, or other Profile files. Only the structured Cookie acquired
+      for the exact designated account is injected before validation.
+- [ ] Both real crawls prove designated account/Profile/provider/proxy
       authority, `fallback_used=false`, and no anonymous, generic Profile,
       other-account, task-proxy, process-default, or default-network fallback.
 - [ ] Transient process inspection proves no plaintext Cookie in crawler child
       argv or environment. Committed evidence records only booleans, digests,
-      timestamps, and internal IDs, never the Cookie or raw command line.
-- [ ] After both platform checks, remove Extension session/config/cache
-      material, restart the monitor service, revalidate each committed Profile,
-      and complete one bounded minimal crawl per required platform without the
-      Extension being present or connected.
-- [ ] Kuaishou is `Deferred`; its absence or failed unexecuted matrix row does
-      not fail this Packet D. It must not be reported as tested.
+      timestamps, and internal IDs, never Cookie or raw command lines.
+- [ ] After both platform checks, close and clear temporary acquisition
+      handles/state, restart the monitor service, revalidate each committed
+      Profile, and complete one bounded minimal crawl per required platform
+      without running browser auto-sync again.
+- [ ] Kuaishou is `Deferred`; its absence or unexecuted matrix row does not fail
+      Packet D and must not be reported as tested.
 - [ ] Server-like QR login, SMS verification handling, Profile persistence,
       account checks, manual/scheduler runs, and crawler execution regressions.
 
 ## Headless And Production Decision
 
 V1 production remains QR-first with the server-started browser and persisted
-server Profile. The local browser auto-sync feature is disabled in production
-configuration by default.
+server Profile. Local browser auto-sync is disabled in production by default.
 
-Headless extension evaluation reports independent milestones:
+Headless direct-acquisition observation uses independent milestones:
 
-1. extension/service worker loaded;
-2. authenticated connector registration;
-3. exact synthetic Cookie roundtrip;
-4. restart/reconnect and multi-Profile isolation.
+1. exact provider-selected context created;
+2. exact account/Profile/session generation retained;
+3. structured synthetic Cookie acquisition complete;
+4. restart and multi-Profile isolation complete.
 
-A failure at any milestone records headless Bridge as unsupported for that
-environment. It does not fail the local-desktop feature and does not change the
-server QR acceptance path. Cross-host/remote Bridge remains outside this packet.
-Headless Bridge failure therefore does not block V1 local-desktop acceptance or
-existing server production use; it is reported as `unsupported` for the tested
-environment.
+A failure at any milestone records headless direct acquisition as unsupported
+for that environment. It does not fail the local-desktop feature or change the
+server QR acceptance path. Cross-host Cookie transport remains outside V1.
 
 ## Observability And Proof Strength
 
-Health output includes feature enabled state, in-process connector route state,
-loopback endpoint, protocol version, browser family/source, extension version,
-connected exact binding count, and last error category. It excludes Cookie,
-token, credential, raw Profile path, proxy secret, and platform page content.
+Health output includes feature enabled state, provider readiness, protocol
+version, browser family/source, active acquisition-session count, and last safe
+error category. It excludes Cookie, raw Profile path, proxy secret, browser
+endpoint, and platform page content.
 
 Proof labels:
 
 - docs checks prove governance consistency only;
 - fake tests prove state, isolation, and negative guarantees under controlled
   adapters;
-- real-browser synthetic tests prove loading, registration, and protocol on
-  that browser/host;
-- local pilot proves one real login/account flow on that machine;
+- real-browser synthetic tests prove exact-context acquisition and Cookie
+  fidelity on that browser/host;
+- local pilot proves the designated real account workflow on that machine;
 - server-like QR tests prove the protected production baseline;
 - no local result by itself proves a different production host or future
-  remote Bridge topology.
+  cross-host topology.
 
 ## Exit Criteria
 
 - Clean Windows setup succeeds with Chrome-first and Edge fallback without
-  manual Profile/extension setup.
-- The designated Douyin and Xiaohongshu accounts each complete Extension
-  acquisition, exact-account validation, administrator reveal/copy, fresh
-  candidate injection, Profile restart verification, and persistence of at
-  least one real content item through the normal monitor entry.
+  manual Profile or Extension setup.
+- Designated Douyin and Xiaohongshu accounts each complete direct acquisition,
+  exact-account validation, administrator reveal/copy, fresh candidate
+  injection, Profile restart verification, and at least one persisted real
+  content item through the normal monitor entry.
 - Both required platform runs show `fallback_used=false`; Kuaishou remains
-  explicitly `Deferred` and is not counted as a failure.
-- Cookie acquisition persists the exact account Profile across restart, and
-  process inspection finds no raw Cookie in managed crawler child argv.
-- Failure, restart, concurrency, upgrade, and rollback matrices pass.
-- Promotion journal recovery leaves no ambiguous active Profile, unbounded
-  candidate, or database/Profile disagreement.
-- Loopback peer, Origin, disabled HTTP 404/WebSocket 403 baseline, and reverse-
-  proxy exclusion tests pass without trusting client-supplied forwarding
-  headers.
+  `Deferred` and is not counted as a failure.
+- Process inspection finds no raw Cookie in managed crawler child argv or
+  environment.
+- Failure, restart, concurrency, upgrade, rollback, and cleanup matrices pass.
+- Promotion recovery leaves no ambiguous active Profile, unbounded candidate,
+  or database/Profile disagreement.
+- The rejected Cookie-bridge HTTP/WebSocket route remains absent.
 - Server QR and existing manual Cookie behavior show no regression.
-- Feature-off state has no connector/extension side effects.
+- Feature-off has no C.2 browser-acquisition side effect and does not disable
+  C.1/C.3.
 - Documentation, installer/deployment examples, tests, and evidence agree.
 - Independent read-only review finds no blocking or material acceptance gap.
 
@@ -211,12 +191,9 @@ not persisted by the product.
 ## Stop And Rollback
 
 Stop rollout on cross-account leakage, secret exposure, implicit fallback,
-unreliable automatic extension loading, non-idempotent cleanup, or QR/crawler
-regression. Disable the feature flag and connector route while retaining
-Profiles and last verified Cookies for existing paths. Feature-off rollback
-affects C.2 only after Packet C acceptance; it preserves C.1 manual
-Cookie-to-Profile and C.3 profile-only runner behavior.
-
-Also stop rollout when a LAN/proxy request reaches connector protocol state, a
-failed refresh damages the previous active Profile, or process inspection finds
-raw Cookie in managed crawler child argv.
+wrong context/session binding, non-idempotent cleanup, failed-refresh damage,
+raw Cookie child argv/environment, or QR/crawler regression. Disable
+`MONITOR_BROWSER_COOKIE_SYNC_ENABLED` while retaining committed Profiles and
+last verified Cookies. Feature-off rollback affects C.2 only after Packet C
+acceptance; it preserves C.1 manual Cookie-to-Profile and C.3 profile-only
+runner behavior.
