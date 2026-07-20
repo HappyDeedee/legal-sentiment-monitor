@@ -1,8 +1,8 @@
 # Local Browser Auto-Sync Login Packet
 
-> Packet B and C.1-C.2 are verified within their recorded proof boundaries.
-> C.3 waits for the C.2 atomic commit and Packet D remains gated by C.3
-> acceptance evidence.
+> Packet B and C.1-C.3 are verified within their recorded proof boundaries.
+> Packet D remains dependency-gated pending atomic C.3 delivery and designated
+> real-account evidence.
 
 **Goal:** Add a default-off local browser login flow that automatically
 acquires and verifies Cookie material for the exact account while preserving
@@ -144,8 +144,8 @@ canonical protocol, candidate/rollback journal, atomic account-run/Profile
 exclusion, `256 MiB` storage reserve, marker-based restart recovery, cleanup
 after a successful managed run, manual Cookie promotion, profile-authority
 dispatch, and QR/manual regression checks pass. C.2 verification is complete
-within its local proof boundary; C.3 remains governed by the C.2 atomic-delivery
-gate in `TASKS.md`.
+within its local proof boundary; C.3 is verified within its automated/local
+proof boundary and Packet D remains governed by `TASKS.md`.
 
 ### C.2 - Managed Browser Acquisition
 
@@ -194,41 +194,42 @@ candidate, and left no Chromium process owned by the cancelled session.
 
 ### C.3 - Profile-Only Runner Migration
 
-- [ ] Add one internal profile-only CLI/config contract while keeping
+- [x] Add one internal profile-only CLI/config contract while keeping
       customer-visible login types `qrcode|cookie`. In CR-112 V1 this internal
       mode replaces managed `login_type=cookie` child execution only; existing
       QR/Profile execution remains regression-protected.
-- [ ] In `_build_crawler_cmd`, keep `--lt cookie`, add hidden
+- [x] In `_build_crawler_cmd`, keep `--lt cookie`, add hidden
       `--monitor_profile_only true`, and omit `--cookies`. In
       `_build_crawler_env`, pass the exact provider-resolved Profile/browser/
       proxy settings plus account ID, `profile_key`, promotion ID, and runtime
       version; pass no Cookie in argv or environment.
-- [ ] In `cmd_arg/arg.py`, accept the hidden flag only with `--lt cookie`,
+- [x] In `cmd_arg/arg.py`, accept the hidden flag only with `--lt cookie`,
       reject explicit `--cookies`, clear inherited/default `config.COOKIES`, and
       validate required provider/account metadata before crawler creation.
-- [ ] Parent preflight requires `profile_runtime_version >= 1`, committed
+- [x] Parent preflight requires `profile_runtime_version >= 1`, committed
       promotion state, exact provider Profile, lock ownership, and valid login.
       The child repeats a lightweight login-state check before crawl.
-- [ ] On child check failure, return typed `requires_relogin` before invoking
+- [x] On child check failure, return typed `requires_relogin` before invoking
       QR/Cookie/phone login code. Reject CDP standard/generic Profile fallback,
       empty/stale Cookie injection, provider mismatch, and default network.
-- [ ] Add internal `ProfileLoginRequired`; map it in `main.py` to reserved exit
+- [x] Add internal `ProfileLoginRequired`; map it in `main.py` to reserved exit
       code `42`, and map only that code in `runner.py` to a redacted account/run
       `requires_relogin` result. Other child failures keep their existing error
       classification.
-- [ ] Migrate every usable `login_type=cookie` account through C.1. Accounts
+- [x] Preserve committed version-1 `login_type=cookie` accounts. Accounts
       that cannot be validated are marked `requires_relogin`; they never retain
       a hidden argv fallback after C.3 activation.
-- [ ] Execute C.3 as a maintenance cutover: pause scheduler/new manual runs,
+- [x] Execute C.3 as a startup maintenance cutover before scheduler/manual runs,
       reach zero runnable version-0 Cookie accounts, activate the new command
       builder/child guards, and resume. Thereafter version 1 always uses
       profile-only and version 0 is rejected before child spawn.
-- [ ] Remove raw Cookie from managed crawler argv and environment and prove the
-      effective process command through process inspection.
-- [ ] Make browser-sync feature-off affect C.2 only. C.1 advanced manual Cookie and
+- [x] Remove raw Cookie from managed crawler argv and environment and prove the
+      effective process command/environment through fake-process inspection.
+      Packet D retains real OS process inspection.
+- [x] Make browser-sync feature-off affect C.2 only. C.1 advanced manual Cookie and
       accepted C.3 profile-only runs remain usable; feature-off never restores
       `runner.py --cookies`.
-- [ ] Add audit events with actor, trigger, account ID, Profile key hash,
+- [x] Add audit events with actor, trigger, account ID, Profile key hash,
       promotion/session IDs, provider summary, effective settings, recovery
       action, and terminal result, excluding secrets and raw paths.
 

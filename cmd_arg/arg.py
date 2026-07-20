@@ -31,6 +31,7 @@ from typing_extensions import Annotated
 
 import config
 from tools.utils import str2bool
+from tools.profile_only import validate_profile_only_cli
 
 
 EnumT = TypeVar("EnumT", bound=Enum)
@@ -138,6 +139,7 @@ def _inject_init_db_default(args: Sequence[str]) -> list[str]:
 async def parse_cmd(argv: Optional[Sequence[str]] = None):
     """Parse command line arguments using Typer."""
 
+    cli_args = _inject_init_db_default(list(_normalize_argv(argv)))
     app = typer.Typer(add_completion=False)
 
     @app.callback(invoke_without_command=True)
@@ -349,6 +351,13 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
                 show_default=True,
             ),
         ] = str(config.CDP_CONNECT_EXISTING),
+        monitor_profile_only: Annotated[
+            str,
+            typer.Option(
+                "--monitor_profile_only",
+                hidden=True,
+            ),
+        ] = "false",
     ) -> SimpleNamespace:
         """MediaCrawler 命令行入口"""
 
@@ -357,7 +366,17 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
         enable_headless = _to_bool(headless)
         enable_ip_proxy_value = _to_bool(enable_ip_proxy)
         cdp_connect_existing_value = _to_bool(cdp_connect_existing)
+        monitor_profile_only_value = _to_bool(monitor_profile_only)
         init_db_value = init_db.value if init_db else None
+
+        if monitor_profile_only_value:
+            config.COOKIES = ""
+            validate_profile_only_cli(
+                True,
+                lt.value,
+                cookies,
+                cli_args,
+            )
 
         # Parse specified_id and creator_id into lists
         specified_id_list = [id.strip() for id in specified_id.split(",") if id.strip()] if specified_id else []
@@ -374,7 +393,8 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
         config.HEADLESS = enable_headless
         config.CDP_HEADLESS = enable_headless
         config.SAVE_DATA_OPTION = save_data_option.value
-        config.COOKIES = cookies
+        config.COOKIES = "" if monitor_profile_only_value else cookies
+        config.MONITOR_PROFILE_ONLY = monitor_profile_only_value
         config.LOGIN_PHONE = login_phone
         config.CRAWLER_MAX_NOTES_COUNT = crawler_max_notes_count
         config.CRAWLER_MAX_COMMENTS_COUNT_SINGLENOTES = max_comments_count_singlenotes
@@ -425,6 +445,7 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
             save_data_option=config.SAVE_DATA_OPTION,
             init_db=init_db_value,
             cookies=config.COOKIES,
+            monitor_profile_only=config.MONITOR_PROFILE_ONLY,
             login_phone=getattr(config, "LOGIN_PHONE", ""),
             crawler_max_notes_count=config.CRAWLER_MAX_NOTES_COUNT,
             specified_id=specified_id,
@@ -434,9 +455,6 @@ async def parse_cmd(argv: Optional[Sequence[str]] = None):
         )
 
     command = typer.main.get_command(app)
-
-    cli_args = _normalize_argv(argv)
-    cli_args = _inject_init_db_default(cli_args)
 
     try:
         result = command.main(args=cli_args, standalone_mode=False)

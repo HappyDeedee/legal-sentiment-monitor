@@ -44,6 +44,7 @@ from media_platform.weibo import WeiboCrawler
 from media_platform.xhs import XiaoHongShuCrawler
 from media_platform.zhihu import ZhihuCrawler
 from tools.async_file_writer import AsyncFileWriter
+from tools.profile_only import PROFILE_LOGIN_REQUIRED_EXIT_CODE, ProfileLoginRequired
 from var import crawler_type_var
 
 
@@ -107,7 +108,11 @@ async def main() -> None:
         return
 
     crawler = CrawlerFactory.create_crawler(platform=config.PLATFORM)
-    await crawler.start()
+    try:
+        await crawler.start()
+    except ProfileLoginRequired as exc:
+        print("[Main] Managed Profile login state requires re-login.")
+        raise SystemExit(PROFILE_LOGIN_REQUIRED_EXIT_CODE) from exc
 
     _flush_excel_if_needed()
 

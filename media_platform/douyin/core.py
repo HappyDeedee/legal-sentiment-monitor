@@ -45,6 +45,7 @@ from tools.browser_environment import (
     verify_managed_page,
 )
 from tools.cdp_browser import CDPBrowserManager
+from tools.profile_only import should_begin_platform_login
 from var import crawler_type_var, source_keyword_var
 
 from .client import DouYinClient
@@ -119,7 +120,8 @@ class DouYinCrawler(AbstractCrawler):
                 raise BrowserEnvironmentError(provider_result.reason, "page")
 
             self.dy_client = await self.create_douyin_client(httpx_proxy_format)
-            if not await self.dy_client.pong(browser_context=self.browser_context):
+            logged_in = await self.dy_client.pong(browser_context=self.browser_context)
+            if should_begin_platform_login(logged_in, self.browser_environment_plan):
                 login_obj = DouYinLogin(
                     login_type=config.LOGIN_TYPE,
                     login_phone=getattr(config, "LOGIN_PHONE", ""),

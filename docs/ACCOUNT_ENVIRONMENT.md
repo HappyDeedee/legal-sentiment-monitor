@@ -1329,12 +1329,14 @@ Verification states must be returned to the UI rather than bypassed.
 
 ## Accepted CR-112 Local Browser Auto-Sync Cookie Acquisition
 
-Status: `Accepted / Dependency-Gated (Packet C.3)`. This section defines the approved
+Status: `Accepted / Dependency-Gated (Packet D)`. This section defines the approved
 same-machine Windows account contract and the verified Packet B component
 selection. C.1 implements the shared schema, canonical Cookie material,
 fixed-path promotion/recovery, cleanup, and advanced manual path. C.2 verifies
 exact-context acquisition, binding, administrator reveal, and owned-process
-cleanup. C.3 waits for the C.2 atomic commit; D is not started or verified, and CR-047 Linux/server-like acceptance
+cleanup. C.3 verifies the version-0 startup cutover, persisted Profile-only
+runtime, and raw-Cookie argv/environment retirement within its automated/local
+proof boundary; D is not started or verified, and CR-047 Linux/server-like acceptance
 remains separate.
 
 Accepted login model:
@@ -1359,20 +1361,18 @@ Confirmed CR-112 authority split (2026-07-19):
 - direct browser-context acquisition state is in-memory and temporary, not
   durable login authority.
 
-The current runner contract passes decrypted Cookie material through
-`runner.py --cookies`. That value can be visible in OS process arguments and
-diagnostic tools even though it is encrypted at rest and redacted from product
-logs/UI. CR-112 treats this as a pre-existing current-code risk. The confirmed
-target prepares and validates the persistent Profile before crawler launch and
-does not pass raw Cookie through child argv. C.3 owns that runner migration,
-compatibility, rollback, and process-inspection proof; C.2 does not claim the
-pre-existing argv risk is retired.
+The pre-C.3 runner contract passed decrypted Cookie material through
+`runner.py --cookies`. C.3 now prepares and validates the persistent Profile,
+uses hidden `--monitor_profile_only true`, and passes no raw Cookie through
+managed crawler argv or environment. Automated effective-command inspection
+passes; Packet D still owns real OS process inspection. C.2 evidence alone did
+not retire the prior exposure.
 
 ### Accepted CR-112 V1 Profile Promotion Protocol
 
-Status: implemented and verified for Packet C.1-C.2; C.3 waits for the C.2
-atomic commit, and Packet D real acceptance remains gated. Present-tense
-normative wording defines the verified C.1-C.2 behavior and the remaining
+Status: implemented and verified for Packet C.1-C.3; Packet D real acceptance
+remains gated. Present-tense
+normative wording defines the verified C.1-C.3 behavior and the remaining
 packet contract.
 
 V1 keeps one fixed active runtime path:
@@ -1568,16 +1568,16 @@ Packet C is delivered in three serial sub-packets:
    browser-sync UI or acquisition is enabled.
 2. **C.2 Browser acquisition:** add feature-gated direct exact-context
    acquisition, APIs, and UI on top of C.1.
-3. **C.3 Profile-only runner:** migrate every usable `login_type=cookie`
-   account to
-   `profile_runtime_version >= 1`, mark invalid accounts `requires_relogin`,
-   enable the internal profile-only child contract, prove no raw Cookie argv,
-   and then retire the managed-account `--cookies` path.
+3. **C.3 Profile-only runner:** preserve committed version-1
+   `login_type=cookie` accounts, mark non-draft version-0 accounts
+   `requires_relogin`, enable the internal profile-only child contract, prove
+   no raw Cookie argv/environment in the effective process builder, and retire
+   the managed-account `--cookies` path.
 
 `MONITOR_BROWSER_COOKIE_SYNC_ENABLED` controls C.2 only. Turning it off
 hides/stops browser acquisition while C.1 manual Cookie support
-and C.3 profile-only execution remain active. Before C.3 acceptance, deployment
-may stay on the unchanged current baseline; after C.3 acceptance, rollback does
+and C.3 profile-only execution remain active. C.3 is accepted within its
+automated/local proof boundary; rollback does
 not restore raw Cookie argv. A release that cannot preserve C.1 and C.3 is not
 an accepted CR-112 rollback.
 

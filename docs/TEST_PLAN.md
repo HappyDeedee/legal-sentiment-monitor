@@ -1823,8 +1823,8 @@ Documentation-stage checks:
   recorded as verified and merged, the separate CR-047 Linux/server-like real
   acceptance remains operator-gated, and accepted sequencing places CR-112
   before CR-070 without claiming that local evidence closes CR-047.
-- Verify CR-112 is `Accepted / Dependency-Gated (Packet C.3)`, with Packet B
-  and C.1-C.2 verified, C.3 waiting for the C.2 atomic commit, and D gated; the current
+- Verify CR-112 is `Accepted / Dependency-Gated (Packet D)`, with Packet B
+  and C.1-C.3 verified and D gated; the current
   server-first QR acceptance boundary is unchanged.
 - Verify `DECISIONS.md`, CR-112, account-environment guidance, and all five
   plan files agree on the confirmed sub-decision: both login modes converge on
@@ -1880,6 +1880,21 @@ Packet C.2 implementation evidence currently includes:
 - controlled local account-bound start/cancel evidence proving the active
   Profile/account remains usable, the candidate is removed, and no owned
   Chromium process remains.
+
+Packet C.3 implementation evidence currently includes:
+
+- hidden profile-only CLI/config, exact provider metadata, persisted
+  account/promotion revalidation, default Cookie clearing, explicit Cookie
+  rejection, and exit-code-42 mapping;
+- startup cutover before browser-sync recovery/scheduler, version-0 explicit
+  rejection, parent Profile login preflight, and secret-free audit records;
+- managed Cookie-account command/environment construction with no raw Cookie,
+  plus effective child command/environment capture of both values;
+- all seven platform adapters failing before QR/Cookie/phone login construction
+  when the prepared Profile is not logged in;
+- focused `17`, adjacent `190`, and complete monitoring `642` passing tests.
+  Real OS process inspection and designated-account crawl evidence remain
+  Packet D.
 
 - Feature disabled by default starts no acquisition browser and shows no active
   auto-sync action. The rejected Cookie-bridge route remains unmounted in both

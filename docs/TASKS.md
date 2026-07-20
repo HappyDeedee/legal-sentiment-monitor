@@ -1922,13 +1922,13 @@ data, sensitive files, or the old server-login worktree.
 
 Planning status:
 
-CR-112 is an `Accepted / Dependency-Gated (Packet C.3)` new capability as of
+CR-112 is an `Accepted / Dependency-Gated (Packet D)` new capability as of
 2026-07-21.
 Acceptance approves the same-machine Windows scope, reuse-first/minimal-
 adaptation evaluation, CR-112-before-CR-070 order, Profile/Cookie authority,
   administrator Cookie reveal, and Douyin/Xiaohongshu Packet D matrix. Packet
-  B, C.1, and C.2 are verified within their recorded proof boundaries. C.3
-  waits for the C.2 atomic commit, while Packet D remains gated. Phase 5.1P and Phase
+  B and C.1-C.3 are verified within their recorded proof boundaries. Packet D
+  remains gated pending atomic C.3 delivery and designated real accounts. Phase 5.1P and Phase
 5.1A-D plus the current merged regression fixes are verified; the separate
 CR-047 Linux/server-like real acceptance remains operator-gated and is not
 closed by CR-112 local evidence.
@@ -2058,14 +2058,20 @@ Accepted decisions and gated execution:
       gates, and a controlled account-bound start/cancel run. The controlled
       run preserved the existing active account/Profile, removed the candidate,
       and left no owned Chromium process after cancellation.
-- [ ] Packet C.3: implement the internal profile-only runner, migrate or mark
+- [x] Packet C.3: implement the internal profile-only runner, migrate or mark
       every `login_type=cookie` account, reject login/generic/default-network
-      fallback, and retire raw Cookie argv/env with process-inspection proof.
+      fallback, and retire raw Cookie argv/env with effective command/environment
+      construction proof.
       Use hidden `--monitor_profile_only`, exact provider env, Cookie clearing,
       exit-code-42 relogin mapping, and a paused maintenance cutover with no
       runnable version-0 account. Existing QR/Profile execution remains
       regression-protected. Accepted rollback preserves C.1/C.3 and never
       restores argv exposure.
+- [x] Verify Packet C.3 with `17` focused tests, `190` adjacent Phase 5.1D/
+      CR-117/login/runner regressions, the complete monitoring suite (`642 passed`),
+      Python compile, and documentation/whitespace gates.
+      Effective child command/environment inspection proves no synthetic Cookie reaches the
+      effective argv/environment; real OS process inspection remains Packet D.
 - [ ] Start Packet D only after Packet C tests pass; verify clean-computer
       bootstrap, multi-account isolation, promotion checkpoint crash/restart,
       C.1/C.2/C.3 rollback, process inspection, structured Cookie fidelity,

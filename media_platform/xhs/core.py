@@ -47,6 +47,7 @@ from tools.browser_environment import (
     verify_managed_page,
 )
 from tools.cdp_browser import CDPBrowserManager
+from tools.profile_only import should_begin_platform_login
 from var import crawler_type_var, source_keyword_var
 
 from .client import XiaoHongShuClient
@@ -120,7 +121,8 @@ class XiaoHongShuCrawler(AbstractCrawler):
 
             # Create a client to interact with the Xiaohongshu website.
             self.xhs_client = await self.create_xhs_client(httpx_proxy_format)
-            if not await self.xhs_client.pong():
+            logged_in = await self.xhs_client.pong()
+            if should_begin_platform_login(logged_in, self.browser_environment_plan):
                 login_obj = XiaoHongShuLogin(
                     login_type=config.LOGIN_TYPE,
                     login_phone=getattr(config, "LOGIN_PHONE", ""),

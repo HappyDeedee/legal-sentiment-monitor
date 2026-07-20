@@ -30,7 +30,12 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse
 
-from .monitoring.database import bootstrap_admin_from_env, init_db, recover_stale_runs_and_locks
+from .monitoring.database import (
+    bootstrap_admin_from_env,
+    enforce_profile_only_cookie_cutover,
+    init_db,
+    recover_stale_runs_and_locks,
+)
 from .monitoring.login_browser_sync import browser_cookie_sync_enabled, recover_browser_cookie_sync_sessions
 from .monitoring.profile_promotion import cleanup_profile_promotion_artifacts, recover_profile_promotions
 from .monitoring.scheduler import start_scheduler
@@ -83,6 +88,7 @@ async def startup_monitoring():
     recover_stale_runs_and_locks("startup_recovery")
     await asyncio.to_thread(recover_profile_promotions)
     await asyncio.to_thread(cleanup_profile_promotion_artifacts)
+    await asyncio.to_thread(enforce_profile_only_cookie_cutover, "startup")
     if browser_cookie_sync_enabled():
         recover_browser_cookie_sync_sessions()
     await start_scheduler()

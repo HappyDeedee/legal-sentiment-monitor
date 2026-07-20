@@ -1,8 +1,8 @@
 # Cross-Computer Browser Login And CookieBridge Roadmap
 
-> Accepted roadmap with Packet B and Packet C.1-C.2 `Verified` within their
-> recorded proof boundaries. C.3 waits for the C.2 atomic commit and Packet D
-> remains dependency-gated. Execute only the packet whose start gate is open in
+> Accepted roadmap with Packet B and Packet C.1-C.3 `Verified` within their
+> recorded proof boundaries. Packet D remains dependency-gated. Execute only
+> the packet whose start gate is open in
 > current project documents.
 
 **Goal:** Add an optional local-desktop browser login flow that opens a
@@ -60,9 +60,9 @@ Packet documents:
 | Phase 5.1P | `docs/TASKS.md` and `docs/phase-5.1p-browser-entrypoint-map.md` record verified completion | Completed read-only preflight | Keep as Packet A evidence and provider boundary | No code, schema, Profile, Cookie, proxy, or runtime mutation | Complete |
 | Phase 5.1A-D | Merged provider, identity, lifecycle, runtime binding, and regression fixes through CR-121 on current main | Historical/already completed | Keep closed; consume the provider contract | One account/browser/Profile/proxy authority and requested/effective snapshots | Ready dependency |
 | Phase 5.1 server-like acceptance | Task 3 is operator-gated because this host has no Docker/Linux runtime, dedicated proxy probe, or acceptance fixtures | Operator-gated CR-047 work | Keep open and separate; do not claim local evidence closes it | Server production remains QR-first and no diagnostic fallback is production proof | Operator-only |
-| CR-112 | Accepted decisions and the scoped Windows gate are verified; Packet B and C.1-C.2 are complete within their recorded proof boundaries | Accepted / Dependency-Gated (Packet C.3) | Commit C.2 atomically, then execute C.3; keep D gated until C.3 acceptance | Existing QR, manual Cookie, Profile, and permission behavior | C.3 commit-gated |
+| CR-112 | Accepted decisions and the scoped Windows gate are verified; Packet B and C.1-C.3 are complete within their recorded proof boundaries | Accepted / Dependency-Gated (Packet D) | Commit C.3 atomically, then execute Packet D | Existing QR, manual Cookie, Profile, and permission behavior | D account/evidence-gated |
 | CookieBridge reference | Temporary snapshot measured: Chrome loading fails, Edge roundtrip is flat/unauthenticated, and distribution/runtime do not fit | Historical evaluation evidence | Keep outside product paths; retain the result matrix | No product dependency on rejected reference behavior | Closed by Packet B evidence |
-| Current schema/API/UI | C.1 promotion and C.2 exact-context acquisition/reveal are verified; standard account APIs remain masked; runner still uses `--cookies` | Implemented through C.2; C.3 gap | Commit C.2, then implement profile-only child execution and remove raw Cookie argv/env in C.3 | Existing storage encryption and administrator account boundary | C.3 commit-gated |
+| Current schema/API/UI/runtime | C.1 promotion, C.2 exact-context acquisition/reveal, and C.3 Profile-only execution are verified; standard account APIs remain masked and managed Cookie crawls omit raw Cookie argv/env | Implemented through C.3 | Commit C.3, then execute real Packet D acceptance | Existing storage encryption and administrator account boundary | D account/evidence-gated |
 | CR-070 / Phase 5.2 | Accepted export/import capability, not implemented | Deferred behind CR-112 by accepted decision | Preserve ownership and consume only committed CR-112 state later | No export of operation or connector secrets | Future-only |
 | CR-092 to CR-094 | Independent future architecture lanes | Future-only | Keep separate | No hidden prerequisite or parallel account/provider system | Future-only |
 
@@ -74,10 +74,9 @@ Browser and login evidence on the current baseline:
 - CR-120 binds local visible login to the selected browser, account
   `profile_key`, and owned CDP process. CR-121 preserves exact prepared-page
   identity evidence for real crawls.
-- `runner.py` passes decrypted saved Cookie material through `--cookies` for
-  `login_type=cookie`. Phase 5.1P mapped that current baseline without
-  changing it; Packet C owns the later confirmed migration to persistent
-  Profile preparation and no raw Cookie in managed crawler child argv.
+- Phase 5.1P mapped the historical `runner.py --cookies` baseline. Packet C.3
+  now routes committed version-1 Cookie accounts through persistent Profile-
+  only execution and omits raw Cookie from managed crawler child argv/env.
 - The evaluated CookieBridge extension hardcodes `ws://localhost:8274/ws`,
   generates a `client_id`, and registers without an account/Profile pairing
   claim. Its server accepts clients by `client_id`, keeps connection state in

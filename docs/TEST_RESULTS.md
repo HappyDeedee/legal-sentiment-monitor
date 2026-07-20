@@ -2,6 +2,48 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-21 - CR-112 Packet C.3 Profile-Only Runner
+
+Scope: synthetic automated verification only. Real platform material, real OS
+process inspection, and live crawls remain Packet D.
+
+Result: `Verified` within the Packet C.3 automated/local proof boundary.
+Packet D real acceptance remains dependency-gated.
+
+- Added one hidden `--monitor_profile_only true` child contract for managed
+  `login_type=cookie` accounts while preserving customer-visible
+  `qrcode|cookie` login types.
+- The parent requires runtime version 1, a committed promotion, the exact
+  account/Profile/provider plan, an account lock, and a successful Profile
+  login check before child launch. The child revalidates exact persisted
+  workspace, platform, account, `profile_key`, promotion, and runtime metadata.
+- Managed Cookie-account children receive no raw Cookie in argv or environment.
+  Explicit `--cookies` is rejected, inherited/default Cookie configuration is
+  cleared, and a missing managed plan fails before process creation.
+- All seven platform adapters stop before constructing QR, Cookie, or phone
+  login objects when the prepared Profile is not logged in. Reserved exit code
+  `42` maps only this typed condition to `requires_relogin`.
+- Startup cutover runs after promotion recovery/cleanup and before browser-sync
+  recovery or scheduler start. Legacy non-draft Cookie accounts become limited
+  and require re-login without deleting their encrypted Cookie or Profile.
+- Focused Packet C.3 regression: `17 passed, 625 deselected`.
+- Adjacent Phase 5.1D, CR-117 browser selection, login, QR/manual-Cookie,
+  runner, and crawl regression: `190 passed, 452 deselected`.
+- Complete monitoring regression: `642 passed, 3 warnings`.
+- Python compile, documentation consistency/test, and `git diff --check`
+  passed.
+
+Proof boundary:
+
+- Effective child command/environment inspection proves the builder
+  contains no synthetic Cookie. Packet D still owns inspection of a real OS
+  child process and designated-account runs.
+- Packet C.3 does not prove real Cookie acquisition, administrator reveal/copy
+  against real material, clean-candidate restart, or real Douyin/Xiaohongshu
+  persistence. Packet D owns those checks; Kuaishou remains Deferred.
+- This local Windows evidence does not close the separate CR-047 Linux/server-
+  like acceptance.
+
 ## 2026-07-21 - CR-112 Packet C.2 Managed Browser Acquisition
 
 Environment: `codex/cr-112-cookiebridge-integration` on Packet C.1 commit

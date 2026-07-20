@@ -49,6 +49,7 @@ from tools.browser_environment import (
     verify_managed_page,
 )
 from tools.cdp_browser import CDPBrowserManager
+from tools.profile_only import should_begin_platform_login
 from var import crawler_type_var, source_keyword_var
 
 from .client import ZhiHuClient
@@ -128,7 +129,8 @@ class ZhihuCrawler(AbstractCrawler):
 
             # Create a client to interact with the zhihu website.
             self.zhihu_client = await self.create_zhihu_client(httpx_proxy_format)
-            if not await self.zhihu_client.pong():
+            logged_in = await self.zhihu_client.pong()
+            if should_begin_platform_login(logged_in, self.browser_environment_plan):
                 login_obj = ZhiHuLogin(
                     login_type=config.LOGIN_TYPE,
                     login_phone="",  # input your phone number

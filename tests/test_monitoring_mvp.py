@@ -8062,24 +8062,26 @@ def test_platform_login_config_defaults_masking_and_validation():
         _restore_table("platform_login_configs", snapshot)
 
 
-def test_runner_command_uses_platform_login_config_for_cookie_mode(tmp_path):
+def test_runner_command_rejects_platform_cookie_fallback_before_child_spawn(tmp_path):
+    from tools.profile_only import ProfileLoginRequired
+
     init_db()
     snapshot = _snapshot_table("platform_login_configs")
     try:
         save_platform_login_config("dy", {"login_type": "cookie", "cookies": "sessionid=secret-cookie"})
-        cmd = runner_module._build_crawler_cmd(
-            {"keywords": ["海安律所避雷"], "enable_comments": False, "time_window_type": "recent_1d"},
-            "dy",
-            tmp_path,
-        )
+        with pytest.raises(ProfileLoginRequired, match="requires_relogin") as exc_info:
+            runner_module._build_crawler_cmd(
+                {"keywords": ["海安律所避雷"], "enable_comments": False, "time_window_type": "recent_1d"},
+                "dy",
+                tmp_path,
+            )
+        assert "secret-cookie" not in str(exc_info.value)
     finally:
         _restore_table("platform_login_configs", snapshot)
 
-    assert _cmd_value(cmd, "--lt") == "cookie"
-    assert _cmd_value(cmd, "--cookies") == "sessionid=secret-cookie"
+def test_runner_command_rejects_version_zero_account_cookie_before_child_spawn(tmp_path):
+    from tools.profile_only import ProfileLoginRequired
 
-
-def test_runner_command_uses_bound_account_cookie_login_parameter(tmp_path):
     init_db()
     snapshot = _snapshot_table("social_accounts")
     try:
@@ -8092,18 +8094,16 @@ def test_runner_command_uses_bound_account_cookie_login_parameter(tmp_path):
                 "cookies": "web_session=account-cookie",
             }
         )
-        cmd = runner_module._build_crawler_cmd(
-            {"keywords": ["海安律所退费"], "enable_comments": False, "time_window_type": "recent_1d"},
-            "xhs",
-            tmp_path,
-            {"login_type": account["login_type"], "cookies": "web_session=account-cookie"},
-        )
+        with pytest.raises(ProfileLoginRequired, match="requires_relogin") as exc_info:
+            runner_module._build_crawler_cmd(
+                {"keywords": ["海安律所退费"], "enable_comments": False, "time_window_type": "recent_1d"},
+                "xhs",
+                tmp_path,
+                {"login_type": account["login_type"], "cookies": "web_session=account-cookie"},
+            )
+        assert "account-cookie" not in str(exc_info.value)
     finally:
         _restore_table("social_accounts", snapshot)
-
-    assert _cmd_value(cmd, "--lt") == "cookie"
-    assert _cmd_value(cmd, "--cookies") == "web_session=account-cookie"
-
 
 def test_runner_command_defaults_to_qrcode_login(tmp_path):
     init_db()
@@ -25753,3 +25753,646 @@ def test_cr112_c2_terminal_audit_uses_bound_workspace():
         assert "2/dy/acc_7002" not in audit["details_json"]
     finally:
         _restore_table("audit_logs", snapshot)
+
+
+def _cr112_c3_binding(plan, **overrides):
+    binding = {
+        "account_id": plan.account_id,
+        "account_name": "CR-112 C3 synthetic",
+        "platform": plan.platform,
+        "login_type": "cookie",
+        "cookies": "sessionid=synthetic-c3-secret",
+        "profile_key": plan.profile_key,
+        "profile_path": plan.profile_path,
+        "profile_runtime_version": 1,
+        "profile_promotion_id": 7101,
+        "profile_promotion_state": "committed",
+        "proxy_id": plan.proxy_id,
+        "proxy_name": "",
+        "proxy_url": plan.proxy_url,
+    }
+    binding.update(overrides)
+    return binding
+
+
+def test_cr112_c3_profile_only_command_and_environment_contain_no_cookie(tmp_path, monkeypatch):
+    from tools.profile_only import (
+        PROFILE_ONLY_ACCOUNT_ID_ENV,
+        PROFILE_ONLY_FLAG,
+        PROFILE_ONLY_PROFILE_KEY_ENV,
+        PROFILE_ONLY_PROMOTION_ID_ENV,
+        PROFILE_ONLY_RUNTIME_VERSION_ENV,
+    )
+
+    plan = _phase_5_1d_plan(tmp_path, monkeypatch, action="crawl", launch_mode="cdp_launch")
+    Path(plan.profile_path).mkdir(parents=True, exist_ok=True)
+    binding = _cr112_c3_binding(plan)
+    result_path = tmp_path / "result.json"
+    monkeypatch.setenv("COOKIE", "synthetic-inherited-cookie")
+    monkeypatch.setenv("MONITOR_BROWSER_COOKIE_SYNC_ENABLED", "true")
+
+    cmd = runner_module._build_crawler_cmd(
+        {"keywords": ["CR-112 C3"], "target_type": "search"},
+        plan.platform,
+        tmp_path,
+        binding,
+        plan,
+    )
+    env = runner_module._build_crawler_env(binding, plan, result_path)
+
+    assert _cmd_value(cmd, "--lt") == "cookie"
+    assert _cmd_value(cmd, "--monitor_profile_only") == "true"
+    assert "--cookies" not in cmd
+    assert "synthetic-c3-secret" not in json.dumps(cmd)
+    assert "synthetic-c3-secret" not in json.dumps(env)
+    assert "synthetic-inherited-cookie" not in json.dumps(env)
+    assert not [name for name in env if "COOKIE" in name.upper()]
+    assert env[PROFILE_ONLY_ACCOUNT_ID_ENV] == str(plan.account_id)
+    assert env[PROFILE_ONLY_PROFILE_KEY_ENV] == plan.profile_key
+    assert env[PROFILE_ONLY_PROMOTION_ID_ENV] == "7101"
+    assert env[PROFILE_ONLY_RUNTIME_VERSION_ENV] == "1"
+    assert PROFILE_ONLY_FLAG not in env
+
+
+@pytest.mark.parametrize(
+    "overrides",
+    [
+        {"profile_runtime_version": 0},
+        {"profile_promotion_id": None},
+        {"profile_promotion_state": "failed"},
+    ],
+)
+def test_cr112_c3_profile_only_rejects_unready_account_before_child_spawn(overrides, tmp_path, monkeypatch):
+    from tools.profile_only import ProfileLoginRequired
+
+    plan = _phase_5_1d_plan(tmp_path, monkeypatch, action="crawl", launch_mode="cdp_launch")
+    binding = _cr112_c3_binding(plan, **overrides)
+
+    with pytest.raises(ProfileLoginRequired, match="requires_relogin"):
+        runner_module._build_crawler_cmd(
+            {"keywords": [], "target_type": "search"},
+            plan.platform,
+            tmp_path,
+            binding,
+            plan,
+        )
+
+
+def test_cr112_c3_profile_only_rejects_missing_managed_plan_before_child_spawn(tmp_path, monkeypatch):
+    from tools.profile_only import ProfileLoginRequired
+
+    plan = _phase_5_1d_plan(tmp_path, monkeypatch, action="crawl", launch_mode="cdp_launch")
+    Path(plan.profile_path).mkdir(parents=True, exist_ok=True)
+    binding = _cr112_c3_binding(plan)
+
+    with pytest.raises(ProfileLoginRequired, match="requires_relogin"):
+        runner_module._build_crawler_cmd(
+            {"keywords": [], "target_type": "search"},
+            plan.platform,
+            tmp_path,
+            binding,
+            None,
+        )
+    with pytest.raises(ProfileLoginRequired, match="requires_relogin"):
+        runner_module._build_crawler_env(binding, None, None)
+
+
+def test_cr112_c3_hidden_cli_clears_cookie_and_validates_exact_metadata(tmp_path, monkeypatch):
+    import config
+    import tools.profile_only as profile_only_module
+    from tools.browser_environment import PLAN_ENV_NAME, browser_environment_plan_to_json, reset_browser_environment_cache_for_tests
+    from tools.profile_only import (
+        PROFILE_ONLY_ACCOUNT_ID_ENV,
+        PROFILE_ONLY_PROFILE_KEY_ENV,
+        PROFILE_ONLY_PROMOTION_ID_ENV,
+        PROFILE_ONLY_RUNTIME_VERSION_ENV,
+        validate_profile_only_cli,
+    )
+
+    plan = _phase_5_1d_plan(tmp_path, monkeypatch, action="crawl", launch_mode="cdp_launch")
+    Path(plan.profile_path).mkdir(parents=True, exist_ok=True)
+    monkeypatch.setenv(PLAN_ENV_NAME, browser_environment_plan_to_json(plan))
+    monkeypatch.setenv(PROFILE_ONLY_ACCOUNT_ID_ENV, str(plan.account_id))
+    monkeypatch.setenv(PROFILE_ONLY_PROFILE_KEY_ENV, plan.profile_key)
+    monkeypatch.setenv(PROFILE_ONLY_PROMOTION_ID_ENV, "7201")
+    monkeypatch.setenv(PROFILE_ONLY_RUNTIME_VERSION_ENV, "1")
+    monkeypatch.setattr(config, "COOKIES", "sessionid=synthetic-default-cookie")
+    monkeypatch.setattr(config, "MONITOR_PROFILE_ONLY", False, raising=False)
+    monkeypatch.setattr(profile_only_module, "_profile_only_persistence_matches", lambda *args: True)
+    reset_browser_environment_cache_for_tests()
+
+    parsed = asyncio.run(
+        parse_mediacrawler_cmd(
+            [
+                "--platform",
+                plan.platform,
+                "--lt",
+                "cookie",
+                "--monitor_profile_only",
+                "true",
+            ]
+        )
+    )
+
+    assert parsed.lt == "cookie"
+    assert parsed.cookies == ""
+    assert config.COOKIES == ""
+    assert config.MONITOR_PROFILE_ONLY is True
+    with pytest.raises(ValueError, match="profile_only_requires_cookie_login"):
+        validate_profile_only_cli(True, "qrcode", "", ["--monitor_profile_only", "true"])
+    with pytest.raises(ValueError, match="profile_only_cookie_forbidden"):
+        validate_profile_only_cli(
+            True,
+            "cookie",
+            "synthetic-forbidden-cookie",
+            ["--monitor_profile_only", "true", "--cookies", "synthetic-forbidden-cookie"],
+        )
+    with pytest.raises(ValueError, match="profile_only_cookie_forbidden"):
+        validate_profile_only_cli(
+            True,
+            "cookie",
+            "",
+            ["--monitor_profile_only", "true", "--cookies=synthetic-forbidden-cookie"],
+        )
+    reset_browser_environment_cache_for_tests()
+
+
+def test_cr112_c3_profile_only_child_guard_blocks_login_fallback_for_all_platforms(tmp_path, monkeypatch):
+    import config
+    import tools.profile_only as profile_only_module
+    from tools.browser_environment import browser_environment_plan_to_json, reset_browser_environment_cache_for_tests
+    from tools.profile_only import (
+        PROFILE_ONLY_ACCOUNT_ID_ENV,
+        PROFILE_ONLY_PROFILE_KEY_ENV,
+        PROFILE_ONLY_PROMOTION_ID_ENV,
+        PROFILE_ONLY_RUNTIME_VERSION_ENV,
+        ProfileLoginRequired,
+        should_begin_platform_login,
+    )
+
+    plan = _phase_5_1d_plan(tmp_path, monkeypatch, action="crawl", launch_mode="cdp_launch")
+    monkeypatch.setattr(config, "MONITOR_PROFILE_ONLY", True, raising=False)
+    monkeypatch.setenv(PROFILE_ONLY_ACCOUNT_ID_ENV, str(plan.account_id))
+    monkeypatch.setenv(PROFILE_ONLY_PROFILE_KEY_ENV, plan.profile_key)
+    monkeypatch.setenv(PROFILE_ONLY_PROMOTION_ID_ENV, "7301")
+    monkeypatch.setenv(PROFILE_ONLY_RUNTIME_VERSION_ENV, "1")
+    monkeypatch.setattr(profile_only_module, "_profile_only_persistence_matches", lambda *args: True)
+    reset_browser_environment_cache_for_tests()
+
+    with pytest.raises(ProfileLoginRequired, match="requires_relogin"):
+        should_begin_platform_login(False, plan)
+    assert should_begin_platform_login(True, plan) is False
+
+    for path in (
+        Path("media_platform/douyin/core.py"),
+        Path("media_platform/kuaishou/core.py"),
+        Path("media_platform/xhs/core.py"),
+        Path("media_platform/bilibili/core.py"),
+        Path("media_platform/weibo/core.py"),
+        Path("media_platform/tieba/core.py"),
+        Path("media_platform/zhihu/core.py"),
+    ):
+        source = path.read_text(encoding="utf-8")
+        assert "should_begin_platform_login" in source, path
+        assert "login_obj" in source, path
+    reset_browser_environment_cache_for_tests()
+
+
+def test_cr112_c3_profile_only_child_rejects_persistence_mismatch(tmp_path, monkeypatch):
+    import tools.profile_only as profile_only_module
+    from tools.browser_environment import BrowserEnvironmentError
+    from tools.profile_only import (
+        PROFILE_ONLY_ACCOUNT_ID_ENV,
+        PROFILE_ONLY_PROFILE_KEY_ENV,
+        PROFILE_ONLY_PROMOTION_ID_ENV,
+        PROFILE_ONLY_RUNTIME_VERSION_ENV,
+        profile_only_metadata,
+    )
+
+    plan = _phase_5_1d_plan(tmp_path, monkeypatch, action="crawl", launch_mode="cdp_launch")
+    monkeypatch.setenv(PROFILE_ONLY_ACCOUNT_ID_ENV, str(plan.account_id))
+    monkeypatch.setenv(PROFILE_ONLY_PROFILE_KEY_ENV, plan.profile_key)
+    monkeypatch.setenv(PROFILE_ONLY_PROMOTION_ID_ENV, "7302")
+    monkeypatch.setenv(PROFILE_ONLY_RUNTIME_VERSION_ENV, "1")
+    monkeypatch.setattr(profile_only_module, "_profile_only_persistence_matches", lambda *args: False)
+
+    with pytest.raises(BrowserEnvironmentError, match="account_identity_snapshot_mismatch"):
+        profile_only_metadata(plan)
+
+
+def test_cr112_c3_profile_only_child_rejects_forged_plan_and_stale_promotion(tmp_path, monkeypatch):
+    from dataclasses import replace
+
+    from api.monitoring import account_environment, browser_environment_provider, browser_selection
+    from api.monitoring.browser_selection import BrowserSelection
+    from api.monitoring.database import utc_now
+    from tools.profile_only import ProfileOnlyMetadata, _profile_only_persistence_matches
+
+    profile_root = (tmp_path / "profiles").resolve()
+    browser_path = (tmp_path / "playwright-chromium.exe").resolve()
+    other_browser_path = (tmp_path / "other-browser.exe").resolve()
+    browser_path.write_bytes(b"synthetic browser")
+    other_browser_path.write_bytes(b"synthetic other browser")
+    monkeypatch.setattr(account_environment, "ACCOUNT_PROFILE_ROOT", profile_root)
+    selection_path = tmp_path / "browser_selection.json"
+    monkeypatch.setattr(browser_selection, "BROWSER_SELECTION_PATH", selection_path)
+    monkeypatch.setattr(
+        browser_environment_provider,
+        "resolve_browser_selection",
+        lambda *args, **kwargs: BrowserSelection(browser_path, "playwright_bundled", "playwright"),
+    )
+    monkeypatch.delenv("MONITOR_BROWSER_EXECUTABLE", raising=False)
+    monkeypatch.setenv("MONITOR_CRAWLER_HEADLESS", "true")
+    selection_path.write_text(
+        json.dumps(
+            {
+                "contract_version": 1,
+                "browser_source": "playwright_bundled",
+                "browser_channel": "playwright",
+                "executable_path": str(browser_path),
+            }
+        ),
+        encoding="utf-8",
+    )
+    init_db()
+    snapshots = {
+        "account_profile_promotions": _snapshot_table("account_profile_promotions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        account = save_social_account(
+            {
+                "name": "CR-112 C3 persisted child",
+                "platform": "dy",
+                "login_type": "cookie",
+                "cookies": "sessionid=synthetic-persisted-child",
+                "status": "active",
+                "proxy_region_snapshot": "CN_MAINLAND",
+                "identity_template_family": "windows_chrome_desktop",
+            }
+        )
+        now = utc_now()
+        with get_conn() as conn:
+            conn.execute(
+                """
+                UPDATE social_accounts SET profile_runtime_version=1,
+                    profile_ready_at=?, identity_state='active', status='active',
+                    requires_relogin=0
+                WHERE id=?
+                """,
+                (now, account["id"]),
+            )
+            old_promotion_id = int(
+                conn.execute(
+                    """
+                    INSERT INTO account_profile_promotions (
+                        workspace_id, account_id, profile_key, state,
+                        acquisition_generation, cookie_source, created_at,
+                        committed_at, updated_at
+                    ) VALUES (1, ?, ?, 'committed', 1, 'manual', ?, ?, ?)
+                    """,
+                    (account["id"], account["profile_key"], now, now, now),
+                ).lastrowid
+            )
+            current_promotion_id = int(
+                conn.execute(
+                    """
+                    INSERT INTO account_profile_promotions (
+                        workspace_id, account_id, profile_key, state,
+                        acquisition_generation, cookie_source, created_at,
+                        committed_at, updated_at
+                    ) VALUES (1, ?, ?, 'committed', 2, 'manual', ?, ?, ?)
+                    """,
+                    (account["id"], account["profile_key"], now, now, now),
+                ).lastrowid
+            )
+        account = get_social_account(account["id"], masked=False)
+        plan = browser_environment_provider.resolve_account_browser_environment(
+            account,
+            action="crawl",
+            trigger_source="manual",
+            headless=True,
+            launch_mode="cdp_launch",
+            playwright_executable_path=str(browser_path),
+        )
+        Path(plan.profile_path).mkdir(parents=True, exist_ok=True)
+        metadata = ProfileOnlyMetadata(
+            account_id=account["id"],
+            profile_key=account["profile_key"],
+            promotion_id=current_promotion_id,
+            runtime_version=1,
+        )
+
+        assert _profile_only_persistence_matches(metadata, plan) is True
+        assert _profile_only_persistence_matches(
+            metadata,
+            replace(plan, profile_path=str(tmp_path / "forged-profile")),
+        ) is False
+        assert _profile_only_persistence_matches(
+            metadata,
+            replace(plan, browser_executable_path=str(other_browser_path)),
+        ) is False
+        assert _profile_only_persistence_matches(
+            metadata,
+            replace(plan, locale="en-SG", accept_language="en-SG"),
+        ) is False
+        assert _profile_only_persistence_matches(
+            replace(metadata, promotion_id=old_promotion_id),
+            plan,
+        ) is False
+        selection_payload = selection_path.read_text(encoding="utf-8")
+        selection_path.unlink()
+        assert _profile_only_persistence_matches(metadata, plan) is False
+        selection_path.write_text(selection_payload, encoding="utf-8")
+        with get_conn() as conn:
+            conn.execute(
+                """
+                INSERT INTO account_profile_promotions (
+                    workspace_id, account_id, profile_key, state,
+                    acquisition_generation, cookie_source, created_at, updated_at
+                ) VALUES (1, ?, ?, 'preparing', 3, 'manual', ?, ?)
+                """,
+                (account["id"], account["profile_key"], now, now),
+            )
+        assert _profile_only_persistence_matches(metadata, plan) is False
+    finally:
+        _restore_table("account_profile_promotions", snapshots["account_profile_promotions"])
+        _restore_table("social_accounts", snapshots["social_accounts"])
+
+
+def test_cr112_c3_main_maps_only_profile_login_required_to_exit_42(monkeypatch):
+    import main as crawler_main
+    from tools.profile_only import PROFILE_LOGIN_REQUIRED_EXIT_CODE, ProfileLoginRequired
+
+    class FakeCrawler:
+        async def start(self):
+            raise ProfileLoginRequired("requires_relogin")
+
+    async def fake_parse_cmd():
+        return SimpleNamespace(init_db=None)
+
+    monkeypatch.setattr(crawler_main.cmd_arg, "parse_cmd", fake_parse_cmd)
+    monkeypatch.setattr(crawler_main.CrawlerFactory, "create_crawler", lambda platform: FakeCrawler())
+
+    try:
+        with pytest.raises(SystemExit) as exc_info:
+            asyncio.run(crawler_main.main())
+        assert exc_info.value.code == PROFILE_LOGIN_REQUIRED_EXIT_CODE == 42
+    finally:
+        crawler_main.crawler = None
+
+
+def test_cr112_c3_runner_maps_exit_42_only_for_profile_only_binding(tmp_path, monkeypatch):
+    from tools.profile_only import PROFILE_LOGIN_REQUIRED_EXIT_CODE
+
+    plan = _phase_5_1d_plan(tmp_path, monkeypatch, action="crawl", launch_mode="cdp_launch")
+    profile_binding = _cr112_c3_binding(plan)
+    qr_binding = {**profile_binding, "login_type": "qrcode", "profile_runtime_version": 0}
+
+    assert runner_module._is_profile_only_login_required_exit(PROFILE_LOGIN_REQUIRED_EXIT_CODE, profile_binding) is True
+    assert runner_module._is_profile_only_login_required_exit(1, profile_binding) is False
+    assert runner_module._is_profile_only_login_required_exit(PROFILE_LOGIN_REQUIRED_EXIT_CODE, qr_binding) is False
+
+
+def test_cr112_c3_startup_cutover_marks_only_legacy_cookie_accounts_requires_relogin():
+    from api.monitoring.database import enforce_profile_only_cookie_cutover, utc_now
+
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        legacy = save_social_account(
+            {
+                "name": "CR-112 C3 legacy",
+                "platform": "dy",
+                "login_type": "cookie",
+                "cookies": "sessionid=synthetic-legacy",
+                "status": "active",
+            }
+        )
+        ready = save_social_account(
+            {
+                "name": "CR-112 C3 ready",
+                "platform": "xhs",
+                "login_type": "cookie",
+                "cookies": "web_session=synthetic-ready",
+                "status": "active",
+            }
+        )
+        with get_conn() as conn:
+            conn.execute(
+                "UPDATE social_accounts SET profile_runtime_version=1, profile_ready_at=? WHERE id=?",
+                (utc_now(), ready["id"]),
+            )
+
+        changed = enforce_profile_only_cookie_cutover("test_cutover")
+
+        assert changed == [legacy["id"]]
+        legacy_after = get_social_account(legacy["id"], masked=False)
+        ready_after = get_social_account(ready["id"], masked=False)
+        assert legacy_after["status"] == "limited"
+        assert legacy_after["requires_relogin"] is True
+        assert legacy_after["identity_state"] == "requires_relogin"
+        assert ready_after["status"] == "active"
+        assert ready_after["requires_relogin"] is False
+        with get_conn() as conn:
+            audits = [
+                dict(row)
+                for row in conn.execute(
+                    "SELECT * FROM audit_logs WHERE action_type='profile_only_cutover_requires_relogin' ORDER BY id"
+                ).fetchall()
+            ]
+        assert len(audits) == 1
+        assert "synthetic-legacy" not in audits[0]["details_json"]
+    finally:
+        _restore_table("social_accounts", snapshots["social_accounts"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
+
+
+def test_cr112_c3_explicit_legacy_cookie_account_requires_profile_relogin():
+    from tools.profile_only import ProfileLoginRequired
+
+    init_db()
+    snapshot = _snapshot_table("social_accounts")
+    try:
+        account = save_social_account(
+            {
+                "name": "CR-112 C3 explicit legacy",
+                "platform": "dy",
+                "login_type": "cookie",
+                "cookies": "sessionid=synthetic-explicit-legacy",
+                "status": "active",
+            }
+        )
+
+        with pytest.raises(ProfileLoginRequired, match="requires_relogin"):
+            runner_module._resolve_platform_account_binding(
+                "dy",
+                {"account_id": account["id"]},
+            )
+    finally:
+        _restore_table("social_accounts", snapshot)
+
+
+def test_cr112_c3_effective_popen_arguments_and_environment_exclude_cookie(tmp_path, monkeypatch):
+    from tools.browser_environment import RESULT_PATH_ENV_NAME
+
+    plan = _phase_5_1d_plan(tmp_path, monkeypatch, action="crawl", launch_mode="cdp_launch")
+    Path(plan.profile_path).mkdir(parents=True, exist_ok=True)
+    binding = _cr112_c3_binding(plan)
+    out_dir = tmp_path / "attempt"
+    out_dir.mkdir()
+    result_path = out_dir / "browser-result.json"
+    captured = {}
+    monkeypatch.setenv("COOKIE", "synthetic-process-cookie")
+
+    class FakeProcess:
+        returncode = 0
+
+        def wait(self, timeout=None):
+            return 0
+
+    def fake_popen(cmd, **kwargs):
+        captured["cmd"] = list(cmd)
+        captured["env"] = dict(kwargs["env"])
+        result = _phase_5_1d_result_for_plan(plan)
+        Path(kwargs["env"][RESULT_PATH_ENV_NAME]).write_text(
+            json.dumps({"ok": result.ok, "reason": result.reason, "snapshot": result.snapshot}),
+            encoding="utf-8",
+        )
+        return FakeProcess()
+
+    monkeypatch.setattr(runner_module.subprocess, "Popen", fake_popen)
+    outcome = runner_module._run_crawler_attempt(
+        {
+            "id": 7401,
+            "keywords": ["CR-112 C3"],
+            "target_type": "search",
+            "_browser_environment_plan": plan,
+            "_browser_environment_result_path": result_path,
+        },
+        plan.platform,
+        out_dir,
+        binding,
+    )
+
+    assert outcome.returncode == 0
+    assert "--cookies" not in captured["cmd"]
+    serialized = json.dumps(captured, ensure_ascii=False)
+    assert "synthetic-c3-secret" not in serialized
+    assert "synthetic-process-cookie" not in serialized
+    assert not [name for name in captured["env"] if "COOKIE" in name.upper()]
+
+
+@pytest.mark.parametrize("login_ok", [True, False])
+def test_cr112_c3_parent_preflight_validates_profile_or_marks_relogin(login_ok, tmp_path, monkeypatch):
+    from api.monitoring import account_environment
+    from api.monitoring.database import utc_now
+    from tools.profile_only import ProfileLoginRequired
+
+    profile_root = (tmp_path / "profiles").resolve()
+    monkeypatch.setattr(account_environment, "ACCOUNT_PROFILE_ROOT", profile_root)
+    init_db()
+    snapshots = {
+        "account_profile_promotions": _snapshot_table("account_profile_promotions"),
+        "audit_logs": _snapshot_table("audit_logs"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        account = save_social_account(
+            {
+                "name": "CR-112 C3 parent preflight",
+                "platform": "dy",
+                "login_type": "cookie",
+                "cookies": "sessionid=synthetic-parent",
+                "status": "active",
+            }
+        )
+        account = get_social_account(account["id"], masked=False)
+        profile_path = resolve_account_profile_path(account["profile_key"])
+        profile_path.mkdir(parents=True)
+        now = utc_now()
+        with get_conn() as conn:
+            conn.execute(
+                "UPDATE social_accounts SET profile_runtime_version=1, profile_ready_at=?, identity_state='active' WHERE id=?",
+                (now, account["id"]),
+            )
+            promotion_id = int(
+                conn.execute(
+                    """
+                    INSERT INTO account_profile_promotions (
+                        workspace_id, account_id, profile_key, state,
+                        acquisition_generation, cookie_source, created_at,
+                        committed_at, updated_at
+                    ) VALUES (1, ?, ?, 'committed', 1, 'manual', ?, ?, ?)
+                    """,
+                    (account["id"], account["profile_key"], now, now, now),
+                ).lastrowid
+            )
+        binding = {
+            "account_id": account["id"],
+            "account_name": account["name"],
+            "platform": "dy",
+            "login_type": "cookie",
+            "cookies": "",
+            "profile_key": account["profile_key"],
+            "profile_path": str(profile_path),
+            "profile_runtime_version": 1,
+            "profile_promotion_id": promotion_id,
+            "profile_promotion_state": "committed",
+            "_account": {**account, "cookies": ""},
+        }
+
+        async def fake_check(*args, **kwargs):
+            return {"ok": login_ok}
+
+        monkeypatch.setattr(runner_module, "check_social_account_login", fake_check)
+        if login_ok:
+            asyncio.run(runner_module._prepare_profile_only_parent(binding, {"_trigger_source": "manual"}))
+            stored = get_social_account(account["id"], masked=False)
+            assert stored["requires_relogin"] is False
+            expected_action = "profile_only_parent_preflight"
+        else:
+            with pytest.raises(ProfileLoginRequired, match="requires_relogin"):
+                asyncio.run(runner_module._prepare_profile_only_parent(binding, {"_trigger_source": "manual"}))
+            stored = get_social_account(account["id"], masked=False)
+            assert stored["requires_relogin"] is True
+            assert stored["status"] == "limited"
+            expected_action = "profile_only_requires_relogin"
+        with get_conn() as conn:
+            audit = dict(
+                conn.execute(
+                    "SELECT * FROM audit_logs WHERE action_type=? ORDER BY id DESC LIMIT 1",
+                    (expected_action,),
+                ).fetchone()
+            )
+        assert "synthetic-parent" not in audit["details_json"]
+        assert str(profile_path) not in audit["details_json"]
+    finally:
+        _restore_table("account_profile_promotions", snapshots["account_profile_promotions"])
+        _restore_table("social_accounts", snapshots["social_accounts"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
+
+
+def test_cr112_c3_startup_cutover_runs_before_scheduler(monkeypatch):
+    from api import main as api_main
+
+    events = []
+    monkeypatch.setattr(api_main, "init_db", lambda: events.append("db"))
+    monkeypatch.setattr(api_main, "bootstrap_admin_from_env", lambda *args: events.append("admin"))
+    monkeypatch.setattr(api_main, "recover_stale_runs_and_locks", lambda *args: events.append("runs"))
+    monkeypatch.setattr(api_main, "recover_profile_promotions", lambda: events.append("promotions"))
+    monkeypatch.setattr(api_main, "cleanup_profile_promotion_artifacts", lambda: events.append("cleanup"))
+    monkeypatch.setattr(api_main, "enforce_profile_only_cookie_cutover", lambda *args: events.append("cutover"))
+    monkeypatch.setattr(api_main, "browser_cookie_sync_enabled", lambda: False)
+
+    async def fake_scheduler():
+        events.append("scheduler")
+
+    monkeypatch.setattr(api_main, "start_scheduler", fake_scheduler)
+
+    asyncio.run(api_main.startup_monitoring())
+
+    assert events == ["db", "admin", "runs", "promotions", "cleanup", "cutover", "scheduler"]

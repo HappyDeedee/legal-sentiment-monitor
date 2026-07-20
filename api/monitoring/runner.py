@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import hashlib
 import json
 import os
 import subprocess
@@ -24,6 +25,15 @@ from tools.browser_environment import (
     browser_environment_plan_to_json,
     browser_environment_result_from_json,
 )
+from tools.profile_only import (
+    PROFILE_LOGIN_REQUIRED_EXIT_CODE,
+    PROFILE_ONLY_ACCOUNT_ID_ENV,
+    PROFILE_ONLY_FLAG,
+    PROFILE_ONLY_PROFILE_KEY_ENV,
+    PROFILE_ONLY_PROMOTION_ID_ENV,
+    PROFILE_ONLY_RUNTIME_VERSION_ENV,
+    ProfileLoginRequired,
+)
 
 from .ai import (
     _build_trace_snapshot,
@@ -31,6 +41,7 @@ from .ai import (
     evaluate_content,
 )
 from .account_identity import AccountIdentityError
+from .account_check import check_social_account_login
 from .browser_environment_provider import (
     is_legacy_draft_account,
     persist_account_browser_environment_result,
@@ -48,7 +59,10 @@ from .database import (
     get_proxy_profile,
     get_runtime_setting_value,
     get_social_account,
+    list_account_profile_promotions,
     list_social_accounts,
+    mark_social_account_profile_requires_relogin,
+    record_audit_log,
     release_account_lock,
     release_proxy_locks,
     release_run_resource_locks,
@@ -397,6 +411,8 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
                         _safe_int(account_binding.get("account_id")),
                         _safe_int(account_binding.get("proxy_id")),
                     )
+                if _is_profile_only_binding(account_binding):
+                    await _prepare_profile_only_parent(account_binding, job)
                 if account_binding and account_binding.get("account_id"):
                     base_plan = await asyncio.to_thread(
                         _resolve_runner_browser_plan,
@@ -448,6 +464,28 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
                                     + crawler_outcome.provider_result.reason
                                 )
                             if crawler_outcome.returncode != 0:
+                                if crawler_outcome.login_required:
+                                    mark_social_account_profile_requires_relogin(
+                                        int(account_binding["account_id"]),
+                                        reason="Profile 登录态失效，请重新登录",
+                                        trigger_source="profile_only_child",
+                                        user_id=_safe_int(job.get("created_by")),
+                                    )
+                                    _record_profile_only_terminal(
+                                        account_binding,
+                                        attempt_plan,
+                                        job,
+                                        result="requires_relogin",
+                                        reason="profile_login_required",
+                                    )
+                                elif _is_profile_only_binding(account_binding):
+                                    _record_profile_only_terminal(
+                                        account_binding,
+                                        attempt_plan,
+                                        job,
+                                        result="failed",
+                                        reason="child_exit",
+                                    )
                                 hint = "；检测到登录态失效，请先重新登录该平台账号" if crawler_outcome.login_required else ""
                                 raise RuntimeError(
                                     f"MediaCrawler exited with {crawler_outcome.returncode}{hint}"
@@ -468,6 +506,14 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
                             result["proxy"] = _proxy_summary(account_binding)
                         if account_binding and account_binding.get("account_id"):
                             successful_account_id = int(account_binding["account_id"])
+                        if _is_profile_only_binding(account_binding) and attempt_plan is not None:
+                            _record_profile_only_terminal(
+                                account_binding,
+                                attempt_plan,
+                                job,
+                                result="success",
+                                reason="",
+                            )
                         return result
                     except CrawlerStopped as exc:
                         _update_collection_progress(run_id, platform, attempt_out, phase="collecting", error=str(exc))
@@ -614,7 +660,11 @@ def _run_crawler_attempt(
         return ManagedCrawlerOutcome(
             provider_result=provider_result,
             returncode=int(process.returncode),
-            login_required=_looks_like_login_required(log_text),
+            login_required=(
+                _is_profile_only_login_required_exit(int(process.returncode), account_binding)
+                if _is_profile_only_binding(account_binding)
+                else _looks_like_login_required(log_text)
+            ),
         )
     if process.returncode != 0:
         hint = "；检测到登录态失效，请先重新登录该平台账号" if _looks_like_login_required(log_text) else ""
@@ -1575,10 +1625,10 @@ def _build_crawler_cmd(
     if target_type == "creator":
         cmd.extend(["--creator_id", ",".join(job.get("keywords", []))])
     if login_type == "cookie":
-        cookies = (account_binding or {}).get("cookies") or login_config.get("cookies") or ""
-        if not cookies:
-            raise ValueError(f"{platform} Cookie 登录未配置 Cookie")
-        cmd.extend(["--cookies", cookies])
+        if managed_plan is None:
+            raise ProfileLoginRequired()
+        _require_profile_only_binding(account_binding, managed_plan)
+        cmd.extend(["--monitor_profile_only", "true"])
     if platform == "dy":
         cmd.extend(["--publish_time_type", str(douyin_publish_time_type(job))])
     if platform == "xhs":
@@ -1607,6 +1657,8 @@ def _build_crawler_env(
     result_path: Path | None = None,
 ) -> dict[str, str]:
     env = {**os.environ, "PYTHONUNBUFFERED": "1"}
+    if _is_profile_only_binding(account_binding) and managed_plan is None:
+        raise ProfileLoginRequired()
     if managed_plan is not None:
         if result_path is None:
             raise BrowserEnvironmentError("account_identity_provider_unsupported", "runner_result")
@@ -1631,6 +1683,16 @@ def _build_crawler_env(
                 env.pop(name, None)
         env[PLAN_ENV_NAME] = browser_environment_plan_to_json(managed_plan)
         env[RESULT_PATH_ENV_NAME] = str(result_path.resolve())
+        if _is_profile_only_binding(account_binding):
+            metadata = _require_profile_only_binding(account_binding, managed_plan)
+            for name in list(env):
+                if "COOKIE" in name.upper():
+                    env.pop(name, None)
+            env[PROFILE_ONLY_ACCOUNT_ID_ENV] = str(metadata["account_id"])
+            env[PROFILE_ONLY_PROFILE_KEY_ENV] = str(metadata["profile_key"])
+            env[PROFILE_ONLY_PROMOTION_ID_ENV] = str(metadata["promotion_id"])
+            env[PROFILE_ONLY_RUNTIME_VERSION_ENV] = str(metadata["runtime_version"])
+            env.pop(PROFILE_ONLY_FLAG, None)
         return env
     if not account_binding:
         return env
@@ -1657,6 +1719,64 @@ def _build_crawler_env(
             }
         )
     return env
+
+
+def _is_profile_only_binding(account_binding: dict[str, Any] | None) -> bool:
+    return bool(
+        account_binding
+        and str(account_binding.get("login_type") or "") == "cookie"
+    )
+
+
+def _require_profile_only_binding(
+    account_binding: dict[str, Any] | None,
+    managed_plan: BrowserEnvironmentPlan | None = None,
+) -> dict[str, Any]:
+    if not _is_profile_only_binding(account_binding):
+        raise ProfileLoginRequired()
+    binding = account_binding or {}
+    account_id = _safe_int(binding.get("account_id"))
+    runtime_version = _safe_int(binding.get("profile_runtime_version"))
+    promotion_id = _safe_int(binding.get("profile_promotion_id"))
+    profile_key = str(binding.get("profile_key") or "").strip()
+    profile_path = str(binding.get("profile_path") or "").strip()
+    if (
+        not account_id
+        or not runtime_version
+        or runtime_version < 1
+        or not promotion_id
+        or str(binding.get("profile_promotion_state") or "") != "committed"
+        or not profile_key
+        or not profile_path
+        or not Path(profile_path).is_dir()
+    ):
+        raise ProfileLoginRequired()
+    if managed_plan is not None and (
+        managed_plan.account_id != account_id
+        or managed_plan.profile_key != profile_key
+        or Path(managed_plan.profile_path).resolve() != Path(profile_path).resolve()
+        or managed_plan.action != "crawl"
+        or managed_plan.profile_mode != "persistent"
+        or managed_plan.launch_mode != "cdp_launch"
+    ):
+        raise ProfileLoginRequired()
+    return {
+        "account_id": account_id,
+        "profile_key": profile_key,
+        "promotion_id": promotion_id,
+        "runtime_version": runtime_version,
+    }
+
+
+def _is_profile_only_login_required_exit(
+    returncode: int,
+    account_binding: dict[str, Any] | None,
+) -> bool:
+    return (
+        int(returncode) == PROFILE_LOGIN_REQUIRED_EXIT_CODE
+        and _is_profile_only_binding(account_binding)
+        and int((account_binding or {}).get("profile_runtime_version") or 0) >= 1
+    )
 
 
 def _load_managed_child_result(
@@ -1711,19 +1831,39 @@ def _resolve_platform_account_binding(platform: str, job: dict[str, Any] | None 
             continue
         if account.get("platform") != platform:
             continue
+        runtime_version = int(account.get("profile_runtime_version") or 0)
+        if (
+            explicit_account_id
+            and str(account.get("login_type") or "") == "cookie"
+            and (runtime_version < 1 or bool(account.get("requires_relogin")))
+        ):
+            raise ProfileLoginRequired()
         if account.get("status") != "active":
             continue
+        committed_promotion = next(
+            (
+                row
+                for row in list_account_profile_promotions(int(account["id"]), include_terminal=True)
+                if str(row.get("state") or "") == "committed"
+            ),
+            None,
+        )
+        account_for_plan = {**account, "cookies": ""}
         binding: dict[str, Any] = {
             "account_id": account.get("id"),
             "account_name": account.get("name") or "",
             "platform": platform,
             "login_type": account.get("login_type") or "qrcode",
-            "cookies": account.get("cookies") or "",
+            "cookies": "" if runtime_version >= 1 else account.get("cookies") or "",
             "profile_key": account.get("profile_key") or "",
             "profile_configured": bool(account.get("profile_configured")),
             "profile_path": account.get("profile_path") or "",
+            "profile_runtime_version": runtime_version,
+            "profile_ready_at": account.get("profile_ready_at"),
+            "profile_promotion_id": committed_promotion.get("id") if committed_promotion else None,
+            "profile_promotion_state": committed_promotion.get("state") if committed_promotion else "",
             "task_proxy_id": explicit_proxy_id,
-            "_account": account,
+            "_account": account_for_plan,
             "_proxy": None,
         }
         account_proxy_id = _safe_int(account.get("proxy_id"))
@@ -1771,6 +1911,8 @@ def _resolve_runner_browser_plan(
         return None
     if is_legacy_draft_account(account):
         return None
+    if _is_profile_only_binding(account_binding):
+        _require_profile_only_binding(account_binding)
     if os.environ.get("MONITOR_CDP_CONNECT_EXISTING", "false").lower() in {"1", "true", "yes"}:
         raise BrowserEnvironmentError("account_identity_provider_unsupported", "cdp_connect_existing")
     proxy = account_binding.get("_proxy")
@@ -1786,7 +1928,111 @@ def _resolve_runner_browser_plan(
     )
     if not Path(plan.profile_path).is_dir():
         raise AccountIdentityError("account_identity_requires_relogin", "profile_key")
+    if _is_profile_only_binding(account_binding):
+        _require_profile_only_binding(account_binding, plan)
     return plan
+
+
+async def _prepare_profile_only_parent(
+    account_binding: dict[str, Any],
+    job: dict[str, Any],
+) -> None:
+    account_id = _safe_int(account_binding.get("account_id"))
+    user_id = _safe_int(job.get("created_by"))
+    if not account_id:
+        raise ProfileLoginRequired()
+    try:
+        _require_profile_only_binding(account_binding)
+        checked = await check_social_account_login(
+            account_id,
+            timeout_ms=15000,
+            actor_id=user_id,
+        )
+        if not checked.get("ok"):
+            raise ProfileLoginRequired()
+        account = get_social_account(account_id, masked=False)
+        if not account:
+            raise ProfileLoginRequired()
+        committed = next(
+            (
+                row
+                for row in list_account_profile_promotions(account_id, include_terminal=True)
+                if str(row.get("state") or "") == "committed"
+            ),
+            None,
+        )
+        account_binding.update(
+            {
+                "profile_key": str(account.get("profile_key") or ""),
+                "profile_path": str(account.get("profile_path") or ""),
+                "profile_runtime_version": int(account.get("profile_runtime_version") or 0),
+                "profile_promotion_id": committed.get("id") if committed else None,
+                "profile_promotion_state": committed.get("state") if committed else "",
+                "cookies": "",
+                "_account": {**account, "cookies": ""},
+            }
+        )
+        metadata = _require_profile_only_binding(account_binding)
+        record_audit_log(
+            "profile_only_parent_preflight",
+            "social_account",
+            account_id,
+            {
+                "trigger_source": str(job.get("_trigger_source") or "manual")[:64],
+                "profile_key_hash": hashlib.sha256(metadata["profile_key"].encode("utf-8")).hexdigest(),
+                "promotion_id": metadata["promotion_id"],
+                "runtime_version": metadata["runtime_version"],
+                "result": "passed",
+            },
+            user_id=user_id,
+            workspace_id=int(account.get("workspace_id") or 1),
+        )
+    except ProfileLoginRequired:
+        mark_social_account_profile_requires_relogin(
+            account_id,
+            reason="Profile 登录态需要重新登录",
+            trigger_source="profile_only_parent",
+            user_id=user_id,
+        )
+        raise
+    except Exception as exc:
+        mark_social_account_profile_requires_relogin(
+            account_id,
+            reason="Profile 登录态检查失败，请重新登录",
+            trigger_source="profile_only_parent",
+            user_id=user_id,
+        )
+        raise ProfileLoginRequired() from exc
+
+
+def _record_profile_only_terminal(
+    account_binding: dict[str, Any],
+    plan: BrowserEnvironmentPlan,
+    job: dict[str, Any],
+    *,
+    result: str,
+    reason: str,
+) -> None:
+    metadata = _require_profile_only_binding(account_binding, plan)
+    account = account_binding.get("_account") if isinstance(account_binding.get("_account"), dict) else {}
+    record_audit_log(
+        "profile_only_crawler_terminal",
+        "social_account",
+        metadata["account_id"],
+        {
+            "trigger_source": str(job.get("_trigger_source") or "manual")[:64],
+            "profile_key_hash": hashlib.sha256(metadata["profile_key"].encode("utf-8")).hexdigest(),
+            "promotion_id": metadata["promotion_id"],
+            "runtime_version": metadata["runtime_version"],
+            "provider_resolution_id": str(plan.resolution_id)[:160],
+            "browser_attempt_id": str(plan.attempt_id)[:160],
+            "fallback_used": False,
+            "result": str(result or "failed")[:32],
+            "reason": str(reason or "")[:96],
+        },
+        user_id=_safe_int(job.get("created_by")),
+        workspace_id=int(account.get("workspace_id") or plan.workspace_id),
+    )
 
 
 def _playwright_chromium_executable_path() -> str:

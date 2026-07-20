@@ -7,11 +7,11 @@ documentation-only result was written
 Review date: 2026-07-19
 Current progress: Phase 5.1A-D and CR-114 are verified, merged, and rechecked
 through `main@27389a8`. The separate Phase 5.1 server-like acceptance remains
-operator-gated; CR-112 Packet B and C.1 are verified within their recorded
-proof boundaries. Packet C.2 is verified and C.3 waits for its atomic commit.
+operator-gated; CR-112 Packet B and C.1-C.3 are verified within their recorded
+proof boundaries. Packet D remains dependency-gated.
 
 2026-07-21 status note: the table below preserves its 2026-07-19 baseline
-classification. CR-112 is now `Accepted / Dependency-Gated (Packet C.3)`, executes
+classification. CR-112 is now `Accepted / Dependency-Gated (Packet D)`, executes
 before CR-070, and reuses this provider boundary after Packet B selected direct
 managed-context acquisition; no CR-112 implementation is added to the
 historical Phase 5.1P packet.
@@ -66,7 +66,7 @@ account + action
 | CR-114 | historical/already completed | Object-scoped Context/Page binding is merged and post-merge verified on `main@27389a8`. |
 | Phase 5.1 acceptance | current/operator-gated | The atomic packet requires server-like requested/effective, proxy-effect, manual/scheduler/CLI, restart, and CDP proof. |
 | CR-070 / Phase 5.2 | future, dependency-gated | Current accepted order places it after CR-112 Packet D; it later consumes only committed CR-112 account/Profile state. |
-| CR-112 | historical 2026-07-19 classification was future/`Needs Confirmation`; current status is `Accepted / Dependency-Gated (Packet C.3)` | Reuses the CR-047 provider contract. Packet B selected direct managed Playwright/CDP context acquisition; C.1 owns additive schema/linkage, canonical Cookie validation, Profile promotion, and recovery; C.2 verifies the feature-gated exact-context acquisition, administrator reveal boundary, and owned-process cleanup. No CR-112 implementation is assigned to CR-047. |
+| CR-112 | historical 2026-07-19 classification was future/`Needs Confirmation`; current status is `Accepted / Dependency-Gated (Packet D)` | Reuses the CR-047 provider contract. Packet B selected direct managed Playwright/CDP context acquisition; C.1 owns additive schema/linkage, canonical Cookie validation, Profile promotion, and recovery; C.2 verifies the feature-gated exact-context acquisition, administrator reveal boundary, and owned-process cleanup; C.3 verifies Profile-only execution and raw-Cookie argv/env retirement. No CR-112 implementation is assigned to CR-047. |
 | CR-092 and CR-094 | future, `Needs Confirmation` | Not Phase 5.1P prerequisites. |
 | CR-093 | future, accepted boundary with pending implementation decisions | Its future route-exposure work owns public treatment of legacy `/api/crawler`; it does not block this map. |
 | CR-037 and Users And Permissions page | deferred/future | Independent capability work. |
@@ -405,30 +405,28 @@ effective result; merely passing a value into a helper is not proof.
 
 ## CR-112 Profile-Only Adapter Boundary
 
-CR-112 C.3 remains dependency-gated. The following exact future adapter is
-recorded in accepted planning artifacts and remains mapped here without
-implementation or ownership transfer:
+CR-112 C.3 is implemented and verified within its automated/local proof
+boundary. The adapter remains owned by CR-112 rather than historical Phase
+5.1P:
 
-1. Current `_build_crawler_cmd` keeps `--lt cookie` and raw `--cookies` for
-   managed Cookie accounts.
-2. Future CR-112 C.3 keeps `--lt cookie`, adds hidden
+1. `_build_crawler_cmd` keeps `--lt cookie`, adds hidden
    `--monitor_profile_only true`, and omits `--cookies`.
-3. `_build_crawler_env` passes the exact Phase 5.1 provider Profile/browser/
+2. `_build_crawler_env` passes the exact Phase 5.1 provider Profile/browser/
    proxy result plus account ID, `profile_key`, promotion ID, and
    `profile_runtime_version`, with no Cookie value.
-4. `cmd_arg/arg.py` accepts the hidden flag only with `--lt cookie`, rejects
+3. `cmd_arg/arg.py` accepts the hidden flag only with `--lt cookie`, rejects
    explicit Cookie input, clears default/process `config.COOKIES`, and rejects
    inconsistent provider/account metadata before `CrawlerFactory` creates a
    crawler.
-5. Each monitor platform checks the prepared Profile before constructing any
+4. Each monitor platform checks the prepared Profile before constructing any
    QR, Cookie, or phone login class. Failure raises `ProfileLoginRequired`.
-6. `main.py` maps only `ProfileLoginRequired` to exit code `42`.
-7. `runner.py` maps only exit code `42` to a redacted typed
+5. `main.py` maps only `ProfileLoginRequired` to exit code `42`.
+6. `runner.py` maps only exit code `42` to a redacted typed
    `requires_relogin` account/run result; generic failures keep generic
    handling.
-8. Missing Profile, provider/CDP mismatch, E14 fallback, default network,
+7. Missing Profile, provider/CDP mismatch, E14 fallback, default network,
    empty Cookie injection, or unexpected QR opening fails before crawl.
-9. Existing QR/Profile child execution stays separate and regression-protected
+8. Existing QR/Profile child execution stays separate and regression-protected
    unless a later decision changes it.
 
 CR-047 owns the provider result reused by this future contract. CR-112 owns

@@ -6429,6 +6429,100 @@ def list_account_profile_promotions(
     return [dict(row) for row in rows]
 
 
+def enforce_profile_only_cookie_cutover(trigger_source: str = "startup") -> list[int]:
+    """Make every legacy Cookie account non-runnable before profile-only activation."""
+
+    now = utc_now()
+    changed: list[int] = []
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT * FROM social_accounts
+            WHERE login_type='cookie'
+              AND profile_runtime_version < 1
+              AND is_draft=0
+              AND (
+                    requires_relogin=0
+                 OR status<>'limited'
+                 OR identity_state<>'requires_relogin'
+              )
+            ORDER BY id
+            """
+        ).fetchall()
+        for row in rows:
+            account = dict(row)
+            account_id = int(account["id"])
+            conn.execute(
+                """
+                UPDATE social_accounts SET
+                    requires_relogin=1,
+                    identity_state='requires_relogin',
+                    status='limited',
+                    last_error=?,
+                    updated_at=?
+                WHERE id=? AND login_type='cookie' AND profile_runtime_version < 1
+                """,
+                ("Cookie 账号需要重新验证并生成采集 Profile", now, account_id),
+            )
+            _record_audit_log(
+                conn,
+                int(account.get("workspace_id") or DEFAULT_WORKSPACE_ID),
+                None,
+                "profile_only_cutover_requires_relogin",
+                "social_account",
+                str(account_id),
+                {
+                    "trigger_source": str(trigger_source or "startup")[:64],
+                    "profile_runtime_version": int(account.get("profile_runtime_version") or 0),
+                    "cookie_source": str(account.get("cookie_source") or "")[:32],
+                    "result": "requires_relogin",
+                },
+            )
+            changed.append(account_id)
+    return changed
+
+
+def mark_social_account_profile_requires_relogin(
+    account_id: int,
+    *,
+    reason: str,
+    trigger_source: str,
+    user_id: int | None = None,
+) -> dict[str, Any]:
+    now = utc_now()
+    safe_reason = customer_safe_text(str(reason or "profile_login_invalid"))[:240]
+    with get_conn() as conn:
+        account = conn.execute("SELECT * FROM social_accounts WHERE id=?", (int(account_id),)).fetchone()
+        if not account:
+            raise ValueError("account not found")
+        conn.execute(
+            """
+            UPDATE social_accounts SET
+                requires_relogin=1,
+                identity_state='requires_relogin',
+                status='limited',
+                last_error=?,
+                updated_at=?
+            WHERE id=?
+            """,
+            (safe_reason, now, int(account_id)),
+        )
+        _record_audit_log(
+            conn,
+            int(account["workspace_id"] or DEFAULT_WORKSPACE_ID),
+            user_id,
+            "profile_only_requires_relogin",
+            "social_account",
+            str(account_id),
+            {
+                "trigger_source": str(trigger_source or "profile_only")[:64],
+                "reason": safe_reason,
+                "result": "requires_relogin",
+            },
+        )
+    return get_social_account(int(account_id)) or {}
+
+
 def update_account_profile_promotion(
     promotion_id: int,
     state: str,
