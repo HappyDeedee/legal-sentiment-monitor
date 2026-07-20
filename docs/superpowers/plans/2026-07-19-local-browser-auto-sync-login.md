@@ -1,8 +1,8 @@
 # Local Browser Auto-Sync Login Packet
 
-> In Progress from 2026-07-21. Packet B and C.1 are verified within their
-> recorded proof boundaries; C.2 and C.3 remain gated by the preceding
-> sub-packet.
+> Packet B and C.1-C.2 are verified within their recorded proof boundaries.
+> C.3 waits for the C.2 atomic commit and Packet D remains gated by C.3
+> acceptance evidence.
 
 **Goal:** Add a default-off local browser login flow that automatically
 acquires and verifies Cookie material for the exact account while preserving
@@ -143,47 +143,54 @@ C.1 verification is complete within the synthetic/local proof boundary: the addi
 canonical protocol, candidate/rollback journal, atomic account-run/Profile
 exclusion, `256 MiB` storage reserve, marker-based restart recovery, cleanup
 after a successful managed run, manual Cookie promotion, profile-authority
-dispatch, and QR/manual regression checks pass. C.2 router/UI acquisition
-remains governed by the atomic delivery gate in `TASKS.md`.
+dispatch, and QR/manual regression checks pass. C.2 verification is complete
+within its local proof boundary; C.3 remains governed by the C.2 atomic-delivery
+gate in `TASKS.md`.
 
 ### C.2 - Managed Browser Acquisition
 
-- [ ] Add default-off `MONITOR_BROWSER_COOKIE_SYNC_ENABLED` configuration.
+- [x] Add default-off `MONITOR_BROWSER_COOKIE_SYNC_ENABLED` configuration.
       Leave the rejected Cookie-bridge route absent in both feature states and
       retain HTTP 404/unmatched-WebSocket 403 regression probes.
-- [ ] Limit the feature-flag reads to C.2 router inclusion, C.2
+- [x] Limit the feature-flag reads to C.2 router inclusion, C.2
       UI/capability/readiness, and C.2 managed-browser launch. C.1
       validator/promotion/recovery/manual modules and every C.3 path must import
       and execute with the flag false.
-- [ ] Create the acquisition session before browser launch and bind its exact
+- [x] Create the acquisition session before browser launch and bind its exact
       account ID, `profile_key`, login session, promotion, provider resolution,
       attempt ID, actor, platform, and generation under the account/Profile
       lock.
-- [ ] Pass the live Playwright/CDP browser-context handle directly from the
+- [x] Pass the live Playwright/CDP browser-context handle directly from the
       parent operation to the acquisition service. Reject caller-supplied raw
       Profile paths, default contexts, missing handles, closed handles, and any
       account/session/generation mismatch.
-- [ ] Capture structured Cookie records directly from that exact context,
+- [x] Capture structured Cookie records directly from that exact context,
       enforce Packet B limits and platform allowlists, reject late/stale results,
       and pass only the canonical payload to C.1.
-- [ ] Implement the browser-sync state machine and centralized finalizer. Open
+- [x] Implement the browser-sync state machine and centralized finalizer. Open
       the visible managed candidate automatically and update status without
       manual refresh.
-- [ ] Add authenticated start/status/cancel APIs and UI actions in this order:
+- [x] Add authenticated start/status/cancel APIs and UI actions in this order:
       QR default, browser auto-sync, collapsed advanced manual Cookie. Browser
       sync failure does not auto-open manual input.
-- [ ] Add an administrator-only Cookie reveal POST endpoint for one exact
+- [x] Add an administrator-only Cookie reveal POST endpoint for one exact
       `social_account`. Keep standard account responses masked; require the
       normal monitor authorization dependency; return 403 to normal users and
       `no-store`/`no-cache` headers on success and error responses.
-- [ ] Add the masked Cookie field, eye reveal/hide button, copy button, and copy
+- [x] Add the masked Cookie field, eye reveal/hide button, copy button, and copy
       feedback to the administrator account form. Fetch only after explicit
       reveal, keep the value out of browser persistent Storage and URLs, and
       clear transient value/DOM state on close, navigation, account switch, and
       timeout. Normal-user markup has no reveal or copy control.
-- [ ] Add customer-safe states for timeout, browser closed, browser
+- [x] Add customer-safe states for timeout, browser closed, browser
       unavailable, stale session, validation, promotion, rollback, and
       `recovery_required`.
+
+C.2 verification covers focused unit/API/permission/state/process tests,
+adjacent Phase 5.1/login/crawl regressions, the complete monitor suite,
+desktop/phone UI checks, and a controlled account-bound start/cancel run. The
+controlled run preserved the previous active account/Profile, removed the
+candidate, and left no Chromium process owned by the cancelled session.
 
 ### C.3 - Profile-Only Runner Migration
 

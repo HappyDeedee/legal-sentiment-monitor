@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import asyncio
 import copy
+import ctypes
 import importlib.metadata
 import json
 import os
@@ -248,6 +250,13 @@ class ManagedBrowserSession:
     plan: BrowserEnvironmentPlan
 
 
+@dataclass(frozen=True)
+class ManagedBrowserProcess:
+    pid: int
+    executable_name: str
+    creation_time: int
+
+
 _cached_plan: BrowserEnvironmentPlan | None = None
 _cache_lock = threading.Lock()
 _CONTEXT_PLAN_ATTR = "_monitor_browser_environment_plan"
@@ -403,6 +412,276 @@ async def launch_managed_browser_context(playwright: Any, plan: BrowserEnvironme
         )
         await _close_failed_launch(browser, context)
         raise failure from exc
+
+
+def managed_browser_processes(context: Any) -> tuple[ManagedBrowserProcess, ...]:
+    """Return Windows browser descendants owned by this context's Playwright driver."""
+
+    if os.name != "nt":
+        return ()
+    impl = getattr(context, "_impl_obj", None)
+    connection = getattr(impl, "_connection", None)
+    transport = getattr(connection, "_transport", None)
+    process = getattr(transport, "_proc", None)
+    try:
+        driver_pid = int(getattr(process, "pid", 0) or 0)
+    except (TypeError, ValueError):
+        driver_pid = 0
+    if driver_pid <= 0:
+        return ()
+    rows = _windows_process_snapshot()
+    processes: list[ManagedBrowserProcess] = []
+    for pid, name in _descendant_processes(rows, driver_pid):
+        creation_time = _windows_process_creation_time(pid)
+        if creation_time is not None:
+            processes.append(
+                ManagedBrowserProcess(
+                    pid=pid,
+                    executable_name=name,
+                    creation_time=creation_time,
+                )
+            )
+    return tuple(processes)
+
+
+async def close_managed_browser_session(
+    context: Any | None,
+    browser: Any | None,
+    owned_processes: tuple[ManagedBrowserProcess, ...] = (),
+) -> None:
+    """Close one managed session and terminate only proven residual child processes."""
+
+    captured = {process.pid: process for process in owned_processes}
+    if os.name == "nt" and context is not None:
+        try:
+            captured.update({process.pid: process for process in managed_browser_processes(context)})
+        except Exception:
+            pass
+    close_failed = False
+    if context is not None:
+        try:
+            await context.close()
+        except Exception:
+            close_failed = True
+    if browser is not None:
+        try:
+            await browser.close()
+        except Exception:
+            close_failed = True
+    cleanup_ok = True
+    captured_processes = tuple(captured.values())
+    if os.name == "nt" and captured_processes:
+        cleanup_ok = await asyncio.to_thread(_terminate_owned_windows_processes, captured_processes)
+    if not cleanup_ok or (close_failed and not captured_processes):
+        raise BrowserEnvironmentError("account_identity_provider_browser_cleanup_failed", "browser")
+
+
+def _windows_process_snapshot() -> tuple[tuple[int, int, str], ...]:
+    if os.name != "nt":
+        return ()
+
+    from ctypes import wintypes
+
+    class ProcessEntry32W(ctypes.Structure):
+        _fields_ = (
+            ("dwSize", wintypes.DWORD),
+            ("cntUsage", wintypes.DWORD),
+            ("th32ProcessID", wintypes.DWORD),
+            ("th32DefaultHeapID", ctypes.c_size_t),
+            ("th32ModuleID", wintypes.DWORD),
+            ("cntThreads", wintypes.DWORD),
+            ("th32ParentProcessID", wintypes.DWORD),
+            ("pcPriClassBase", wintypes.LONG),
+            ("dwFlags", wintypes.DWORD),
+            ("szExeFile", wintypes.WCHAR * 260),
+        )
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.CreateToolhelp32Snapshot.argtypes = (wintypes.DWORD, wintypes.DWORD)
+    kernel32.CreateToolhelp32Snapshot.restype = wintypes.HANDLE
+    kernel32.Process32FirstW.argtypes = (wintypes.HANDLE, ctypes.POINTER(ProcessEntry32W))
+    kernel32.Process32FirstW.restype = wintypes.BOOL
+    kernel32.Process32NextW.argtypes = (wintypes.HANDLE, ctypes.POINTER(ProcessEntry32W))
+    kernel32.Process32NextW.restype = wintypes.BOOL
+    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    kernel32.CloseHandle.restype = wintypes.BOOL
+
+    snapshot = kernel32.CreateToolhelp32Snapshot(0x00000002, 0)
+    invalid_handle = ctypes.c_void_p(-1).value
+    if snapshot in (None, 0, invalid_handle):
+        raise BrowserEnvironmentError("account_identity_provider_browser_process_snapshot_failed", "browser")
+    rows: list[tuple[int, int, str]] = []
+    try:
+        entry = ProcessEntry32W()
+        entry.dwSize = ctypes.sizeof(ProcessEntry32W)
+        if not kernel32.Process32FirstW(snapshot, ctypes.byref(entry)):
+            raise BrowserEnvironmentError("account_identity_provider_browser_process_snapshot_failed", "browser")
+        while True:
+            rows.append(
+                (
+                    int(entry.th32ProcessID),
+                    int(entry.th32ParentProcessID),
+                    str(entry.szExeFile),
+                )
+            )
+            if not kernel32.Process32NextW(snapshot, ctypes.byref(entry)):
+                break
+    finally:
+        kernel32.CloseHandle(snapshot)
+    return tuple(rows)
+
+
+def _descendant_processes(
+    rows: tuple[tuple[int, int, str], ...],
+    root_pid: int,
+) -> tuple[tuple[int, str], ...]:
+    children: dict[int, list[tuple[int, str]]] = {}
+    for pid, parent_pid, executable_name in rows:
+        if pid > 0 and parent_pid > 0 and pid != parent_pid:
+            children.setdefault(parent_pid, []).append((pid, executable_name))
+
+    found: list[tuple[int, int, str]] = []
+    pending: list[tuple[int, int]] = [(int(root_pid), 0)]
+    seen = {int(root_pid)}
+    while pending:
+        parent_pid, depth = pending.pop()
+        for pid, executable_name in children.get(parent_pid, ()):
+            if pid in seen:
+                continue
+            seen.add(pid)
+            found.append((depth + 1, pid, executable_name))
+            pending.append((pid, depth + 1))
+    found.sort(key=lambda item: (-item[0], item[1]))
+    return tuple((pid, executable_name) for _, pid, executable_name in found)
+
+
+def _windows_process_creation_time(pid: int) -> int | None:
+    if os.name != "nt":
+        return None
+
+    from ctypes import wintypes
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.GetProcessTimes.argtypes = (
+        wintypes.HANDLE,
+        ctypes.POINTER(wintypes.FILETIME),
+        ctypes.POINTER(wintypes.FILETIME),
+        ctypes.POINTER(wintypes.FILETIME),
+        ctypes.POINTER(wintypes.FILETIME),
+    )
+    kernel32.GetProcessTimes.restype = wintypes.BOOL
+    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    kernel32.CloseHandle.restype = wintypes.BOOL
+
+    handle = kernel32.OpenProcess(0x1000, False, int(pid))
+    if not handle:
+        return None
+    try:
+        created = wintypes.FILETIME()
+        exited = wintypes.FILETIME()
+        kernel = wintypes.FILETIME()
+        user = wintypes.FILETIME()
+        if not kernel32.GetProcessTimes(
+            handle,
+            ctypes.byref(created),
+            ctypes.byref(exited),
+            ctypes.byref(kernel),
+            ctypes.byref(user),
+        ):
+            return None
+        return (int(created.dwHighDateTime) << 32) | int(created.dwLowDateTime)
+    finally:
+        kernel32.CloseHandle(handle)
+
+
+def _terminate_owned_windows_processes(owned_processes: tuple[ManagedBrowserProcess, ...]) -> bool:
+    if os.name != "nt":
+        return True
+
+    from ctypes import wintypes
+
+    try:
+        current = {pid: name for pid, _, name in _windows_process_snapshot()}
+    except Exception:
+        return False
+
+    kernel32 = ctypes.WinDLL("kernel32", use_last_error=True)
+    kernel32.OpenProcess.argtypes = (wintypes.DWORD, wintypes.BOOL, wintypes.DWORD)
+    kernel32.OpenProcess.restype = wintypes.HANDLE
+    kernel32.GetExitCodeProcess.argtypes = (wintypes.HANDLE, ctypes.POINTER(wintypes.DWORD))
+    kernel32.GetExitCodeProcess.restype = wintypes.BOOL
+    kernel32.TerminateProcess.argtypes = (wintypes.HANDLE, wintypes.UINT)
+    kernel32.TerminateProcess.restype = wintypes.BOOL
+    kernel32.WaitForSingleObject.argtypes = (wintypes.HANDLE, wintypes.DWORD)
+    kernel32.WaitForSingleObject.restype = wintypes.DWORD
+    kernel32.CloseHandle.argtypes = (wintypes.HANDLE,)
+    kernel32.CloseHandle.restype = wintypes.BOOL
+
+    cleanup_ok = True
+    waiting: list[Any] = []
+    access = 0x0001 | 0x00100000 | 0x1000
+    for process in owned_processes:
+        current_name = current.get(process.pid)
+        if current_name is None:
+            continue
+        if current_name.casefold() != process.executable_name.casefold():
+            cleanup_ok = False
+            continue
+        handle = kernel32.OpenProcess(access, False, int(process.pid))
+        if not handle:
+            cleanup_ok = False
+            continue
+        created = wintypes.FILETIME()
+        exited = wintypes.FILETIME()
+        kernel = wintypes.FILETIME()
+        user = wintypes.FILETIME()
+        get_process_times = kernel32.GetProcessTimes
+        get_process_times.argtypes = (
+            wintypes.HANDLE,
+            ctypes.POINTER(wintypes.FILETIME),
+            ctypes.POINTER(wintypes.FILETIME),
+            ctypes.POINTER(wintypes.FILETIME),
+            ctypes.POINTER(wintypes.FILETIME),
+        )
+        get_process_times.restype = wintypes.BOOL
+        if not get_process_times(
+            handle,
+            ctypes.byref(created),
+            ctypes.byref(exited),
+            ctypes.byref(kernel),
+            ctypes.byref(user),
+        ):
+            kernel32.CloseHandle(handle)
+            cleanup_ok = False
+            continue
+        creation_time = (int(created.dwHighDateTime) << 32) | int(created.dwLowDateTime)
+        if creation_time != process.creation_time:
+            kernel32.CloseHandle(handle)
+            cleanup_ok = False
+            continue
+        exit_code = wintypes.DWORD()
+        if not kernel32.GetExitCodeProcess(handle, ctypes.byref(exit_code)):
+            kernel32.CloseHandle(handle)
+            cleanup_ok = False
+            continue
+        if exit_code.value != 259:
+            kernel32.CloseHandle(handle)
+            continue
+        if not kernel32.TerminateProcess(handle, 1):
+            kernel32.CloseHandle(handle)
+            cleanup_ok = False
+            continue
+        waiting.append(handle)
+
+    for handle in waiting:
+        try:
+            if kernel32.WaitForSingleObject(handle, 2000) != 0:
+                cleanup_ok = False
+        finally:
+            kernel32.CloseHandle(handle)
+    return cleanup_ok
 
 
 async def verify_managed_page(context: Any, page: Any) -> BrowserEnvironmentResult | None:

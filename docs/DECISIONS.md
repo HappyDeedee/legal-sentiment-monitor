@@ -743,9 +743,9 @@ short `Superseded by` note rather than deleting history.
   designated account and normal monitor crawl entry to persist at least one
   real content item with `fallback_used=false`. Kuaishou (`ks`) is deferred and
   is not a Packet D failure condition.
-- Confirmed status semantics: CR-112 is `Accepted / In Progress (Packet C.1)`
-  after Packet B verification and commit. The C.1 implementation gates pass
-  within the recorded synthetic/local proof boundary. A packet
+- Confirmed status semantics: CR-112 is `Accepted / Dependency-Gated (Packet C.3)`
+  after Packet B/C.1-C.2 verification. C.3 starts only after the C.2 atomic
+  commit. A packet
   becomes `In Progress` only when its start gate passes and execution begins, and becomes
   `Verified` only after its required tests, real evidence where specified,
   documentation synchronization, and independent review pass.

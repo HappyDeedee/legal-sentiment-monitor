@@ -19,7 +19,9 @@ from typing import Any
 from tools.browser_environment import (
     BrowserEnvironmentError,
     BrowserEnvironmentPlan,
+    close_managed_browser_session,
     launch_managed_browser_context,
+    managed_browser_processes,
     verify_managed_page,
 )
 
@@ -153,7 +155,7 @@ async def async_profile_operation_lock(account_id: int, profile_key: str, timeou
 
 async def promote_cookie_to_profile(
     account_id: int,
-    cookie_records: Sequence[Mapping[str, Any]],
+    cookie_records: Sequence[Mapping[str, Any]] | None,
     *,
     cookie_source: str,
     login_session_id: int | None = None,
@@ -176,8 +178,12 @@ async def promote_cookie_to_profile(
     if not account:
         raise ProfilePromotionError("profile_promotion_account_missing")
     platform = str(account.get("platform") or "").strip().lower()
-    records = canonicalize_cookie_records(platform, cookie_records)
-    serialized_material = serialize_cookie_material(platform, records)
+    records = (
+        canonicalize_cookie_records(platform, cookie_records)
+        if cookie_records is not None
+        else None
+    )
+    serialized_material = serialize_cookie_material(platform, records) if records is not None else ""
     if login_session_id is None:
         session = create_login_session(
             {
@@ -250,6 +256,12 @@ async def promote_cookie_to_profile(
             )
             candidate_result = await runner(candidate_plan, records)
             _require_validation(candidate_result, "profile_candidate_validation_failed", int(promotion["id"]))
+            if records is None:
+                acquired_records = candidate_result.get("cookie_records") if isinstance(candidate_result, Mapping) else None
+                if not isinstance(acquired_records, Sequence) or isinstance(acquired_records, (str, bytes, bytearray)):
+                    raise ProfilePromotionError("profile_cookie_capture_missing", int(promotion["id"]))
+                records = canonicalize_cookie_records(platform, acquired_records)
+                serialized_material = serialize_cookie_material(platform, records)
             update_account_profile_promotion(int(promotion["id"]), "candidate_ready", checkpoint="candidate_ready_at")
 
             update_account_profile_promotion(int(promotion["id"]), "swapping", checkpoint="swap_started_at")
@@ -482,7 +494,10 @@ def _default_browser_runner(platform: str, playwright: Any) -> BrowserRunner:
             raise ProfilePromotionError("profile_promotion_browser_unavailable")
         session = await launch_managed_browser_context(playwright, plan)
         context = session.context
+        owned_processes = managed_browser_processes(context)
         try:
+            if os.name == "nt" and not owned_processes:
+                raise ProfilePromotionError("profile_browser_process_ownership_unavailable")
             if injected_records is not None:
                 await context.add_cookies(to_playwright_cookie_items(injected_records))
             page = context.pages[0] if getattr(context, "pages", None) else await context.new_page()
@@ -505,17 +520,15 @@ def _default_browser_runner(platform: str, playwright: Any) -> BrowserRunner:
                 "identity": await _extract_platform_identity(platform, page),
             }
         finally:
-            try:
-                await context.close()
-            except Exception:
-                pass
-            if session.browser is not None:
-                try:
-                    await session.browser.close()
-                except Exception:
-                    pass
+            await close_managed_browser_session(context, session.browser, owned_processes)
 
     return run
+
+
+def default_profile_browser_runner(platform: str, playwright: Any) -> BrowserRunner:
+    """Return the standard managed Profile validator for C.2 acquisition."""
+
+    return _default_browser_runner(platform, playwright)
 
 
 def _resolve_provider_plan(account: Mapping[str, Any], playwright: Any) -> BrowserEnvironmentPlan:
@@ -564,6 +577,24 @@ def _prepare_operation_paths(paths: ProfilePromotionPaths, promotion: Mapping[st
     temporary = paths.candidate_marker.with_name(f"{paths.candidate_marker.name}.tmp")
     temporary.write_text(json.dumps(marker, sort_keys=True, separators=(",", ":")), encoding="utf-8")
     os.replace(temporary, paths.candidate_marker)
+
+
+def reset_candidate_profile_for_cookie_injection(paths: ProfilePromotionPaths, promotion: Mapping[str, Any]) -> None:
+    """Remove browser storage acquired during login while retaining the journal marker."""
+
+    if not paths.candidate.exists() or not paths.candidate.is_dir() or paths.candidate.is_symlink():
+        raise ProfilePromotionError("profile_candidate_missing", int(promotion["id"]))
+    if not _marker_matches(paths.candidate, promotion):
+        raise ProfilePromotionError("profile_marker_mismatch", int(promotion["id"]), recovery_required=True)
+    for child in paths.candidate.iterdir():
+        if child.name == PROFILE_OPERATION_MARKER:
+            continue
+        if child.is_symlink() or child.is_file():
+            child.unlink()
+        elif child.is_dir():
+            shutil.rmtree(child)
+        else:
+            raise ProfilePromotionError("profile_artifact_invalid", int(promotion["id"]), recovery_required=True)
 
 
 def _recover_failed_promotion(

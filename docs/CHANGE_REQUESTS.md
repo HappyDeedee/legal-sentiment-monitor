@@ -1922,16 +1922,17 @@ multi-account binding, local deployment, and login UI.
 
 Type: New Capability
 
-Status: Accepted / In Progress (Packet C.1)
+Status: Accepted / Dependency-Gated (Packet C.3)
 
 Interpretation: the product direction and packet boundaries were accepted on
 2026-07-21. Packet B is verified and committed in `1d7465c`; Packet C.1 is
-implemented and verified within its recorded proof boundary. C.1 also enforces
-the atomic account-run/Profile-promotion exclusion, a `256 MiB` storage
-reserve, and immediate retained-rollback cleanup after a successful managed
-run. Packet C.2/C.3 and D remain gated. Schema, runtime, migration, UI, and real acceptance remain
-dependency-gated until the owning packet begins and produces its required
-evidence.
+implemented and verified within its recorded proof boundary. Packet C.2 is
+also implemented and verified for direct browser acquisition, session binding,
+administrator Cookie reveal, associated UI, and owned-process cleanup. C.1 enforces the
+atomic account-run/Profile-promotion exclusion, a `256 MiB` storage reserve,
+and immediate retained-rollback cleanup after a successful managed run.
+Packet C.3 waits for the C.2 atomic commit; Packet D remains gated until C.3
+produces its required evidence.
 
 Background:
 
@@ -2154,8 +2155,9 @@ Related Governance:
 
 Packet B Documentation And Review Acceptance:
 
-- CR-112 is consistently `Accepted / Verified (Packet B)`. Packet C and D
-  remain dependency-gated and not started until the Packet B result commit.
+- CR-112 is consistently `Accepted / Dependency-Gated (Packet C.3)`. Packet B
+  and C.1-C.2 are verified within their recorded proof boundaries; C.3 waits
+  for the C.2 atomic commit, while D remains dependency-gated.
 - Phase 5.1P and Phase 5.1A-D plus current merged regression fixes are recorded
   as verified. The separate CR-047 Linux/server-like real acceptance remains
   operator-gated, and CR-112-before-CR-070 sequencing is explicit.

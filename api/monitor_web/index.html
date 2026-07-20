@@ -3606,19 +3606,32 @@
                     <div id="login_panel_qrcode" class="login-mode-panel platform-login-panel active">
                       <div class="login-actions">
                         <button id="account_qrcode_button" class="primary" type="button" data-feedback-bound="1" onclick="startLoginSessionFromForm()">生成二维码并登录</button>
+                        <button id="account_browser_sync_button" class="secondary" type="button" data-feedback-bound="1" onclick="startBrowserCookieSyncFromForm()" style="display:none">浏览器登录并自动同步</button>
                         <button id="account_local_login_button" class="secondary" type="button" data-feedback-bound="1" onclick="openCurrentAccountLoginBrowser()">打开登录窗口</button>
                       </div>
                       <div id="login_session_result" class="login-result"><div class="small">点击“生成登录二维码”后在这里扫码。</div></div>
                     </div>
-                    <div id="login_panel_cookie" class="login-mode-panel platform-login-panel">
-                      <label>Cookie</label>
-                      <textarea id="social_account_cookie_input" placeholder="粘贴该平台 Cookie。保存后采集会使用 Cookie 登录。"></textarea>
-                      <label class="small"><input id="social_account_clear_cookie" type="checkbox" style="width:auto"> 清空当前账号已保存 Cookie</label>
-                      <div class="login-actions">
-                        <button id="account_cookie_save_button" class="primary" type="button" data-feedback-bound="1" onclick="saveCurrentPlatformCookieLogin()">保存 Cookie 登录</button>
+                    <details id="manual_cookie_advanced" class="advanced">
+                      <summary>高级选项：手工 Cookie</summary>
+                      <div id="login_panel_cookie" class="login-mode-panel platform-login-panel">
+                        <label>Cookie</label>
+                        <textarea id="social_account_cookie_input" placeholder="粘贴该平台 Cookie。保存后系统会验证并写入账号 Profile。"></textarea>
+                        <label class="small"><input id="social_account_clear_cookie" type="checkbox" style="width:auto"> 清空当前账号已保存 Cookie</label>
+                        <div class="login-actions">
+                          <button id="account_cookie_save_button" class="primary" type="button" data-feedback-bound="1" onclick="saveCurrentPlatformCookieLogin()">保存 Cookie 登录</button>
+                        </div>
+                        <div id="cookie_login_result" class="notice">Cookie 会加密保存，页面默认不显示原文。</div>
+                        <div id="account_cookie_reveal_panel" class="admin-only-cookie-control" style="display:none">
+                          <label>已保存的完整 Cookie</label>
+                          <textarea id="account_cookie_reveal_value" readonly aria-label="已保存的完整 Cookie">••••••••</textarea>
+                          <div class="login-actions">
+                            <button id="account_cookie_reveal_button" class="secondary" type="button" data-feedback-bound="1" onclick="toggleCurrentAccountCookieReveal()">显示</button>
+                            <button id="account_cookie_copy_button" class="secondary" type="button" data-feedback-bound="1" onclick="copyCurrentAccountCookie()" style="display:none">复制</button>
+                          </div>
+                          <div id="account_cookie_reveal_feedback" class="small"></div>
+                        </div>
                       </div>
-                      <div id="cookie_login_result" class="notice">Cookie 会加密保存，页面不会回显原文。</div>
-                    </div>
+                    </details>
                   </div>
                 </div>
                 <div class="detail-block">
@@ -4316,8 +4329,15 @@
     let runPollInFlight = false;
     let loginSessionPollTimer = null;
     let activeLoginSessionId = null;
+    let browserCookieSyncPollTimer = null;
+    let activeBrowserCookieSyncSessionId = null;
+    let browserCookieSyncPollToken = 0;
     let visibleLoginReconcileTimer = null;
     let visibleLoginReconcileToken = 0;
+    let revealedAccountCookie = '';
+    let revealedAccountCookieId = null;
+    let accountCookieRevealTimer = null;
+    let revealedAccountCookieVisible = false;
     let emailPreviewTimer = null;
     let openJobMenuId = null;
     let openAIRuleMenuId = null;
@@ -4937,6 +4957,8 @@
     function showLogin(message=''){
       authReady=false;
       currentSession=null;
+      stopBrowserCookieSyncPolling({cancelRemote:true});
+      clearRevealedAccountCookie();
       document.getElementById('auth_screen').classList.add('active');
       document.getElementById('login_error').textContent=message;
       document.getElementById('login_password').value='';
@@ -6611,6 +6633,7 @@
       return `<button class="action-card" onclick="switchTab('${esc(tab)}'${options})"><strong>${esc(title)}</strong><span>${esc(note)}</span></button>`;
     }
     function switchTab(tab, options={}){
+      clearRevealedAccountCookie();
       const targetTab=normalizeConsoleTab(tab);
       const btn=[...document.querySelectorAll('nav button')].find(item=>item.dataset.tab===targetTab);
       if(!btn) return;
@@ -6703,6 +6726,184 @@
         await Promise.all([loadAccountsPool(), loadReadiness(), loadDoctor()]);
         renderLoginModePanel();
       });
+    }
+    function browserCookieSyncAvailable(platform=''){
+      const caps=platform ? platformLoginCapability(platform) : {};
+      return !!(caps && caps.browser_cookie_sync_available);
+    }
+    function browserCookieSyncEnabled(platform=''){
+      const caps=platform ? platformLoginCapability(platform) : {};
+      return !!(caps && caps.browser_cookie_sync_enabled);
+    }
+    function stopBrowserCookieSyncPolling(options={}){
+      const sessionId=activeBrowserCookieSyncSessionId;
+      if(browserCookieSyncPollTimer){
+        clearTimeout(browserCookieSyncPollTimer);
+        browserCookieSyncPollTimer=null;
+      }
+      activeBrowserCookieSyncSessionId=null;
+      browserCookieSyncPollToken += 1;
+      if(options.cancelRemote && sessionId){
+        api('/browser-sync/login-sessions/'+Number(sessionId)+'/cancel',{method:'POST'}).catch(()=>{});
+      }
+    }
+    function browserCookieSyncResultNote(message, tone=''){
+      const result=document.getElementById('login_session_result');
+      if(result) result.innerHTML=`<div class="login-flow-card"><div class="small ${tone}">${esc(cleanCustomerText(message||''))}</div></div>`;
+    }
+    async function startBrowserCookieSyncFromForm(){
+      let account=socialAccountCache.get(Number(val('social_account_id')||0));
+      if(account && !ensureAccountIdentityCanLogin(account)) return;
+      if(!browserCookieSyncAvailable(val('social_account_platform'))){
+        toast('浏览器自动同步当前未启用，请使用二维码或高级手工 Cookie');
+        return;
+      }
+      await withActionButtonLoading('account_browser_sync_button','打开中...',async ()=>{
+        stopLoginSessionPolling({closeRemote:true});
+        stopVisibleLoginReconciliation();
+        stopBrowserCookieSyncPolling({cancelRemote:true});
+        clearRevealedAccountCookie();
+        if(!account){
+          account=await persistSocialAccount({login_type:'qrcode'});
+          if(!account){ toast('请先填写并保存账号基本资料'); return; }
+        }
+        const result=document.getElementById('login_session_result');
+        if(result) result.innerHTML='<div class="login-flow-card">正在准备浏览器登录窗口...</div>';
+        const res=await api('/social-accounts/'+Number(account.id)+'/browser-sync',{method:'POST',body:JSON.stringify({})});
+        if(!res.ok){ if(result) browserCookieSyncResultNote(await err(res),'warn'); return; }
+        const data=await res.json();
+        const session=data.session||{};
+        activeBrowserCookieSyncSessionId=Number(session.id||0)||null;
+        renderBrowserCookieSyncSession(session);
+        if(activeBrowserCookieSyncSessionId) pollBrowserCookieSync(activeBrowserCookieSyncSessionId);
+        toast('浏览器登录窗口正在打开，请完成平台登录');
+      });
+    }
+    function renderBrowserCookieSyncSession(session){
+      const status=normalizeLoginSessionStatus(session?.status);
+      const result=document.getElementById('login_session_result');
+      if(!result) return;
+      const pending=isLoginSessionPending(status);
+      const cancel=pending && session?.id ? `<button class="secondary" type="button" data-feedback-bound="1" onclick="cancelCurrentBrowserCookieSync(this)">取消同步</button>` : '';
+      const message=session?.message || (status==='success'?'登录成功，登录态已保存。':'正在准备浏览器登录窗口...');
+      result.innerHTML=`<div class="login-flow-card"><div class="small ${status==='success'?'ok':(pending?'':'warn')}">${esc(cleanCustomerText(message))}</div><div class="login-actions">${cancel}</div></div>`;
+      const badge=document.getElementById('login_status_badge');
+      if(badge){ badge.textContent=status==='success'?'登录成功':(pending?'浏览器登录中':loginSessionText(status)); badge.className='status '+(status==='success'?'ok':(pending?'warn':'bad')); }
+    }
+    function pollBrowserCookieSync(sessionId){
+      stopBrowserCookieSyncPolling();
+      activeBrowserCookieSyncSessionId=Number(sessionId)||null;
+      if(!activeBrowserCookieSyncSessionId) return;
+      const token=browserCookieSyncPollToken;
+      let rounds=300;
+      const update=async()=>{
+        if(browserCookieSyncPollToken!==token || activeBrowserCookieSyncSessionId!==Number(sessionId)) return;
+        rounds -= 1;
+        try{
+          const res=await api('/browser-sync/login-sessions/'+Number(sessionId));
+          if(browserCookieSyncPollToken!==token) return;
+          if(!res.ok){ browserCookieSyncResultNote(await err(res),'warn'); stopBrowserCookieSyncPolling(); return; }
+          const data=(await res.json()).session||{};
+          renderBrowserCookieSyncSession(data);
+          const status=normalizeLoginSessionStatus(data.status);
+          if(isLoginSessionPending(status) && rounds>0){
+            browserCookieSyncPollTimer=setTimeout(()=>{ browserCookieSyncPollTimer=null; update(); },1500);
+            return;
+          }
+          const success=status==='success';
+          stopBrowserCookieSyncPolling();
+          await Promise.all([loadAccountsPool(),loadDashboard(),loadReadiness()]);
+          if(success){
+            const accountId=Number(data.account_id||val('social_account_id')||0);
+            if(accountId && val('social_account_id') && Number(val('social_account_id'))===accountId) editSocialAccount(accountId,true);
+            toast('浏览器登录成功，账号登录态已自动保存');
+          } else if(rounds<=0){
+            browserCookieSyncResultNote('浏览器同步等待超时，请重新发起。','warn');
+            toast('浏览器同步等待超时');
+          } else {
+            browserCookieSyncResultNote(data.message||'浏览器同步未完成，请重新发起。','warn');
+            toast(data.message||'浏览器同步未完成');
+          }
+        }catch(error){
+          if(browserCookieSyncPollToken!==token) return;
+          stopBrowserCookieSyncPolling();
+          browserCookieSyncResultNote('浏览器同步状态读取失败，请重新发起。','warn');
+        }
+      };
+      update();
+    }
+    async function cancelCurrentBrowserCookieSync(button=null){
+      const sessionId=activeBrowserCookieSyncSessionId;
+      if(!sessionId) return;
+      await withActionButtonLoading(button,'取消中...',async ()=>{
+        const res=await api('/browser-sync/login-sessions/'+Number(sessionId)+'/cancel',{method:'POST'});
+        stopBrowserCookieSyncPolling();
+        if(res.ok){
+          const data=(await res.json()).session||{};
+          renderBrowserCookieSyncSession(data);
+          const status=normalizeLoginSessionStatus(data.status);
+          if(data.active){
+            activeBrowserCookieSyncSessionId=Number(data.id||sessionId)||null;
+            browserCookieSyncResultNote(data.message||'取消请求已收到，正在安全完成登录态切换。','warn');
+            if(activeBrowserCookieSyncSessionId) pollBrowserCookieSync(activeBrowserCookieSyncSessionId);
+            toast('取消请求已收到，正在安全完成');
+          }else if(status==='success'){
+            await Promise.all([loadAccountsPool(),loadDashboard(),loadReadiness()]);
+            toast('登录态切换已完成，账号可继续使用');
+          }else toast('浏览器同步已取消');
+        }else browserCookieSyncResultNote(await err(res),'warn');
+      });
+    }
+    function clearRevealedAccountCookie(){
+      if(accountCookieRevealTimer){ clearTimeout(accountCookieRevealTimer); accountCookieRevealTimer=null; }
+      revealedAccountCookie='';
+      revealedAccountCookieId=null;
+      revealedAccountCookieVisible=false;
+      const value=document.getElementById('account_cookie_reveal_value');
+      if(value) value.value='••••••••';
+      const copy=document.getElementById('account_cookie_copy_button');
+      if(copy) copy.style.display='none';
+      const button=document.getElementById('account_cookie_reveal_button');
+      if(button){ button.textContent='显示'; button.disabled=false; }
+      const feedback=document.getElementById('account_cookie_reveal_feedback');
+      if(feedback) feedback.textContent='';
+    }
+    async function toggleCurrentAccountCookieReveal(){
+      const accountId=Number(val('social_account_id')||0);
+      if(!accountId || !isAdminUser()){ toast('只有管理员可以查看完整 Cookie'); return; }
+      const value=document.getElementById('account_cookie_reveal_value');
+      const copy=document.getElementById('account_cookie_copy_button');
+      const button=document.getElementById('account_cookie_reveal_button');
+      if(revealedAccountCookie && revealedAccountCookieId===accountId){
+        revealedAccountCookieVisible=!revealedAccountCookieVisible;
+        if(value) value.value=revealedAccountCookieVisible ? revealedAccountCookie : '••••••••';
+        if(button) button.textContent=revealedAccountCookieVisible ? '隐藏' : '显示';
+        if(copy) copy.style.display=revealedAccountCookieVisible ? 'inline-flex' : 'none';
+        return;
+      }
+      if(button){ button.disabled=true; button.textContent='读取中...'; }
+      const res=await api('/social-accounts/'+accountId+'/cookie-reveal',{method:'POST',body:JSON.stringify({})});
+      if(!res.ok){ if(button){ button.disabled=false; button.textContent='显示'; } const feedback=document.getElementById('account_cookie_reveal_feedback'); if(feedback) feedback.textContent=await err(res); return; }
+      const data=await res.json();
+      revealedAccountCookie=String(data.cookies||'');
+      revealedAccountCookieId=accountId;
+      revealedAccountCookieVisible=!!revealedAccountCookie;
+      if(value) value.value=revealedAccountCookieVisible ? revealedAccountCookie : '••••••••';
+      if(button){ button.disabled=false; button.textContent='隐藏'; }
+      if(copy) copy.style.display='inline-flex';
+      const feedback=document.getElementById('account_cookie_reveal_feedback');
+      if(feedback) feedback.textContent='仅保留在当前页面，关闭账号详情后清除。';
+      if(accountCookieRevealTimer) clearTimeout(accountCookieRevealTimer);
+      accountCookieRevealTimer=setTimeout(clearRevealedAccountCookie,60000);
+    }
+    async function copyCurrentAccountCookie(){
+      if(!revealedAccountCookie || !revealedAccountCookieVisible){ toast('请先显示完整 Cookie'); return; }
+      try{
+        await navigator.clipboard.writeText(revealedAccountCookie);
+        const feedback=document.getElementById('account_cookie_reveal_feedback');
+        if(feedback) feedback.textContent='已复制完整 Cookie。';
+        toast('完整 Cookie 已复制');
+      }catch(error){ toast('复制失败，请检查浏览器剪贴板权限'); }
     }
     function stopVisibleLoginReconciliation(){
       if(visibleLoginReconcileTimer){
@@ -7564,7 +7765,7 @@
       const id=val('social_account_id');
       const existing=id ? socialAccountCache.get(Number(id)) : null;
       const platform=existing ? existing.platform : val('social_account_platform');
-      const loginType=overrides.login_type || val('social_account_login_type');
+      const loginType=overrides.login_type || (existing && existing.cookie_source==='browser_sync' ? existing.login_type : val('social_account_login_type'));
       if(!val('social_account_name').trim()){
         updateAccountLoginPrerequisites();
         toast('请先填写账号名称');
@@ -7596,6 +7797,11 @@
       return saved || null;
     }
     function editSocialAccount(id, silent=false){
+      const previousId=Number(val('social_account_id')||0);
+      if(previousId && previousId!==Number(id)){
+        stopBrowserCookieSyncPolling({cancelRemote:true});
+        clearRevealedAccountCookie();
+      }
       const a=socialAccountCache.get(Number(id));
       if(!a){ toast('账号池已刷新，请重新选择'); loadAccountsPool(); return; }
       set('social_account_id', a.id); set('social_account_name', a.name); set('social_account_platform', a.platform);
@@ -7603,7 +7809,8 @@
       updateSocialLoginTypeOptions();
       const loginSelect=document.getElementById('social_account_login_type');
       const loginType=a.login_type||'qrcode';
-      if([...loginSelect.options].some(option=>option.value===loginType)) set('social_account_login_type', loginType);
+      const maintenanceLoginType=loginType==='cookie' && a.cookie_source==='browser_sync' ? 'qrcode' : loginType;
+      if([...loginSelect.options].some(option=>option.value===maintenanceLoginType)) set('social_account_login_type', maintenanceLoginType);
       set('social_account_status', a.status||'standby');
       set('social_account_proxy_id', a.proxy_id||''); set('social_account_notes', a.notes||''); set('social_account_last_error', a.last_error||'');
       set('social_account_proxy_region', a.proxy_region_snapshot||'CN_MAINLAND');
@@ -7861,7 +8068,7 @@
         qrButton.disabled=!nameReady || blocked;
         qrButton.title=blockedTitle || (nameReady?'':'请先填写账号名称');
       }
-      ['account_local_login_button','account_cookie_save_button'].forEach(id=>{
+      ['account_browser_sync_button','account_local_login_button','account_cookie_save_button'].forEach(id=>{
         const button=document.getElementById(id);
         if(button){ button.disabled=blocked; button.title=blockedTitle; }
       });
@@ -7920,7 +8127,7 @@
     function socialLoginMethodMeta(type, platform){
       const meta={
         qrcode:{title:'扫码登录', note:'使用手机扫码确认'},
-        cookie:{title:'Cookie 登录', note:'粘贴已有 Cookie'}
+        cookie:{title:'高级：手工 Cookie', note:'仅在自动方式不可用时使用'}
       };
       const item=meta[type] || {title:type, note:''};
       return item;
@@ -7952,7 +8159,6 @@
     function renderLoginModePanel(){
       const loginType=val('social_account_login_type') || 'qrcode';
       const platform=val('social_account_platform') || 'dy';
-      const cfg=platformLoginConfig(platform);
       const titles={qrcode:'扫码登录',cookie:'Cookie 登录'};
       const title=document.getElementById('login_mode_title');
       if(title) title.textContent=titles[loginType] || '登录';
@@ -7965,12 +8171,16 @@
           panel.style.display = active ? 'block' : 'none';
         }
       });
+      const manualCookie=document.getElementById('manual_cookie_advanced');
+      if(manualCookie) manualCookie.open=loginType==='cookie';
       const badge=document.getElementById('login_status_badge');
       const account=socialAccountCache.get(Number(val('social_account_id')||0));
       const qrButton=document.getElementById('account_qrcode_button');
+      const syncButton=document.getElementById('account_browser_sync_button');
       const localButton=document.getElementById('account_local_login_button');
       if(qrButton) qrButton.textContent = account ? '重新生成二维码' : '生成二维码并登录';
-      if(localButton) localButton.style.display = localLoginWindowAllowed(platform) ? 'inline-flex' : 'none';
+      if(syncButton) syncButton.style.display = browserCookieSyncAvailable(platform) && !!account ? 'inline-flex' : 'none';
+      if(localButton) localButton.style.display = browserCookieSyncAvailable(platform) ? 'none' : (localLoginWindowAllowed(platform) ? 'inline-flex' : 'none');
       if(badge){
         if(loginType==='qrcode'){
           badge.textContent = account ? poolStatusText(account.status) : '未保存';
@@ -7981,7 +8191,9 @@
         }
       }
       const cookieResult=document.getElementById('cookie_login_result');
-      if(cookieResult) cookieResult.textContent = account && account.has_cookies ? '当前账号已保存 Cookie。Cookie 会加密保存，页面不会回显原文。' : '当前账号还没有保存 Cookie。';
+      if(cookieResult) cookieResult.textContent = account && account.has_cookies ? '当前账号已保存 Cookie。Cookie 会加密保存，页面默认不显示原文。' : '当前账号还没有保存 Cookie。';
+      const revealPanel=document.getElementById('account_cookie_reveal_panel');
+      if(revealPanel) revealPanel.style.display = isAdminUser() && browserCookieSyncEnabled(platform) && account && account.has_cookies ? 'block' : 'none';
       updateAccountLoginPrerequisites();
     }
     function handleSocialLoginTypeChange(){
@@ -7999,6 +8211,8 @@
     function closeSocialAccountModal(event){
       if(event && event.target && event.target.id !== 'account_modal') return;
       stopLoginSessionPolling({closeRemote:true});
+      stopBrowserCookieSyncPolling({cancelRemote:true});
+      clearRevealedAccountCookie();
       const backdrop=document.getElementById('account_modal');
       const dialog=document.getElementById('account_dialog');
       if(!backdrop || !dialog) return;
@@ -8012,6 +8226,8 @@
     }
     function resetSocialAccountForm(){
       stopLoginSessionPolling({closeRemote:true});
+      stopBrowserCookieSyncPolling({cancelRemote:true});
+      clearRevealedAccountCookie();
       ['social_account_id','social_account_name','social_account_proxy_id','social_account_notes','social_account_last_error'].forEach(id=>set(id,''));
       set('social_account_cookie_input','');
       const clearCookie=document.getElementById('social_account_clear_cookie');

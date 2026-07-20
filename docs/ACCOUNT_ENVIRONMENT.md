@@ -1329,12 +1329,13 @@ Verification states must be returned to the UI rather than bypassed.
 
 ## Accepted CR-112 Local Browser Auto-Sync Cookie Acquisition
 
-Status: `Accepted / In Progress (Packet C.1)`. This section defines the approved
+Status: `Accepted / Dependency-Gated (Packet C.3)`. This section defines the approved
 same-machine Windows account contract and the verified Packet B component
 selection. C.1 implements the shared schema, canonical Cookie material,
-fixed-path promotion/recovery, cleanup, and advanced manual path. C.2/C.3/D
-are not started or verified, and CR-047 Linux/server-like acceptance remains
-separate.
+fixed-path promotion/recovery, cleanup, and advanced manual path. C.2 verifies
+exact-context acquisition, binding, administrator reveal, and owned-process
+cleanup. C.3 waits for the C.2 atomic commit; D is not started or verified, and CR-047 Linux/server-like acceptance
+remains separate.
 
 Accepted login model:
 
@@ -1363,15 +1364,16 @@ The current runner contract passes decrypted Cookie material through
 diagnostic tools even though it is encrypted at rest and redacted from product
 logs/UI. CR-112 treats this as a pre-existing current-code risk. The confirmed
 target prepares and validates the persistent Profile before crawler launch and
-does not pass raw Cookie through child argv. Packet C must assign migration,
-compatibility, rollback, and test ownership, and process inspection must prove
-the raw value is absent before acceptance.
+does not pass raw Cookie through child argv. C.3 owns that runner migration,
+compatibility, rollback, and process-inspection proof; C.2 does not claim the
+pre-existing argv risk is retired.
 
 ### Accepted CR-112 V1 Profile Promotion Protocol
 
-Status: implemented and verified for Packet C.1; C.2 acquisition, C.3 runner
-cutover, and Packet D real acceptance remain gated. Present-tense normative
-wording defines the active C.1 behavior and the remaining packet contract.
+Status: implemented and verified for Packet C.1-C.2; C.3 waits for the C.2
+atomic commit, and Packet D real acceptance remains gated. Present-tense
+normative wording defines the verified C.1-C.2 behavior and the remaining
+packet contract.
 
 V1 keeps one fixed active runtime path:
 

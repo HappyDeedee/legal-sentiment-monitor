@@ -84,11 +84,11 @@ a supported migration path.
 
 ## Accepted CR-112 Local Browser Auto-Sync Boundary
 
-Status: `Accepted / In Progress (Packet C.1)`. Packet B
-and C.1 are verified. This is an accepted same-machine Windows capability and
-does not change the production/server deployment boundary. Packet B selected
-direct managed-context acquisition; C.2/C.3 UI/runtime and Packet D real
-acceptance remain gated.
+Status: `Accepted / Dependency-Gated (Packet C.3)`. Packet B and C.1-C.2 are verified.
+This is an accepted same-machine Windows capability and does not change the
+production/server deployment boundary. Packet B selected direct managed-context
+acquisition; C.2 UI/runtime and owned-process cleanup are verified, while C.3
+waits for the C.2 atomic commit and Packet D real acceptance remains gated.
 
 Accepted V1 topology:
 

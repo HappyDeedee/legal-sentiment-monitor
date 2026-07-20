@@ -1823,10 +1823,9 @@ Documentation-stage checks:
   recorded as verified and merged, the separate CR-047 Linux/server-like real
   acceptance remains operator-gated, and accepted sequencing places CR-112
   before CR-070 without claiming that local evidence closes CR-047.
-- Verify CR-112 is `Accepted / In Progress (Packet C.1 verified; commit-gated)`,
-  with Packet B and the C.1 implementation gates complete, the independent
-  review and atomic C.1 commit still pending, and Packet C.2/C.3/D gated; the
-  current server-first QR acceptance boundary is unchanged.
+- Verify CR-112 is `Accepted / Dependency-Gated (Packet C.3)`, with Packet B
+  and C.1-C.2 verified, C.3 waiting for the C.2 atomic commit, and D gated; the current
+  server-first QR acceptance boundary is unchanged.
 - Verify `DECISIONS.md`, CR-112, account-environment guidance, and all five
   plan files agree on the confirmed sub-decision: both login modes converge on
   one account-bound persistent Profile, encrypted Cookie is
@@ -1862,8 +1861,25 @@ Packet C.1 implementation evidence currently includes:
 - `test_run_platform_attaches_bound_proxy_summary` for the successful-run
   cleanup callback after release of the account lock.
 
-These tests must remain green together with the full monitoring suite before
-the C.1 atomic commit. C.2/C.3 and Packet D evidence are not implied by them.
+These tests must remain green together with the full monitoring suite. They do
+not imply C.2/C.3 or Packet D evidence by themselves.
+
+Packet C.2 implementation evidence currently includes:
+
+- exact-context structured Cookie capture, candidate reset, injection, fixed-
+  path recheck, and commit through the C.1 service;
+- database-generated acquisition generation plus exact account, `profile_key`,
+  login session, promotion, provider resolution, and attempt binding;
+- reversed account-session completion, stale binding, and all caller-supplied
+  start-parameter rejection;
+- explicit cancelled, browser-closed, and timeout terminal-boundary tests;
+- administrator-only Cookie reveal with normal-user 403, masked standard
+  payloads, no-store/no-cache responses, and secret-free audit details;
+- default-off route/UI behavior, restart finalization, cancellation cleanup,
+  candidate storage isolation, and owned Windows process identity cleanup;
+- controlled local account-bound start/cancel evidence proving the active
+  Profile/account remains usable, the candidate is removed, and no owned
+  Chromium process remains.
 
 - Feature disabled by default starts no acquisition browser and shows no active
   auto-sync action. The rejected Cookie-bridge route remains unmounted in both

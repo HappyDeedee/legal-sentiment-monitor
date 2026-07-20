@@ -2,6 +2,70 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-21 - CR-112 Packet C.2 Managed Browser Acquisition
+
+Environment: `codex/cr-112-cookiebridge-integration` on Packet C.1 commit
+`8fe1dbc`. Automated tests used synthetic Cookie values, fake browser contexts,
+temporary Profile roots, and the test database. A controlled local run used an
+existing account only to open and cancel its project-managed login browser; it
+did not capture, reveal, replace, or persist a real Cookie.
+
+Result: `Verified` within the Packet C.2 local acquisition and cancellation
+proof boundary. Packet C.3 waits for this packet's atomic commit.
+
+- Added default-off same-machine Windows exact-context acquisition with no
+  Extension, Connector, pairing service, Cookie-bridge HTTP route, or WebSocket
+  route.
+- Browser-sync sessions bind the exact workspace, account, `profile_key`, login
+  session, promotion, generation, provider resolution, browser attempt,
+  platform, and actor. Non-empty caller payloads, stale/cross-account bindings,
+  and cross-workspace start/status/cancel/reveal attempts fail closed.
+- The selected context emits canonical structured Cookie records into the C.1
+  fresh-candidate service. Acquired LocalStorage, cache, service-worker, and
+  unrelated browser state are removed before Cookie-only injection and fixed-
+  path recheck.
+- Candidate-stage cancellation removes the candidate and preserves the prior
+  authority. A cancellation received after the directory swap waits for safe
+  commit or rollback and the UI continues polling to the actual terminal state.
+  Service-restart recovery preserves the previous account Cookie and Profile.
+- Managed Windows browser descendants are captured from the dedicated
+  Playwright driver and rechecked by PID, executable name, and creation time.
+  Graceful close is followed only by cleanup of those proven residual
+  processes; unrelated Chrome/Edge processes are not selected.
+- The administrator reveal POST is same-workspace and same-machine-capability
+  scoped, returns no-store/no-cache on success and errors, and keeps standard
+  account payloads masked. Normal users receive 403. The frontend keeps the
+  revealed value only in transient memory/DOM, clears it on timeout and account
+  lifecycle transitions, and provides explicit show/hide/copy feedback.
+- Controlled local start/cancel verification opened the designated account's
+  visible managed Chromium, recorded a cancelled login session and failed
+  promotion with candidate removal, preserved the active account/Profile and
+  left zero browser processes for the candidate path.
+- Desktop and phone-width account-dialog checks passed with QR first, browser
+  auto-sync second, advanced manual Cookie collapsed, no overlapping controls,
+  and correct cancellation feedback.
+- Focused Packet C.2 regression: `19 passed, 606 deselected`.
+- Adjacent Phase 5.1, CR-112, QR/browser-login, and crawl-identity regression:
+  `269 passed, 356 deselected`.
+- Complete monitoring regression: `625 passed, 3 warnings`.
+- Python compile, external and inline JavaScript parsing, documentation
+  consistency/test, and `git diff --check` gates passed.
+- Independent read-only review checked workspace isolation, cancellation
+  commit windows, capability gating, Cookie leakage, process ownership,
+  regression coverage, and artifact hygiene, and returned `FINAL PASS` with no
+  actionable finding.
+
+Proof boundary:
+
+- C.2 does not retire the pre-existing managed crawler `--cookies` argument or
+  prove raw Cookie absence from crawler argv/environment; C.3 owns that
+  profile-only cutover and process inspection.
+- C.2 does not prove a successful real Cookie capture/promotion, monitor restart
+  with the promoted Profile, or real Douyin/Xiaohongshu collection. Packet D
+  owns those designated-account checks after C.3. Kuaishou remains Deferred.
+- This local Windows evidence does not close the separate CR-047 Linux/server-
+  like acceptance.
+
 ## 2026-07-21 - CR-112 Packet C.1 Profile Promotion Foundation
 
 Environment: `codex/cr-112-cookiebridge-integration` on Packet B commit

@@ -3539,6 +3539,65 @@ def _phase_5_1d_effective_probe(plan):
     }
 
 
+def test_cr112_managed_browser_processes_are_scoped_to_driver_descendants(monkeypatch):
+    from tools import browser_environment
+
+    context = SimpleNamespace(
+        _impl_obj=SimpleNamespace(
+            _connection=SimpleNamespace(
+                _transport=SimpleNamespace(_proc=SimpleNamespace(pid=100))
+            )
+        )
+    )
+    rows = (
+        (100, 50, "node.exe"),
+        (200, 100, "chrome.exe"),
+        (201, 200, "chrome.exe"),
+        (202, 200, "chrome.exe"),
+        (300, 50, "unrelated.exe"),
+    )
+    monkeypatch.setattr(browser_environment, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(browser_environment, "_windows_process_snapshot", lambda: rows)
+    monkeypatch.setattr(browser_environment, "_windows_process_creation_time", lambda pid: pid * 10)
+
+    processes = browser_environment.managed_browser_processes(context)
+
+    assert [(item.pid, item.executable_name, item.creation_time) for item in processes] == [
+        (201, "chrome.exe", 2010),
+        (202, "chrome.exe", 2020),
+        (200, "chrome.exe", 2000),
+    ]
+
+
+def test_cr112_managed_browser_close_cleans_only_captured_process_identities(monkeypatch):
+    from tools import browser_environment
+    from tools.browser_environment import ManagedBrowserProcess
+
+    initial = ManagedBrowserProcess(pid=201, executable_name="chrome.exe", creation_time=2010)
+    late = ManagedBrowserProcess(pid=202, executable_name="chrome.exe", creation_time=2020)
+    cleaned = []
+
+    class FakeContext:
+        closed = False
+
+        async def close(self):
+            self.closed = True
+
+    context = FakeContext()
+    monkeypatch.setattr(browser_environment, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(browser_environment, "managed_browser_processes", lambda value: (late,))
+    monkeypatch.setattr(
+        browser_environment,
+        "_terminate_owned_windows_processes",
+        lambda processes: cleaned.extend(processes) is None,
+    )
+
+    asyncio.run(browser_environment.close_managed_browser_session(context, None, (initial,)))
+
+    assert context.closed is True
+    assert {(item.pid, item.creation_time) for item in cleaned} == {(201, 2010), (202, 2020)}
+
+
 def test_phase_5_1d_proxy_proof_finishes_before_context_is_returned(tmp_path, monkeypatch):
     from tools.browser_environment import launch_managed_browser_context
 
@@ -24867,3 +24926,830 @@ def test_cr112_manual_cookie_update_keeps_verified_account_active(monkeypatch):
     finally:
         _restore_table("social_accounts", snapshots["social_accounts"])
         _restore_table("audit_logs", snapshots["audit_logs"])
+
+
+def test_cr112_c2_profile_promotion_accepts_exact_context_cookie_result(tmp_path, monkeypatch):
+    from api.monitoring import account_environment, browser_environment_provider
+    from api.monitoring.browser_selection import BrowserSelection
+    from api.monitoring.cookie_material import deserialize_cookie_material
+    from api.monitoring.database import create_login_session
+    from api.monitoring.profile_promotion import promote_cookie_to_profile
+
+    profile_root = (tmp_path / "profiles").resolve()
+    browser_path = (tmp_path / "chrome.exe").resolve()
+    browser_path.write_bytes(b"synthetic browser")
+    monkeypatch.setattr(account_environment, "ACCOUNT_PROFILE_ROOT", profile_root)
+    monkeypatch.setattr(
+        browser_environment_provider,
+        "resolve_browser_selection",
+        lambda *args, **kwargs: BrowserSelection(browser_path, "system_chrome", "chrome"),
+    )
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "account_profile_promotions": _snapshot_table("account_profile_promotions"),
+        "login_sessions": _snapshot_table("login_sessions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        account = save_social_account(
+            {
+                "name": "CR-112 exact context capture",
+                "platform": "dy",
+                "login_type": "qrcode",
+                "status": "standby",
+            }
+        )
+        account = get_social_account(account["id"], masked=False)
+        session = create_login_session(
+            {
+                "platform": "dy",
+                "account_id": account["id"],
+                "cookie_source": "browser_sync",
+                "acquisition_generation": 7,
+            }
+        )
+        plan = browser_environment_provider.resolve_account_browser_environment(
+            account,
+            action="login_check",
+            trigger_source="browser_cookie_sync",
+            headless=False,
+            launch_mode="persistent_launch",
+            proxy=None,
+            playwright_executable_path=str(browser_path),
+        )
+        calls = []
+
+        async def fake_runner(used_plan, injected_records):
+            calls.append((Path(used_plan.profile_path), injected_records))
+            if len(calls) == 1:
+                return {
+                    "ok": True,
+                    "cookie_records": [
+                        {
+                            "name": "sessionid",
+                            "value": "captured-value",
+                            "domain": ".douyin.com",
+                            "path": "/",
+                            "http_only": True,
+                            "secure": True,
+                            "same_site": "Lax",
+                            "host_only": False,
+                        }
+                    ],
+                    "identity": {"platform_account_id": "captured-user"},
+                    "runtime_snapshot_json": "",
+                }
+            return {"ok": True, "identity": {"platform_account_id": "captured-user"}, "runtime_snapshot_json": ""}
+
+        result = asyncio.run(
+            promote_cookie_to_profile(
+                account["id"],
+                None,
+                cookie_source="browser_sync",
+                login_session_id=session["id"],
+                actor_id=1,
+                acquisition_generation=7,
+                provider_plan=plan,
+                browser_runner=fake_runner,
+            )
+        )
+        assert result["ok"] is True
+        assert len(calls) == 2
+        stored = get_social_account(account["id"], masked=False)
+        records = deserialize_cookie_material("dy", stored["cookies"])
+        assert records[0]["name"] == "sessionid"
+        assert records[0]["value"] == "captured-value"
+        assert stored["cookie_source"] == "browser_sync"
+        assert stored["profile_runtime_version"] == 1
+    finally:
+        _restore_table("account_profile_promotions", snapshots["account_profile_promotions"])
+        _restore_table("login_sessions", snapshots["login_sessions"])
+        _restore_table("social_accounts", snapshots["social_accounts"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
+
+
+def test_cr112_c2_candidate_reset_removes_acquired_browser_storage(tmp_path, monkeypatch):
+    from api.monitoring import account_environment
+    from api.monitoring.profile_promotion import (
+        PROFILE_OPERATION_MARKER,
+        profile_promotion_paths,
+        reset_candidate_profile_for_cookie_injection,
+    )
+    import hashlib
+
+    profile_root = (tmp_path / "profiles").resolve()
+    monkeypatch.setattr(account_environment, "ACCOUNT_PROFILE_ROOT", profile_root)
+    paths = profile_promotion_paths(account_id=91, profile_key="1/dy/acc_91", promotion_id=17)
+    paths.candidate.mkdir(parents=True)
+    promotion = {"id": 17, "account_id": 91, "profile_key": "1/dy/acc_91"}
+    marker = {
+        "promotion_id": 17,
+        "account_id": 91,
+        "profile_key_hash": hashlib.sha256(b"1/dy/acc_91").hexdigest(),
+        "role": "candidate",
+    }
+    (paths.candidate / PROFILE_OPERATION_MARKER).write_text(json.dumps(marker), encoding="utf-8")
+    (paths.candidate / "Local Storage").mkdir()
+    (paths.candidate / "Local Storage" / "state").write_text("old", encoding="utf-8")
+    (paths.candidate / "Cache").mkdir()
+    (paths.candidate / "Cache" / "entry").write_text("old", encoding="utf-8")
+    (paths.candidate / "Cookies").write_text("old", encoding="utf-8")
+
+    reset_candidate_profile_for_cookie_injection(paths, promotion)
+
+    assert list(paths.candidate.iterdir()) == [paths.candidate / PROFILE_OPERATION_MARKER]
+
+
+def test_cr112_c2_browser_sync_session_generation_and_provider_binding():
+    from api.monitoring import login_browser_sync
+    from api.monitoring.database import bind_browser_sync_login_session, create_browser_sync_login_session
+    from api.monitoring.login_browser_sync import BrowserSyncHandle
+
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "login_sessions": _snapshot_table("login_sessions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        account = save_social_account(
+            {
+                "name": "CR-112 binding account",
+                "platform": "dy",
+                "login_type": "qrcode",
+                "status": "standby",
+            }
+        )
+        first = create_browser_sync_login_session(account["id"], actor_id=1)
+        second = create_browser_sync_login_session(account["id"], actor_id=1)
+        assert second["acquisition_generation"] == first["acquisition_generation"] + 1
+        bound = bind_browser_sync_login_session(
+            first["id"],
+            account_id=account["id"],
+            profile_key=first["profile_key"],
+            acquisition_generation=first["acquisition_generation"],
+            provider_resolution_id="resolution-c2-1",
+            browser_attempt_id="attempt-c2-1",
+        )
+        assert bound["provider_resolution_id"] == "resolution-c2-1"
+        assert bound["browser_attempt_id"] == "attempt-c2-1"
+        handle = BrowserSyncHandle(
+            session_id=first["id"],
+            account_id=account["id"],
+            profile_key=first["profile_key"],
+            platform="dy",
+            actor_id=1,
+            acquisition_generation=first["acquisition_generation"],
+            created_at=datetime.now(timezone.utc),
+            provider_resolution_id="resolution-c2-1",
+            browser_attempt_id="attempt-c2-1",
+        )
+        plan = SimpleNamespace(
+            account_id=account["id"],
+            profile_key=first["profile_key"],
+            platform="dy",
+            resolution_id="resolution-c2-1",
+            attempt_id="attempt-c2-1",
+        )
+        login_browser_sync._assert_session_binding(handle, bound, plan, require_promotion=False)
+        with pytest.raises(login_browser_sync.BrowserSyncError, match="browser_sync_binding_mismatch"):
+            login_browser_sync._assert_session_binding(handle, bound, plan)
+        with pytest.raises(ValueError, match="browser_sync_session_binding_mismatch"):
+            bind_browser_sync_login_session(
+                first["id"],
+                account_id=account["id"] + 1,
+                profile_key=first["profile_key"],
+                acquisition_generation=first["acquisition_generation"],
+                provider_resolution_id="resolution-c2-bad",
+                browser_attempt_id="attempt-c2-bad",
+            )
+    finally:
+        _restore_table("login_sessions", snapshots["login_sessions"])
+        _restore_table("social_accounts", snapshots["social_accounts"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
+
+
+@pytest.mark.parametrize(
+    ("case", "expected_reason", "expected_status"),
+    [
+        ("cancelled", "browser_sync_cancelled", "qrcode_failed"),
+        ("browser_closed", "browser_sync_browser_closed", "qrcode_failed"),
+        ("timeout", "browser_sync_timeout", "timeout"),
+    ],
+)
+def test_cr112_c2_wait_terminal_boundaries(case, expected_reason, expected_status, monkeypatch):
+    from api.monitoring import login_browser_sync
+    from api.monitoring.login_browser_sync import BrowserSyncHandle
+
+    page = SimpleNamespace(is_closed=lambda: case == "browser_closed")
+    context = SimpleNamespace(pages=[] if case == "browser_closed" else [page])
+    handle = BrowserSyncHandle(
+        session_id=1,
+        account_id=2,
+        profile_key="1/dy/acc_2",
+        platform="dy",
+        actor_id=1,
+        acquisition_generation=1,
+        created_at=datetime.now(timezone.utc),
+    )
+    if case == "cancelled":
+        handle.cancel_event.set()
+    monkeypatch.setattr(login_browser_sync.time, "monotonic", lambda: 100.0)
+    deadline = 100.0 if case == "timeout" else 101.0
+
+    with pytest.raises(login_browser_sync.BrowserSyncError) as exc_info:
+        login_browser_sync._require_browser_sync_waiting(handle, context, page, deadline)
+
+    assert exc_info.value.reason == expected_reason
+    assert login_browser_sync._status_for_reason(expected_reason) == expected_status
+
+
+def test_cr112_c2_start_route_rejects_every_caller_supplied_parameter():
+    from api.routers.browser_sync import start_browser_sync_route
+
+    for payload in (
+        {"cookies": "synthetic-secret"},
+        {"ProfilePath": "synthetic-profile"},
+        {"unexpected": True},
+    ):
+        with pytest.raises(HTTPException) as exc_info:
+            asyncio.run(start_browser_sync_route(999991, payload, {"id": 1, "role": "administrator"}))
+        assert exc_info.value.status_code == 400
+        assert "synthetic" not in str(exc_info.value.detail)
+
+
+def test_cr112_c2_cookie_reveal_is_admin_only_and_no_store(monkeypatch):
+    from api.routers import browser_sync as browser_sync_router
+    from api.monitoring.database import create_user_session, save_user
+    from api.routers.browser_sync import reveal_social_account_cookie
+
+    monkeypatch.setattr(browser_sync_router, "browser_cookie_sync_available", lambda: True)
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "social_accounts": _snapshot_table("social_accounts"),
+        "users": _snapshot_table("users"),
+        "user_sessions": _snapshot_table("user_sessions"),
+    }
+    try:
+        account = save_social_account(
+            {
+                "name": "CR-112 reveal account",
+                "platform": "dy",
+                "login_type": "cookie",
+                "cookies": "sessionid=secret-c2-value",
+                "status": "active",
+            }
+        )
+        admin = save_user(
+            {"email": "cr112-reveal-admin@example.com", "display_name": "C2 Admin", "password": "AdminPass123!", "role": "administrator"}
+        )
+        normal = save_user(
+            {"email": "cr112-reveal-user@example.com", "display_name": "C2 User", "password": "UserPass123!", "role": "normal"}
+        )
+        admin_token, _ = create_user_session(admin["id"])
+        normal_token, _ = create_user_session(normal["id"])
+        response = asyncio.run(reveal_social_account_cookie(account["id"], admin_token))
+        assert response.status_code == 200
+        assert response.headers["cache-control"] == "no-store, private"
+        assert response.headers["pragma"] == "no-cache"
+        assert "sessionid=secret-c2-value" in response.body.decode("utf-8")
+
+        denied = asyncio.run(reveal_social_account_cookie(account["id"], normal_token))
+        assert denied.status_code == 403
+        assert denied.headers["cache-control"] == "no-store, private"
+        assert "secret-c2-value" not in denied.body.decode("utf-8")
+        assert get_social_account(account["id"], masked=True)["cookies"] != "sessionid=secret-c2-value"
+        with get_conn() as conn:
+            reveal_audits = [
+                dict(row)
+                for row in conn.execute(
+                    "SELECT * FROM audit_logs WHERE action_type='reveal_social_account_cookie' ORDER BY id"
+                ).fetchall()
+            ]
+        assert {row["details_json"] for row in reveal_audits}
+        assert "secret-c2-value" not in json.dumps(reveal_audits, ensure_ascii=False)
+
+        monkeypatch.setattr(browser_sync_router, "browser_cookie_sync_available", lambda: False)
+        unavailable = asyncio.run(reveal_social_account_cookie(account["id"], admin_token))
+        assert unavailable.status_code == 409
+        assert unavailable.headers["cache-control"] == "no-store, private"
+        assert "secret-c2-value" not in unavailable.body.decode("utf-8")
+    finally:
+        _restore_table("user_sessions", snapshots["user_sessions"])
+        _restore_table("users", snapshots["users"])
+        _restore_table("social_accounts", snapshots["social_accounts"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
+
+
+@pytest.mark.parametrize("cancel_phase", ["none", "candidate", "active"])
+def test_cr112_c2_exact_context_flow_injects_only_captured_cookie(cancel_phase, tmp_path, monkeypatch):
+    from api.monitoring import account_environment, browser_environment_provider, login_browser_sync
+    from api.monitoring.browser_selection import BrowserSelection
+    from api.monitoring.database import (
+        bind_browser_sync_login_session,
+        create_browser_sync_login_session,
+    )
+    from api.monitoring.login_browser_sync import BrowserSyncHandle
+    from api.monitoring.profile_promotion import ProfilePromotionError, promote_cookie_to_profile
+
+    profile_root = (tmp_path / "profiles").resolve()
+    browser_path = (tmp_path / "chrome.exe").resolve()
+    browser_path.write_bytes(b"synthetic browser")
+    monkeypatch.setattr(account_environment, "ACCOUNT_PROFILE_ROOT", profile_root)
+    monkeypatch.setattr(
+        browser_environment_provider,
+        "resolve_browser_selection",
+        lambda *args, **kwargs: BrowserSelection(browser_path, "system_chrome", "chrome"),
+    )
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "account_profile_promotions": _snapshot_table("account_profile_promotions"),
+        "login_sessions": _snapshot_table("login_sessions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+
+    class FakePage:
+        def __init__(self):
+            self.context = None
+            self.closed = False
+
+        def set_default_timeout(self, value):
+            return None
+
+        async def goto(self, *args, **kwargs):
+            return None
+
+        def is_closed(self):
+            return self.closed
+
+    class FakeContext:
+        def __init__(self):
+            self.page = FakePage()
+            self.page.context = self
+            self.pages = [self.page]
+            self.closed = False
+
+        async def cookies(self, *urls):
+            return [
+                {
+                    "name": "sessionid",
+                    "value": "exact-context-secret",
+                    "domain": ".douyin.com",
+                    "path": "/",
+                    "expires": -1,
+                    "httpOnly": True,
+                    "secure": True,
+                    "sameSite": "Lax",
+                }
+            ]
+
+        async def close(self):
+            self.closed = True
+
+    try:
+        account = save_social_account(
+            {"name": "CR-112 C2 exact context", "platform": "dy", "login_type": "qrcode", "status": "standby"}
+        )
+        account = get_social_account(account["id"], masked=False)
+        session = create_browser_sync_login_session(account["id"], actor_id=1)
+        plan = browser_environment_provider.resolve_account_browser_environment(
+            account,
+            action="login_check",
+            trigger_source="browser_cookie_sync",
+            headless=False,
+            launch_mode="persistent_launch",
+            proxy=None,
+            playwright_executable_path=str(browser_path),
+        )
+        bind_browser_sync_login_session(
+            session["id"],
+            account_id=account["id"],
+            profile_key=account["profile_key"],
+            acquisition_generation=session["acquisition_generation"],
+            provider_resolution_id=plan.resolution_id,
+            browser_attempt_id=plan.attempt_id,
+        )
+        handle = BrowserSyncHandle(
+            session_id=session["id"],
+            account_id=account["id"],
+            profile_key=account["profile_key"],
+            platform="dy",
+            actor_id=1,
+            acquisition_generation=session["acquisition_generation"],
+            created_at=datetime.now(timezone.utc),
+            playwright=SimpleNamespace(),
+            provider_resolution_id=plan.resolution_id,
+            browser_attempt_id=plan.attempt_id,
+        )
+        login_browser_sync.ACTIVE_BROWSER_SYNC_SESSIONS[session["id"]] = handle
+        contexts = []
+        validation_calls = []
+
+        async def fake_launch(playwright, used_plan):
+            acquired_storage = Path(used_plan.profile_path) / "Local Storage"
+            acquired_storage.mkdir(parents=True, exist_ok=True)
+            (acquired_storage / "state").write_text("must be removed", encoding="utf-8")
+            context = FakeContext()
+            contexts.append(context)
+            return SimpleNamespace(context=context, browser=None)
+
+        async def fake_provider_result(context, page):
+            return SimpleNamespace(ok=True)
+
+        async def fake_login_baseline(platform, context):
+            return ""
+
+        async def fake_is_logged_in(platform, context, page, baseline):
+            return True
+
+        async def fake_collectable(platform, context, page, timeout, baseline):
+            return {"ok": True}
+
+        async def fake_identity(platform, page):
+            return {"platform_account_id": "dy-exact-context"}
+
+        async def fake_profile_runner(used_plan, injected_records):
+            path = Path(used_plan.profile_path)
+            validation_calls.append((path, injected_records))
+            if injected_records is not None:
+                assert not (path / "Local Storage").exists()
+                assert injected_records[0]["value"] == "exact-context-secret"
+                (path / "validated-profile").write_text("ready", encoding="utf-8")
+                if cancel_phase == "candidate":
+                    handle.cancel_event.set()
+            else:
+                assert (path / "validated-profile").read_text(encoding="utf-8") == "ready"
+                if cancel_phase == "active":
+                    handle.cancel_event.set()
+            return {"ok": True, "identity": {"platform_account_id": "dy-exact-context"}, "runtime_snapshot_json": ""}
+
+        monkeypatch.setattr(login_browser_sync, "launch_managed_browser_context", fake_launch)
+        monkeypatch.setattr(login_browser_sync, "verify_managed_page", fake_provider_result)
+        monkeypatch.setattr(login_browser_sync, "_login_baseline", fake_login_baseline)
+        monkeypatch.setattr(login_browser_sync, "_is_logged_in", fake_is_logged_in)
+        monkeypatch.setattr(login_browser_sync, "_verify_collectable_login", fake_collectable)
+        monkeypatch.setattr(login_browser_sync, "_extract_platform_identity", fake_identity)
+        monkeypatch.setattr(
+            login_browser_sync,
+            "managed_browser_processes",
+            lambda context: (
+                SimpleNamespace(pid=999999, executable_name="synthetic.exe", creation_time=1),
+            ),
+        )
+        monkeypatch.setattr(login_browser_sync, "default_profile_browser_runner", lambda *args: fake_profile_runner)
+
+        runner = login_browser_sync._build_browser_sync_runner(handle, plan)
+        if cancel_phase == "candidate":
+            with pytest.raises(ProfilePromotionError, match="browser_sync_cancelled"):
+                asyncio.run(
+                    promote_cookie_to_profile(
+                        account["id"],
+                        None,
+                        cookie_source="browser_sync",
+                        login_session_id=session["id"],
+                        actor_id=1,
+                        acquisition_generation=session["acquisition_generation"],
+                        provider_plan=plan,
+                        browser_runner=runner,
+                    )
+                )
+            stored = get_social_account(account["id"], masked=False)
+            assert stored["cookies"] == ""
+            assert stored["profile_runtime_version"] == 0
+            assert len(validation_calls) == 1
+        else:
+            result = asyncio.run(
+                promote_cookie_to_profile(
+                    account["id"],
+                    None,
+                    cookie_source="browser_sync",
+                    login_session_id=session["id"],
+                    actor_id=1,
+                    acquisition_generation=session["acquisition_generation"],
+                    provider_plan=plan,
+                    browser_runner=runner,
+                )
+            )
+            assert result["ok"] is True
+            assert len(validation_calls) == 2
+            stored = get_social_account(account["id"], masked=False)
+            assert "exact-context-secret" in stored["cookies"]
+            assert stored["platform_account_id"] == "dy-exact-context"
+        assert contexts and contexts[0].closed is True
+        assert validation_calls[0][1] is not None
+        if cancel_phase != "candidate":
+            assert validation_calls[1][1] is None
+    finally:
+        login_browser_sync.ACTIVE_BROWSER_SYNC_SESSIONS.clear()
+        _restore_table("account_profile_promotions", snapshots["account_profile_promotions"])
+        _restore_table("login_sessions", snapshots["login_sessions"])
+        _restore_table("social_accounts", snapshots["social_accounts"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
+
+
+def test_cr112_c2_cancel_cleanup_keeps_exact_owned_process_set(monkeypatch):
+    from api.monitoring import login_browser_sync
+    from api.monitoring.login_browser_sync import BrowserSyncHandle
+    from tools.browser_environment import ManagedBrowserProcess
+
+    owned = (
+        ManagedBrowserProcess(pid=401, executable_name="chrome.exe", creation_time=4010),
+        ManagedBrowserProcess(pid=402, executable_name="chrome.exe", creation_time=4020),
+    )
+    closed = []
+
+    class FakePlaywright:
+        stopped = False
+
+        async def stop(self):
+            self.stopped = True
+
+    playwright = FakePlaywright()
+    context = SimpleNamespace()
+    handle = BrowserSyncHandle(
+        session_id=1,
+        account_id=2,
+        profile_key="1/dy/acc_2",
+        platform="dy",
+        actor_id=1,
+        acquisition_generation=1,
+        created_at=datetime.now(timezone.utc),
+        playwright=playwright,
+        context=context,
+        page=SimpleNamespace(),
+        owned_processes=owned,
+    )
+
+    async def fake_close(used_context, browser, used_processes):
+        closed.append((used_context, browser, used_processes))
+
+    monkeypatch.setattr(login_browser_sync, "_close_context_and_browser", fake_close)
+
+    asyncio.run(login_browser_sync._close_handle_browser(handle))
+
+    assert closed == [(context, None, owned)]
+    assert handle.context is None
+    assert handle.page is None
+    assert handle.owned_processes == ()
+    assert handle.playwright is None
+    assert playwright.stopped is True
+
+
+def test_cr112_c2_feature_flag_routes_and_frontend_are_default_off(monkeypatch):
+    from api import main as api_main
+    from api.monitoring import login_browser_sync
+    from api.routers.browser_sync import router as browser_sync_router
+
+    monkeypatch.delenv("MONITOR_BROWSER_COOKIE_SYNC_ENABLED", raising=False)
+    assert login_browser_sync.browser_cookie_sync_enabled() is False
+    current_paths = {getattr(route, "path", "") for route in api_main.app.routes}
+    assert "/api/monitor/social-accounts/{account_id}/browser-sync" not in current_paths
+    assert "/api/monitor/social-accounts/{account_id}/cookie-reveal" not in current_paths
+
+    c2_routes = {route.path: set(route.methods or set()) for route in browser_sync_router.routes}
+    assert c2_routes["/monitor/social-accounts/{account_id}/browser-sync"] == {"POST"}
+    assert c2_routes["/monitor/social-accounts/{account_id}/cookie-reveal"] == {"POST"}
+    assert all("cookie-bridge" not in path for path in c2_routes)
+
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    assert 'id="account_browser_sync_button"' in page
+    assert "浏览器登录并自动同步" in page
+    assert 'id="manual_cookie_advanced"' in page
+    assert "高级选项：手工 Cookie" in page
+    assert 'id="account_cookie_reveal_button"' in page
+    assert 'id="account_cookie_copy_button"' in page
+    assert "clearRevealedAccountCookie" in page
+    assert "accountCookieRevealTimer=setTimeout(clearRevealedAccountCookie,60000)" in page
+    assert "localStorage" not in page
+    assert "sessionStorage" not in page
+    assert "indexedDB" not in page
+    assert "if(data.active)" in page
+    assert "取消请求已收到，正在安全完成" in page
+
+
+def test_cr112_c2_restart_finalizes_pending_session_without_changing_account_cookie():
+    from api.monitoring.database import create_browser_sync_login_session
+    from api.monitoring.login_browser_sync import ACTIVE_BROWSER_SYNC_SESSIONS, recover_browser_cookie_sync_sessions
+
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "login_sessions": _snapshot_table("login_sessions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        account = save_social_account(
+            {
+                "name": "CR-112 restart account",
+                "platform": "dy",
+                "login_type": "cookie",
+                "cookies": "sessionid=previous-authority",
+                "status": "active",
+            }
+        )
+        session = create_browser_sync_login_session(account["id"], actor_id=1)
+        ACTIVE_BROWSER_SYNC_SESSIONS.clear()
+
+        recovered = recover_browser_cookie_sync_sessions()
+
+        assert session["id"] in recovered
+        refreshed_session = get_login_session(session["id"])
+        assert refreshed_session["status"] == "platform_error"
+        refreshed_account = get_social_account(account["id"], masked=False)
+        assert refreshed_account["cookies"] == "sessionid=previous-authority"
+        assert refreshed_account["status"] == "active"
+    finally:
+        ACTIVE_BROWSER_SYNC_SESSIONS.clear()
+        _restore_table("login_sessions", snapshots["login_sessions"])
+        _restore_table("social_accounts", snapshots["social_accounts"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
+
+
+def test_cr112_c2_reversed_account_sessions_cannot_cross_bind(tmp_path, monkeypatch):
+    from api.monitoring import account_environment, browser_environment_provider, login_browser_sync
+    from api.monitoring.browser_selection import BrowserSelection
+    from api.monitoring.database import (
+        bind_browser_sync_login_session,
+        create_account_profile_promotion,
+        create_browser_sync_login_session,
+    )
+    from api.monitoring.login_browser_sync import BrowserSyncHandle
+
+    profile_root = (tmp_path / "profiles").resolve()
+    browser_path = (tmp_path / "chrome.exe").resolve()
+    browser_path.write_bytes(b"synthetic browser")
+    monkeypatch.setattr(account_environment, "ACCOUNT_PROFILE_ROOT", profile_root)
+    monkeypatch.setattr(
+        browser_environment_provider,
+        "resolve_browser_selection",
+        lambda *args, **kwargs: BrowserSelection(browser_path, "system_chrome", "chrome"),
+    )
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "account_profile_promotions": _snapshot_table("account_profile_promotions"),
+        "login_sessions": _snapshot_table("login_sessions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        accounts = [
+            get_social_account(
+                save_social_account({"name": f"CR-112 bind {name}", "platform": "dy", "login_type": "qrcode", "status": "standby"})["id"],
+                masked=False,
+            )
+            for name in ("A", "B")
+        ]
+        bindings = []
+        for index, account in enumerate(accounts, start=1):
+            session = create_browser_sync_login_session(account["id"], actor_id=1)
+            plan = browser_environment_provider.resolve_account_browser_environment(
+                account,
+                action="login_check",
+                trigger_source="browser_cookie_sync",
+                headless=False,
+                launch_mode="persistent_launch",
+                proxy=None,
+                playwright_executable_path=str(browser_path),
+            )
+            bind_browser_sync_login_session(
+                session["id"],
+                account_id=account["id"],
+                profile_key=account["profile_key"],
+                acquisition_generation=session["acquisition_generation"],
+                provider_resolution_id=plan.resolution_id,
+                browser_attempt_id=plan.attempt_id,
+            )
+            promotion = create_account_profile_promotion(
+                account_id=account["id"],
+                login_session_id=session["id"],
+                cookie_source="browser_sync",
+                acquisition_generation=session["acquisition_generation"],
+                created_by=1,
+            )
+            handle = BrowserSyncHandle(
+                session_id=session["id"],
+                account_id=account["id"],
+                profile_key=account["profile_key"],
+                platform="dy",
+                actor_id=1,
+                acquisition_generation=session["acquisition_generation"],
+                created_at=datetime.now(timezone.utc),
+                promotion_id=promotion["id"],
+                provider_resolution_id=plan.resolution_id,
+                browser_attempt_id=plan.attempt_id,
+            )
+            bindings.append((handle, get_login_session(session["id"]), plan))
+
+        login_browser_sync._assert_session_binding(*bindings[1])
+        login_browser_sync._assert_session_binding(*bindings[0])
+        with pytest.raises(login_browser_sync.BrowserSyncError, match="browser_sync_binding_mismatch"):
+            login_browser_sync._assert_session_binding(bindings[0][0], bindings[1][1], bindings[0][2])
+        with pytest.raises(login_browser_sync.BrowserSyncError, match="browser_sync_binding_mismatch"):
+            login_browser_sync._assert_session_binding(bindings[1][0], bindings[0][1], bindings[1][2])
+    finally:
+        _restore_table("account_profile_promotions", snapshots["account_profile_promotions"])
+        _restore_table("login_sessions", snapshots["login_sessions"])
+        _restore_table("social_accounts", snapshots["social_accounts"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
+
+
+def test_cr112_c2_cross_workspace_start_status_cancel_and_reveal_are_rejected(monkeypatch):
+    from api.monitoring.database import create_browser_sync_login_session, create_user_session, save_user
+    from api.routers import browser_sync as browser_sync_router
+    from api.routers.browser_sync import (
+        browser_sync_cancel_route,
+        browser_sync_status_route,
+        reveal_social_account_cookie,
+        start_browser_sync_route,
+    )
+
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "login_sessions": _snapshot_table("login_sessions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+        "users": _snapshot_table("users"),
+        "user_sessions": _snapshot_table("user_sessions"),
+    }
+    try:
+        account = save_social_account(
+            {
+                "name": "CR-112 workspace B",
+                "platform": "dy",
+                "login_type": "cookie",
+                "cookies": "sessionid=cross-workspace-secret",
+                "status": "active",
+            }
+        )
+        with get_conn() as conn:
+            conn.execute("UPDATE social_accounts SET workspace_id=2 WHERE id=?", (account["id"],))
+        session = create_browser_sync_login_session(account["id"], actor_id=1)
+        admin = save_user(
+            {
+                "email": "cr112-workspace-admin@example.com",
+                "display_name": "Workspace A Admin",
+                "password": "AdminPass123!",
+                "role": "administrator",
+            }
+        )
+        token, _ = create_user_session(admin["id"])
+        admin_context = {"id": admin["id"], "workspace_id": 1, "role": "administrator"}
+        monkeypatch.setattr(browser_sync_router, "browser_cookie_sync_available", lambda: True)
+
+        for operation in (
+            lambda: start_browser_sync_route(account["id"], {}, admin_context),
+            lambda: browser_sync_status_route(session["id"], admin_context),
+            lambda: browser_sync_cancel_route(session["id"], admin_context),
+        ):
+            with pytest.raises(HTTPException) as exc_info:
+                asyncio.run(operation())
+            assert exc_info.value.status_code == 404
+
+        revealed = asyncio.run(reveal_social_account_cookie(str(account["id"]), token))
+        assert revealed.status_code == 404
+        assert revealed.headers["cache-control"] == "no-store, private"
+        assert "cross-workspace-secret" not in revealed.body.decode("utf-8")
+    finally:
+        _restore_table("user_sessions", snapshots["user_sessions"])
+        _restore_table("users", snapshots["users"])
+        _restore_table("login_sessions", snapshots["login_sessions"])
+        _restore_table("social_accounts", snapshots["social_accounts"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
+
+
+def test_cr112_c2_terminal_audit_uses_bound_workspace():
+    from api.monitoring import login_browser_sync
+    from api.monitoring.login_browser_sync import BrowserSyncHandle
+
+    init_db()
+    snapshot = _snapshot_table("audit_logs")
+    try:
+        handle = BrowserSyncHandle(
+            session_id=7001,
+            account_id=7002,
+            profile_key="2/dy/acc_7002",
+            platform="dy",
+            actor_id=None,
+            acquisition_generation=7001,
+            created_at=datetime.now(timezone.utc),
+            workspace_id=2,
+            promotion_id=7003,
+            provider_resolution_id="resolution-workspace-2",
+            browser_attempt_id="attempt-workspace-2",
+        )
+
+        login_browser_sync._record_browser_sync_terminal(handle, "cancelled", "browser_sync_cancelled")
+
+        with get_conn() as conn:
+            audit = dict(
+                conn.execute(
+                    "SELECT * FROM audit_logs WHERE action_type='browser_sync_session_finished' ORDER BY id DESC LIMIT 1"
+                ).fetchone()
+            )
+        assert audit["workspace_id"] == 2
+        assert "2/dy/acc_7002" not in audit["details_json"]
+    finally:
+        _restore_table("audit_logs", snapshot)

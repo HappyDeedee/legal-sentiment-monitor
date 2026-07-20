@@ -1922,12 +1922,13 @@ data, sensitive files, or the old server-login worktree.
 
 Planning status:
 
-CR-112 is an `Accepted / In Progress (Packet C.1)` new capability as of 2026-07-21.
+CR-112 is an `Accepted / Dependency-Gated (Packet C.3)` new capability as of
+2026-07-21.
 Acceptance approves the same-machine Windows scope, reuse-first/minimal-
 adaptation evaluation, CR-112-before-CR-070 order, Profile/Cookie authority,
   administrator Cookie reveal, and Douyin/Xiaohongshu Packet D matrix. Packet
-  B and C.1 are verified within their recorded proof boundaries; C.2/C.3 and
-  Packet D remain gated. Phase 5.1P and Phase
+  B, C.1, and C.2 are verified within their recorded proof boundaries. C.3
+  waits for the C.2 atomic commit, while Packet D remains gated. Phase 5.1P and Phase
 5.1A-D plus the current merged regression fixes are verified; the separate
 CR-047 Linux/server-like real acceptance remains operator-gated and is not
 closed by CR-112 local evidence.
@@ -2039,15 +2040,24 @@ Accepted decisions and gated execution:
 - [x] Verify Packet C.1 with focused protocol/journal/recovery/route tests, the
       full monitoring suite (`606 passed`), Python compile, documentation checks,
       and `git diff --check`; leave C.2 gated until the atomic commit.
-- [ ] Packet C.2: implement feature-gated direct exact-context acquisition/API/UI
+- [x] Start Packet C.2 after the C.1 atomic delivery and verification gates;
+      keep C.3 and Packet D gated until C.2 acceptance evidence exists.
+- [x] Packet C.2: implement feature-gated direct exact-context acquisition/API/UI
       on C.1; feature-off removes only C.2 and preserves advanced manual Cookie.
       Only C.2 router/UI/readiness/managed-browser code may read
       `MONITOR_BROWSER_COOKIE_SYNC_ENABLED`.
-- [ ] Packet C.2: implement the administrator-only Cookie reveal POST endpoint
+- [x] Packet C.2: implement the administrator-only Cookie reveal POST endpoint
       and default-masked eye/copy UI. Return no-store/no-cache, reject normal
       users with 403, keep standard account payloads masked, and prove Cookie
-      material never enters browser persistent Storage, URL, logs, audit
-      details, diagnostics, child argv, or child environment.
+      reveal material never enters browser persistent Storage, URL, logs,
+      audit details, diagnostics, or a new child process. C.2 does not claim
+      the existing crawler Cookie argv/env is retired; that remains C.3.
+- [x] Verify Packet C.2 with `19` focused tests, `269` adjacent Phase 5.1/login/
+      crawl regressions, the complete monitoring suite (`625 passed`), desktop
+      and phone browser checks, Python/JavaScript/documentation/whitespace
+      gates, and a controlled account-bound start/cancel run. The controlled
+      run preserved the existing active account/Profile, removed the candidate,
+      and left no owned Chromium process after cancellation.
 - [ ] Packet C.3: implement the internal profile-only runner, migrate or mark
       every `login_type=cookie` account, reject login/generic/default-network
       fallback, and retire raw Cookie argv/env with process-inspection proof.

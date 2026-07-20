@@ -186,10 +186,11 @@ identity values until the explicit Phase 5.1C lifecycle/reset flow runs.
 
 ### Accepted CR-112 - Persistent Profile Promotion And Browser-Sync Metadata
 
-Status: `Implemented / Verified (Packet C.1)`. Packet B is verified. C.1 now
+Status: `Implemented / Verified (Packet C.1-C.2); Dependency-Gated (Packet C.3)`. Packet B is verified. C.1 now
 applies this additive, backward-compatible migration after Packet B fixed the
 direct acquisition/protocol boundary. It is not part of Phase 5.1P or the
-historical CR-047 schema body; C.2/C.3/D remain gated.
+historical CR-047 schema body; C.2 is verified, C.3 waits for the C.2 atomic
+commit, and D remains gated.
 
 Accepted Packet C additions are specified in `DATA_MODEL.md`:
 
@@ -210,8 +211,8 @@ Migration is delivered in serial Packet C sub-packets:
    candidate is initialized fresh from the Phase 5.1 provider inputs; it does
    not clone active Profile storage.
 2. **C.2 Browser acquisition:** add exact-context session metadata and the
-   default-off direct acquisition API/UI. No Connector binding table or
-   Cookie-bridge WebSocket route is added.
+   default-off direct acquisition API/UI. This is the active migration unit.
+   No Connector binding table or Cookie-bridge WebSocket route is added.
 3. **C.3 Profile-only runner:** migrate each usable `login_type=cookie` account
    through C.1, mark invalid/missing accounts `requires_relogin`, enable the
    internal profile-only child contract for those accounts, and retire raw

@@ -2725,6 +2725,10 @@ def _default_login_state_message(status: str) -> str:
 def _login_capability_response(platform: str, override: dict[str, Any] | None = None) -> dict[str, Any]:
     capability = get_mediacrawler_login_capability(platform)
     local_login_window_allowed = _local_login_window_allowed()
+    from ..monitoring.login_browser_sync import browser_cookie_sync_available, browser_cookie_sync_enabled
+
+    cookie_sync_enabled = browser_cookie_sync_enabled()
+    cookie_sync_available = browser_cookie_sync_available()
     return {
         "platform": platform,
         "platform_label": PLATFORM_LABELS.get(platform, platform),
@@ -2758,6 +2762,11 @@ def _login_capability_response(platform: str, override: dict[str, Any] | None = 
         "local_login_window_allowed": local_login_window_allowed,
         "manual_browser_fallback": local_login_window_allowed,
         "manual_browser_fallback_reason": "" if local_login_window_allowed else "生产模式已关闭本地登录窗口",
+        "browser_cookie_sync_enabled": cookie_sync_enabled,
+        "browser_cookie_sync_available": cookie_sync_available,
+        "browser_cookie_sync_reason": (
+            "" if cookie_sync_available else ("当前仅支持 Windows 本机" if cookie_sync_enabled else "功能未启用")
+        ),
     }
 
 

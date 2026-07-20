@@ -6186,6 +6186,123 @@ def create_login_session(payload: dict[str, Any]) -> dict[str, Any]:
     return get_login_session(target_id) or {}
 
 
+def create_browser_sync_login_session(account_id: int, actor_id: int | None = None) -> dict[str, Any]:
+    """Create one account-bound browser-sync session with a new generation."""
+
+    account_id = _safe_int(account_id) or 0
+    if not account_id:
+        raise ValueError("account not found")
+    account = get_social_account(account_id, masked=False)
+    if not account:
+        raise ValueError("account not found")
+    platform = str(account.get("platform") or "").strip()
+    _validate_platform(platform)
+    profile_key = str(account.get("profile_key") or "").strip()
+    if not profile_key:
+        raise ValueError("account profile is not ready")
+    capability = get_mediacrawler_login_capability(platform)
+    now = utc_now()
+    profile_path = str(resolve_account_profile_path(profile_key))
+    message = "正在准备浏览器登录窗口。"
+    with get_conn() as conn:
+        cursor = conn.execute(
+            """
+            INSERT INTO login_sessions (
+                workspace_id, platform, account_id, status, login_url, qr_image,
+                profile_key, profile_path, cookie_source, profile_promotion_id,
+                acquisition_generation, provider_resolution_id, browser_attempt_id,
+                message, created_by, updated_by, created_at, updated_at, expires_at
+            ) VALUES (?, ?, ?, ?, ?, '', ?, ?, 'browser_sync', NULL, 0, '', '', ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                int(account.get("workspace_id") or DEFAULT_WORKSPACE_ID),
+                platform,
+                account_id,
+                LOGIN_STATE_PREPARING,
+                str(capability.get("login_url") or ""),
+                profile_key,
+                profile_path,
+                message,
+                actor_id,
+                actor_id,
+                now,
+                now,
+                "",
+            ),
+        )
+        target_id = int(cursor.lastrowid)
+        generation = target_id
+        conn.execute(
+            "UPDATE login_sessions SET acquisition_generation=? WHERE id=?",
+            (generation, target_id),
+        )
+        _record_audit_log(
+            conn,
+            int(account.get("workspace_id") or DEFAULT_WORKSPACE_ID),
+            actor_id,
+            "browser_sync_session_started",
+            "social_account",
+            str(account_id),
+            {
+                "login_session_id": target_id,
+                "profile_key_hash": _profile_key_hash(profile_key),
+                "platform": platform,
+                "acquisition_generation": generation,
+                "cookie_source": "browser_sync",
+            },
+        )
+    return get_login_session(target_id) or {}
+
+
+def bind_browser_sync_login_session(
+    session_id: int,
+    *,
+    account_id: int,
+    profile_key: str,
+    acquisition_generation: int,
+    provider_resolution_id: str,
+    browser_attempt_id: str,
+) -> dict[str, Any]:
+    """Bind the exact provider attempt before a managed browser is launched."""
+
+    session_id = _safe_int(session_id) or 0
+    account_id = _safe_int(account_id) or 0
+    generation = _safe_int(acquisition_generation) or 0
+    if not session_id or not account_id or not generation:
+        raise ValueError("browser_sync_session_binding_invalid")
+    resolution_id = str(provider_resolution_id or "").strip()
+    attempt_id = str(browser_attempt_id or "").strip()
+    if not resolution_id or not attempt_id or not profile_key:
+        raise ValueError("browser_sync_session_binding_invalid")
+    now = utc_now()
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT account_id, platform, profile_key, acquisition_generation, status, profile_promotion_id FROM login_sessions WHERE id=?",
+            (session_id,),
+        ).fetchone()
+        if not row:
+            raise ValueError("login session not found")
+        if (
+            int(row["account_id"] or 0) != account_id
+            or str(row["profile_key"] or "") != str(profile_key)
+            or int(row["acquisition_generation"] or 0) != generation
+            or row["profile_promotion_id"] is not None
+            or normalize_login_state(row["status"]) not in PENDING_LOGIN_STATES
+        ):
+            raise ValueError("browser_sync_session_binding_mismatch")
+        cursor = conn.execute(
+            """
+            UPDATE login_sessions SET
+                provider_resolution_id=?, browser_attempt_id=?, updated_by=?, updated_at=?
+            WHERE id=? AND account_id=? AND profile_key=? AND acquisition_generation=?
+            """,
+            (resolution_id[:160], attempt_id[:160], None, now, session_id, account_id, str(profile_key), generation),
+        )
+        if cursor.rowcount != 1:
+            raise ValueError("browser_sync_session_binding_mismatch")
+    return get_login_session(session_id) or {}
+
+
 def create_account_profile_promotion(
     *,
     account_id: int,
