@@ -4805,7 +4805,7 @@ frontend polling, and post-restart Profile verification.
 
 Type: Regression Fix
 
-Status: Verified
+Status: Verified/Merged
 
 Background:
 
@@ -4892,7 +4892,7 @@ provider resolution, and runtime version evidence.
 
 Type: Existing Feature Optimization
 
-Status: Verified
+Status: Verified/Merged
 
 Background:
 
@@ -5005,7 +5005,7 @@ browser verification.
 
 Type: Regression Fix
 
-Status: Verified
+Status: Verified/Merged
 
 Background:
 
