@@ -1922,13 +1922,16 @@ multi-account binding, local deployment, and login UI.
 
 Type: New Capability
 
-Status: Accepted / Verified (Packet B)
+Status: Accepted / In Progress (Packet C.1)
 
 Interpretation: the product direction and packet boundaries were accepted on
-2026-07-21. Packet B synthetic evidence and required validation are complete. Packet
-C and D have not started. Schema,
-runtime, migration, UI, and real acceptance remain dependency-gated until the
-owning packet begins and produces its required evidence.
+2026-07-21. Packet B is verified and committed in `1d7465c`; Packet C.1 is
+implemented and verified within its recorded proof boundary. C.1 also enforces
+the atomic account-run/Profile-promotion exclusion, a `256 MiB` storage
+reserve, and immediate retained-rollback cleanup after a successful managed
+run. Packet C.2/C.3 and D remain gated. Schema, runtime, migration, UI, and real acceptance remain
+dependency-gated until the owning packet begins and produces its required
+evidence.
 
 Background:
 

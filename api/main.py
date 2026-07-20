@@ -31,6 +31,7 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse
 
 from .monitoring.database import bootstrap_admin_from_env, init_db, recover_stale_runs_and_locks
+from .monitoring.profile_promotion import cleanup_profile_promotion_artifacts, recover_profile_promotions
 from .monitoring.scheduler import start_scheduler
 from .routers import auth_router, crawler_router, data_router, monitor_router, websocket_router
 
@@ -75,6 +76,8 @@ async def startup_monitoring():
         os.environ.get("MONITOR_ADMIN_DISPLAY_NAME"),
     )
     recover_stale_runs_and_locks("startup_recovery")
+    await asyncio.to_thread(recover_profile_promotions)
+    await asyncio.to_thread(cleanup_profile_promotion_artifacts)
     await start_scheduler()
 
 

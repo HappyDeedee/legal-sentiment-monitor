@@ -1922,12 +1922,12 @@ data, sensitive files, or the old server-login worktree.
 
 Planning status:
 
-CR-112 is an `Accepted / Verified (Packet B)` new capability as of 2026-07-21.
+CR-112 is an `Accepted / In Progress (Packet C.1)` new capability as of 2026-07-21.
 Acceptance approves the same-machine Windows scope, reuse-first/minimal-
 adaptation evaluation, CR-112-before-CR-070 order, Profile/Cookie authority,
   administrator Cookie reveal, and Douyin/Xiaohongshu Packet D matrix. Packet
-  B is verified; Packet C/D remain dependency-gated and are not started. Phase
-  5.1P and Phase
+  B and C.1 are verified within their recorded proof boundaries; C.2/C.3 and
+  Packet D remain gated. Phase 5.1P and Phase
 5.1A-D plus the current merged regression fixes are verified; the separate
 CR-047 Linux/server-like real acceptance remains operator-gated and is not
 closed by CR-112 local evidence.
@@ -2025,15 +2025,20 @@ Accepted decisions and gated execution:
       proof boundary.
 - [x] Commit the verified Packet B result and synchronized formal documents
       atomically before marking Packet C `In Progress`.
-- [ ] Start Packet C only after Packet B passes and data-model/migration,
+- [x] Start Packet C only after Packet B passes and data-model/migration,
       distribution, runtime, permission, and security decisions are accepted.
-- [ ] Packet C.1: implement the shared browser-sync/manual canonical Cookie service,
+- [x] Packet C.1: implement the shared browser-sync/manual canonical Cookie service,
       fixed-active-path promotion journal, same-volume candidate/rollback swap,
       active-path recheck, restart recovery, bounded cleanup, and existing
       account migration without enabling Bridge. Candidates are fresh provider
       outputs and never clone/mutate the active Profile before `swapping`;
       recovery follows the commit-authority/directory-shape/operation-marker
-      table and cleanup runs after success, on timer/startup, and before refresh.
+      table; the run/promotion lock exclusion is atomic, candidate creation
+      requires a `256 MiB` reserve, and cleanup runs after success, on
+      timer/startup, and before refresh.
+- [x] Verify Packet C.1 with focused protocol/journal/recovery/route tests, the
+      full monitoring suite (`606 passed`), Python compile, documentation checks,
+      and `git diff --check`; leave C.2 gated until the atomic commit.
 - [ ] Packet C.2: implement feature-gated direct exact-context acquisition/API/UI
       on C.1; feature-off removes only C.2 and preserves advanced manual Cookie.
       Only C.2 router/UI/readiness/managed-browser code may read

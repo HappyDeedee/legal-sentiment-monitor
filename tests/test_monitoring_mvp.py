@@ -8940,7 +8940,7 @@ def test_sensitive_text_is_redacted():
     assert r"E:\myproject" not in customer_safe
 
 
-def test_phase_9_admin_resource_operations_are_audited_without_secrets():
+def test_phase_9_admin_resource_operations_are_audited_without_secrets(monkeypatch):
     init_db()
     snapshots = {
         "audit_logs": _snapshot_table("audit_logs"),
@@ -8951,6 +8951,23 @@ def test_phase_9_admin_resource_operations_are_audited_without_secrets():
         "email_templates": _snapshot_table("email_templates"),
     }
     admin = {"id": 901, "workspace_id": 1, "role": "administrator"}
+
+    async def fake_profile_promotion(account_id, records, **kwargs):
+        from api.monitoring.cookie_material import serialize_cookie_material
+
+        current = get_social_account(account_id, masked=False)
+        stored = save_social_account(
+            {
+                **current,
+                "login_type": "cookie",
+                "cookies": serialize_cookie_material(str(current["platform"]), records),
+                "status": "active",
+            },
+            account_id,
+        )
+        return {"promotion": {"id": 9001, "state": "committed"}, "account": stored}
+
+    monkeypatch.setattr(monitor_router, "promote_cookie_to_profile", fake_profile_promotion)
     try:
         with get_conn() as conn:
             conn.execute("DELETE FROM audit_logs")
@@ -23387,6 +23404,7 @@ def test_run_platform_attaches_bound_proxy_summary(tmp_path, monkeypatch):
         "time_window_type": "recent_1d",
     }
     seen: dict[str, Any] = {}
+    cleanup_lock_states: list[Any] = []
 
     def fake_run_attempt(job_arg, platform_arg, out_dir, proxy_binding=None):
         seen["proxy_binding"] = proxy_binding
@@ -23433,6 +23451,13 @@ def test_run_platform_attaches_bound_proxy_summary(tmp_path, monkeypatch):
         monkeypatch.setenv("MONITOR_BROWSER_PROXY_PROBE_URL", "https://probe.invalid/region")
         monkeypatch.setattr(runner_module, "list_platform_status", lambda: [{"platform": "dy", "login_window_open": False}])
         monkeypatch.setattr(runner_module, "_run_crawler_attempt", fake_run_attempt)
+        monkeypatch.setattr(
+            runner_module,
+            "cleanup_after_successful_managed_run",
+            lambda account_id: cleanup_lock_states.append(
+                get_social_account(account_id, masked=False).get("locked_by_run_id")
+            ),
+        )
 
         result = asyncio.run(runner_module.run_platform(job, 10003, "dy", tmp_path))
     finally:
@@ -23450,6 +23475,7 @@ def test_run_platform_attaches_bound_proxy_summary(tmp_path, monkeypatch):
     assert result["proxy"]["proxy_id"] == proxy["id"]
     assert "user:pass" not in result["proxy"]["proxy_url"]
     assert result["new_contents"] == 1
+    assert cleanup_lock_states == [None]
 
 
 def test_run_platform_does_not_retry_login_required_error(tmp_path, monkeypatch):
@@ -23955,3 +23981,889 @@ class _FakeResponse:
 
     def delete_cookie(self, key: str, **kwargs) -> None:
         self.deleted_cookies.add(key)
+
+
+def test_cr112_packet_c1_schema_adds_profile_runtime_journal_and_session_linkage():
+    init_db()
+    with get_conn() as conn:
+        assert {
+            "cookie_source",
+            "profile_runtime_version",
+            "profile_ready_at",
+        } <= _table_columns(conn, "social_accounts")
+        assert {
+            "cookie_source",
+            "profile_promotion_id",
+            "acquisition_generation",
+            "provider_resolution_id",
+            "browser_attempt_id",
+        } <= _table_columns(conn, "login_sessions")
+        assert {
+            "id",
+            "workspace_id",
+            "account_id",
+            "login_session_id",
+            "profile_key",
+            "state",
+            "had_active_profile",
+            "acquisition_generation",
+            "cookie_source",
+            "failure_category",
+            "recovery_action",
+            "created_by",
+            "created_at",
+            "candidate_ready_at",
+            "swap_started_at",
+            "active_moved_at",
+            "candidate_moved_at",
+            "active_rechecked_at",
+            "committed_at",
+            "finalized_at",
+            "cleanup_after",
+            "updated_at",
+        } <= _table_columns(conn, "account_profile_promotions")
+        indexes = {
+            row["name"]
+            for row in conn.execute("PRAGMA index_list(account_profile_promotions)").fetchall()
+        }
+        assert {
+            "idx_profile_promotions_one_active_account",
+            "idx_profile_promotions_state",
+            "idx_profile_promotions_account",
+        } <= indexes
+
+
+def test_cr112_cookie_protocol_canonicalizes_manual_material_and_preserves_scoped_duplicates():
+    from api.monitoring.cookie_material import (
+        canonicalize_cookie_records,
+        deserialize_cookie_material,
+        parse_manual_cookie_material,
+        serialize_cookie_material,
+        to_playwright_cookie_items,
+    )
+
+    manual = parse_manual_cookie_material("dy", "sessionid=abc=def; sid_guard=xyz")
+    assert manual == [
+        {
+            "name": "sessionid",
+            "value": "abc=def",
+            "domain": ".douyin.com",
+            "path": "/",
+            "http_only": False,
+            "secure": False,
+            "same_site": "Lax",
+            "host_only": False,
+        },
+        {
+            "name": "sid_guard",
+            "value": "xyz",
+            "domain": ".douyin.com",
+            "path": "/",
+            "http_only": False,
+            "secure": False,
+            "same_site": "Lax",
+            "host_only": False,
+        },
+    ]
+
+    scoped = canonicalize_cookie_records(
+        "dy",
+        [
+            {
+                "name": "sessionid",
+                "value": "root",
+                "domain": ".douyin.com",
+                "path": "/",
+                "httpOnly": True,
+                "secure": True,
+                "sameSite": "Lax",
+            },
+            {
+                "name": "sessionid",
+                "value": "api",
+                "domain": "www.douyin.com",
+                "path": "/api",
+                "httpOnly": False,
+                "secure": True,
+                "sameSite": "None",
+            },
+        ],
+    )
+    assert [item["path"] for item in scoped] == ["/", "/api"]
+    assert scoped[0]["host_only"] is False
+    assert scoped[1]["host_only"] is True
+    stored = serialize_cookie_material("dy", scoped)
+    assert deserialize_cookie_material("dy", stored) == scoped
+    assert to_playwright_cookie_items(scoped)[0]["httpOnly"] is True
+
+
+@pytest.mark.parametrize(
+    ("records", "reason"),
+    [
+        (
+            [
+                {"name": "sid", "value": "a", "domain": ".douyin.com", "path": "/"},
+                {"name": "sid", "value": "b", "domain": ".douyin.com", "path": "/"},
+            ],
+            "cookie_duplicate_scope",
+        ),
+        (
+            [{"name": "sid", "value": "a", "domain": ".example.com", "path": "/"}],
+            "cookie_domain_not_allowed",
+        ),
+        (
+            [
+                {
+                    "name": "sid",
+                    "value": "a",
+                    "domain": ".douyin.com",
+                    "path": "/",
+                    "partition_key": "https://douyin.com",
+                }
+            ],
+            "cookie_attribute_unsupported",
+        ),
+    ],
+)
+def test_cr112_cookie_protocol_rejects_unsafe_scope(records, reason):
+    from api.monitoring.cookie_material import CookieMaterialError, canonicalize_cookie_records
+
+    with pytest.raises(CookieMaterialError) as exc_info:
+        canonicalize_cookie_records("dy", records)
+
+    assert exc_info.value.reason == reason
+
+
+def test_cr112_profile_storage_preflight_rejects_low_space_before_candidate(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from api.monitoring import account_environment, profile_promotion as profile_promotion_module
+    from api.monitoring.profile_promotion import (
+        PROMOTION_MIN_FREE_BYTES,
+        ProfilePromotionError,
+        _ensure_profile_storage_capacity,
+        profile_promotion_paths,
+    )
+
+    monkeypatch.setattr(account_environment, "ACCOUNT_PROFILE_ROOT", (tmp_path / "profiles").resolve())
+    paths = profile_promotion_paths(account_id=1, profile_key="1/dy/acc_1", promotion_id=1)
+    paths.operation_root.parent.mkdir(parents=True, exist_ok=True)
+    monkeypatch.setattr(
+        profile_promotion_module.shutil,
+        "disk_usage",
+        lambda path: SimpleNamespace(free=PROMOTION_MIN_FREE_BYTES - 1),
+    )
+
+    with pytest.raises(ProfilePromotionError) as exc_info:
+        _ensure_profile_storage_capacity(paths)
+
+    assert exc_info.value.reason == "profile_storage_insufficient"
+    assert not paths.candidate.exists()
+
+
+def test_cr112_async_profile_lock_wait_does_not_block_event_loop(tmp_path, monkeypatch):
+    from api.monitoring import account_environment
+    from api.monitoring.profile_promotion import async_profile_operation_lock
+
+    monkeypatch.setattr(account_environment, "ACCOUNT_PROFILE_ROOT", (tmp_path / "profiles").resolve())
+
+    async def exercise_lock():
+        holder_entered = asyncio.Event()
+        release_holder = asyncio.Event()
+        waiter_entered = asyncio.Event()
+
+        async def holder():
+            async with async_profile_operation_lock(987654, "1/dy/acc_987654", timeout=1.0):
+                holder_entered.set()
+                await release_holder.wait()
+
+        async def waiter():
+            await holder_entered.wait()
+            async with async_profile_operation_lock(987654, "1/dy/acc_987654", timeout=1.0):
+                waiter_entered.set()
+
+        holder_task = asyncio.create_task(holder())
+        await holder_entered.wait()
+        waiter_task = asyncio.create_task(waiter())
+        await asyncio.sleep(0.05)
+        assert waiter_entered.is_set() is False
+        release_holder.set()
+        await holder_task
+        await waiter_task
+        assert waiter_entered.is_set() is True
+
+    asyncio.run(exercise_lock())
+
+
+def test_cr112_async_profile_lock_cancellation_releases_late_acquisition(tmp_path, monkeypatch):
+    from api.monitoring import account_environment
+    from api.monitoring.profile_promotion import async_profile_operation_lock
+
+    monkeypatch.setattr(account_environment, "ACCOUNT_PROFILE_ROOT", (tmp_path / "profiles").resolve())
+
+    async def exercise_cancellation():
+        holder_entered = asyncio.Event()
+        release_holder = asyncio.Event()
+
+        async def holder():
+            async with async_profile_operation_lock(987655, "1/dy/acc_987655", timeout=1.0):
+                holder_entered.set()
+                await release_holder.wait()
+
+        async def cancelled_waiter():
+            async with async_profile_operation_lock(987655, "1/dy/acc_987655", timeout=1.0):
+                raise AssertionError("cancelled waiter must not enter the protected block")
+
+        holder_task = asyncio.create_task(holder())
+        await holder_entered.wait()
+        waiter_task = asyncio.create_task(cancelled_waiter())
+        await asyncio.sleep(0.05)
+        waiter_task.cancel()
+        await asyncio.sleep(0)
+        release_holder.set()
+        await holder_task
+        with pytest.raises(asyncio.CancelledError):
+            await waiter_task
+
+        reacquired = False
+        async with async_profile_operation_lock(987655, "1/dy/acc_987655", timeout=0.2):
+            reacquired = True
+        assert reacquired is True
+
+    asyncio.run(exercise_cancellation())
+
+
+def test_cr112_profile_promotion_journal_enforces_one_active_operation_and_atomic_commit():
+    from api.monitoring.cookie_material import parse_manual_cookie_material, serialize_cookie_material
+    from api.monitoring.database import (
+        acquire_account_lock,
+        commit_account_profile_promotion,
+        create_account_profile_promotion,
+        get_account_profile_promotion,
+        release_account_lock,
+        update_account_profile_promotion,
+    )
+
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "account_profile_promotions": _snapshot_table("account_profile_promotions"),
+        "login_sessions": _snapshot_table("login_sessions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        account = save_social_account(
+            {
+                "name": "CR-112 manual account",
+                "platform": "dy",
+                "login_type": "cookie",
+                "cookies": "legacy=preserved",
+                "status": "standby",
+            }
+        )
+        session = create_login_session(
+            {
+                "platform": "dy",
+                "account_id": account["id"],
+                "cookie_source": "manual",
+                "acquisition_generation": 3,
+            }
+        )
+        promotion = create_account_profile_promotion(
+            account_id=account["id"],
+            login_session_id=session["id"],
+            cookie_source="manual",
+            acquisition_generation=3,
+            created_by=1,
+        )
+        assert promotion["state"] == "preparing"
+        assert acquire_account_lock(account["id"], 8801) is False
+        with pytest.raises(ValueError, match="profile_promotion_conflict"):
+            create_account_profile_promotion(
+                account_id=account["id"],
+                login_session_id=session["id"],
+                cookie_source="manual",
+                acquisition_generation=4,
+                created_by=1,
+            )
+
+        update_account_profile_promotion(promotion["id"], "candidate_ready")
+        update_account_profile_promotion(promotion["id"], "swapping", checkpoint="swap_started_at")
+        update_account_profile_promotion(promotion["id"], "swapping", checkpoint="candidate_moved_at")
+        update_account_profile_promotion(promotion["id"], "active_recheck")
+        material = serialize_cookie_material(
+            "dy",
+            parse_manual_cookie_material("dy", "sessionid=verified"),
+        )
+        committed = commit_account_profile_promotion(
+            promotion["id"],
+            serialized_cookie_material=material,
+            provider_resolution_id="resolution-cr112-test",
+            browser_attempt_id="attempt-cr112-test",
+            identity={"platform_account_id": "dy-user-1", "platform_account_name": "Test"},
+        )
+        stored = get_social_account(account["id"], masked=False)
+        linked_session = get_login_session(session["id"])
+        assert committed["state"] == "committed"
+        assert stored["cookies"] == material
+        assert stored["cookie_source"] == "manual"
+        assert stored["profile_runtime_version"] == 1
+        assert stored["profile_ready_at"]
+        assert stored["status"] == "active"
+        assert linked_session["profile_promotion_id"] == promotion["id"]
+        assert linked_session["provider_resolution_id"] == "resolution-cr112-test"
+        assert linked_session["browser_attempt_id"] == "attempt-cr112-test"
+        assert get_account_profile_promotion(promotion["id"])["state"] == "committed"
+        with get_conn() as conn:
+            encrypted = conn.execute(
+                "SELECT cookies_encrypted FROM social_accounts WHERE id=?",
+                (account["id"],),
+            ).fetchone()[0]
+        assert material not in encrypted
+        assert acquire_account_lock(account["id"], 8801) is True
+        try:
+            with pytest.raises(ValueError, match="profile_promotion_account_busy"):
+                create_account_profile_promotion(
+                    account_id=account["id"],
+                    cookie_source="manual",
+                    acquisition_generation=5,
+                    created_by=1,
+                )
+        finally:
+            release_account_lock(account["id"], 8801)
+    finally:
+        _restore_table("account_profile_promotions", snapshots["account_profile_promotions"])
+        _restore_table("login_sessions", snapshots["login_sessions"])
+        _restore_table("social_accounts", snapshots["social_accounts"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
+
+
+def test_cr112_profile_promotion_swaps_only_after_validation_and_preserves_predecessor(tmp_path, monkeypatch):
+    from api.monitoring import account_environment, browser_environment_provider, profile_promotion as profile_promotion_module
+    from api.monitoring.browser_selection import BrowserSelection
+    from api.monitoring.cookie_material import parse_manual_cookie_material
+    from api.monitoring.database import acquire_account_lock, release_account_lock
+    from api.monitoring.profile_promotion import (
+        PROFILE_OPERATION_MARKER,
+        ProfilePromotionError,
+        cleanup_after_successful_managed_run,
+        promote_cookie_to_profile,
+        profile_promotion_paths,
+    )
+
+    profile_root = (tmp_path / "profiles").resolve()
+    browser_path = (tmp_path / "chrome.exe").resolve()
+    browser_path.write_bytes(b"synthetic browser")
+    monkeypatch.setattr(account_environment, "ACCOUNT_PROFILE_ROOT", profile_root)
+    monkeypatch.setattr(
+        browser_environment_provider,
+        "resolve_browser_selection",
+        lambda *args, **kwargs: BrowserSelection(browser_path, "system_chrome", "chrome"),
+    )
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "account_profile_promotions": _snapshot_table("account_profile_promotions"),
+        "login_sessions": _snapshot_table("login_sessions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        account = save_social_account(
+            {
+                "name": "CR-112 predecessor",
+                "platform": "dy",
+                "login_type": "cookie",
+                "cookies": "legacy=old",
+                "status": "active",
+            }
+        )
+        account = get_social_account(account["id"], masked=False)
+        active_path = account_environment.resolve_account_profile_path(account["profile_key"])
+        active_path.mkdir(parents=True)
+        (active_path / "predecessor.txt").write_text("old", encoding="utf-8")
+        session = create_login_session(
+            {"platform": "dy", "account_id": account["id"], "cookie_source": "manual"}
+        )
+        plan = browser_environment_provider.resolve_account_browser_environment(
+            account,
+            action="login_check",
+            trigger_source="cookie_profile_promotion",
+            headless=True,
+            launch_mode="persistent_launch",
+            proxy=None,
+            playwright_executable_path=str(browser_path),
+        )
+        events = []
+
+        async def fake_browser_runner(used_plan, injected_records):
+            path = Path(used_plan.profile_path)
+            events.append((path, injected_records is not None))
+            if injected_records is not None:
+                assert not (path / "predecessor.txt").exists()
+                (path / "candidate.txt").write_text("new", encoding="utf-8")
+            else:
+                assert (path / "candidate.txt").read_text(encoding="utf-8") == "new"
+                assert not (path / "predecessor.txt").exists()
+            return {
+                "ok": True,
+                "identity": {"platform_account_id": "dy-cr112"},
+                "runtime_snapshot_json": "",
+            }
+
+        result = asyncio.run(
+            promote_cookie_to_profile(
+                account["id"],
+                parse_manual_cookie_material("dy", "sessionid=new"),
+                cookie_source="manual",
+                login_session_id=session["id"],
+                actor_id=1,
+                provider_plan=plan,
+                browser_runner=fake_browser_runner,
+            )
+        )
+        promotion = result["promotion"]
+        paths = profile_promotion_paths(
+            account_id=account["id"],
+            profile_key=account["profile_key"],
+            promotion_id=promotion["id"],
+        )
+        stored = get_social_account(account["id"], masked=False)
+        assert promotion["state"] == "committed"
+        assert len(events) == 2
+        assert events[0][0] == paths.candidate
+        assert events[1][0] == active_path
+        assert (active_path / "candidate.txt").exists()
+        assert not (active_path / "predecessor.txt").exists()
+        assert (paths.rollback / "predecessor.txt").read_text(encoding="utf-8") == "old"
+        assert stored["profile_runtime_version"] == 1
+        assert stored["cookie_source"] == "manual"
+        assert (active_path / PROFILE_OPERATION_MARKER).exists()
+        assert acquire_account_lock(account["id"], 8811) is True
+        try:
+            deferred = cleanup_after_successful_managed_run(account["id"])
+            assert deferred[0]["deferred"] is True
+            assert get_social_account(account["id"], masked=False)["last_error"] == ""
+        finally:
+            release_account_lock(account["id"], 8811)
+
+        original_remove_owned_tree = profile_promotion_module._remove_owned_tree
+
+        def fail_cleanup(*args, **kwargs):
+            raise ProfilePromotionError("profile_marker_mismatch")
+
+        monkeypatch.setattr(profile_promotion_module, "_remove_owned_tree", fail_cleanup)
+        failed_cleanup = cleanup_after_successful_managed_run(account["id"])
+        assert failed_cleanup[0]["cleaned"] is False
+        assert get_social_account(account["id"], masked=False)["last_error"] == "Profile 清理需要处理"
+        monkeypatch.setattr(profile_promotion_module, "_remove_owned_tree", original_remove_owned_tree)
+
+        assert cleanup_after_successful_managed_run(account["id"])[0]["cleaned"] is True
+        assert not paths.rollback.exists()
+        assert not (active_path / PROFILE_OPERATION_MARKER).exists()
+        assert get_social_account(account["id"], masked=False)["last_error"] == ""
+        with get_conn() as conn:
+            finalized = conn.execute(
+                "SELECT failure_category, recovery_action FROM account_profile_promotions WHERE id=?",
+                (promotion["id"],),
+            ).fetchone()
+        assert finalized["failure_category"] == ""
+        assert finalized["recovery_action"] == ""
+        with get_conn() as conn:
+            finalized_before_repeat = dict(
+                conn.execute(
+                    "SELECT finalized_at, cleanup_after, updated_at FROM account_profile_promotions WHERE id=?",
+                    (promotion["id"],),
+                ).fetchone()
+            )
+        assert finalized_before_repeat["cleanup_after"] == ""
+        assert cleanup_after_successful_managed_run(account["id"]) == []
+        with get_conn() as conn:
+            finalized_after_repeat = dict(
+                conn.execute(
+                    "SELECT finalized_at, cleanup_after, updated_at FROM account_profile_promotions WHERE id=?",
+                    (promotion["id"],),
+                ).fetchone()
+            )
+        assert finalized_after_repeat == finalized_before_repeat
+    finally:
+        _restore_table("account_profile_promotions", snapshots["account_profile_promotions"])
+        _restore_table("login_sessions", snapshots["login_sessions"])
+        _restore_table("social_accounts", snapshots["social_accounts"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
+
+
+def test_cr112_profile_promotion_active_recheck_failure_restores_profile_and_cookie(tmp_path, monkeypatch):
+    from api.monitoring import account_environment, browser_environment_provider
+    from api.monitoring.browser_selection import BrowserSelection
+    from api.monitoring.cookie_material import parse_manual_cookie_material
+    from api.monitoring.profile_promotion import ProfilePromotionError, promote_cookie_to_profile
+
+    profile_root = (tmp_path / "profiles").resolve()
+    browser_path = (tmp_path / "edge.exe").resolve()
+    browser_path.write_bytes(b"synthetic browser")
+    monkeypatch.setattr(account_environment, "ACCOUNT_PROFILE_ROOT", profile_root)
+    monkeypatch.setattr(
+        browser_environment_provider,
+        "resolve_browser_selection",
+        lambda *args, **kwargs: BrowserSelection(browser_path, "system_edge", "edge"),
+    )
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "account_profile_promotions": _snapshot_table("account_profile_promotions"),
+        "login_sessions": _snapshot_table("login_sessions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        account = save_social_account(
+            {
+                "name": "CR-112 rollback",
+                "platform": "dy",
+                "login_type": "cookie",
+                "cookies": "legacy=must-stay",
+                "status": "active",
+            }
+        )
+        account = get_social_account(account["id"], masked=False)
+        active_path = account_environment.resolve_account_profile_path(account["profile_key"])
+        active_path.mkdir(parents=True)
+        (active_path / "predecessor.txt").write_text("old", encoding="utf-8")
+        plan = browser_environment_provider.resolve_account_browser_environment(
+            account,
+            action="login_check",
+            trigger_source="cookie_profile_promotion",
+            headless=True,
+            launch_mode="persistent_launch",
+            proxy=None,
+            playwright_executable_path=str(browser_path),
+        )
+        calls = 0
+
+        async def fake_browser_runner(used_plan, injected_records):
+            nonlocal calls
+            calls += 1
+            path = Path(used_plan.profile_path)
+            if injected_records is not None:
+                (path / "candidate.txt").write_text("new", encoding="utf-8")
+                return {"ok": True, "identity": {}, "runtime_snapshot_json": ""}
+            return {"ok": False, "reason": "invalid", "identity": {}, "runtime_snapshot_json": ""}
+
+        with pytest.raises(ProfilePromotionError) as exc_info:
+            asyncio.run(
+                promote_cookie_to_profile(
+                    account["id"],
+                    parse_manual_cookie_material("dy", "sessionid=bad-new"),
+                    cookie_source="manual",
+                    actor_id=1,
+                    provider_plan=plan,
+                    browser_runner=fake_browser_runner,
+                )
+            )
+        stored = get_social_account(account["id"], masked=False)
+        with get_conn() as conn:
+            latest = dict(
+                conn.execute(
+                    "SELECT * FROM account_profile_promotions WHERE account_id=? ORDER BY id DESC LIMIT 1",
+                    (account["id"],),
+                ).fetchone()
+            )
+        assert exc_info.value.reason == "profile_active_recheck_failed"
+        assert calls == 2
+        assert latest["state"] == "rolled_back"
+        assert stored["cookies"] == "legacy=must-stay"
+        assert stored["profile_runtime_version"] == 0
+        assert (active_path / "predecessor.txt").read_text(encoding="utf-8") == "old"
+        assert not (active_path / "candidate.txt").exists()
+    finally:
+        _restore_table("account_profile_promotions", snapshots["account_profile_promotions"])
+        _restore_table("login_sessions", snapshots["login_sessions"])
+        _restore_table("social_accounts", snapshots["social_accounts"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
+
+
+def test_cr112_profile_promotion_restart_recovery_uses_marker_and_old_account_authority(tmp_path, monkeypatch):
+    from api.monitoring import account_environment
+    from api.monitoring.database import create_account_profile_promotion, update_account_profile_promotion
+    from api.monitoring.profile_promotion import (
+        _prepare_operation_paths,
+        profile_promotion_paths,
+        recover_profile_promotions,
+    )
+
+    profile_root = (tmp_path / "profiles").resolve()
+    monkeypatch.setattr(account_environment, "ACCOUNT_PROFILE_ROOT", profile_root)
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "account_profile_promotions": _snapshot_table("account_profile_promotions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        account = save_social_account(
+            {
+                "name": "CR-112 restart recovery",
+                "platform": "dy",
+                "login_type": "cookie",
+                "cookies": "legacy=authority",
+                "status": "active",
+            }
+        )
+        account = get_social_account(account["id"], masked=False)
+        active_path = account_environment.resolve_account_profile_path(account["profile_key"])
+        active_path.mkdir(parents=True)
+        (active_path / "predecessor.txt").write_text("old", encoding="utf-8")
+        promotion = create_account_profile_promotion(
+            account_id=account["id"],
+            cookie_source="manual",
+            had_active_profile=True,
+            created_by=1,
+        )
+        paths = profile_promotion_paths(
+            account_id=account["id"],
+            profile_key=account["profile_key"],
+            promotion_id=promotion["id"],
+        )
+        _prepare_operation_paths(paths, promotion)
+        (paths.candidate / "candidate.txt").write_text("new", encoding="utf-8")
+        update_account_profile_promotion(promotion["id"], "candidate_ready", checkpoint="candidate_ready_at")
+        update_account_profile_promotion(promotion["id"], "swapping", checkpoint="swap_started_at")
+        active_path.rename(paths.rollback)
+        paths.candidate.rename(active_path)
+
+        recovered = recover_profile_promotions(account_id=account["id"])
+        stored = get_social_account(account["id"], masked=False)
+        with get_conn() as conn:
+            journal = dict(
+                conn.execute(
+                    "SELECT * FROM account_profile_promotions WHERE id=?",
+                    (promotion["id"],),
+                ).fetchone()
+            )
+        assert recovered == [
+            {
+                "promotion_id": promotion["id"],
+                "state": "rolled_back",
+                "recovery_action": "restored_predecessor",
+            }
+        ]
+        assert journal["state"] == "rolled_back"
+        assert stored["cookies"] == "legacy=authority"
+        assert stored["profile_runtime_version"] == 0
+        assert (active_path / "predecessor.txt").read_text(encoding="utf-8") == "old"
+        assert not (active_path / "candidate.txt").exists()
+    finally:
+        _restore_table("account_profile_promotions", snapshots["account_profile_promotions"])
+        _restore_table("social_accounts", snapshots["social_accounts"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
+
+
+def test_cr112_profile_promotion_contradiction_blocks_account_without_deleting_evidence(tmp_path, monkeypatch):
+    from api.monitoring import account_environment
+    from api.monitoring.database import create_account_profile_promotion, update_account_profile_promotion
+    from api.monitoring.profile_promotion import profile_promotion_paths, recover_profile_promotions
+
+    profile_root = (tmp_path / "profiles").resolve()
+    monkeypatch.setattr(account_environment, "ACCOUNT_PROFILE_ROOT", profile_root)
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "account_profile_promotions": _snapshot_table("account_profile_promotions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        account = save_social_account(
+            {
+                "name": "CR-112 contradiction",
+                "platform": "dy",
+                "login_type": "cookie",
+                "cookies": "legacy=authority",
+                "status": "active",
+            }
+        )
+        account = get_social_account(account["id"], masked=False)
+        active_path = account_environment.resolve_account_profile_path(account["profile_key"])
+        active_path.mkdir(parents=True)
+        (active_path / "unknown-active.txt").write_text("keep", encoding="utf-8")
+        promotion = create_account_profile_promotion(
+            account_id=account["id"],
+            cookie_source="manual",
+            had_active_profile=True,
+            created_by=1,
+        )
+        paths = profile_promotion_paths(
+            account_id=account["id"],
+            profile_key=account["profile_key"],
+            promotion_id=promotion["id"],
+        )
+        paths.rollback.mkdir(parents=True)
+        (paths.rollback / "other-predecessor.txt").write_text("keep", encoding="utf-8")
+        update_account_profile_promotion(promotion["id"], "candidate_ready")
+        update_account_profile_promotion(promotion["id"], "swapping")
+
+        recovered = recover_profile_promotions(account_id=account["id"])
+        stored = get_social_account(account["id"], masked=False)
+        assert recovered[0]["state"] == "recovery_required"
+        assert stored["requires_relogin"] is True
+        assert stored["status"] == "limited"
+        assert (active_path / "unknown-active.txt").exists()
+        assert (paths.rollback / "other-predecessor.txt").exists()
+    finally:
+        _restore_table("account_profile_promotions", snapshots["account_profile_promotions"])
+        _restore_table("social_accounts", snapshots["social_accounts"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
+
+
+def test_cr112_recovery_defers_live_promotion_lock_without_marking_contradiction(monkeypatch):
+    from api.monitoring import profile_promotion as profile_promotion_module
+    from api.monitoring.database import create_account_profile_promotion, get_account_profile_promotion
+    from api.monitoring.profile_promotion import ProfilePromotionError, recover_profile_promotions
+
+    init_db()
+    snapshots = {
+        "account_profile_promotions": _snapshot_table("account_profile_promotions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        account = save_social_account(
+            {
+                "name": "CR-112 busy recovery",
+                "platform": "dy",
+                "login_type": "qrcode",
+                "status": "active",
+            }
+        )
+        promotion = create_account_profile_promotion(
+            account_id=account["id"],
+            cookie_source="browser_sync",
+            created_by=1,
+        )
+
+        def busy_lock(*args, **kwargs):
+            raise ProfilePromotionError("profile_promotion_lock_timeout")
+
+        monkeypatch.setattr(profile_promotion_module, "profile_operation_lock", busy_lock)
+        with pytest.raises(ValueError, match="profile_promotion_account_busy"):
+            recover_profile_promotions(account_id=account["id"])
+
+        assert get_account_profile_promotion(promotion["id"])["state"] == "preparing"
+        assert get_social_account(account["id"], masked=False)["requires_relogin"] is False
+    finally:
+        _restore_table("account_profile_promotions", snapshots["account_profile_promotions"])
+        _restore_table("social_accounts", snapshots["social_accounts"])
+
+
+def test_cr112_recovery_reloads_terminal_state_after_waiting_for_promotion(monkeypatch):
+    from contextlib import contextmanager
+
+    from api.monitoring import profile_promotion as profile_promotion_module
+    from api.monitoring.cookie_material import parse_manual_cookie_material, serialize_cookie_material
+    from api.monitoring.database import (
+        commit_account_profile_promotion,
+        create_account_profile_promotion,
+        get_account_profile_promotion,
+        update_account_profile_promotion,
+    )
+    from api.monitoring.profile_promotion import recover_profile_promotions
+
+    init_db()
+    snapshots = {
+        "account_profile_promotions": _snapshot_table("account_profile_promotions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        account = save_social_account(
+            {
+                "name": "CR-112 terminal recheck",
+                "platform": "dy",
+                "login_type": "qrcode",
+                "status": "standby",
+            }
+        )
+        promotion = create_account_profile_promotion(
+            account_id=account["id"],
+            cookie_source="manual",
+            created_by=1,
+        )
+        update_account_profile_promotion(promotion["id"], "candidate_ready")
+        update_account_profile_promotion(promotion["id"], "swapping")
+        update_account_profile_promotion(promotion["id"], "active_recheck")
+        material = serialize_cookie_material("dy", parse_manual_cookie_material("dy", "sessionid=terminal"))
+
+        @contextmanager
+        def finishing_lock(*args, **kwargs):
+            commit_account_profile_promotion(
+                promotion["id"],
+                serialized_cookie_material=material,
+            )
+            yield
+
+        monkeypatch.setattr(profile_promotion_module, "profile_operation_lock", finishing_lock)
+        recovered = recover_profile_promotions(account_id=account["id"])
+
+        assert recovered == [{"promotion_id": promotion["id"], "state": "committed"}]
+        assert get_account_profile_promotion(promotion["id"])["state"] == "committed"
+        stored = get_social_account(account["id"], masked=False)
+        assert stored["status"] == "active"
+        assert stored["requires_relogin"] is False
+    finally:
+        _restore_table("account_profile_promotions", snapshots["account_profile_promotions"])
+        _restore_table("social_accounts", snapshots["social_accounts"])
+
+
+def test_cr112_manual_cookie_update_keeps_verified_account_active(monkeypatch):
+    from api.monitoring.cookie_material import parse_manual_cookie_material, serialize_cookie_material
+
+    init_db()
+    snapshots = {
+        "social_accounts": _snapshot_table("social_accounts"),
+        "audit_logs": _snapshot_table("audit_logs"),
+    }
+    try:
+        account = save_social_account(
+            {
+                "name": "CR-112 route status",
+                "platform": "dy",
+                "login_type": "qrcode",
+                "status": "limited",
+            }
+        )
+        current = get_social_account(account["id"], masked=False)
+        material = serialize_cookie_material("dy", parse_manual_cookie_material("dy", "sessionid=verified"))
+
+        async def fake_promote(existing, raw_cookie, admin):
+            assert existing["id"] == account["id"]
+            assert raw_cookie == "sessionid=verified"
+            return save_social_account(
+                {
+                    **existing,
+                    "login_type": "cookie",
+                    "cookies": material,
+                    "status": "active",
+                },
+                account["id"],
+            )
+
+        monkeypatch.setattr(monitor_router, "_promote_manual_cookie_account", fake_promote)
+        updated = asyncio.run(
+            monitor_router.update_social_account(
+                account["id"],
+                {
+                    "name": current["name"],
+                    "platform": "dy",
+                    "login_type": "cookie",
+                    "status": "limited",
+                    "proxy_id": None,
+                    "notes": "updated after validation",
+                    "last_error": "stale error",
+                    "cookies": "sessionid=verified",
+                },
+                {"id": 1, "workspace_id": 1, "role": "administrator"},
+            )
+        )["account"]
+
+        assert updated["status"] == "active"
+        assert updated["login_type"] == "cookie"
+        assert updated["last_error"] == ""
+    finally:
+        _restore_table("social_accounts", snapshots["social_accounts"])
+        _restore_table("audit_logs", snapshots["audit_logs"])

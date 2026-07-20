@@ -1823,9 +1823,10 @@ Documentation-stage checks:
   recorded as verified and merged, the separate CR-047 Linux/server-like real
   acceptance remains operator-gated, and accepted sequencing places CR-112
   before CR-070 without claiming that local evidence closes CR-047.
-- Verify CR-112 is `Accepted / Verified (Packet B)`, Packet C/D remain
-  dependency-gated, and the current server-first QR acceptance boundary is
-  unchanged before implementation evidence exists.
+- Verify CR-112 is `Accepted / In Progress (Packet C.1 verified; commit-gated)`,
+  with Packet B and the C.1 implementation gates complete, the independent
+  review and atomic C.1 commit still pending, and Packet C.2/C.3/D gated; the
+  current server-first QR acceptance boundary is unchanged.
 - Verify `DECISIONS.md`, CR-112, account-environment guidance, and all five
   plan files agree on the confirmed sub-decision: both login modes converge on
   one account-bound persistent Profile, encrypted Cookie is
@@ -1841,6 +1842,28 @@ Documentation-stage checks:
   independent read-only review.
 
 Packet C fake/unit/integration tests after its start gates pass:
+
+Packet C.1 implementation evidence currently includes:
+
+- `test_cr112_packet_c1_schema_adds_profile_runtime_journal_and_session_linkage`;
+- `test_cr112_cookie_protocol_canonicalizes_manual_material_and_preserves_scoped_duplicates`;
+- `test_cr112_cookie_protocol_rejects_unsafe_scope` (three parametrized cases);
+- `test_cr112_profile_storage_preflight_rejects_low_space_before_candidate`;
+- `test_cr112_async_profile_lock_wait_does_not_block_event_loop`;
+- `test_cr112_async_profile_lock_cancellation_releases_late_acquisition`;
+- `test_cr112_profile_promotion_journal_enforces_one_active_operation_and_atomic_commit`;
+- `test_cr112_profile_promotion_swaps_only_after_validation_and_preserves_predecessor`;
+- `test_cr112_profile_promotion_active_recheck_failure_restores_profile_and_cookie`;
+- `test_cr112_profile_promotion_restart_recovery_uses_marker_and_old_account_authority`;
+- `test_cr112_profile_promotion_contradiction_blocks_account_without_deleting_evidence`;
+- `test_cr112_recovery_defers_live_promotion_lock_without_marking_contradiction`;
+- `test_cr112_recovery_reloads_terminal_state_after_waiting_for_promotion`;
+- `test_cr112_manual_cookie_update_keeps_verified_account_active`;
+- `test_run_platform_attaches_bound_proxy_summary` for the successful-run
+  cleanup callback after release of the account lock.
+
+These tests must remain green together with the full monitoring suite before
+the C.1 atomic commit. C.2/C.3 and Packet D evidence are not implied by them.
 
 - Feature disabled by default starts no acquisition browser and shows no active
   auto-sync action. The rejected Cookie-bridge route remains unmounted in both

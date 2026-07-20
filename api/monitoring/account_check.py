@@ -37,13 +37,9 @@ from .mediacrawler_login import call_mediacrawler_check_login_state, get_mediacr
 from .normalizer import PLATFORM_LABELS
 from .security import customer_safe_text, redact_sensitive
 from .account_environment import account_profile_environment
+from .cookie_material import deserialize_cookie_material, to_playwright_cookie_items
+from .profile_promotion import recover_profile_promotions
 
-
-COOKIE_DOMAINS = {
-    "dy": ".douyin.com",
-    "ks": ".kuaishou.com",
-    "xhs": ".xiaohongshu.com",
-}
 
 MEDIACRAWLER_CLIENT_CLASSES = {
     "dy": DouYinClient,
@@ -59,6 +55,7 @@ async def check_social_account_login(
     identity_prepared: bool = False,
     actor_id: int | None = None,
 ) -> dict[str, Any]:
+    await asyncio.to_thread(recover_profile_promotions, account_id)
     account = get_social_account(account_id, masked=False)
     if not account:
         raise ValueError("account not found")
@@ -81,7 +78,7 @@ async def check_social_account_login(
     )
     account = get_social_account(account_id, masked=False) or account
     try:
-        if login_type == "cookie":
+        if login_type == "cookie" and int(account.get("profile_runtime_version") or 0) < 1:
             result = await _check_cookie_account(account, timeout_ms)
         else:
             result = await _check_profile_account(account, timeout_ms)
@@ -351,12 +348,8 @@ def _resolve_account_plan(
     )
 
 
-def _cookie_items(platform: str, cookie_str: str) -> list[dict[str, str]]:
-    domain = COOKIE_DOMAINS.get(platform) or ""
-    result = []
-    for name, value in utils.convert_str_cookie_to_dict(cookie_str).items():
-        result.append({"name": name, "value": value, "domain": domain, "path": "/"})
-    return result
+def _cookie_items(platform: str, cookie_str: str) -> list[dict[str, Any]]:
+    return to_playwright_cookie_items(deserialize_cookie_material(platform, cookie_str))
 
 
 async def _verify_collectable_login(

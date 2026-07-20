@@ -64,6 +64,7 @@ from .normalizer import (
     normalize_content,
 )
 from .platform_status import list_platform_status
+from .profile_promotion import cleanup_after_successful_managed_run
 from .reporting import create_report, send_report_with_delivery_log
 from .security import MONITOR_DATA_DIR, redact_sensitive
 
@@ -365,6 +366,7 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
             lock_expires_at = _lock_expires_at(run_id)
             account_lock_acquired = False
             proxy_lock_acquired = False
+            successful_account_id: int | None = None
             platform_root = run_dir / platform
             platform_root.mkdir(parents=True, exist_ok=True)
             max_retries = _crawler_max_retries()
@@ -464,6 +466,8 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
                             result["account"] = _account_summary(account_binding)
                         if account_binding and account_binding.get("proxy_id"):
                             result["proxy"] = _proxy_summary(account_binding)
+                        if account_binding and account_binding.get("account_id"):
+                            successful_account_id = int(account_binding["account_id"])
                         return result
                     except CrawlerStopped as exc:
                         _update_collection_progress(run_id, platform, attempt_out, phase="collecting", error=str(exc))
@@ -486,6 +490,11 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
                     release_account_lock(int(account_binding["account_id"]), run_id)
                 if account_binding and account_binding.get("proxy_id") and proxy_lock_acquired:
                     release_proxy_locks(run_id, int(account_binding["proxy_id"]))
+                if successful_account_id:
+                    try:
+                        await asyncio.to_thread(cleanup_after_successful_managed_run, successful_account_id)
+                    except Exception:
+                        pass
 
 
 def _run_crawler_attempt(

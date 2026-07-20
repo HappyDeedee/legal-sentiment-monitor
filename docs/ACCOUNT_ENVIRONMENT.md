@@ -1329,10 +1329,12 @@ Verification states must be returned to the UI rather than bypassed.
 
 ## Accepted CR-112 Local Browser Auto-Sync Cookie Acquisition
 
-Status: `Accepted / Verified (Packet B)`. This section defines the approved
-same-machine Windows account contract and Packet B component selection. Packet
-C/D are not started or verified, CR-047 Linux/server-like acceptance remains
-separate, and runtime behavior does not change until Packet C implements it.
+Status: `Accepted / In Progress (Packet C.1)`. This section defines the approved
+same-machine Windows account contract and the verified Packet B component
+selection. C.1 implements the shared schema, canonical Cookie material,
+fixed-path promotion/recovery, cleanup, and advanced manual path. C.2/C.3/D
+are not started or verified, and CR-047 Linux/server-like acceptance remains
+separate.
 
 Accepted login model:
 
@@ -1367,10 +1369,9 @@ the raw value is absent before acceptance.
 
 ### Accepted CR-112 V1 Profile Promotion Protocol
 
-Status: accepted Packet C contract, dependency-gated by Packet B and Packet C
-start gates. It is not active schema or runtime behavior yet. Present-tense
-normative wording defines required implementation behavior; current code still
-uses the baseline paths identified below and in Phase 5.1P.
+Status: implemented and verified for Packet C.1; C.2 acquisition, C.3 runner
+cutover, and Packet D real acceptance remain gated. Present-tense normative
+wording defines the active C.1 behavior and the remaining packet contract.
 
 V1 keeps one fixed active runtime path:
 
@@ -1409,9 +1410,12 @@ terminal failure: failed | recovery_required
 Promotion sequence:
 
 1. Hold the account/Profile lock and create a `preparing` journal row before
-   filesystem mutation. Reject a second promotion for the same `profile_key`.
+   filesystem mutation. The database account-run lock and this Profile lock
+   exclude each other atomically: a crawl cannot acquire an account lock while
+   a promotion is non-terminal, and a promotion cannot start while a crawl owns
+   the account lock. Reject a second promotion for the same `profile_key`.
 2. Verify the operation root is writable, on the same filesystem as the active
-   path, and has sufficient free space. Close every browser using the active
+   path, and has at least `256 MiB` free. Close every browser using the active
    Profile, but leave that Profile byte-for-byte untouched. Initialize a fresh
    candidate through the Phase 5.1 provider with the same locked account
    identity/browser/proxy inputs. Do not clone active Profile storage into the

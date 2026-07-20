@@ -1,8 +1,8 @@
 # Local Browser Auto-Sync Login Packet
 
-> Accepted, dependency-gated implementation packet. Start only after Packet B
-> is `Verified` and its selected direct managed-browser acquisition path is
-> committed. `Accepted` is not `In Progress` or `Verified`.
+> In Progress from 2026-07-21. Packet B and C.1 are verified within their
+> recorded proof boundaries; C.2 and C.3 remain gated by the preceding
+> sub-packet.
 
 **Goal:** Add a default-off local browser login flow that automatically
 acquires and verifies Cookie material for the exact account while preserving
@@ -13,8 +13,8 @@ existing QR and advanced manual Cookie behavior.
 - [x] Phase 5.1P and Phase 5.1A-D plus current merged regression fixes are
       verified. The separate CR-047 Linux/server-like real acceptance remains
       operator-gated and is not claimed by this same-machine Windows packet.
-- [ ] Packet B result document and synchronized component matrix are committed
-      as `Verified`.
+- [x] Packet B result document and synchronized component matrix are committed
+      as `Verified` in `1d7465c`.
 - [x] CR-112 same-machine Windows scope is accepted. Packet B, rather than an
       upfront ownership assumption, selects direct reuse, minimal adaptation,
       or one focused replacement for each component.
@@ -26,7 +26,7 @@ existing QR and advanced manual Cookie behavior.
 - [x] The target raw-Cookie disposition is confirmed: prepare and validate the
       persistent Profile before crawler launch and pass no raw Cookie in child
       argv.
-- [ ] The Packet C migration, compatibility, rollback, and process-inspection
+- [x] The Packet C migration, compatibility, rollback, and process-inspection
       plan for removing current `runner.py --cookies` use is approved.
 
 ## Planned Touch Surface
@@ -107,34 +107,44 @@ Chrome/Edge fields and limits before this packet starts.
 
 ### C.1 - Shared Cookie-To-Profile Service
 
-- [ ] Add backward-compatible schema reads and the accepted account fields,
+- [x] Add backward-compatible schema reads and the accepted account fields,
       promotion journal, session linkage, indexes, and recovery queries.
-- [ ] Reuse `create_draft_social_account`; every operation has a real account
+- [x] Reuse `create_draft_social_account`; every operation has a real account
       ID and `profile_key` before filesystem or browser work.
-- [ ] Implement the fixed-active-path protocol from `ACCOUNT_ENVIRONMENT.md`:
+- [x] Implement the fixed-active-path protocol from `ACCOUNT_ENVIRONMENT.md`:
       same-volume candidate/rollback directories, durable checkpoints, closed
       handles, candidate validation, swap, active-path recheck, database commit,
       rollback, restart recovery, bounded cleanup, and `recovery_required`.
-- [ ] Initialize every candidate fresh from the locked Phase 5.1 provider
+- [x] Enforce the shared account-run/Profile-promotion exclusion contract,
+      require a `256 MiB` storage reserve before candidate creation, and enqueue
+      retained rollback cleanup after a successful managed run.
+- [x] Initialize every candidate fresh from the locked Phase 5.1 provider
       inputs. Leave the previous active Profile and browser storage untouched
       before `swapping`; never clone either into the candidate.
-- [ ] Hold the account/Profile lock for the complete operation. At/after
+- [x] Hold the account/Profile lock for the complete operation. At/after
       `swapping`, cancellation becomes a request that finalizes only after safe
       commit or rollback.
-- [ ] Implement canonical Cookie records and platform-domain allowlists.
+- [x] Implement canonical Cookie records and platform-domain allowlists.
       Browser-acquired structured payloads and advanced manual strings enter the same
       validator/injector after parsing; unsupported security/scope attributes
       fail closed.
-- [ ] Reuse the Phase 5.1 provider result for candidate and active-path checks;
+- [x] Reuse the Phase 5.1 provider result for candidate and active-path checks;
       do not add another browser/Profile/proxy resolver.
-- [ ] Preserve the previous fixed active Profile, encrypted Cookie, and account
+- [x] Preserve the previous fixed active Profile, encrypted Cookie, and account
       row on every pre-commit failure. A new-account failure remains draft.
-- [ ] Before active-path recheck, close all acquisition handles and launch the
+- [x] Before active-path recheck, close all acquisition handles and launch the
       fixed path without capture hooks or Cookie injection.
-- [ ] Recover non-terminal journals before account check, login, reset, export,
+- [x] Recover non-terminal journals before account check, login, reset, export,
       or crawl, and emit only opaque IDs/redacted categories.
-- [ ] Keep advanced manual Cookie usable through C.1 without starting any
+- [x] Keep advanced manual Cookie usable through C.1 without starting any
       managed browser acquisition.
+
+C.1 verification is complete within the synthetic/local proof boundary: the additive migration,
+canonical protocol, candidate/rollback journal, atomic account-run/Profile
+exclusion, `256 MiB` storage reserve, marker-based restart recovery, cleanup
+after a successful managed run, manual Cookie promotion, profile-authority
+dispatch, and QR/manual regression checks pass. C.2 router/UI acquisition
+remains governed by the atomic delivery gate in `TASKS.md`.
 
 ### C.2 - Managed Browser Acquisition
 

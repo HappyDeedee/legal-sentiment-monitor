@@ -7,6 +7,7 @@ from typing import Any
 
 from .database import get_job, get_runtime_setting_value, has_job_template_placeholders, list_jobs, record_skipped_run, recover_stale_runs_and_locks, set_job_schedule_state
 from .preflight import build_job_preflight
+from .profile_promotion import cleanup_profile_promotion_artifacts
 from .runner import clear_stop_request, request_stop_job, run_job
 
 
@@ -51,6 +52,7 @@ async def _loop() -> None:
 
 async def tick() -> None:
     recover_stale_runs_and_locks("scheduler_recovery")
+    await asyncio.to_thread(cleanup_profile_promotion_artifacts)
     now = datetime.now()
     for job in list_jobs():
         if not job.get("enabled"):

@@ -136,6 +136,12 @@ from ..monitoring.login_status import (
     normalize_login_state,
 )
 from ..monitoring.account_check import check_social_account_login
+from ..monitoring.cookie_material import CookieMaterialError, parse_manual_cookie_material
+from ..monitoring.profile_promotion import (
+    ProfilePromotionError,
+    promote_cookie_to_profile,
+    recover_profile_promotions,
+)
 from ..monitoring.avatar_cache import AVATAR_CACHE_DIR, avatar_media_type, cache_account_avatar, has_cacheable_avatar_url
 from ..monitoring.mediacrawler_login import get_mediacrawler_login_capability, list_mediacrawler_login_capabilities
 from ..monitoring.normalizer import PLATFORM_LABELS
@@ -445,6 +451,7 @@ async def _platform_login_browser_locked(
     prepared = False
     try:
         if account_id:
+            await asyncio.to_thread(recover_profile_promotions, account_id)
             prepare_social_account_identity_login(
                 account_id,
                 trigger_source="visible_browser_login",
@@ -1216,11 +1223,31 @@ async def social_account_avatar_for_account(account_id: int, admin: dict[str, An
 @router.post("/social-accounts")
 async def create_social_account(payload: dict[str, Any], admin: dict[str, Any] = AdminUser):
     try:
+        raw_cookie = str(payload.get("cookies") or "").strip()
+        if (payload.get("login_type") or "qrcode") == "cookie" and raw_cookie:
+            base_payload = {key: value for key, value in payload.items() if key not in {"cookies", "clear_cookies"}}
+            base_payload["login_type"] = "qrcode"
+            account = create_draft_social_account(base_payload, actor_id=_route_actor_id(admin))
+            promoted = await _promote_manual_cookie_account(account, raw_cookie, admin)
+            confirmed = confirm_social_account(
+                int(promoted["id"]),
+                {"name": payload.get("name") or promoted.get("name"), "login_type": "cookie", "status": "active"},
+            )
+            _audit_admin(
+                admin,
+                "create_social_account",
+                "social_account",
+                confirmed.get("id"),
+                {"platform": confirmed.get("platform"), "login_type": confirmed.get("login_type")},
+            )
+            return {"account": _customer_view_social_account(confirmed)}
         account = save_social_account(payload, actor_id=_route_actor_id(admin))
         _audit_admin(admin, "create_social_account", "social_account", account.get("id"), {"platform": account.get("platform"), "login_type": account.get("login_type")})
         return {"account": _customer_view_social_account(account)}
     except AccountIdentityError as exc:
         _raise_identity_http_error(exc)
+    except ProfilePromotionError as exc:
+        raise HTTPException(status_code=409, detail=exc.reason)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -1231,6 +1258,7 @@ async def update_social_account(account_id: int, payload: dict[str, Any], admin:
         current = get_social_account(account_id, masked=False)
         if not current:
             raise ValueError("account not found")
+        raw_cookie = str(payload.get("cookies") or "").strip()
         proxy_id, region, template_family = _identity_configuration_request(current, payload)
         configuration_changed = _identity_configuration_changed(
             current,
@@ -1238,6 +1266,25 @@ async def update_social_account(account_id: int, payload: dict[str, Any], admin:
             region,
             template_family,
         )
+        if raw_cookie and configuration_changed:
+            raise ValueError("保存 Cookie 前请先完成账号环境重置")
+        if raw_cookie and (payload.get("login_type") or "qrcode") == "cookie":
+            account = await _promote_manual_cookie_account(current, raw_cookie, admin)
+            base_payload = {
+                key: value
+                for key, value in payload.items()
+                if key not in {"cookies", "clear_cookies", "proxy_id", "proxy_region_snapshot", "identity_template_family"}
+            }
+            base_payload["login_type"] = "cookie"
+            base_payload["status"] = "active"
+            base_payload["last_error"] = ""
+            account = save_social_account(
+                {**base_payload, "proxy_id": current.get("proxy_id")},
+                account_id,
+                actor_id=_route_actor_id(admin),
+            )
+            _audit_admin(admin, "update_social_account", "social_account", account_id, {"platform": account.get("platform"), "status": account.get("status")})
+            return {"account": _customer_view_social_account(account)}
         base_payload = {**payload, "proxy_id": current.get("proxy_id")}
         account = save_social_account(
             base_payload,
@@ -1257,8 +1304,64 @@ async def update_social_account(account_id: int, payload: dict[str, Any], admin:
         return {"account": _customer_view_social_account(account)}
     except AccountIdentityError as exc:
         _raise_identity_http_error(exc)
+    except ProfilePromotionError as exc:
+        raise HTTPException(status_code=409, detail=exc.reason)
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+async def _promote_manual_cookie_account(
+    account: dict[str, Any],
+    raw_cookie: str,
+    admin: dict[str, Any],
+) -> dict[str, Any]:
+    records = parse_manual_cookie_material(str(account.get("platform") or ""), raw_cookie)
+    result = await promote_cookie_to_profile(
+        int(account["id"]),
+        records,
+        cookie_source="manual",
+        actor_id=_route_actor_id(admin),
+    )
+    promoted = result.get("account") if isinstance(result, dict) else None
+    if not isinstance(promoted, dict) or not promoted:
+        raise ProfilePromotionError("profile_promotion_commit_invalid")
+    _audit_admin(
+        admin,
+        "promote_manual_cookie_profile",
+        "social_account",
+        int(account["id"]),
+        {
+            "promotion_id": (result.get("promotion") or {}).get("id"),
+            "cookie_source": "manual",
+            "state": (result.get("promotion") or {}).get("state"),
+        },
+    )
+    return promoted
+
+
+@router.post("/social-accounts/{account_id}/cookie-promotion")
+async def promote_social_account_cookie(
+    account_id: int,
+    payload: dict[str, Any],
+    admin: dict[str, Any] = AdminUser,
+):
+    account = get_social_account(account_id, masked=False)
+    if not account:
+        raise HTTPException(status_code=404, detail="account not found")
+    raw_cookie = str(payload.get("cookies") or "").strip()
+    if not raw_cookie:
+        raise HTTPException(status_code=400, detail="Cookie 不能为空")
+    try:
+        promoted = await _promote_manual_cookie_account(account, raw_cookie, admin)
+        return {"account": _customer_view_social_account(promoted)}
+    except CookieMaterialError as exc:
+        raise HTTPException(status_code=400, detail=exc.reason)
+    except ProfilePromotionError as exc:
+        raise HTTPException(status_code=409, detail=exc.reason)
+    except AccountIdentityError as exc:
+        _raise_identity_http_error(exc)
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=redact_sensitive(str(exc)))
 
 
 @router.post("/social-accounts/{account_id}/identity/reset")
@@ -1271,6 +1374,7 @@ async def reset_social_account_identity_route(
         current = get_social_account(account_id, masked=False)
         if not current:
             raise ValueError("account not found")
+        await asyncio.to_thread(recover_profile_promotions, account_id)
         proxy_id, region, template_family = _identity_configuration_request(
             current,
             payload or {},
@@ -1440,6 +1544,7 @@ async def create_platform_login_session(payload: dict[str, Any], admin: dict[str
             payload = {**payload, "account_id": draft["id"]}
         prepared_account_id = _optional_positive_id(payload.get("account_id"), "account_id")
         if prepared_account_id:
+            await asyncio.to_thread(recover_profile_promotions, prepared_account_id)
             prepare_social_account_identity_login(
                 prepared_account_id,
                 trigger_source="qrcode_login",

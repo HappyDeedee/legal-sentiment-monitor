@@ -301,9 +301,10 @@ Phase 5.1B write rules:
 
 ### Accepted CR-112 Profile Runtime And Promotion Metadata
 
-Status: `Accepted / Verified (Packet B)` with CR-112. Packet B selected the
-direct acquisition boundary but these fields and tables are not part of the
-current schema until Packet C migration begins and passes its gates.
+Status: `Implemented / Verified (Packet C.1)` with CR-112. Packet B selected
+the direct acquisition boundary; C.1 now adds these fields, table, migration,
+indexes, backward-compatible defaults, transaction authority, and the atomic
+account-run/non-terminal-promotion exclusion. C.2/C.3/D remain gated.
 
 Additive `social_accounts` fields accepted for Packet C:
 

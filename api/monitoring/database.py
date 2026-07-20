@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import hashlib
 import json
 import sqlite3
 import re
@@ -86,6 +87,34 @@ LEAD_STATUS_LABELS = {
     "limited_context": "上下文有限",
 }
 _IDENTITY_AUDIT_UNSET = object()
+PROFILE_PROMOTION_TERMINAL_STATES = frozenset(
+    {"committed", "rolled_back", "failed", "recovery_required"}
+)
+PROFILE_PROMOTION_NONTERMINAL_STATES = frozenset(
+    {"preparing", "candidate_ready", "swapping", "active_recheck", "rolling_back"}
+)
+_PROFILE_PROMOTION_TRANSITIONS = {
+    "preparing": frozenset({"candidate_ready", "failed", "recovery_required"}),
+    "candidate_ready": frozenset({"swapping", "failed", "recovery_required"}),
+    "swapping": frozenset({"active_recheck", "rolling_back", "recovery_required"}),
+    "active_recheck": frozenset({"committed", "rolling_back", "recovery_required"}),
+    "rolling_back": frozenset({"rolled_back", "recovery_required"}),
+    "committed": frozenset(),
+    "rolled_back": frozenset(),
+    "failed": frozenset(),
+    "recovery_required": frozenset(),
+}
+_PROFILE_PROMOTION_CHECKPOINTS = frozenset(
+    {
+        "candidate_ready_at",
+        "swap_started_at",
+        "active_moved_at",
+        "candidate_moved_at",
+        "active_rechecked_at",
+        "committed_at",
+        "finalized_at",
+    }
+)
 
 
 def utc_now() -> str:
@@ -367,6 +396,9 @@ def init_db() -> None:
                 platform TEXT NOT NULL,
                 login_type TEXT NOT NULL DEFAULT 'qrcode',
                 cookies_encrypted TEXT NOT NULL DEFAULT '',
+                cookie_source TEXT NOT NULL DEFAULT '',
+                profile_runtime_version INTEGER NOT NULL DEFAULT 0,
+                profile_ready_at TEXT,
                 status TEXT NOT NULL DEFAULT 'standby',
                 profile_key TEXT NOT NULL DEFAULT '',
                 profile_path TEXT NOT NULL DEFAULT '',
@@ -441,12 +473,42 @@ def init_db() -> None:
                 qr_image TEXT NOT NULL DEFAULT '',
                 profile_key TEXT NOT NULL DEFAULT '',
                 profile_path TEXT NOT NULL DEFAULT '',
+                cookie_source TEXT NOT NULL DEFAULT '',
+                profile_promotion_id INTEGER,
+                acquisition_generation INTEGER NOT NULL DEFAULT 1,
+                provider_resolution_id TEXT NOT NULL DEFAULT '',
+                browser_attempt_id TEXT NOT NULL DEFAULT '',
                 message TEXT NOT NULL DEFAULT '',
                 created_by INTEGER,
                 updated_by INTEGER,
                 created_at TEXT NOT NULL,
                 updated_at TEXT NOT NULL,
                 expires_at TEXT
+            );
+
+            CREATE TABLE IF NOT EXISTS account_profile_promotions (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                workspace_id INTEGER NOT NULL DEFAULT 1,
+                account_id INTEGER NOT NULL REFERENCES social_accounts(id) ON DELETE CASCADE,
+                login_session_id INTEGER REFERENCES login_sessions(id) ON DELETE SET NULL,
+                profile_key TEXT NOT NULL,
+                state TEXT NOT NULL,
+                had_active_profile INTEGER NOT NULL DEFAULT 0,
+                acquisition_generation INTEGER NOT NULL DEFAULT 1,
+                cookie_source TEXT NOT NULL DEFAULT '',
+                failure_category TEXT NOT NULL DEFAULT '',
+                recovery_action TEXT NOT NULL DEFAULT '',
+                created_by INTEGER,
+                created_at TEXT NOT NULL,
+                candidate_ready_at TEXT,
+                swap_started_at TEXT,
+                active_moved_at TEXT,
+                candidate_moved_at TEXT,
+                active_rechecked_at TEXT,
+                committed_at TEXT,
+                finalized_at TEXT,
+                cleanup_after TEXT,
+                updated_at TEXT NOT NULL
             );
 
             CREATE TABLE IF NOT EXISTS crawl_runs (
@@ -641,6 +703,7 @@ def init_db() -> None:
         _migrate_raw_contents_unique_by_job(conn)
         _ensure_phase_05_schema(conn)
         _ensure_phase_51_account_identity_schema(conn)
+        _ensure_cr112_profile_schema(conn)
         mark_selftest_jobs_internal(conn)
         conn.execute(
             "INSERT OR IGNORE INTO ai_configs (id, updated_at) VALUES (1, ?)",
@@ -1057,6 +1120,61 @@ def _ensure_phase_51_account_identity_schema(conn: sqlite3.Connection) -> None:
             ON social_accounts(workspace_id, requires_relogin);
         CREATE INDEX IF NOT EXISTS idx_social_accounts_identity_template
             ON social_accounts(workspace_id, identity_template);
+        """
+    )
+
+
+def _ensure_cr112_profile_schema(conn: sqlite3.Connection) -> None:
+    for column, definition in (
+        ("cookie_source", "TEXT NOT NULL DEFAULT ''"),
+        ("profile_runtime_version", "INTEGER NOT NULL DEFAULT 0"),
+        ("profile_ready_at", "TEXT"),
+    ):
+        _ensure_column(conn, "social_accounts", column, definition)
+    for column, definition in (
+        ("cookie_source", "TEXT NOT NULL DEFAULT ''"),
+        ("profile_promotion_id", "INTEGER"),
+        ("acquisition_generation", "INTEGER NOT NULL DEFAULT 1"),
+        ("provider_resolution_id", "TEXT NOT NULL DEFAULT ''"),
+        ("browser_attempt_id", "TEXT NOT NULL DEFAULT ''"),
+    ):
+        _ensure_column(conn, "login_sessions", column, definition)
+    conn.executescript(
+        """
+        CREATE TABLE IF NOT EXISTS account_profile_promotions (
+            id INTEGER PRIMARY KEY AUTOINCREMENT,
+            workspace_id INTEGER NOT NULL DEFAULT 1,
+            account_id INTEGER NOT NULL REFERENCES social_accounts(id) ON DELETE CASCADE,
+            login_session_id INTEGER REFERENCES login_sessions(id) ON DELETE SET NULL,
+            profile_key TEXT NOT NULL,
+            state TEXT NOT NULL,
+            had_active_profile INTEGER NOT NULL DEFAULT 0,
+            acquisition_generation INTEGER NOT NULL DEFAULT 1,
+            cookie_source TEXT NOT NULL DEFAULT '',
+            failure_category TEXT NOT NULL DEFAULT '',
+            recovery_action TEXT NOT NULL DEFAULT '',
+            created_by INTEGER,
+            created_at TEXT NOT NULL,
+            candidate_ready_at TEXT,
+            swap_started_at TEXT,
+            active_moved_at TEXT,
+            candidate_moved_at TEXT,
+            active_rechecked_at TEXT,
+            committed_at TEXT,
+            finalized_at TEXT,
+            cleanup_after TEXT,
+            updated_at TEXT NOT NULL
+        );
+        CREATE UNIQUE INDEX IF NOT EXISTS idx_profile_promotions_one_active_account
+            ON account_profile_promotions(account_id)
+            WHERE state IN (
+                'preparing', 'candidate_ready', 'swapping',
+                'active_recheck', 'rolling_back'
+            );
+        CREATE INDEX IF NOT EXISTS idx_profile_promotions_state
+            ON account_profile_promotions(state, updated_at);
+        CREATE INDEX IF NOT EXISTS idx_profile_promotions_account
+            ON account_profile_promotions(account_id, created_at);
         """
     )
 
@@ -3112,6 +3230,10 @@ def acquire_account_lock(account_id: int | None, run_id: int, lock_expires_at: s
             WHERE id=? AND (
                 locked_by_run_id IS NULL
                 OR locked_by_run_id=?
+            ) AND NOT EXISTS (
+                SELECT 1 FROM account_profile_promotions p
+                WHERE p.account_id=social_accounts.id
+                  AND p.state IN ('preparing','candidate_ready','swapping','active_recheck','rolling_back')
             )
             """,
             (run_id, now, lock_expires_at or "", now, account_id, run_id),
@@ -5743,7 +5865,7 @@ def _record_identity_audit(
     )
 
 
-def create_draft_social_account(payload: dict[str, Any]) -> dict[str, Any]:
+def create_draft_social_account(payload: dict[str, Any], actor_id: int | None = None) -> dict[str, Any]:
     platform = (payload.get("platform") or "").strip()
     _validate_platform(platform)
     name = (payload.get("name") or "").strip() or f"{LOGIN_TYPE_LABELS.get('qrcode', '扫码登录')}临时账号"
@@ -5755,7 +5877,8 @@ def create_draft_social_account(payload: dict[str, Any]) -> dict[str, Any]:
             "login_type": "qrcode",
             "status": "standby",
             "is_draft": True,
-        }
+        },
+        actor_id=actor_id,
     )
 
 
@@ -6020,6 +6143,13 @@ def create_login_session(payload: dict[str, Any]) -> dict[str, Any]:
     profile_path = ""
     if profile_key:
         profile_path = str(resolve_account_profile_path(profile_key))
+    cookie_source = str(payload.get("cookie_source") or "").strip().lower()
+    if cookie_source not in {"", "browser_sync", "manual"}:
+        raise ValueError("invalid cookie source")
+    acquisition_generation = _safe_int(payload.get("acquisition_generation")) or 1
+    profile_promotion_id = _safe_int(payload.get("profile_promotion_id")) or None
+    provider_resolution_id = str(payload.get("provider_resolution_id") or "").strip()
+    browser_attempt_id = str(payload.get("browser_attempt_id") or "").strip()
     message = payload.get("message") or (
         "正在创建平台登录会话；如二维码或验证状态无法回传，可使用网页登录窗口人工处理。"
     )
@@ -6029,8 +6159,9 @@ def create_login_session(payload: dict[str, Any]) -> dict[str, Any]:
             """
             INSERT INTO login_sessions (
                 platform, account_id, status, login_url, qr_image, profile_key, profile_path,
-                message, created_at, updated_at, expires_at
-            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                cookie_source, profile_promotion_id, acquisition_generation,
+                provider_resolution_id, browser_attempt_id, message, created_at, updated_at, expires_at
+            ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
                 platform,
@@ -6040,6 +6171,11 @@ def create_login_session(payload: dict[str, Any]) -> dict[str, Any]:
                 payload.get("qr_image") or "",
                 profile_key,
                 profile_path,
+                cookie_source,
+                profile_promotion_id,
+                acquisition_generation,
+                provider_resolution_id,
+                browser_attempt_id,
                 message,
                 now,
                 now,
@@ -6048,6 +6184,317 @@ def create_login_session(payload: dict[str, Any]) -> dict[str, Any]:
         )
         target_id = int(cur.lastrowid)
     return get_login_session(target_id) or {}
+
+
+def create_account_profile_promotion(
+    *,
+    account_id: int,
+    login_session_id: int | None = None,
+    cookie_source: str,
+    acquisition_generation: int = 1,
+    had_active_profile: bool = False,
+    created_by: int | None = None,
+) -> dict[str, Any]:
+    """Create the durable pre-filesystem checkpoint for one promotion."""
+
+    account_id = _safe_int(account_id) or 0
+    if not account_id:
+        raise ValueError("profile_promotion_account_required")
+    cookie_source = _validate_profile_promotion_cookie_source(cookie_source)
+    generation = _safe_int(acquisition_generation) or 0
+    if generation <= 0:
+        raise ValueError("profile_promotion_generation_invalid")
+    now = utc_now()
+    with get_conn() as conn:
+        account = conn.execute(
+            "SELECT id, workspace_id, platform, profile_key FROM social_accounts WHERE id=?",
+            (account_id,),
+        ).fetchone()
+        if not account or not str(account["profile_key"] or ""):
+            raise ValueError("profile_promotion_account_invalid")
+        if login_session_id:
+            session = conn.execute(
+                "SELECT account_id, platform, profile_key FROM login_sessions WHERE id=?",
+                (login_session_id,),
+            ).fetchone()
+            if not session or int(session["account_id"] or 0) != account_id:
+                raise ValueError("profile_promotion_session_mismatch")
+            if str(session["platform"] or "") != str(account["platform"] or ""):
+                raise ValueError("profile_promotion_session_mismatch")
+            if session["profile_key"] and str(session["profile_key"]) != str(account["profile_key"]):
+                raise ValueError("profile_promotion_session_mismatch")
+        try:
+            cursor = conn.execute(
+                """
+                INSERT INTO account_profile_promotions (
+                    workspace_id, account_id, login_session_id, profile_key, state,
+                    had_active_profile, acquisition_generation, cookie_source,
+                    created_by, created_at, updated_at
+                )
+                SELECT workspace_id, id, ?, profile_key, 'preparing', ?, ?, ?, ?, ?, ?
+                FROM social_accounts
+                WHERE id=? AND locked_by_run_id IS NULL
+                """,
+                (
+                    login_session_id,
+                    1 if had_active_profile else 0,
+                    generation,
+                    cookie_source,
+                    created_by,
+                    now,
+                    now,
+                    account_id,
+                ),
+            )
+            if cursor.rowcount != 1:
+                raise ValueError("profile_promotion_account_busy")
+        except sqlite3.IntegrityError as exc:
+            raise ValueError("profile_promotion_conflict") from exc
+        promotion_id = int(cursor.lastrowid)
+        if login_session_id:
+            conn.execute(
+                """
+                UPDATE login_sessions
+                SET cookie_source=?, profile_promotion_id=?, acquisition_generation=?, updated_at=?
+                WHERE id=?
+                """,
+                (cookie_source, promotion_id, generation, now, login_session_id),
+            )
+        _record_audit_log(
+            conn,
+            int(account["workspace_id"] or DEFAULT_WORKSPACE_ID),
+            created_by,
+            "profile_promotion_started",
+            "social_account",
+            str(account_id),
+            {
+                "promotion_id": promotion_id,
+                "login_session_id": login_session_id,
+                "profile_key_hash": _profile_key_hash(str(account["profile_key"])),
+                "cookie_source": cookie_source,
+                "acquisition_generation": generation,
+                "state": "preparing",
+            },
+        )
+    return get_account_profile_promotion(promotion_id) or {}
+
+
+def get_account_profile_promotion(promotion_id: int) -> dict[str, Any] | None:
+    promotion_id = _safe_int(promotion_id) or 0
+    if not promotion_id:
+        return None
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT * FROM account_profile_promotions WHERE id=?",
+            (promotion_id,),
+        ).fetchone()
+    return dict(row) if row else None
+
+
+def list_account_profile_promotions(
+    account_id: int | None = None,
+    *,
+    include_terminal: bool = True,
+) -> list[dict[str, Any]]:
+    clauses: list[str] = []
+    params: list[Any] = []
+    if account_id:
+        clauses.append("account_id=?")
+        params.append(int(account_id))
+    if not include_terminal:
+        clauses.append("state IN ('preparing','candidate_ready','swapping','active_recheck','rolling_back')")
+    where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+    with get_conn() as conn:
+        rows = conn.execute(
+            f"SELECT * FROM account_profile_promotions{where} ORDER BY id DESC",
+            params,
+        ).fetchall()
+    return [dict(row) for row in rows]
+
+
+def update_account_profile_promotion(
+    promotion_id: int,
+    state: str,
+    *,
+    checkpoint: str | None = None,
+    failure_category: str = "",
+    recovery_action: str = "",
+    cleanup_after: str | None = None,
+) -> dict[str, Any]:
+    promotion_id = _safe_int(promotion_id) or 0
+    if not promotion_id or state not in PROFILE_PROMOTION_TERMINAL_STATES | PROFILE_PROMOTION_NONTERMINAL_STATES:
+        raise ValueError("profile_promotion_state_invalid")
+    if checkpoint and checkpoint not in _PROFILE_PROMOTION_CHECKPOINTS:
+        raise ValueError("profile_promotion_checkpoint_invalid")
+    now = utc_now()
+    with get_conn() as conn:
+        row = conn.execute(
+            "SELECT state FROM account_profile_promotions WHERE id=?",
+            (promotion_id,),
+        ).fetchone()
+        if not row:
+            raise ValueError("profile_promotion_not_found")
+        current = str(row["state"])
+        if state != current and state not in _PROFILE_PROMOTION_TRANSITIONS.get(current, frozenset()):
+            raise ValueError("profile_promotion_state_conflict")
+        assignments = ["state=?", "updated_at=?"]
+        values: list[Any] = [state, now]
+        if checkpoint:
+            assignments.append(f"{checkpoint}=?")
+            values.append(now)
+        if failure_category:
+            assignments.append("failure_category=?")
+            values.append(_redacted_promotion_category(failure_category))
+        if recovery_action:
+            assignments.append("recovery_action=?")
+            values.append(_redacted_promotion_category(recovery_action))
+        if cleanup_after is not None:
+            assignments.append("cleanup_after=?")
+            values.append(str(cleanup_after)[:64])
+        values.append(promotion_id)
+        conn.execute(
+            f"UPDATE account_profile_promotions SET {', '.join(assignments)} WHERE id=?",
+            values,
+        )
+    return get_account_profile_promotion(promotion_id) or {}
+
+
+def commit_account_profile_promotion(
+    promotion_id: int,
+    *,
+    serialized_cookie_material: str,
+    provider_resolution_id: str = "",
+    browser_attempt_id: str = "",
+    runtime_snapshot_json: str = "",
+    identity: dict[str, Any] | None = None,
+) -> dict[str, Any]:
+    """Commit account material and the journal state in one database transaction."""
+
+    promotion_id = _safe_int(promotion_id) or 0
+    if not promotion_id or not isinstance(serialized_cookie_material, str) or not serialized_cookie_material:
+        raise ValueError("profile_promotion_commit_invalid")
+    identity = identity or {}
+    now = utc_now()
+    with get_conn() as conn:
+        promotion = conn.execute(
+            "SELECT * FROM account_profile_promotions WHERE id=?",
+            (promotion_id,),
+        ).fetchone()
+        if not promotion:
+            raise ValueError("profile_promotion_not_found")
+        if str(promotion["state"]) != "active_recheck":
+            raise ValueError("profile_promotion_state_conflict")
+        account_id = int(promotion["account_id"])
+        encrypted = encrypt_secret(serialized_cookie_material)
+        profile_path = str(resolve_account_profile_path(str(promotion["profile_key"])))
+        account_update = conn.execute(
+            """
+            UPDATE social_accounts SET
+                login_type='cookie', cookies_encrypted=?, cookie_source=?,
+                profile_runtime_version=1, profile_ready_at=?, profile_path=?,
+                status='active', requires_relogin=0, identity_state='active',
+                browser_environment_locked_at=COALESCE(browser_environment_locked_at, ?),
+                browser_environment_lock_reason='cookie_profile_promotion',
+                last_error='', last_used_at=?, last_checked_at=?,
+                platform_account_id=COALESCE(NULLIF(?, ''), platform_account_id),
+                platform_account_name=COALESCE(NULLIF(?, ''), platform_account_name),
+                platform_avatar_url=COALESCE(NULLIF(?, ''), platform_avatar_url),
+                platform_home_url=COALESCE(NULLIF(?, ''), platform_home_url),
+                platform_identity_checked_at=CASE WHEN ? <> '' THEN ? ELSE platform_identity_checked_at END,
+                identity_runtime_snapshot_json=COALESCE(NULLIF(?, ''), identity_runtime_snapshot_json),
+                updated_at=?
+            WHERE id=?
+            """,
+            (
+                encrypted,
+                str(promotion["cookie_source"]),
+                now,
+                profile_path,
+                now,
+                now,
+                now,
+                str(identity.get("platform_account_id") or "")[:240],
+                str(identity.get("platform_account_name") or "")[:240],
+                str(identity.get("platform_avatar_url") or "")[:1000],
+                str(identity.get("platform_home_url") or "")[:1000],
+                now if identity else "",
+                now,
+                runtime_snapshot_json,
+                now,
+                account_id,
+            ),
+        )
+        if account_update.rowcount != 1:
+            raise ValueError("profile_promotion_account_missing")
+        if promotion["login_session_id"]:
+            conn.execute(
+                """
+                UPDATE login_sessions SET
+                    cookie_source=?, profile_promotion_id=?, acquisition_generation=?,
+                    provider_resolution_id=?, browser_attempt_id=?, status='success', updated_at=?
+                WHERE id=?
+                """,
+                (
+                    str(promotion["cookie_source"]),
+                    promotion_id,
+                    int(promotion["acquisition_generation"] or 1),
+                    str(provider_resolution_id or "")[:160],
+                    str(browser_attempt_id or "")[:160],
+                    now,
+                    int(promotion["login_session_id"]),
+                ),
+            )
+        cleanup_after = (
+            (datetime.fromisoformat(now) + timedelta(hours=24)).isoformat()
+            if bool(promotion["had_active_profile"])
+            else now
+        )
+        finalized_at = None if bool(promotion["had_active_profile"]) else now
+        journal_update = conn.execute(
+            """
+            UPDATE account_profile_promotions SET
+                state='committed', committed_at=?, finalized_at=?, cleanup_after=?, updated_at=?
+            WHERE id=? AND state='active_recheck'
+            """,
+            (now, finalized_at, cleanup_after, now, promotion_id),
+        )
+        if journal_update.rowcount != 1:
+            raise ValueError("profile_promotion_state_conflict")
+        _record_audit_log(
+            conn,
+            int(promotion["workspace_id"] or DEFAULT_WORKSPACE_ID),
+            promotion["created_by"],
+            "profile_promotion_committed",
+            "social_account",
+            str(account_id),
+            {
+                "promotion_id": promotion_id,
+                "login_session_id": promotion["login_session_id"],
+                "profile_key_hash": _profile_key_hash(str(promotion["profile_key"])),
+                "cookie_source": str(promotion["cookie_source"]),
+                "acquisition_generation": int(promotion["acquisition_generation"] or 1),
+                "provider_resolution_id": str(provider_resolution_id or "")[:160],
+                "browser_attempt_id": str(browser_attempt_id or "")[:160],
+                "state": "committed",
+            },
+        )
+    return get_account_profile_promotion(promotion_id) or {}
+
+
+def _validate_profile_promotion_cookie_source(value: Any) -> str:
+    source = str(value or "").strip().lower()
+    if source not in {"browser_sync", "manual"}:
+        raise ValueError("profile_promotion_cookie_source_invalid")
+    return source
+
+
+def _profile_key_hash(profile_key: str) -> str:
+    return hashlib.sha256(str(profile_key).encode("utf-8")).hexdigest()
+
+
+def _redacted_promotion_category(value: Any) -> str:
+    text = str(value or "").strip().lower()
+    return re.sub(r"[^a-z0-9_.:-]", "_", text)[:128]
 
 
 def get_login_session(session_id: int) -> dict[str, Any] | None:

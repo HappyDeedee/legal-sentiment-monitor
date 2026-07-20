@@ -2,6 +2,57 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-21 - CR-112 Packet C.1 Profile Promotion Foundation
+
+Environment: `codex/cr-112-cookiebridge-integration` on Packet B commit
+`1d7465c`. Tests used synthetic Cookie values, temporary Profile roots, fake
+browser runners, and the test database only. No real account or platform
+request was used in this packet.
+
+Result: `Verified` within the Packet C.1 synthetic/local proof boundary.
+
+- Added the backward-compatible CR-112 account, login-session, and durable
+  `account_profile_promotions` schema with one non-terminal promotion per
+  account.
+- Added canonical structured Cookie Protocol V1 validation, manual-header
+  conversion, platform-domain allowlists, exact scope tuple handling, and
+  bounded payload checks.
+- Added same-volume fresh-candidate Profile promotion, a `256 MiB` storage
+  reserve check, active-path recheck,
+  transaction-bound Cookie/account/journal commit, predecessor rollback,
+  marker-based restart recovery, contradiction quarantine, and bounded
+  cleanup.
+- Account-run and Profile-promotion locks share an atomic database exclusion
+  predicate; successful managed runs enqueue immediate retained-rollback
+  cleanup after releasing run locks, and cleanup failures record only a
+  redacted operator-remediation state.
+- Async promotion lock waits do not block the service event loop. Recovery
+  reloads journal authority after waiting, preserves live busy operations, and
+  skips a promotion that reached a terminal state. Successful cleanup clears
+  its due marker and repeated finalization is a no-op.
+- Existing advanced manual Cookie create/update/UI paths now use the shared
+  promotion service. Failed validation preserves the previous account Cookie
+  and active Profile.
+- Focused C.1 regression: `16 passed, 590 deselected`; the adjacent successful-
+  runner callback regression also passed.
+- Full monitoring regression: `606 passed, 3 warnings`.
+- `uv run python -m compileall -q api tools cmd_arg`, `node --check
+  api/webui/monitor/monitor.js`, and the inline monitor script parse passed.
+- `uv run python scripts/check_docs.py` passed; documentation tests passed (`1
+  passed, 1 warning`); `git diff --check` passed with only Windows line-ending
+  warnings.
+- Independent read-only full-diff review checked affected callers, concurrency,
+  crash recovery, secret handling, tests, and documentation hygiene and
+  returned `PASS` with no actionable findings.
+
+Proof boundary:
+
+- This verifies Packet C.1 schema, protocol, promotion, rollback/recovery,
+  cleanup, and advanced manual Cookie integration. It does not verify C.2
+  visible-browser acquisition or administrator reveal/copy, C.3 profile-only
+  crawler execution, Packet D real Douyin/Xiaohongshu collection, or the
+  separate CR-047 Linux/server-like acceptance.
+
 ## 2026-07-21 - CR-112 Packet B Compatibility And Acquisition Spike
 
 Environment: `codex/cr-112-cookiebridge-integration` on
