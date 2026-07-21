@@ -1942,3 +1942,11 @@ kept until the candidate passes.
 CR-129 real validation is serial and explicit: Douyin account `8972` and
 Xiaohongshu account `9196`. Accounts `9197` and `9198` are protected from
 collection. Kuaishou is Deferred.
+
+Packet A implementation status (2026-07-22): verified. The effective browser
+proof now projects into one immutable request environment for managed XHS and
+Douyin attempts. Parent/child transfer uses a safe binding; the child writes a
+short-lived atomic proof file; Runner validates account, Profile, revision,
+resolution, attempt, run, expiry, and fallback state before ingest. This is an
+additive runtime contract and does not replace Profile or encrypted Cookie
+authority.

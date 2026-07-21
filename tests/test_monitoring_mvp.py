@@ -4470,7 +4470,19 @@ def test_phase_5_1d_runner_handoff_is_bounded_and_not_in_command_or_summary(tmp_
     monkeypatch.setenv("MONITOR_CDP_USER_DATA_DIR", r"C:\generic\profile")
     monkeypatch.setenv("MONITOR_CDP_CONNECT_EXISTING", "false")
 
-    env = runner_module._build_crawler_env(account_binding, plan, result_path)
+    request_binding = runner_module._build_request_binding_for_attempt(
+        account_binding,
+        plan,
+        run_id=5101,
+    )
+    request_result_path = tmp_path / "attempt" / "platform-request-environment.json"
+    env = runner_module._build_crawler_env(
+        account_binding,
+        plan,
+        result_path,
+        request_binding=request_binding,
+        request_result_path=request_result_path,
+    )
     cmd = runner_module._build_crawler_cmd(
         {"keywords": ["Phase 5.1D"], "target_type": "search"},
         "dy",
@@ -4503,7 +4515,13 @@ def test_phase_5_1d_runner_handoff_is_bounded_and_not_in_command_or_summary(tmp_
         user_agent="Mozilla/5.0 " + ("X" * 900),
         proxy_url="http://" + ("u" * 700) + ":" + ("p" * 700) + "@proxy.invalid:8080",
     )
-    long_payload = runner_module._build_crawler_env(account_binding, long_plan, result_path)[PLAN_ENV_NAME]
+    long_payload = runner_module._build_crawler_env(
+        account_binding,
+        long_plan,
+        result_path,
+        request_binding=request_binding,
+        request_result_path=request_result_path,
+    )[PLAN_ENV_NAME]
     parsed_long = browser_environment_plan_from_json(long_payload)
     assert parsed_long.user_agent == long_plan.user_agent
     assert parsed_long.proxy_url == long_plan.proxy_url
@@ -4644,7 +4662,18 @@ def test_phase_5_1d_runner_resolves_after_locks_and_persists_before_ingest(tmp_p
         assert lock_state["held"] is True
         events.append("attempt")
         plan = job_arg["_browser_environment_plan"]
-        return _phase_5_1d_result_for_plan(plan)
+        result = _phase_5_1d_result_for_plan(plan)
+        request_environment = runner_module.build_platform_request_environment_from_binding(
+            plan,
+            result,
+            job_arg["_platform_request_binding"],
+        )
+        return runner_module.ManagedCrawlerOutcome(
+            result,
+            0,
+            False,
+            request_environment,
+        )
 
     monkeypatch.setattr(runner_module, "_run_crawler_attempt", fake_attempt)
 
@@ -4668,6 +4697,7 @@ def test_phase_5_1d_runner_resolves_after_locks_and_persists_before_ingest(tmp_p
     )
     monkeypatch.setattr(runner_module, "_update_collection_progress", lambda *args, **kwargs: None)
     monkeypatch.setattr(runner_module, "_finalize_collection_progress", lambda *args, **kwargs: None)
+    monkeypatch.setattr(runner_module, "_record_request_environment_proof", lambda *args, **kwargs: None)
     monkeypatch.setenv("MONITOR_CRAWLER_MAX_RETRIES", "0")
 
     manual = asyncio.run(
@@ -5440,11 +5470,17 @@ def test_phase_5_1d_all_platforms_use_one_managed_plan_before_first_navigation(
         assert used_context is context
         assert used_page is page
         events.append(("verify",))
-        return None
+        return _phase_5_1d_result_for_plan(plan)
 
     monkeypatch.setattr(module, "launch_managed_browser_context", fake_launch_managed, raising=False)
     monkeypatch.setattr(module, "prepare_managed_page", fake_prepare, raising=False)
     monkeypatch.setattr(module, "verify_managed_page", fake_verify, raising=False)
+    if hasattr(module, "establish_platform_request_environment"):
+        monkeypatch.setattr(
+            module,
+            "establish_platform_request_environment",
+            lambda used_plan, result: {"plan": used_plan, "result": result},
+        )
 
     class FakePlaywrightManager:
         async def __aenter__(self):
@@ -23660,7 +23696,19 @@ def test_run_platform_attaches_bound_proxy_summary(tmp_path, monkeypatch):
             ),
             encoding="utf-8",
         )
-        return _phase_5_1d_result_for_plan(job_arg["_browser_environment_plan"])
+        plan = job_arg["_browser_environment_plan"]
+        provider_result = _phase_5_1d_result_for_plan(plan)
+        request_environment = runner_module.build_platform_request_environment_from_binding(
+            plan,
+            provider_result,
+            job_arg["_platform_request_binding"],
+        )
+        return runner_module.ManagedCrawlerOutcome(
+            provider_result,
+            0,
+            False,
+            request_environment,
+        )
 
     try:
         proxy = save_proxy_profile(
@@ -27149,6 +27197,12 @@ def test_cr112_c3_profile_only_command_and_environment_contain_no_cookie(tmp_pat
     Path(plan.profile_path).mkdir(parents=True, exist_ok=True)
     binding = _cr112_c3_binding(plan)
     result_path = tmp_path / "result.json"
+    request_binding = runner_module._build_request_binding_for_attempt(
+        binding,
+        plan,
+        run_id=5101,
+    )
+    request_result_path = tmp_path / "request-result.json"
     monkeypatch.setenv("COOKIE", "synthetic-inherited-cookie")
     monkeypatch.setenv("MONITOR_BROWSER_COOKIE_SYNC_ENABLED", "true")
 
@@ -27159,7 +27213,13 @@ def test_cr112_c3_profile_only_command_and_environment_contain_no_cookie(tmp_pat
         binding,
         plan,
     )
-    env = runner_module._build_crawler_env(binding, plan, result_path)
+    env = runner_module._build_crawler_env(
+        binding,
+        plan,
+        result_path,
+        request_binding=request_binding,
+        request_result_path=request_result_path,
+    )
 
     assert _cmd_value(cmd, "--lt") == "cookie"
     assert _cmd_value(cmd, "--monitor_profile_only") == "true"
@@ -27599,6 +27659,13 @@ def test_cr112_c3_explicit_legacy_cookie_account_requires_profile_relogin():
 
 def test_cr112_c3_effective_popen_arguments_and_environment_exclude_cookie(tmp_path, monkeypatch):
     from tools.browser_environment import RESULT_PATH_ENV_NAME
+    from tools.platform_request_environment import (
+        REQUEST_BINDING_ENV_NAME,
+        REQUEST_RESULT_PATH_ENV_NAME,
+        build_platform_request_environment_from_binding,
+        platform_request_binding_from_json,
+        platform_request_environment_to_json,
+    )
 
     plan = _phase_5_1d_plan(tmp_path, monkeypatch, action="crawl", launch_mode="cdp_launch")
     Path(plan.profile_path).mkdir(parents=True, exist_ok=True)
@@ -27606,6 +27673,12 @@ def test_cr112_c3_effective_popen_arguments_and_environment_exclude_cookie(tmp_p
     out_dir = tmp_path / "attempt"
     out_dir.mkdir()
     result_path = out_dir / "browser-result.json"
+    request_result_path = out_dir / "request-result.json"
+    request_binding = runner_module._build_request_binding_for_attempt(
+        binding,
+        plan,
+        run_id=7401,
+    )
     captured = {}
     monkeypatch.setenv("COOKIE", "synthetic-process-cookie")
 
@@ -27623,6 +27696,18 @@ def test_cr112_c3_effective_popen_arguments_and_environment_exclude_cookie(tmp_p
             json.dumps({"ok": result.ok, "reason": result.reason, "snapshot": result.snapshot}),
             encoding="utf-8",
         )
+        child_binding = platform_request_binding_from_json(
+            kwargs["env"][REQUEST_BINDING_ENV_NAME]
+        )
+        request_environment = build_platform_request_environment_from_binding(
+            plan,
+            result,
+            child_binding,
+        )
+        Path(kwargs["env"][REQUEST_RESULT_PATH_ENV_NAME]).write_text(
+            platform_request_environment_to_json(request_environment),
+            encoding="utf-8",
+        )
         return FakeProcess()
 
     monkeypatch.setattr(runner_module.subprocess, "Popen", fake_popen)
@@ -27631,8 +27716,11 @@ def test_cr112_c3_effective_popen_arguments_and_environment_exclude_cookie(tmp_p
             "id": 7401,
             "keywords": ["CR-112 C3"],
             "target_type": "search",
+            "_run_id": 7401,
             "_browser_environment_plan": plan,
             "_browser_environment_result_path": result_path,
+            "_platform_request_binding": request_binding,
+            "_platform_request_result_path": request_result_path,
         },
         plan.platform,
         out_dir,
@@ -27640,6 +27728,7 @@ def test_cr112_c3_effective_popen_arguments_and_environment_exclude_cookie(tmp_p
     )
 
     assert outcome.returncode == 0
+    assert outcome.request_environment is not None
     assert "--cookies" not in captured["cmd"]
     serialized = json.dumps(captured, ensure_ascii=False)
     assert "synthetic-c3-secret" not in serialized

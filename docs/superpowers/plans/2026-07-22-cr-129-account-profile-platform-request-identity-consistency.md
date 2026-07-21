@@ -5,7 +5,7 @@
 - CR: CR-129
 - Type: Phase 5.1 follow-up regression fix; account-environment hardening;
   platform-request identity consistency
-- Status: Accepted / Ready for Implementation
+- Status: Accepted / In Progress (Packet A verified)
 - Baseline: `main@6cffdbaf0c0ffca8863192c962918a37349f10a4`
 - Branch: `codex/cr-129-request-identity-consistency`
 - Owner: project implementation lane
@@ -222,6 +222,17 @@ credentials, Cookie/token values, proxy credentials, and complete headers are
 excluded. Historical pre-CR-129 runs may remain limited-context and must not be
 retrofit with guessed proof.
 
+Packet A implementation receipt (2026-07-22): `Verified`. The immutable
+contract, safe parent binding, child proof write/read path, attempt ordering
+guard, managed proxy freeze, XHS signed-header snapshot, and Douyin managed
+Profile token gate are implemented in code. Focused Packet A coverage passes
+`19`; the affected governed selection passes `228`; the complete monitoring
+regression passes `715` with three existing warnings. Python compile, docs
+consistency, documentation regression, and `git diff --check` pass. The final
+focused Claude read-only review reported no P0/P1 findings; its two P2 notes
+were documentation-only and were corrected. Full child argv/environment/log
+tripwires and typed terminal error taxonomy remain explicit Packet D gates.
+
 Exit gate: contract tests pass; no platform call occurs for invalid contracts;
 existing pre-CR-129 account setup remains compatible.
 
@@ -418,3 +429,19 @@ tests, and documentation update. Temporary raw review output stays under
   stop condition confirmed.
 - TODO baseline, formal documents, protected CR-112 boundary, CR-070 order,
   designated IDs, and implementation readiness were all found consistent.
+
+### Round 3 - Packet A implementation review
+
+- The first implementation review returned `PASS AFTER MATERIAL
+  REFINEMENTS`, identifying proxy refresh drift, stale proof ordering, missing
+  safe-channel tripwires, and minimal XHS/Douyin input guards.
+- Packet A addressed the in-scope findings with managed proxy-refresh
+  rejection, monotonic attempt-proof merging, safe binding/proof tripwires,
+  immutable XHS signed headers, managed Douyin `msToken` presence validation,
+  and concurrent account projection coverage.
+- Packet D child-process argv/environment/log tripwires, Packet B/C complete
+  signer/request equality, and typed retry taxonomy remain intentionally
+  deferred to their named packets under the hard implementation gates.
+- Focused Round 2 returned `PASS AFTER SMALL FIXES`, with no P0/P1 findings and
+  two documentation-only P2 notes. The notes were corrected in the Douyin CDP
+  docstring and XHS signer docstring. Packet A is permitted to commit.

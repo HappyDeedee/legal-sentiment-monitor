@@ -4658,9 +4658,13 @@ collection proof.
 Type: Phase 5.1 follow-up regression fix; account-environment architecture
 hardening; platform-request identity consistency.
 
-Status: Accepted
+Status: In Progress (Packet A Verified; Packet B next)
 
 Execution: Ready for Implementation after deep plan-cross-validation.
+
+Packet status: Packet A is `Verified` on 2026-07-22. Packet B is the next
+execution unit; CR-129 remains In Progress until Packets B-E and designated
+real acceptance pass.
 
 Baseline: `main@6cffdbaf0c0ffca8863192c962918a37349f10a4`.
 
@@ -4720,6 +4724,13 @@ Atomic implementation packages:
   states, and secret tripwires.
 - Packet E: browser compatibility, saved-Profile compatibility, and real
   acceptance.
+
+Packet A evidence: the immutable request contract is projected from the
+effective browser proof, passed through a safe parent binding, written by the
+child atomically, and validated by the Runner before ingest. Managed proxy
+refresh drift, stale attempt proof, XHS signed Cookie/UA mutation, missing
+Douyin Profile `msToken`, and two-account projection isolation have regression
+coverage. Full child-process tripwires remain Packet D scope.
 
 Real acceptance:
 

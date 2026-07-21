@@ -34,6 +34,7 @@ from var import request_keyword_var
 
 if TYPE_CHECKING:
     from proxy.proxy_ip_pool import ProxyIpPool
+    from tools.platform_request_environment import PlatformRequestEnvironment
 
 from .exception import *
 from .field import *
@@ -51,6 +52,7 @@ class DouYinClient(AbstractApiClient, ProxyRefreshMixin):
         playwright_page: Optional[Page],
         cookie_dict: Dict,
         proxy_ip_pool: Optional["ProxyIpPool"] = None,
+        request_environment: Optional["PlatformRequestEnvironment"] = None,
     ):
         self.proxy = proxy
         self.timeout = timeout
@@ -65,6 +67,7 @@ class DouYinClient(AbstractApiClient, ProxyRefreshMixin):
         ]
         self.playwright_page = playwright_page
         self.cookie_dict = cookie_dict
+        self.request_environment = request_environment
         # Initialize proxy pool (from ProxyRefreshMixin)
         self.init_proxy_pool(proxy_ip_pool)
 
@@ -80,6 +83,8 @@ class DouYinClient(AbstractApiClient, ProxyRefreshMixin):
             return
         headers = headers or self.headers
         local_storage: Dict = await self.playwright_page.evaluate("() => window.localStorage")  # type: ignore
+        if self.request_environment is not None and not str(local_storage.get("xmst") or "").strip():
+            raise RuntimeError("managed request msToken is missing from the bound Profile")
         common_params = {
             "device_platform": "webapp",
             "aid": "6383",

@@ -3281,6 +3281,11 @@ Layout stress inputs:
 - Safe serialization contains IDs/revisions/hashes only and never raw Cookie,
   token, proxy credentials, Profile path, or signature material.
 
+Packet A verification receipt (2026-07-22): the contract, safe binding/proof,
+stale-attempt, proxy-freeze, XHS header, Douyin Profile-token, and concurrent
+account tests passed. Complete child-process argv/environment/log tripwires are
+tested in Packet D, not inferred from this Packet A receipt.
+
 ### Packet B XHS Tests
 
 - Signer and final request use the same Cookie, `a1`, `web_session`, UA,

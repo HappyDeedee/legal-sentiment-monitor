@@ -29,17 +29,27 @@ from tools.httpx_util import make_async_client
 
 import config
 from base.base_crawler import AbstractApiClient
-from proxy.proxy_mixin import ProxyRefreshMixin
+from proxy.proxy_mixin import ManagedProxyEnvironmentError, ProxyRefreshMixin
 from tools import utils
 
 if TYPE_CHECKING:
     from proxy.proxy_ip_pool import ProxyIpPool
+    from tools.platform_request_environment import PlatformRequestEnvironment
 
 from .exception import DataFetchError, IPBlockError, NoteNotFoundError
 from .field import SearchNoteType, SearchSortType
 from .help import get_search_id
 from .extractor import XiaoHongShuExtractor
 from .playwright_sign import sign_with_xhshow
+
+
+class ManagedRequestIdentityError(RuntimeError):
+    """A managed request changed a frozen identity input."""
+
+
+class _SignedHeaders(dict):
+    signed_cookie: str
+    signed_user_agent: str
 
 
 class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
@@ -53,6 +63,7 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
         playwright_page: Page,
         cookie_dict: Dict[str, str],
         proxy_ip_pool: Optional["ProxyIpPool"] = None,
+        request_environment: Optional["PlatformRequestEnvironment"] = None,
     ):
         self.proxy = proxy
         self.timeout = timeout
@@ -71,20 +82,42 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
         self.NOTE_ABNORMAL_CODE = -510001
         self.playwright_page = playwright_page
         self.cookie_dict = cookie_dict
+        self.request_environment = request_environment
         self._extractor = XiaoHongShuExtractor()
         # Initialize proxy pool (from ProxyRefreshMixin)
         self.init_proxy_pool(proxy_ip_pool)
 
+    def _validate_managed_headers(self, headers: Dict[str, str]) -> None:
+        if self.request_environment is None:
+            return
+        if str(headers.get("User-Agent") or "") != self.request_environment.user_agent:
+            raise ManagedRequestIdentityError("managed request user-agent mismatch")
+        if str(headers.get("accept-language") or "") != self.request_environment.accept_language:
+            raise ManagedRequestIdentityError("managed request accept-language mismatch")
+
+    @staticmethod
+    def _validate_signed_headers(headers: Dict[str, str]) -> None:
+        if not isinstance(headers, _SignedHeaders):
+            return
+        if str(headers.get("Cookie") or "") != headers.signed_cookie:
+            raise ManagedRequestIdentityError("signed request Cookie changed before dispatch")
+        if str(headers.get("User-Agent") or "") != headers.signed_user_agent:
+            raise ManagedRequestIdentityError("signed request user-agent changed before dispatch")
+
     async def _pre_headers(self, url: str, params: Optional[Dict] = None, payload: Optional[Dict] = None) -> Dict:
-        """请求头参数签名 (使用 xhshow 纯算法)
+        """Sign request headers using the xhshow algorithm.
+
+        Managed request environments validate User-Agent and
+        Accept-Language before dispatch, and the returned headers retain an
+        immutable Cookie/User-Agent snapshot for the dispatch boundary.
 
         Args:
-            url: 请求 URI path
-            params: GET 请求参数
-            payload: POST 请求参数
+            url: Request URI path
+            params: GET request parameters
+            payload: POST request parameters
 
         Returns:
-            Dict: 签名后的请求头参数
+            Dict: Signed request headers.
         """
         if params is not None:
             data = params
@@ -96,10 +129,14 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
             raise ValueError("params or payload is required")
 
         # 使用 xhshow 纯算法生成签名
+        signed_headers = _SignedHeaders(self.headers)
+        signed_cookie = str(signed_headers.get("Cookie") or "")
+        signed_headers.signed_cookie = signed_cookie
+        signed_headers.signed_user_agent = str(signed_headers.get("User-Agent") or "")
         signs = sign_with_xhshow(
             uri=url,
             data=data,
-            cookie_str=self.headers.get("Cookie", ""),
+            cookie_str=signed_cookie,
             method=method,
         )
 
@@ -109,10 +146,17 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
             "x-S-Common": signs["x-s-common"],
             "X-B3-Traceid": signs["x-b3-traceid"],
         }
-        self.headers.update(headers)
-        return self.headers
+        signed_headers.update(headers)
+        self._validate_managed_headers(signed_headers)
+        return signed_headers
 
-    @retry(stop=stop_after_attempt(3), wait=wait_fixed(1), retry=retry_if_not_exception_type(NoteNotFoundError))
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_fixed(1),
+        retry=retry_if_not_exception_type(
+            (NoteNotFoundError, ManagedRequestIdentityError, ManagedProxyEnvironmentError)
+        ),
+    )
     async def request(self, method, url, **kwargs) -> Union[str, Any]:
         """
         Wrapper for httpx common request method, processes request response
@@ -129,6 +173,10 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
 
         # return response.text
         return_response = kwargs.pop("return_response", False)
+        request_headers = kwargs.get("headers")
+        if isinstance(request_headers, dict):
+            self._validate_signed_headers(request_headers)
+            self._validate_managed_headers(request_headers)
         async with make_async_client(proxy=self.proxy) as client:
             response = await client.request(method, url, timeout=self.timeout, **kwargs)
 

@@ -741,6 +741,12 @@ short `Superseded by` note rather than deleting history.
 - Accepted real-acceptance boundary: use only designated Douyin account 8972
   and Xiaohongshu account 9196 for collection validation. Accounts 9197 and
   9198 are protected and excluded. Kuaishou remains Deferred.
+- Packet A implementation confirms that the request proof is an additive,
+  in-memory/attempt-file projection with no schema migration: the committed
+  Profile remains authority, the safe binding carries only IDs/revisions, and
+  the Runner rejects missing, stale, conflicting, expired, or cross-account
+  proof before ingest. Complete child-process leakage tripwires remain Packet
+  D scope.
 
 ## 2026-07-21 - CR-112 Acceptance And Execution Order
 

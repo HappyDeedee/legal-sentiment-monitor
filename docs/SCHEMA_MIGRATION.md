@@ -846,6 +846,10 @@ proves that historical request proof is required for an existing API or run
 record. Any such change must be additive, nullable/default-safe, compatible
 with old rows, and reversible.
 
+Packet A verification confirms that no schema change is needed for the first
+runtime contract. The child proof is short-lived and safe-serialized; existing
+account, Profile, Cookie, proxy, and run rows remain unchanged.
+
 Migration rules:
 
 1. Do not move raw Cookie, token, proxy password, Profile path, or complete

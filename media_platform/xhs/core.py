@@ -48,6 +48,10 @@ from tools.browser_environment import (
 )
 from tools.cdp_browser import CDPBrowserManager
 from tools.profile_only import should_begin_platform_login
+from tools.platform_request_environment import (
+    PlatformRequestEnvironment,
+    establish_platform_request_environment,
+)
 from var import crawler_type_var, source_keyword_var
 
 from .client import XiaoHongShuClient
@@ -62,6 +66,7 @@ class XiaoHongShuCrawler(AbstractCrawler):
     xhs_client: XiaoHongShuClient
     browser_context: BrowserContext
     cdp_manager: Optional[CDPBrowserManager]
+    platform_request_environment: PlatformRequestEnvironment | None
 
     def __init__(self) -> None:
         self.index_url = "https://www.rednote.com" if config.XHS_INTERNATIONAL else "https://www.xiaohongshu.com"
@@ -75,6 +80,7 @@ class XiaoHongShuCrawler(AbstractCrawler):
         self.managed_browser = None
         self.cdp_manager = None
         self.ip_proxy_pool = None  # Proxy IP pool for automatic proxy refresh
+        self.platform_request_environment = None
 
     async def start(self) -> None:
         playwright_proxy_format, httpx_proxy_format = None, None
@@ -118,6 +124,16 @@ class XiaoHongShuCrawler(AbstractCrawler):
             provider_result = await verify_managed_page(self.browser_context, self.context_page)
             if provider_result is not None and not provider_result.ok:
                 raise BrowserEnvironmentError(provider_result.reason, "page")
+            if self.browser_environment_plan is not None:
+                if provider_result is None:
+                    raise BrowserEnvironmentError(
+                        "account_identity_provider_unsupported",
+                        "request_environment",
+                    )
+                self.platform_request_environment = establish_platform_request_environment(
+                    self.browser_environment_plan,
+                    provider_result,
+                )
 
             # Create a client to interact with the Xiaohongshu website.
             self.xhs_client = await self.create_xhs_client(httpx_proxy_format)
@@ -393,7 +409,11 @@ class XiaoHongShuCrawler(AbstractCrawler):
             proxy=httpx_proxy,
             headers={
                 "accept": "application/json, text/plain, */*",
-                "accept-language": "zh-CN,zh;q=0.9",
+                "accept-language": (
+                    self.browser_environment_plan.accept_language
+                    if self.browser_environment_plan
+                    else "zh-CN,zh;q=0.9"
+                ),
                 "cache-control": "no-cache",
                 "content-type": "application/json;charset=UTF-8",
                 "origin": self.index_url,
@@ -406,12 +426,13 @@ class XiaoHongShuCrawler(AbstractCrawler):
                 "sec-fetch-dest": "empty",
                 "sec-fetch-mode": "cors",
                 "sec-fetch-site": "same-site",
-                "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
+                "user-agent": self.user_agent,
                 "Cookie": cookie_str,
             },
             playwright_page=self.context_page,
             cookie_dict=cookie_dict,
             proxy_ip_pool=self.ip_proxy_pool,  # Pass proxy pool for automatic refresh
+            request_environment=self.platform_request_environment,
         )
         return xhs_client_obj
 

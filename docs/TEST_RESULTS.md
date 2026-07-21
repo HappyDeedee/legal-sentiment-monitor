@@ -2,6 +2,26 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-22 - CR-129 Packet A Verified
+
+Scope: immutable platform request environment, safe parent/child binding,
+Runner proof validation, managed proxy freeze, XHS signed-header snapshot,
+Douyin managed Profile token gate, stale-attempt ordering, and account
+projection isolation.
+
+Result: `Verified`.
+
+- Packet A focused tests: `19 passed`.
+- Affected governed selection: `228 passed, 3 warnings`.
+- Complete monitoring regression plus Packet A tests: `715 passed, 3 warnings`.
+- Python compile, `uv run python scripts/check_docs.py`, documentation tests,
+  and `git diff --check` passed.
+- Independent Claude focused re-review: no P0/P1 findings; two documentation
+  P2 notes were corrected. Packet A is permitted to commit.
+- Full child argv/environment/log tripwires, complete platform signer/request
+  equality, typed retry taxonomy, and real accounts remain deferred to Packets
+  B-E. No real account or platform traffic was used in this packet.
+
 ## 2026-07-22 - CR-129 Plan Cross-Validation READY
 
 Scope: CR-129 TODO baseline, account/Profile/browser/proxy/request authority,

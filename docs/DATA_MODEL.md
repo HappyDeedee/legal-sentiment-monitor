@@ -1055,5 +1055,10 @@ The data model invariant is:
 one managed attempt = one frozen request environment
 ```
 
+Packet A uses an in-memory immutable contract and a short-lived safe attempt
+proof file; it adds no database column and does not rewrite historical run or
+account rows. A future persistent request-proof field remains subject to the
+additive migration gate below.
+
 Content persistence alone is not identity proof. Authenticated status requires
 platform-specific self-identity or an equivalent strong login-state result.

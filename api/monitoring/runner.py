@@ -34,6 +34,16 @@ from tools.profile_only import (
     PROFILE_ONLY_RUNTIME_VERSION_ENV,
     ProfileLoginRequired,
 )
+from tools.platform_request_environment import (
+    REQUEST_BINDING_ENV_NAME,
+    REQUEST_RESULT_PATH_ENV_NAME,
+    PlatformRequestBinding,
+    PlatformRequestEnvironment,
+    build_platform_request_binding,
+    build_platform_request_environment_from_binding,
+    platform_request_binding_to_json,
+    read_platform_request_environment,
+)
 
 from .ai import (
     _build_trace_snapshot,
@@ -113,6 +123,7 @@ class ManagedCrawlerOutcome:
     provider_result: BrowserEnvironmentResult
     returncode: int
     login_required: bool
+    request_environment: PlatformRequestEnvironment | None = None
 
 
 def clear_stop_request(job_id: int) -> None:
@@ -428,14 +439,27 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
                         attempt_job = {**job, "_crawler_timeout_seconds": attempt_timeout, "_run_id": run_id}
                         attempt_plan = None
                         result_path = None
+                        request_binding = None
+                        request_result_path = None
                         if base_plan is not None:
                             attempt_plan = replace(
                                 base_plan,
                                 attempt_id=f"attempt-{uuid.uuid4().hex}",
                             )
                             result_path = (attempt_out / ".browser-environment-result.json").resolve()
+                            request_result_path = (
+                                attempt_out / ".platform-request-environment.json"
+                            ).resolve()
+                            request_binding = _build_request_binding_for_attempt(
+                                account_binding,
+                                attempt_plan,
+                                run_id=run_id,
+                                expires_at=_run_deadline_at(run_id) or None,
+                            )
                             attempt_job["_browser_environment_plan"] = attempt_plan
                             attempt_job["_browser_environment_result_path"] = result_path
+                            attempt_job["_platform_request_binding"] = request_binding
+                            attempt_job["_platform_request_result_path"] = request_result_path
                         _update_collection_progress(run_id, platform, attempt_out, phase="collecting")
                         crawler_outcome = await asyncio.to_thread(
                             _run_crawler_attempt,
@@ -445,8 +469,6 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
                             account_binding,
                         )
                         if attempt_plan is not None:
-                            if isinstance(crawler_outcome, BrowserEnvironmentResult):
-                                crawler_outcome = ManagedCrawlerOutcome(crawler_outcome, 0, False)
                             if not isinstance(crawler_outcome, ManagedCrawlerOutcome):
                                 raise RuntimeError("managed crawler child result is missing")
                             try:
@@ -463,6 +485,28 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
                                     "managed browser environment failed: "
                                     + crawler_outcome.provider_result.reason
                                 )
+                            if request_binding is None or crawler_outcome.request_environment is None:
+                                raise RuntimeError("managed platform request environment is missing")
+                            request_environment = crawler_outcome.request_environment
+                            request_environment.assert_request_binding(
+                                account_id=attempt_plan.account_id,
+                                platform=attempt_plan.platform,
+                                profile_key=attempt_plan.profile_key,
+                                resolution_id=attempt_plan.resolution_id,
+                                attempt_id=attempt_plan.attempt_id,
+                                proxy_revision=request_binding.proxy_revision,
+                                identity_revision=request_binding.identity_revision,
+                                cookie_material_revision=request_binding.cookie_material_revision,
+                            )
+                            request_environment.assert_active()
+                            if request_environment.run_id != run_id:
+                                raise RuntimeError("managed platform request run binding mismatch")
+                            _record_request_environment_proof(
+                                run_id,
+                                platform,
+                                attempt,
+                                request_environment,
+                            )
                             if crawler_outcome.returncode != 0:
                                 if crawler_outcome.login_required:
                                     mark_social_account_profile_requires_relogin(
@@ -506,6 +550,10 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
                             result["proxy"] = _proxy_summary(account_binding)
                         if account_binding and account_binding.get("account_id"):
                             successful_account_id = int(account_binding["account_id"])
+                        if attempt_plan is not None:
+                            result["request_environment"] = (
+                                crawler_outcome.request_environment.to_safe_dict()
+                            )
                         if _is_profile_only_binding(account_binding) and attempt_plan is not None:
                             _record_profile_only_terminal(
                                 account_binding,
@@ -530,6 +578,9 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
                         _raise_if_deadline_passed(run_id)
                         await asyncio.sleep(_crawler_retry_delay_seconds())
                         _raise_if_deadline_passed(run_id)
+                    finally:
+                        if request_result_path is not None:
+                            request_result_path.unlink(missing_ok=True)
                 raise RuntimeError(f"MediaCrawler failed after {attempt} attempt(s): {last_error}")
             finally:
                 if account_binding and account_binding.get("account_id") and account_lock_acquired:
@@ -558,14 +609,47 @@ def _run_crawler_attempt(
     result_path = Path(result_path_value).resolve() if result_path_value else None
     if (managed_plan is None) != (result_path is None):
         raise BrowserEnvironmentError("account_identity_provider_unsupported", "runner_result")
+    request_binding = job.get("_platform_request_binding")
+    request_result_path_value = job.get("_platform_request_result_path")
+    request_result_path = (
+        Path(request_result_path_value).resolve()
+        if request_result_path_value
+        else None
+    )
+    if managed_plan is None:
+        if request_binding is not None or request_result_path is not None:
+            raise BrowserEnvironmentError(
+                "account_identity_provider_unsupported",
+                "request_environment",
+            )
+    elif not isinstance(request_binding, PlatformRequestBinding) or request_result_path is None:
+        raise BrowserEnvironmentError(
+            "account_identity_provider_unsupported",
+            "request_environment",
+        )
     if result_path is not None:
         try:
             result_path.relative_to(out_dir.resolve())
         except ValueError as exc:
             raise BrowserEnvironmentError("account_identity_provider_unsupported", "runner_result") from exc
         result_path.unlink(missing_ok=True)
+    if request_result_path is not None:
+        try:
+            request_result_path.relative_to(out_dir.resolve())
+        except ValueError as exc:
+            raise BrowserEnvironmentError(
+                "account_identity_provider_unsupported",
+                "request_environment",
+            ) from exc
+        request_result_path.unlink(missing_ok=True)
     cmd = _build_crawler_cmd(job, platform, out_dir, account_binding, managed_plan)
-    env = _build_crawler_env(account_binding, managed_plan, result_path)
+    env = _build_crawler_env(
+        account_binding,
+        managed_plan,
+        result_path,
+        request_binding=request_binding,
+        request_result_path=request_result_path,
+    )
     log_path = out_dir / "crawler.log"
     timeout_seconds = max(1, _safe_int(job.get("_crawler_timeout_seconds")) or _runtime_setting_int("crawler_timeout_seconds", 900))
     process: subprocess.Popen | None = None
@@ -657,6 +741,13 @@ def _run_crawler_attempt(
         raise CrawlerStopped(f"任务已手动停止；see {log_path}")
     if managed_plan is not None and result_path is not None:
         provider_result = _load_managed_child_result(result_path, managed_plan, child_started_at)
+        request_environment = None
+        if provider_result.ok:
+            request_environment = _load_managed_child_request_environment(
+                request_result_path,
+                managed_plan,
+                request_binding,
+            )
         return ManagedCrawlerOutcome(
             provider_result=provider_result,
             returncode=int(process.returncode),
@@ -665,6 +756,7 @@ def _run_crawler_attempt(
                 if _is_profile_only_binding(account_binding)
                 else _looks_like_login_required(log_text)
             ),
+            request_environment=request_environment,
         )
     if process.returncode != 0:
         hint = "；检测到登录态失效，请先重新登录该平台账号" if _looks_like_login_required(log_text) else ""
@@ -741,6 +833,55 @@ def _update_collection_progress(
     return summary
 
 
+def _record_request_environment_proof(
+    run_id: int,
+    platform: str,
+    attempt: int,
+    environment: PlatformRequestEnvironment,
+) -> None:
+    if environment.run_id != int(run_id) or environment.platform != platform or int(attempt) < 1:
+        raise RuntimeError("managed platform request proof binding mismatch")
+    environment.assert_active()
+    proof = environment.to_safe_dict()
+    with get_conn() as conn:
+        conn.execute("BEGIN IMMEDIATE")
+        row = conn.execute(
+            "SELECT summary FROM crawl_runs WHERE id=? AND status='running'",
+            (run_id,),
+        ).fetchone()
+        if not row:
+            return
+        try:
+            summary = json.loads(row["summary"] or "{}")
+        except (TypeError, ValueError):
+            summary = {}
+        if not isinstance(summary, dict):
+            summary = {}
+        attempts = (
+            summary.get("request_environment_attempts")
+            if isinstance(summary.get("request_environment_attempts"), dict)
+            else {}
+        )
+        platform_attempts = (
+            attempts.get(platform)
+            if isinstance(attempts.get(platform), list)
+            else []
+        )
+        entry = {
+            "attempt": int(attempt),
+            "status": "validated",
+            "proof": proof,
+            "recorded_at": utc_now(),
+        }
+        platform_attempts = _merge_request_environment_attempt(platform_attempts, entry)
+        attempts[platform] = platform_attempts[-8:]
+        summary["request_environment_attempts"] = attempts
+        conn.execute(
+            "UPDATE crawl_runs SET summary=? WHERE id=? AND status='running'",
+            (json.dumps(_redact_summary(summary), ensure_ascii=False), run_id),
+        )
+
+
 def _finalize_collection_progress(run_id: int, platform: str, result: dict[str, Any]) -> dict[str, Any]:
     with get_conn() as conn:
         row = conn.execute("SELECT summary FROM crawl_runs WHERE id=? AND status='running'", (run_id,)).fetchone()
@@ -783,6 +924,36 @@ def _finalize_collection_progress(run_id: int, platform: str, result: dict[str, 
     return summary
 
 
+def _merge_request_environment_attempt(
+    existing: list[dict[str, Any]],
+    entry: dict[str, Any],
+) -> list[dict[str, Any]]:
+    attempt = entry.get("attempt")
+    if type(attempt) is not int or attempt < 1:
+        raise RuntimeError("invalid managed platform request proof attempt")
+    previous_attempts = [
+        item
+        for item in existing
+        if isinstance(item, dict) and type(item.get("attempt")) is int
+    ]
+    last_attempt = max((int(item["attempt"]) for item in previous_attempts), default=0)
+    if attempt < last_attempt:
+        raise RuntimeError("stale managed platform request proof")
+    same_attempt = [item for item in previous_attempts if int(item["attempt"]) == attempt]
+    if same_attempt:
+        previous_proof = same_attempt[-1].get("proof")
+        current_proof = entry.get("proof")
+        if (
+            isinstance(previous_proof, dict)
+            and isinstance(current_proof, dict)
+            and previous_proof.get("attempt_id") != current_proof.get("attempt_id")
+        ):
+            raise RuntimeError("conflicting managed platform request proof")
+        previous_attempts = [item for item in previous_attempts if int(item["attempt"]) != attempt]
+    previous_attempts.append(entry)
+    return previous_attempts
+
+
 def _sync_progress_from_stored_summary(run_id: int, summary: dict[str, Any], *, finalize: bool = False) -> None:
     with get_conn() as conn:
         row = conn.execute("SELECT summary FROM crawl_runs WHERE id=?", (run_id,)).fetchone()
@@ -794,7 +965,13 @@ def _sync_progress_from_stored_summary(run_id: int, summary: dict[str, Any], *, 
         stored = {}
     if not isinstance(stored, dict):
         return
-    for key in ("collection_progress", "progress_message", "progress_updated_at", "phase_19b_progress"):
+    for key in (
+        "collection_progress",
+        "progress_message",
+        "progress_updated_at",
+        "phase_19b_progress",
+        "request_environment_attempts",
+    ):
         if key in stored:
             summary[key] = stored[key]
     progress = summary.get("collection_progress")
@@ -1651,10 +1828,96 @@ def _job_int(job: dict[str, Any], key: str, default: int) -> int:
         return default
 
 
+def _build_request_binding_for_attempt(
+    account_binding: dict[str, Any],
+    plan: BrowserEnvironmentPlan,
+    *,
+    run_id: int,
+    created_at: str | None = None,
+    expires_at: str | None = None,
+) -> PlatformRequestBinding:
+    account = (
+        account_binding.get("_account")
+        if isinstance(account_binding.get("_account"), dict)
+        else {}
+    )
+    proxy = (
+        account_binding.get("_proxy")
+        if isinstance(account_binding.get("_proxy"), dict)
+        else {}
+    )
+    identity_revision = _safe_request_revision(
+        "identity",
+        {
+            "workspace_id": account.get("workspace_id") or plan.workspace_id,
+            "account_id": account.get("id") or plan.account_id,
+            "platform": account.get("platform") or plan.platform,
+            "profile_key": account.get("profile_key") or plan.profile_key,
+            "identity_state": account.get("identity_state") or plan.identity_state,
+            "identity_template": account.get("identity_template") or plan.identity_template,
+            "identity_generator_name": account.get("identity_generator_name") or "",
+            "identity_generator_version": account.get("identity_generator_version") or "",
+            "identity_environment_version": account.get("identity_environment_version") or "",
+            "browser_environment_locked_at": account.get("browser_environment_locked_at") or "",
+            "browser_platform": account.get("browser_platform") or plan.browser_platform,
+            "user_agent": account.get("user_agent") or plan.user_agent,
+            "timezone": account.get("timezone") or plan.timezone,
+            "locale": account.get("locale") or plan.locale,
+            "accept_language": account.get("accept_language") or plan.accept_language,
+            "proxy_region_snapshot": account.get("proxy_region_snapshot") or plan.proxy_region,
+        },
+    )
+    cookie_material_revision = _safe_request_revision(
+        "material",
+        {
+            "account_id": plan.account_id,
+            "profile_key": plan.profile_key,
+            "login_type": account_binding.get("login_type") or account.get("login_type") or "",
+            "cookie_source": account.get("cookie_source") or "",
+            "profile_runtime_version": account_binding.get("profile_runtime_version")
+            or account.get("profile_runtime_version")
+            or 0,
+            "profile_ready_at": account_binding.get("profile_ready_at")
+            or account.get("profile_ready_at")
+            or "",
+            "profile_promotion_id": account_binding.get("profile_promotion_id") or 0,
+            "profile_promotion_state": account_binding.get("profile_promotion_state") or "",
+        },
+    )
+    proxy_revision = _safe_request_revision(
+        "proxy",
+        {
+            "policy": plan.proxy_policy,
+            "proxy_id": plan.proxy_id,
+            "region": plan.proxy_region,
+            "provider": proxy.get("provider") or account_binding.get("provider") or "",
+            "status": proxy.get("status") or "",
+            "updated_at": proxy.get("updated_at") or "",
+        },
+    )
+    return build_platform_request_binding(
+        plan,
+        run_id=run_id,
+        identity_revision=identity_revision,
+        cookie_material_revision=cookie_material_revision,
+        proxy_revision=proxy_revision,
+        created_at=created_at,
+        expires_at=expires_at,
+    )
+
+
+def _safe_request_revision(prefix: str, value: dict[str, Any]) -> str:
+    payload = json.dumps(value, ensure_ascii=False, sort_keys=True, separators=(",", ":"))
+    return f"{prefix}-{hashlib.sha256(payload.encode('utf-8')).hexdigest()}"
+
+
 def _build_crawler_env(
     account_binding: dict[str, Any] | None = None,
     managed_plan: BrowserEnvironmentPlan | None = None,
     result_path: Path | None = None,
+    *,
+    request_binding: PlatformRequestBinding | None = None,
+    request_result_path: Path | None = None,
 ) -> dict[str, str]:
     env = {**os.environ, "PYTHONUNBUFFERED": "1"}
     if _is_profile_only_binding(account_binding) and managed_plan is None:
@@ -1679,10 +1942,26 @@ def _build_crawler_env(
                 "MONITOR_CDP_CONNECT_EXISTING",
                 PLAN_ENV_NAME,
                 RESULT_PATH_ENV_NAME,
+                REQUEST_BINDING_ENV_NAME,
+                REQUEST_RESULT_PATH_ENV_NAME,
             } or name.startswith("MONITOR_CDP_USER_DATA_DIR"):
                 env.pop(name, None)
         env[PLAN_ENV_NAME] = browser_environment_plan_to_json(managed_plan)
         env[RESULT_PATH_ENV_NAME] = str(result_path.resolve())
+        if request_binding is None or request_result_path is None:
+            raise BrowserEnvironmentError(
+                "account_identity_provider_unsupported",
+                "request_environment",
+            )
+        request_binding.assert_request_binding(
+            account_id=managed_plan.account_id,
+            platform=managed_plan.platform,
+            profile_key=managed_plan.profile_key,
+            resolution_id=managed_plan.resolution_id,
+            attempt_id=managed_plan.attempt_id,
+        )
+        env[REQUEST_BINDING_ENV_NAME] = platform_request_binding_to_json(request_binding)
+        env[REQUEST_RESULT_PATH_ENV_NAME] = str(request_result_path.resolve())
         if _is_profile_only_binding(account_binding):
             metadata = _require_profile_only_binding(account_binding, managed_plan)
             for name in list(env):
@@ -1813,6 +2092,38 @@ def _load_managed_child_result(
     if validated_at < started - timedelta(seconds=1) or validated_at > now + timedelta(seconds=60):
         raise BrowserEnvironmentError("account_identity_snapshot_mismatch", "validated_at")
     return result
+
+
+def _load_managed_child_request_environment(
+    result_path: Path,
+    plan: BrowserEnvironmentPlan,
+    binding: PlatformRequestBinding,
+) -> PlatformRequestEnvironment:
+    environment = read_platform_request_environment(result_path)
+    binding.assert_request_binding(
+        account_id=plan.account_id,
+        platform=plan.platform,
+        profile_key=plan.profile_key,
+        resolution_id=plan.resolution_id,
+        attempt_id=plan.attempt_id,
+    )
+    environment.assert_request_binding(
+        account_id=plan.account_id,
+        platform=plan.platform,
+        profile_key=plan.profile_key,
+        resolution_id=plan.resolution_id,
+        attempt_id=plan.attempt_id,
+        proxy_revision=binding.proxy_revision,
+        identity_revision=binding.identity_revision,
+        cookie_material_revision=binding.cookie_material_revision,
+    )
+    if environment.workspace_id != plan.workspace_id or environment.run_id != binding.run_id:
+        raise BrowserEnvironmentError(
+            "account_identity_snapshot_mismatch",
+            "request_environment",
+        )
+    environment.assert_active()
+    return environment
 
 
 def _resolve_platform_account_binding(platform: str, job: dict[str, Any] | None = None) -> dict[str, Any] | None:

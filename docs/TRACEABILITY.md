@@ -4,7 +4,7 @@ Use this file to connect requirements, tasks, code areas, and tests.
 
 | Requirement | Module | Task Area | Code Area | Test Area | Status |
 | --- | --- | --- | --- | --- | --- |
-| CR-129 | Account Profile And Platform Request Identity Consistency | CR-129 Packet A-E; TODO baseline and deep plan review | BrowserEnvironmentProvider projection, XHS/Douyin Client and signer request binding, proxy/retry/process boundaries | Plan readiness passed; Packet A-E contract binding, XHS/Douyin signer equality, account isolation, terminal states, secret tripwires, designated real acceptance remain implementation gates | Accepted / Ready for Implementation |
+| CR-129 | Account Profile And Platform Request Identity Consistency | CR-129 Packet A-E; TODO baseline and deep plan review | tools/platform_request_environment.py, api/monitoring/runner.py, XHS/Douyin Core and Client request binding, proxy/retry/process boundaries | Packet A: 19 focused, 228 affected, 715 full monitoring tests; compile/docs/diff and focused Claude review pass. Packets B-E remain gates for complete signer equality, terminal states, child tripwires, and designated real acceptance | In Progress |
 | CR-001 | Project governance | Phase 0 | docs, AGENTS.md | Documentation review | Verified |
 | CR-002 | Product requirements | Phase 0 | docs/PRODUCT_REQUIREMENTS.md | Documentation review | Verified |
 | CR-003 | Agent workflow | Phase 0 | docs, AGENTS.md | Documentation review | Verified |

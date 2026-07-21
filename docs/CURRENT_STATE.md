@@ -7,16 +7,19 @@ Last updated: 2026-07-22
 - CR-129 is the active implementation lane on branch
   `codex/cr-129-request-identity-consistency`, based on merged
   `main@6cffdbaf0c0ffca8863192c962918a37349f10a4`. It is currently
-  `Accepted / Ready for Implementation` after a two-round deep Claude
-  read-only review. The plan review returned `READY` with no blockers or
-  material refinements.
+  `Accepted / In Progress` with Packet A verified after a two-round deep
+  Claude read-only plan review and a focused Packet A implementation review.
+  The plan review returned `READY` with no blockers or material refinements.
   The TODO baseline classifies CR-112 and CR-119 through CR-128 as verified
   historical work, CR-047 server-like identity proof as operator-gated, and
   CR-070 as future-valid after this lane.
-- The remaining CR-129 issue is a request-layer authority split: the provider
-  freezes browser/Profile/UA/proxy proof, while XHS and Douyin Client/signer
-  paths can still derive mutable Cookie, token, header, page, and proxy values
-  independently. No CR-129 runtime implementation has started on this branch.
+- Packet A is now verified: a frozen request-environment projection is created
+  from effective BrowserEnvironmentResult proof, handed to the child through a
+  safe binding, written atomically, and checked by Runner before ingest. The
+  managed proxy, stale-attempt, XHS signed-header, Douyin Profile-token, and
+  two-account isolation guards are covered by focused tests. Packet B is the
+  next implementation unit; complete XHS/Douyin signer equality, typed retry,
+  full child tripwires, and real acceptance remain gated by Packets B-E.
 - CR-129 protects the existing boundary: committed Profile is crawl authority;
   encrypted Cookie is initialization, refresh, recovery, and migration
   material; managed accounts do not silently use anonymous, generic-Profile,

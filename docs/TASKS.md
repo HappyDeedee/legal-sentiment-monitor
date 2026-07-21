@@ -1799,7 +1799,7 @@ follow-up and does not reopen completed Phase 5.1 or CR-118.
 
 ## CR-129 - Account Profile And Platform Request Identity Consistency
 
-Planning status (2026-07-22): Accepted / Ready for Implementation. This is a new follow-up
+Implementation status (2026-07-22): Packet A Verified; Packet B is next. This is a new follow-up
 after the verified CR-128 baseline. It does not reopen Phase 5.1, CR-112, or
 the verified CR-119 through CR-128 history.
 
@@ -1838,9 +1838,9 @@ Hard boundaries:
 
 Atomic packages:
 
-- [ ] Packet A: add the versioned immutable PlatformRequestEnvironment (or
+- [x] Packet A: add the versioned immutable PlatformRequestEnvironment (or
       reviewed equivalent) and safe validation/serialization.
-- [ ] Packet A: add RED tests for missing/conflicting/expired/cross-account
+- [x] Packet A: add RED tests for missing/conflicting/expired/cross-account
       environment and secret-leak cases.
 - [ ] Packet B: bind XHS Cookie, a1, web_session, UA/UA-CH,
       Accept-Language, URL/query/body, signer, final headers, Profile, and
@@ -1868,6 +1868,12 @@ Per-package gates:
 - [ ] Synchronize CHANGE_REQUESTS, TASKS, CURRENT_STATE, TEST_RESULTS,
       TRACEABILITY, DECISIONS, and specialist documents after each package.
 - [ ] Create one atomic commit only after the package evidence is complete.
+
+Packet A receipt (2026-07-22): `19` focused tests, `228` affected tests, and
+`715` complete monitoring tests passed. Compile, docs consistency,
+documentation regression, whitespace, and independent Claude read-only review
+passed. No real account, Profile, Cookie, proxy, browser, or platform traffic
+was used. Packet D owns the remaining full child-process tripwires.
 
 ## CR-120 - Local Visible Login Automatic Reconciliation
 

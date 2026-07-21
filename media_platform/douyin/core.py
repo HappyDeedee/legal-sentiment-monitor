@@ -46,6 +46,10 @@ from tools.browser_environment import (
 )
 from tools.cdp_browser import CDPBrowserManager
 from tools.profile_only import should_begin_platform_login
+from tools.platform_request_environment import (
+    PlatformRequestEnvironment,
+    establish_platform_request_environment,
+)
 from var import crawler_type_var, source_keyword_var
 
 from .client import DouYinClient
@@ -60,6 +64,7 @@ class DouYinCrawler(AbstractCrawler):
     dy_client: DouYinClient
     browser_context: BrowserContext
     cdp_manager: Optional[CDPBrowserManager]
+    platform_request_environment: PlatformRequestEnvironment | None
 
     def __init__(self) -> None:
         self.index_url = "https://www.douyin.com"
@@ -75,6 +80,7 @@ class DouYinCrawler(AbstractCrawler):
         self.managed_browser = None
         self.cdp_manager = None
         self.ip_proxy_pool = None  # Proxy IP pool for automatic proxy refresh
+        self.platform_request_environment = None
 
     async def start(self) -> None:
         playwright_proxy_format, httpx_proxy_format = None, None
@@ -118,6 +124,16 @@ class DouYinCrawler(AbstractCrawler):
             provider_result = await verify_managed_page(self.browser_context, self.context_page)
             if provider_result is not None and not provider_result.ok:
                 raise BrowserEnvironmentError(provider_result.reason, "page")
+            if self.browser_environment_plan is not None:
+                if provider_result is None:
+                    raise BrowserEnvironmentError(
+                        "account_identity_provider_unsupported",
+                        "request_environment",
+                    )
+                self.platform_request_environment = establish_platform_request_environment(
+                    self.browser_environment_plan,
+                    provider_result,
+                )
 
             self.dy_client = await self.create_douyin_client(httpx_proxy_format)
             logged_in = await self.dy_client.pong(browser_context=self.browser_context)
@@ -348,6 +364,7 @@ class DouYinCrawler(AbstractCrawler):
             playwright_page=self.context_page,
             cookie_dict=cookie_dict,
             proxy_ip_pool=self.ip_proxy_pool,  # Pass proxy pool for automatic refresh
+            request_environment=self.platform_request_environment,
         )
         return douyin_client
 
@@ -386,7 +403,7 @@ class DouYinCrawler(AbstractCrawler):
         headless: bool = True,
     ) -> BrowserContext:
         """
-        使用CDP模式启动浏览器
+        Launch the browser using CDP mode.
         """
         try:
             self.cdp_manager = CDPBrowserManager(plan=self.browser_environment_plan)
