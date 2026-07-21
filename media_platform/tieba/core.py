@@ -46,6 +46,7 @@ from tools.browser_environment import (
     verify_managed_page,
 )
 from tools.cdp_browser import CDPBrowserManager
+from tools.profile_only import should_begin_platform_login
 from var import crawler_type_var, source_keyword_var
 
 from .client import BaiduTieBaClient
@@ -137,7 +138,8 @@ class TieBaCrawler(AbstractCrawler):
             )
 
             # Check login status and perform login if necessary
-            if not await self.tieba_client.pong(browser_context=self.browser_context):
+            logged_in = await self.tieba_client.pong(browser_context=self.browser_context)
+            if should_begin_platform_login(logged_in, self.browser_environment_plan):
                 login_obj = BaiduTieBaLogin(
                     login_type=config.LOGIN_TYPE,
                     login_phone="",  # your phone number

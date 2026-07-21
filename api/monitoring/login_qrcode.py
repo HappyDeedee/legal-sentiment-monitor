@@ -765,7 +765,7 @@ async def _find_qrcode_with_mediacrawler_util(page: Page, selector: str) -> str:
         image = await utils.find_login_qrcode(page, selector=selector)
     except Exception:
         return ""
-    if _valid_qrcode_image_source(image):
+    if _valid_qrcode_image_source(image) and utils.is_qrcode_image_data(str(image)):
         return str(image)
     return ""
 
@@ -777,7 +777,7 @@ async def _find_qrcode_with_mediacrawler_adapter(login_adapter: Any | None) -> s
         image = await login_adapter.capture_qrcode()
     except Exception:
         return ""
-    if _valid_qrcode_image_source(image):
+    if _valid_qrcode_image_source(image) and utils.is_qrcode_image_data(str(image)):
         return str(image)
     return ""
 
@@ -804,7 +804,7 @@ async def _find_visible_qrcode_candidate_screenshot(page: Page, platform: str) -
             except Exception:
                 continue
             image = base64.b64encode(screenshot).decode("utf-8")
-            if _valid_qrcode_image_source(image):
+            if _valid_qrcode_image_source(image) and utils.is_qrcode_image_data(image):
                 return image
     return ""
 
@@ -823,14 +823,6 @@ def _qrcode_candidate_selectors(platform: str) -> list[str]:
         "canvas[class*='qrcode']",
         "[class*='qrcode'] canvas",
     ]
-    if platform == "xhs":
-        selectors.extend(
-            [
-                ".login-container img",
-                ".login-modal img",
-                "[class*='login'] img",
-            ]
-        )
     result: list[str] = []
     for selector in selectors:
         if selector and selector not in result:

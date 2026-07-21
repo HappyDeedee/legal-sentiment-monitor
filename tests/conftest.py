@@ -20,15 +20,62 @@
 Pytest configuration and shared fixtures
 """
 
-import pytest
+import gc
 import os
+import shutil
 import smtplib
 import sys
+import tempfile
+import time
 from pathlib import Path
+
+import pytest
 
 # Add project root to Python path
 project_root = Path(__file__).parent.parent
 sys.path.insert(0, str(project_root))
+
+_pytest_runtime_parent = project_root / ".codex_tmp"
+_pytest_runtime_parent.mkdir(parents=True, exist_ok=True)
+PYTEST_MONITOR_DATA_DIR = Path(
+    tempfile.mkdtemp(prefix="pytest-monitor-", dir=_pytest_runtime_parent)
+).resolve()
+os.environ["MONITOR_DATA_DIR"] = str(PYTEST_MONITOR_DATA_DIR)
+os.environ["MONITOR_ACCOUNT_PROFILE_ROOT"] = str(PYTEST_MONITOR_DATA_DIR / "account_profiles")
+
+
+def _remove_pytest_runtime_data(
+    path: Path,
+    *,
+    attempts: int = 8,
+    delay_seconds: float = 0.1,
+) -> None:
+    last_error: OSError | None = None
+    for attempt in range(max(1, int(attempts))):
+        gc.collect()
+        try:
+            shutil.rmtree(path)
+        except FileNotFoundError:
+            return
+        except OSError as exc:
+            last_error = exc
+        else:
+            if not path.exists():
+                return
+            last_error = OSError("runtime directory still exists after cleanup")
+        if attempt + 1 < attempts:
+            time.sleep(max(0.0, float(delay_seconds)) * (attempt + 1))
+    raise RuntimeError("pytest monitor data cleanup failed") from last_error
+
+
+def pytest_sessionfinish(session, exitstatus):
+    try:
+        _remove_pytest_runtime_data(PYTEST_MONITOR_DATA_DIR)
+    except RuntimeError as exc:
+        session.exitstatus = pytest.ExitCode.TESTS_FAILED
+        reporter = session.config.pluginmanager.get_plugin("terminalreporter")
+        if reporter is not None:
+            reporter.write_sep("!", str(exc), red=True)
 
 
 @pytest.fixture(scope="session")

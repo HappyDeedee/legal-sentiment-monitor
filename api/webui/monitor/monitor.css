@@ -4941,6 +4941,11 @@ body .account-identity span {
   color: var(--phase21-muted);
 }
 
+body .account-identity-time-cell {
+  min-width: 136px;
+  white-space: nowrap;
+}
+
 body .account-avatar {
   border-color: var(--phase21-line);
   box-shadow: 0 0 0 3px rgba(15, 118, 110, 0.08);

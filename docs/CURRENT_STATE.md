@@ -1,9 +1,97 @@
 # Current State
 
-Last updated: 2026-07-21
+Last updated: 2026-07-22
 
 ## Current Baseline
 
+- CR-128 is verified. A strict post-crawl Xiaohongshu Profile check exposed
+  that successful endpoint-specific content retrieval is not sufficient proof
+  of authenticated identity. The saved-Cookie recovery path now performs the
+  normal Profile check first. A limited account with a recoverable failure may
+  explicitly rebuild from its saved Cookie; `requires_relogin` only rechecks
+  the saved Profile and still requires a fresh platform login if that fails.
+  Recovery now holds the account login-start lock from that Profile check
+  through promotion, so an older recovery cannot supersede a newer login. It
+  creates a fresh candidate, preserves the original `cookie_source`, requires
+  the exact bound platform
+  account identity in candidate and active checks, and uses the existing
+  account/login-session/promotion locks and rollback journal. An expired saved
+  Cookie was rejected with a terminal conflict and the prior account/Profile,
+  encrypted Cookie, source, locks, and sessions remained intact. Missing or
+  unknown provenance is rejected before promotion, and user responses no
+  longer expose internal promotion reason codes. Focused CR-128 coverage passes
+  `14`, the adjacent governed set passes `101`, and the complete monitoring
+  suite passes `696` tests with three existing warnings.
+- The final same-machine Windows Packet D real-account lane is verified. The
+  designated Douyin and Xiaohongshu accounts each passed administrator
+  reveal/copy, exact identity/Profile validation, final service restart,
+  bounded normal-monitor collection with persisted real content,
+  `fallback_used=false`, post-crawl Profile validation, and cleanup. Real
+  child-process inspection found no raw Cookie in argv or environment; only the
+  two designated acceptance accounts were used. The separate CR-047
+  Linux/server-like acceptance and a second physical computer remain
+  independent proof gates.
+- The latest local service runs the final reviewed code with browser sync
+  enabled. Health and monitor-page probes pass; the designated post-restart
+  Profile check passes with both designated accounts active, locks released,
+  zero pending login sessions, and zero residual managed-browser processes.
+
+- CR-127 is verified. QR, Browser,
+  visible-browser, and Cookie entry points now share one account-scoped current
+  attempt; stale sessions cannot replace a newer result or committed
+  Cookie/Profile authority. QR bytes require actual decoder proof, interrupted
+  promotion recovery is terminal, administrator Cookie reveal is always
+  registered behind role/no-store controls, and the Platform Account form has
+  one login-method column with in-field Cookie icons and no editable
+  notes/latest-error textareas. Account-level startup locking, atomic session
+  reservation, session-bound success/failure/cancellation, and terminal-state
+  monotonicity prevent cross-method races. Focused `20` and complete `682`
+  monitoring tests, real Chromium delayed-response behavior, compile/docs/diff
+  checks, desktop/`390x844` rendering, designated Douyin and Xiaohongshu
+  saved-Profile checks, and a normal Douyin monitor run with stored content and
+  `fallback_used=false` pass.
+- CR-125 and CR-126 are verified.
+  Platform Account rows keep the recognized avatar/name, omit the raw platform
+  identifier, and show recognition time in its own column before recent
+  validation. Xiaohongshu readiness now reuses its signed self-info response to
+  merge `basic_info.nickname` and avatar metadata with the stable Profile page
+  identifier/home URL. Focused `4` and complete `682` monitoring tests pass;
+  two current saved Xiaohongshu Profiles passed normal checks and stored
+  non-empty names distinct from their stable identifiers. Desktop/mobile layout,
+  detail open/close, service health, and a clean browser console are verified.
+- CR-124 is verified. Pytest now selects disposable database, encryption-key,
+  and Profile paths before application imports and removes them at session
+  end, so the complete suite leaves workspace runtime accounts unchanged. The
+  Platform Account form offers a saved Cookie/Profile recheck before a new
+  login, and administrator Cookie reveal/copy is the structured cross-computer
+  import artifact. A live saved Profile returned to `active` without a new
+  platform login, the persisted browser selection launched and cleaned up,
+  and a fresh isolated Windows root selected system Chrome automatically. The
+  real 54-record structured Cookie passed exact cross-key roundtrip without
+  emitting names or values. Focused `8`, combined `84`, and complete `658`
+  monitoring tests plus syntax, documentation, whitespace, live runtime, and
+  independent review gates pass.
+- CR-123 is a verified CR-112/CR-122 presentation and interoperability
+  follow-up. Platform Account login now presents QR, Browser, and Cookie as
+  three peer UI choices with separate result panels and no duplicated advanced
+  Cookie disclosure. Cookie promotion accepts both standard Cookie headers and
+  Structured Cookie Protocol V1 exports, preserving canonical scope/security
+  attributes through Profile promotion. Focused `20` and complete `650`
+  monitoring tests, syntax, documentation, whitespace, and rendered desktop/
+  narrow-screen interaction checks pass. Permission, Cookie redaction, routing,
+  and documentation-state checks have no open P0, P1, or P2 defect for CR-123.
+- CR-122 is a verified regression follow-up to CR-112. The new-account
+  frontend no longer hides browser auto-sync behind an already saved account:
+  after an account name is entered, QR and browser auto-sync are independent
+  actions, and browser sync persists the account plus `profile_key` before
+  launching its managed candidate Profile. Bounded Cookie hydration,
+  empty-name browser artifact filtering, valid empty-value preservation, and
+  owned Windows process exit-race handling are implemented. Real operator
+  acceptance created a new account through browser auto-sync without a QR
+  prerequisite, committed its Profile and encrypted Cookie, passed the normal
+  account check, and later persisted five real Douyin content rows with
+  `fallback_used=false`. The complete behavior remains covered by the later
+  `658`-test CR-124 baseline and independent review.
 - CR-119 is verified as a bounded frontend regression fix. The Platform
   Accounts labelled recent-error card and basic-form warning now use one-line
   ellipses and complete-text titles while preserving the advanced error field
@@ -118,20 +206,58 @@ Last updated: 2026-07-21
   not change
   product code, schema, UI behavior, runtime data, sensitive files, or the old
   server-login worktree.
-- CR-112 is registered as a proposed local browser auto-sync Cookie-acquisition
-  capability with status `Needs Confirmation`. Its reviewed roadmap and four
-  goal packets and every normative CR-112 schema/runtime/protocol statement are
-  future acceptance contracts, not current implementation evidence. The
-  2026-07-19
-  persistent-Profile/login-material sub-decision is recorded, but no CR-112
-  product code, schema, UI, extension, Profile, Cookie, connector, runtime,
-  deployment, or database change is active.
-- CR-112 deep plan cross-validation ended after five Claude Code read-only
-  rounds with no blocking or material refinement. The review closed crash
-  recovery, profile-only cutover, feature-flag isolation, binding rotation,
-  extension cleanup, structured Cookie, and deployment proof gaps. This is a
-  future execution-contract review result, not CR-112 acceptance or
-  implementation evidence.
+- CR-112 is `Verified (Same-Machine Windows V1 / Packet D Real-Account Lane)` as
+  of 2026-07-22. Its roadmap, four goal packets, and Packet B result define the
+  selected implementation boundary; Packet C.1-C.3 and the designated
+  two-platform Packet D real-account workflow are verified within their
+  recorded proof boundaries. The separate CR-047 Linux/server-like acceptance
+  and a second physical computer remain independent gates.
+  Accepted decisions cover same-machine Windows,
+  reuse-first/minimal-adaptation component evaluation, CR-112 before CR-070,
+  Profile/Cookie authority, administrator Cookie reveal/copy, mandatory
+  Douyin/Xiaohongshu real acceptance, and Kuaishou deferral.
+- Packet B synthetic measurements are complete. Current branded Chrome did not
+  load the reference Extension; Edge loaded it but the reference roundtrip had
+  no account/Profile pairing and lost duplicate scope/security attributes.
+  Direct Playwright/CDP acquisition passed on Chrome and Edge with structured
+  attribute fidelity, restart persistence, two-Profile isolation, bounded
+  negative cases, and temporary cleanup. Packet B therefore selected the
+  managed context as the Extension/Connector replacement and an internal
+  structured protocol with `256` records, `8192` bytes per record, and
+  `1048576` bytes per payload. The Packet B result is complete within its
+  synthetic local proof scope. C.1 now provides the additive schema,
+  structured Cookie validator, fixed-path promotion journal, restart recovery,
+  cleanup worker, atomic account-run/Profile-promotion exclusion, storage
+  reserve check, successful-run cleanup hook, and advanced manual Cookie
+  promotion. C.2 adds default-off exact-context browser acquisition, strict
+  account/Profile/session/generation/provider binding, administrator-only
+  no-store Cookie reveal/copy, transient frontend handling, restart/cancel
+  recovery, and exact owned-process cleanup. C.3 adds the startup version-0
+  cutover, parent/child persisted-Profile binding, seven-platform login guard,
+  typed exit-code-42 re-login handling, and raw-Cookie argv/environment
+  retirement for managed Cookie-account crawls.
+- The accepted CR-112 contract defines crash recovery, profile-only cutover,
+  feature-flag isolation, exact context/session binding, structured Cookie,
+  and deployment proof boundaries. The scoped Windows provider/preflight gate passes:
+  Compose configuration, persisted Chrome selection, 12-check isolated
+  server-like validation with cleanup, and `234` focused Phase 5.1/CR-116-121
+  tests pass. This local evidence does not close CR-047 Linux/server-like
+  acceptance. The accepted plan commit is `44baf78`; Packet B result commit is
+  `1d7465c`; Packet C.1-C.3 are verified within their recorded proof
+  boundaries. C.2 focused `19`, adjacent `269`, and complete monitoring `625`
+  tests pass. A controlled account-bound start/cancel run preserved the active
+  account/Profile and left no candidate Chromium process. C.3 focused `17`,
+  adjacent `190`, and complete monitoring `642` tests pass; effective child
+  command/environment
+  inspection proves no synthetic Cookie reaches effective argv/environment.
+- Packet D's initial designated-Douyin preflight timed out safely and preserved
+  the prior Profile. Later CR-122/CR-124 evidence completed the first successful
+  Douyin browser-sync/promotion path. The final 2026-07-22 receipt supersedes
+  the earlier open state: after one final service restart, both designated
+  platform Profiles passed identity checks, each normal monitor crawl persisted
+  real content with `fallback_used=false`, each Profile passed a post-crawl
+  check, and temporary login/job/browser state was clean. No Cookie name or
+  value entered tracked evidence. Kuaishou remains Deferred.
 - Phase 5.1P is complete as a documentation/read-only compatibility preflight.
   `docs/phase-5.1p-browser-entrypoint-map.md` maps the current QR, visible
   login, Cookie validation, Profile check, HTTP/CLI/scheduler run, runner,
@@ -159,11 +285,11 @@ Last updated: 2026-07-21
   container browser, persistent mounts, `RUNTIME_COMMIT`, account-bound proxy
   probe, or real account/platform action was started. Task 3 is
   operator-blocked and Tasks 4-7 remain operator-gated.
-  CR-070 / Phase 5.2 remains blocked
-  by implemented and verified CR-047 provider binding and requested/effective
-  runtime snapshots. CR-092 and CR-094 remain `Needs Confirmation`, CR-112
-  remains `Needs Confirmation`, CR-093 remains future-only, CR-037 remains
-  deferred, and Phase 7.1D remains operator-gated.
+  CR-070 / Phase 5.2 is now sequenced after and unblocked by CR-112 Packet D.
+  CR-092 and CR-094 remain `Needs Confirmation`, CR-112 is `Verified` for the
+  same-machine Windows V1 real-account lane,
+  CR-093 remains future-only, CR-037 remains deferred, and Phase 7.1D remains
+  operator-gated.
 - The unmerged server-login worktree is historical/source evidence only and is
   not a current-main completion source or a branch to merge directly.
 
@@ -801,6 +927,9 @@ Permissions page, and Phase 7.1D historical repair. This batch changes task
 sequencing only; it does not change code, UI, database schema, runtime data,
 account profiles, cookies, proxy configuration, crawler behavior, or
 deployment configuration.
+That sentence records the 2026-06-19 CR-091 baseline. The accepted 2026-07-21
+decision supersedes only its future order: CR-112 Packet B/C/D now precede
+CR-070.
 CR-092, CR-093, and CR-094 are added as future independent backlog lanes after
 the CR-091 rebaseline. CR-092 covers future `/monitor-next` frontend stack
 migration planning in `docs/MONITOR_NEXT_FRONTEND_PLAN.md` and is not a Phase
@@ -1361,27 +1490,36 @@ separate follow-up work.
   `main@abb4d66`. Phase 10-21, CR-091, CR-095, and CR-107 through CR-110 are
   complete through their recorded scope. Phase 5.1P is now also verified as a
   documentation/read-only preflight. Phase 5.1A-D and CR-114 are implemented,
-  merged, and independently verified. The Phase 5.1 server-like acceptance
-  packet is the active serial unit. Phase
-  7.1D remains operator-gated, CR-037 remains deferred, CR-092 and
+  merged, and independently verified. The separate Phase 5.1 Linux/server-like
+  acceptance remains operator-gated; CR-112 Packet B, C.1-C.3, and the
+  same-machine Windows Packet D real-account lane are verified. Phase 7.1D remains operator-gated, CR-037 remains
+  deferred, CR-092 and
   CR-094 remain `Needs Confirmation`, and CR-093 remains a future independent
   backlog lane.
-- CR-112 planning is synchronized as a proposed new capability. The same-host
-  local-desktop topology, project-owned extension/in-process Python 3.11
-  connector, and sequencing relative to CR-070 still require confirmation.
-  The 2026-07-19 login-material sub-decision is confirmed: QR and accepted
-  Cookie login converge on the same account-bound persistent Profile;
-  encrypted Cookie remains bootstrap/refresh/recovery/migration material; a
-  failed refresh preserves the prior Profile and Cookie; and the target
-  managed crawler child argv contains no raw Cookie. CR-112 does not change
-  the current first lane or preempt the accepted CR-070 sequence.
-- The latest focused audit corrected an earlier over-broad positive result.
-  CR-112 documentation now requires server-side socket-peer and extension-Origin
-  enforcement, reverse-proxy route exclusion, explicit classification of the
-  existing raw Cookie subprocess-argument risk, and atomic delivery of the five
-  plans with all formal references. The final focused Claude Code re-review
-  found no blocking or material plan issue. CR-112 still awaits user
-  confirmation, and implementation and atomic-delivery gates remain open.
+- CR-112 is `Verified` for the same-machine Windows real-account lane as of
+  2026-07-22. Confirmed
+  scope is same-machine Windows. Packet B selected the managed Playwright/CDP
+  context as the Extension/Connector replacement and a minimally adapted
+  structured Cookie protocol; CR-112 executes before CR-070; Profile is normal
+  crawl-login authority and encrypted Cookie is initialization/refresh/recovery/
+  migration material; administrators may explicitly reveal/copy the complete
+  Cookie under a no-store and transient-memory boundary; Douyin and
+  Xiaohongshu are mandatory Packet D real platforms while Kuaishou is
+  Deferred. Packet B, Packet C.1-C.3, and the designated two-platform Packet D
+  real-account lane are verified; CR-047's separate server-like gate remains
+  open.
+  C.2's focused, adjacent, full,
+  browser, controlled cancellation, cleanup, and documentation gates pass
+  within the recorded local proof boundary. C.3's focused, adjacent, full,
+  compile, process-builder, and documentation gates pass
+  within its automated/local proof boundary.
+- Packet B proved the reference Extension/Connector path does not satisfy the
+  supported Chrome, exact binding, structured Cookie, runtime, or distribution
+  contract. The selected direct path adds no Cookie-bridge network route and
+  removes pairing/Origin/client-selection trust boundaries. C.1 now owns the
+  shared promotion, validation, and recovery implementation. C.2 owns the
+  default-off exact-context acquisition, administrator reveal/copy, and
+  account-bound browser-process lifecycle.
 
 ## Known Risks
 
@@ -1396,11 +1534,14 @@ separate follow-up work.
   launch and requires process-inspection proof that child argv contains no raw
   Cookie. The risk remains present until Packet C implements and verifies that
   migration.
-- The proposed in-process connector shares a FastAPI service that may listen on
-  `0.0.0.0`. Client use of `127.0.0.1` alone does not enforce locality; future
-  implementation must reject non-loopback socket peers, ignore forwarded
-  headers for authorization, require the exact extension Origin, and remain
-  excluded from reverse proxies.
+- The accepted administrator reveal capability intentionally returns one full
+  Cookie only after an explicit administrator action. Until Packet C adds the
+  dedicated no-store POST boundary and transient-only UI, standard account
+  APIs remain masked and no full-Cookie reveal exists.
+- Packet B rejected the proposed in-process Connector/Extension network path.
+  The selected direct browser-context path has no Cookie-bridge route, client
+  registry, pairing, or Origin trust boundary; the rejected path remains absent
+  and its HTTP 404/WebSocket 403 baseline is retained as a tripwire.
 - Current system is closer to a single-team MVP than a production multi-user
   system.
 - Server-side QR/login capability and profile persistence now have automated
@@ -1702,15 +1843,13 @@ and stop conditions.
    server-like acceptance packet. Locked account environments must still reject task-level proxy
    overrides, and acceptance must stop if it needs a second browser, Profile,
    proxy, or identity authority or cannot prove a required effective value;
-4. implement CR-070/Phase 5.2 account-environment export/import only after
-   CR-047 provider binding and requested/effective runtime snapshot behavior
-   are implemented and verified;
-5. keep CR-112 local browser auto-sync Cookie acquisition as a future
-   `Needs Confirmation` lane. Its Packet B compatibility spike, Packet C local
-   implementation, and Packet D clean-computer/deployment acceptance must not
-   start before required confirmations and gates pass. CR-070 keeps its current
-   accepted position after CR-047 unless a later accepted sequencing decision
-   explicitly changes that order;
+4. keep the verified CR-112 same-machine Windows real-account lane as the
+   current Cookie/Profile baseline. Its local evidence never closes or weakens
+   the separate CR-047 Linux/server-like real acceptance;
+5. before implementing CR-070/Phase 5.2, complete a fresh todo baseline review
+   and atomic execution packet. Export/import consumes only committed Profile/
+   account state and excludes CR-112 operation journals and operation
+   directories;
 6. keep CR-092 `/monitor-next` planning, CR-093 MediaCrawler public exposure
    boundary, and CR-094 crawler provider architecture as future independent
    backlog lanes. They may receive read-only planning or documentation
@@ -1758,9 +1897,10 @@ Test gate hardening recorded:
   visual polish; and crawler provider architecture cannot become the
   Phase 5.1P prerequisite unless a later accepted decision changes the
   roadmap.
-- CR-112 is also separate from Phase 5.1P and CR-047 ownership. It reuses their
-  future provider output only after Phase 5.1 acceptance and remains behind
-  confirmation, compatibility, security, migration, and sequencing gates.
+- CR-112 is separate from Phase 5.1P and CR-047 ownership. It reuses the merged
+  Phase 5.1 provider output and passed its packet-specific compatibility,
+  security, migration, test, and local real-account gates. Its local Windows
+  proof does not close CR-047 server-like acceptance.
 - CR-112 plan artifacts and formal references form one documentation delivery
   unit. All five plans and their formal references were staged and committed
   together as the CR-112 governance package.
@@ -1778,9 +1918,10 @@ Lowest-risk parallel execution lane:
    binding and CR-114 object-scoped follow-up are independently verified,
    merged, and rechecked. The separate server-like acceptance packet is active.
 
-CR-112 may receive documentation refinement while it is `Needs Confirmation`,
-but it is not a parallel implementation lane and does not alter the verified
-Phase 5.1P/Phase 5.1A-D boundary or CR-114/acceptance sequencing.
+CR-112 is the verified serial baseline before CR-070. Its Packet B/C/D evidence
+does not alter the verified Phase 5.1P/Phase 5.1A-D history or close the still-
+open CR-047 server-like acceptance. CR-070 is the next implementation lane
+after its own baseline review and execution packet.
 
 Do not run Phase 19 and Phase 20 in parallel, and do not run more than one
 frontend worktree that edits the formal console shell at the same time.

@@ -533,6 +533,9 @@ short `Superseded by` note rather than deleting history.
   closed on `main`, Phase 5.1P read-only preflight, Phase 5.1A-D
   implementation, Phase 5.1 acceptance, then CR-070 / Phase 5.2 after CR-047
   provider/effective snapshot verification.
+- Sequencing note: the CR-095 order above is the accepted 2026-06-19 baseline.
+  The 2026-07-21 CR-112 decision supersedes only its future CR-070 position:
+  CR-112 Packet B/C/D now execute before CR-070.
 
 ## 2026-06-20
 
@@ -624,12 +627,12 @@ short `Superseded by` note rather than deleting history.
   same application-managed persistent Profile resolved from
   `social_account.profile_key`. The persistent Profile is the normal browser
   session and crawl environment for both login modes.
-- Confirmed for CR-112: a Bridge- or manually supplied Cookie is bootstrap,
+- Confirmed for CR-112: a browser-sync- or manually supplied Cookie is bootstrap,
   refresh, recovery, and migration material. The monitor injects the candidate
   Cookie into an account-bound persistent Profile, validates the exact platform
   identity in that Profile, and activates the result only after validation.
   The verified Cookie is also retained through the encrypted account store;
-  connector cache is never durable login authority.
+  in-memory acquisition state is never durable login authority.
 - Confirmed for CR-112: an existing active Profile must not be damaged by a
   failed Cookie refresh. Packet C must use a staged or equivalently reversible
   Profile update and preserve the previously active Profile and verified
@@ -708,3 +711,113 @@ short `Superseded by` note rather than deleting history.
   or background CDP pages cannot overwrite that evidence, while a mismatch on
   the prepared page still fails closed as
   `account_identity_snapshot_mismatch`.
+
+## 2026-07-21 - CR-112 Acceptance And Execution Order
+
+- Confirmed for CR-112: V1 browser auto-sync is a same-machine Windows
+  capability. The monitor service and managed Chrome or Edge process run on
+  the same computer. Remote and cross-host Cookie transport remain outside V1.
+- Confirmed for CR-112: Packet B starts from reuse-first, minimal-adaptation
+  evaluation of the existing CookieBridge Extension, Connector, and protocol.
+  Packet B evidence, including license and distribution constraints, decides
+  whether each component is reused directly, minimally adapted, or replaced as
+  one focused project component. Component ownership is not selected in
+  advance.
+- Confirmed for CR-112 sequencing: CR-112 executes before CR-070. CR-070 later
+  exports or imports only committed Profile/account state and must not package
+  CR-112 promotion journals or operation directories.
+- Confirmed for CR-112 login authority: the application-managed persistent
+  Profile resolved from `social_account.profile_key` is the normal crawl-login
+  authority. Encrypted Cookie remains initialization, refresh, recovery, and
+  migration material; in-memory browser acquisition state is never durable
+  authority.
+- Confirmed for CR-112 permissions: an administrator may explicitly reveal and
+  copy the complete decrypted Cookie for one selected social account. The
+  standard account list/detail remains masked. The reveal endpoint is
+  administrator-only, returns `Cache-Control: no-store`, and never places the
+  Cookie in URLs, browser persistent storage, logs, audit details, diagnostics,
+  subprocess arguments, or subprocess environment. Normal users have no UI
+  entry and receive HTTP 403.
+- Confirmed for CR-112 real acceptance: Douyin (`dy`) and Xiaohongshu (`xhs`)
+  are both mandatory Packet D platforms. Each must use its explicitly
+  designated account and normal monitor crawl entry to persist at least one
+  real content item with `fallback_used=false`. Kuaishou (`ks`) is deferred and
+  is not a Packet D failure condition.
+- Confirmed status semantics as of 2026-07-21: CR-112 was
+  `Accepted / Dependency-Gated (Packet D)` after Packet B/C.1-C.3
+  verification. Packet D started only after the C.3 atomic commit. A packet
+  becomes `In Progress` only when its start gate passes and execution begins, and becomes
+  `Verified` only after its required tests, real evidence where specified,
+  documentation synchronization, and independent review pass.
+
+## 2026-07-21 - CR-112 Packet B Component Selection
+
+- Confirmed from the Packet B synthetic Windows measurements that the
+  reference Extension is not a V1 dependency: current branded Chrome does not
+  load it through the tested managed command-line path, Edge loading does not
+  provide account/Profile pairing, and the unpacked ID is not stable across
+  installation paths.
+- Confirmed that the reference Connector is not a V1 dependency: its
+  unauthenticated in-memory client selection and Python `>=3.12` runtime do not
+  satisfy the product account-binding or runtime boundary.
+- Selected the existing project-managed Playwright/CDP browser context as the
+  single-component replacement for Extension and Connector. Packet C receives
+  the live context handle from the locked account operation and captures
+  structured Cookies directly; it does not mount a Cookie-bridge WebSocket
+  route or install an Extension.
+- Selected a minimally adapted internal structured Cookie Protocol V1. Chrome
+  and Edge preserve domain/path/host-only/HttpOnly/Secure/SameSite fields and
+  distinct same-name scope tuples. Limits are `256` records, `8192` serialized
+  bytes per record, and `1048576` serialized bytes per acquisition payload;
+  unsupported `partition_key` fails closed.
+- Confirmed the result does not change the accepted Profile authority, manual
+  Cookie path, administrator reveal boundary, QR production path, CR-112 before
+  CR-070 order, or mandatory Douyin/Xiaohongshu Packet D acceptance.
+
+## 2026-07-22 - CR-128 Saved Cookie Recovery And Packet D Closure
+
+- Confirmed for CR-128: a strict Profile check remains the first check. An
+  explicit administrator recovery may use the encrypted saved Cookie only for
+  a limited account with a recoverable check result. A `requires_relogin`
+  account may recheck its saved Profile, but a failed recheck still requires a
+  fresh platform login after an environment reset.
+- Confirmed for CR-128: recovery creates a fresh candidate through the existing
+  promotion service, preserves `cookie_source`, and requires the exact
+  already-bound platform account identity in both candidate and active-path
+  checks. A mismatch or expired Cookie returns a terminal failure and restores
+  the previous account/Profile/Cookie authority.
+- Confirmed for CR-128: saved-Cookie recovery shares the account start lock,
+  login-session supersession, promotion journal, and cleanup rules; it is not a
+  second login system and does not introduce generic or anonymous fallback.
+- Confirmed for CR-128: the account start lock covers the Profile recheck and
+  any subsequent recovery promotion as one operation. A later login waits and
+  becomes authoritative after the older operation finishes. Empty or unknown
+  Cookie provenance is rejected before promotion and is never relabelled as a
+  different source.
+- Confirmed for CR-112: the same-machine Windows Packet D real-account lane is
+  verified after designated Douyin and Xiaohongshu crawls, post-crawl Profile
+  checks, raw-Cookie process inspection, and final cleanup. The separate
+  CR-047 Linux/server-like acceptance and second-computer deployment proof
+  remain independent gates.
+- Confirmed status semantics: CR-112 is now `Verified` for the V1 local
+  real-account lane. CR-070 may begin only after its own todo baseline review
+  and atomic execution packet; this decision does not start CR-070.
+
+## 2026-07-21 - CR-127 Account Login Authority
+
+- One platform account has one current login attempt across QR, Browser, local
+  visible-browser, and manual Cookie entry points. Starting a new method safely
+  supersedes pending attempts from other methods.
+- A committed Browser/manual Cookie promotion sets backend `login_type=cookie`
+  and Profile authority. Metadata-only form saves preserve that state; existing
+  inconsistent rows are repaired only when encrypted Cookie, Profile runtime,
+  source, and committed promotion evidence all agree.
+- QR images are accepted only after byte-level QR detection. Platform selectors
+  remain discovery hints and are not proof that an image is a QR code.
+- Administrator reveal of already stored Cookie material is always registered
+  and does not depend on current Browser-sync feature availability. Role,
+  workspace, audit, no-store, transient-memory, and redaction boundaries remain.
+- The Platform Account UI shows the effective login method in the existing
+  platform/method cell and removes the duplicate source column/detail field.
+  Notes and runtime error data remain database-compatible but are no longer
+  editable in the account form; runtime errors are system-owned.

@@ -299,18 +299,28 @@ Phase 5.1B write rules:
 - `fingerprint_seed` and raw `identity_runtime_snapshot_json` remain internal
   and are removed from customer-facing account responses.
 
-### Proposed CR-112 Profile Runtime And Promotion Metadata
+### Accepted CR-112 Profile Runtime And Promotion Metadata
 
-Status: proposed and `Needs Confirmation` with CR-112. These fields and tables
-are not part of the current schema or accepted Phase 5.1 migration.
+Status: `Implemented / Verified (Packet C.1-C.3 and Packet D real-account lane)`
+with CR-112. Packet B selected the direct acquisition boundary; C.1 adds these
+fields, table, migration, indexes, backward-compatible defaults, transaction
+authority, and the atomic account-run/non-terminal-promotion exclusion. C.2
+verifies the live acquisition-session metadata and administrator reveal
+boundary. C.3 verifies the version-0 cutover and persisted Profile-only runtime
+binding without another schema change. Packet D's same-machine Windows
+real-account lane is verified; CR-047 Linux/server-like acceptance remains
+separate.
 
-Additive `social_accounts` fields proposed for Packet C:
+Additive `social_accounts` fields accepted for Packet C:
 
 ```text
 cookie_source TEXT NOT NULL DEFAULT ''
 profile_runtime_version INTEGER NOT NULL DEFAULT 0
 profile_ready_at TEXT
 ```
+
+`cookie_source` is empty for legacy/unmigrated rows and becomes
+`browser_sync|manual` only after a verified Packet C promotion commit.
 
 `profile_runtime_version = 0` means current/legacy Cookie execution and never
 proves that a Profile is ready. Version `1` means the fixed active Profile has
@@ -321,7 +331,7 @@ version `0` is non-runnable, uses `identity_state=requires_relogin` plus the
 existing limited/non-active pool status, and is rejected before child spawn;
 there is no schema or command-builder fallback to raw Cookie argv.
 
-Proposed durable promotion journal:
+Accepted durable promotion journal:
 
 ```text
 account_profile_promotions
@@ -332,8 +342,7 @@ account_profile_promotions
   profile_key TEXT NOT NULL
   state TEXT NOT NULL
   had_active_profile INTEGER NOT NULL DEFAULT 0
-  previous_binding_id INTEGER
-  candidate_binding_id INTEGER
+  acquisition_generation INTEGER NOT NULL DEFAULT 1
   cookie_source TEXT NOT NULL DEFAULT ''
   failure_category TEXT NOT NULL DEFAULT ''
   recovery_action TEXT NOT NULL DEFAULT ''
@@ -356,8 +365,8 @@ Allowed states are `preparing`, `candidate_ready`, `swapping`,
 `recovery_required` are terminal; the last state still blocks account use. One
 account may have only one non-terminal promotion, and a retained rollback
 artifact blocks a new promotion until cleanup succeeds. The row stores opaque
-IDs and redacted categories, not raw Profile paths, Cookies, pairing tokens,
-credentials, proxy secrets, or browser endpoints. Candidate and rollback paths
+IDs and redacted categories, not raw Profile paths, Cookies, proxy secrets, or
+browser endpoints. Candidate and rollback paths
 are derived under the internal Profile operation root from validated
 account/session/operation IDs.
 
@@ -365,48 +374,16 @@ account/session/operation IDs.
 `candidate_moved_at` is written only after candidate-to-active rename succeeds.
 The database checkpoint may lag one completed same-volume rename, so recovery
 also validates the operation marker and exact directory-shape table in
-`ACCOUNT_ENVIRONMENT.md`. The account/Cookie/binding update and journal
+`ACCOUNT_ENVIRONMENT.md`. The account/Cookie/Profile update and journal
 `committed` transition share one database transaction and are the sole commit
 authority.
 
-Proposed connector binding table:
-
-```text
-cookie_bridge_bindings
-  id INTEGER PRIMARY KEY
-  workspace_id INTEGER NOT NULL
-  account_id INTEGER NOT NULL
-  profile_key TEXT NOT NULL
-  login_session_id INTEGER NOT NULL
-  profile_promotion_id INTEGER NOT NULL
-  client_id TEXT NOT NULL
-  credential_hash TEXT NOT NULL
-  credential_version INTEGER NOT NULL DEFAULT 1
-  protocol_version TEXT NOT NULL
-  status TEXT NOT NULL
-  bound_at TEXT NOT NULL
-  last_authenticated_at TEXT
-  rotated_at TEXT
-  revoked_at TEXT
-  created_at TEXT NOT NULL
-  updated_at TEXT NOT NULL
-```
-
-`client_id` and binding metadata are administrator-internal. Customer APIs and
-ordinary diagnostics expose only a customer-safe lifecycle/health status and
-timestamps. Only credential hashes are stored. Account/Profile reset or
-account deletion revokes every binding for that `profile_key`. Binding status
-is `pending|active|revoked`: a Bridge candidate receives a session-scoped
-pending credential that may serve only its exact login-session requests. A
-Bridge promotion commit activates it and revokes the previous active binding
-in the same database transaction. A manual-Cookie promotion creates no
-candidate binding and revokes the previous active binding on commit because
-that binding belongs to the rollback Profile. Rollback revokes any pending
-candidate credential and preserves the previous active binding.
-
-Proposed `login_sessions` linkage fields are `cookie_source`,
-`profile_promotion_id`, and `connector_binding_id`. They link one session to
-one exact promotion/binding without storing Cookie material or raw paths.
+Accepted `login_sessions` linkage fields are `cookie_source`,
+`profile_promotion_id`, `acquisition_generation`, `provider_resolution_id`,
+and `browser_attempt_id`. They bind one session to the exact server-owned
+browser context and promotion without storing Cookie material, browser
+endpoints, or raw paths. No Connector binding table is required by the Packet B
+selected direct path.
 
 Recommended constraints/indexes:
 
@@ -414,17 +391,19 @@ Recommended constraints/indexes:
 unique active promotion per account for non-terminal states
 idx_profile_promotions_state on account_profile_promotions(state, updated_at)
 idx_profile_promotions_account on account_profile_promotions(account_id, created_at)
-unique cookie_bridge_bindings(profile_key, client_id)
-unique active cookie_bridge_binding per profile_key where status='active'
-unique pending cookie_bridge_binding per profile_promotion_id where status='pending'
-idx_cookie_bridge_bindings_account on cookie_bridge_bindings(account_id, status)
-idx_cookie_bridge_bindings_session on cookie_bridge_bindings(login_session_id, profile_promotion_id)
 ```
 
 CR-112 audit events reference account ID, login session ID, promotion ID,
-binding ID, actor, trigger source, requested/effective provider summary,
-terminal state, and redacted recovery result. They never include raw Profile
+actor, trigger source, requested/effective provider summary, terminal state,
+and redacted recovery result. They never include raw Profile
 paths or secret values.
+
+The administrator Cookie reveal capability adds no plaintext column and never
+persists a reveal copy. It decrypts the existing `cookies_encrypted` field for
+one explicit, authorized POST response only. Standard account readers and
+list/detail APIs remain masked. Access audit may store actor, account ID,
+action, result, and timestamp, but no Cookie value, fragment, scope, hash, or
+response body.
 
 CR-070 adds an accepted account-environment export/import capability. The
 account row remains the source of truth after import, but package creation and
@@ -448,10 +427,9 @@ artifacts by default. The encrypted payload may contain a source proxy
 host/IP plus port hint for target-side mapping, but it must not contain proxy
 username, password, token, authentication header, or provider secret.
 
-If CR-112 is implemented before CR-070, export reads only committed account
+Because CR-112 executes before CR-070, export reads only committed account
 metadata and the fixed active Profile. It excludes `account_profile_promotions`
-rows, candidate/rollback operation directories, `cookie_bridge_bindings`
-credentials, pairing/session tokens, and connector cache. Import creates a new
+rows and candidate/rollback operation directories. Import creates a new
 target Profile through the target-side validation/promotion path rather than
 copying a source operation journal. Export triggers due cleanup and is blocked
 until any retained rollback and active-Profile operation marker are gone.

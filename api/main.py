@@ -30,9 +30,19 @@ from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse, RedirectResponse
 
-from .monitoring.database import bootstrap_admin_from_env, init_db, recover_stale_runs_and_locks
+from .monitoring.database import (
+    bootstrap_admin_from_env,
+    enforce_profile_only_cookie_cutover,
+    init_db,
+    recover_interrupted_cookie_promotion_sessions,
+    recover_stale_runs_and_locks,
+    repair_promoted_account_login_authority,
+)
+from .monitoring.login_browser_sync import browser_cookie_sync_enabled, recover_browser_cookie_sync_sessions
+from .monitoring.profile_promotion import cleanup_profile_promotion_artifacts, recover_profile_promotions
 from .monitoring.scheduler import start_scheduler
 from .routers import auth_router, crawler_router, data_router, monitor_router, websocket_router
+from .routers.browser_sync import router as browser_sync_router
 
 app = FastAPI(
     title="律所舆情监控系统",
@@ -64,6 +74,7 @@ app.include_router(data_router, prefix="/api")
 app.include_router(auth_router, prefix="/api")
 app.include_router(monitor_router, prefix="/api")
 app.include_router(websocket_router, prefix="/api")
+app.include_router(browser_sync_router, prefix="/api")
 
 
 @app.on_event("startup")
@@ -75,6 +86,13 @@ async def startup_monitoring():
         os.environ.get("MONITOR_ADMIN_DISPLAY_NAME"),
     )
     recover_stale_runs_and_locks("startup_recovery")
+    await asyncio.to_thread(recover_profile_promotions)
+    await asyncio.to_thread(cleanup_profile_promotion_artifacts)
+    await asyncio.to_thread(repair_promoted_account_login_authority, "startup")
+    await asyncio.to_thread(recover_interrupted_cookie_promotion_sessions, "startup")
+    await asyncio.to_thread(enforce_profile_only_cookie_cutover, "startup")
+    if browser_cookie_sync_enabled():
+        recover_browser_cookie_sync_sessions()
     await start_scheduler()
 
 

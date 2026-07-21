@@ -61,6 +61,7 @@ Confirmed V1 strategy:
 | View all reports | yes | no |
 | Resend report email | yes | own reports only |
 | Manage platform accounts | yes | no |
+| Reveal/copy one platform account Cookie | yes, explicit action | no |
 | Export/import account environment packages | yes | no |
 | Manage proxies | yes | no |
 | Manage AI access | yes | no |
@@ -86,6 +87,9 @@ Administrator:
 - can view and manage all data in the workspace;
 - can view resource errors;
 - can view system diagnostics.
+- can explicitly reveal and copy the complete Cookie for one selected platform
+  account through the CR-112 no-store endpoint. Standard account lists/details
+  remain masked, and the secret itself is not written to audit details.
 
 Normal user:
 
@@ -112,6 +116,7 @@ Endpoint groups:
 | runs | yes, all workspace | own task runs |
 | reports | yes, all workspace | own task reports |
 | platform accounts | yes | no |
+| platform account Cookie reveal | yes, POST only | no, HTTP 403 |
 | account environment packages | yes | no |
 | proxies | yes | no |
 | AI access | yes | no |
@@ -129,6 +134,12 @@ requires the CR-093 route audit and confirmation.
 CR-094 future provider APIs, if later accepted, must use the same monitor
 authorization and data-scope model. A provider must not introduce a separate
 public permission system or bypass normal-user ownership scope.
+
+CR-112 Cookie reveal is a narrow administrator diagnostic action, not a
+general relaxation of secret masking. The frontend entry is absent for normal
+users, backend authorization returns HTTP 403, the response is no-store/no-
+cache, and audit records only actor/account/action/result metadata. Cookie
+content, fragments, scope, hashes, and response bodies remain excluded.
 
 ## User Lifecycle
 

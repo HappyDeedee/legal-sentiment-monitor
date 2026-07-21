@@ -65,6 +65,22 @@ def resolve_browser_selection(
     )
 
 
+def require_persisted_browser_selection() -> BrowserSelection:
+    with _browser_selection_lock():
+        saved = _load_saved_selection(validate_system_detection=False)
+        if saved is None:
+            raise BrowserSelectionError(
+                "selection_missing",
+                "未找到已保存的浏览器选择，请先运行浏览器预检。",
+            )
+        if not saved.executable_path.is_file():
+            raise BrowserSelectionError(
+                "saved_browser_missing",
+                "已保存的本机浏览器不存在。请恢复该浏览器，或重置账号登录环境后重新选择。",
+            )
+        return saved
+
+
 def _resolve_browser_selection_unlocked(
     playwright_executable_path: str | Path,
     *,

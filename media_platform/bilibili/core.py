@@ -53,6 +53,7 @@ from tools.browser_environment import (
     verify_managed_page,
 )
 from tools.cdp_browser import CDPBrowserManager
+from tools.profile_only import should_begin_platform_login
 from var import crawler_type_var, source_keyword_var
 
 from .client import BilibiliClient
@@ -117,7 +118,8 @@ class BilibiliCrawler(AbstractCrawler):
 
             # Create a client to interact with the xiaohongshu website.
             self.bili_client = await self.create_bilibili_client(httpx_proxy_format)
-            if not await self.bili_client.pong():
+            logged_in = await self.bili_client.pong()
+            if should_begin_platform_login(logged_in, self.browser_environment_plan):
                 login_obj = BilibiliLogin(
                     login_type=config.LOGIN_TYPE,
                     login_phone="",  # your phone number

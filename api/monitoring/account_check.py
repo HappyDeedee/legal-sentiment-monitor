@@ -15,6 +15,7 @@ from tools import utils
 from tools.browser_environment import (
     BrowserEnvironmentError,
     browser_environment_failure_result,
+    close_managed_browser_session,
     launch_managed_browser_context,
     verify_managed_page,
 )
@@ -28,22 +29,20 @@ from .browser_environment_provider import (
 from .database import (
     complete_social_account_identity_login,
     get_conn,
+    get_login_session,
     get_proxy_profile,
     get_social_account,
     prepare_social_account_identity_login,
     update_social_account_check_state,
 )
 from .mediacrawler_login import call_mediacrawler_check_login_state, get_mediacrawler_login_capability
+from .login_status import PENDING_LOGIN_STATES, normalize_login_state
 from .normalizer import PLATFORM_LABELS
 from .security import customer_safe_text, redact_sensitive
 from .account_environment import account_profile_environment
+from .cookie_material import COOKIE_LOGIN_HYDRATION_WAIT_MS, deserialize_cookie_material, to_playwright_cookie_items
+from .profile_promotion import recover_profile_promotions
 
-
-COOKIE_DOMAINS = {
-    "dy": ".douyin.com",
-    "ks": ".kuaishou.com",
-    "xhs": ".xiaohongshu.com",
-}
 
 MEDIACRAWLER_CLIENT_CLASSES = {
     "dy": DouYinClient,
@@ -58,16 +57,29 @@ async def check_social_account_login(
     allow_draft: bool = False,
     identity_prepared: bool = False,
     actor_id: int | None = None,
+    saved_state_recheck: bool = False,
+    login_session_id: int | None = None,
 ) -> dict[str, Any]:
+    await asyncio.to_thread(recover_profile_promotions, account_id)
     account = get_social_account(account_id, masked=False)
     if not account:
         raise ValueError("account not found")
     if account.get("is_draft") and not allow_draft:
         raise ValueError("draft account cannot be checked")
+    if login_session_id is not None:
+        login_session = get_login_session(int(login_session_id))
+        if (
+            not login_session
+            or int(login_session.get("account_id") or 0) != int(account_id)
+            or normalize_login_state(login_session.get("status")) not in PENDING_LOGIN_STATES
+        ):
+            raise AccountIdentityError("account_identity_login_conflict", "login_session")
     platform = str(account.get("platform") or "")
     login_type = str(account.get("login_type") or "qrcode")
     platform_label = PLATFORM_LABELS.get(platform, platform)
-    if login_type == "cookie":
+    if saved_state_recheck:
+        trigger_source = "saved_state_recheck"
+    elif login_type == "cookie":
         trigger_source = "cookie_validation"
     elif identity_prepared and allow_draft:
         trigger_source = "qrcode_login"
@@ -78,10 +90,12 @@ async def check_social_account_login(
         trigger_source=trigger_source,
         user_id=actor_id,
         allow_prepared_validation=identity_prepared,
+        allow_requires_relogin_recheck=saved_state_recheck,
+        login_session_id=login_session_id,
     )
     account = get_social_account(account_id, masked=False) or account
     try:
-        if login_type == "cookie":
+        if login_type == "cookie" and int(account.get("profile_runtime_version") or 0) < 1:
             result = await _check_cookie_account(account, timeout_ms)
         else:
             result = await _check_profile_account(account, timeout_ms)
@@ -106,6 +120,8 @@ async def check_social_account_login(
             trigger_source=trigger_source,
             failure_reason="account_check_failed",
             user_id=actor_id,
+            restore_requires_relogin_on_failure=saved_state_recheck,
+            login_session_id=login_session_id,
         )
         raise
     ok = bool(result.get("ok"))
@@ -115,16 +131,22 @@ async def check_social_account_login(
         ok=ok,
         trigger_source=trigger_source,
         lock_reason=(
-            "cookie_validation_success"
-            if login_type == "cookie"
+            "saved_state_recheck_success"
+            if saved_state_recheck
             else (
-                "qrcode_login_success"
-                if trigger_source == "qrcode_login"
-                else "profile_validation_success"
+                "cookie_validation_success"
+                if login_type == "cookie"
+                else (
+                    "qrcode_login_success"
+                    if trigger_source == "qrcode_login"
+                    else "profile_validation_success"
+                )
             )
         ),
         failure_reason=str(result.get("status") or message),
         user_id=actor_id,
+        restore_requires_relogin_on_failure=saved_state_recheck,
+        login_session_id=login_session_id,
     )
     updated = update_social_account_check_state(
         int(account_id),
@@ -132,6 +154,7 @@ async def check_social_account_login(
         message=message,
         status="active" if ok else "limited",
         identity=result.get("identity") if ok else None,
+        login_session_id=login_session_id,
     )
     return {
         **result,
@@ -154,6 +177,7 @@ async def _check_profile_account(account: dict[str, Any], timeout_ms: int) -> di
         return _result(False, "未找到该账号的网页登录态，请重新扫码登录。", "missing_profile")
     capability = get_mediacrawler_login_capability(platform)
     playwright = None
+    browser = None
     context = None
     plan = None
     provider_result = None
@@ -169,33 +193,32 @@ async def _check_profile_account(account: dict[str, Any], timeout_ms: int) -> di
             playwright_executable_path=str(playwright.chromium.executable_path),
         )
         session = await launch_managed_browser_context(playwright, plan)
+        browser = session.browser
         context = session.context
         page = context.pages[0] if context.pages else await context.new_page()
         page.set_default_timeout(timeout_ms)
         await page.goto(str(capability.get("login_url") or ""), wait_until="domcontentloaded", timeout=timeout_ms)
-        await page.wait_for_timeout(1200)
+        await page.wait_for_timeout(COOKIE_LOGIN_HYDRATION_WAIT_MS)
         provider_result = await verify_managed_page(context, page)
         if provider_result is None or not provider_result.ok:
             result = _result(False, "浏览器账号环境校验未通过，请重新登录。", "provider_mismatch")
-            return {
-                **result,
-                "_browser_environment_plan": plan,
-                "_browser_environment_result": provider_result,
-                "_browser_session_closed": False,
-            }
-        login_baseline = await _login_baseline(platform, context)
-        verified = await _verify_collectable_login(platform, context, page, timeout_ms, login_baseline)
-        if verified.get("ok"):
-            identity = await _extract_platform_identity(platform, page)
-            result = _result(True, "登录态有效，可供采集任务使用。", "valid", identity)
         else:
-            verification = await _detect_simple_verification(page)
-            if verification:
-                result = _result(False, verification, "needs_verification")
-            elif verified.get("status") == "client_check_failed":
-                result = _result(False, str(verified.get("message") or ""), "client_check_failed")
+            login_baseline = await _login_baseline(platform, context)
+            verified = await _verify_collectable_login(platform, context, page, timeout_ms, login_baseline)
+            if verified.get("ok"):
+                identity = _merge_platform_identity(
+                    await _extract_platform_identity(platform, page),
+                    verified.get("identity"),
+                )
+                result = _result(True, "登录态有效，可供采集任务使用。", "valid", identity)
             else:
-                result = _result(False, "登录态无效或已失效，请重新扫码登录。", "invalid")
+                verification = await _detect_simple_verification(page)
+                if verification:
+                    result = _result(False, verification, "needs_verification")
+                elif verified.get("status") == "client_check_failed":
+                    result = _result(False, str(verified.get("message") or ""), "client_check_failed")
+                else:
+                    result = _result(False, "登录态无效或已失效，请重新扫码登录。", "invalid")
     except BrowserEnvironmentError as exc:
         if plan is None:
             raise
@@ -216,17 +239,18 @@ async def _check_profile_account(account: dict[str, Any], timeout_ms: int) -> di
             )
         result = _result(False, _friendly_error(exc), "check_failed")
     finally:
-        if context:
-            try:
-                await context.close()
-                session_closed = True
-            except Exception:
-                pass
-        if playwright:
-            try:
-                await playwright.stop()
-            except Exception:
-                pass
+        try:
+            await _close_account_check_browser(context, browser, playwright)
+            session_closed = True
+        except BrowserEnvironmentError as exc:
+            if plan is None:
+                raise
+            provider_result = browser_environment_failure_result(
+                plan,
+                exc.reason,
+                proxy_effect="failed" if plan.proxy_policy == "account_bound" else "not_applicable",
+            )
+            result = _result(False, "浏览器会话清理失败，请重试后再使用该账号。", exc.reason)
     return {
         **(result or _result(False, "登录态检测失败。", "check_failed")),
         "_browser_environment_plan": plan,
@@ -264,29 +288,27 @@ async def _check_cookie_account(account: dict[str, Any], timeout_ms: int) -> dic
         page = await context.new_page()
         page.set_default_timeout(timeout_ms)
         await page.goto(str(capability.get("login_url") or ""), wait_until="domcontentloaded", timeout=timeout_ms)
-        await page.wait_for_timeout(1200)
+        await page.wait_for_timeout(COOKIE_LOGIN_HYDRATION_WAIT_MS)
         provider_result = await verify_managed_page(context, page)
         if provider_result is None or not provider_result.ok:
             result = _result(False, "浏览器账号环境校验未通过，请重新保存 Cookie。", "provider_mismatch")
-            return {
-                **result,
-                "_browser_environment_plan": plan,
-                "_browser_environment_result": provider_result,
-                "_browser_session_closed": False,
-            }
-        login_baseline = await _login_baseline(platform, context)
-        verified = await _verify_collectable_login(platform, context, page, timeout_ms, login_baseline)
-        if verified.get("ok"):
-            identity = await _extract_platform_identity(platform, page)
-            result = _result(True, "Cookie 登录态有效，可供采集任务使用。", "valid", identity)
         else:
-            verification = await _detect_simple_verification(page)
-            if verification:
-                result = _result(False, verification, "needs_verification")
-            elif verified.get("status") == "client_check_failed":
-                result = _result(False, "Cookie 页面状态存在，但采集前验活未通过，请重新保存 Cookie 后再检测。", "client_check_failed")
+            login_baseline = await _login_baseline(platform, context)
+            verified = await _verify_collectable_login(platform, context, page, timeout_ms, login_baseline)
+            if verified.get("ok"):
+                identity = _merge_platform_identity(
+                    await _extract_platform_identity(platform, page),
+                    verified.get("identity"),
+                )
+                result = _result(True, "Cookie 登录态有效，可供采集任务使用。", "valid", identity)
             else:
-                result = _result(False, "Cookie 登录态无效或已失效，请重新保存 Cookie。", "invalid")
+                verification = await _detect_simple_verification(page)
+                if verification:
+                    result = _result(False, verification, "needs_verification")
+                elif verified.get("status") == "client_check_failed":
+                    result = _result(False, "Cookie 页面状态存在，但采集前验活未通过，请重新保存 Cookie 后再检测。", "client_check_failed")
+                else:
+                    result = _result(False, "Cookie 登录态无效或已失效，请重新保存 Cookie。", "invalid")
     except BrowserEnvironmentError as exc:
         if plan is None:
             raise
@@ -307,28 +329,48 @@ async def _check_cookie_account(account: dict[str, Any], timeout_ms: int) -> dic
             )
         result = _result(False, _friendly_error(exc), "check_failed")
     finally:
-        if context:
-            try:
-                await context.close()
-                session_closed = True
-            except Exception:
-                pass
-        if browser:
-            try:
-                await browser.close()
-            except Exception:
-                pass
-        if playwright:
-            try:
-                await playwright.stop()
-            except Exception:
-                pass
+        try:
+            await _close_account_check_browser(context, browser, playwright)
+            session_closed = True
+        except BrowserEnvironmentError as exc:
+            if plan is None:
+                raise
+            provider_result = browser_environment_failure_result(
+                plan,
+                exc.reason,
+                proxy_effect="failed" if plan.proxy_policy == "account_bound" else "not_applicable",
+            )
+            result = _result(False, "浏览器会话清理失败，请重试或重新保存 Cookie。", exc.reason)
     return {
         **(result or _result(False, "Cookie 登录态检测失败。", "check_failed")),
         "_browser_environment_plan": plan,
         "_browser_environment_result": provider_result,
         "_browser_session_closed": session_closed,
     }
+
+
+async def _close_account_check_browser(context, browser, playwright) -> None:
+    cleanup_error: BrowserEnvironmentError | None = None
+    try:
+        await close_managed_browser_session(context, browser)
+    except BrowserEnvironmentError as exc:
+        cleanup_error = exc
+    except Exception as exc:
+        cleanup_error = BrowserEnvironmentError(
+            "account_identity_provider_browser_cleanup_failed", "browser"
+        )
+        cleanup_error.__cause__ = exc
+    if playwright is not None:
+        try:
+            await playwright.stop()
+        except Exception as exc:
+            if cleanup_error is None:
+                cleanup_error = BrowserEnvironmentError(
+                    "account_identity_provider_browser_cleanup_failed", "playwright"
+                )
+                cleanup_error.__cause__ = exc
+    if cleanup_error is not None:
+        raise cleanup_error
 
 
 def _resolve_account_plan(
@@ -351,12 +393,8 @@ def _resolve_account_plan(
     )
 
 
-def _cookie_items(platform: str, cookie_str: str) -> list[dict[str, str]]:
-    domain = COOKIE_DOMAINS.get(platform) or ""
-    result = []
-    for name, value in utils.convert_str_cookie_to_dict(cookie_str).items():
-        result.append({"name": name, "value": value, "domain": domain, "path": "/"})
-    return result
+def _cookie_items(platform: str, cookie_str: str) -> list[dict[str, Any]]:
+    return to_playwright_cookie_items(deserialize_cookie_material(platform, cookie_str))
 
 
 async def _verify_collectable_login(
@@ -369,7 +407,12 @@ async def _verify_collectable_login(
     login_state_ok = await call_mediacrawler_check_login_state(platform, context, page, login_baseline)
     client_check = await _check_mediacrawler_client_pong(platform, context, page, timeout_ms)
     if client_check.get("ok"):
-        return {"ok": True, "status": "valid", "message": "登录态有效，可供采集任务使用。"}
+        return {
+            "ok": True,
+            "status": "valid",
+            "message": "登录态有效，可供采集任务使用。",
+            "identity": client_check.get("identity") or {},
+        }
     if login_state_ok:
         message = str(client_check.get("message") or "")
         detail = f" {message}" if message else ""
@@ -390,6 +433,16 @@ async def _check_mediacrawler_client_pong(platform: str, context, page: Page, ti
         timeout_seconds = max(3.0, min(20.0, float(timeout_ms or 15000) / 1000))
         if platform == "dy":
             ok = await asyncio.wait_for(client.pong(browser_context=context), timeout=timeout_seconds)
+        elif platform == "xhs":
+            self_info = await asyncio.wait_for(client.query_self(), timeout=timeout_seconds)
+            data = self_info.get("data", {}) if isinstance(self_info, dict) else {}
+            result = data.get("result", {}) if isinstance(data, dict) else {}
+            ok = bool(result.get("success")) if isinstance(result, dict) else False
+            return {
+                "ok": ok,
+                "message": "" if ok else "采集前验活未通过。",
+                "identity": _xhs_identity_from_self_info(self_info) if ok else {},
+            }
         else:
             ok = await asyncio.wait_for(client.pong(), timeout=timeout_seconds)
         return {"ok": bool(ok), "message": "" if ok else "采集前验活未通过。"}
@@ -645,6 +698,31 @@ async def _extract_kuaishou_identity(page: Page) -> dict[str, str]:
 def _extract_path_id(url: str, pattern: str) -> str:
     match = re.search(pattern, str(url or ""))
     return match.group(1)[:240] if match else ""
+
+
+def _xhs_identity_from_self_info(self_info: Any) -> dict[str, str]:
+    data = self_info.get("data", {}) if isinstance(self_info, dict) else {}
+    basic_info = data.get("basic_info", {}) if isinstance(data, dict) else {}
+    if not isinstance(basic_info, dict):
+        basic_info = {}
+    return {
+        "platform_account_id": "",
+        "platform_account_name": _clean_identity_text(basic_info.get("nickname")),
+        "platform_avatar_url": _safe_identity_url(basic_info.get("imageb") or basic_info.get("images")),
+        "platform_home_url": "",
+    }
+
+
+def _merge_platform_identity(primary: Any, secondary: Any) -> dict[str, str]:
+    merged = _empty_identity()
+    for source in (primary, secondary):
+        if not isinstance(source, dict):
+            continue
+        for key in merged:
+            value = str(source.get(key) or "").strip()
+            if value:
+                merged[key] = value
+    return merged
 
 
 def _clean_identity_text(value: Any) -> str:

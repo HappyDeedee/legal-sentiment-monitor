@@ -218,12 +218,52 @@ Interaction rules:
   after lock, and unlocked after an explicit `更改环境` action only for the
   `重置并重新登录` workflow.
 - The Platform Accounts labelled recent-error card and basic-form warning stay
-  on one visible line with ellipses and complete-text titles. The advanced
-  error textarea remains the editable full-value surface.
+  on one visible line with ellipses and complete-text titles. CR-127 removes
+  Notes and the advanced latest-error textarea from the editable form; omitted
+  legacy values remain preserved by the backend.
+- Platform Account list identity cells show only avatar, a distinct recognized
+  display name, and duplicate warning. Keep the raw platform identifier in
+  account details, and render recognition time as a dedicated no-wrap column
+  immediately before recent validation.
 - Account-bound local visible login shows an in-progress state while the user
   completes platform verification, then automatically saves the validated
   Profile result. Closing the account drawer does not cancel reconciliation;
   generic unbound local login remains status-only.
+- CR-112 keeps QR as the default login method and shows same-machine browser
+  auto-sync only when enabled and healthy. CR-123 presents `扫码登录`,
+  `浏览器登录`, and `Cookie 登录` as three peer choices that fill the available
+  row; exactly one separate panel is visible and no duplicate advanced Cookie
+  disclosure remains.
+- For a new Platform Account, QR and enabled browser auto-sync are parallel
+  actions. Both remain visible but disabled until the account name is entered;
+  browser auto-sync then saves the account binding before opening the managed
+  login window and does not require a QR session first.
+- Browser-sync and account-bound local visible-login progress belongs to the
+  Browser panel. QR images, verification, and QR fallback status remain in the
+  QR panel. The Cookie panel accepts standard Cookie text or the complete
+  structured data exported by this system.
+- Starting any one of QR, Browser, or Cookie login makes it the current attempt
+  for that account, cancels the other pending panels, and exposes an explicit
+  cancel action while pending. A terminal Browser/Cookie result cannot return
+  the UI to an older QR panel.
+- When an account marked `requires_relogin` or `limited` still has saved Cookie
+  or Profile material, show the saved-state check action before the three
+  new-login methods. For a limited account, state that saved Cookie recovery
+  may follow a recoverable Profile failure. For `requires_relogin`, state that
+  a failed Profile check still requires fresh platform login. A terminal
+  failure remains visible and does not spin indefinitely.
+- Label administrator Cookie reveal/copy as complete cross-computer Cookie
+  data, and state that it can be pasted into another installation's Cookie
+  login. Keep the value masked by default and retain the explicit reveal/copy
+  permission boundary.
+- In the administrator Platform Account form, the complete Cookie field is
+  masked by default. Use an eye icon to reveal/hide and a copy icon to copy;
+  keep both icons inside the top-right of the textarea, with reserved text
+  padding so content never sits underneath them. Both controls need tooltips
+  and clear success/error feedback. Fetch the value
+  only after explicit reveal, never render it in HTML attributes or URLs, keep
+  it only in transient page memory, and clear it on account switch, drawer
+  close, navigation, or timeout. Normal-user UI contains no reveal/copy entry.
 - `requires_relogin` and `resetting` disable QR, visible-browser, Cookie-save,
   and single/bulk account-check actions with customer-safe guidance. The reset
   action remains reachable and must state that Profile, Cookie, and platform

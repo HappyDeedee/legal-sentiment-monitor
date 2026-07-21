@@ -82,48 +82,36 @@ set the desired explicit executable if needed, and run a local preflight again.
 Deleting only the manifest while retaining system-browser Profile data is not
 a supported migration path.
 
-## Proposed CR-112 Local Browser Auto-Sync Boundary
+## Accepted CR-112 Local Browser Auto-Sync Boundary
 
-Status: `Needs Confirmation`. This is a proposed local Windows capability and
-does not change the accepted production/server deployment boundary. Every
-normative CR-112 statement in this section is a future acceptance contract, not
-evidence that the connector/extension/schema exists in current code.
+Status: `Verified (Same-Machine Windows V1 / Packet D Real-Account Lane)`. Packet B
+and C.1-C.3 are verified.
+This is an accepted same-machine Windows capability and does not change the
+production/server deployment boundary. Packet B selected direct managed-context
+acquisition; C.2 UI/runtime and owned-process cleanup are verified. C.3
+verifies startup cutover, persisted Profile-only execution, and raw-Cookie
+argv/environment retirement; the designated two-platform Packet D real-account
+lane is verified. CR-047 Linux/server-like acceptance remains a separate gate.
 
-Proposed V1 topology:
+Accepted V1 topology:
 
 ```text
-monitor FastAPI service + project-owned connector route + managed browser
+monitor FastAPI service + project-managed browser
 on the same Windows computer
 ```
 
-- The connector is a feature-gated WebSocket route mounted in the existing
-  Python 3.11 FastAPI process, not a separate Python 3.12 product service. The
-  service may bind on `0.0.0.0`; locality comes from socket-peer enforcement,
-  not a claim that this in-process route has its own loopback-only listener.
-- The extension connects through `127.0.0.1` and the effective monitor port.
-  Non-loopback and cross-host endpoints remain disabled.
-- The WebSocket handler authorizes locality from the ASGI socket peer
-  (`websocket.client.host` / `scope["client"]`) using a literal IP loopback
-  check. It rejects an empty, unparsable, or non-loopback peer before accepting
-  the socket, even when FastAPI listens on `0.0.0.0`.
-- `X-Forwarded-For`, `Forwarded`, and similar proxy headers are ignored for the
-  loopback authorization decision. A future trusted-proxy/remote topology
-  requires a separate accepted CR rather than broadening this route.
-- The handshake requires the exact allowlisted
-  `chrome-extension://<stable-extension-id>` Origin. Missing, opaque, or
-  unexpected Origins and invalid peers are rejected before protocol state or
-  Cookie access.
-- The standard monitor installation contains the project-owned extension and
-  creates its per-session managed copy automatically. The operator does not
-  install an extension manually, create a personal Chrome Profile, use a Google
-  account, place a connector binary, or install Python 3.12.
-- The extension uses packaged manifest-key material so Chrome, Edge,
-  per-session copies, and clean installations produce the same allowlisted ID
-  and Origin. Its manifest excludes `<all_urls>` and unrelated host access.
+- Packet B selected the existing Playwright/CDP context as the replacement for
+  Extension and Connector. The parent account operation retains one exact live
+  context handle; no browser/client discovery or network Cookie transport is
+  used.
+- The standard monitor installation therefore contains no CR-112 Extension or
+  Connector service. The operator does not install an Extension, create a
+  personal Chrome Profile, use a Google account, place a Connector binary, or
+  install Python 3.12.
 - Browser resolution is valid explicit executable, Chrome, Edge, then supported
   Chromium. Chrome is preferred when Chrome and Edge both exist.
 - The 2026-07-19 confirmed login-material sub-decision applies inside this
-  otherwise proposed capability: QR and accepted Cookie login converge on the
+  accepted capability: QR and accepted Cookie login converge on the
   account-bound persistent Profile resolved from `profile_key`. Encrypted
   Cookie remains bootstrap/refresh/recovery/migration material.
 - An existing active Profile uses the fixed-path promotion journal from
@@ -132,35 +120,37 @@ on the same Windows computer
   ambiguous promotion preserves prior data or blocks only that account as
   `recovery_required`.
 - The candidate is fresh from the locked Phase 5.1 provider inputs rather than
-  a clone of the active Profile. Before active-path recheck, one-time
-  extension/config material is removed and the Profile is opened in a crawler-
-  equivalent environment so a deleted session extension path cannot become a
-  runtime dependency.
+  a clone of active Profile storage. Before active-path recheck, every
+  acquisition handle closes and the Profile opens through the normal provider
+  without capture hooks or Cookie injection.
 - After successful Profile preparation, managed crawler children receive no
   raw Cookie through argv. Clean-computer acceptance includes process
   inspection for this guarantee.
+- The administrator-only full-Cookie reveal is a dedicated POST response, not
+  a standard account field or deployment diagnostic. It uses no-store/no-cache
+  headers and must not enter reverse-proxy access logs with a body, browser
+  persistent Storage, URL, audit details, diagnostics, argv, or environment.
+  Normal users receive HTTP 403 and have no frontend entry.
 - The feature is disabled by default. Disabled or unhealthy state must not
-  mount a usable connector path, load the extension, generate pairing tokens,
-  choose another account/client, or alter QR/manual Cookie behavior.
-- Packet C is layered: C.1 is the shared advanced-manual/Bridge
-  Cookie-to-Profile promotion service, C.2 is Bridge connector/extension/API/UI,
-  and C.3 is the internal profile-only runner. The Bridge flag controls C.2
-  only. After C.3 acceptance, disabling Bridge preserves C.1/C.3 and never
-  restores raw Cookie argv.
-- Only C.2 route/UI/readiness/extension/pairing code reads the Bridge flag. C.1
+  launch acquisition, choose another account/browser/Profile, or alter QR/
+  manual Cookie behavior.
+- Packet C is layered: C.1 is the shared advanced-manual/browser-sync
+  Cookie-to-Profile promotion service, C.2 is direct acquisition/API/UI, and
+  C.3 is the internal profile-only runner. The browser-sync flag controls C.2
+  only. After C.3 acceptance, disabling it preserves C.1/C.3 and never restores
+  raw Cookie argv.
+- Only C.2 route/UI/readiness/managed-browser code reads
+  `MONITOR_BROWSER_COOKIE_SYNC_ENABLED`. C.1
   startup recovery/manual Cookie and C.3 command/child/platform guards remain
   active independently. C.3 deployment pauses new runs, migrates or blocks
   every version-0 Cookie account, and resumes only after no such account is
   runnable; later version-0 runs fail before child spawn.
-- Disabled startup does not mount `/api/monitor/cookie-bridge/ws`. A normal
+- Both feature states leave `/api/monitor/cookie-bridge/ws` unmounted. A normal
   HTTP probe receives 404; with the pinned Starlette/Uvicorn baseline, an
-  unmatched WebSocket upgrade receives 403 before acceptance. Packet B fixes
-  the packaged-runtime expectation. When enabled, invalid peer or Origin is
-  rejected before WebSocket acceptance and must not create session, client,
-  pairing, audit-success, or Cookie-read state.
+  unmatched WebSocket upgrade receives 403 before acceptance.
 - The reviewed baseline is FastAPI `0.110.2` and Uvicorn `0.29.0` from exact
   project pins plus Starlette `0.37.2` from `uv.lock`. HTTP/WebSocket status is
-  regression evidence; route absence and zero connector protocol state remain
+  regression evidence; route absence and zero WebSocket protocol state remain
   mandatory if dependencies change.
 
 Production remains server-first:
@@ -168,15 +158,17 @@ Production remains server-first:
 - production continues to use the server-started QR browser and persisted
   server Profile;
 - local Chrome/Edge auto-sync evidence is not production acceptance;
-- remote Bridge, browser-on-operator/monitor-on-server topology, cross-host
-  Cookie transport, and headless Bridge remain outside the proposed V1 scope;
+- remote browser sync, browser-on-operator/monitor-on-server topology,
+  cross-host Cookie transport, and headless direct acquisition remain outside
+  the accepted V1 scope;
 - a headless compatibility result may be recorded as supported or unsupported
   without changing the server QR production baseline.
 
-CR-112 compatibility, implementation, and deployment packets remain gated by
-confirmation, Phase 5.1 acceptance, the existing CR-070 sequence or a later
-accepted sequencing decision, project-owned protocol proof, data-model and
-migration approval, and clean-computer acceptance.
+CR-112 compatibility, implementation, and local real-account packets passed
+their packet-specific provider, protocol, security, migration, test, and
+acceptance gates. CR-112 executes before CR-070. The separate CR-047 Linux/
+server-like real acceptance remains operator-gated and CR-112 local proof does
+not close it.
 
 Before serving account checks, login, reset, export, or crawl after startup,
 the monitor must reconcile non-terminal Profile-promotion journals. An
@@ -200,8 +192,8 @@ explicit account-identity seed salt when configured
 monitor.yaml if used
 ```
 
-CR-112 candidate/rollback operation directories and connector credentials are
-excluded from ordinary backups and CR-070 exports. The fixed committed active
+CR-112 candidate/rollback operation directories are excluded from ordinary
+backups and CR-070 exports. The fixed committed active
 Profile is backed up only after no promotion is non-terminal and operation
 cleanup has removed any retained rollback/active marker. A restore that
 contains a non-terminal promotion journal runs the same recovery gate before
@@ -353,15 +345,12 @@ Required behavior:
 - forward client IP headers where audit logs need them;
 - restrict CORS to trusted origins;
 - avoid exposing internal diagnostic routes publicly.
-- deny and do not forward `/api/monitor/cookie-bridge/` in every production or
+- do not add or forward `/api/monitor/cookie-bridge/` in any production or
   remotely reachable reverse-proxy configuration, including WebSocket upgrade
-  handling. The local extension connects directly to the loopback monitor
-  endpoint and never through the public proxy.
+  handling. The selected local product path has no Cookie-bridge endpoint.
 
-CR-112 acceptance includes negative probes through the machine LAN address and
-configured reverse proxy, plus spoofed `X-Forwarded-For`/`Forwarded` headers.
-All must fail before connector protocol state. Only a direct loopback peer with
-the exact extension Origin may proceed to pairing authentication.
+CR-112 acceptance proves direct and proxied HTTP/WebSocket probes cannot reach
+Cookie acquisition state because the route is absent.
 
 ## Public Exposure Boundary
 

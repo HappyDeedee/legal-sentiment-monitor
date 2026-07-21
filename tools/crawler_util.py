@@ -33,6 +33,8 @@ from io import BytesIO
 from typing import Dict, List, Optional, Tuple, cast
 
 import httpx
+import cv2
+import numpy as np
 from PIL import Image, ImageDraw, ImageShow
 from playwright.async_api import BrowserContext, Cookie, Page
 
@@ -48,9 +50,10 @@ async def find_login_qrcode(page: Page, selector: str) -> str:
         )
         for source in await _login_qrcode_image_sources(page, elements):
             login_qrcode_img = await _login_qrcode_source_to_base64(page, source)
-            if login_qrcode_img:
+            if is_qrcode_image_data(login_qrcode_img):
                 return login_qrcode_img
-        return await _login_qrcode_element_screenshot(elements)
+        screenshot = await _login_qrcode_element_screenshot(elements)
+        return screenshot if is_qrcode_image_data(screenshot) else ""
 
     except Exception as e:
         print(e)
@@ -119,13 +122,13 @@ async def _fetch_login_qrcode_image(page: Page, source: str) -> str:
     try:
         response = await page.context.request.get(source, headers={"User-Agent": get_user_agent()})
         if getattr(response, "ok", False):
-            utils.logger.info(f"[find_login_qrcode] get qrcode by browser request:{source}")
+            utils.logger.info("[find_login_qrcode] fetched candidate image by browser request")
             return base64.b64encode(await response.body()).decode("utf-8")
     except Exception:
         pass
     try:
         async with make_async_client(follow_redirects=True) as client:
-            utils.logger.info(f"[find_login_qrcode] get qrcode by url:{source}")
+            utils.logger.info("[find_login_qrcode] fetched candidate image by URL")
             resp = await client.get(source, headers={"User-Agent": get_user_agent()})
             if resp.status_code == 200:
                 return base64.b64encode(resp.content).decode("utf-8")
@@ -158,6 +161,31 @@ async def _login_qrcode_element_screenshot(element) -> str:
         return base64.b64encode(screenshot).decode("utf-8")
     except Exception:
         return ""
+
+
+def is_qrcode_image_data(image_data: str) -> bool:
+    """Return true only when decoded image bytes contain a detectable QR code."""
+
+    source = _strip_data_url(str(image_data or "").strip())
+    if not source:
+        return False
+    try:
+        encoded = "".join(source.split())
+        if len(encoded) > 8 * 1024 * 1024:
+            return False
+        content = base64.b64decode(encoded, validate=True)
+        if not content or len(content) > 6 * 1024 * 1024:
+            return False
+        image = cv2.imdecode(np.frombuffer(content, dtype=np.uint8), cv2.IMREAD_GRAYSCALE)
+        if image is None:
+            return False
+        height, width = image.shape[:2]
+        if min(width, height) < 64 or max(width, height) > 4096:
+            return False
+        detected, points = cv2.QRCodeDetector().detect(image)
+        return bool(detected and points is not None)
+    except (ValueError, cv2.error):
+        return False
 
 
 def _strip_data_url(source: str) -> str:

@@ -184,21 +184,26 @@ columns through one bounded identity UPDATE inside the new-account INSERT
 transaction. Existing rows and all account UPDATE paths keep their current
 identity values until the explicit Phase 5.1C lifecycle/reset flow runs.
 
-### Proposed CR-112 - Persistent Profile Promotion And Bridge Metadata
+### Accepted CR-112 - Persistent Profile Promotion And Browser-Sync Metadata
 
-Status: proposed and `Needs Confirmation`. This is a Packet C additive
-migration after Phase 5.1 acceptance, not part of Phase 5.1P or the accepted
-CR-047 schema body.
+Status: `Implemented / Verified (Packet C.1-C.3 and Packet D real-account
+lane)`. Packet B is verified. C.1 now
+applies this additive, backward-compatible migration after Packet B fixed the
+direct acquisition/protocol boundary. It is not part of Phase 5.1P or the
+historical CR-047 schema body; C.2 and C.3 are verified within their recorded
+proof boundaries. Packet D's same-machine Windows real-account lane is
+verified without another migration; CR-047 Linux/server-like acceptance
+remains separate.
 
-Proposed additions are specified in `DATA_MODEL.md`:
+Accepted Packet C additions are specified in `DATA_MODEL.md`:
 
 - `social_accounts.cookie_source`;
 - `social_accounts.profile_runtime_version` with safe default `0`;
 - `social_accounts.profile_ready_at`;
 - `account_profile_promotions` durable journal;
-- `cookie_bridge_bindings` credential-hash/binding metadata;
-- `login_sessions.cookie_source`, `profile_promotion_id`, and
-  `connector_binding_id`.
+- `login_sessions.cookie_source`, `profile_promotion_id`,
+  `acquisition_generation`, `provider_resolution_id`, and
+  `browser_attempt_id`.
 
 Migration is delivered in serial Packet C sub-packets:
 
@@ -207,15 +212,15 @@ Migration is delivered in serial Packet C sub-packets:
    Profile-ready without a real candidate validation, fixed-path promotion,
    crawler-equivalent active-path recheck, and committed account update. The
    candidate is initialized fresh from the Phase 5.1 provider inputs; it does
-   not clone the active Profile or extension credential storage.
-2. **C.2 Bridge acquisition:** add connector binding/session metadata and keep
-   the connector route unmounted while its feature flag is off. Binding rows
-   include login-session/promotion correlation, credential generation, and
-   `pending|active|revoked` lifecycle constraints.
-3. **C.3 Profile-only runner:** migrate each usable `login_type=cookie` account
-   through C.1, mark invalid/missing accounts `requires_relogin`, enable the
+   not clone active Profile storage.
+2. **C.2 Browser acquisition:** add exact-context session metadata and the
+   default-off direct acquisition API/UI. This migration unit is verified.
+   No Connector binding table or Cookie-bridge WebSocket route is added.
+3. **C.3 Profile-only runner:** keep each committed version-1
+   `login_type=cookie` account, mark invalid/missing version-0 accounts
+   `requires_relogin`, enable the
    internal profile-only child contract for those accounts, and retire raw
-   Cookie argv only after process inspection and regression evidence pass.
+   Cookie argv after fake-process inspection and regression evidence pass.
    Existing QR/Profile execution remains regression-protected and is not
    silently reclassified by CR-112 V1.
 
@@ -240,18 +245,16 @@ Migration and recovery rules:
   table in `ACCOUNT_ENVIRONMENT.md` govern recovery;
 - a pre-commit crash restores the previous active Profile and leaves the
   previous encrypted Cookie/account row unchanged;
-- a Bridge commit activates its exact pending binding and revokes the previous
-  active binding in the account/journal transaction; a manual-Cookie commit
-  creates no candidate binding and revokes the previous Profile's binding;
-  rollback revokes any candidate binding and preserves the previous binding;
 - contradictory filesystem/journal evidence marks `recovery_required` and
   `requires_relogin`, blocks execution, and preserves remaining files;
-  contradictory binding lifecycle evidence has the same result;
 - candidate/rollback cleanup is idempotent, same-volume, lock-aware, excluded
   from backups/exports, and triggered after the first successful managed run,
   by startup/periodic `cleanup_after` scan, and synchronously before a new
   promotion; a retained rollback or failed cleanup blocks the next refresh so
   at most one rollback artifact exists per account;
+- the account-run lock and non-terminal promotion journal use a shared atomic
+  exclusion predicate, so a crawl and Profile promotion cannot win separate
+  locks and mutate the same active Profile concurrently;
 - migration logs and audit rows contain opaque operation IDs and redacted
   categories, not secret values or raw paths.
 
@@ -259,16 +262,21 @@ Rollback boundaries:
 
 - before C.3 acceptance, deployments may remain on the unchanged current
   runner baseline while C.1/C.2 are still disabled;
-- `MONITOR_COOKIE_BRIDGE_ENABLED=false` rolls back C.2 only and must leave C.1
+- `MONITOR_BROWSER_COOKIE_SYNC_ENABLED=false` rolls back C.2 only and must leave C.1
   advanced-manual Cookie support usable;
-- the Bridge flag is referenced only by C.2 route/UI/readiness/extension and
-  pairing launch. C.1 validation/promotion/recovery/manual Cookie and C.3
+- the browser-sync flag is referenced only by C.2 route/UI/readiness/managed-
+  browser launch. C.1 validation/promotion/recovery/manual Cookie and C.3
   command/child/platform guards neither read nor import-gate on that flag;
 - after C.3 acceptance, rollback must preserve C.1 and the profile-only runner;
   it must not restore raw Cookie argv;
 - schema deletion is never the first rollback. Older code must ignore additive
   fields/tables, and unresolved promotion journals must be finalized before a
   binary downgrade that cannot read them.
+
+The administrator full-Cookie reveal adds no plaintext schema field, cache
+table, or durable response copy. It reads the existing encrypted account value
+only after authorization and returns it through the dedicated no-store POST
+response. Audit schema stores only redacted access metadata.
 
 ### Accepted Phase 5.2 - Account Environment Export/Import Package
 
@@ -352,8 +360,7 @@ Compatibility and safety:
   non-terminal;
 - when CR-112 exists on the source deployment, export includes only the fixed
   committed active Profile and committed account metadata. Candidate/rollback
-  directories, non-terminal promotion journals, Bridge credentials, pairing
-  tokens, and connector cache are excluded; due cleanup must remove any
+  directories and non-terminal promotion journals are excluded; due cleanup must remove any
   retained rollback and active operation marker before export proceeds;
 - export operations must release locks and delete staging files on success,
   failure, cancellation, timeout, process interruption recovery, expiry, or
