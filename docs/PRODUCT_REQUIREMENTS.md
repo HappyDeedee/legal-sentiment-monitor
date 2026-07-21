@@ -642,11 +642,18 @@ Fields:
 - login type: QR login or Cookie login;
 - status;
 - bound proxy;
-- notes;
 - latest check time;
-- latest error.
+- latest error summary as read-only operational state;
 - recognized platform identity, including display name and avatar when
   available.
+- the account list keeps recognized avatar/display name compact, omits the raw
+  platform identifier, and shows recognition time in its own column immediately
+  before latest check time; account details retain the complete identity.
+- existing saved Cookie/Profile recheck before requiring a new login when an
+  account is marked for re-login.
+- administrator-only complete structured Cookie reveal/copy for explicit
+  import through Cookie login on another installation; destination-local
+  encryption and Profile creation remain required.
 - CR-047 Phase 5.1A-C account-identity summary: safe browser platform,
   identity template, region, environment lock/re-login state, and proxy binding
   state are available now. Phase 5.1D adds one administrator-only compact
@@ -663,11 +670,21 @@ Fields:
 - proposed future CR-070 package operation status: export/import in progress,
   ready for download, failed, cancelled, expired, deleted, active after import,
   or requires re-login after import.
-- accepted CR-112 account login actions (Packet B verified): QR remains default;
-  same-machine Windows browser auto-sync is the normal Cookie workflow when
-  enabled and healthy; manual Cookie input remains collapsed advanced; an
-  administrator may explicitly reveal/copy one selected account's complete
-  Cookie from a default-masked field.
+- accepted CR-112 account login actions (Packet B verified, CR-123 presentation
+  refinement): QR remains default; QR, same-machine Windows browser login, and
+  Cookie import are peer user-facing choices; browser auto-sync is available
+  only when enabled and healthy; an administrator may explicitly reveal/copy
+  one selected account's complete Cookie from a default-masked field.
+- CR-127 login authority: one account has one current pending login attempt.
+  Starting QR, Browser, visible-browser, or Cookie login supersedes older
+  pending attempts, and a stale callback cannot replace committed
+  Cookie/Profile material or its provenance.
+- CR-128 saved-state recovery: a limited account with saved material exposes
+  one administrator action that checks the Profile first, then uses the
+  encrypted Cookie to build a fresh candidate only for a recoverable failure.
+  A `requires_relogin` account only rechecks its saved Profile and still needs
+  fresh platform login after a failed check. Candidate and active checks must
+  match the already-bound platform account identity.
 
 Rules:
 
@@ -676,9 +693,24 @@ Rules:
 - CR-047 keeps one platform account mapped to one
   `profile_key` and one stable account identity;
 - account name is display-only and not profile identity;
+- Xiaohongshu display name/avatar come from the successful signed self-info
+  readiness response, while the Profile page identifier/home URL remain the
+  stable recognized-account binding metadata;
 - login sessions are scoped to the current account;
 - no phone-login UI is shown unless a complete supported chain exists;
 - verification/captcha/SMS states are returned, not bypassed.
+- QR login returns only image bytes that decode as a QR code. Advertisements,
+  avatars, banners, and diagnostic screenshots are never presented as QR
+  codes; second-factor verification remains a distinct state with explicit
+  operator guidance.
+- Cookie import accepts a standard Cookie header or Structured Cookie Protocol
+  V1 data, validates it in a new destination-local candidate Profile, rechecks
+  the platform identity, and swaps the Profile/Cookie material atomically only
+  after success. Interruption preserves the prior committed material.
+- Saved-Cookie recovery preserves its `browser_sync` or `manual` provenance,
+  uses the same promotion journal as Cookie import, and leaves the previous
+  account/Profile/Cookie state intact when the Cookie is expired or the
+  candidate identity is missing or different.
 - platform avatar display must not expose signed external image URLs or query
   parameters to the frontend; use a same-origin server-side cache endpoint and
   fall back to the placeholder when the avatar cannot be fetched safely.
@@ -750,11 +782,14 @@ Acceptance:
   an administrator performs an explicit audited reset/re-login flow. Phase
   5.1D and final Phase 5.1 acceptance still must prove all crawl launch paths
   reuse the same effective environment.
-- After CR-112 Packet D, designated Douyin and Xiaohongshu accounts each prove
+- The verified CR-112 Packet D lane proves designated Douyin and Xiaohongshu accounts each
   exact managed-context acquisition, administrator reveal/copy, fresh candidate
   injection, restart identity verification, `fallback_used=false`, and at
   least one persisted real content item through the normal monitor entry.
   Kuaishou remains Deferred.
+- CR-128 recovery tests and live evidence prove an expired saved Cookie reaches
+  one terminal failure with rollback, while a fresh browser-sync login survives
+  service restart, normal collection, and post-crawl Profile validation.
 - after CR-070 is implemented, administrators can move an account environment
   to another deployment through a versioned, encrypted, audited package. Import
   succeeds as usable only after compatibility checks and login-state

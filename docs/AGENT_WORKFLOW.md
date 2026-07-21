@@ -122,10 +122,11 @@ Current goal rhythm:
    independently verified.
 4. The separate CR-047 Linux/server-like real acceptance remains
    operator-gated; local Windows evidence does not close it.
-5. CR-112 Packet B, C, and D execute serially. Packet B is active after atomic
-   plan commit `44baf78`; Packet C starts only after Packet B direct-acquisition
-   evidence, focused review, documentation gates, and commit are verified.
-6. CR-070 / Phase 5.2A-E starts only after CR-112 Packet D is verified.
+5. CR-112 Packet B, C, and the designated same-machine Windows Packet D
+   real-account lane are verified serially. Preserve the recorded proof
+   boundaries and do not treat local evidence as CR-047 server-like proof.
+6. CR-070 / Phase 5.2A-E is the next lane after a fresh todo baseline review
+   and atomic execution packet; it consumes only committed CR-112 state.
 7. CR-092, CR-093, and CR-094 remain future independent backlog lanes.
 
 Use the iteration rule from `docs/GOAL_EXECUTION_GUIDELINES.md`:

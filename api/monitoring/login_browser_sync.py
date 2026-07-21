@@ -43,7 +43,8 @@ from .database import (
     record_audit_log,
     update_login_session_status,
 )
-from .login_qrcode import _is_logged_in
+from .login_qrcode import _is_logged_in, close_qrcode_login_session
+from .login_attempts import account_login_start_lock, supersede_account_login_attempts
 from .login_status import (
     LOGIN_STATE_NEEDS_VERIFICATION,
     LOGIN_STATE_PLATFORM_ERROR,
@@ -136,18 +137,37 @@ async def start_browser_cookie_sync(
     profile_key = str(account.get("profile_key") or "").strip()
     if not profile_key:
         raise BrowserSyncError("account_profile_missing", "账号环境尚未准备完成。")
-    for handle in ACTIVE_BROWSER_SYNC_SESSIONS.values():
-        if handle.account_id == int(account_id) and not handle.finalized:
-            raise BrowserSyncError("browser_sync_account_busy", "该账号已有浏览器同步会话。")
-    for session in list_login_sessions(limit=100, account_id=int(account_id)):
-        if normalize_login_state(session.get("status")) in PENDING_LOGIN_STATES:
-            raise BrowserSyncError("browser_sync_account_busy", "该账号已有登录会话，请先完成或取消。")
+    async with account_login_start_lock(int(account_id)):
+        return await _start_browser_cookie_sync_locked(account, actor_id, workspace_id)
 
-    session = create_browser_sync_login_session(int(account_id), actor_id)
+
+async def _start_browser_cookie_sync_locked(
+    account: dict[str, Any],
+    actor_id: int | None,
+    workspace_id: int,
+) -> dict[str, Any]:
+    account_id = int(account["id"])
+    platform = str(account.get("platform") or "").strip().lower()
+    profile_key = str(account.get("profile_key") or "").strip()
+    for handle in ACTIVE_BROWSER_SYNC_SESSIONS.values():
+        if handle.account_id == account_id and not handle.finalized:
+            raise BrowserSyncError("browser_sync_account_busy", "该账号已有浏览器同步会话。")
+    await supersede_account_login_attempts(
+        account_id,
+        platform,
+        profile_key=profile_key,
+        profile_path=str(account.get("profile_path") or ""),
+        new_method="browser",
+        include_browser_sync=False,
+    )
+
+    session = create_browser_sync_login_session(account_id, actor_id)
+    for superseded_session_id in session.pop("superseded_session_ids", []):
+        await close_qrcode_login_session(int(superseded_session_id))
     session_id = int(session["id"])
     handle = BrowserSyncHandle(
         session_id=session_id,
-        account_id=int(account_id),
+        account_id=account_id,
         profile_key=profile_key,
         platform=platform,
         actor_id=actor_id,
@@ -204,6 +224,30 @@ async def cancel_browser_cookie_sync(
     elif normalize_login_state(session.get("status")) in PENDING_LOGIN_STATES:
         _set_session_status(int(session_id), LOGIN_STATE_QRCODE_FAILED, "浏览器同步已取消。")
     return browser_sync_session_view(int(session_id))
+
+
+async def cancel_active_browser_cookie_syncs_for_account(account_id: int) -> list[int]:
+    """Request cancellation and wait for active browser-sync work to release the Profile."""
+
+    handles = [
+        handle
+        for handle in ACTIVE_BROWSER_SYNC_SESSIONS.values()
+        if handle.account_id == int(account_id) and not handle.finalized
+    ]
+    for handle in handles:
+        handle.cancel_event.set()
+    for handle in handles:
+        if not handle.task or handle.task.done():
+            continue
+        try:
+            await asyncio.wait_for(asyncio.shield(handle.task), timeout=12)
+        except asyncio.TimeoutError:
+            _set_session_status(
+                handle.session_id,
+                LOGIN_STATE_WAITING_CONFIRM,
+                "正在安全结束旧浏览器登录，请稍后重试。",
+            )
+    return [handle.session_id for handle in handles]
 
 
 def recover_browser_cookie_sync_sessions() -> list[int]:
@@ -445,9 +489,12 @@ def _playwright_cookie_records(raw_cookies: Any) -> list[dict[str, Any]]:
             raise CookieMaterialError("cookie_payload_invalid", "records")
         if raw.get("partitionKey") is not None or raw.get("partition_key") is not None:
             raise CookieMaterialError("cookie_attribute_unsupported", "partition_key")
+        name = raw.get("name")
+        if not isinstance(name, str) or not name or any(char in name for char in ("\x00", "\r", "\n")):
+            continue
         domain = str(raw.get("domain") or "")
         item: dict[str, Any] = {
-            "name": raw.get("name"),
+            "name": name,
             "value": raw.get("value"),
             "domain": domain,
             "path": raw.get("path") or "/",

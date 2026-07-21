@@ -175,9 +175,9 @@ CR-112 browser auto-sync is controlled by deployment-only
 `MONITOR_BROWSER_COOKIE_SYNC_ENABLED`, default `false`. It is not a browser
 template field or ordinary frontend runtime setting. When false, no direct
 managed-browser acquisition or auto-sync action is activated; accepted
-advanced manual Cookie and profile-only runtime behavior remain independent of
-this flag. The rejected Cookie-bridge WebSocket route remains absent in both
-feature states.
+the separately selected Cookie-import method and profile-only runtime behavior
+remain independent of this flag. The rejected Cookie-bridge WebSocket route
+remains absent in both feature states.
 
 ## Database Storage
 

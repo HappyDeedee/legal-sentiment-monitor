@@ -16,6 +16,7 @@ from ..monitoring import ai
 from ..monitoring.account_environment import account_profile_environment
 from ..monitoring.account_identity import (
     IDENTITY_STATE_LOGIN_IN_PROGRESS,
+    IDENTITY_STATE_REQUIRES_RELOGIN,
     AccountIdentityError,
     identity_template_family,
 )
@@ -38,7 +39,6 @@ from ..monitoring.database import (
     delete_login_session,
     delete_proxy_profile,
     delete_social_account,
-    expire_login_sessions_for_account,
     get_dashboard_summary,
     get_ai_config,
     get_email_config,
@@ -121,6 +121,7 @@ from ..monitoring.login_qrcode import (
     start_qrcode_login_session_with_profile,
     submit_qrcode_login_verification_code,
 )
+from ..monitoring.login_attempts import account_login_start_lock, supersede_account_login_attempts
 from ..monitoring.login_status import (
     LOGIN_STATE_NEEDS_VERIFICATION,
     LOGIN_STATE_PLATFORM_ERROR,
@@ -136,7 +137,7 @@ from ..monitoring.login_status import (
     normalize_login_state,
 )
 from ..monitoring.account_check import check_social_account_login
-from ..monitoring.cookie_material import CookieMaterialError, parse_manual_cookie_material
+from ..monitoring.cookie_material import CookieMaterialError, deserialize_cookie_material
 from ..monitoring.profile_promotion import (
     ProfilePromotionError,
     promote_cookie_to_profile,
@@ -221,6 +222,24 @@ def _raise_identity_http_error(exc: AccountIdentityError) -> None:
     raise HTTPException(status_code=status_code, detail=_identity_error_detail(exc))
 
 
+def _profile_promotion_http_detail(exc: ProfilePromotionError) -> str:
+    return {
+        "profile_candidate_identity_mismatch": "保存的 Cookie 对应账号与当前账号不一致，原登录态已保留。请重新登录当前账号。",
+        "profile_active_identity_mismatch": "保存的 Cookie 对应账号与当前账号不一致，原登录态已保留。请重新登录当前账号。",
+        "profile_candidate_validation_failed": "保存的 Cookie 已失效或平台要求再次验证，原登录态已保留。请使用浏览器或扫码重新登录。",
+        "profile_active_recheck_failed": "新登录态复检未通过，原登录态已保留。请使用浏览器或扫码重新登录。",
+        "profile_cookie_material_missing": "当前账号没有可恢复的 Cookie，原登录态已保留。",
+        "profile_cookie_source_missing": "Cookie 来源记录不完整，原登录态已保留。请重新获取 Cookie。",
+        "profile_cookie_source_invalid": "Cookie 来源记录不完整，原登录态已保留。请重新获取 Cookie。",
+        "profile_account_identity_missing": "当前账号尚未识别平台身份，原登录态已保留。请先使用浏览器或扫码登录。",
+        "profile_promotion_account_busy": "账号正在进行登录或验活，请稍后重试。",
+        "profile_promotion_lock_timeout": "账号正在进行登录或验活，请稍后重试。",
+    }.get(
+        exc.reason,
+        "登录态保存失败，原登录态已保留。请重试或使用浏览器重新登录。",
+    )
+
+
 def _optional_positive_id(value: Any, field: str) -> int | None:
     if value in (None, ""):
         return None
@@ -277,6 +296,7 @@ def _recover_prepared_account_identity(
     trigger_source: str,
     failure_reason: str,
     user_id: int | None = None,
+    login_session_id: int | None = None,
 ) -> dict[str, Any] | None:
     if not account_id:
         return None
@@ -290,6 +310,7 @@ def _recover_prepared_account_identity(
             trigger_source=trigger_source,
             failure_reason=failure_reason,
             user_id=user_id,
+            login_session_id=login_session_id,
         )
     except AccountIdentityError:
         return get_social_account(int(account_id), masked=False)
@@ -438,6 +459,10 @@ async def platform_login_browser(platform: str, payload: dict[str, Any] | None =
     async with _login_browser_open_lock(platform):
         if login_window_status(platform).get("is_open"):
             raise HTTPException(status_code=409, detail="该平台已有登录窗口，请先完成或关闭当前窗口后重试")
+        account_id = _optional_positive_id((payload or {}).get("account_id"), "account_id")
+        if account_id:
+            async with account_login_start_lock(account_id):
+                return await _platform_login_browser_locked(platform, payload, admin)
         return await _platform_login_browser_locked(platform, payload, admin)
 
 
@@ -449,8 +474,21 @@ async def _platform_login_browser_locked(
     request_payload = payload or {}
     account_id = _optional_positive_id(request_payload.get("account_id"), "account_id")
     prepared = False
+    superseded_session_ids: list[int] = []
     try:
         if account_id:
+            account = get_social_account(account_id, masked=False)
+            if not account:
+                raise ValueError("account not found")
+            if str(account.get("platform") or "") != str(platform):
+                raise ValueError("账号平台与登录窗口不一致")
+            superseded_session_ids = await supersede_account_login_attempts(
+                account_id,
+                str(platform),
+                profile_key=str(account.get("profile_key") or ""),
+                profile_path=str(account.get("profile_path") or ""),
+                new_method="browser",
+            )
             await asyncio.to_thread(recover_profile_promotions, account_id)
             prepare_social_account_identity_login(
                 account_id,
@@ -465,23 +503,13 @@ async def _platform_login_browser_locked(
             trigger_source="visible_browser_login",
             headless=False,
         )
-        expired_session_ids = expire_login_sessions_for_account(
-            int(command.get("account_id") or 0) or None,
-            str(platform),
-            str(command.get("profile_path") or ""),
-            str(command.get("profile_key") or ""),
-        )
-        switch_message = "已切换到登录窗口，请完成平台验证并关闭窗口后，再回后台验活账号。"
-        for expired_session_id in expired_session_ids:
-            update_login_session_status(int(expired_session_id), LOGIN_STATE_TIMEOUT, switch_message)
-            await close_qrcode_login_session(expired_session_id)
         result = open_login_browser_with_command(command)
         if account_id:
             result = {
                 **result,
                 "message": "登录窗口已打开，请在窗口中完成平台验证；系统将自动检测并保存登录状态。",
             }
-        if expired_session_ids:
+        if superseded_session_ids:
             result = {
                 **result,
                 "message": "已切换到登录窗口，请完成平台验证；系统将自动检测并保存登录状态。",
@@ -528,7 +556,7 @@ async def reconcile_platform_login_browser(
     if not account_id:
         raise HTTPException(status_code=400, detail="请选择需要确认登录的账号")
 
-    async with _visible_login_reconcile_lock(platform, account_id):
+    async with _visible_login_reconcile_lock(platform, account_id), account_login_start_lock(account_id):
         account = get_social_account(account_id, masked=False)
         if not account:
             raise HTTPException(status_code=404, detail="账号不存在")
@@ -1247,7 +1275,7 @@ async def create_social_account(payload: dict[str, Any], admin: dict[str, Any] =
     except AccountIdentityError as exc:
         _raise_identity_http_error(exc)
     except ProfilePromotionError as exc:
-        raise HTTPException(status_code=409, detail=exc.reason)
+        raise HTTPException(status_code=409, detail=_profile_promotion_http_detail(exc))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
 
@@ -1305,9 +1333,92 @@ async def update_social_account(account_id: int, payload: dict[str, Any], admin:
     except AccountIdentityError as exc:
         _raise_identity_http_error(exc)
     except ProfilePromotionError as exc:
-        raise HTTPException(status_code=409, detail=exc.reason)
+        raise HTTPException(status_code=409, detail=_profile_promotion_http_detail(exc))
     except ValueError as exc:
         raise HTTPException(status_code=400, detail=str(exc))
+
+
+async def _promote_cookie_account(
+    account: dict[str, Any],
+    raw_cookie: str,
+    admin: dict[str, Any],
+    *,
+    cookie_source: str,
+    audit_action: str,
+    expected_platform_account_id: str = "",
+    start_lock_held: bool = False,
+) -> dict[str, Any]:
+    records = deserialize_cookie_material(str(account.get("platform") or ""), raw_cookie)
+    if start_lock_held:
+        result = await _promote_cookie_account_locked(
+            account,
+            records,
+            admin,
+            cookie_source=cookie_source,
+            expected_platform_account_id=expected_platform_account_id,
+        )
+    else:
+        async with account_login_start_lock(int(account["id"])):
+            result = await _promote_cookie_account_locked(
+                account,
+                records,
+                admin,
+                cookie_source=cookie_source,
+                expected_platform_account_id=expected_platform_account_id,
+            )
+    promoted = result.get("account") if isinstance(result, dict) else None
+    if not isinstance(promoted, dict) or not promoted:
+        raise ProfilePromotionError("profile_promotion_commit_invalid")
+    _audit_admin(
+        admin,
+        audit_action,
+        "social_account",
+        int(account["id"]),
+        {
+            "promotion_id": (result.get("promotion") or {}).get("id"),
+            "cookie_source": cookie_source,
+            "state": (result.get("promotion") or {}).get("state"),
+        },
+    )
+    return promoted
+
+
+async def _promote_cookie_account_locked(
+    account: dict[str, Any],
+    records: list[dict[str, Any]],
+    admin: dict[str, Any],
+    *,
+    cookie_source: str,
+    expected_platform_account_id: str,
+) -> dict[str, Any]:
+    await supersede_account_login_attempts(
+        int(account["id"]),
+        str(account.get("platform") or ""),
+        profile_key=str(account.get("profile_key") or ""),
+        profile_path=str(account.get("profile_path") or ""),
+        new_method="cookie",
+    )
+    session = create_login_session(
+        {
+            "platform": str(account.get("platform") or ""),
+            "account_id": int(account["id"]),
+            "profile_key": str(account.get("profile_key") or ""),
+            "cookie_source": cookie_source,
+            "message": "正在验证 Cookie 并初始化网页登录态。",
+        },
+        supersede_pending=True,
+        supersede_message="已切换到 Cookie 登录，本次旧登录会话已结束。",
+    )
+    for session_id in session.pop("superseded_session_ids", []):
+        await close_qrcode_login_session(int(session_id))
+    return await promote_cookie_to_profile(
+        int(account["id"]),
+        records,
+        cookie_source=cookie_source,
+        login_session_id=int(session["id"]),
+        actor_id=_route_actor_id(admin),
+        expected_platform_account_id=expected_platform_account_id,
+    )
 
 
 async def _promote_manual_cookie_account(
@@ -1315,28 +1426,41 @@ async def _promote_manual_cookie_account(
     raw_cookie: str,
     admin: dict[str, Any],
 ) -> dict[str, Any]:
-    records = parse_manual_cookie_material(str(account.get("platform") or ""), raw_cookie)
-    result = await promote_cookie_to_profile(
-        int(account["id"]),
-        records,
-        cookie_source="manual",
-        actor_id=_route_actor_id(admin),
-    )
-    promoted = result.get("account") if isinstance(result, dict) else None
-    if not isinstance(promoted, dict) or not promoted:
-        raise ProfilePromotionError("profile_promotion_commit_invalid")
-    _audit_admin(
+    return await _promote_cookie_account(
+        account,
+        raw_cookie,
         admin,
-        "promote_manual_cookie_profile",
-        "social_account",
-        int(account["id"]),
-        {
-            "promotion_id": (result.get("promotion") or {}).get("id"),
-            "cookie_source": "manual",
-            "state": (result.get("promotion") or {}).get("state"),
-        },
+        cookie_source="manual",
+        audit_action="promote_manual_cookie_profile",
     )
-    return promoted
+
+
+async def _recover_saved_cookie_profile(
+    account: dict[str, Any],
+    admin: dict[str, Any],
+    *,
+    start_lock_held: bool = False,
+) -> dict[str, Any]:
+    raw_cookie = str(account.get("cookies") or "").strip()
+    if not raw_cookie:
+        raise ProfilePromotionError("profile_cookie_material_missing")
+    source = str(account.get("cookie_source") or "").strip()
+    if not source:
+        raise ProfilePromotionError("profile_cookie_source_missing")
+    if source not in {"browser_sync", "manual"}:
+        raise ProfilePromotionError("profile_cookie_source_invalid")
+    expected_platform_account_id = str(account.get("platform_account_id") or "").strip()
+    if not expected_platform_account_id:
+        raise ProfilePromotionError("profile_account_identity_missing")
+    return await _promote_cookie_account(
+        account,
+        raw_cookie,
+        admin,
+        cookie_source=source,
+        audit_action="recover_saved_cookie_profile",
+        expected_platform_account_id=expected_platform_account_id,
+        start_lock_held=start_lock_held,
+    )
 
 
 @router.post("/social-accounts/{account_id}/cookie-promotion")
@@ -1357,7 +1481,7 @@ async def promote_social_account_cookie(
     except CookieMaterialError as exc:
         raise HTTPException(status_code=400, detail=exc.reason)
     except ProfilePromotionError as exc:
-        raise HTTPException(status_code=409, detail=exc.reason)
+        raise HTTPException(status_code=409, detail=_profile_promotion_http_detail(exc))
     except AccountIdentityError as exc:
         _raise_identity_http_error(exc)
     except ValueError as exc:
@@ -1463,6 +1587,69 @@ async def check_social_account(account_id: int, admin: dict[str, Any] = AdminUse
         raise HTTPException(status_code=400, detail=redact_sensitive(str(exc)))
 
 
+@router.post("/social-accounts/{account_id}/recheck-saved-login")
+async def recheck_saved_social_account_login(account_id: int, admin: dict[str, Any] = AdminUser):
+    try:
+        async with account_login_start_lock(account_id):
+            account = get_social_account(account_id, masked=False)
+            if not account:
+                raise ValueError("account not found")
+            if (
+                not account.get("requires_relogin")
+                and str(account.get("status") or "") != "limited"
+            ):
+                raise HTTPException(status_code=409, detail="当前账号已不需要恢复验活。")
+            if not account.get("has_cookies") and int(account.get("profile_runtime_version") or 0) < 1:
+                raise HTTPException(status_code=409, detail="当前账号没有可验活的 Cookie 或 Profile。")
+            saved_state_recheck = bool(account.get("requires_relogin"))
+            result = await check_social_account_login(
+                account_id,
+                saved_state_recheck=saved_state_recheck,
+                actor_id=_route_actor_id(admin),
+            )
+            recovery_used = False
+            if (
+                not result.get("ok")
+                and not saved_state_recheck
+                and str(result.get("status") or "") in {"invalid", "missing_profile", "client_check_failed"}
+                and account.get("has_cookies")
+            ):
+                current = get_social_account(account_id, masked=False) or account
+                promoted = await _recover_saved_cookie_profile(
+                    current,
+                    admin,
+                    start_lock_held=True,
+                )
+                result = {
+                    "ok": True,
+                    "status": "valid",
+                    "message": "已使用保存的 Cookie 恢复 Profile，可供采集任务使用。",
+                    "account": promoted,
+                    "recovery_used": True,
+                }
+                recovery_used = True
+        _audit_admin(
+            admin,
+            "recheck_social_account_saved_login",
+            "social_account",
+            account_id,
+            {
+                "status": result.get("status"),
+                "ok": result.get("ok"),
+                "recovery_used": recovery_used,
+            },
+        )
+        if isinstance(result.get("account"), dict):
+            result = {**result, "account": _customer_view_social_account(result["account"])}
+        return {"result": result}
+    except AccountIdentityError as exc:
+        _raise_identity_http_error(exc)
+    except ProfilePromotionError as exc:
+        raise HTTPException(status_code=409, detail=_profile_promotion_http_detail(exc))
+    except ValueError as exc:
+        raise HTTPException(status_code=400, detail=redact_sensitive(str(exc)))
+
+
 @router.post("/social-accounts/check-login")
 async def check_social_accounts(payload: dict[str, Any] | None = None, admin: dict[str, Any] = AdminUser):
     account_ids = (payload or {}).get("account_ids") or []
@@ -1529,6 +1716,9 @@ async def create_platform_login_session(payload: dict[str, Any], admin: dict[str
     identity_prepared = False
     session_lock: asyncio.Lock | None = None
     session_lock_acquired = False
+    account_start_lock: asyncio.Lock | None = None
+    account_start_lock_acquired = False
+    session: dict[str, Any] | None = None
     try:
         if not payload.get("account_id"):
             draft = create_draft_social_account(
@@ -1544,11 +1734,42 @@ async def create_platform_login_session(payload: dict[str, Any], admin: dict[str
             payload = {**payload, "account_id": draft["id"]}
         prepared_account_id = _optional_positive_id(payload.get("account_id"), "account_id")
         if prepared_account_id:
+            pending_account = get_social_account(prepared_account_id, masked=False)
+            if not pending_account:
+                raise ValueError("account not found")
+            account_start_lock = account_login_start_lock(prepared_account_id)
+            await account_start_lock.acquire()
+            account_start_lock_acquired = True
+            await supersede_account_login_attempts(
+                prepared_account_id,
+                str(platform),
+                profile_key=str(pending_account.get("profile_key") or ""),
+                profile_path=str(pending_account.get("profile_path") or ""),
+                new_method="qrcode",
+            )
+            capability = get_mediacrawler_login_capability(str(platform))
+            session = create_login_session(
+                {
+                    "platform": platform,
+                    "account_id": prepared_account_id,
+                    "login_url": str(capability.get("login_url") or ""),
+                    "profile_key": str(pending_account.get("profile_key") or ""),
+                    "message": "正在准备登录二维码。",
+                },
+                supersede_pending=True,
+                supersede_message="已切换到扫码登录，本次旧登录会话已结束。",
+            )
+            session_lock = _login_session_poll_lock(int(session["id"]))
+            await session_lock.acquire()
+            session_lock_acquired = True
+            for superseded_session_id in session.pop("superseded_session_ids", []):
+                await close_qrcode_login_session(int(superseded_session_id))
             await asyncio.to_thread(recover_profile_promotions, prepared_account_id)
             prepare_social_account_identity_login(
                 prepared_account_id,
                 trigger_source="qrcode_login",
                 user_id=_route_actor_id(admin),
+                login_session_id=int(session["id"]),
             )
             identity_prepared = True
         command = await _login_browser_command_for_payload(
@@ -1558,19 +1779,18 @@ async def create_platform_login_session(payload: dict[str, Any], admin: dict[str
             trigger_source="qrcode_login",
             headless=_login_qr_headless(),
         )
+        if not session:
+            raise ValueError("login session reservation missing")
+        prepare_social_account_identity_login(
+            int(prepared_account_id or 0),
+            trigger_source="qrcode_login",
+            user_id=_route_actor_id(admin),
+            allow_prepared_validation=True,
+            login_session_id=int(session["id"]),
+        )
         account = get_social_account(int(payload.get("account_id") or 0)) if payload.get("account_id") else None
         profile_window = _open_login_window_for_command(str(platform), command)
         if profile_window:
-            session = create_login_session(
-                {
-                    "platform": platform,
-                    "account_id": payload.get("account_id"),
-                    "login_url": command["login_url"],
-                    "profile_key": command.get("profile_key") or "",
-                    "profile_path": command["profile_path"],
-                    "message": _profile_contention_message(),
-                }
-            )
             session = update_login_session_status(
                 int(session["id"]),
                 LOGIN_STATE_NEEDS_VERIFICATION,
@@ -1580,6 +1800,7 @@ async def create_platform_login_session(payload: dict[str, Any], admin: dict[str
                 int(account["id"]) if account else None,
                 str(session.get("status") or ""),
                 str(session.get("message") or ""),
+                login_session_id=int(session["id"]),
             )
             return {
                 "session": _customer_view_login_session(session),
@@ -1608,27 +1829,6 @@ async def create_platform_login_session(payload: dict[str, Any], admin: dict[str
                     "polling_supported": True,
                 },
             }
-        expired_session_ids = expire_login_sessions_for_account(
-            int(account["id"]) if account else None,
-            str(platform),
-            str(command.get("profile_path") or ""),
-            str(command.get("profile_key") or ""),
-        )
-        for expired_session_id in expired_session_ids:
-            await close_qrcode_login_session(expired_session_id)
-        session = create_login_session(
-            {
-                "platform": platform,
-                "account_id": payload.get("account_id"),
-                "login_url": command["login_url"],
-                "profile_key": command.get("profile_key") or "",
-                "profile_path": command["profile_path"],
-                "message": "正在生成登录二维码。",
-            }
-        )
-        session_lock = _login_session_poll_lock(int(session["id"]))
-        await session_lock.acquire()
-        session_lock_acquired = True
         _audit_admin(admin, "create_login_session", "login_session", session.get("id"), {"platform": platform, "account_id": payload.get("account_id")})
         qr_result = await start_qrcode_login_session_with_profile(int(session["id"]), str(platform), command)
         provider_plan = qr_result.pop("_browser_environment_plan", None)
@@ -1662,6 +1862,7 @@ async def create_platform_login_session(payload: dict[str, Any], admin: dict[str
                 int(account["id"]) if account else None,
                 str(session.get("status") or ""),
                 str(session.get("message") or ""),
+                login_session_id=int(session["id"]),
             )
         return {
             "session": _customer_view_login_session(session),
@@ -1689,7 +1890,10 @@ async def create_platform_login_session(payload: dict[str, Any], admin: dict[str
                 trigger_source="qrcode_login",
                 failure_reason="qrcode_start_failed",
                 user_id=_route_actor_id(admin),
+                login_session_id=int(session["id"]) if session else None,
             )
+        if session:
+            update_login_session_status(int(session["id"]), LOGIN_STATE_PLATFORM_ERROR, _identity_error_detail(exc))
         _raise_identity_http_error(exc)
     except ValueError as exc:
         _recover_prepared_account_identity(
@@ -1697,7 +1901,10 @@ async def create_platform_login_session(payload: dict[str, Any], admin: dict[str
             trigger_source="qrcode_login",
             failure_reason="qrcode_start_failed",
             user_id=_route_actor_id(admin),
+            login_session_id=int(session["id"]) if session else None,
         )
+        if session:
+            update_login_session_status(int(session["id"]), LOGIN_STATE_PLATFORM_ERROR, customer_safe_text(str(exc)))
         raise HTTPException(status_code=400, detail=redact_sensitive(str(exc)))
     except Exception as exc:
         _recover_prepared_account_identity(
@@ -1705,7 +1912,14 @@ async def create_platform_login_session(payload: dict[str, Any], admin: dict[str
             trigger_source="qrcode_login",
             failure_reason="qrcode_start_failed",
             user_id=_route_actor_id(admin),
+            login_session_id=int(session["id"]) if session else None,
         )
+        if session:
+            update_login_session_status(
+                int(session["id"]),
+                LOGIN_STATE_PLATFORM_ERROR,
+                customer_safe_text(redact_sensitive(f"{type(exc).__name__}: {exc}")),
+            )
         raise HTTPException(
             status_code=500,
             detail=customer_safe_text(redact_sensitive(f"{type(exc).__name__}: {exc}")),
@@ -1713,6 +1927,8 @@ async def create_platform_login_session(payload: dict[str, Any], admin: dict[str
     finally:
         if session_lock_acquired and session_lock is not None:
             session_lock.release()
+        if account_start_lock_acquired and account_start_lock is not None:
+            account_start_lock.release()
 
 
 @router.get("/login-sessions/{session_id}")
@@ -1775,6 +1991,7 @@ async def _login_session_locked(session_id: int) -> dict[str, Any]:
             int(session.get("account_id") or 0) or None,
             str(session.get("status") or ""),
             str(session.get("message") or ""),
+            login_session_id=int(session["id"]),
         )
     statuses = {item["platform"]: item for item in list_platform_status()}
     platform_status = statuses.get(platform) or {}
@@ -1840,6 +2057,7 @@ async def _submit_login_session_verification_code_locked(session_id: int, payloa
             int(session.get("account_id") or 0) or None,
             str(session.get("status") or ""),
             str(session.get("message") or ""),
+            login_session_id=int(session["id"]),
         )
     statuses = {item["platform"]: item for item in list_platform_status()}
     platform = str(session.get("platform") or "")
@@ -1906,6 +2124,7 @@ async def _request_login_session_verification_code_locked(session_id: int) -> di
             int(session.get("account_id") or 0) or None,
             str(session.get("status") or ""),
             str(session.get("message") or ""),
+            login_session_id=int(session["id"]),
         )
     statuses = {item["platform"]: item for item in list_platform_status()}
     platform = str(session.get("platform") or "")
@@ -1932,6 +2151,13 @@ async def _request_login_session_verification_code_locked(session_id: int) -> di
 
 
 async def _verify_successful_login_session(session: dict[str, Any]) -> tuple[dict[str, Any], dict[str, Any] | None]:
+    current = get_login_session(int(session["id"]))
+    if not current:
+        raise HTTPException(status_code=404, detail="login session not found")
+    if normalize_login_state(current.get("status")) not in PENDING_LOGIN_STATES:
+        account_id = int(current.get("account_id") or 0)
+        return current, get_social_account(account_id) if account_id else None
+    session = current
     account_id = int(session.get("account_id") or 0)
     if not account_id:
         verified_session = update_login_session_status(
@@ -1946,27 +2172,54 @@ async def _verify_successful_login_session(session: dict[str, Any]) -> tuple[dic
             account_id,
             allow_draft=True,
             identity_prepared=True,
+            login_session_id=int(session["id"]),
         )
     except Exception as exc:
+        current = get_login_session(int(session["id"]))
+        if current and normalize_login_state(current.get("status")) not in PENDING_LOGIN_STATES:
+            return current, get_social_account(account_id)
         message = customer_safe_text(f"登录结果未确认，请重新生成二维码后扫码登录。{redact_sensitive(str(exc))}")
-        failed_session = update_login_session_status(int(session["id"]), LOGIN_STATE_PLATFORM_ERROR, message)
         account_status = _recover_prepared_account_identity(
             account_id,
             trigger_source="qrcode_login",
             failure_reason="qrcode_verification_failed",
-        ) or update_social_account_login_state(account_id, LOGIN_STATE_PLATFORM_ERROR, message)
+            login_session_id=int(session["id"]),
+        )
+        failed_session = update_login_session_status(int(session["id"]), LOGIN_STATE_PLATFORM_ERROR, message)
+        if normalize_login_state(failed_session.get("status")) != LOGIN_STATE_PLATFORM_ERROR:
+            return failed_session, get_social_account(account_id)
+        account_status = account_status or update_social_account_login_state(
+            account_id,
+            LOGIN_STATE_PLATFORM_ERROR,
+            message,
+            login_session_id=int(session["id"]),
+        )
         return failed_session, account_status
+    current = get_login_session(int(session["id"]))
+    if current and normalize_login_state(current.get("status")) not in PENDING_LOGIN_STATES:
+        return current, get_social_account(account_id)
     if not check.get("ok"):
         message = customer_safe_text(str(check.get("message") or "登录态未通过验活，请重新扫码登录。"))
-        failed_session = update_login_session_status(int(session["id"]), LOGIN_STATE_PLATFORM_ERROR, message)
         account_status = _recover_prepared_account_identity(
             account_id,
             trigger_source="qrcode_login",
             failure_reason=str(check.get("status") or "qrcode_verification_failed"),
-        ) or check.get("account") or update_social_account_login_state(account_id, LOGIN_STATE_PLATFORM_ERROR, message)
+            login_session_id=int(session["id"]),
+        )
+        failed_session = update_login_session_status(int(session["id"]), LOGIN_STATE_PLATFORM_ERROR, message)
+        if normalize_login_state(failed_session.get("status")) != LOGIN_STATE_PLATFORM_ERROR:
+            return failed_session, get_social_account(account_id)
+        account_status = account_status or check.get("account") or update_social_account_login_state(
+            account_id,
+            LOGIN_STATE_PLATFORM_ERROR,
+            message,
+            login_session_id=int(session["id"]),
+        )
         return failed_session, account_status
     success_message = "登录成功，账号已通过验活。"
     verified_session = update_login_session_status(int(session["id"]), LOGIN_STATE_SUCCESS, success_message, str(session.get("qr_image") or ""))
+    if normalize_login_state(verified_session.get("status")) != LOGIN_STATE_SUCCESS:
+        return verified_session, get_social_account(account_id)
     return verified_session, check.get("account")
 
 
@@ -1995,17 +2248,39 @@ async def _reconcile_login_session_with_account_check(
             account_id,
             allow_draft=True,
             identity_prepared=True,
+            login_session_id=int(session["id"]),
         )
     except Exception:
+        current = get_login_session(int(session["id"]))
+        if current and normalize_login_state(current.get("status")) not in PENDING_LOGIN_STATES:
+            return current, get_social_account(account_id)
         account_status = _recover_prepared_account_identity(
             account_id,
             trigger_source="qrcode_login",
             failure_reason=str(fallback_status or "qrcode_verification_failed"),
+            login_session_id=int(session["id"]),
         )
+        failed_session = update_login_session_status(
+            int(session["id"]),
+            fallback_status,
+            message,
+            str(qr_poll.get("qr_image") or ""),
+        )
+        if normalize_login_state(failed_session.get("status")) != normalize_login_state(fallback_status):
+            return failed_session, get_social_account(account_id)
         return (
-            update_login_session_status(int(session["id"]), fallback_status, message, str(qr_poll.get("qr_image") or "")),
-            account_status or update_social_account_login_state(account_id, fallback_status, message),
+            failed_session,
+            account_status
+            or update_social_account_login_state(
+                account_id,
+                fallback_status,
+                message,
+                login_session_id=int(session["id"]),
+            ),
         )
+    current = get_login_session(int(session["id"]))
+    if current and normalize_login_state(current.get("status")) not in PENDING_LOGIN_STATES:
+        return current, get_social_account(account_id)
     if check.get("ok"):
         success_message = "登录成功，账号已通过验活。"
         verified_session = update_login_session_status(
@@ -2021,10 +2296,26 @@ async def _reconcile_login_session_with_account_check(
         account_id,
         trigger_source="qrcode_login",
         failure_reason=str(check.get("status") or fallback_status or "qrcode_verification_failed"),
+        login_session_id=int(session["id"]),
     )
+    failed_session = update_login_session_status(
+        int(session["id"]),
+        fallback_status,
+        failure_message,
+        str(qr_poll.get("qr_image") or ""),
+    )
+    if normalize_login_state(failed_session.get("status")) != normalize_login_state(fallback_status):
+        return failed_session, get_social_account(account_id)
     return (
-        update_login_session_status(int(session["id"]), fallback_status, failure_message, str(qr_poll.get("qr_image") or "")),
-        account_status or check.get("account") or update_social_account_login_state(account_id, fallback_status, failure_message),
+        failed_session,
+        account_status
+        or check.get("account")
+        or update_social_account_login_state(
+            account_id,
+            fallback_status,
+            failure_message,
+            login_session_id=int(session["id"]),
+        ),
     )
 
 
@@ -2036,15 +2327,30 @@ async def remove_login_session(session_id: int, admin: dict[str, Any] = AdminUse
 
 async def _remove_login_session_locked(session_id: int, admin: dict[str, Any]) -> dict[str, bool]:
     session = get_login_session(session_id)
-    await close_qrcode_login_session(session_id)
-    if session:
-        _recover_prepared_account_identity(
-            _optional_positive_id(session.get("account_id"), "account_id"),
-            trigger_source="qrcode_login",
-            failure_reason="cancelled",
-            user_id=_route_actor_id(admin),
-        )
-    delete_login_session(session_id)
+    account_id = (
+        _optional_positive_id(session.get("account_id"), "account_id")
+        if session
+        else None
+    )
+
+    async def cancel_owned_session() -> None:
+        current = get_login_session(session_id)
+        await close_qrcode_login_session(session_id)
+        if current:
+            _recover_prepared_account_identity(
+                account_id,
+                trigger_source="qrcode_login",
+                failure_reason="cancelled",
+                user_id=_route_actor_id(admin),
+                login_session_id=session_id,
+            )
+        delete_login_session(session_id)
+
+    if account_id:
+        async with account_login_start_lock(account_id):
+            await cancel_owned_session()
+    else:
+        await cancel_owned_session()
     _audit_admin(admin, "delete_login_session", "login_session", session_id)
     return {"ok": True}
 

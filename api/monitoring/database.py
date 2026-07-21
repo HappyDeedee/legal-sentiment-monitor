@@ -5218,11 +5218,20 @@ def save_social_account(
     proxy_id = _safe_int(payload.get("proxy_id")) or None
     if proxy_id and not get_proxy_profile(proxy_id, masked=True):
         raise ValueError("proxy not found")
+    current_account: dict[str, Any] = {}
     current_cookies = ""
     if account_id:
         with get_conn() as conn:
-            row = conn.execute("SELECT cookies_encrypted FROM social_accounts WHERE id=?", (account_id,)).fetchone()
+            row = conn.execute(
+                """
+                SELECT cookies_encrypted, login_type, cookie_source,
+                       profile_runtime_version, notes, last_error
+                FROM social_accounts WHERE id=?
+                """,
+                (account_id,),
+            ).fetchone()
         if row:
+            current_account = dict(row)
             current_cookies = decrypt_secret(row["cookies_encrypted"] or "")
     if payload.get("clear_cookies"):
         cookies = ""
@@ -5230,8 +5239,18 @@ def save_social_account(
         cookies = str(payload.get("cookies") or "").strip()
     else:
         cookies = current_cookies
+    if (
+        account_id
+        and cookies
+        and str(current_account.get("cookie_source") or "") in {"browser_sync", "manual"}
+        and int(current_account.get("profile_runtime_version") or 0) >= 1
+        and login_type == "qrcode"
+    ):
+        login_type = "cookie"
     if login_type == "cookie" and not cookies:
         raise ValueError("Cookie 登录需要先填写 Cookie")
+    notes = payload.get("notes") if "notes" in payload else current_account.get("notes", "")
+    last_error = payload.get("last_error") if "last_error" in payload else current_account.get("last_error", "")
     values = (
         name,
         platform,
@@ -5242,8 +5261,8 @@ def save_social_account(
         profile_path,
         proxy_id,
         is_draft,
-        payload.get("notes") or "",
-        payload.get("last_error") or "",
+        notes or "",
+        last_error or "",
         now,
     )
     with get_conn() as conn:
@@ -5369,9 +5388,22 @@ def prepare_social_account_identity_login(
     trigger_source: str,
     user_id: int | None = None,
     allow_prepared_validation: bool = False,
+    allow_requires_relogin_recheck: bool = False,
+    login_session_id: int | None = None,
 ) -> dict[str, Any]:
     now = utc_now()
     with get_conn() as conn:
+        if login_session_id is not None:
+            session = conn.execute(
+                "SELECT account_id, status FROM login_sessions WHERE id=?",
+                (int(login_session_id),),
+            ).fetchone()
+            if (
+                not session
+                or int(session["account_id"] or 0) != int(account_id)
+                or normalize_login_state(session["status"]) not in PENDING_LOGIN_STATES
+            ):
+                raise AccountIdentityError("account_identity_login_conflict", "login_session")
         account = _identity_account_row(conn, account_id)
         state = str(account.get("identity_state") or IDENTITY_STATE_DRAFT)
         if allow_prepared_validation:
@@ -5380,7 +5412,39 @@ def prepare_social_account_identity_login(
             _validate_persisted_identity(conn, account)
             return _row_to_pool_item(account, masked=True)
         if state == IDENTITY_STATE_REQUIRES_RELOGIN or account.get("requires_relogin"):
-            raise AccountIdentityError("account_identity_requires_relogin", "identity_state")
+            if not allow_requires_relogin_recheck:
+                raise AccountIdentityError("account_identity_requires_relogin", "identity_state")
+            if not account.get("cookies_encrypted") and int(account.get("profile_runtime_version") or 0) < 1:
+                raise AccountIdentityError("account_identity_missing", "login_material")
+            validation_state = (
+                IDENTITY_STATE_ACTIVE
+                if account.get("browser_environment_locked_at")
+                and account.get("browser_environment_lock_reason")
+                else IDENTITY_STATE_VALIDATED
+            )
+            _validate_persisted_identity(
+                conn,
+                {
+                    **account,
+                    "identity_state": validation_state,
+                    "requires_relogin": 0,
+                },
+            )
+            conn.execute(
+                "UPDATE social_accounts SET identity_state=?, requires_relogin=0, updated_at=? WHERE id=?",
+                (IDENTITY_STATE_LOGIN_IN_PROGRESS, now, account_id),
+            )
+            prepared = _identity_account_row(conn, account_id)
+            _record_identity_audit(
+                conn,
+                "identity_saved_login_recheck_started",
+                account,
+                prepared,
+                trigger_source=trigger_source,
+                reason="saved_login_material_recheck",
+                user_id=user_id,
+            )
+            return _row_to_pool_item(prepared, masked=True)
         if state in {IDENTITY_STATE_LOGIN_IN_PROGRESS, IDENTITY_STATE_RESETTING}:
             raise AccountIdentityError("account_identity_login_conflict", "identity_state")
         if state == IDENTITY_STATE_DRAFT:
@@ -5446,9 +5510,22 @@ def complete_social_account_identity_login(
     lock_reason: str = "",
     failure_reason: str = "",
     user_id: int | None = None,
+    restore_requires_relogin_on_failure: bool = False,
+    login_session_id: int | None = None,
 ) -> dict[str, Any]:
     now = utc_now()
     with get_conn() as conn:
+        if login_session_id is not None:
+            session = conn.execute(
+                "SELECT account_id, status FROM login_sessions WHERE id=?",
+                (int(login_session_id),),
+            ).fetchone()
+            if (
+                not session
+                or int(session["account_id"] or 0) != int(account_id)
+                or normalize_login_state(session["status"]) not in PENDING_LOGIN_STATES
+            ):
+                raise AccountIdentityError("account_identity_login_conflict", "login_session")
         account = _identity_account_row(conn, account_id)
         if str(account.get("identity_state") or "") != IDENTITY_STATE_LOGIN_IN_PROGRESS:
             if not ok:
@@ -5490,27 +5567,76 @@ def complete_social_account_identity_login(
                 user_id=user_id,
             )
         else:
-            target_state = (
-                IDENTITY_STATE_ACTIVE
-                if account.get("browser_environment_locked_at")
-                and account.get("browser_environment_lock_reason")
-                else IDENTITY_STATE_VALIDATED
-            )
             reason = str(failure_reason or "identity_login_failed")
-            conn.execute(
-                "UPDATE social_accounts SET identity_state=?, last_error=?, updated_at=? WHERE id=?",
-                (target_state, customer_safe_text(reason), now, account_id),
-            )
+            if restore_requires_relogin_on_failure:
+                conn.execute(
+                    """
+                    UPDATE social_accounts SET identity_state=?, requires_relogin=1,
+                        status='limited', last_error=?, updated_at=? WHERE id=?
+                    """,
+                    (IDENTITY_STATE_REQUIRES_RELOGIN, customer_safe_text(reason), now, account_id),
+                )
+            else:
+                target_state = (
+                    IDENTITY_STATE_ACTIVE
+                    if account.get("browser_environment_locked_at")
+                    and account.get("browser_environment_lock_reason")
+                    else IDENTITY_STATE_VALIDATED
+                )
+                conn.execute(
+                    "UPDATE social_accounts SET identity_state=?, last_error=?, updated_at=? WHERE id=?",
+                    (target_state, customer_safe_text(reason), now, account_id),
+                )
             failed = _identity_account_row(conn, account_id)
             _record_identity_audit(
                 conn,
-                "identity_launch_failed",
+                (
+                    "identity_saved_login_recheck_failed"
+                    if restore_requires_relogin_on_failure
+                    else "identity_launch_failed"
+                ),
                 account,
                 failed,
                 trigger_source=trigger_source,
                 reason=reason,
                 user_id=user_id,
             )
+    return get_social_account(account_id) or {}
+
+
+def supersede_social_account_identity_login(
+    account_id: int,
+    *,
+    trigger_source: str,
+    user_id: int | None = None,
+) -> dict[str, Any]:
+    """Release identity ownership held by an older login attempt."""
+
+    now = utc_now()
+    with get_conn() as conn:
+        account = _identity_account_row(conn, account_id)
+        if str(account.get("identity_state") or "") != IDENTITY_STATE_LOGIN_IN_PROGRESS:
+            return _row_to_pool_item(account, masked=True)
+        target_state = (
+            IDENTITY_STATE_ACTIVE
+            if account.get("browser_environment_locked_at")
+            and account.get("browser_environment_lock_reason")
+            else IDENTITY_STATE_VALIDATED
+        )
+        conn.execute(
+            "UPDATE social_accounts SET identity_state=?, updated_at=? WHERE id=? AND identity_state=?",
+            (target_state, now, account_id, IDENTITY_STATE_LOGIN_IN_PROGRESS),
+        )
+        released = _identity_account_row(conn, account_id)
+        _record_identity_audit(
+            conn,
+            "identity_login_superseded",
+            account,
+            released,
+            trigger_source=trigger_source,
+            reason="new_login_attempt_started",
+            user_id=user_id,
+        )
     return get_social_account(account_id) or {}
 
 
@@ -5955,7 +6081,13 @@ def delete_social_account(account_id: int) -> None:
         conn.execute("DELETE FROM social_accounts WHERE id=?", (account_id,))
 
 
-def update_social_account_login_state(account_id: int | None, status: str, message: str = "") -> dict[str, Any] | None:
+def update_social_account_login_state(
+    account_id: int | None,
+    status: str,
+    message: str = "",
+    *,
+    login_session_id: int | None = None,
+) -> dict[str, Any] | None:
     if not account_id:
         return None
     now = utc_now()
@@ -5971,6 +6103,27 @@ def update_social_account_login_state(account_id: int | None, status: str, messa
     else:
         return get_social_account(account_id)
     with get_conn() as conn:
+        if login_session_id is not None:
+            session = conn.execute(
+                "SELECT account_id, status FROM login_sessions WHERE id=?",
+                (int(login_session_id),),
+            ).fetchone()
+            if (
+                not session
+                or int(session["account_id"] or 0) != int(account_id)
+                or normalize_login_state(session["status"]) != status
+            ):
+                return get_social_account(account_id)
+            newer_pending = conn.execute(
+                f"""
+                SELECT id FROM login_sessions
+                WHERE account_id=? AND id>? AND status IN ({','.join('?' for _ in _pending_login_status_values())})
+                LIMIT 1
+                """,
+                (int(account_id), int(login_session_id), *_pending_login_status_values()),
+            ).fetchone()
+            if newer_pending:
+                return get_social_account(account_id)
         conn.execute(
             """
             UPDATE social_accounts
@@ -5988,12 +6141,34 @@ def update_social_account_check_state(
     message: str = "",
     status: str | None = None,
     identity: dict[str, Any] | None = None,
+    login_session_id: int | None = None,
 ) -> dict[str, Any]:
     now = utc_now()
     account_status = status or ("active" if ok else "limited")
     account_status = _validate_pool_status(account_status)
     last_error = "" if ok else customer_safe_text(message)
     with get_conn() as conn:
+        if login_session_id is not None:
+            session = conn.execute(
+                "SELECT account_id, status FROM login_sessions WHERE id=?",
+                (int(login_session_id),),
+            ).fetchone()
+            if (
+                not session
+                or int(session["account_id"] or 0) != int(account_id)
+                or normalize_login_state(session["status"]) not in PENDING_LOGIN_STATES
+            ):
+                return get_social_account(account_id) or {}
+            newer_pending = conn.execute(
+                f"""
+                SELECT id FROM login_sessions
+                WHERE account_id=? AND id>? AND status IN ({','.join('?' for _ in _pending_login_status_values())})
+                LIMIT 1
+                """,
+                (int(account_id), int(login_session_id), *_pending_login_status_values()),
+            ).fetchone()
+            if newer_pending:
+                return get_social_account(account_id) or {}
         conn.execute(
             """
             UPDATE social_accounts
@@ -6130,7 +6305,21 @@ def delete_proxy_profile(proxy_id: int) -> None:
         conn.execute("DELETE FROM proxy_profiles WHERE id=?", (proxy_id,))
 
 
-def create_login_session(payload: dict[str, Any]) -> dict[str, Any]:
+def _pending_login_status_values() -> tuple[str, ...]:
+    return tuple(
+        sorted(
+            PENDING_LOGIN_STATES
+            | {"waiting_qrcode", "waiting_verification", "waiting_manual_browser", "scanned"}
+        )
+    )
+
+
+def create_login_session(
+    payload: dict[str, Any],
+    *,
+    supersede_pending: bool = False,
+    supersede_message: str = "已被新的登录会话替换",
+) -> dict[str, Any]:
     platform = (payload.get("platform") or "").strip()
     _validate_platform(platform)
     account_id = _safe_int(payload.get("account_id")) or None
@@ -6154,7 +6343,30 @@ def create_login_session(payload: dict[str, Any]) -> dict[str, Any]:
         "正在创建平台登录会话；如二维码或验证状态无法回传，可使用网页登录窗口人工处理。"
     )
     now = utc_now()
+    superseded_session_ids: list[int] = []
     with get_conn() as conn:
+        if supersede_pending and account_id:
+            pending_statuses = _pending_login_status_values()
+            rows = conn.execute(
+                f"""
+                SELECT id FROM login_sessions
+                WHERE account_id=? AND status IN ({','.join('?' for _ in pending_statuses)})
+                ORDER BY id
+                """,
+                (account_id, *pending_statuses),
+            ).fetchall()
+            superseded_session_ids = [int(row["id"]) for row in rows]
+            if superseded_session_ids:
+                placeholders = ",".join("?" for _ in superseded_session_ids)
+                conn.execute(
+                    f"UPDATE login_sessions SET status=?, message=?, updated_at=? WHERE id IN ({placeholders})",
+                    (
+                        LOGIN_STATE_TIMEOUT,
+                        customer_safe_text(str(supersede_message or "已被新的登录会话替换"))[:240],
+                        now,
+                        *superseded_session_ids,
+                    ),
+                )
         cur = conn.execute(
             """
             INSERT INTO login_sessions (
@@ -6183,7 +6395,9 @@ def create_login_session(payload: dict[str, Any]) -> dict[str, Any]:
             ),
         )
         target_id = int(cur.lastrowid)
-    return get_login_session(target_id) or {}
+    session = get_login_session(target_id) or {}
+    session["superseded_session_ids"] = superseded_session_ids
+    return session
 
 
 def create_browser_sync_login_session(account_id: int, actor_id: int | None = None) -> dict[str, Any]:
@@ -6205,6 +6419,27 @@ def create_browser_sync_login_session(account_id: int, actor_id: int | None = No
     profile_path = str(resolve_account_profile_path(profile_key))
     message = "正在准备浏览器登录窗口。"
     with get_conn() as conn:
+        pending_statuses = _pending_login_status_values()
+        superseded_rows = conn.execute(
+            f"""
+            SELECT id FROM login_sessions
+            WHERE account_id=? AND status IN ({','.join('?' for _ in pending_statuses)})
+            ORDER BY id
+            """,
+            (account_id, *pending_statuses),
+        ).fetchall()
+        superseded_session_ids = [int(row["id"]) for row in superseded_rows]
+        if superseded_session_ids:
+            placeholders = ",".join("?" for _ in superseded_session_ids)
+            conn.execute(
+                f"UPDATE login_sessions SET status=?, message=?, updated_at=? WHERE id IN ({placeholders})",
+                (
+                    LOGIN_STATE_TIMEOUT,
+                    "已切换到浏览器登录，本次旧登录会话已结束。",
+                    now,
+                    *superseded_session_ids,
+                ),
+            )
         cursor = conn.execute(
             """
             INSERT INTO login_sessions (
@@ -6251,7 +6486,9 @@ def create_browser_sync_login_session(account_id: int, actor_id: int | None = No
                 "cookie_source": "browser_sync",
             },
         )
-    return get_login_session(target_id) or {}
+    session = get_login_session(target_id) or {}
+    session["superseded_session_ids"] = superseded_session_ids
+    return session
 
 
 def bind_browser_sync_login_session(
@@ -6482,6 +6719,145 @@ def enforce_profile_only_cookie_cutover(trigger_source: str = "startup") -> list
     return changed
 
 
+def repair_promoted_account_login_authority(trigger_source: str = "startup") -> list[int]:
+    """Repair login_type only when a committed promotion proves Cookie/Profile authority."""
+
+    now = utc_now()
+    repaired: list[int] = []
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT a.* FROM social_accounts a
+            WHERE a.login_type<>'cookie'
+              AND COALESCE(a.cookies_encrypted, '')<>''
+              AND COALESCE(a.profile_runtime_version, 0)>=1
+              AND a.cookie_source IN ('browser_sync', 'manual')
+              AND EXISTS (
+                    SELECT 1 FROM account_profile_promotions p
+                    WHERE p.account_id=a.id
+                      AND p.profile_key=a.profile_key
+                      AND p.cookie_source=a.cookie_source
+                      AND p.state='committed'
+              )
+            ORDER BY a.id
+            """
+        ).fetchall()
+        for row in rows:
+            account = dict(row)
+            account_id = int(account["id"])
+            updated = conn.execute(
+                """
+                UPDATE social_accounts SET login_type='cookie', updated_at=?
+                WHERE id=? AND login_type<>'cookie'
+                """,
+                (now, account_id),
+            )
+            if updated.rowcount != 1:
+                continue
+            _record_audit_log(
+                conn,
+                int(account.get("workspace_id") or DEFAULT_WORKSPACE_ID),
+                None,
+                "repair_promoted_account_login_authority",
+                "social_account",
+                str(account_id),
+                {
+                    "trigger_source": str(trigger_source or "startup")[:64],
+                    "cookie_source": str(account.get("cookie_source") or "")[:32],
+                    "result": "cookie_authority_restored",
+                },
+            )
+            repaired.append(account_id)
+        sessions = conn.execute(
+            """
+            SELECT s.id, s.workspace_id, s.message, p.cookie_source
+            FROM login_sessions s
+            JOIN account_profile_promotions p ON p.login_session_id=s.id
+            WHERE p.state='committed'
+              AND s.status='success'
+              AND p.cookie_source IN ('browser_sync', 'manual')
+            ORDER BY s.id
+            """
+        ).fetchall()
+        for session in sessions:
+            expected_message = (
+                "浏览器登录成功，Cookie 和 Profile 已同步。"
+                if str(session["cookie_source"]) == "browser_sync"
+                else "Cookie 已验证并创建持久网页登录态。"
+            )
+            if str(session["message"] or "") == expected_message:
+                continue
+            conn.execute(
+                "UPDATE login_sessions SET message=?, updated_at=? WHERE id=? AND status='success'",
+                (expected_message, now, int(session["id"])),
+            )
+            _record_audit_log(
+                conn,
+                int(session["workspace_id"] or DEFAULT_WORKSPACE_ID),
+                None,
+                "repair_promoted_login_session_message",
+                "login_session",
+                str(int(session["id"])),
+                {
+                    "trigger_source": str(trigger_source or "startup")[:64],
+                    "cookie_source": str(session["cookie_source"])[:32],
+                    "result": "terminal_message_restored",
+                },
+            )
+    return repaired
+
+
+def recover_interrupted_cookie_promotion_sessions(trigger_source: str = "startup") -> list[int]:
+    """Close manual Cookie sessions interrupted before their durable commit."""
+
+    recovered: list[int] = []
+    now = utc_now()
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT id FROM login_sessions
+            WHERE cookie_source='manual'
+            ORDER BY id
+            """
+        ).fetchall()
+        for row in rows:
+            session_id = int(row["id"])
+            current = conn.execute(
+                "SELECT status FROM login_sessions WHERE id=?",
+                (session_id,),
+            ).fetchone()
+            if not current or normalize_login_state(current["status"]) not in PENDING_LOGIN_STATES:
+                continue
+            conn.execute(
+                """
+                UPDATE login_sessions SET status=?, message=?, updated_at=?
+                WHERE id=?
+                """,
+                (
+                    LOGIN_STATE_PLATFORM_ERROR,
+                    "服务重启中断了 Cookie 验证，原账号 Profile 和 Cookie 已保留，请重新提交。",
+                    now,
+                    session_id,
+                ),
+            )
+            recovered.append(session_id)
+        if recovered:
+            _record_audit_log(
+                conn,
+                DEFAULT_WORKSPACE_ID,
+                None,
+                "recover_interrupted_cookie_promotion_sessions",
+                "login_session",
+                "startup",
+                {
+                    "trigger_source": str(trigger_source or "startup")[:64],
+                    "recovered_count": len(recovered),
+                    "session_ids": recovered,
+                },
+            )
+    return recovered
+
+
 def mark_social_account_profile_requires_relogin(
     account_id: int,
     *,
@@ -6596,6 +6972,13 @@ def commit_account_profile_promotion(
         if str(promotion["state"]) != "active_recheck":
             raise ValueError("profile_promotion_state_conflict")
         account_id = int(promotion["account_id"])
+        if promotion["login_session_id"]:
+            login_session = conn.execute(
+                "SELECT status FROM login_sessions WHERE id=?",
+                (int(promotion["login_session_id"]),),
+            ).fetchone()
+            if not login_session or normalize_login_state(login_session["status"]) not in PENDING_LOGIN_STATES:
+                raise ValueError("profile_promotion_session_stale")
         encrypted = encrypt_secret(serialized_cookie_material)
         profile_path = str(resolve_account_profile_path(str(promotion["profile_key"])))
         account_update = conn.execute(
@@ -6638,11 +7021,16 @@ def commit_account_profile_promotion(
         if account_update.rowcount != 1:
             raise ValueError("profile_promotion_account_missing")
         if promotion["login_session_id"]:
+            terminal_message = (
+                "浏览器登录成功，Cookie 和 Profile 已同步。"
+                if str(promotion["cookie_source"]) == "browser_sync"
+                else "Cookie 已验证并创建持久网页登录态。"
+            )
             conn.execute(
                 """
                 UPDATE login_sessions SET
                     cookie_source=?, profile_promotion_id=?, acquisition_generation=?,
-                    provider_resolution_id=?, browser_attempt_id=?, status='success', updated_at=?
+                    provider_resolution_id=?, browser_attempt_id=?, status='success', message=?, updated_at=?
                 WHERE id=?
                 """,
                 (
@@ -6651,6 +7039,7 @@ def commit_account_profile_promotion(
                     int(promotion["acquisition_generation"] or 1),
                     str(provider_resolution_id or "")[:160],
                     str(browser_attempt_id or "")[:160],
+                    terminal_message,
                     now,
                     int(promotion["login_session_id"]),
                 ),
@@ -6747,9 +7136,15 @@ def latest_successful_login_session_at(platform: str) -> str:
     return str(row["updated_at"] or "") if row else ""
 
 
-def expire_login_sessions_for_account(account_id: int | None, platform: str, profile_path: str = "", profile_key: str = "") -> list[int]:
+def expire_login_sessions_for_account(
+    account_id: int | None,
+    platform: str,
+    profile_path: str = "",
+    profile_key: str = "",
+    message: str = "已被新的登录会话替换",
+) -> list[int]:
     _validate_platform(platform)
-    pending_statuses = tuple(PENDING_LOGIN_STATES | {"waiting_qrcode", "waiting_verification", "waiting_manual_browser", "scanned"})
+    pending_statuses = _pending_login_status_values()
     clauses = [f"platform=?", f"status IN ({','.join('?' for _ in pending_statuses)})"]
     params: list[Any] = [platform]
     params.extend(pending_statuses)
@@ -6773,7 +7168,7 @@ def expire_login_sessions_for_account(account_id: int | None, platform: str, pro
             placeholders = ",".join("?" for _ in ids)
             conn.execute(
                 f"UPDATE login_sessions SET status=?, message=?, updated_at=? WHERE id IN ({placeholders})",
-                [LOGIN_STATE_TIMEOUT, "已被新的登录会话替换", now, *ids],
+                [LOGIN_STATE_TIMEOUT, customer_safe_text(str(message or "已被新的登录会话替换"))[:240], now, *ids],
             )
     return ids
 
@@ -6787,11 +7182,12 @@ def update_login_session_status(session_id: int, status: str, message: str = "",
     }
     if status not in allowed:
         raise ValueError("invalid login session status")
+    mutable_statuses = _pending_login_status_values()
     with get_conn() as conn:
         cursor = conn.execute(
-            """
+            f"""
             UPDATE login_sessions SET status=?, message=?, qr_image=COALESCE(NULLIF(?, ''), qr_image), updated_at=?
-            WHERE id=? AND (?=? OR status<>?)
+            WHERE id=? AND (status=? OR status IN ({','.join('?' for _ in mutable_statuses)}))
             """,
             (
                 status,
@@ -6800,8 +7196,7 @@ def update_login_session_status(session_id: int, status: str, message: str = "",
                 utc_now(),
                 session_id,
                 status,
-                LOGIN_STATE_SUCCESS,
-                LOGIN_STATE_SUCCESS,
+                *mutable_statuses,
             ),
         )
         if cursor.rowcount == 0:

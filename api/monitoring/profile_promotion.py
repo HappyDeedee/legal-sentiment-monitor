@@ -29,6 +29,7 @@ from . import account_environment
 from .account_environment import resolve_account_profile_path
 from .browser_environment_provider import resolve_account_browser_environment
 from .cookie_material import (
+    COOKIE_LOGIN_HYDRATION_WAIT_MS,
     canonicalize_cookie_records,
     serialize_cookie_material,
     to_playwright_cookie_items,
@@ -163,6 +164,7 @@ async def promote_cookie_to_profile(
     acquisition_generation: int = 1,
     provider_plan: BrowserEnvironmentPlan | None = None,
     browser_runner: BrowserRunner | None = None,
+    expected_platform_account_id: str = "",
 ) -> dict[str, Any]:
     """Validate Cookie material and promote a fresh candidate to the fixed path."""
 
@@ -256,6 +258,12 @@ async def promote_cookie_to_profile(
             )
             candidate_result = await runner(candidate_plan, records)
             _require_validation(candidate_result, "profile_candidate_validation_failed", int(promotion["id"]))
+            _require_expected_platform_identity(
+                candidate_result,
+                expected_platform_account_id,
+                "profile_candidate_identity_mismatch",
+                int(promotion["id"]),
+            )
             if records is None:
                 acquired_records = candidate_result.get("cookie_records") if isinstance(candidate_result, Mapping) else None
                 if not isinstance(acquired_records, Sequence) or isinstance(acquired_records, (str, bytes, bytearray)):
@@ -275,6 +283,12 @@ async def promote_cookie_to_profile(
             active_plan = replace(candidate_plan, profile_path=str(paths.active))
             active_result = await runner(active_plan, None)
             _require_validation(active_result, "profile_active_recheck_failed", int(promotion["id"]))
+            _require_expected_platform_identity(
+                active_result,
+                expected_platform_account_id,
+                "profile_active_identity_mismatch",
+                int(promotion["id"]),
+            )
             update_account_profile_promotion(int(promotion["id"]), "active_recheck", checkpoint="active_rechecked_at")
 
             from .database import commit_account_profile_promotion
@@ -507,6 +521,7 @@ def _default_browser_runner(platform: str, playwright: Any) -> BrowserRunner:
             provider_result = await verify_managed_page(context, page)
             if provider_result is None or not provider_result.ok:
                 return {"ok": False, "reason": "account_identity_snapshot_mismatch"}
+            await page.wait_for_timeout(COOKIE_LOGIN_HYDRATION_WAIT_MS)
             from .account_check import _extract_platform_identity, _login_baseline, _verify_collectable_login
 
             baseline = await _login_baseline(platform, context)
@@ -813,6 +828,21 @@ def _assert_within(path: Path, root: Path) -> None:
 
 def _require_validation(result: Any, reason: str, promotion_id: int) -> None:
     if not isinstance(result, Mapping) or result.get("ok") is not True:
+        raise ProfilePromotionError(reason, promotion_id)
+
+
+def _require_expected_platform_identity(
+    result: Any,
+    expected_platform_account_id: str,
+    reason: str,
+    promotion_id: int,
+) -> None:
+    expected = str(expected_platform_account_id or "").strip()
+    if not expected:
+        return
+    identity = result.get("identity") if isinstance(result, Mapping) else None
+    actual = str(identity.get("platform_account_id") or "").strip() if isinstance(identity, Mapping) else ""
+    if not actual or actual != expected:
         raise ProfilePromotionError(reason, promotion_id)
 
 

@@ -84,12 +84,14 @@ a supported migration path.
 
 ## Accepted CR-112 Local Browser Auto-Sync Boundary
 
-Status: `Accepted / Dependency-Gated (Packet D)`. Packet B and C.1-C.3 are verified.
+Status: `Verified (Same-Machine Windows V1 / Packet D Real-Account Lane)`. Packet B
+and C.1-C.3 are verified.
 This is an accepted same-machine Windows capability and does not change the
 production/server deployment boundary. Packet B selected direct managed-context
 acquisition; C.2 UI/runtime and owned-process cleanup are verified. C.3
 verifies startup cutover, persisted Profile-only execution, and raw-Cookie
-argv/environment retirement; Packet D real acceptance remains gated.
+argv/environment retirement; the designated two-platform Packet D real-account
+lane is verified. CR-047 Linux/server-like acceptance remains a separate gate.
 
 Accepted V1 topology:
 
@@ -162,9 +164,9 @@ Production remains server-first:
 - a headless compatibility result may be recorded as supported or unsupported
   without changing the server QR production baseline.
 
-CR-112 compatibility, implementation, and deployment packets remain gated by
-their packet-specific provider, protocol, security, migration, test, and real-
-acceptance evidence. CR-112 executes before CR-070. The separate CR-047 Linux/
+CR-112 compatibility, implementation, and local real-account packets passed
+their packet-specific provider, protocol, security, migration, test, and
+acceptance gates. CR-112 executes before CR-070. The separate CR-047 Linux/
 server-like real acceptance remains operator-gated and CR-112 local proof does
 not close it.
 

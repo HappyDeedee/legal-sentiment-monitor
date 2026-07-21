@@ -220,6 +220,60 @@ async def probe_login_browser_session(
         await playwright.stop()
 
 
+async def close_login_browser_session(
+    platform: str,
+    debug_port: int,
+    *,
+    expected_pid: int,
+    timeout_ms: int = 4000,
+) -> dict[str, bool]:
+    """Close only the visible login browser whose CDP process matches our record."""
+
+    if platform not in PLATFORM_LOGIN_URLS:
+        raise ValueError("unsupported platform")
+    port = int(debug_port)
+    if not 1 <= port <= 65535:
+        raise ValueError("invalid debug port")
+    process_id = int(expected_pid)
+    if process_id <= 0:
+        raise ValueError("invalid browser process")
+
+    playwright = await async_playwright().start()
+    session = None
+    try:
+        browser = await playwright.chromium.connect_over_cdp(
+            f"http://127.0.0.1:{port}",
+            timeout=max(1000, int(timeout_ms)),
+        )
+        session = await browser.new_browser_cdp_session()
+        process_matched = await _browser_process_matches(session, process_id)
+        if not process_matched:
+            return {
+                "connected": True,
+                "process_matched": False,
+                "logged_in": False,
+                "close_requested": False,
+            }
+        try:
+            await session.send("Browser.close")
+            close_requested = True
+        except Exception:
+            close_requested = not browser.is_connected()
+        return {
+            "connected": True,
+            "process_matched": True,
+            "logged_in": False,
+            "close_requested": close_requested,
+        }
+    finally:
+        if session is not None:
+            try:
+                await session.detach()
+            except Exception:
+                pass
+        await playwright.stop()
+
+
 def _login_browser_page(contexts: list[Any], platform: str):
     login_host = str(urlsplit(PLATFORM_LOGIN_URLS[platform]).hostname or "").lower()
     base_domain = ".".join(login_host.split(".")[-2:])

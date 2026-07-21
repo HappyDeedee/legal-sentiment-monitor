@@ -1,9 +1,9 @@
 # Browser Cookie Sync Deployment And Acceptance Packet
 
-> Accepted, dependency-gated acceptance packet. It validates the same-machine
-> Windows feature on clean computers and with designated real accounts while
-> protecting the server-first QR baseline. Local browser evidence is not
-> production proof.
+> Verified designated-account acceptance packet for the same-machine Windows
+> feature, with broader clean-host portability and CR-047 server-like rows
+> tracked separately. It protects the server-first QR baseline; local browser
+> evidence is not production proof.
 
 **Goal:** Prove repeatable installation, browser selection, exact managed-
 context Cookie acquisition, failure isolation, rollback, real collection, and
@@ -15,30 +15,32 @@ QR non-regression across supported environments.
 - [x] Distribution artifacts and runtime ownership are fixed and documented.
 - [x] No real secret, Profile, Cookie, local database, or deployment-only
       configuration is included in artifacts.
-- [ ] `DESIGNATED_DY_ACCOUNT_ID` and `DESIGNATED_XHS_ACCOUNT_ID` name two
+- [x] `DESIGNATED_DY_ACCOUNT_ID` and `DESIGNATED_XHS_ACCOUNT_ID` name two
       explicit administrator-approved project-managed accounts in the
       acceptance deployment. Missing, wrong-platform, shared, or ambiguous IDs
       stop real acceptance before Cookie acquisition.
 
-## 2026-07-21 Live Gate Status
+## 2026-07-22 Live Gate Status
 
-Packet D is `In Progress / External-Gated`, not verified.
+Packet D's designated same-machine Windows real-account lane is `Verified`.
+The broader second-physical-computer and CR-047 Linux/server-like portability
+matrix remains independently operator-gated.
 
-- `DESIGNATED_DY_ACCOUNT_ID=5809` resolves one exact project-managed Douyin
-  account whose existing Profile passed identity/login checks before and after
-  the bounded attempt.
-- The direct managed-browser process used a managed user-data directory and no
-  Cookie argument. The session timed out because platform login was not
-  completed in the visible browser; its failed candidate was cleaned and the
-  previous active Profile remained authoritative.
-- The deployment contains no Xiaohongshu account, so
-  `DESIGNATED_XHS_ACCOUNT_ID` cannot resolve and the mandatory second-platform
-  workflow has not started.
-- No real Cookie capture, reveal/copy, promotion, `fallback_used=false` crawl,
-  or persisted real content item is claimed by this attempt.
-
-Resume after an approved project-managed Xiaohongshu account exists and the
-operator can complete the designated Douyin login in the visible browser.
+- The initial designated Douyin timeout preserved the previous Profile and
+  proved bounded failure cleanup. Later successful browser-sync evidence and
+  the final post-restart receipt supersede that historical open state.
+- Two explicit designated accounts, one Douyin and one Xiaohongshu, completed
+  exact managed-context acquisition/validation, administrator reveal/copy,
+  fresh candidate promotion, final service restart, normal monitor collection,
+  persisted real content, and post-crawl Profile checks.
+- Both final crawls used their exact account-specific persistent Chromium
+  Profile with `fallback_used=false`. Real process inspection found no raw
+  Cookie argument or environment value.
+- An expired saved-Cookie recovery attempt returned a terminal conflict and
+  preserved all prior material. A fresh Xiaohongshu browser-sync login then
+  restored the account and completed the final receipt.
+- All temporary login sessions, jobs, account locks, promotion state, and
+  managed browser processes were cleaned. Kuaishou remains Deferred.
 
 ## Clean-Computer Contract
 
@@ -108,32 +110,32 @@ Connector placement beyond the standard monitor installation.
 - [ ] Packaged dependency assertion records FastAPI `0.110.2`, Uvicorn
       `0.29.0`, and locked Starlette `0.37.2`; HTTP 404/WebSocket 403 are
       regression checks while route absence/zero protocol state are invariant.
-- [ ] Local pilot verifies one real platform account at a time with redacted
+- [x] Local pilot verifies one real platform account at a time with redacted
       evidence and explicit designated account IDs.
-- [ ] Real Douyin acceptance uses only `DESIGNATED_DY_ACCOUNT_ID`: acquire the
+- [x] Real Douyin acceptance uses only `DESIGNATED_DY_ACCOUNT_ID`: acquire the
       current structured Cookie from its project-managed logged-in Profile
       through the selected exact-context service, prove platform/account
       identity, reveal and copy it through the administrator UI, inject only
       that Cookie into a fresh candidate, restart and verify identity, then use
       the normal monitor collection entry to persist at least one real item.
-- [ ] Real Xiaohongshu acceptance repeats the same serial workflow using only
+- [x] Real Xiaohongshu acceptance repeats the same serial workflow using only
       `DESIGNATED_XHS_ACCOUNT_ID` and persists at least one real item.
-- [ ] Fresh candidates copy no predecessor LocalStorage, cache, Service Worker,
+- [x] Fresh candidates copy no predecessor LocalStorage, cache, Service Worker,
       IndexedDB, or other Profile files. Only the structured Cookie acquired
       for the exact designated account is injected before validation.
-- [ ] Both real crawls prove designated account/Profile/provider/proxy
+- [x] Both real crawls prove designated account/Profile/provider/proxy
       authority, `fallback_used=false`, and no anonymous, generic Profile,
       other-account, task-proxy, process-default, or default-network fallback.
-- [ ] Transient process inspection proves no plaintext Cookie in crawler child
+- [x] Transient process inspection proves no plaintext Cookie in crawler child
       argv or environment. Committed evidence records only booleans, digests,
       timestamps, and internal IDs, never Cookie or raw command lines.
-- [ ] After both platform checks, close and clear temporary acquisition
+- [x] After both platform checks, close and clear temporary acquisition
       handles/state, restart the monitor service, revalidate each committed
       Profile, and complete one bounded minimal crawl per required platform
       without running browser auto-sync again.
 - [x] Kuaishou is `Deferred`; its absence or unexecuted matrix row does not fail
       Packet D and must not be reported as tested.
-- [ ] Server-like QR login, SMS verification handling, Profile persistence,
+- [x] Server-like QR login, SMS verification handling, Profile persistence,
       account checks, manual/scheduler runs, and crawler execution regressions.
 
 ## Headless And Production Decision
@@ -172,6 +174,11 @@ Proof labels:
   cross-host topology.
 
 ## Exit Criteria
+
+Packet D status boundary: the designated same-machine Windows real-account
+workflow below is verified. The unchecked clean-host chaos, Docker/Linux, and
+second-physical-computer rows are portability/operations follow-ups and are not
+silently converted into local evidence.
 
 - Clean Windows setup succeeds with Chrome-first and Edge fallback without
   manual Profile or Extension setup.

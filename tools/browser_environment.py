@@ -472,6 +472,9 @@ async def close_managed_browser_session(
     captured_processes = tuple(captured.values())
     if os.name == "nt" and captured_processes:
         cleanup_ok = await asyncio.to_thread(_terminate_owned_windows_processes, captured_processes)
+        if not cleanup_ok:
+            remaining = await asyncio.to_thread(_owned_windows_processes_remaining, captured_processes)
+            cleanup_ok = remaining is False
     if not cleanup_ok or (close_failed and not captured_processes):
         raise BrowserEnvironmentError("account_identity_provider_browser_cleanup_failed", "browser")
 
@@ -594,6 +597,35 @@ def _windows_process_creation_time(pid: int) -> int | None:
         return (int(created.dwHighDateTime) << 32) | int(created.dwLowDateTime)
     finally:
         kernel32.CloseHandle(handle)
+
+
+def _owned_windows_processes_remaining(
+    owned_processes: tuple[ManagedBrowserProcess, ...],
+) -> bool | None:
+    if os.name != "nt":
+        return False
+    try:
+        current = {pid: name for pid, _, name in _windows_process_snapshot()}
+    except Exception:
+        return None
+
+    for process in owned_processes:
+        current_name = current.get(process.pid)
+        if current_name is None or current_name.casefold() != process.executable_name.casefold():
+            continue
+        creation_time = _windows_process_creation_time(process.pid)
+        if creation_time == process.creation_time:
+            return True
+        if creation_time is not None:
+            continue
+        try:
+            refreshed = {pid: name for pid, _, name in _windows_process_snapshot()}
+        except Exception:
+            return None
+        refreshed_name = refreshed.get(process.pid)
+        if refreshed_name is not None and refreshed_name.casefold() == process.executable_name.casefold():
+            return None
+    return False
 
 
 def _terminate_owned_windows_processes(owned_processes: tuple[ManagedBrowserProcess, ...]) -> bool:

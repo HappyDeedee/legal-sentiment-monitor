@@ -14,6 +14,7 @@ from typing import Any
 
 
 COOKIE_PROTOCOL_VERSION = 1
+COOKIE_LOGIN_HYDRATION_WAIT_MS = 3000
 MAX_COOKIE_RECORDS = 256
 MAX_COOKIE_RECORD_BYTES = 8192
 MAX_COOKIE_PAYLOAD_BYTES = 1048576
@@ -128,7 +129,7 @@ def canonicalize_cookie_records(
                 raise CookieMaterialError("cookie_required_attribute", f"records[{index}].{required}")
 
         name = _text(normalized_input["name"], "cookie_name", f"records[{index}].name")
-        value = _text(normalized_input["value"], "cookie_value", f"records[{index}].value")
+        value = _text(normalized_input["value"], "cookie_value", f"records[{index}].value", allow_empty=True)
         domain, host_only = _normalize_domain(
             normalized_input["domain"],
             roots,
@@ -284,8 +285,14 @@ def _normalize_same_site(value: Any, field: str) -> str:
     return mapping[normalized]
 
 
-def _text(value: Any, reason: str, field: str) -> str:
-    if not isinstance(value, str) or not value or "\x00" in value or "\r" in value or "\n" in value:
+def _text(value: Any, reason: str, field: str, *, allow_empty: bool = False) -> str:
+    if (
+        not isinstance(value, str)
+        or (not value and not allow_empty)
+        or "\x00" in value
+        or "\r" in value
+        or "\n" in value
+    ):
         raise CookieMaterialError(reason, field)
     return value
 

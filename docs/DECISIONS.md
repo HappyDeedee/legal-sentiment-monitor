@@ -743,9 +743,9 @@ short `Superseded by` note rather than deleting history.
   designated account and normal monitor crawl entry to persist at least one
   real content item with `fallback_used=false`. Kuaishou (`ks`) is deferred and
   is not a Packet D failure condition.
-- Confirmed status semantics: CR-112 is `Accepted / Dependency-Gated (Packet D)`
-  after Packet B/C.1-C.3 verification. Packet D starts only after the C.3
-  atomic commit. A packet
+- Confirmed status semantics as of 2026-07-21: CR-112 was
+  `Accepted / Dependency-Gated (Packet D)` after Packet B/C.1-C.3
+  verification. Packet D started only after the C.3 atomic commit. A packet
   becomes `In Progress` only when its start gate passes and execution begins, and becomes
   `Verified` only after its required tests, real evidence where specified,
   documentation synchronization, and independent review pass.
@@ -773,3 +773,51 @@ short `Superseded by` note rather than deleting history.
 - Confirmed the result does not change the accepted Profile authority, manual
   Cookie path, administrator reveal boundary, QR production path, CR-112 before
   CR-070 order, or mandatory Douyin/Xiaohongshu Packet D acceptance.
+
+## 2026-07-22 - CR-128 Saved Cookie Recovery And Packet D Closure
+
+- Confirmed for CR-128: a strict Profile check remains the first check. An
+  explicit administrator recovery may use the encrypted saved Cookie only for
+  a limited account with a recoverable check result. A `requires_relogin`
+  account may recheck its saved Profile, but a failed recheck still requires a
+  fresh platform login after an environment reset.
+- Confirmed for CR-128: recovery creates a fresh candidate through the existing
+  promotion service, preserves `cookie_source`, and requires the exact
+  already-bound platform account identity in both candidate and active-path
+  checks. A mismatch or expired Cookie returns a terminal failure and restores
+  the previous account/Profile/Cookie authority.
+- Confirmed for CR-128: saved-Cookie recovery shares the account start lock,
+  login-session supersession, promotion journal, and cleanup rules; it is not a
+  second login system and does not introduce generic or anonymous fallback.
+- Confirmed for CR-128: the account start lock covers the Profile recheck and
+  any subsequent recovery promotion as one operation. A later login waits and
+  becomes authoritative after the older operation finishes. Empty or unknown
+  Cookie provenance is rejected before promotion and is never relabelled as a
+  different source.
+- Confirmed for CR-112: the same-machine Windows Packet D real-account lane is
+  verified after designated Douyin and Xiaohongshu crawls, post-crawl Profile
+  checks, raw-Cookie process inspection, and final cleanup. The separate
+  CR-047 Linux/server-like acceptance and second-computer deployment proof
+  remain independent gates.
+- Confirmed status semantics: CR-112 is now `Verified` for the V1 local
+  real-account lane. CR-070 may begin only after its own todo baseline review
+  and atomic execution packet; this decision does not start CR-070.
+
+## 2026-07-21 - CR-127 Account Login Authority
+
+- One platform account has one current login attempt across QR, Browser, local
+  visible-browser, and manual Cookie entry points. Starting a new method safely
+  supersedes pending attempts from other methods.
+- A committed Browser/manual Cookie promotion sets backend `login_type=cookie`
+  and Profile authority. Metadata-only form saves preserve that state; existing
+  inconsistent rows are repaired only when encrypted Cookie, Profile runtime,
+  source, and committed promotion evidence all agree.
+- QR images are accepted only after byte-level QR detection. Platform selectors
+  remain discovery hints and are not proof that an image is a QR code.
+- Administrator reveal of already stored Cookie material is always registered
+  and does not depend on current Browser-sync feature availability. Role,
+  workspace, audit, no-store, transient-memory, and redaction boundaries remain.
+- The Platform Account UI shows the effective login method in the existing
+  platform/method cell and removes the duplicate source column/detail field.
+  Notes and runtime error data remain database-compatible but are no longer
+  editable in the account form; runtime errors are system-owned.

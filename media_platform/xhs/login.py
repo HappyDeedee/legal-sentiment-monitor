@@ -36,7 +36,7 @@ from tools import utils
 class XiaoHongShuLogin(AbstractLogin):
     LOGIN_URL = "https://www.xiaohongshu.com"
     LOGIN_BUTTON_SELECTOR = "xpath=//*[@id='app']/div[1]/div[2]/div[1]/ul/div[1]/button"
-    QRCODE_SELECTOR = "xpath=//img[contains(@class, 'qrcode-img') or contains(@class, 'qrcode') or contains(@src, 'qr')]"
+    QRCODE_SELECTOR = "xpath=//img[contains(@class, 'qrcode-img')]"
     MOBILE_METHOD_SELECTOR = 'xpath=//div[@class="login-container"]//div[@class="other-method"]/div[1]'
     QRCODE_CAPTURE_METHOD = "tools.utils.find_login_qrcode"
     QRCODE_FLOW_STEPS = (

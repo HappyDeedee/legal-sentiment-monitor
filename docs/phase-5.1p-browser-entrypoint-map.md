@@ -7,14 +7,14 @@ documentation-only result was written
 Review date: 2026-07-19
 Current progress: Phase 5.1A-D and CR-114 are verified, merged, and rechecked
 through `main@27389a8`. The separate Phase 5.1 server-like acceptance remains
-operator-gated; CR-112 Packet B and C.1-C.3 are verified within their recorded
-proof boundaries. Packet D remains dependency-gated.
+operator-gated; CR-112 Packet B, C.1-C.3, and the same-machine Windows Packet
+D real-account lane are verified within their recorded proof boundaries.
 
-2026-07-21 status note: the table below preserves its 2026-07-19 baseline
-classification. CR-112 is now `Accepted / Dependency-Gated (Packet D)`, executes
-before CR-070, and reuses this provider boundary after Packet B selected direct
-managed-context acquisition; no CR-112 implementation is added to the
-historical Phase 5.1P packet.
+2026-07-22 status note: the table below preserves its 2026-07-19 baseline
+classification. CR-112 is now `Verified` for the same-machine Windows
+real-account lane, executes before CR-070, and reuses this provider boundary
+after Packet B selected direct managed-context acquisition; no CR-112
+implementation is added to the historical Phase 5.1P packet.
 
 ## Result
 
@@ -65,8 +65,8 @@ account + action
 | Phase 5.1C-D | historical/already completed | Both units are merged and post-merge verified through `main@86e9d02`. |
 | CR-114 | historical/already completed | Object-scoped Context/Page binding is merged and post-merge verified on `main@27389a8`. |
 | Phase 5.1 acceptance | current/operator-gated | The atomic packet requires server-like requested/effective, proxy-effect, manual/scheduler/CLI, restart, and CDP proof. |
-| CR-070 / Phase 5.2 | future, dependency-gated | Current accepted order places it after CR-112 Packet D; it later consumes only committed CR-112 account/Profile state. |
-| CR-112 | historical 2026-07-19 classification was future/`Needs Confirmation`; current status is `Accepted / Dependency-Gated (Packet D)` | Reuses the CR-047 provider contract. Packet B selected direct managed Playwright/CDP context acquisition; C.1 owns additive schema/linkage, canonical Cookie validation, Profile promotion, and recovery; C.2 verifies the feature-gated exact-context acquisition, administrator reveal boundary, and owned-process cleanup; C.3 verifies Profile-only execution and raw-Cookie argv/env retirement. No CR-112 implementation is assigned to CR-047. |
+| CR-070 / Phase 5.2 | future, ready for baseline review | Current accepted order places it after verified CR-112 Packet D; it later consumes only committed CR-112 account/Profile state. |
+| CR-112 | historical 2026-07-19 classification was future/`Needs Confirmation`; current status is `Verified` for the same-machine Windows real-account lane | Reuses the CR-047 provider contract. Packet B selected direct managed Playwright/CDP context acquisition; C.1 owns additive schema/linkage, canonical Cookie validation, Profile promotion, and recovery; C.2 verifies the feature-gated exact-context acquisition, administrator reveal boundary, and owned-process cleanup; C.3 verifies Profile-only execution and raw-Cookie argv/env retirement. Packet D real-account evidence is complete; CR-047 server-like acceptance remains separate. No CR-112 implementation is assigned to CR-047. |
 | CR-092 and CR-094 | future, `Needs Confirmation` | Not Phase 5.1P prerequisites. |
 | CR-093 | future, accepted boundary with pending implementation decisions | Its future route-exposure work owns public treatment of legacy `/api/crawler`; it does not block this map. |
 | CR-037 and Users And Permissions page | deferred/future | Independent capability work. |

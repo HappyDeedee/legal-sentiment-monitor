@@ -1,13 +1,13 @@
 # Local Browser Auto-Sync Login Packet
 
-> Packet B and C.1-C.3 are verified within their recorded proof boundaries.
-> Packet D is in progress after C.3 commit `1d62677` and remains externally
-> gated by a completed designated-Douyin login and an approved project-managed
-> Xiaohongshu account.
+> Packet B, C.1-C.3, and the designated same-machine Windows Packet D
+> real-account lane are verified within their recorded proof boundaries.
+> CR-047 Linux/server-like acceptance and a second physical-computer claim
+> remain separate gates.
 
 **Goal:** Add a default-off local browser login flow that automatically
 acquires and verifies Cookie material for the exact account while preserving
-existing QR and advanced manual Cookie behavior.
+existing QR and separately selected Cookie-import behavior.
 
 ## Start Gates
 
@@ -145,8 +145,8 @@ canonical protocol, candidate/rollback journal, atomic account-run/Profile
 exclusion, `256 MiB` storage reserve, marker-based restart recovery, cleanup
 after a successful managed run, manual Cookie promotion, profile-authority
 dispatch, and QR/manual regression checks pass. C.2 verification is complete
-within its local proof boundary; C.3 is verified within its automated/local
-proof boundary and Packet D remains governed by `TASKS.md`.
+within its local proof boundary; C.3 and the designated real-account Packet D
+lane are verified within their recorded proof boundaries.
 
 ### C.2 - Managed Browser Acquisition
 
@@ -171,9 +171,9 @@ proof boundary and Packet D remains governed by `TASKS.md`.
 - [x] Implement the browser-sync state machine and centralized finalizer. Open
       the visible managed candidate automatically and update status without
       manual refresh.
-- [x] Add authenticated start/status/cancel APIs and UI actions in this order:
-      QR default, browser auto-sync, collapsed advanced manual Cookie. Browser
-      sync failure does not auto-open manual input.
+- [x] Add authenticated start/status/cancel APIs. CR-123 now presents QR
+      default, browser auto-sync, and Cookie import as three peer UI choices;
+      browser-sync failure does not auto-open or promote Cookie input.
 - [x] Add an administrator-only Cookie reveal POST endpoint for one exact
       `social_account`. Keep standard account responses masked; require the
       normal monitor authorization dependency; return 403 to normal users and
@@ -280,6 +280,34 @@ Standard tests use fakes and temporary Profiles:
 Opt-in real-browser tests prove Chrome and Edge exact-context structured
 acquisition, restart, and isolation. Real platform login belongs only to an
 explicit local pilot and must not expose evidence secrets.
+
+## Packet D Real-Account Verification (2026-07-22)
+
+- [x] Use two explicitly designated project-managed accounts serially, one for
+      Douyin and one for Xiaohongshu; no other real account participates in the
+      collection receipt.
+- [x] Complete direct managed-browser Cookie acquisition, exact platform and
+      account identity validation, administrator reveal/copy, and fresh
+      account-bound Profile promotion. Evidence records only redacted booleans
+      and aggregate counts.
+- [x] Restart the monitor service, revalidate both committed Profiles, and run
+      one bounded normal-monitor crawl per required platform. Both runs persist
+      real content, remain bound to the designated account/Profile, and report
+      `fallback_used=false`.
+- [x] Inspect the effective crawler child process for both runs. No raw Cookie
+      argument, Cookie-named environment key, serialized Cookie, Cookie pair,
+      or long Cookie value is present.
+- [x] Recheck both Profiles after collection, release account locks and login
+      sessions, remove temporary jobs, and confirm zero managed browser
+      processes remain.
+- [x] Keep Kuaishou `Deferred`; it is outside this real-account receipt.
+
+The initial expired-Cookie recovery attempt is also part of the regression
+boundary: it returned a terminal conflict, preserved the previous authority,
+and left no pending promotion or login session. A fresh browser-sync login then
+restored the designated Xiaohongshu account and completed the final receipt.
+This proves the local Windows workflow only; CR-047 Linux/server-like and
+second-computer deployment evidence remain separate.
 
 ## Exit Criteria
 

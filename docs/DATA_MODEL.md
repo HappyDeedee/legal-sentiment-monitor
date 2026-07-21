@@ -301,13 +301,15 @@ Phase 5.1B write rules:
 
 ### Accepted CR-112 Profile Runtime And Promotion Metadata
 
-Status: `Implemented / Verified (Packet C.1-C.3); Dependency-Gated (Packet D)` with
-CR-112. Packet B selected the direct acquisition boundary; C.1 adds these
+Status: `Implemented / Verified (Packet C.1-C.3 and Packet D real-account lane)`
+with CR-112. Packet B selected the direct acquisition boundary; C.1 adds these
 fields, table, migration, indexes, backward-compatible defaults, transaction
 authority, and the atomic account-run/non-terminal-promotion exclusion. C.2
 verifies the live acquisition-session metadata and administrator reveal
 boundary. C.3 verifies the version-0 cutover and persisted Profile-only runtime
-binding without another schema change; D remains gated.
+binding without another schema change. Packet D's same-machine Windows
+real-account lane is verified; CR-047 Linux/server-like acceptance remains
+separate.
 
 Additive `social_accounts` fields accepted for Packet C:
 

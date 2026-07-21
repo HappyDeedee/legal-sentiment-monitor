@@ -186,11 +186,14 @@ identity values until the explicit Phase 5.1C lifecycle/reset flow runs.
 
 ### Accepted CR-112 - Persistent Profile Promotion And Browser-Sync Metadata
 
-Status: `Implemented / Verified (Packet C.1-C.3); Dependency-Gated (Packet D)`. Packet B is verified. C.1 now
+Status: `Implemented / Verified (Packet C.1-C.3 and Packet D real-account
+lane)`. Packet B is verified. C.1 now
 applies this additive, backward-compatible migration after Packet B fixed the
 direct acquisition/protocol boundary. It is not part of Phase 5.1P or the
 historical CR-047 schema body; C.2 and C.3 are verified within their recorded
-proof boundaries, and D remains gated.
+proof boundaries. Packet D's same-machine Windows real-account lane is
+verified without another migration; CR-047 Linux/server-like acceptance
+remains separate.
 
 Accepted Packet C additions are specified in `DATA_MODEL.md`:
 

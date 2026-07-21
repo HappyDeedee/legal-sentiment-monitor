@@ -91,8 +91,6 @@ async def reveal_social_account_cookie(
     if user.get("role") != "administrator":
         _record_cookie_reveal_audit(user, parsed_account_id, "denied")
         return _no_store_error(403, "permission denied")
-    if not browser_cookie_sync_available():
-        return _no_store_error(409, "浏览器自动同步当前未启用或当前电脑不支持")
     account = get_social_account(parsed_account_id, masked=False)
     if not account or int(account.get("workspace_id") or 0) != int(user.get("workspace_id") or 1):
         _record_cookie_reveal_audit(user, parsed_account_id, "missing")

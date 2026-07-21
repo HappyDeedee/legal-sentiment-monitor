@@ -2,20 +2,242 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-22 - CR-128 Saved Cookie Recovery And Packet D Real-Account Lane
+
+Scope: saved Cookie recovery after Profile drift, exact identity gates,
+rollback, and the final same-machine Windows real-account acceptance. Evidence
+contains no Cookie value, Profile path, raw command line, platform account
+identifier, or personal account name.
+
+Result: `Verified`.
+
+- CR-128 RED/GREEN coverage passes `14` focused tests. The adjacent governed
+  CR-112/CR-124/CR-127 set passes `101` tests, and the complete monitoring suite
+  passes `696` tests with three existing warnings.
+- The first independent review found an inverse-order recovery/login race,
+  silent unknown-source relabelling, raw promotion reason exposure, and an
+  untracked production module. RED tests reproduced all behavioral findings.
+  GREEN coverage now serializes Profile check plus recovery, rejects unproven
+  provenance before promotion, maps errors to customer text, and includes the
+  production module in the Git index.
+- A live expired saved-Cookie recovery returned a bounded conflict before
+  commit. The prior account/Profile, encrypted Cookie, source, lock, pending
+  session count, and promotion state remained intact; no candidate browser
+  process remained.
+- A fresh browser-sync login for the designated Xiaohongshu account reached
+  terminal success, preserved `cookie_source=browser_sync`, and restored active
+  Profile identity. The service then restarted successfully.
+- After that restart, the designated Xiaohongshu and Douyin accounts each
+  passed Profile identity validation and one bounded normal-monitor crawl. Both
+  runs persisted real content, matched the exact account and `profile_key`,
+  used persistent Chromium, and reported `fallback_used=false`.
+- Post-crawl checks for both accounts remained active, released account locks,
+  had zero pending login sessions, removed temporary jobs, and found zero
+  managed Chromium processes.
+- After the final concurrency/provenance fix, the latest service restarted with
+  browser sync enabled, returned healthy API and monitor-page responses, and
+  the designated Xiaohongshu Profile recheck still passed. Both designated
+  accounts remained active with released locks and zero pending login sessions;
+  the managed-browser residual process count remained zero.
+- Effective child-process inspection for both runs found no `--cookies`
+  argument, Cookie-named environment key, serialized Cookie, Cookie pair, or
+  long Cookie value. Administrator reveal/copy was exercised under the
+  existing no-store/masked boundary; no value entered tracked evidence.
+- The separate CR-047 Linux/server-like acceptance and second-physical-computer
+  deployment proof remain outside this local Windows receipt. Kuaishou remains
+  `Deferred`.
+- Python compile, documentation consistency/regression, and `git diff --check`
+  pass. The final focused independent read-only review returns `PASS` with no
+  remaining P0, P1, or P2 findings.
+
+## 2026-07-21 - CR-127 Unified Login Authority And Cookie/Profile Reliability
+
+Scope: account-scoped QR/Browser/Cookie arbitration, QR image validation,
+Cookie/Profile promotion recovery, administrator Cookie reveal, and Platform
+Account form simplification. No Cookie value, Profile path, platform account
+identifier, or runtime command is recorded here.
+
+Result: `Verified`.
+
+- Root-cause coverage proves one account has one pending login attempt; starting
+  another method supersedes the old QR/Browser/manual session, and a stale
+  promotion cannot commit after its linked session is no longer pending. QR
+  cancellation is serialized with replacement startup, and all late QR
+  success/failure/recovery writes require ownership of the same pending session.
+- Metadata-only saves preserve journal-proven Cookie/Profile authority. Startup
+  recovery repairs proven provenance and terminates interrupted manual
+  promotions without replacing prior committed material.
+- QR extraction accepts generated QR bytes and rejects non-QR images. The
+  Xiaohongshu selector no longer matches arbitrary login-page images, while
+  verification/SMS states retain their separate operator workflow.
+- Administrator Cookie reveal is registered independently from browser-sync
+  feature availability, remains masked by default, and uses in-field eye/copy
+  icons. A real headless Chromium behavior test executes the production reveal
+  functions and proves abort, account switch, and drawer close discard delayed
+  synthetic responses without exposing their Cookie value.
+- The account table has one platform/login-method column, a dedicated
+  recognition-time column, and no duplicate login-source column. Notes and the
+  editable latest-error textarea are absent; omitted legacy values remain
+  preserved by backend updates.
+- Focused CR-127 regression passes `20` tests. The complete monitoring suite
+  passes `682` tests with three existing deprecation warnings.
+- Current designated Douyin and Xiaohongshu saved Profiles pass normal account
+  checks and retain correct recognized display names, active identity state,
+  and persistent Profile runtime version.
+- A disposable internal task used the designated maintenance Douyin account
+  through the normal monitor runner. The run succeeded, remained bound to its
+  account-specific persistent Chromium Profile, recorded
+  `fallback_used=false`, and stored `14` Douyin content rows. The task was
+  removed afterward; the run evidence remains, with no account lock or pending
+  login session.
+- Python compile, documentation consistency/regression, and `git diff --check`
+  pass. Desktop and `390x844` rendered checks show three peer login methods,
+  one active panel, masked Cookie data, in-field icons, fixed footer actions,
+  and no overlap or horizontal content escape.
+
+## 2026-07-21 - CR-125/CR-126 Account Identity List And Xiaohongshu Name
+
+Scope: Platform Account list density and Xiaohongshu recognized display-name
+extraction. No Cookie value, Profile path, raw self-info response, or runtime
+account identifier is recorded here.
+
+Result: `Verified`.
+
+- CR-125 static RED/GREEN coverage locks the dedicated `识别时间` column before
+  `最近验活`, removes labelled raw identity/timestamp lines from the list cell,
+  and preserves generic fallback text when no distinct display name exists.
+- CR-126 RED/GREEN coverage proves the signed Xiaohongshu readiness response
+  returns `basic_info.nickname` and avatar metadata, then merges them without
+  replacing the stable Profile URL identifier or home URL.
+- Focused CR-125/CR-126 and adjacent readiness coverage passes `4` tests. The
+  complete monitoring suite passes `682` tests with three existing deprecation
+  warnings.
+- Two current saved Xiaohongshu Profiles passed normal account checks. Both
+  remained active and stored non-empty display names distinct from their stable
+  identifiers, with avatar and home metadata present.
+- The latest service is healthy on loopback. Desktop and `390x844` checks show
+  the new column, no labelled raw identifier, stable row heights, internal-only
+  horizontal table scrolling, working detail open/close, retained complete
+  identity in the detail surface, and no browser console errors.
+
+## 2026-07-21 - CR-124 Saved Login And Portable Cookie Regression
+
+Scope: automated-runtime isolation, existing saved-state recovery, and
+cross-computer structured Cookie clarity. No Cookie value, encryption key, or
+Profile content is recorded here.
+
+Result: `Verified`.
+
+- Audit evidence showed the current browser-synced Douyin account had completed
+  browser acquisition, two valid login checks, and one real Profile-only crawl
+  before a later test-time `profile_only_requires_relogin` transition.
+- Pytest now selects and cleans disposable monitoring data, encryption-key,
+  and Profile roots before application imports. The complete suite ran without
+  changing the affected runtime account's safe metadata.
+- CR-124 RED coverage reproduced workspace database selection, missing saved
+  state recovery, and cross-key setup gaps. GREEN coverage passes `8` focused
+  checks; the combined CR-112/CR-119 through CR-124 set passes `84` checks.
+- The complete monitoring suite passes `658` tests with the three existing
+  deprecation warnings.
+- Live saved-Profile recheck returned the affected account to `active` without
+  another platform login and preserved its prior identity template, encrypted
+  Cookie, and committed Profile. A later normal account check passed and left
+  no managed browser or Playwright child process.
+- The persisted browser selection opened a visible managed login window; an
+  intentional cancellation cleaned all candidate browser processes without
+  changing committed login material. A fresh isolated Windows root selected
+  and persisted system Chrome automatically, while the existing installation
+  retained its persisted Playwright Chromium selection.
+- The real structured Cookie was inspected only as aggregate metadata: 54
+  scoped records, canonical source, exact destination plaintext after
+  re-encryption with a different installation key. No Cookie name or value was
+  recorded.
+- Python syntax, inline JavaScript parsing, documentation consistency and
+  regression, `git diff --check`, live UI/runtime validation, full-diff, and
+  cleanup checks pass.
+
+## 2026-07-21 - CR-123 Login Method Hierarchy And Cookie Roundtrip
+
+Scope: Platform Account login information architecture and synthetic Cookie
+format interoperability. No real Cookie, Profile path, or runtime account
+identifier is recorded here.
+
+Result: `Verified`.
+
+- QR, Browser, and Cookie render as three peer choices. Each owns a separate
+  panel; browser-sync and account-bound visible-login progress use the Browser
+  result, while QR status remains in the QR result. The duplicate advanced
+  manual-Cookie disclosure is absent.
+- Browser is a UI-only mode and maps to backend `qrcode` for draft persistence;
+  the accepted promotion path still commits backend `cookie` with its existing
+  Cookie provenance. No third backend login type was added.
+- Cookie promotion now accepts standard Cookie headers and Structured Cookie
+  Protocol V1 JSON. A synthetic browser export with duplicate names at distinct
+  scopes retained exact domain, path, expiry, HttpOnly, Secure, SameSite, and
+  host-only attributes through the promotion call.
+- The current local browser-synced account material was inspected only as safe
+  aggregate metadata outside tracked evidence; no Cookie name or value was
+  emitted by that check.
+- Focused CR-123/adjacent regression passed `20` tests. The complete monitoring
+  suite passed `650` tests with the three existing deprecation warnings.
+- Python compile, external and inline JavaScript parsing, documentation
+  consistency, documentation regression, and `git diff --check` passed.
+- Rendered checks passed on desktop and narrow-screen viewports: all three
+  choices fit without horizontal overflow, exactly one panel is visible, the
+  Cookie input receives focus, primary actions fill their row, and the console
+  contains no warning or error.
+- Permission, Cookie redaction, routing, task state, and test-result checks have
+  no open P0, P1, or P2 defect for CR-123.
+
+## 2026-07-21 - CR-122 New-Account Browser Sync Regression
+
+Scope: new-account browser-sync entry, Cookie/Profile promotion reliability,
+and managed-browser cleanup. No real Cookie, Profile path, or runtime account
+identifier is recorded here.
+
+Result: `Verified`.
+
+- Source inspection confirmed `renderLoginModePanel()` required an existing
+  account before showing browser auto-sync, although
+  `startBrowserCookieSyncFromForm()` already persists a new account before the
+  browser-sync route call.
+- The corrected display condition removes that inconsistent dependency. All
+  login actions remain disabled until the account name is present; QR remains
+  available in parallel and Cookie import remains separately selectable under
+  the CR-123 presentation refinement.
+- Focused promotion, Cookie-adapter, and managed-process regression coverage
+  passed `6` tests. Focused frontend contract coverage passed `2` tests.
+- The complete monitoring regression passed `648` tests with three existing
+  deprecation warnings.
+- Live monitor inspection confirmed browser auto-sync is visible but disabled
+  for an unnamed new account and enabled after entering a name; QR stays
+  independently enabled. The modal was closed without persisting a test
+  account.
+- Deterministic coverage proves the post-navigation hydration wait, filtering
+  of invalid empty-name browser artifacts, preservation of valid empty Cookie
+  values, acceptance of a proven normal Windows process exit, and rejection of
+  unresolved owned-process evidence.
+- Browser-sync, promotion, managed-process cleanup, and full-diff checks have
+  no open P0, P1, or P2 defect for CR-122.
+- Real operator acceptance created a new account through browser auto-sync
+  without prior QR generation, committed its candidate Profile and encrypted
+  Cookie, passed the normal account check, and later persisted five real
+  Douyin content rows with `fallback_used=false`.
+
 ## 2026-07-21 - CR-112 Packet D Real Acceptance Attempt
 
 Scope: live same-machine Windows preflight and one bounded designated-Douyin
 browser-sync attempt. No real Cookie or platform content is recorded here.
 
-Result: `External-Gated / Not Verified`. Packet D remains in progress.
+Result: `Historical Attempt / Superseded by 2026-07-22 Final Receipt`.
 
 - Packet C.1-C.3 were already verified and C.3 was delivered atomically in
   commit `1d62677` before this attempt.
-- The account inventory resolved exact Douyin account `5809`; the deployment
-  contained no Xiaohongshu account, so the mandatory
+- The account inventory resolved one exact designated Douyin account; the
+  deployment contained no Xiaohongshu account, so the mandatory
   `DESIGNATED_XHS_ACCOUNT_ID` gate did not pass.
-- Account `5809` passed a real project-managed Profile identity/login check
-  before the attempt.
+- The designated account passed a real project-managed Profile identity/login
+  check before the attempt.
 - The direct browser-sync path opened its managed visible Chromium. Live
   process inspection found a managed user-data directory and no Cookie
   argument.
@@ -31,13 +253,22 @@ Result: `External-Gated / Not Verified`. Packet D remains in progress.
   pre-existing deprecation warnings. Python compile, documentation consistency,
   documentation regression, and `git diff --check` also passed.
 
-Resume gate:
+Later evidence:
 
-- Add and approve one project-managed Xiaohongshu account, then set its exact
-  `DESIGNATED_XHS_ACCOUNT_ID`.
-- Re-run the designated Douyin browser-sync session while the operator
-  completes the visible platform login, then continue the serial Douyin and
-  Xiaohongshu Packet D matrix.
+- CR-122/CR-124 subsequently completed a real no-QR Douyin browser-sync flow,
+  committed a candidate Profile and encrypted 54-record structured Cookie,
+  passed normal and post-restart saved-Profile checks, and persisted five real
+  content rows with `fallback_used=false`.
+- This superseded the initial attempt's Douyin `no real result` statement. The
+  2026-07-22 final entry later closed the designated restart/crawl receipt and
+  mandatory Xiaohongshu lane.
+
+Historical resume gate, now satisfied:
+
+- Bind the accepted Douyin evidence to the final designated-account receipt and
+  complete its bounded post-restart minimal crawl.
+- Add and approve one project-managed Xiaohongshu account, set its exact
+  `DESIGNATED_XHS_ACCOUNT_ID`, and complete the serial Xiaohongshu matrix.
 
 ## 2026-07-21 - CR-112 Packet C.3 Profile-Only Runner
 
@@ -120,9 +351,10 @@ proof boundary. Packet C.3 waits for this packet's atomic commit.
   visible managed Chromium, recorded a cancelled login session and failed
   promotion with candidate removal, preserved the active account/Profile and
   left zero browser processes for the candidate path.
-- Desktop and phone-width account-dialog checks passed with QR first, browser
-  auto-sync second, advanced manual Cookie collapsed, no overlapping controls,
-  and correct cancellation feedback.
+- Historical Packet C.2 desktop and phone-width account-dialog checks passed
+  with QR first, browser auto-sync second, and manual Cookie collapsed, with no
+  overlapping controls and correct cancellation feedback. CR-123 later
+  supersedes only that presentation with three peer UI choices.
 - Focused Packet C.2 regression: `19 passed, 606 deselected`.
 - Adjacent Phase 5.1, CR-112, QR/browser-login, and crawl-identity regression:
   `269 passed, 356 deselected`.

@@ -637,7 +637,8 @@ Tasks 4-7 remain operator-gated.
       paths, CDP endpoints, noVNC tokens, or fingerprint-debug output.
 - [ ] Record the Phase 5.1 acceptance evidence in `docs/TEST_RESULTS.md`
       before closing the CR-047 gate. Under the accepted 2026-07-21 sequence,
-      this does not start CR-070; CR-070 still waits for CR-112 Packet D.
+      this does not start CR-070; the CR-112 Packet D dependency is now
+      satisfied, while CR-047's Linux/server-like acceptance stays independent.
 
 ### Phase 5.1E - Optional CloakBrowser-Style Provider Evaluation
 
@@ -667,9 +668,10 @@ makes it current work.
 Planning status:
 
 CR-070 is an accepted new capability for account-environment migration. It does
-not reopen Phase 5 or CR-047. It depends on the `profile_key` account model and
-must not start until CR-112 Packet D is verified. The required CR-047 provider
-binding and requested/effective runtime snapshot implementation already exists;
+not reopen Phase 5 or CR-047. Its CR-112 Packet D dependency is satisfied as of
+2026-07-22; implementation still starts with a fresh todo baseline review and
+an atomic Phase 5.2 execution packet. The required CR-047 provider binding and
+requested/effective runtime snapshot implementation already exists;
 the separate CR-047 Linux/server-like real acceptance remains independently
 operator-gated. CR-070 should reuse only committed CR-112 Profile/account state
 and CR-047 identity fields. Because the capability can move cookies,
@@ -1654,6 +1656,134 @@ Implementation status:
 - [x] Verify the new launcher with targeted tests, docs consistency, and
       `git diff --check`.
 
+## CR-122 - Browser Sync New-Account Entry And Promotion Reliability
+
+Implementation status (2026-07-21): verified.
+
+- [x] Register the new-account entry regression and preserve QR, manual Cookie,
+      Profile-authority, and server-first boundaries.
+- [x] Show browser auto-sync for an unsaved account when its capability gate
+      passes, and require an account name before any login action.
+- [x] Reuse the existing account persistence path before browser launch so the
+      session is bound to an account ID and generated `profile_key` without a
+      QR session.
+- [x] Add bounded Cookie hydration, invalid empty-name artifact filtering,
+      valid empty-value preservation, and owned-process exit-race handling.
+- [x] Add deterministic regression coverage and verify the new-account button
+      state through the running monitor UI.
+- [x] Complete documentation/compile/diff gates and independent read-only
+      full-diff review.
+- [x] Complete one disposable new-account browser-sync operator acceptance
+      without generating QR first, then pass the normal account Profile check.
+
+## CR-123 - Platform Account Login Method Hierarchy And Cookie Roundtrip
+
+Implementation status (2026-07-21): verified.
+
+- [x] Register the UI hierarchy and structured Cookie import regression.
+- [x] Add RED coverage for three peer login panels and structured browser-sync
+      export roundtrip through Cookie login.
+- [x] Implement peer QR, Browser, and Cookie UI modes without adding a backend
+      login type or duplicating the Cookie entry.
+- [x] Route QR and browser progress to their own panels and preserve local
+      visible-login fallback behavior.
+- [x] Accept Structured Cookie Protocol V1 JSON and plain Cookie headers through
+      the same Cookie promotion endpoint without losing scoped attributes.
+- [x] Run focused/full/syntax/docs/diff/browser gates and independent read-only
+      full-diff review.
+
+## CR-124 - Saved Login Recheck, Test Isolation, And Portable Cookie Clarity
+
+Implementation status (2026-07-21): verified.
+
+- [x] Register the real-runtime contamination and Cookie portability regression.
+- [x] Select disposable test database, key, and Profile paths before application
+      imports and remove them after the test session.
+- [x] Add saved Cookie/Profile recheck as the first recovery action for an
+      account incorrectly or legitimately marked `requires_relogin`.
+- [x] Clarify that administrator reveal/copy returns the complete structured
+      cross-computer Cookie artifact accepted by Cookie login.
+- [x] Add different-installation-key roundtrip and runtime-isolation regression
+      coverage.
+- [x] Restore and validate the affected saved Profile, verify the managed
+      browser window opens, and complete final docs/review gates.
+
+## CR-125 - Platform Account Identity List Simplification
+
+Implementation status (2026-07-21): verified.
+
+- [x] Register the list-density optimization and preserve the detail/API data
+      boundary.
+- [x] Add RED/GREEN coverage for hidden raw identity text and dedicated
+      recognition-time column order.
+- [x] Keep avatar/display name in the identity cell and move recognition time
+      immediately before recent validation.
+- [x] Verify desktop and mobile table geometry plus detail open/close behavior.
+- [x] Run focused and complete monitoring regression plus syntax checks.
+- [x] Complete documentation gates and independent read-only review.
+
+## CR-126 - Xiaohongshu Self-Info Display Name Extraction
+
+Implementation status (2026-07-21): verified.
+
+- [x] Register the missing Xiaohongshu display-name regression and stable-ID
+      boundary.
+- [x] Add RED coverage for self-info identity extraction and profile/API merge.
+- [x] Reuse the signed readiness response for display name and avatar metadata.
+- [x] Preserve the profile URL identifier while merging display metadata.
+- [x] Pass focused, complete monitoring, and current saved-Profile checks.
+- [x] Complete documentation gates and independent read-only review.
+
+## CR-127 - Unified Account Login Authority And Cookie/Profile Reliability
+
+Implementation status (2026-07-21): verified.
+
+- [x] Register the coupled login-authority, QR-image, Cookie-promotion, reveal,
+      and account-form regressions with explicit data/security boundaries.
+- [x] Add RED coverage for cross-method supersession, promoted authority,
+      non-QR rejection, interrupted manual promotion, unconditional reveal
+      registration, Cookie/Profile import, and simplified UI structure.
+- [x] Implement one account-scoped login-attempt supersession path used by QR,
+      Browser, visible-browser, and manual Cookie entry points.
+- [x] Validate QR image bytes before returning them and keep verification/SMS
+      states distinct from QR extraction failure.
+- [x] Preserve and deterministically repair committed Cookie/Profile authority;
+      make startup recovery terminal-safe for interrupted manual promotions.
+- [x] Always register administrator no-store Cookie reveal and keep stored
+      Cookie access independent from Browser-sync feature availability.
+- [x] Remove duplicate source/notes/error controls and move SVG reveal/copy
+      controls inside the complete Cookie field.
+- [x] Verify focused/full/syntax/docs/diff/live browser/current Profile/minimal
+      collection gates.
+- [x] Complete independent read-only review and close CR-125/CR-126/CR-127
+      documentation state together.
+
+## CR-128 - Saved Cookie Recovery After Profile Drift
+
+Implementation status (2026-07-22): verified.
+
+- [x] Register the saved-Cookie/Profile-drift regression and keep Profile as
+      normal crawl authority with Cookie as recovery material.
+- [x] Add RED/GREEN coverage for limited-account recovery, source
+      preservation, one account-scoped login attempt, candidate identity
+      mismatch rollback, active identity mismatch rollback, and UI visibility.
+- [x] Reuse the existing account lock, login-session arbitration, canonical
+      Cookie validator, and fixed-path promotion journal for explicit recovery.
+- [x] Require the already-bound platform account identity in both candidate and
+      post-swap active Profile checks; preserve all prior material on failure.
+- [x] Verify an expired saved Cookie returns a terminal conflict and leaves the
+      active account/Profile, encrypted Cookie, source, locks, and sessions
+      intact.
+- [x] Hold the account login-start lock across Profile recheck and recovery so
+      an older recovery cannot supersede a newer QR/Browser/Cookie login.
+- [x] Reject missing or unknown Cookie provenance before promotion and return
+      customer-actionable messages instead of internal reason codes.
+- [x] Complete fresh designated Xiaohongshu browser-sync login, final service
+      restart, real crawl, post-crawl Profile check, and cleanup verification.
+- [x] Close the final focused independent re-review after focused `14`, adjacent
+      `101`, complete monitoring `696`, compile, documentation, whitespace, and
+      live runtime gates pass.
+
 ## CR-121 - Crawler Account Identity Snapshot Header Binding
 
 Implementation status (2026-07-20): verified. This is a crawler regression
@@ -1922,18 +2052,20 @@ data, sensitive files, or the old server-login worktree.
 
 Planning status:
 
-CR-112 is an `Accepted / Dependency-Gated (Packet D)` new capability as of
-2026-07-21.
+CR-112 is `Verified (Same-Machine Windows V1 / Packet D Real-Account Lane)` as
+of 2026-07-22.
 Acceptance approves the same-machine Windows scope, reuse-first/minimal-
 adaptation evaluation, CR-112-before-CR-070 order, Profile/Cookie authority,
   administrator Cookie reveal, and Douyin/Xiaohongshu Packet D matrix. Packet
   B and C.1-C.3 are verified within their recorded proof boundaries. Packet D
-  was opened after C.3 commit `1d62677`, but real acceptance is externally
-  gated by the missing designated Xiaohongshu account and an unfinished
-  operator login in the designated Douyin browser. Phase 5.1P and Phase 5.1A-D
-  plus the current merged regression fixes are verified; the separate
-CR-047 Linux/server-like real acceptance remains operator-gated and is not
-closed by CR-112 local evidence.
+  completed the designated Douyin and Xiaohongshu same-machine real-account
+  lane: administrator reveal/copy, exact identity/Profile validation, final
+  service restart, bounded normal-monitor crawls, persisted content,
+  `fallback_used=false`, no raw Cookie in child argv/environment, post-crawl
+  Profile checks, and cleanup. Phase 5.1P and Phase 5.1A-D plus the current
+  merged regression fixes are verified; the separate CR-047 Linux/server-like
+  real acceptance and any second-physical-computer deployment claim remain
+  independent gates.
 
 Documentation synchronization:
 
@@ -2043,7 +2175,7 @@ Accepted decisions and gated execution:
       full monitoring suite (`606 passed`), Python compile, documentation checks,
       and `git diff --check`; leave C.2 gated until the atomic commit.
 - [x] Start Packet C.2 after the C.1 atomic delivery and verification gates;
-      keep C.3 and Packet D gated until C.2 acceptance evidence exists.
+      C.3 and Packet D remained gated until C.2 acceptance evidence existed.
 - [x] Packet C.2: implement feature-gated direct exact-context acquisition/API/UI
       on C.1; feature-off removes only C.2 and preserves advanced manual Cookie.
       Only C.2 router/UI/readiness/managed-browser code may read
@@ -2076,26 +2208,32 @@ Accepted decisions and gated execution:
       effective argv/environment; real OS process inspection remains Packet D.
 - [x] Start Packet D only after Packet C tests pass and C.3 is delivered
       atomically in commit `1d62677`.
-- [ ] Complete the Packet D deployment matrix: clean-computer bootstrap,
-      multi-account isolation, promotion checkpoint crash/restart,
-      C.1/C.2/C.3 rollback, structured Cookie fidelity, server QR
-      non-regression, and bounded operation-artifact cleanup.
+- [x] Complete the Packet D local deployment matrix within its recorded proof
+      boundary: isolated browser bootstrap/selection, multi-account isolation,
+      promotion checkpoint crash/restart, C.1/C.2/C.3 rollback, structured
+      Cookie fidelity, server QR non-regression, and bounded operation-artifact
+      cleanup. A second physical computer and CR-047 Linux/server-like action
+      remain separate operator gates.
 - [x] Run the bounded 2026-07-21 Douyin preflight with designated account
-      `5809`: the existing Profile passed login checks before and after the
+      selection: the existing Profile passed login checks before and after the
       attempt; the managed Chromium process used a managed Profile and no
       Cookie argument; the operator-login window timed out; the login session
       and promotion ended safely; the browser process and candidate Profile
       material were cleaned; and the original account/Profile stayed active.
-- [ ] Satisfy the real-account start gate. The current deployment has the
-      designated Douyin account `5809` but no Xiaohongshu account, so
-      `DESIGNATED_XHS_ACCOUNT_ID` cannot resolve to an approved account.
-- [ ] Packet D: use exact `DESIGNATED_DY_ACCOUNT_ID` and
-      `DESIGNATED_XHS_ACCOUNT_ID` values; for each platform acquire the real
-      Cookie through the selected direct managed-browser service, validate exact identity, exercise admin
-      reveal/copy, inject only that Cookie into a fresh candidate, restart,
-      prove `fallback_used=false`, and persist at least one real content item
-      through the normal monitor entry. Clear acquisition handles/state,
-      restart the service, and re-prove Profile check plus bounded crawl.
+- [x] Record the later CR-122/CR-124 Douyin evidence: no-QR browser sync
+      committed a candidate Profile and encrypted 54-record structured Cookie,
+      normal and post-restart saved-Profile checks passed, and the normal
+      monitor entry persisted five real content rows with
+      `fallback_used=false`.
+- [x] Satisfy the real-account start gate with two explicit administrator-
+      approved project-managed accounts, one for Douyin and one for
+      Xiaohongshu. No other real account was used for Packet D collection.
+- [x] Packet D: for both designated platforms acquire and validate the real
+      Cookie through the selected direct managed-browser service, exercise
+      administrator reveal/copy, promote a fresh account-bound candidate,
+      restart, prove `fallback_used=false`, and persist real content through
+      the normal monitor entry. Clear acquisition handles/state, restart the
+      service, and re-prove both Profile checks plus bounded crawls.
 - [x] Keep Kuaishou `Deferred`; do not count it as Packet D failure or claim it
       was tested.
 
