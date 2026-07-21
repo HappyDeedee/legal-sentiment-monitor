@@ -173,7 +173,8 @@ Before Packet A code:
 Before Packet B/C code:
 
 - Packet B must cover `xhs/client.py:_pre_headers()`,
-  `xhs/playwright_sign.py:get_xs()`, the XHS `request()` transport, and
+  `xhs/playwright_sign.py:sign_with_xhshow()` and `_build_sign_string()`, the XHS
+  `request()` transport, and
   `xhs/core.py` preparation as one frozen input contract;
 - Packet C must cover `douyin/client.py:_pre_headers()`,
   `douyin/help.py:get_a_bogus()`, `douyin/help.py:get_web_id()`, the Douyin
@@ -245,6 +246,21 @@ identity failure and preserve the committed Profile.
 
 Exit gate: focused XHS RED/GREEN tests, identity proof tests, retry/lock tests,
 and affected monitoring regression pass.
+
+Packet B implementation receipt (2026-07-22): `Verified`. Managed XHS Core
+builds one frozen request identity from Provider-effective account/Profile,
+Cookie, required `a1`/`web_session`, UA/UA-CH, Accept-Language, and proxy
+values. `_pre_headers()`, `sign_with_xhshow()` / `_build_sign_string()`, and
+the final httpx URL/body use byte-identical copied inputs; target, body, Cookie,
+UA, proxy, revision, or expiry drift stops before dispatch. Safe signed request
+proof is atomic, monotonic, and bounded to request 1 plus the latest 31; Runner
+requires a bound signed 2xx proof before XHS ingest. Focused coverage passes
+`33`, the affected monitoring selection passes `12`, and full monitoring
+passes `696` with three existing warnings. The complete suite passes `747`
+with one documented pre-existing XHS Store assertion outside this packet.
+Python compile and `git diff --check` pass. Claude focused re-review returned
+`PASS` with no blocker or material refinement. No real platform traffic was
+used; Packet C is next.
 
 ### Packet C - Douyin Request Identity
 

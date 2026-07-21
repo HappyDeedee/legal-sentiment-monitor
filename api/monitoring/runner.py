@@ -42,7 +42,7 @@ from tools.platform_request_environment import (
     build_platform_request_binding,
     build_platform_request_environment_from_binding,
     platform_request_binding_to_json,
-    read_platform_request_environment,
+    read_platform_request_result,
 )
 
 from .ai import (
@@ -124,6 +124,7 @@ class ManagedCrawlerOutcome:
     returncode: int
     login_required: bool
     request_environment: PlatformRequestEnvironment | None = None
+    request_dispatch_proofs: tuple[dict[str, Any], ...] = ()
 
 
 def clear_stop_request(job_id: int) -> None:
@@ -501,13 +502,13 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
                             request_environment.assert_active()
                             if request_environment.run_id != run_id:
                                 raise RuntimeError("managed platform request run binding mismatch")
-                            _record_request_environment_proof(
-                                run_id,
-                                platform,
-                                attempt,
-                                request_environment,
-                            )
                             if crawler_outcome.returncode != 0:
+                                _record_request_environment_proof(
+                                    run_id,
+                                    platform,
+                                    attempt,
+                                    request_environment,
+                                )
                                 if crawler_outcome.login_required:
                                     mark_social_account_profile_requires_relogin(
                                         int(account_binding["account_id"]),
@@ -534,6 +535,18 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
                                 raise RuntimeError(
                                     f"MediaCrawler exited with {crawler_outcome.returncode}{hint}"
                                 )
+                            _validate_managed_dispatch_proofs(
+                                platform,
+                                request_environment,
+                                crawler_outcome.request_dispatch_proofs,
+                            )
+                            _record_request_environment_proof(
+                                run_id,
+                                platform,
+                                attempt,
+                                request_environment,
+                                dispatch_proofs=crawler_outcome.request_dispatch_proofs,
+                            )
                         _raise_if_stop_requested(job["id"])
                         _raise_if_deadline_passed(run_id)
                         _update_collection_progress(run_id, platform, attempt_out, phase="ingesting")
@@ -742,12 +755,14 @@ def _run_crawler_attempt(
     if managed_plan is not None and result_path is not None:
         provider_result = _load_managed_child_result(result_path, managed_plan, child_started_at)
         request_environment = None
+        request_dispatch_proofs: tuple[dict[str, Any], ...] = ()
         if provider_result.ok:
-            request_environment = _load_managed_child_request_environment(
+            request_environment, loaded_dispatch_proofs = _load_managed_child_request_result(
                 request_result_path,
                 managed_plan,
                 request_binding,
             )
+            request_dispatch_proofs = tuple(loaded_dispatch_proofs)
         return ManagedCrawlerOutcome(
             provider_result=provider_result,
             returncode=int(process.returncode),
@@ -757,6 +772,7 @@ def _run_crawler_attempt(
                 else _looks_like_login_required(log_text)
             ),
             request_environment=request_environment,
+            request_dispatch_proofs=request_dispatch_proofs,
         )
     if process.returncode != 0:
         hint = "；检测到登录态失效，请先重新登录该平台账号" if _looks_like_login_required(log_text) else ""
@@ -838,6 +854,8 @@ def _record_request_environment_proof(
     platform: str,
     attempt: int,
     environment: PlatformRequestEnvironment,
+    *,
+    dispatch_proofs: tuple[dict[str, Any], ...] = (),
 ) -> None:
     if environment.run_id != int(run_id) or environment.platform != platform or int(attempt) < 1:
         raise RuntimeError("managed platform request proof binding mismatch")
@@ -871,6 +889,7 @@ def _record_request_environment_proof(
             "attempt": int(attempt),
             "status": "validated",
             "proof": proof,
+            "dispatch_proofs": [dict(item) for item in dispatch_proofs],
             "recorded_at": utc_now(),
         }
         platform_attempts = _merge_request_environment_attempt(platform_attempts, entry)
@@ -880,6 +899,31 @@ def _record_request_environment_proof(
             "UPDATE crawl_runs SET summary=? WHERE id=? AND status='running'",
             (json.dumps(_redact_summary(summary), ensure_ascii=False), run_id),
         )
+
+
+def _validate_managed_dispatch_proofs(
+    platform: str,
+    environment: PlatformRequestEnvironment,
+    dispatch_proofs: tuple[dict[str, Any], ...],
+) -> None:
+    if platform != "xhs":
+        return
+    if not dispatch_proofs:
+        raise RuntimeError("managed XHS request dispatch proof is missing")
+    signed_success = False
+    for proof in dispatch_proofs:
+        if (
+            proof.get("account_id") != environment.account_id
+            or proof.get("platform") != environment.platform
+            or proof.get("profile_key") != environment.profile_key
+            or proof.get("attempt_id") != environment.attempt_id
+            or proof.get("resolution_id") != environment.resolution_id
+        ):
+            raise RuntimeError("managed XHS request dispatch proof binding mismatch")
+        if proof.get("signed") is True and 200 <= int(proof.get("response_status", 0)) < 300:
+            signed_success = True
+    if not signed_success:
+        raise RuntimeError("managed XHS signed request proof is missing")
 
 
 def _finalize_collection_progress(run_id: int, platform: str, result: dict[str, Any]) -> dict[str, Any]:
@@ -2094,12 +2138,12 @@ def _load_managed_child_result(
     return result
 
 
-def _load_managed_child_request_environment(
+def _load_managed_child_request_result(
     result_path: Path,
     plan: BrowserEnvironmentPlan,
     binding: PlatformRequestBinding,
-) -> PlatformRequestEnvironment:
-    environment = read_platform_request_environment(result_path)
+) -> tuple[PlatformRequestEnvironment, list[dict[str, Any]]]:
+    environment, dispatch_proofs = read_platform_request_result(result_path)
     binding.assert_request_binding(
         account_id=plan.account_id,
         platform=plan.platform,
@@ -2123,6 +2167,15 @@ def _load_managed_child_request_environment(
             "request_environment",
         )
     environment.assert_active()
+    return environment, dispatch_proofs
+
+
+def _load_managed_child_request_environment(
+    result_path: Path,
+    plan: BrowserEnvironmentPlan,
+    binding: PlatformRequestBinding,
+) -> PlatformRequestEnvironment:
+    environment, _ = _load_managed_child_request_result(result_path, plan, binding)
     return environment
 
 

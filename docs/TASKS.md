@@ -1799,7 +1799,7 @@ follow-up and does not reopen completed Phase 5.1 or CR-118.
 
 ## CR-129 - Account Profile And Platform Request Identity Consistency
 
-Implementation status (2026-07-22): Packet A Verified; Packet B is next. This is a new follow-up
+Implementation status (2026-07-22): Packets A-B Verified; Packet C is next. This is a new follow-up
 after the verified CR-128 baseline. It does not reopen Phase 5.1, CR-112, or
 the verified CR-119 through CR-128 history.
 
@@ -1842,10 +1842,10 @@ Atomic packages:
       reviewed equivalent) and safe validation/serialization.
 - [x] Packet A: add RED tests for missing/conflicting/expired/cross-account
       environment and secret-leak cases.
-- [ ] Packet B: bind XHS Cookie, a1, web_session, UA/UA-CH,
+- [x] Packet B: bind XHS Cookie, a1, web_session, UA/UA-CH,
       Accept-Language, URL/query/body, signer, final headers, Profile, and
       proxy to one frozen environment.
-- [ ] Packet B: prove identity mismatch and signature/request drift fail before
+- [x] Packet B: prove identity mismatch and signature/request drift fail before
       dispatch while preserving committed Profile/Cookie authority.
 - [ ] Packet C: bind Douyin Cookie, webid, verifyFp, msToken, ttwid, a_bogus,
       UA/UA-CH, page/local-storage evidence, request values, Profile, and

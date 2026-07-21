@@ -4,7 +4,7 @@ Use this file to connect requirements, tasks, code areas, and tests.
 
 | Requirement | Module | Task Area | Code Area | Test Area | Status |
 | --- | --- | --- | --- | --- | --- |
-| CR-129 | Account Profile And Platform Request Identity Consistency | CR-129 Packet A-E; TODO baseline and deep plan review | tools/platform_request_environment.py, api/monitoring/runner.py, XHS/Douyin Core and Client request binding, proxy/retry/process boundaries | Packet A: 19 focused, 228 affected, 715 full monitoring tests; compile/docs/diff and focused Claude review pass. Packets B-E remain gates for complete signer equality, terminal states, child tripwires, and designated real acceptance | In Progress |
+| CR-129 | Account Profile And Platform Request Identity Consistency | CR-129 Packet A-E; TODO baseline and deep plan review | tools/platform_request_environment.py, api/monitoring/runner.py, media_platform/xhs/request_identity.py, XHS/Douyin Core and Client request binding, proxy/retry/process boundaries | Packet A verified. Packet B: 33 combined focused, 12 affected-monitoring, 696 full monitoring; 747 complete-suite tests pass with one documented pre-existing XHS Store assertion; compile/diff and focused Claude re-review pass. Packets C-E remain gates for Douyin signer equality, terminal states, child tripwires, and designated real acceptance | In Progress |
 | CR-001 | Project governance | Phase 0 | docs, AGENTS.md | Documentation review | Verified |
 | CR-002 | Product requirements | Phase 0 | docs/PRODUCT_REQUIREMENTS.md | Documentation review | Verified |
 | CR-003 | Agent workflow | Phase 0 | docs, AGENTS.md | Documentation review | Verified |

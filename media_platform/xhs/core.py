@@ -59,6 +59,7 @@ from .exception import DataFetchError, NoteNotFoundError
 from .field import SearchSortType
 from .help import parse_note_info_from_note_url, parse_creator_info_from_url, get_search_id
 from .login import XiaoHongShuLogin
+from .request_identity import build_xhs_request_identity, build_xhs_sec_ch_ua
 
 
 class XiaoHongShuCrawler(AbstractCrawler):
@@ -405,34 +406,52 @@ class XiaoHongShuCrawler(AbstractCrawler):
             self.browser_context,
             urls=self.cookie_urls,
         )
+        sec_ch_ua = (
+            build_xhs_sec_ch_ua(self.platform_request_environment)
+            if self.platform_request_environment is not None
+            else '"Chromium";v="136", "Google Chrome";v="136", "Not.A/Brand";v="99"'
+        )
+        headers = {
+            "accept": "application/json, text/plain, */*",
+            "accept-language": (
+                self.browser_environment_plan.accept_language
+                if self.browser_environment_plan
+                else "zh-CN,zh;q=0.9"
+            ),
+            "cache-control": "no-cache",
+            "content-type": "application/json;charset=UTF-8",
+            "origin": self.index_url,
+            "pragma": "no-cache",
+            "priority": "u=1, i",
+            "referer": f"{self.index_url}/",
+            "sec-ch-ua": sec_ch_ua,
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": '"Windows"',
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "same-site",
+            "user-agent": self.user_agent,
+            "Cookie": cookie_str,
+        }
+        request_identity = (
+            build_xhs_request_identity(
+                environment=self.platform_request_environment,
+                cookie_header=cookie_str,
+                cookie_dict=cookie_dict,
+                headers=headers,
+                proxy_url=httpx_proxy,
+            )
+            if self.platform_request_environment is not None
+            else None
+        )
         xhs_client_obj = XiaoHongShuClient(
             proxy=httpx_proxy,
-            headers={
-                "accept": "application/json, text/plain, */*",
-                "accept-language": (
-                    self.browser_environment_plan.accept_language
-                    if self.browser_environment_plan
-                    else "zh-CN,zh;q=0.9"
-                ),
-                "cache-control": "no-cache",
-                "content-type": "application/json;charset=UTF-8",
-                "origin": self.index_url,
-                "pragma": "no-cache",
-                "priority": "u=1, i",
-                "referer": f"{self.index_url}/",
-                "sec-ch-ua": '"Chromium";v="136", "Google Chrome";v="136", "Not.A/Brand";v="99"',
-                "sec-ch-ua-mobile": "?0",
-                "sec-ch-ua-platform": '"Windows"',
-                "sec-fetch-dest": "empty",
-                "sec-fetch-mode": "cors",
-                "sec-fetch-site": "same-site",
-                "user-agent": self.user_agent,
-                "Cookie": cookie_str,
-            },
+            headers=headers,
             playwright_page=self.context_page,
             cookie_dict=cookie_dict,
             proxy_ip_pool=self.ip_proxy_pool,  # Pass proxy pool for automatic refresh
             request_environment=self.platform_request_environment,
+            request_identity=request_identity,
         )
         return xhs_client_obj
 

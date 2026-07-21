@@ -3290,12 +3290,22 @@ tested in Packet D, not inferred from this Packet A receipt.
 
 - Signer and final request use the same Cookie, `a1`, `web_session`, UA,
   UA-CH, Accept-Language, URL, query, body, headers, Profile, and proxy.
-- Coverage names `_pre_headers()`, `get_xs()`, the request transport, and Core
-  preparation as one frozen input path.
+- Coverage names `_pre_headers()`, `sign_with_xhshow()`,
+  `_build_sign_string()`, the request transport, and Core preparation as one
+  frozen input path.
 - Old Cookie, old UA, old proxy, or changed signed body paired with a new
   request produces a RED failure.
 - Two accounts and same-account concurrent attempts remain isolated and
   serialized; identity loss preserves the committed Profile.
+
+Packet B verification receipt (2026-07-22): combined Packet A+B focused tests
+pass `33`; the affected monitoring selection passes `12`; complete monitoring
+passes `696` with three existing warnings. The complete `tests` collection
+passes `747` with the separately documented pre-existing XHS Store factory
+assertion remaining. Coverage includes exact GET/list-query and complex POST
+signer/transport equality, Header casing, Cookie/proxy/body/target drift,
+pre-dispatch expiry, two-account isolation, atomic bounded proof persistence,
+stale proof rejection, and unmanaged account-check compatibility.
 
 ### Packet C Douyin Tests
 

@@ -4658,12 +4658,12 @@ collection proof.
 Type: Phase 5.1 follow-up regression fix; account-environment architecture
 hardening; platform-request identity consistency.
 
-Status: In Progress (Packet A Verified; Packet B next)
+Status: In Progress (Packets A-B Verified; Packet C next)
 
 Execution: Ready for Implementation after deep plan-cross-validation.
 
-Packet status: Packet A is `Verified` on 2026-07-22. Packet B is the next
-execution unit; CR-129 remains In Progress until Packets B-E and designated
+Packet status: Packets A and B are `Verified` on 2026-07-22. Packet C is the
+next execution unit; CR-129 remains In Progress until Packets C-E and designated
 real acceptance pass.
 
 Baseline: `main@6cffdbaf0c0ffca8863192c962918a37349f10a4`.
@@ -4672,8 +4672,9 @@ Background:
 
 - `BrowserEnvironmentProvider` and `BrowserEnvironmentPlan` now establish the
   account-scoped browser, Profile, UA, locale, timezone, and proxy result.
-- The XHS and Douyin request paths still allow Client, signer, page, local
-  storage, and proxy helpers to derive mutable request values independently.
+- Packet B closes the XHS split. The Douyin request path still allows Client,
+  signer, page, local storage, and proxy helpers to derive mutable request
+  values independently; Packet C owns that remaining path.
 - A successful content response alone does not prove that the designated
   account identity, signature inputs, and final request used one environment.
 
@@ -4732,6 +4733,17 @@ refresh drift, stale attempt proof, XHS signed Cookie/UA mutation, missing
 Douyin Profile `msToken`, and two-account projection isolation have regression
 coverage. Full child-process tripwires remain Packet D scope.
 
+Packet B evidence: managed XHS Core now builds one frozen request identity from
+the effective request environment, complete Cookie map, `a1`, `web_session`,
+UA/UA-CH, Accept-Language, Profile binding, and proxy. `_pre_headers()`,
+`sign_with_xhshow()` / `_build_sign_string()`, and the final httpx URL/body use
+the same copied input. Runtime drift fails before dispatch. Safe signed 2xx
+dispatch proofs are written atomically, reject stale/non-monotonic writes, and
+retain a bounded first-plus-latest-31 window. Runner requires a bound signed
+success proof before managed XHS ingest. Raw Cookie, proxy credentials, URL,
+headers, signature output, and Profile path remain outside persisted proof.
+The unmanaged account-check/update-Cookie path remains compatible.
+
 Real acceptance:
 
 - Designated Douyin account: `8972`.
@@ -4746,8 +4758,9 @@ Acceptance and rollback:
 - Every packet requires RED/GREEN coverage, affected/full regression, compile,
   JavaScript, docs, whitespace, and independent read-only review before its
   atomic commit.
-- Packet B must cover XHS `_pre_headers()`, `get_xs()`, Core preparation, and
-  final transport; Packet C must cover Douyin `_pre_headers()`, `get_web_id()`,
+- Packet B covers XHS `_pre_headers()`, `sign_with_xhshow()`,
+  `_build_sign_string()`, Core preparation, and final transport; Packet C must
+  cover Douyin `_pre_headers()`, `get_web_id()`,
   `get_a_bogus()`, page evidence, and final transport. Proxy expiry/revision/
   region drift is terminal and requires a new resolution; only bounded
   transient connection failures reuse the verified environment revision.

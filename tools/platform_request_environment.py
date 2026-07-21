@@ -19,6 +19,8 @@ from tools.browser_environment import (
 
 REQUEST_ENVIRONMENT_CONTRACT_VERSION = 1
 REQUEST_ENVIRONMENT_MAX_BYTES = 16384
+REQUEST_RESULT_MAX_BYTES = 131072
+REQUEST_DISPATCH_PROOF_LIMIT = 32
 DEFAULT_REQUEST_ENVIRONMENT_TTL_SECONDS = 900
 REQUEST_BINDING_ENV_NAME = "MONITOR_PLATFORM_REQUEST_BINDING"
 REQUEST_RESULT_PATH_ENV_NAME = "MONITOR_PLATFORM_REQUEST_RESULT_PATH"
@@ -220,6 +222,7 @@ class PlatformRequestEnvironment:
 
 _cached_binding: PlatformRequestBinding | None = None
 _binding_cache_lock = threading.Lock()
+_request_result_lock = threading.Lock()
 
 
 def build_platform_request_binding(
@@ -528,15 +531,56 @@ def write_platform_request_environment(
     destination = Path(destination_value).resolve()
     destination.parent.mkdir(parents=True, exist_ok=True)
     payload = platform_request_environment_to_json(environment)
-    temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
-    try:
-        temporary.write_text(payload, encoding="utf-8")
-        temporary.replace(destination)
-    finally:
-        temporary.unlink(missing_ok=True)
+    _write_atomic(destination, payload)
 
 
-def read_platform_request_environment(path: Path) -> PlatformRequestEnvironment:
+def append_platform_request_dispatch_proof(
+    environment: PlatformRequestEnvironment,
+    proof: dict[str, Any],
+) -> None:
+    destination_value = os.environ.get(REQUEST_RESULT_PATH_ENV_NAME, "")
+    if not destination_value:
+        raise PlatformRequestEnvironmentError(
+            "platform_request_environment_missing",
+            "result_path",
+        )
+    destination = Path(destination_value).resolve()
+    with _request_result_lock:
+        stored_environment, stored_proofs = read_platform_request_result(destination)
+        if stored_environment != environment:
+            raise PlatformRequestEnvironmentError(
+                "platform_request_environment_mismatch",
+                "dispatch_environment",
+            )
+        validated = _validate_dispatch_proof(proof, environment)
+        if stored_proofs and validated["request_index"] <= stored_proofs[-1]["request_index"]:
+            raise PlatformRequestEnvironmentError(
+                "platform_request_environment_mismatch",
+                "request_index",
+            )
+        next_proofs = [*stored_proofs, validated]
+        if len(next_proofs) > REQUEST_DISPATCH_PROOF_LIMIT:
+            next_proofs = [next_proofs[0], *next_proofs[-(REQUEST_DISPATCH_PROOF_LIMIT - 1):]]
+        payload = json.dumps(
+            {
+                "environment": environment.to_safe_dict(),
+                "dispatch_proofs": next_proofs,
+            },
+            ensure_ascii=False,
+            sort_keys=True,
+            separators=(",", ":"),
+        )
+        if len(payload.encode("utf-8")) > REQUEST_RESULT_MAX_BYTES:
+            raise PlatformRequestEnvironmentError(
+                "platform_request_environment_unsafe",
+                "result_size",
+            )
+        _write_atomic(destination, payload)
+
+
+def read_platform_request_result(
+    path: Path,
+) -> tuple[PlatformRequestEnvironment, list[dict[str, Any]]]:
     destination = Path(path).resolve()
     try:
         payload = destination.read_text(encoding="utf-8")
@@ -545,7 +589,146 @@ def read_platform_request_environment(path: Path) -> PlatformRequestEnvironment:
             "platform_request_environment_missing",
             "result",
         ) from exc
-    return platform_request_environment_from_json(payload)
+    if len(payload.encode("utf-8")) > REQUEST_RESULT_MAX_BYTES:
+        raise PlatformRequestEnvironmentError(
+            "platform_request_environment_unsafe",
+            "result_size",
+        )
+    try:
+        value = json.loads(payload)
+    except (TypeError, ValueError) as exc:
+        raise PlatformRequestEnvironmentError(
+            "platform_request_environment_unsafe",
+            "result",
+        ) from exc
+    if not isinstance(value, dict):
+        raise PlatformRequestEnvironmentError(
+            "platform_request_environment_unsafe",
+            "result",
+        )
+    if set(value) == {"environment", "dispatch_proofs"}:
+        environment = platform_request_environment_from_json(
+            json.dumps(value["environment"], ensure_ascii=False)
+        )
+        raw_proofs = value["dispatch_proofs"]
+        if not isinstance(raw_proofs, list) or len(raw_proofs) > REQUEST_DISPATCH_PROOF_LIMIT:
+            raise PlatformRequestEnvironmentError(
+                "platform_request_environment_unsafe",
+                "dispatch_proofs",
+            )
+        proofs = [_validate_dispatch_proof(item, environment) for item in raw_proofs]
+        indexes = [item["request_index"] for item in proofs]
+        if indexes != sorted(set(indexes)):
+            raise PlatformRequestEnvironmentError(
+                "platform_request_environment_mismatch",
+                "request_index",
+            )
+        return environment, proofs
+    return platform_request_environment_from_json(payload), []
+
+
+def read_platform_request_environment(path: Path) -> PlatformRequestEnvironment:
+    environment, _ = read_platform_request_result(path)
+    return environment
+
+
+def _write_atomic(destination: Path, payload: str) -> None:
+    temporary = destination.with_name(f".{destination.name}.{os.getpid()}.tmp")
+    try:
+        temporary.write_text(payload, encoding="utf-8")
+        temporary.replace(destination)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
+def _validate_dispatch_proof(
+    proof: Any,
+    environment: PlatformRequestEnvironment,
+) -> dict[str, Any]:
+    expected_fields = {
+        "contract_version",
+        "workspace_id",
+        "account_id",
+        "platform",
+        "profile_key",
+        "resolution_id",
+        "attempt_id",
+        "run_id",
+        "identity_revision",
+        "cookie_material_revision",
+        "proxy_revision",
+        "cookie_digest",
+        "user_agent_digest",
+        "client_hints_digest",
+        "proxy_digest",
+        "request_index",
+        "method",
+        "target_digest",
+        "body_digest",
+        "request_header_digest",
+        "signer_input_digest",
+        "signer_output_digest",
+        "signed",
+        "response_status",
+        "dispatched_at",
+    }
+    if not isinstance(proof, dict) or set(proof) != expected_fields:
+        raise PlatformRequestEnvironmentError(
+            "platform_request_environment_invalid",
+            "dispatch_proof_fields",
+        )
+    _reject_forbidden_recursive(proof, "dispatch_proof")
+    binding_fields = (
+        "contract_version",
+        "workspace_id",
+        "account_id",
+        "platform",
+        "profile_key",
+        "resolution_id",
+        "attempt_id",
+        "run_id",
+        "identity_revision",
+        "cookie_material_revision",
+        "proxy_revision",
+    )
+    mismatches = [
+        name for name in binding_fields if proof.get(name) != getattr(environment, name)
+    ]
+    if mismatches:
+        raise PlatformRequestEnvironmentError(
+            "platform_request_environment_mismatch",
+            *mismatches,
+        )
+    for name in (
+        "cookie_digest",
+        "user_agent_digest",
+        "client_hints_digest",
+        "proxy_digest",
+        "target_digest",
+        "body_digest",
+        "request_header_digest",
+        "signer_input_digest",
+        "signer_output_digest",
+    ):
+        if not _DIGEST_RE.fullmatch(str(proof.get(name) or "")):
+            _invalid(name)
+    if type(proof["request_index"]) is not int or not 1 <= proof["request_index"] <= 10000:
+        _invalid("request_index")
+    if proof["method"] not in {"GET", "POST", "PUT", "PATCH", "DELETE"}:
+        _invalid("method")
+    if type(proof["signed"]) is not bool:
+        _invalid("signed")
+    if type(proof["response_status"]) is not int or not 100 <= proof["response_status"] <= 599:
+        _invalid("response_status")
+    dispatched = _parse_datetime(str(proof["dispatched_at"]), "dispatched_at")
+    created = _parse_datetime(environment.created_at, "created_at")
+    expires = _parse_datetime(environment.expires_at, "expires_at")
+    if dispatched < created - timedelta(seconds=1) or dispatched > expires:
+        raise PlatformRequestEnvironmentError(
+            "platform_request_environment_mismatch",
+            "dispatched_at",
+        )
+    return dict(proof)
 
 
 def _validate_provider_binding(
@@ -721,6 +904,13 @@ def _browser_channel(
     if source in {"playwright_bundled", "system_chromium"}:
         return "chromium"
     if source in {"explicit", "system_managed"}:
+        executable = str(plan.browser_executable_path).lower().replace("/", "\\")
+        if "msedge" in executable or "\\microsoft edge" in executable or "\\microsoft\\edge" in executable:
+            return "edge"
+        if "chromium" in executable:
+            return "chromium"
+        if "chrome" in executable:
+            return "chrome"
         return "managed"
     return str(plan.provider_name or "playwright")
 

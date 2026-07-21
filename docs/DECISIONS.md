@@ -747,6 +747,18 @@ short `Superseded by` note rather than deleting history.
   the Runner rejects missing, stale, conflicting, expired, or cross-account
   proof before ingest. Complete child-process leakage tripwires remain Packet
   D scope.
+- Packet B confirms the actual XHS signer entry is `sign_with_xhshow()` with
+  `_build_sign_string()`, not the superseded `get_xs()` name. Core creates one
+  immutable XHS request identity from the Provider-effective environment;
+  Client signs and dispatches copied URL/query/body/Cookie/UA/proxy inputs from
+  that identity and rejects drift before HTTP.
+- Packet B safe dispatch evidence retains request 1 plus the latest 31
+  monotonic records. Every request is still validated in memory; the bounded
+  persisted window prevents long crawls from growing the attempt proof without
+  limit. Runner requires at least one bound signed 2xx XHS proof before ingest.
+- Explicit browser selections derive only the safe channel label
+  (`chrome`, `edge`, or `chromium`) from the executable path. The path itself
+  remains excluded from request and dispatch proof.
 
 ## 2026-07-21 - CR-112 Acceptance And Execution Order
 

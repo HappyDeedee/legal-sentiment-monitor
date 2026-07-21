@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import json
 import os
+from dataclasses import replace
 from datetime import datetime, timedelta, timezone
 from pathlib import Path
 
@@ -152,14 +153,15 @@ def _result(plan: BrowserEnvironmentPlan, *, fallback_used: bool = False) -> Bro
 def _build(plan: BrowserEnvironmentPlan | None = None, result: BrowserEnvironmentResult | None = None):
     plan = plan or _plan()
     result = result or _result(plan)
+    created = datetime.now(timezone.utc)
     return build_platform_request_environment(
         plan,
         result,
         run_id=12001,
         identity_revision="identity-rev-1",
         cookie_material_revision="cookie-material-rev-1",
-        created_at="2026-07-22T10:00:00+00:00",
-        expires_at="2026-07-22T10:15:00+00:00",
+        created_at=created.isoformat(),
+        expires_at=(created + timedelta(minutes=15)).isoformat(),
     )
 
 
@@ -180,6 +182,29 @@ def test_cr129_packet_a_projects_safe_immutable_request_environment():
     assert "Cookie" not in encoded
     assert "sessionid=synthetic-secret" not in encoded
     assert "C:\\runtime" not in encoded
+
+
+@pytest.mark.parametrize(
+    ("executable", "expected_channel"),
+    [
+        (r"C:\Program Files\Google\Chrome\Application\chrome.exe", "chrome"),
+        (r"C:\Program Files (x86)\Microsoft\Edge\Application\msedge.exe", "edge"),
+        (r"C:\runtime\Chromium\chrome.exe", "chromium"),
+    ],
+)
+def test_cr129_packet_b_explicit_browser_channel_is_derived_without_persisting_path(
+    executable,
+    expected_channel,
+):
+    plan = replace(
+        _plan(),
+        browser_source="explicit",
+        browser_executable_path=executable,
+    )
+    environment = _build(plan, _result(plan))
+
+    assert environment.browser_channel == expected_channel
+    assert executable not in json.dumps(environment.to_safe_dict())
 
 
 def test_cr129_packet_a_rejects_result_account_or_resolution_drift():
@@ -218,7 +243,7 @@ def test_cr129_packet_a_safe_roundtrip_and_expiry_guard():
     assert restored == environment
 
     expired = environment.to_safe_dict()
-    expired["expires_at"] = "2026-07-22T09:59:00+00:00"
+    expired["expires_at"] = (datetime.now(timezone.utc) - timedelta(minutes=1)).isoformat()
     with pytest.raises(PlatformRequestEnvironmentError, match="expired"):
         platform_request_environment_from_json(json.dumps(expired, ensure_ascii=False))
 
@@ -531,9 +556,17 @@ def test_cr129_packet_a_platform_client_receives_verified_request_environment(
 
     module = importlib.import_module(module_name)
     crawler = getattr(module, crawler_name).__new__(getattr(module, crawler_name))
-    environment = _build()
+    plan = _plan()
+    if module_name.endswith("xhs.core"):
+        plan = replace(
+            plan,
+            account_id=9196,
+            platform="xhs",
+            profile_key="1/xhs/acc_9196",
+        )
+    environment = _build(plan, _result(plan))
     crawler.platform_request_environment = environment
-    crawler.browser_environment_plan = _plan()
+    crawler.browser_environment_plan = plan
     crawler.user_agent = environment.user_agent
     crawler.browser_context = object()
     crawler.context_page = object()
@@ -543,6 +576,11 @@ def test_cr129_packet_a_platform_client_receives_verified_request_environment(
     captured = {}
 
     async def fake_cookies(*args, **kwargs):
+        if module_name.endswith("xhs.core"):
+            return "a1=synthetic-a1;web_session=synthetic-session", {
+                "a1": "synthetic-a1",
+                "web_session": "synthetic-session",
+            }
         return "synthetic=1", {"synthetic": "1"}
 
     class FakeClient:
@@ -560,6 +598,10 @@ def test_cr129_packet_a_platform_client_receives_verified_request_environment(
     asyncio.run(getattr(crawler, factory_name)(None))
 
     assert captured["request_environment"] is environment
+    if module_name.endswith("xhs.core"):
+        assert captured["request_identity"].environment is environment
+        assert 'v="127"' in captured["headers"]["sec-ch-ua"]
+        assert 'v="136"' not in captured["headers"]["sec-ch-ua"]
 
 
 def test_cr129_packet_a_xhs_signed_cookie_cannot_change_before_dispatch(monkeypatch):
@@ -567,16 +609,23 @@ def test_cr129_packet_a_xhs_signed_cookie_cannot_change_before_dispatch(monkeypa
 
     from media_platform.xhs.client import XiaoHongShuClient
 
-    environment = _build()
+    plan = replace(
+        _plan(),
+        account_id=9196,
+        platform="xhs",
+        profile_key="1/xhs/acc_9196",
+    )
+    environment = _build(plan, _result(plan))
     client = XiaoHongShuClient(
         proxy=None,
         headers={
             "User-Agent": environment.user_agent,
             "accept-language": environment.accept_language,
-            "Cookie": "sessionid=synthetic",
+            "sec-ch-ua": '"Chromium";v="127", "Not.A/Brand";v="99"',
+            "Cookie": "a1=synthetic-a1;web_session=synthetic-session",
         },
         playwright_page=object(),
-        cookie_dict={"sessionid": "synthetic"},
+        cookie_dict={"a1": "synthetic-a1", "web_session": "synthetic-session"},
         request_environment=environment,
     )
     monkeypatch.setattr(

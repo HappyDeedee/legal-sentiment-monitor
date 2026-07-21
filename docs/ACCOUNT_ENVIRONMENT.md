@@ -1950,3 +1950,17 @@ short-lived atomic proof file; Runner validates account, Profile, revision,
 resolution, attempt, run, expiry, and fallback state before ingest. This is an
 additive runtime contract and does not replace Profile or encrypted Cookie
 authority.
+
+Packet B implementation status (2026-07-22): verified. For managed XHS
+attempts, the full Cookie map, required `a1` and `web_session`, UA, derived
+browser-channel UA-CH, Accept-Language, Profile binding, proxy, URL/query/body,
+and signer inputs are frozen once. The final httpx transport must match that
+snapshot exactly. Cookie refresh, proxy refresh, expiry, target/body drift, or
+account/Profile/revision mismatch requires a new resolution and cannot mutate
+the committed Profile.
+
+The child keeps raw Cookie and proxy material in controlled memory. Its attempt
+file stores only bound IDs/revisions and digests. Dispatch records are atomic,
+monotonic, and bounded to request 1 plus the latest 31; Runner requires a
+signed 2xx XHS proof before ingest. The unmanaged account-check path remains
+available and does not create managed proof.

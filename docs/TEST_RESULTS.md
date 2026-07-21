@@ -2,6 +2,37 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-22 - CR-129 Packet B Verified
+
+Scope: Xiaohongshu managed Cookie/Profile/request identity, signer-to-transport
+byte equality, safe dispatch proof, browser-channel client hints, account
+isolation, expiry, and unmanaged account-check compatibility.
+
+Result: `Verified`.
+
+- Packet A+B focused tests: `33 passed`.
+- Affected monitoring selection: `12 passed`; complete monitoring regression:
+  `696 passed, 3 warnings`.
+- Complete `tests` collection: `747 passed, 1 failed, 3 warnings`. The sole
+  failure is the documented pre-existing
+  `TestXhsStoreFactory.test_create_excel_store` assertion: it expects
+  `XhsExcelStoreImplement` while the current factory returns `ExcelStoreBase`.
+  Packet B does not touch Store code.
+- XHS tests prove required `a1`/`web_session`, Cookie/UA/proxy drift rejection,
+  list-query and complex-POST byte equality, case-insensitive header handling,
+  two-account isolation, concurrent atomic proof writes, bounded first-plus-
+  latest-31 retention, stale-write rejection, pre-dispatch expiry, and legacy
+  unmanaged Cookie updates.
+- Python compile, JavaScript syntax, docs consistency, documentation tests,
+  and `git diff --check` passed.
+- Independent Claude focused re-review returned `PASS`, `BLOCKERS=None`, and
+  `MATERIAL REFINEMENTS=None`. Two non-blocking P2 observations concern tolerant
+  Cookie whitespace and proxy URL validation already enforced by the upstream
+  account/proxy authority.
+- No real account, Profile, Cookie, browser, proxy, or platform traffic was
+  used. Designated real XHS account `9196` remains gated to Packet E; protected
+  accounts `9197` and `9198` remain unused.
+
 ## 2026-07-22 - CR-129 Packet A Verified
 
 Scope: immutable platform request environment, safe parent/child binding,
