@@ -837,3 +837,25 @@ Confirmed:
 - Phase 10-18 run type uses `scheduled | manual | test`.
 - Phase 10-18 email delivery uses `email_delivery_logs`.
 - Phase 10-18 report orphan handling uses `reports.job_snapshot_json`.
+
+## CR-129 Migration Boundary
+
+CR-129 starts with an in-memory, versioned request-environment contract and
+safe proof projection. A database column is added only when packet review
+proves that historical request proof is required for an existing API or run
+record. Any such change must be additive, nullable/default-safe, compatible
+with old rows, and reversible.
+
+Migration rules:
+
+1. Do not move raw Cookie, token, proxy password, Profile path, or complete
+   request headers into a new table or JSON snapshot.
+2. Derive safe revisions from existing encrypted/material or account/proxy
+   records; do not guess missing provenance for old rows.
+3. Validate the old active Profile and account identity before any candidate
+   promotion.
+4. On startup, failed migration, service interruption, or candidate mismatch,
+   preserve the prior committed Profile/Cookie authority and record a
+   terminal safe result.
+5. Rollback removes only the new candidate/proof record and leaves existing
+   account rows and encrypted material readable.

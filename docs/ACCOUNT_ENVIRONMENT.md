@@ -1901,3 +1901,44 @@ Server-like acceptance must verify:
 - two same-platform accounts have different profiles;
 - same account/profile cannot run concurrently;
 - proxy binding is respected during login and crawl.
+
+## CR-129 Request Environment Boundary
+
+The account environment is resolved in two explicit layers:
+
+```text
+social_account + profile_key
+  -> BrowserEnvironmentProvider
+  -> effective BrowserEnvironmentResult
+  -> frozen platform request environment
+  -> platform Client + signer + HTTP request
+```
+
+The second arrow is a projection, not a second account authority. A managed
+request environment must bind at least:
+
+- workspace and account IDs;
+- platform and `profile_key`;
+- browser family, source, channel, and effective version;
+- account-bound proxy ID/policy and proxy revision;
+- account identity revision;
+- provider resolution ID, crawl attempt ID, and run ID;
+- locale, timezone, User-Agent, and Accept-Language;
+- Cookie material revision and source reference;
+- creation and expiry timestamps.
+
+Only safe IDs, revisions, hashes, and redacted proof may cross a process or be
+persisted as a request snapshot. Raw Cookie, token, proxy credentials, and
+Profile paths remain in controlled runtime objects or existing encrypted
+material. XHS and Douyin Client/signer code must not read a second browser,
+Profile, proxy, page, global config, or default network for a managed attempt.
+
+For a same-family browser version update, retain `profile_key`, obtain fresh
+effective proof, and update the runtime snapshot. A version change alone does
+not require login. A browser-family/channel change uses a candidate Profile,
+Cookie validation, exact identity check, and promotion; the active Profile is
+kept until the candidate passes.
+
+CR-129 real validation is serial and explicit: Douyin account `8972` and
+Xiaohongshu account `9196`. Accounts `9197` and `9198` are protected from
+collection. Kuaishou is Deferred.

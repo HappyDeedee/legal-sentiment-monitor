@@ -556,3 +556,31 @@ Acceptance cannot be marked complete until:
 - the web UI controls login;
 - server-side profile persistence is verified across restart;
 - concurrency limits are verified for account/profile/proxy resources.
+
+## CR-129 Managed Request Environment
+
+The server runtime must pass the effective provider proof into one immutable
+platform request environment before constructing a managed XHS or Douyin
+Client. The environment is bound to the account, platform, `profile_key`,
+browser proof, proxy revision, identity revision, resolution ID, attempt ID,
+and run ID. A child process receives only a versioned safe handle or
+Profile-only launch metadata.
+
+Deployment acceptance must inspect that:
+
+- a missing or conflicting field stops the request before platform dispatch;
+- a managed account does not change browser, Profile, proxy, or network during
+  a retry;
+- only bounded transient-network failures retry;
+- login/challenge/second-verification/rate-limit/signature/environment/
+  identity failures reach a terminal actionable state;
+- raw Cookie, token, proxy credentials, Profile paths, and signature material
+  are absent from argv, environment variables, logs, audit details, and safe
+  snapshots;
+- service restart, browser close, cancellation, timeout, and child-process
+  exit leave the prior committed account authority intact.
+
+CR-129 local real acceptance is explicitly serial and uses Douyin account
+`8972` and Xiaohongshu account `9196`. Accounts `9197` and `9198` are not
+collection targets. This evidence supplements, rather than replaces, the
+separate CR-047 Linux/server-like gate.

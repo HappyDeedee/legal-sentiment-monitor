@@ -127,6 +127,9 @@ Status values:
 - CR-124: Saved Login Recheck, Test Isolation, And Portable Cookie Clarity
 - CR-125: Platform Account Identity List Simplification
 - CR-126: Xiaohongshu Self-Info Display Name Extraction
+- CR-127: Unified Account Login Authority And Cookie/Profile Reliability
+- CR-128: Saved Cookie Recovery After Profile Drift
+- CR-129: Account Profile And Platform Request Identity Consistency
 - CR-096: AI Evaluation Postprocessing Scope Reduction
 - CR-075: Responsive Navigation Interaction Consistency
 - CR-076: Mobile Header Layout Resilience Regression Fix
@@ -4640,6 +4643,113 @@ Verification:
 
 - Verified on 2026-06-18 with targeted frontend regression coverage, syntax
   checks, docs check, and browser inspection of the local `/monitor` page.
+
+## CR-129 - Account Profile And Platform Request Identity Consistency
+
+Date: 2026-07-22
+
+Source: TODO baseline review after CR-128 exposed a remaining split between the
+verified account/browser environment and the platform request/signature paths.
+
+Module: managed account request environment, Xiaohongshu and Douyin clients and
+signers, proxy binding, Runner retries, child-process boundaries, and real
+collection proof.
+
+Type: Phase 5.1 follow-up regression fix; account-environment architecture
+hardening; platform-request identity consistency.
+
+Status: Accepted
+
+Execution: Ready for Implementation after deep plan-cross-validation.
+
+Baseline: `main@6cffdbaf0c0ffca8863192c962918a37349f10a4`.
+
+Background:
+
+- `BrowserEnvironmentProvider` and `BrowserEnvironmentPlan` now establish the
+  account-scoped browser, Profile, UA, locale, timezone, and proxy result.
+- The XHS and Douyin request paths still allow Client, signer, page, local
+  storage, and proxy helpers to derive mutable request values independently.
+- A successful content response alone does not prove that the designated
+  account identity, signature inputs, and final request used one environment.
+
+Confirmed boundary:
+
+- Profile is the crawl and browser-runtime authority.
+- Encrypted Cookie is initialization, refresh, recovery, and migration
+  material.
+- BrowserEnvironmentProvider is the sole browser/Profile/UA/proxy authority.
+- Platform clients and signers consume one frozen request environment.
+- Managed accounts keep their bound account, Profile, identity revision,
+  browser, proxy, and network; silent anonymous, generic-Profile, other-account,
+  or default-network fallback is outside the boundary.
+- CR-112's same-machine Windows and Packet B component decisions remain
+  protected. This CR does not reimplement Extension, Connector, or WebSocket
+  transport.
+- CR-070 remains after CR-112 and this follow-up.
+
+In scope:
+
+- Versioned immutable request-environment projection from effective provider
+  proof.
+- XHS Cookie/a1/web_session/UA/signature/final-request consistency.
+- Douyin Cookie/webid/verifyFp/msToken/ttwid/a_bogus/UA/signature/final-
+  request consistency.
+- Proxy revision, retry, process, restart, cancellation, timeout, and typed
+  identity/error boundaries.
+- Synthetic RED/GREEN tests, affected regression, documentation, and serial
+  designated real acceptance.
+
+Out of scope:
+
+- CR-070 export/import package, new crawler framework, account rotation,
+  challenge bypass, whole-Profile cross-host transfer, or new external
+  dependency.
+- Real collection using protected accounts 9197 and 9198.
+
+Atomic implementation packages:
+
+- Packet A: project and validate `PlatformRequestEnvironment`.
+- Packet A must make safe request proof mandatory for every post-CR-129
+  platform attempt. Proof stores IDs, revisions, digests, effective values,
+  expiry, and redacted signer/request evidence only; historical runs remain
+  limited-context.
+- Packet B: unify Xiaohongshu signer/client/request identity.
+- Packet C: unify Douyin signer/client/request identity.
+- Packet D: typed errors, bounded retry, cross-process safe handle, terminal
+  states, and secret tripwires.
+- Packet E: browser compatibility, saved-Profile compatibility, and real
+  acceptance.
+
+Real acceptance:
+
+- Designated Douyin account: `8972`.
+- Designated Xiaohongshu account: `9196`.
+- Run serially through the normal monitor entry; prove exact identity, one
+  stored item per platform, `fallback_used=false`, no plaintext secrets in
+  child argv/environment/logs/snapshots, and service-restart Profile checks.
+- Kuaishou remains Deferred.
+
+Acceptance and rollback:
+
+- Every packet requires RED/GREEN coverage, affected/full regression, compile,
+  JavaScript, docs, whitespace, and independent read-only review before its
+  atomic commit.
+- Packet B must cover XHS `_pre_headers()`, `get_xs()`, Core preparation, and
+  final transport; Packet C must cover Douyin `_pre_headers()`, `get_web_id()`,
+  `get_a_bogus()`, page evidence, and final transport. Proxy expiry/revision/
+  region drift is terminal and requires a new resolution; only bounded
+  transient connection failures reuse the verified environment revision.
+- Child-process tripwires must prove that Cookie, token, proxy credentials,
+  Profile paths, CDP endpoints, and raw signatures are absent from argv,
+  environment, logs, and safe result files.
+- Invalid or expired candidate environments are discarded before changing the
+  committed Profile/Cookie authority.
+- Failed, cancelled, timed-out, interrupted, and browser-closed operations
+  preserve the previous committed account material.
+- The packet plan is the CR-095-compatible execution artifact. Its status is
+  Accepted/Ready for Implementation after Claude deep review reached READY;
+  packet code still moves through In Progress and Verified independently.
 
 ## CR-113 - QR Draft Account Identity Choice Forwarding
 

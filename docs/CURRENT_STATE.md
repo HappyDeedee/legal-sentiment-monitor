@@ -4,6 +4,26 @@ Last updated: 2026-07-22
 
 ## Current Baseline
 
+- CR-129 is the active implementation lane on branch
+  `codex/cr-129-request-identity-consistency`, based on merged
+  `main@6cffdbaf0c0ffca8863192c962918a37349f10a4`. It is currently
+  `Accepted / Ready for Implementation` after a two-round deep Claude
+  read-only review. The plan review returned `READY` with no blockers or
+  material refinements.
+  The TODO baseline classifies CR-112 and CR-119 through CR-128 as verified
+  historical work, CR-047 server-like identity proof as operator-gated, and
+  CR-070 as future-valid after this lane.
+- The remaining CR-129 issue is a request-layer authority split: the provider
+  freezes browser/Profile/UA/proxy proof, while XHS and Douyin Client/signer
+  paths can still derive mutable Cookie, token, header, page, and proxy values
+  independently. No CR-129 runtime implementation has started on this branch.
+- CR-129 protects the existing boundary: committed Profile is crawl authority;
+  encrypted Cookie is initialization, refresh, recovery, and migration
+  material; managed accounts do not silently use anonymous, generic-Profile,
+  other-account, default-proxy, or default-network fallback. Designated real
+  acceptance remains Douyin `8972` and Xiaohongshu `9196`; accounts `9197` and
+  `9198` are protected from collection.
+
 - CR-128 is verified. A strict post-crawl Xiaohongshu Profile check exposed
   that successful endpoint-specific content retrieval is not sufficient proof
   of authenticated identity. The saved-Cookie recovery path now performs the

@@ -712,6 +712,36 @@ short `Superseded by` note rather than deleting history.
   the prepared page still fails closed as
   `account_identity_snapshot_mismatch`.
 
+## 2026-07-22 - CR-129 Request Environment Authority Boundary
+
+- Accepted boundary for the queued CR-129 follow-up: the committed Profile
+  resolved from `social_account.profile_key` remains the browser and crawl
+  login authority. Encrypted Cookie remains initialization, refresh, recovery,
+  and migration material.
+- Accepted boundary: `BrowserEnvironmentProvider` is the sole source for the
+  browser family/channel/version, Profile, UA, locale, timezone, window, and
+  proxy environment. XHS and Douyin clients/signers must consume one frozen
+  request projection from its effective proof instead of deriving a second
+  environment.
+- Accepted invariant: one managed crawl attempt binds account ID, platform,
+  `profile_key`, browser proof, proxy revision, identity revision,
+  resolution ID, attempt ID, and run ID. Missing, conflicting, expired, or
+  cross-account values fail closed before platform dispatch.
+- Accepted retry boundary: transient network failures may use bounded retries
+  against the same verified environment revision. Login, challenge, second
+  verification, rate-limit, proxy-block, signature, protocol, and identity
+  failures become terminal typed results until an explicit new resolution.
+- Accepted safety boundary: raw Cookie, token, proxy credentials, and signature
+  material stay in controlled runtime memory or existing encrypted references;
+  safe handles and proof snapshots contain only IDs, revisions, hashes, and
+  redacted metadata.
+- Accepted sequencing: CR-070 remains after CR-112 and CR-129. CR-112's
+  same-machine Windows and Packet B Extension/Connector/transport decisions
+  remain protected and are not reimplemented by CR-129.
+- Accepted real-acceptance boundary: use only designated Douyin account 8972
+  and Xiaohongshu account 9196 for collection validation. Accounts 9197 and
+  9198 are protected and excluded. Kuaishou remains Deferred.
+
 ## 2026-07-21 - CR-112 Acceptance And Execution Order
 
 - Confirmed for CR-112: V1 browser auto-sync is a same-machine Windows

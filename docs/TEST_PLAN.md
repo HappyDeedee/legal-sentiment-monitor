@@ -3252,3 +3252,84 @@ Layout stress inputs:
   `390x844`.
 - All implementation verification is recorded in `docs/TEST_RESULTS.md` after
   code changes are actually made and tested.
+
+## CR-129 Account Profile And Platform Request Identity Tests
+
+### Plan Readiness Tests
+
+- Compare current `main` with TASKS, CHANGE_REQUESTS, CURRENT_STATE,
+  DECISIONS, TRACEABILITY, and accepted specialist decisions.
+- Classify stale, duplicate, future-valid, operator-gated, historical, and
+  active items before implementation.
+- Run deep read-only Claude review with only `Read`, `Grep`, and `Glob`.
+- Require `Overall verdict=READY`, no blocking findings, no material
+  refinements, consistent formal documents, docs consistency, documentation
+  tests, and `git diff --check`.
+
+### Packet A Tests
+
+- Required account, platform, Profile, browser, proxy, identity, resolution,
+  attempt, run, locale, timezone, UA, language, Cookie revision, and expiry
+  fields are validated before Client construction.
+- Every post-CR-129 platform attempt persists safe proof containing contract,
+  account/Profile/platform, browser digest, proxy revision, identity/Cookie
+  revisions, resolution/attempt/run IDs, effective language, expiry,
+  `fallback_used`, and redacted signer/request digests. Historical runs remain
+  limited-context rather than receiving guessed proof.
+- Missing, conflicting, expired, cross-account, cross-Profile, and stale
+  revisions produce typed failures before any platform request.
+- Safe serialization contains IDs/revisions/hashes only and never raw Cookie,
+  token, proxy credentials, Profile path, or signature material.
+
+### Packet B XHS Tests
+
+- Signer and final request use the same Cookie, `a1`, `web_session`, UA,
+  UA-CH, Accept-Language, URL, query, body, headers, Profile, and proxy.
+- Coverage names `_pre_headers()`, `get_xs()`, the request transport, and Core
+  preparation as one frozen input path.
+- Old Cookie, old UA, old proxy, or changed signed body paired with a new
+  request produces a RED failure.
+- Two accounts and same-account concurrent attempts remain isolated and
+  serialized; identity loss preserves the committed Profile.
+
+### Packet C Douyin Tests
+
+- Signer and final request use the same Cookie, webid, verifyFp, msToken,
+  ttwid, a_bogus, UA/UA-CH, page/local-storage evidence, URL, query, body,
+  Profile, and proxy.
+- Fixed, random, stale, or cross-account token values are rejected when they
+  are not bound to the current environment revision.
+- Coverage names `_pre_headers()`, `get_web_id()`, `get_a_bogus()`, page
+  evidence, and final transport as one frozen input path.
+- Identity loss and second verification become actionable terminal results;
+  anonymous content is not accepted as authenticated collection.
+
+### Packet D Boundary Tests
+
+- Typed errors cover login required, second verification, challenge,
+  rate-limit, proxy block, signature mismatch, invalid Cookie, browser/
+  account identity mismatch, transient network, protocol change, timeout,
+  cancellation, and process crash.
+- Only bounded transient-network errors retry; each retry has a new attempt ID
+  and the same verified environment revision.
+- Proxy expiry, proxy revision drift, proxy region mismatch, and proxy block
+  are terminal managed-environment errors requiring a new resolution; an
+  in-flight attempt never refreshes its proxy.
+- Stale callback, late child result, restart, cancel, timeout, and crash cannot
+  overwrite newer state; every path has a terminal state and releases locks.
+- Tripwires inspect argv, environment, logs, audit details, and snapshots for
+  raw Cookie, token, proxy credentials, Profile path, CDP endpoint, or
+  signature material.
+
+### Packet E Real Acceptance
+
+- Use temporary Profiles and synthetic material for automatic tests; block real
+  platform traffic with a tripwire.
+- Set explicit designated IDs only: `DESIGNATED_DY_ACCOUNT_ID=8972` and
+  `DESIGNATED_XHS_ACCOUNT_ID=9196`.
+- Serially prove identity, Profile/browser/proxy/request consistency, normal
+  monitor entry, one persisted real item per platform, `fallback_used=false`,
+  no secret process leakage, cleanup, service restart, and a second bounded
+  Profile check/crawl.
+- Do not select or touch protected collection accounts 9197/9198. Kuaishou is
+  Deferred and does not affect this gate.

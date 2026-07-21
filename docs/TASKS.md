@@ -1797,6 +1797,78 @@ follow-up and does not reopen completed Phase 5.1 or CR-118.
 - [x] Re-run controlled collection and prove at least one stored content row.
 - [x] Run focused/full/docs/compile/diff gates and independent review.
 
+## CR-129 - Account Profile And Platform Request Identity Consistency
+
+Planning status (2026-07-22): Accepted / Ready for Implementation. This is a new follow-up
+after the verified CR-128 baseline. It does not reopen Phase 5.1, CR-112, or
+the verified CR-119 through CR-128 history.
+
+Baseline review classification:
+
+- CR-112 and CR-119 through CR-128: already completed / historical Verified;
+  preserve their boundaries and evidence.
+- CR-047 Linux/server-like identity proof: operator-gated and independent.
+- CR-070: future-valid and remains after CR-112 and CR-129.
+- CR-092 through CR-094: future-valid or Needs Confirmation; outside this lane.
+- Platform request identity split: active/current CR-129 follow-up.
+
+Readiness gate: passed on 2026-07-22 after two Claude read-only review rounds.
+
+- [x] Complete the CR-095-compatible plan and formal-document synchronization.
+- [x] Complete deep plan-cross-validation with Claude Code using only Read,
+      Grep, and Glob.
+- [x] Classify all TODO items and resolve every blocker/material refinement.
+- [x] Reach `Overall verdict=READY`, `Blocking findings=None`, and
+      `Material refinements=None` before code implementation.
+- [x] Run docs consistency, documentation tests, and `git diff --check`.
+
+Hard boundaries:
+
+- [ ] Keep the committed Profile as crawl/browser authority and encrypted
+      Cookie as initialization, refresh, recovery, and migration material.
+- [ ] Keep BrowserEnvironmentProvider as the only browser/Profile/UA/proxy
+      resolver and make platform clients consume its frozen request projection.
+- [ ] Keep account, platform, `profile_key`, identity revision, browser,
+      proxy, resolution, attempt, and run binding explicit and immutable per
+      attempt.
+- [ ] Preserve CR-112 same-machine Windows and Packet B component decisions;
+      keep CR-070 after this lane.
+- [ ] Use only designated real accounts 8972 (Douyin) and 9196 (XHS);
+      protect 9197 and 9198 from collection.
+
+Atomic packages:
+
+- [ ] Packet A: add the versioned immutable PlatformRequestEnvironment (or
+      reviewed equivalent) and safe validation/serialization.
+- [ ] Packet A: add RED tests for missing/conflicting/expired/cross-account
+      environment and secret-leak cases.
+- [ ] Packet B: bind XHS Cookie, a1, web_session, UA/UA-CH,
+      Accept-Language, URL/query/body, signer, final headers, Profile, and
+      proxy to one frozen environment.
+- [ ] Packet B: prove identity mismatch and signature/request drift fail before
+      dispatch while preserving committed Profile/Cookie authority.
+- [ ] Packet C: bind Douyin Cookie, webid, verifyFp, msToken, ttwid, a_bogus,
+      UA/UA-CH, page/local-storage evidence, request values, Profile, and
+      proxy to one frozen environment.
+- [ ] Packet C: remove unbound fixed/cross-account request values and add
+      account-isolation and signer/input equality tests.
+- [ ] Packet D: add typed platform/environment errors, bounded transient-only
+      retry, terminal session states, stale callback guards, and safe child
+      handles with argv/environment/log tripwires.
+- [ ] Packet E: verify QR, Browser, manual Cookie, saved Profile, restart,
+      manual, scheduled, server-like, and normal monitor paths.
+- [ ] Packet E: serially prove exact identity and at least one stored real item
+      for designated Douyin 8972 and XHS 9196 with `fallback_used=false`.
+
+Per-package gates:
+
+- [ ] Reproduce the issue and add a failing RED test before the fix.
+- [ ] Verify focused and affected/full tests, compile, JavaScript checks,
+      documentation checks, whitespace, and independent read-only review.
+- [ ] Synchronize CHANGE_REQUESTS, TASKS, CURRENT_STATE, TEST_RESULTS,
+      TRACEABILITY, DECISIONS, and specialist documents after each package.
+- [ ] Create one atomic commit only after the package evidence is complete.
+
 ## CR-120 - Local Visible Login Automatic Reconciliation
 
 Implementation status (2026-07-20): verified. This is a local fallback

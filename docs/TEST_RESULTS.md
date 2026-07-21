@@ -2,6 +2,45 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-22 - CR-129 Plan Cross-Validation READY
+
+Scope: CR-129 TODO baseline, account/Profile/browser/proxy/request authority,
+XHS/Douyin signer boundaries, retry/process safety, and packet sequencing.
+
+Result: `Accepted / Ready for Implementation`.
+
+- Round 1 deep Claude review identified six blocking plan gaps: exact contract
+  gates, mutable signer inputs, proxy drift classification, retry inheritance,
+  mandatory safe proof, and child-process secret boundaries.
+- The plan and formal documents were revised to define all six gates, named
+  XHS/Douyin entry points, terminal proxy categories, same-resolution retry
+  inheritance, mandatory post-CR-129 safe proof, and argv/environment/log/
+  audit/snapshot tripwires.
+- Round 2 focused Claude review returned `Overall verdict=READY`,
+  `Blocking findings=None`, and `Material refinements=None`.
+- This entry records plan readiness only. No CR-129 runtime code, account,
+  Profile, Cookie, proxy, browser, or real-platform data was changed.
+
+## 2026-07-22 - CR-129 TODO Baseline And Plan Registration
+
+Scope: read-only baseline comparison after merged CR-128 and registration of
+the Account Profile And Platform Request Identity Consistency follow-up.
+
+Result: `Proposed / Queued`.
+
+- Latest baseline is `main@6cffdbaf0c0ffca8863192c962918a37349f10a4` on the new
+  CR-129 branch. CR-112 and CR-119 through CR-128 remain historical Verified;
+  CR-047 server-like real acceptance remains operator-gated; CR-070 remains
+  future-valid after CR-112 and this follow-up.
+- The active gap is documented as a request-layer authority split: provider
+  effective browser/Profile/proxy proof is not yet projected into one immutable
+  XHS/Douyin Client/signer/request contract.
+- No CR-129 code, schema, account, Profile, Cookie, proxy, browser, or runtime
+  data was changed in this registration step. Real platform collection was not
+  run for CR-129.
+- Plan validation and implementation remain gated on the deep Claude review
+  and its READY criteria.
+
 ## 2026-07-22 - CR-128 Saved Cookie Recovery And Packet D Real-Account Lane
 
 Scope: saved Cookie recovery after Profile drift, exact identity gates,
