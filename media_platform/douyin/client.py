@@ -20,7 +20,9 @@
 import asyncio
 import copy
 import json
+import os
 import urllib.parse
+from datetime import datetime, timezone
 from typing import TYPE_CHECKING, Any, Callable, Dict, Union, Optional
 
 import httpx
@@ -30,6 +32,11 @@ from base.base_crawler import AbstractApiClient
 from proxy.proxy_mixin import ProxyRefreshMixin
 from tools import utils
 from tools.httpx_util import make_async_client
+from tools.platform_request_environment import (
+    REQUEST_RESULT_PATH_ENV_NAME,
+    PlatformRequestEnvironmentError,
+    append_platform_request_dispatch_proof,
+)
 from var import request_keyword_var
 
 if TYPE_CHECKING:
@@ -39,6 +46,25 @@ if TYPE_CHECKING:
 from .exception import *
 from .field import *
 from .help import *
+from .request_identity import (
+    DouyinRequestIdentity,
+    DouyinRequestIdentityError,
+    safe_digest,
+)
+
+
+class ManagedDouyinRequestIdentityError(RuntimeError):
+    """A managed Douyin request changed a frozen identity input."""
+
+
+class _SignedHeaders(dict):
+    signed_cookie: str
+    signed_user_agent: str
+    expected_method: str
+    expected_url: str
+    expected_body_digest: str
+    signer_input_digest: str
+    signer_output_digest: str
 
 
 class DouYinClient(AbstractApiClient, ProxyRefreshMixin):
@@ -53,10 +79,11 @@ class DouYinClient(AbstractApiClient, ProxyRefreshMixin):
         cookie_dict: Dict,
         proxy_ip_pool: Optional["ProxyIpPool"] = None,
         request_environment: Optional["PlatformRequestEnvironment"] = None,
+        request_identity: Optional[DouyinRequestIdentity] = None,
     ):
         self.proxy = proxy
         self.timeout = timeout
-        self.headers = headers
+        self.headers = dict(headers)
         self._host = "https://www.douyin.com"
         self.cookie_urls = [
             "https://douyin.com",
@@ -66,8 +93,29 @@ class DouYinClient(AbstractApiClient, ProxyRefreshMixin):
             "https://live.douyin.com",
         ]
         self.playwright_page = playwright_page
-        self.cookie_dict = cookie_dict
+        self.cookie_dict = dict(cookie_dict)
         self.request_environment = request_environment
+        self.request_identity = request_identity
+        self.safe_request_proofs: list[dict[str, Any]] = []
+        self._request_sequence = 0
+        if self.request_environment is not None:
+            if self.request_identity is None:
+                raise ManagedDouyinRequestIdentityError(
+                    "managed Douyin request identity is missing"
+                )
+            if self.request_identity.environment != self.request_environment:
+                raise ManagedDouyinRequestIdentityError(
+                    "managed Douyin request environment mismatch"
+                )
+            try:
+                self.request_identity.assert_runtime(
+                    headers=self.headers,
+                    proxy_url=self.proxy,
+                )
+            except DouyinRequestIdentityError as exc:
+                raise ManagedDouyinRequestIdentityError(str(exc)) from exc
+            self.headers = self.request_identity.headers
+            self.cookie_dict = self.request_identity.cookie_dict
         # Initialize proxy pool (from ProxyRefreshMixin)
         self.init_proxy_pool(proxy_ip_pool)
 
@@ -78,13 +126,82 @@ class DouYinClient(AbstractApiClient, ProxyRefreshMixin):
         headers: Optional[Dict] = None,
         request_method="GET",
     ):
-
         if not params:
-            return
+            params = {}
         headers = headers or self.headers
+        if self.request_environment is not None:
+            if request_method != "GET":
+                raise ManagedDouyinRequestIdentityError(
+                    "managed Douyin POST signer is unsupported"
+                )
+            if self.request_identity is None:
+                raise ManagedDouyinRequestIdentityError(
+                    "managed Douyin request identity is missing"
+                )
+            try:
+                self.request_identity.assert_runtime(
+                    headers=headers,
+                    proxy_url=self.proxy,
+                )
+            except DouyinRequestIdentityError as exc:
+                raise ManagedDouyinRequestIdentityError(str(exc)) from exc
+
+            request_params = copy.deepcopy(params)
+            for name, value in self.request_identity.common_params.items():
+                if name in request_params and str(request_params[name]) != value:
+                    raise ManagedDouyinRequestIdentityError(
+                        f"managed Douyin request {name} mismatch"
+                    )
+                request_params[name] = value
+            for name in ("verifyFp", "fp"):
+                if (
+                    name in request_params
+                    and str(request_params[name]) != self.request_identity.verify_fp
+                ):
+                    raise ManagedDouyinRequestIdentityError(
+                        f"managed Douyin request {name} mismatch"
+                    )
+                request_params[name] = self.request_identity.verify_fp
+
+            query_string = urllib.parse.urlencode(request_params, doseq=True)
+            a_bogus = await get_a_bogus(
+                uri,
+                query_string,
+                {},
+                self.request_identity.environment.user_agent,
+                self.playwright_page,
+            )
+            if not isinstance(a_bogus, str) or not a_bogus:
+                raise ManagedDouyinRequestIdentityError(
+                    "managed Douyin request a_bogus is missing"
+                )
+            request_params["a_bogus"] = a_bogus
+            final_query = urllib.parse.urlencode(request_params, doseq=True)
+
+            signed_headers = _SignedHeaders(headers)
+            signed_headers.signed_cookie = self.request_identity.cookie_header
+            signed_headers.signed_user_agent = (
+                self.request_identity.environment.user_agent
+            )
+            signed_headers.expected_method = "GET"
+            signed_headers.expected_url = f"{self._host}{uri}?{final_query}"
+            signed_headers.expected_body_digest = safe_digest("")
+            signed_headers.signer_input_digest = safe_digest(
+                {
+                    "method": "GET",
+                    "uri": uri,
+                    "query": query_string,
+                    "body_digest": safe_digest(""),
+                    "cookie_digest": self.request_identity.cookie_digest,
+                    "user_agent_digest": self.request_identity.user_agent_digest,
+                    "client_hints_digest": self.request_identity.client_hints_digest,
+                    "proxy_digest": self.request_identity.proxy_digest,
+                }
+            )
+            signed_headers.signer_output_digest = safe_digest(a_bogus)
+            return request_params, signed_headers
+
         local_storage: Dict = await self.playwright_page.evaluate("() => window.localStorage")  # type: ignore
-        if self.request_environment is not None and not str(local_storage.get("xmst") or "").strip():
-            raise RuntimeError("managed request msToken is missing from the bound Profile")
         common_params = {
             "device_platform": "webapp",
             "aid": "6383",
@@ -124,13 +241,117 @@ class DouYinClient(AbstractApiClient, ProxyRefreshMixin):
         if "/v1/web/general/search" not in uri:
             a_bogus = await get_a_bogus(uri, query_string, post_data, headers["User-Agent"], self.playwright_page)
             params["a_bogus"] = a_bogus
+        return params, headers
+
+    def _validate_managed_headers(self, headers: Dict[str, str]) -> None:
+        if self.request_environment is None:
+            return
+        if self.request_identity is None:
+            raise ManagedDouyinRequestIdentityError(
+                "managed Douyin request identity is missing"
+            )
+        try:
+            self.request_identity.assert_runtime(
+                headers=headers,
+                proxy_url=self.proxy,
+            )
+        except DouyinRequestIdentityError as exc:
+            raise ManagedDouyinRequestIdentityError(str(exc)) from exc
+
+    @staticmethod
+    def _header_value(headers: Dict[str, str], name: str) -> str:
+        values = [
+            str(value)
+            for key, value in headers.items()
+            if str(key).lower() == name
+        ]
+        if len(values) != 1:
+            raise ManagedDouyinRequestIdentityError(
+                f"signed Douyin request {name} header is ambiguous"
+            )
+        return values[0]
+
+    @staticmethod
+    def _validate_signed_headers(
+        headers: Dict[str, str],
+        *,
+        method: str,
+        url: str,
+        body: Any,
+    ) -> None:
+        if not isinstance(headers, _SignedHeaders):
+            return
+        if DouYinClient._header_value(headers, "cookie") != headers.signed_cookie:
+            raise ManagedDouyinRequestIdentityError(
+                "signed Douyin request Cookie changed before dispatch"
+            )
+        if (
+            DouYinClient._header_value(headers, "user-agent")
+            != headers.signed_user_agent
+        ):
+            raise ManagedDouyinRequestIdentityError(
+                "signed Douyin request user-agent changed before dispatch"
+            )
+        if method.upper() != headers.expected_method or url != headers.expected_url:
+            raise ManagedDouyinRequestIdentityError(
+                "signed Douyin request target changed before dispatch"
+            )
+        if safe_digest(body if body is not None else "") != headers.expected_body_digest:
+            raise ManagedDouyinRequestIdentityError(
+                "signed Douyin request body changed before dispatch"
+            )
 
     async def request(self, method, url, **kwargs):
         # Check whether the proxy has expired before each request
         await self._refresh_proxy_if_expired()
 
+        if self.request_environment is not None:
+            try:
+                self.request_environment.assert_active()
+            except PlatformRequestEnvironmentError as exc:
+                raise ManagedDouyinRequestIdentityError(
+                    "managed Douyin request environment expired"
+                ) from exc
+            original_headers = kwargs.get("headers")
+            if not isinstance(original_headers, dict):
+                raise ManagedDouyinRequestIdentityError(
+                    "managed Douyin request headers are missing"
+                )
+            request_headers: Dict[str, str]
+            if isinstance(original_headers, _SignedHeaders):
+                request_headers = _SignedHeaders(original_headers)
+                for name in (
+                    "signed_cookie",
+                    "signed_user_agent",
+                    "expected_method",
+                    "expected_url",
+                    "expected_body_digest",
+                    "signer_input_digest",
+                    "signer_output_digest",
+                ):
+                    setattr(request_headers, name, getattr(original_headers, name))
+            else:
+                request_headers = dict(original_headers)
+            kwargs["headers"] = request_headers
+            body = kwargs.get("data", kwargs.get("content", kwargs.get("json")))
+            self._validate_signed_headers(
+                request_headers,
+                method=method,
+                url=url,
+                body=body,
+            )
+            self._validate_managed_headers(request_headers)
+
         async with make_async_client(proxy=self.proxy) as client:
             response = await client.request(method, url, timeout=self.timeout, **kwargs)
+        if self.request_environment is not None:
+            self._record_safe_request_proof(
+                method=method,
+                url=url,
+                body=kwargs.get("data", kwargs.get("content", kwargs.get("json"))),
+                headers=kwargs["headers"],
+                response_status=int(response.status_code),
+            )
         try:
             if response.text == "" or response.text == "blocked":
                 utils.logger.error(f"request params incrr, response.text: {response.text}")
@@ -143,14 +364,37 @@ class DouYinClient(AbstractApiClient, ProxyRefreshMixin):
         """
         GET请求
         """
-        await self.__process_req_params(uri, params, headers)
-        headers = headers or self.headers
-        return await self.request(method="GET", url=f"{self._host}{uri}", params=params, headers=headers)
+        request_params, request_headers = await self.__process_req_params(
+            uri,
+            params,
+            headers,
+        )
+        if self.request_environment is not None:
+            return await self.request(
+                method="GET",
+                url=request_headers.expected_url,
+                headers=request_headers,
+            )
+        return await self.request(
+            method="GET",
+            url=f"{self._host}{uri}",
+            params=request_params,
+            headers=request_headers,
+        )
 
     async def post(self, uri: str, data: dict, headers: Optional[Dict] = None):
-        await self.__process_req_params(uri, data, headers)
-        headers = headers or self.headers
-        return await self.request(method="POST", url=f"{self._host}{uri}", data=data, headers=headers)
+        request_data, request_headers = await self.__process_req_params(
+            uri,
+            data,
+            headers,
+            request_method="POST",
+        )
+        return await self.request(
+            method="POST",
+            url=f"{self._host}{uri}",
+            data=request_data,
+            headers=request_headers,
+        )
 
     async def pong(self, browser_context: BrowserContext) -> bool:
         local_storage = await self.playwright_page.evaluate("() => window.localStorage")
@@ -164,12 +408,69 @@ class DouYinClient(AbstractApiClient, ProxyRefreshMixin):
         return cookie_dict.get("LOGIN_STATUS") == "1"
 
     async def update_cookies(self, browser_context: BrowserContext, urls: Optional[list[str]] = None):
+        if self.request_environment is not None:
+            raise ManagedDouyinRequestIdentityError(
+                "managed Douyin Cookie changed; create a new request resolution"
+            )
         cookie_str, cookie_dict = await utils.convert_browser_context_cookies(
             browser_context,
             urls=urls or self.cookie_urls,
         )
         self.headers["Cookie"] = cookie_str
         self.cookie_dict = cookie_dict
+
+    def _record_safe_request_proof(
+        self,
+        *,
+        method: str,
+        url: str,
+        body: Any,
+        headers: Dict[str, str],
+        response_status: int,
+    ) -> None:
+        if self.request_identity is None:
+            raise ManagedDouyinRequestIdentityError(
+                "managed Douyin request identity is missing"
+            )
+        signed = isinstance(headers, _SignedHeaders)
+        self._request_sequence += 1
+        proof = {
+            **self.request_identity.to_safe_dict(),
+            "request_index": self._request_sequence,
+            "method": method.upper(),
+            "target_digest": safe_digest(url),
+            "body_digest": safe_digest(body if body is not None else ""),
+            "request_header_digest": safe_digest(dict(headers)),
+            "signer_input_digest": (
+                headers.signer_input_digest
+                if signed
+                else safe_digest("not_applicable")
+            ),
+            "signer_output_digest": (
+                headers.signer_output_digest
+                if signed
+                else safe_digest("not_applicable")
+            ),
+            "signed": signed,
+            "response_status": response_status,
+            "dispatched_at": datetime.now(timezone.utc).isoformat(),
+        }
+        self.safe_request_proofs.append(proof)
+        if len(self.safe_request_proofs) > 32:
+            self.safe_request_proofs = [
+                self.safe_request_proofs[0],
+                *self.safe_request_proofs[-31:],
+            ]
+        if os.environ.get(REQUEST_RESULT_PATH_ENV_NAME):
+            try:
+                append_platform_request_dispatch_proof(
+                    self.request_identity.environment,
+                    proof,
+                )
+            except PlatformRequestEnvironmentError as exc:
+                raise ManagedDouyinRequestIdentityError(
+                    "managed Douyin request proof persistence failed"
+                ) from exc
 
     async def search_info_by_keyword(
         self,
@@ -325,15 +626,21 @@ class DouYinClient(AbstractApiClient, ProxyRefreshMixin):
 
     async def get_user_aweme_posts(self, sec_user_id: str, max_cursor: str = "") -> Dict:
         uri = "/aweme/v1/web/aweme/post/"
+        verify_fp = (
+            self.request_identity.verify_fp
+            if self.request_identity is not None
+            else str(self.cookie_dict.get("s_v_web_id") or "")
+        )
         params = {
             "sec_user_id": sec_user_id,
             "count": 18,
             "max_cursor": max_cursor,
             "locate_query": "false",
             "publish_video_strategy_type": 2,
-            'verifyFp': 'verify_ma3hrt8n_q2q2HyYA_uLyO_4N6D_BLvX_E2LgoGmkA1BU',
-            'fp': 'verify_ma3hrt8n_q2q2HyYA_uLyO_4N6D_BLvX_E2LgoGmkA1BU'
         }
+        if verify_fp:
+            params["verifyFp"] = verify_fp
+            params["fp"] = verify_fp
         return await self.get(uri, params)
 
     async def get_all_user_aweme_posts(self, sec_user_id: str, callback: Optional[Callable] = None):

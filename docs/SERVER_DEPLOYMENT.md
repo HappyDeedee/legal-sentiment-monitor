@@ -566,6 +566,13 @@ browser proof, proxy revision, identity revision, resolution ID, attempt ID,
 and run ID. A child process receives only a versioned safe handle or
 Profile-only launch metadata.
 
+Request contract v2 also carries provider-effective browser-platform, screen,
+viewport, scale, mobile, and touch values. Managed Douyin reads its required
+Profile token sources once before Client construction and binds them to the
+same Cookie, browser, UA, proxy, signer input, and final URL. The current
+Douyin Client has no POST call sites; managed POST stops before network until
+a body-aware signer proof exists.
+
 Deployment acceptance must inspect that:
 
 - a missing or conflicting field stops the request before platform dispatch;

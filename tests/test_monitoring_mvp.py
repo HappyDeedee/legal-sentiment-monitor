@@ -4442,6 +4442,36 @@ def _phase_5_1d_result_for_plan(plan, *, ok=True, reason=""):
     return BrowserEnvironmentResult(ok=ok, reason=reason, snapshot=snapshot)
 
 
+def _cr129_signed_dispatch_proof(environment, *, request_index=1):
+    return {
+        "contract_version": environment.contract_version,
+        "workspace_id": environment.workspace_id,
+        "account_id": environment.account_id,
+        "platform": environment.platform,
+        "profile_key": environment.profile_key,
+        "resolution_id": environment.resolution_id,
+        "attempt_id": environment.attempt_id,
+        "run_id": environment.run_id,
+        "identity_revision": environment.identity_revision,
+        "cookie_material_revision": environment.cookie_material_revision,
+        "proxy_revision": environment.proxy_revision,
+        "cookie_digest": "a" * 64,
+        "user_agent_digest": "b" * 64,
+        "client_hints_digest": "c" * 64,
+        "proxy_digest": "d" * 64,
+        "request_index": request_index,
+        "method": "GET",
+        "target_digest": "e" * 64,
+        "body_digest": "f" * 64,
+        "request_header_digest": "1" * 64,
+        "signer_input_digest": "2" * 64,
+        "signer_output_digest": "3" * 64,
+        "signed": True,
+        "response_status": 200,
+        "dispatched_at": environment.created_at,
+    }
+
+
 def test_phase_5_1d_runner_handoff_is_bounded_and_not_in_command_or_summary(tmp_path, monkeypatch):
     from dataclasses import replace
 
@@ -4673,6 +4703,7 @@ def test_phase_5_1d_runner_resolves_after_locks_and_persists_before_ingest(tmp_p
             0,
             False,
             request_environment,
+            (_cr129_signed_dispatch_proof(request_environment),),
         )
 
     monkeypatch.setattr(runner_module, "_run_crawler_attempt", fake_attempt)
@@ -23708,6 +23739,7 @@ def test_run_platform_attaches_bound_proxy_summary(tmp_path, monkeypatch):
             0,
             False,
             request_environment,
+            (_cr129_signed_dispatch_proof(request_environment),),
         )
 
     try:

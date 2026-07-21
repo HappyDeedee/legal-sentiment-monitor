@@ -2,6 +2,40 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-22 - CR-129 Packet C Verified
+
+Scope: Douyin managed Profile/Cookie/request identity, Profile token source,
+signer-to-URL equality, browser/window request values, safe dispatch proof,
+account isolation, and Runner ingest gate.
+
+Result: `Verified`.
+
+- Combined Packet A-C focused tests: `48 passed`.
+- Complete monitoring regression: `696 passed, 3 warnings`.
+- Complete `tests` collection: `767 passed, 1 failed, 3 warnings`. The sole
+  failure remains the pre-existing `TestXhsStoreFactory.test_create_excel_store`
+  assertion recorded in Packet B; Packet C does not touch Store code.
+- RED/GREEN coverage proves `xmst` -> `msToken`, Profile `web_id` -> `webid`,
+  `s_v_web_id` -> `verifyFp/fp`, and `ttwid` -> `ttwid`; Cookie, UA/UA-CH,
+  screen, proxy, stale token, target, signer-query, final-URL, proof, and
+  two-account boundaries fail closed.
+- The designated account `8972` was used only for a bounded local Profile
+  construction diagnostic: the existing bundled-Chromium Profile opened,
+  required material was present, Client construction passed, raw values were
+  absent from the safe projection, and the browser was closed. No content API
+  or collection run was used. Protected accounts `9197` and `9198` were unused.
+- The actual local `a_bogus` generator produced a nonempty result from
+  synthetic inputs; automated tests did not call a real content endpoint.
+- Python compile, JavaScript syntax, and `git diff --check` pass. Docs checks
+  run after this synchronized receipt.
+- Initial independent Claude review found missing automatic `verifyFp/fp`
+  insertion for ordinary managed GET requests. The fix added both values to
+  signer input/final URL and stale-override RED coverage. Focused re-review
+  returned `PASS`, with no blocker or material refinement, and atomic commit
+  readiness `YES`.
+- Packet D remains the gate for typed platform errors, transient-only retry,
+  process terminal states, and full argv/environment/log/snapshot tripwires.
+
 ## 2026-07-22 - CR-129 Packet B Verified
 
 Scope: Xiaohongshu managed Cookie/Profile/request identity, signer-to-transport

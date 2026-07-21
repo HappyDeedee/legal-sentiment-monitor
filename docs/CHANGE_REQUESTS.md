@@ -4658,12 +4658,12 @@ collection proof.
 Type: Phase 5.1 follow-up regression fix; account-environment architecture
 hardening; platform-request identity consistency.
 
-Status: In Progress (Packets A-B Verified; Packet C next)
+Status: In Progress (Packets A-C Verified; Packet D next)
 
 Execution: Ready for Implementation after deep plan-cross-validation.
 
-Packet status: Packets A and B are `Verified` on 2026-07-22. Packet C is the
-next execution unit; CR-129 remains In Progress until Packets C-E and designated
+Packet status: Packets A, B, and C are `Verified` on 2026-07-22. Packet D is the
+next execution unit; CR-129 remains In Progress until Packets D-E and designated
 real acceptance pass.
 
 Baseline: `main@6cffdbaf0c0ffca8863192c962918a37349f10a4`.
@@ -4672,9 +4672,9 @@ Background:
 
 - `BrowserEnvironmentProvider` and `BrowserEnvironmentPlan` now establish the
   account-scoped browser, Profile, UA, locale, timezone, and proxy result.
-- Packet B closes the XHS split. The Douyin request path still allows Client,
-  signer, page, local storage, and proxy helpers to derive mutable request
-  values independently; Packet C owns that remaining path.
+- Packets B and C close the XHS and Douyin request-authority splits. Packet D
+  owns the remaining typed-error, retry, process-terminal, and leakage
+  boundaries.
 - A successful content response alone does not prove that the designated
   account identity, signature inputs, and final request used one environment.
 
@@ -4743,6 +4743,21 @@ retain a bounded first-plus-latest-31 window. Runner requires a bound signed
 success proof before managed XHS ingest. Raw Cookie, proxy credentials, URL,
 headers, signature output, and Profile path remain outside persisted proof.
 The unmanaged account-check/update-Cookie path remains compatible.
+
+Packet C evidence: `PlatformRequestEnvironment` contract v2 projects the
+provider-effective browser platform, screen, viewport, device scale, mobile,
+and touch values in addition to the Packet A binding. Managed Douyin Core reads
+the already-verified Profile once: `xmst` supplies `msToken`,
+`__tea_cache_tokens_6383.web_id` supplies `webid`, and Profile cookies supply
+`s_v_web_id` as `verifyFp/fp` plus `ttwid`. Client requests consume that frozen
+identity, reject caller/token/header/proxy/target drift before HTTP, sign the
+same encoded query that is dispatched, and persist only bound digests. The
+fixed creator `verifyFp`, per-request random `webid`, per-request LocalStorage
+read, and fixed Mac/Chrome-125/screen values are absent from managed mode.
+Runner requires one bound signed 2xx Douyin proof before ingest. The current
+Douyin Client has no POST call sites; managed POST remains fail-closed until a
+body-aware signer contract is implemented and tested rather than reusing an
+unproven GET signature.
 
 Real acceptance:
 

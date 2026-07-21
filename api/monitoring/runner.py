@@ -906,10 +906,13 @@ def _validate_managed_dispatch_proofs(
     environment: PlatformRequestEnvironment,
     dispatch_proofs: tuple[dict[str, Any], ...],
 ) -> None:
-    if platform != "xhs":
+    if platform not in {"xhs", "dy"}:
         return
+    platform_label = "XHS" if platform == "xhs" else "Douyin"
     if not dispatch_proofs:
-        raise RuntimeError("managed XHS request dispatch proof is missing")
+        raise RuntimeError(
+            f"managed {platform_label} request dispatch proof is missing"
+        )
     signed_success = False
     for proof in dispatch_proofs:
         if (
@@ -919,11 +922,15 @@ def _validate_managed_dispatch_proofs(
             or proof.get("attempt_id") != environment.attempt_id
             or proof.get("resolution_id") != environment.resolution_id
         ):
-            raise RuntimeError("managed XHS request dispatch proof binding mismatch")
+            raise RuntimeError(
+                f"managed {platform_label} request dispatch proof binding mismatch"
+            )
         if proof.get("signed") is True and 200 <= int(proof.get("response_status", 0)) < 300:
             signed_success = True
     if not signed_success:
-        raise RuntimeError("managed XHS signed request proof is missing")
+        raise RuntimeError(
+            f"managed {platform_label} signed request proof is missing"
+        )
 
 
 def _finalize_collection_progress(run_id: int, platform: str, result: dict[str, Any]) -> dict[str, Any]:

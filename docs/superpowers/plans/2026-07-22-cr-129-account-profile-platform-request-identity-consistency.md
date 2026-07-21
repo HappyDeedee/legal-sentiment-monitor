@@ -5,7 +5,7 @@
 - CR: CR-129
 - Type: Phase 5.1 follow-up regression fix; account-environment hardening;
   platform-request identity consistency
-- Status: Accepted / In Progress (Packet A verified)
+- Status: Accepted / In Progress (Packets A-C verified; Packet D next)
 - Baseline: `main@6cffdbaf0c0ffca8863192c962918a37349f10a4`
 - Branch: `codex/cr-129-request-identity-consistency`
 - Owner: project implementation lane
@@ -271,6 +271,21 @@ reject drift before platform dispatch.
 
 Exit gate: focused Douyin identity/signature tests, account isolation, retry,
 and affected monitoring regression pass.
+
+Packet C implementation receipt (2026-07-22): `Verified`. The request contract
+is v2 with provider-effective window/device fields. Managed Douyin Core captures
+`xmst`, the Profile web ID, `s_v_web_id`, and `ttwid` once from the verified
+Profile and freezes them as `msToken`, `webid`, `verifyFp/fp`, and `ttwid`.
+Cookie, UA/UA-CH, screen, browser version/channel, proxy, signer input,
+`a_bogus`, and final URL are one immutable request. Fixed/random/cross-account
+values, per-request Page reads, and in-flight Cookie/proxy refresh fail before
+HTTP. Runner requires a bound signed 2xx Douyin proof. Focused tests pass `48`,
+full monitoring passes `696`, and the complete suite passes `767` with the same
+pre-existing XHS Store assertion. The designated `8972` Profile-construction
+diagnostic confirms all required material exists and safe projection excludes
+raw values; it performs no content collection. Independent focused review is
+`PASS`. The current Client has no POST call sites, so managed POST remains
+fail-closed until body-aware signer proof exists. Packet D is next.
 
 ### Packet D - Error, Retry, And Process Boundary
 

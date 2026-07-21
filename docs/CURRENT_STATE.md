@@ -7,7 +7,7 @@ Last updated: 2026-07-22
 - CR-129 is the active implementation lane on branch
   `codex/cr-129-request-identity-consistency`, based on merged
   `main@6cffdbaf0c0ffca8863192c962918a37349f10a4`. It is currently
-  `Accepted / In Progress` with Packets A-B verified after a two-round deep
+  `Accepted / In Progress` with Packets A-C verified after a two-round deep
   Claude read-only plan review and a focused Packet A implementation review.
   The plan review returned `READY` with no blockers or material refinements.
   The TODO baseline classifies CR-112 and CR-119 through CR-128 as verified
@@ -23,8 +23,15 @@ Last updated: 2026-07-22
   URL/body are byte-identical, list-query encoding is unified, and Runner
   requires a bound signed 2xx proof before ingest. Proof persistence is atomic,
   monotonic, secret-free, and bounded to the first plus latest 31 requests.
-  Packet C is next; Douyin signer equality, typed retry, full child tripwires,
-  and real acceptance remain gated by Packets C-E.
+- Packet C is verified: managed Douyin Core freezes `xmst` as `msToken`,
+  `__tea_cache_tokens_6383.web_id` as `webid`, and the current Profile's
+  `s_v_web_id`/`ttwid` cookies once before Client construction. Cookie, UA,
+  UA-CH, screen/viewport, proxy, `verifyFp/fp`, signer input, `a_bogus`, and the
+  final URL remain one request snapshot; fixed/random/cross-account values and
+  per-request Page reads are removed from managed mode. Runner requires a
+  bound signed 2xx Douyin proof before ingest. Packet D typed errors/retry and
+  child tripwires, followed by Packet E compatibility and real acceptance, are
+  next.
 - CR-129 protects the existing boundary: committed Profile is crawl authority;
   encrypted Cookie is initialization, refresh, recovery, and migration
   material; managed accounts do not silently use anonymous, generic-Profile,

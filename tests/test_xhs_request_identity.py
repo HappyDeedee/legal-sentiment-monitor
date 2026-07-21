@@ -22,7 +22,7 @@ from tools.platform_request_environment import (
 def _environment(*, proxy_policy: str = "direct", proxy_id: int | None = None) -> PlatformRequestEnvironment:
     created = datetime.now(timezone.utc)
     return PlatformRequestEnvironment(
-        contract_version=1,
+        contract_version=2,
         workspace_id=1,
         account_id=9196,
         platform="xhs",
@@ -39,10 +39,18 @@ def _environment(*, proxy_policy: str = "direct", proxy_id: int | None = None) -
         resolution_id="resolution-xhs-1",
         attempt_id="attempt-xhs-1",
         run_id=19001,
+        browser_platform="windows",
         locale="zh-CN",
         timezone="Asia/Shanghai",
         user_agent="Mozilla/5.0 Chrome/127.0.6533.17",
         accept_language="zh-CN,zh;q=0.9",
+        screen_width=1920,
+        screen_height=1080,
+        viewport_width=1920,
+        viewport_height=963,
+        device_scale_factor=1.0,
+        is_mobile=False,
+        has_touch=False,
         cookie_material_revision="cookie-material-1",
         created_at=created.isoformat(),
         expires_at=(created + timedelta(minutes=15)).isoformat(),

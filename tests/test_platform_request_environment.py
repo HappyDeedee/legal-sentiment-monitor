@@ -581,7 +581,14 @@ def test_cr129_packet_a_platform_client_receives_verified_request_environment(
                 "a1": "synthetic-a1",
                 "web_session": "synthetic-session",
             }
-        return "synthetic=1", {"synthetic": "1"}
+        return (
+            "sessionid=synthetic;ttwid=synthetic-ttwid;"
+            "s_v_web_id=verify_synthetic"
+        ), {
+            "sessionid": "synthetic",
+            "ttwid": "synthetic-ttwid",
+            "s_v_web_id": "verify_synthetic",
+        }
 
     class FakeClient:
         def __init__(self, **kwargs):
@@ -591,7 +598,21 @@ def test_cr129_packet_a_platform_client_receives_verified_request_environment(
     monkeypatch.setattr(module, client_name, FakeClient)
     if module_name.endswith("douyin.core"):
         async def fake_evaluate(*args, **kwargs):
-            return environment.user_agent
+            return {
+                "navigator_user_agent": environment.user_agent,
+                "navigator_platform": "Win32",
+                "ua_brands": (("Chromium", "127"),),
+                "ua_platform": "Windows",
+                "ua_mobile": False,
+                "hardware_concurrency": 8,
+                "device_memory": 8,
+                "screen_width": environment.screen_width,
+                "screen_height": environment.screen_height,
+                "viewport_width": environment.viewport_width,
+                "viewport_height": environment.viewport_height,
+                "ms_token": "synthetic-ms-token",
+                "web_id": "7000000000000008972",
+            }
 
         crawler.context_page = type("Page", (), {"evaluate": fake_evaluate})()
 
@@ -602,6 +623,9 @@ def test_cr129_packet_a_platform_client_receives_verified_request_environment(
         assert captured["request_identity"].environment is environment
         assert 'v="127"' in captured["headers"]["sec-ch-ua"]
         assert 'v="136"' not in captured["headers"]["sec-ch-ua"]
+    else:
+        assert captured["request_identity"].environment is environment
+        assert captured["request_identity"].ms_token == "synthetic-ms-token"
 
 
 def test_cr129_packet_a_xhs_signed_cookie_cannot_change_before_dispatch(monkeypatch):
@@ -665,28 +689,48 @@ def test_cr129_packet_a_managed_proxy_expiry_does_not_refresh():
 
 
 def test_cr129_packet_a_douyin_managed_request_requires_profile_ms_token(monkeypatch):
-    import asyncio
-
-    from media_platform.douyin.client import DouYinClient
+    from media_platform.douyin.request_identity import (
+        DouyinRequestIdentityError,
+        build_douyin_request_identity,
+    )
 
     environment = _build()
 
-    class Page:
-        async def evaluate(self, script):
-            return {}
-
-    client = DouYinClient(
-        proxy=None,
-        headers={"User-Agent": environment.user_agent, "Cookie": "sessionid=synthetic"},
-        playwright_page=Page(),
-        cookie_dict={"sessionid": "synthetic"},
-        request_environment=environment,
+    cookie_header = (
+        "sessionid=synthetic;ttwid=synthetic-ttwid;"
+        "s_v_web_id=verify_synthetic"
     )
-    with pytest.raises(RuntimeError, match="msToken"):
-        asyncio.run(
-            client._DouYinClient__process_req_params(
-                "/aweme/v1/web/search/item/",
-                {"keyword": "synthetic"},
-                client.headers,
-            )
+    with pytest.raises(DouyinRequestIdentityError, match="msToken"):
+        build_douyin_request_identity(
+            environment=environment,
+            cookie_header=cookie_header,
+            cookie_dict={
+                "sessionid": "synthetic",
+                "ttwid": "synthetic-ttwid",
+                "s_v_web_id": "verify_synthetic",
+            },
+            headers={
+                "User-Agent": environment.user_agent,
+                "Accept-Language": environment.accept_language,
+                "Cookie": cookie_header,
+                "sec-ch-ua": '"Chromium";v="127"',
+                "sec-ch-ua-mobile": "?0",
+                "sec-ch-ua-platform": '"Windows"',
+            },
+            proxy_url=None,
+            page_snapshot={
+                "navigator_user_agent": environment.user_agent,
+                "navigator_platform": "Win32",
+                "ua_brands": (("Chromium", "127"),),
+                "ua_platform": "Windows",
+                "ua_mobile": False,
+                "hardware_concurrency": 8,
+                "device_memory": 8,
+                "screen_width": environment.screen_width,
+                "screen_height": environment.screen_height,
+                "viewport_width": environment.viewport_width,
+                "viewport_height": environment.viewport_height,
+                "ms_token": "",
+                "web_id": "7000000000000008972",
+            },
         )

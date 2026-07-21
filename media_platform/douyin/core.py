@@ -57,6 +57,11 @@ from .exception import DataFetchError
 from .field import PublishTimeType
 from .help import parse_video_info_from_url, parse_creator_info_from_url
 from .login import DouYinLogin
+from .request_identity import (
+    build_douyin_client_hints,
+    build_douyin_request_identity,
+    capture_douyin_page_snapshot,
+)
 
 
 class DouYinCrawler(AbstractCrawler):
@@ -351,20 +356,58 @@ class DouYinCrawler(AbstractCrawler):
             self.browser_context,
             urls=self.cookie_urls,
         )  # type: ignore
+        page_snapshot = (
+            await capture_douyin_page_snapshot(self.context_page)
+            if self.platform_request_environment is not None
+            else None
+        )
+        user_agent = (
+            self.platform_request_environment.user_agent
+            if self.platform_request_environment is not None
+            else await self.context_page.evaluate("() => navigator.userAgent")
+        )
+        client_hints = (
+            build_douyin_client_hints(
+                self.platform_request_environment,
+                page_snapshot,
+            )
+            if self.platform_request_environment is not None and page_snapshot is not None
+            else {}
+        )
+        headers = {
+            "User-Agent": user_agent,
+            "Accept-Language": (
+                self.platform_request_environment.accept_language
+                if self.platform_request_environment is not None
+                else "zh-CN,zh;q=0.9"
+            ),
+            "Cookie": cookie_str,
+            "Host": "www.douyin.com",
+            "Origin": "https://www.douyin.com/",
+            "Referer": "https://www.douyin.com/",
+            "Content-Type": "application/json;charset=UTF-8",
+            **client_hints,
+        }
+        request_identity = (
+            build_douyin_request_identity(
+                environment=self.platform_request_environment,
+                cookie_header=cookie_str,
+                cookie_dict=cookie_dict,
+                headers=headers,
+                proxy_url=httpx_proxy,
+                page_snapshot=page_snapshot,
+            )
+            if self.platform_request_environment is not None and page_snapshot is not None
+            else None
+        )
         douyin_client = DouYinClient(
             proxy=httpx_proxy,
-            headers={
-                "User-Agent": await self.context_page.evaluate("() => navigator.userAgent"),
-                "Cookie": cookie_str,
-                "Host": "www.douyin.com",
-                "Origin": "https://www.douyin.com/",
-                "Referer": "https://www.douyin.com/",
-                "Content-Type": "application/json;charset=UTF-8",
-            },
+            headers=headers,
             playwright_page=self.context_page,
             cookie_dict=cookie_dict,
             proxy_ip_pool=self.ip_proxy_pool,  # Pass proxy pool for automatic refresh
             request_environment=self.platform_request_environment,
+            request_identity=request_identity,
         )
         return douyin_client
 

@@ -759,6 +759,23 @@ short `Superseded by` note rather than deleting history.
 - Explicit browser selections derive only the safe channel label
   (`chrome`, `edge`, or `chromium`) from the executable path. The path itself
   remains excluded from request and dispatch proof.
+- Packet C confirms the managed Douyin Profile sources: LocalStorage `xmst`
+  supplies `msToken`; `__tea_cache_tokens_6383.web_id` supplies the 19-digit
+  `webid`; Profile Cookie `s_v_web_id` supplies `verifyFp/fp`; Profile Cookie
+  `ttwid` supplies `ttwid`. These values are captured once from the already
+  verified Page and frozen for the attempt. Managed mode does not use the old
+  random `get_web_id()` path or the old fixed creator `verifyFp`.
+- Packet C upgrades the safe request-environment contract to v2 so the
+  provider-effective browser platform, screen, viewport, scale, mobile, and
+  touch values are explicit request inputs. This remains an ephemeral
+  parent/child contract and adds no database migration.
+- The current Douyin Client has no POST API call sites, while its existing
+  `a_bogus` helper explicitly lacks body-signing proof. Managed POST therefore
+  fails closed until a body-aware signer/transport contract has RED/GREEN
+  coverage. Existing unmanaged compatibility remains unchanged.
+- Public F2 evidence was used only to verify terminology and external-source
+  boundaries. Its Apache-2.0 code is not copied and it is not added as a runtime
+  dependency; CR-129 retains the current project signer and Profile authority.
 
 ## 2026-07-21 - CR-112 Acceptance And Execution Order
 

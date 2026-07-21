@@ -1050,7 +1050,14 @@ The product must keep these distinctions visible in operational state:
   not anonymous success.
 
 A managed account keeps its account-bound Profile, browser, identity, proxy,
-  and network. The product does not silently substitute a generic Profile,
-  another account, or a default network. Same-family browser version updates
-  retain `profile_key`; browser-family/channel changes use a candidate Profile
-  and explicit identity validation before promotion.
+and network. The product does not silently substitute a generic Profile,
+another account, or a default network. Same-family browser version updates
+retain `profile_key`; browser-family/channel changes use a candidate Profile
+and explicit identity validation before promotion.
+
+For managed Douyin requests, `msToken`, `webid`, `verifyFp/fp`, and `ttwid`
+come from the verified committed Profile and are frozen with Cookie, UA/UA-CH,
+screen/browser values, proxy, signer input, `a_bogus`, and the final URL. A
+request with missing, changed, fixed, random, or cross-account material stops
+before platform dispatch. Content returned without the bound signed request
+proof does not count as authenticated collection.

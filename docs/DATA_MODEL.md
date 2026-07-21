@@ -1036,7 +1036,8 @@ The safe proof may contain:
 - browser family/source/channel/version digest;
 - proxy ID/policy/revision digest;
 - identity and Cookie-material revision references;
-- locale, timezone, UA, Accept-Language;
+- locale, timezone, UA, Accept-Language, and provider-effective window/device
+  values used by the signer;
 - resolution, attempt, and run IDs;
 - signer/request algorithm versions and redacted result digests.
 
@@ -1059,6 +1060,12 @@ Packet A uses an in-memory immutable contract and a short-lived safe attempt
 proof file; it adds no database column and does not rewrite historical run or
 account rows. A future persistent request-proof field remains subject to the
 additive migration gate below.
+
+Packets B-C keep this proof ephemeral and safe-serialized. Contract v2 adds
+provider-effective browser-platform, screen, viewport, scale, mobile, and
+touch values so Douyin signer inputs come from the same provider result as the
+Profile, Cookie, UA, and proxy. It adds no database field and persists only
+digests and revision-bound dispatch evidence, never raw token values.
 
 Content persistence alone is not identity proof. Authenticated status requires
 platform-specific self-identity or an equivalent strong login-state result.

@@ -850,6 +850,11 @@ Packet A verification confirms that no schema change is needed for the first
 runtime contract. The child proof is short-lived and safe-serialized; existing
 account, Profile, Cookie, proxy, and run rows remain unchanged.
 
+Packets B-C verification also requires no schema change. Request contract v2
+adds provider-effective window/device fields to the in-memory and safe-binding
+contract only. XHS and Douyin dispatch proof remains short-lived and
+digest-only; existing rows and encrypted material are not migrated.
+
 Migration rules:
 
 1. Do not move raw Cookie, token, proxy password, Profile path, or complete

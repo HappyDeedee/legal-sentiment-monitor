@@ -3319,6 +3319,17 @@ stale proof rejection, and unmanaged account-check compatibility.
 - Identity loss and second verification become actionable terminal results;
   anonymous content is not accepted as authenticated collection.
 
+Packet C verification receipt (2026-07-22): combined Packet A-C focused tests
+pass `48`; complete monitoring passes `696` with three existing warnings. The
+complete `tests` collection passes `767` with the separately documented
+pre-existing XHS Store factory assertion remaining. Coverage proves required
+Profile `xmst`/`web_id`/`s_v_web_id`/`ttwid`, Cookie/header/screen/proxy drift
+rejection, signer/final-query equality including `verifyFp/fp`, stale override
+and target rejection, two-account isolation, digest-only proof persistence,
+Runner proof gating, and managed Cookie-update/new-resolution behavior.
+Managed POST has an explicit pre-network fail-closed test boundary until a
+body-aware signer exists.
+
 ### Packet D Boundary Tests
 
 - Typed errors cover login required, second verification, challenge,

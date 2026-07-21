@@ -1924,6 +1924,8 @@ request environment must bind at least:
 - account identity revision;
 - provider resolution ID, crawl attempt ID, and run ID;
 - locale, timezone, User-Agent, and Accept-Language;
+- provider-effective browser platform, screen, viewport, scale, mobile, and
+  touch values used by the request signer;
 - Cookie material revision and source reference;
 - creation and expiry timestamps.
 
@@ -1964,3 +1966,17 @@ file stores only bound IDs/revisions and digests. Dispatch records are atomic,
 monotonic, and bounded to request 1 plus the latest 31; Runner requires a
 signed 2xx XHS proof before ingest. The unmanaged account-check path remains
 available and does not create managed proof.
+
+Packet C implementation status (2026-07-22): verified. For managed Douyin
+attempts, the verified Profile is read once before Client construction. The
+Profile `xmst`, `__tea_cache_tokens_6383.web_id`, `s_v_web_id`, and `ttwid`
+values become the frozen `msToken`, `webid`, `verifyFp/fp`, and `ttwid`
+request identity. Cookie, UA/UA-CH, screen and browser values, proxy, target,
+query, signer input, generated `a_bogus`, and final URL must remain bound to
+that same resolution. Per-request Page reads, random/fixed managed tokens,
+caller overrides, and in-flight Cookie or proxy changes stop before HTTP.
+
+Runner requires a bound signed 2xx Douyin request proof before ingest. The
+current Douyin Client has no POST call sites, and its signer does not prove a
+request body; managed POST therefore stops before network until a body-aware
+signer contract is introduced. Unmanaged compatibility remains unchanged.

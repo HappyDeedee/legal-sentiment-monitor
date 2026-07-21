@@ -17,7 +17,7 @@ from tools.browser_environment import (
 )
 
 
-REQUEST_ENVIRONMENT_CONTRACT_VERSION = 1
+REQUEST_ENVIRONMENT_CONTRACT_VERSION = 2
 REQUEST_ENVIRONMENT_MAX_BYTES = 16384
 REQUEST_RESULT_MAX_BYTES = 131072
 REQUEST_DISPATCH_PROOF_LIMIT = 32
@@ -146,10 +146,18 @@ class PlatformRequestEnvironment:
     resolution_id: str
     attempt_id: str
     run_id: int
+    browser_platform: str
     locale: str
     timezone: str
     user_agent: str
     accept_language: str
+    screen_width: int
+    screen_height: int
+    viewport_width: int
+    viewport_height: int
+    device_scale_factor: float
+    is_mobile: bool
+    has_touch: bool
     cookie_material_revision: str
     created_at: str
     expires_at: str
@@ -466,10 +474,18 @@ def build_platform_request_environment(
         resolution_id=plan.resolution_id,
         attempt_id=plan.attempt_id,
         run_id=run_id,
+        browser_platform=plan.browser_platform,
         locale=str(snapshot["effective"]["locale"]),
         timezone=str(snapshot["effective"]["timezone"]),
         user_agent=str(snapshot["effective"]["user_agent"]),
         accept_language=str(snapshot["effective"]["accept_language"]),
+        screen_width=int(snapshot["effective"]["screen_width"]),
+        screen_height=int(snapshot["effective"]["screen_height"]),
+        viewport_width=int(snapshot["effective"]["viewport_width"]),
+        viewport_height=int(snapshot["effective"]["viewport_height"]),
+        device_scale_factor=float(snapshot["effective"]["device_scale_factor"]),
+        is_mobile=bool(snapshot["effective"]["is_mobile"]),
+        has_touch=bool(snapshot["effective"]["has_touch"]),
         cookie_material_revision=cookie_material_revision,
         created_at=created.isoformat(),
         expires_at=expires.isoformat(),
@@ -824,6 +840,8 @@ def _validate_environment(environment: PlatformRequestEnvironment) -> None:
     ):
         if not _REVISION_RE.fullmatch(str(getattr(environment, name))):
             _invalid(name)
+    if not _SAFE_ID_RE.fullmatch(environment.browser_platform):
+        _invalid("browser_platform")
     if not _LOCALE_RE.fullmatch(environment.locale):
         _invalid("locale")
     if not _TIMEZONE_RE.fullmatch(environment.timezone):
@@ -832,6 +850,22 @@ def _validate_environment(environment: PlatformRequestEnvironment) -> None:
         _invalid("user_agent")
     if not _ACCEPT_LANGUAGE_RE.fullmatch(environment.accept_language):
         _invalid("accept_language")
+    for name in ("screen_width", "screen_height", "viewport_width", "viewport_height"):
+        _positive_int(getattr(environment, name), name)
+    if environment.viewport_width > environment.screen_width:
+        _invalid("viewport_width")
+    if environment.viewport_height > environment.screen_height:
+        _invalid("viewport_height")
+    if (
+        isinstance(environment.device_scale_factor, bool)
+        or not isinstance(environment.device_scale_factor, (int, float))
+        or environment.device_scale_factor <= 0
+    ):
+        _invalid("device_scale_factor")
+    if type(environment.is_mobile) is not bool:
+        _invalid("is_mobile")
+    if type(environment.has_touch) is not bool:
+        _invalid("has_touch")
     if environment.fallback_used is not False:
         raise PlatformRequestEnvironmentError(
             "platform_request_environment_fallback",

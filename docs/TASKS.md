@@ -1799,7 +1799,7 @@ follow-up and does not reopen completed Phase 5.1 or CR-118.
 
 ## CR-129 - Account Profile And Platform Request Identity Consistency
 
-Implementation status (2026-07-22): Packets A-B Verified; Packet C is next. This is a new follow-up
+Implementation status (2026-07-22): Packets A-C Verified; Packet D is next. This is a new follow-up
 after the verified CR-128 baseline. It does not reopen Phase 5.1, CR-112, or
 the verified CR-119 through CR-128 history.
 
@@ -1847,10 +1847,10 @@ Atomic packages:
       proxy to one frozen environment.
 - [x] Packet B: prove identity mismatch and signature/request drift fail before
       dispatch while preserving committed Profile/Cookie authority.
-- [ ] Packet C: bind Douyin Cookie, webid, verifyFp, msToken, ttwid, a_bogus,
+- [x] Packet C: bind Douyin Cookie, webid, verifyFp, msToken, ttwid, a_bogus,
       UA/UA-CH, page/local-storage evidence, request values, Profile, and
       proxy to one frozen environment.
-- [ ] Packet C: remove unbound fixed/cross-account request values and add
+- [x] Packet C: remove unbound fixed/cross-account request values and add
       account-isolation and signer/input equality tests.
 - [ ] Packet D: add typed platform/environment errors, bounded transient-only
       retry, terminal session states, stale callback guards, and safe child
