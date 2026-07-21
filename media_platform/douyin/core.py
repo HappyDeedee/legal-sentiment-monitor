@@ -36,6 +36,7 @@ from base.base_crawler import AbstractCrawler
 from proxy.proxy_ip_pool import IpInfoModel, create_ip_pool
 from store import douyin as douyin_store
 from tools import utils
+from tools.crawler_attempt import CrawlerAttemptFailure
 from tools.browser_environment import (
     BrowserEnvironmentError,
     launch_managed_browser_context,
@@ -197,11 +198,18 @@ class DouYinCrawler(AbstractCrawler):
                         utils.logger.info(f"[DouYinCrawler.search] search douyin keyword: {keyword}, page: {page} is empty,{posts_res.get('data')}`")
                         break
                 except DataFetchError:
+                    if self.platform_request_environment is not None:
+                        raise
                     utils.logger.error(f"[DouYinCrawler.search] search douyin keyword: {keyword} failed")
                     break
 
                 page += 1
                 if "data" not in posts_res:
+                    if self.platform_request_environment is not None:
+                        raise CrawlerAttemptFailure(
+                            "platform_protocol_changed",
+                            "douyin_search_response_missing_data",
+                        )
                     utils.logger.error(f"[DouYinCrawler.search] search douyin keyword: {keyword} failed，账号也许被风控了。")
                     break
                 dy_search_id = posts_res.get("extra", {}).get("logid", "")
@@ -269,9 +277,16 @@ class DouYinCrawler(AbstractCrawler):
                 utils.logger.info(f"[DouYinCrawler.get_aweme_detail] Sleeping for {config.CRAWLER_MAX_SLEEP_SEC} seconds after fetching aweme {aweme_id}")
                 return result
             except DataFetchError as ex:
+                if self.platform_request_environment is not None:
+                    raise
                 utils.logger.error(f"[DouYinCrawler.get_aweme_detail] Get aweme detail error: {ex}")
                 return None
             except KeyError as ex:
+                if self.platform_request_environment is not None:
+                    raise CrawlerAttemptFailure(
+                        "platform_protocol_changed",
+                        "douyin_detail_response_missing_field",
+                    ) from ex
                 utils.logger.error(f"[DouYinCrawler.get_aweme_detail] have not fund note detail aweme_id:{aweme_id}, err: {ex}")
                 return None
 
@@ -289,7 +304,10 @@ class DouYinCrawler(AbstractCrawler):
             task = asyncio.create_task(self.get_comments(aweme_id, semaphore), name=aweme_id)
             task_list.append(task)
         if len(task_list) > 0:
-            await asyncio.wait(task_list)
+            if self.platform_request_environment is not None:
+                await asyncio.gather(*task_list)
+            else:
+                await asyncio.wait(task_list)
 
     async def get_comments(self, aweme_id: str, semaphore: asyncio.Semaphore) -> None:
         async with semaphore:
@@ -309,6 +327,8 @@ class DouYinCrawler(AbstractCrawler):
                 utils.logger.info(f"[DouYinCrawler.get_comments] Sleeping for {crawl_interval} seconds after fetching comments for aweme {aweme_id}")
                 utils.logger.info(f"[DouYinCrawler.get_comments] aweme_id: {aweme_id} comments have all been obtained and filtered ...")
             except DataFetchError as e:
+                if self.platform_request_environment is not None:
+                    raise
                 utils.logger.error(f"[DouYinCrawler.get_comments] aweme_id: {aweme_id} get comments failed, error: {e}")
 
     async def get_creators_and_videos(self) -> None:
@@ -322,7 +342,7 @@ class DouYinCrawler(AbstractCrawler):
             try:
                 creator_info_parsed = parse_creator_info_from_url(creator_url)
                 user_id = creator_info_parsed.sec_user_id
-                utils.logger.info(f"[DouYinCrawler.get_creators_and_videos] Parsed sec_user_id: {user_id} from {creator_url}")
+                utils.logger.info(f"[DouYinCrawler.get_creators_and_videos] Parsed creator: {user_id}")
             except ValueError as e:
                 utils.logger.error(f"[DouYinCrawler.get_creators_and_videos] Failed to parse creator URL: {e}")
                 continue

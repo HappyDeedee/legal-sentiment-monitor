@@ -1799,7 +1799,7 @@ follow-up and does not reopen completed Phase 5.1 or CR-118.
 
 ## CR-129 - Account Profile And Platform Request Identity Consistency
 
-Implementation status (2026-07-22): Packets A-C Verified; Packet D is next. This is a new follow-up
+Implementation status (2026-07-22): Packets A-D Verified; Packet E is next. This is a new follow-up
 after the verified CR-128 baseline. It does not reopen Phase 5.1, CR-112, or
 the verified CR-119 through CR-128 history.
 
@@ -1852,7 +1852,7 @@ Atomic packages:
       proxy to one frozen environment.
 - [x] Packet C: remove unbound fixed/cross-account request values and add
       account-isolation and signer/input equality tests.
-- [ ] Packet D: add typed platform/environment errors, bounded transient-only
+- [x] Packet D: add typed platform/environment errors, bounded transient-only
       retry, terminal session states, stale callback guards, and safe child
       handles with argv/environment/log tripwires.
 - [ ] Packet E: verify QR, Browser, manual Cookie, saved Profile, restart,
@@ -1874,6 +1874,18 @@ Packet A receipt (2026-07-22): `19` focused tests, `228` affected tests, and
 documentation regression, whitespace, and independent Claude read-only review
 passed. No real account, Profile, Cookie, proxy, browser, or platform traffic
 was used. Packet D owns the remaining full child-process tripwires.
+
+Packet D receipt (2026-07-22): `84` dedicated request/terminal tests and `704`
+complete monitoring tests pass. The implementation adds the strict terminal
+contract, transient-only bounded retry, one-use plan/result handles, Windows
+process-tree cleanup, pre-write managed-log redaction, and typed XHS/Douyin
+platform failures. The first independent review findings were either fixed
+with RED/GREEN coverage or disproved by current call-chain evidence; focused
+re-review returned `PASS`, no remaining P0/P1/P2, and atomic readiness `YES`.
+The complete repository collection reports `817 passed, 8 skipped, 7 failed`:
+six Redis-dependent failures while local Redis is not running and the
+documented pre-existing XHS Excel factory assertion. Packet E remains the real
+compatibility/identity gate.
 
 ## CR-120 - Local Visible Login Automatic Reconciliation
 

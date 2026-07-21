@@ -38,6 +38,7 @@ from model.m_xiaohongshu import NoteUrlInfo, CreatorUrlInfo
 from proxy.proxy_ip_pool import IpInfoModel, create_ip_pool
 from store import xhs as xhs_store
 from tools import utils
+from tools.crawler_attempt import CrawlerAttemptFailure, classify_crawler_exception
 from tools.browser_environment import (
     BrowserEnvironmentError,
     launch_managed_browser_context,
@@ -196,7 +197,11 @@ class XiaoHongShuCrawler(AbstractCrawler):
                         page=page,
                         sort=(SearchSortType(config.SORT_TYPE) if config.SORT_TYPE != "" else SearchSortType.GENERAL),
                     )
-                    utils.logger.info(f"[XiaoHongShuCrawler.search] Search notes response: {notes_res}")
+                    utils.logger.info(
+                        "[XiaoHongShuCrawler.search] Search response: "
+                        f"items={len(notes_res.get('items') or [])} "
+                        f"has_more={bool(notes_res.get('has_more'))}"
+                    )
                     if not notes_res or not notes_res.get("has_more", False):
                         utils.logger.info("[XiaoHongShuCrawler.search] No more content!")
                         break
@@ -217,13 +222,17 @@ class XiaoHongShuCrawler(AbstractCrawler):
                             note_ids.append(note_detail.get("note_id"))
                             xsec_tokens.append(note_detail.get("xsec_token"))
                     page += 1
-                    utils.logger.info(f"[XiaoHongShuCrawler.search] Note details: {note_details}")
+                    utils.logger.info(
+                        f"[XiaoHongShuCrawler.search] Note details: count={len(note_details)}"
+                    )
                     await self.batch_get_note_comments(note_ids, xsec_tokens)
 
                     # Sleep after each page navigation
                     await asyncio.sleep(config.CRAWLER_MAX_SLEEP_SEC)
                     utils.logger.info(f"[XiaoHongShuCrawler.search] Sleeping for {config.CRAWLER_MAX_SLEEP_SEC} seconds after page {page-1}")
                 except DataFetchError:
+                    if self.platform_request_environment is not None:
+                        raise
                     utils.logger.error("[XiaoHongShuCrawler.search] Get note detail error")
                     break
 
@@ -234,8 +243,10 @@ class XiaoHongShuCrawler(AbstractCrawler):
             try:
                 # Parse creator URL to get user_id and security tokens
                 creator_info: CreatorUrlInfo = parse_creator_info_from_url(creator_url)
-                utils.logger.info(f"[XiaoHongShuCrawler.get_creators_and_notes] Parse creator URL info: {creator_info}")
                 user_id = creator_info.user_id
+                utils.logger.info(
+                    f"[XiaoHongShuCrawler.get_creators_and_notes] Parsed creator: {user_id}"
+                )
 
                 # get creator detail info from web html content
                 createor_info: Dict = await self.xhs_client.get_creator_info(
@@ -337,8 +348,24 @@ class XiaoHongShuCrawler(AbstractCrawler):
             try:
                 try:
                     note_detail = await self.xhs_client.get_note_by_id(note_id, xsec_source, xsec_token)
-                except RetryError:
-                    pass
+                except RetryError as ex:
+                    if self.platform_request_environment is not None:
+                        last_attempt = getattr(ex, "last_attempt", None)
+                        last_exception = (
+                            last_attempt.exception()
+                            if last_attempt is not None
+                            and callable(getattr(last_attempt, "exception", None))
+                            else ex.__cause__
+                        )
+                        if isinstance(last_exception, CrawlerAttemptFailure):
+                            raise last_exception from ex
+                        classified = classify_crawler_exception(
+                            last_exception or ex
+                        )
+                        raise CrawlerAttemptFailure(
+                            classified.category,
+                            classified.reason_code,
+                        ) from ex
 
                 if not note_detail:
                     note_detail = await self.xhs_client.get_note_by_id_from_html(note_id, xsec_source, xsec_token,
@@ -358,9 +385,16 @@ class XiaoHongShuCrawler(AbstractCrawler):
                 utils.logger.warning(f"[XiaoHongShuCrawler.get_note_detail_async_task] Note not found: {note_id}, {ex}")
                 return None
             except DataFetchError as ex:
+                if self.platform_request_environment is not None:
+                    raise
                 utils.logger.error(f"[XiaoHongShuCrawler.get_note_detail_async_task] Get note detail error: {ex}")
                 return None
             except KeyError as ex:
+                if self.platform_request_environment is not None:
+                    raise CrawlerAttemptFailure(
+                        "platform_protocol_changed",
+                        "xhs_detail_response_missing_field",
+                    ) from ex
                 utils.logger.error(f"[XiaoHongShuCrawler.get_note_detail_async_task] have not fund note detail note_id:{note_id}, err: {ex}")
                 return None
 

@@ -4658,12 +4658,12 @@ collection proof.
 Type: Phase 5.1 follow-up regression fix; account-environment architecture
 hardening; platform-request identity consistency.
 
-Status: In Progress (Packets A-C Verified; Packet D next)
+Status: In Progress (Packets A-D Verified; Packet E next)
 
 Execution: Ready for Implementation after deep plan-cross-validation.
 
-Packet status: Packets A, B, and C are `Verified` on 2026-07-22. Packet D is the
-next execution unit; CR-129 remains In Progress until Packets D-E and designated
+Packet status: Packets A, B, C, and D are `Verified` on 2026-07-22. Packet E is
+the next execution unit; CR-129 remains In Progress until Packet E and designated
 real acceptance pass.
 
 Baseline: `main@6cffdbaf0c0ffca8863192c962918a37349f10a4`.
@@ -4673,8 +4673,8 @@ Background:
 - `BrowserEnvironmentProvider` and `BrowserEnvironmentPlan` now establish the
   account-scoped browser, Profile, UA, locale, timezone, and proxy result.
 - Packets B and C close the XHS and Douyin request-authority splits. Packet D
-  owns the remaining typed-error, retry, process-terminal, and leakage
-  boundaries.
+  closes typed-error, retry, process-terminal, and leakage boundaries; Packet E
+  owns compatibility and designated real acceptance.
 - A successful content response alone does not prove that the designated
   account identity, signature inputs, and final request used one environment.
 
@@ -4758,6 +4758,18 @@ Runner requires one bound signed 2xx Douyin proof before ingest. The current
 Douyin Client has no POST call sites; managed POST remains fail-closed until a
 body-aware signer contract is implemented and tested rather than reusing an
 unproven GET signature.
+
+Packet D evidence: the child writes one strict, versioned, attempt-bound
+terminal result and the parent consumes it once. Only `transient_network`
+retries within the existing deadline; retries keep the same resolution,
+identity, Cookie-material, and proxy revisions while receiving a fresh
+`attempt_id`. Login, Cookie, second-verification, human-verification, rate,
+proxy, signature, identity, protocol, timeout, cancellation, and crash results
+are terminal. Windows cleanup uses process-tree termination. Managed stdout is
+redacted before disk write, and argv/environment/result/log tripwires reject
+raw secrets and local authority paths. Dedicated tests pass `84`; complete
+monitoring passes `704`. Independent focused re-review returns `PASS` with no
+remaining P0/P1/P2.
 
 Real acceptance:
 

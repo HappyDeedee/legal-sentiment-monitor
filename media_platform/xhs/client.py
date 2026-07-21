@@ -26,7 +26,8 @@ from typing import TYPE_CHECKING, Any, Callable, Dict, List, Optional, Union
 
 import httpx
 from playwright.async_api import BrowserContext, Page
-from tenacity import retry, stop_after_attempt, wait_fixed, retry_if_not_exception_type
+from tenacity import retry, retry_if_exception, stop_after_attempt, wait_fixed
+from tools.crawler_attempt import CrawlerAttemptFailure
 from tools.httpx_util import make_async_client
 from tools.platform_request_environment import (
     REQUEST_RESULT_PATH_ENV_NAME,
@@ -58,6 +59,18 @@ from .request_identity import (
 
 class ManagedRequestIdentityError(RuntimeError):
     """A managed request changed a frozen identity input."""
+
+
+def _retry_unmanaged_transport_error(exc: BaseException) -> bool:
+    return isinstance(exc, httpx.TransportError) and not isinstance(
+        exc,
+        (
+            DataFetchError,
+            IPBlockError,
+            NoteNotFoundError,
+            CrawlerAttemptFailure,
+        ),
+    )
 
 
 class _SignedHeaders(dict):
@@ -230,9 +243,7 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_fixed(1),
-        retry=retry_if_not_exception_type(
-            (NoteNotFoundError, ManagedRequestIdentityError, ManagedProxyEnvironmentError)
-        ),
+        retry=retry_if_exception(_retry_unmanaged_transport_error),
     )
     async def request(self, method, url, **kwargs) -> Union[str, Any]:
         """
@@ -284,8 +295,23 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
                 body=body,
             )
             self._validate_managed_headers(request_headers)
-        async with make_async_client(proxy=self.proxy) as client:
-            response = await client.request(method, url, timeout=self.timeout, **kwargs)
+        try:
+            async with make_async_client(proxy=self.proxy) as client:
+                response = await client.request(method, url, timeout=self.timeout, **kwargs)
+        except httpx.TimeoutException as exc:
+            if self.request_environment is not None:
+                raise CrawlerAttemptFailure(
+                    "timeout",
+                    "xhs_request_timeout",
+                ) from exc
+            raise
+        except httpx.TransportError as exc:
+            if self.request_environment is not None:
+                raise CrawlerAttemptFailure(
+                    "transient_network",
+                    "xhs_transport_error",
+                ) from exc
+            raise
 
         if self.request_environment is not None:
             self._record_safe_request_proof(
@@ -296,25 +322,64 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
                 response_status=int(response.status_code),
             )
 
-        if response.status_code == 471 or response.status_code == 461:
-            # someday someone maybe will bypass captcha
-            verify_type = response.headers["Verifytype"]
-            verify_uuid = response.headers["Verifyuuid"]
-            msg = f"CAPTCHA appeared, request failed, Verifytype: {verify_type}, Verifyuuid: {verify_uuid}, Response: {response}"
-            utils.logger.error(msg)
-            raise Exception(msg)
+        if response.status_code == 408 and self.request_environment is not None:
+            raise CrawlerAttemptFailure("timeout", "xhs_http_request_timeout")
+        if response.status_code in {461, 471}:
+            utils.logger.error("[XiaoHongShuClient.request] Human verification required")
+            if self.request_environment is not None:
+                raise CrawlerAttemptFailure(
+                    "captcha_or_human_verification",
+                    "xhs_human_verification",
+                )
+            raise DataFetchError("CAPTCHA appeared")
+        if response.status_code == 429:
+            if self.request_environment is not None:
+                raise CrawlerAttemptFailure("rate_limited", "xhs_rate_limited")
+            raise DataFetchError("rate limited")
+        if response.status_code in {502, 503, 504} and self.request_environment is not None:
+            raise CrawlerAttemptFailure(
+                "transient_network",
+                "xhs_gateway_unavailable",
+            )
+        if response.status_code in {401, 403} and self.request_environment is not None:
+            raise CrawlerAttemptFailure("login_required", "xhs_login_required")
 
         if return_response:
             return response.text
-        data: Dict = response.json()
+        try:
+            data: Dict = response.json()
+        except (TypeError, ValueError) as exc:
+            if self.request_environment is not None:
+                raise CrawlerAttemptFailure(
+                    "platform_protocol_changed",
+                    "xhs_response_invalid",
+                ) from exc
+            raise DataFetchError("response is not valid JSON") from exc
+        if not isinstance(data, dict) or "success" not in data:
+            if self.request_environment is not None:
+                raise CrawlerAttemptFailure(
+                    "platform_protocol_changed",
+                    "xhs_response_invalid",
+                )
+            raise DataFetchError("response schema is invalid")
         if data["success"]:
             return data.get("data", data.get("success", {}))
         elif data["code"] == self.IP_ERROR_CODE:
+            if self.request_environment is not None:
+                raise CrawlerAttemptFailure(
+                    "proxy_or_ip_blocked",
+                    "xhs_ip_blocked",
+                )
             raise IPBlockError(self.IP_ERROR_STR)
         elif data["code"] in (self.NOTE_NOT_FOUND_CODE, self.NOTE_ABNORMAL_CODE):
             raise NoteNotFoundError(f"Note not found or abnormal, code: {data['code']}")
         else:
             err_msg = data.get("msg", None) or f"{response.text}"
+            if self.request_environment is not None:
+                raise CrawlerAttemptFailure(
+                    "platform_protocol_changed",
+                    "xhs_platform_response_error",
+                )
             raise DataFetchError(err_msg)
 
     @staticmethod
@@ -881,7 +946,11 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
         data = {"original_url": f"{self._domain}/discovery/item/{note_id}"}
         return await self.post(uri, data=data, return_response=True)
 
-    @retry(stop=stop_after_attempt(3), wait=wait_fixed(1))
+    @retry(
+        stop=stop_after_attempt(3),
+        wait=wait_fixed(1),
+        retry=retry_if_exception(_retry_unmanaged_transport_error),
+    )
     async def get_note_by_id_from_html(
         self,
         note_id: str,

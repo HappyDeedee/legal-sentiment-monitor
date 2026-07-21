@@ -855,6 +855,11 @@ adds provider-effective window/device fields to the in-memory and safe-binding
 contract only. XHS and Douyin dispatch proof remains short-lived and
 digest-only; existing rows and encrypted material are not migrated.
 
+Packet D verification requires no schema change. The browser-plan and terminal
+handles are one-use files under the attempt directory, and the existing run
+summary stores only redacted category and safe request proof. Restart recovery
+continues to use existing run, lock, Profile, and encrypted Cookie records.
+
 Migration rules:
 
 1. Do not move raw Cookie, token, proxy password, Profile path, or complete

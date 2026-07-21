@@ -18,12 +18,22 @@ from playwright.sync_api import sync_playwright
 
 from tools.browser_environment import (
     PLAN_ENV_NAME,
+    PLAN_PATH_ENV_NAME,
     RESULT_PATH_ENV_NAME,
     BrowserEnvironmentError,
     BrowserEnvironmentPlan,
     BrowserEnvironmentResult,
-    browser_environment_plan_to_json,
     browser_environment_result_from_json,
+    write_browser_environment_plan_handle,
+)
+from tools.crawler_attempt import (
+    CRAWLER_ATTEMPT_RESULT_ENV_NAME,
+    CRAWLER_RETRY_ORDINAL_ENV_NAME,
+    CrawlerAttemptFailure,
+    CrawlerAttemptResult,
+    CrawlerAttemptResultError,
+    classify_crawler_exception,
+    read_crawler_attempt_result,
 )
 from tools.profile_only import (
     PROFILE_LOGIN_REQUIRED_EXIT_CODE,
@@ -125,6 +135,7 @@ class ManagedCrawlerOutcome:
     login_required: bool
     request_environment: PlatformRequestEnvironment | None = None
     request_dispatch_proofs: tuple[dict[str, Any], ...] = ()
+    terminal_result: CrawlerAttemptResult | None = None
 
 
 def clear_stop_request(job_id: int) -> None:
@@ -256,6 +267,15 @@ async def _run_job_locked(job_id: int, source: str = "manual") -> dict[str, Any]
                 timeout_reason = timeout_reason or error
                 summary["failed_platforms"].append(platform)
                 summary["platform_results"][platform] = {"status": "timeout", "error": error}
+                continue
+            if isinstance(result, CrawlerAttemptFailure):
+                error = redact_sensitive(str(result))
+                summary["failed_platforms"].append(platform)
+                summary["platform_results"][platform] = {
+                    "status": "failed",
+                    "error": error,
+                    "error_category": result.category,
+                }
                 continue
             if isinstance(result, Exception):
                 error = redact_sensitive(str(result))
@@ -398,7 +418,9 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
             max_retries = _crawler_max_retries()
             total_attempts = max_retries + 1
             last_error = ""
+            last_failure: CrawlerAttemptFailure | None = None
             base_plan: BrowserEnvironmentPlan | None = None
+            request_binding_template: PlatformRequestBinding | None = None
             try:
                 if account_binding and account_binding.get("account_id"):
                     account_lock_acquired = acquire_account_lock(int(account_binding["account_id"]), run_id, lock_expires_at)
@@ -431,17 +453,28 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
                         account_binding,
                         str(job.get("_trigger_source") or "manual"),
                     )
+                    request_binding_template = _build_request_binding_for_attempt(
+                        account_binding,
+                        base_plan,
+                        run_id=run_id,
+                        expires_at=_run_deadline_at(run_id) or None,
+                    )
                 for attempt in range(1, total_attempts + 1):
                     attempt_out = _attempt_output_dir(platform_root, attempt, total_attempts)
                     attempt_out.mkdir(parents=True, exist_ok=True)
+                    attempt_plan = None
+                    result_path = None
+                    request_binding = None
+                    request_result_path = None
                     try:
                         _raise_if_stop_requested(job["id"])
                         attempt_timeout = _remaining_run_seconds(run_id)
-                        attempt_job = {**job, "_crawler_timeout_seconds": attempt_timeout, "_run_id": run_id}
-                        attempt_plan = None
-                        result_path = None
-                        request_binding = None
-                        request_result_path = None
+                        attempt_job = {
+                            **job,
+                            "_crawler_timeout_seconds": attempt_timeout,
+                            "_run_id": run_id,
+                            "_crawler_retry_ordinal": attempt,
+                        }
                         if base_plan is not None:
                             attempt_plan = replace(
                                 base_plan,
@@ -451,11 +484,14 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
                             request_result_path = (
                                 attempt_out / ".platform-request-environment.json"
                             ).resolve()
-                            request_binding = _build_request_binding_for_attempt(
-                                account_binding,
-                                attempt_plan,
-                                run_id=run_id,
-                                expires_at=_run_deadline_at(run_id) or None,
+                            if request_binding_template is None:
+                                raise CrawlerAttemptFailure(
+                                    "browser_environment_mismatch",
+                                    "request_binding_template_missing",
+                                )
+                            request_binding = replace(
+                                request_binding_template,
+                                attempt_id=attempt_plan.attempt_id,
                             )
                             attempt_job["_browser_environment_plan"] = attempt_plan
                             attempt_job["_browser_environment_result_path"] = result_path
@@ -471,7 +507,10 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
                         )
                         if attempt_plan is not None:
                             if not isinstance(crawler_outcome, ManagedCrawlerOutcome):
-                                raise RuntimeError("managed crawler child result is missing")
+                                raise CrawlerAttemptFailure(
+                                    "process_crashed",
+                                    "managed_child_result_missing",
+                                )
                             try:
                                 persist_account_browser_environment_result(
                                     int(account_binding["account_id"]),
@@ -481,10 +520,32 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
                             finally:
                                 if result_path is not None:
                                     result_path.unlink(missing_ok=True)
+                            terminal_result = crawler_outcome.terminal_result
+                            if terminal_result is None:
+                                raise CrawlerAttemptFailure(
+                                    "process_crashed",
+                                    "managed_child_terminal_missing",
+                                )
+                            if terminal_result.status != "success":
+                                if terminal_result.category == "cancelled":
+                                    raise CrawlerStopped("任务已手动停止")
+                                if terminal_result.category == "timeout":
+                                    raise CrawlerTimedOut("采集子进程达到运行时间上限")
+                                raise CrawlerAttemptFailure(
+                                    terminal_result.category,
+                                    terminal_result.reason_code,
+                                    result=terminal_result,
+                                )
                             if not crawler_outcome.provider_result.ok:
-                                raise RuntimeError(
-                                    "managed browser environment failed: "
-                                    + crawler_outcome.provider_result.reason
+                                classified = classify_crawler_exception(
+                                    BrowserEnvironmentError(
+                                        crawler_outcome.provider_result.reason,
+                                        "child_result",
+                                    )
+                                )
+                                raise CrawlerAttemptFailure(
+                                    classified.category,
+                                    classified.reason_code,
                                 )
                             if request_binding is None or crawler_outcome.request_environment is None:
                                 raise RuntimeError("managed platform request environment is missing")
@@ -503,37 +564,9 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
                             if request_environment.run_id != run_id:
                                 raise RuntimeError("managed platform request run binding mismatch")
                             if crawler_outcome.returncode != 0:
-                                _record_request_environment_proof(
-                                    run_id,
-                                    platform,
-                                    attempt,
-                                    request_environment,
-                                )
-                                if crawler_outcome.login_required:
-                                    mark_social_account_profile_requires_relogin(
-                                        int(account_binding["account_id"]),
-                                        reason="Profile 登录态失效，请重新登录",
-                                        trigger_source="profile_only_child",
-                                        user_id=_safe_int(job.get("created_by")),
-                                    )
-                                    _record_profile_only_terminal(
-                                        account_binding,
-                                        attempt_plan,
-                                        job,
-                                        result="requires_relogin",
-                                        reason="profile_login_required",
-                                    )
-                                elif _is_profile_only_binding(account_binding):
-                                    _record_profile_only_terminal(
-                                        account_binding,
-                                        attempt_plan,
-                                        job,
-                                        result="failed",
-                                        reason="child_exit",
-                                    )
-                                hint = "；检测到登录态失效，请先重新登录该平台账号" if crawler_outcome.login_required else ""
-                                raise RuntimeError(
-                                    f"MediaCrawler exited with {crawler_outcome.returncode}{hint}"
+                                raise CrawlerAttemptFailure(
+                                    "process_crashed",
+                                    "managed_child_exit_after_success",
                                 )
                             _validate_managed_dispatch_proofs(
                                 platform,
@@ -582,19 +615,66 @@ async def run_platform(job: dict[str, Any], run_id: int, platform: str, run_dir:
                     except CrawlerTimedOut as exc:
                         _update_collection_progress(run_id, platform, attempt_out, phase="collecting", error=str(exc))
                         raise
-                    except RuntimeError as exc:
-                        last_error = redact_sensitive(str(exc))
+                    except CrawlerAttemptFailure as exc:
+                        last_failure = exc
+                        last_error = str(exc)
                         _update_collection_progress(run_id, platform, attempt_out, phase="collecting", error=last_error)
-                        if not _should_retry_crawler_error(last_error) or attempt >= total_attempts:
+                        will_retry = exc.retryable and attempt < total_attempts
+                        if not will_retry:
+                            _finalize_managed_crawler_failure(
+                                account_binding,
+                                attempt_plan,
+                                job,
+                                exc,
+                            )
+                            break
+                        _raise_if_stop_requested(job["id"])
+                        _raise_if_deadline_passed(run_id)
+                        await asyncio.sleep(_crawler_retry_delay_seconds())
+                        _raise_if_deadline_passed(run_id)
+                    except Exception as exc:
+                        classified = classify_crawler_exception(exc)
+                        last_failure = CrawlerAttemptFailure(
+                            classified.category,
+                            classified.reason_code,
+                        )
+                        last_error = str(last_failure)
+                        _update_collection_progress(
+                            run_id,
+                            platform,
+                            attempt_out,
+                            phase="collecting",
+                            error=last_error,
+                        )
+                        if not last_failure.retryable or attempt >= total_attempts:
+                            _finalize_managed_crawler_failure(
+                                account_binding,
+                                attempt_plan,
+                                job,
+                                last_failure,
+                            )
                             break
                         _raise_if_stop_requested(job["id"])
                         _raise_if_deadline_passed(run_id)
                         await asyncio.sleep(_crawler_retry_delay_seconds())
                         _raise_if_deadline_passed(run_id)
                     finally:
+                        if result_path is not None:
+                            result_path.unlink(missing_ok=True)
                         if request_result_path is not None:
                             request_result_path.unlink(missing_ok=True)
-                raise RuntimeError(f"MediaCrawler failed after {attempt} attempt(s): {last_error}")
+                        (attempt_out / ".browser-environment-plan.json").unlink(
+                            missing_ok=True
+                        )
+                        (attempt_out / ".crawler-attempt-result.json").unlink(
+                            missing_ok=True
+                        )
+                if last_failure is not None:
+                    raise last_failure
+                raise CrawlerAttemptFailure(
+                    "process_crashed",
+                    "crawler_attempt_terminal_missing",
+                )
             finally:
                 if account_binding and account_binding.get("account_id") and account_lock_acquired:
                     release_account_lock(int(account_binding["account_id"]), run_id)
@@ -655,6 +735,30 @@ def _run_crawler_attempt(
                 "request_environment",
             ) from exc
         request_result_path.unlink(missing_ok=True)
+    retry_ordinal = max(1, _safe_int(job.get("_crawler_retry_ordinal")) or 1)
+    plan_path = (
+        (out_dir / ".browser-environment-plan.json").resolve()
+        if managed_plan is not None
+        else None
+    )
+    attempt_result_path = (
+        (out_dir / ".crawler-attempt-result.json").resolve()
+        if managed_plan is not None
+        else None
+    )
+    for handoff_path in (plan_path, attempt_result_path):
+        if handoff_path is None:
+            continue
+        try:
+            handoff_path.relative_to(out_dir.resolve())
+        except ValueError as exc:
+            raise BrowserEnvironmentError(
+                "account_identity_provider_unsupported",
+                "runner_handoff",
+            ) from exc
+        handoff_path.unlink(missing_ok=True)
+    if plan_path is not None and managed_plan is not None:
+        write_browser_environment_plan_handle(plan_path, managed_plan)
     cmd = _build_crawler_cmd(job, platform, out_dir, account_binding, managed_plan)
     env = _build_crawler_env(
         account_binding,
@@ -662,10 +766,23 @@ def _run_crawler_attempt(
         result_path,
         request_binding=request_binding,
         request_result_path=request_result_path,
+        plan_path=plan_path,
+        attempt_result_path=attempt_result_path,
+        retry_ordinal=retry_ordinal,
     )
+    if managed_plan is not None:
+        _assert_managed_child_handoff_safe(
+            cmd,
+            env,
+            managed_plan,
+            account_binding,
+        )
     log_path = out_dir / "crawler.log"
     timeout_seconds = max(1, _safe_int(job.get("_crawler_timeout_seconds")) or _runtime_setting_int("crawler_timeout_seconds", 900))
     process: subprocess.Popen | None = None
+    log_file = None
+    log_pump: threading.Thread | None = None
+    log_pump_errors: list[BaseException] = []
     child_started_at = datetime.now(timezone.utc)
     try:
         creationflags = subprocess.CREATE_NEW_PROCESS_GROUP if os.name == "nt" else 0
@@ -694,43 +811,66 @@ def _run_crawler_attempt(
                 )
             )
         log_path.write_text("\n".join(log_lines) + "\n", encoding="utf-8", errors="ignore")
-        with log_path.open("a", encoding="utf-8", errors="ignore") as log_file:
-            process = subprocess.Popen(
-                cmd,
-                cwd=PROJECT_ROOT,
-                env=env,
-                stdout=log_file,
-                stderr=subprocess.STDOUT,
-                creationflags=creationflags,
+        popen_options: dict[str, Any] = {
+            "cwd": PROJECT_ROOT,
+            "env": env,
+            "stderr": subprocess.STDOUT,
+            "creationflags": creationflags,
+        }
+        if managed_plan is not None:
+            popen_options.update(
+                {
+                    "stdout": subprocess.PIPE,
+                    "text": True,
+                    "encoding": "utf-8",
+                    "errors": "replace",
+                    "bufsize": 1,
+                }
             )
-            _register_process(job["id"], process)
-            deadline = datetime.now(timezone.utc) + timedelta(seconds=timeout_seconds)
-            while True:
-                _raise_if_stop_requested(job["id"])
+        else:
+            log_file = log_path.open("a", encoding="utf-8", errors="ignore")
+            popen_options["stdout"] = log_file
+        process = subprocess.Popen(cmd, **popen_options)
+        if managed_plan is not None:
+            log_pump = _start_managed_child_log_pump(
+                process,
+                log_path,
+                managed_plan,
+                account_binding,
+                log_pump_errors,
+            )
+        _register_process(job["id"], process)
+        deadline = datetime.now(timezone.utc) + timedelta(seconds=timeout_seconds)
+        while True:
+            _raise_if_stop_requested(job["id"])
+            try:
+                process.wait(timeout=CRAWLER_PROGRESS_POLL_SECONDS if run_id else timeout_seconds)
+                break
+            except subprocess.TimeoutExpired as exc:
+                if run_id:
+                    _update_collection_progress(run_id, platform, out_dir, phase="collecting")
+                if datetime.now(timezone.utc) < deadline:
+                    continue
+                _terminate_process(process)
                 try:
-                    process.wait(timeout=CRAWLER_PROGRESS_POLL_SECONDS if run_id else timeout_seconds)
-                    break
-                except subprocess.TimeoutExpired as exc:
-                    if run_id:
-                        _update_collection_progress(run_id, platform, out_dir, phase="collecting")
-                    if datetime.now(timezone.utc) < deadline:
-                        continue
-                    _terminate_process(process)
-                    try:
-                        process.wait(timeout=10)
-                    except subprocess.TimeoutExpired:
-                        pass
-                    log_file.write(f"\n[monitor] MediaCrawler timed out after {timeout_seconds}s\n")
-                    log_file.flush()
-                    if run_id:
-                        _update_collection_progress(
-                            run_id,
-                            platform,
-                            out_dir,
-                            phase="collecting",
-                            error=f"timeout after {timeout_seconds}s",
-                        )
-                    raise CrawlerTimedOut(f"任务达到系统运行时间上限，已停止未完成的采集进程；see {log_path}") from exc
+                    process.wait(timeout=10)
+                except subprocess.TimeoutExpired:
+                    pass
+                _append_crawler_log(
+                    log_path,
+                    f"\n[monitor] MediaCrawler timed out after {timeout_seconds}s\n",
+                    managed_plan,
+                    account_binding,
+                )
+                if run_id:
+                    _update_collection_progress(
+                        run_id,
+                        platform,
+                        out_dir,
+                        phase="collecting",
+                        error=f"timeout after {timeout_seconds}s",
+                    )
+                raise CrawlerTimedOut(f"任务达到系统运行时间上限，已停止未完成的采集进程；see {log_path}") from exc
     except subprocess.TimeoutExpired as exc:
         raise CrawlerTimedOut(f"任务达到系统运行时间上限，已停止未完成的采集进程；see {log_path}") from exc
     except RuntimeError:
@@ -739,20 +879,73 @@ def _run_crawler_attempt(
         if isinstance(exc, (CrawlerStopped, CrawlerTimedOut)):
             raise
         safe_error = redact_sensitive(f"{type(exc).__name__}: {exc}")
+        if managed_plan is not None:
+            safe_error = _redact_managed_child_secrets(
+                safe_error,
+                managed_plan,
+                account_binding,
+            )
         log_path.write_text(safe_error, encoding="utf-8", errors="ignore")
         raise RuntimeError(f"MediaCrawler failed to start: {safe_error}; see {log_path}") from exc
     finally:
+        if process is not None and process.returncode is None:
+            _terminate_process(process)
+            try:
+                process.wait(timeout=10)
+            except subprocess.TimeoutExpired:
+                pass
         if process:
             _unregister_process(job["id"], process)
-    raw_log_text = log_path.read_text(encoding="utf-8", errors="ignore")
-    log_text = redact_sensitive(raw_log_text)
-    if log_text != raw_log_text:
-        log_path.write_text(log_text, encoding="utf-8", errors="ignore")
+        if log_pump is not None:
+            log_pump.join(timeout=10)
+            if log_pump.is_alive():
+                stream = getattr(process, "stdout", None)
+                if stream is not None:
+                    try:
+                        stream.close()
+                    except Exception:
+                        pass
+                log_pump.join(timeout=2)
+            if log_pump.is_alive():
+                log_pump_errors.append(RuntimeError("managed child log pump did not stop"))
+        if log_file is not None:
+            log_file.close()
+        if plan_path is not None:
+            plan_path.unlink(missing_ok=True)
+        _sanitize_crawler_log(log_path, managed_plan, account_binding)
+    if log_pump_errors:
+        raise CrawlerAttemptFailure(
+            "process_crashed",
+            "managed_child_log_capture_failed",
+        ) from log_pump_errors[0]
+    log_text = _sanitize_crawler_log(log_path, managed_plan, account_binding)
     if is_stop_requested(job["id"]):
         if run_id:
             _update_collection_progress(run_id, platform, out_dir, phase="collecting", error="stopped")
         raise CrawlerStopped(f"任务已手动停止；see {log_path}")
     if managed_plan is not None and result_path is not None:
+        if attempt_result_path is None or request_binding is None:
+            raise CrawlerAttemptFailure(
+                "process_crashed",
+                "child_terminal_result_binding_missing",
+            )
+        terminal_result = _load_managed_child_attempt_result(
+            attempt_result_path,
+            request_binding,
+            retry_ordinal=retry_ordinal,
+            child_started_at=child_started_at,
+            returncode=int(process.returncode),
+        )
+        if terminal_result.status != "success" and not result_path.is_file():
+            if terminal_result.category == "cancelled":
+                raise CrawlerStopped("任务已手动停止")
+            if terminal_result.category == "timeout":
+                raise CrawlerTimedOut("采集子进程达到运行时间上限")
+            raise CrawlerAttemptFailure(
+                terminal_result.category,
+                terminal_result.reason_code,
+                result=terminal_result,
+            )
         provider_result = _load_managed_child_result(result_path, managed_plan, child_started_at)
         request_environment = None
         request_dispatch_proofs: tuple[dict[str, Any], ...] = ()
@@ -773,6 +966,7 @@ def _run_crawler_attempt(
             ),
             request_environment=request_environment,
             request_dispatch_proofs=request_dispatch_proofs,
+            terminal_result=terminal_result,
         )
     if process.returncode != 0:
         hint = "；检测到登录态失效，请先重新登录该平台账号" if _looks_like_login_required(log_text) else ""
@@ -1969,13 +2163,21 @@ def _build_crawler_env(
     *,
     request_binding: PlatformRequestBinding | None = None,
     request_result_path: Path | None = None,
+    plan_path: Path | None = None,
+    attempt_result_path: Path | None = None,
+    retry_ordinal: int = 1,
 ) -> dict[str, str]:
     env = {**os.environ, "PYTHONUNBUFFERED": "1"}
     if _is_profile_only_binding(account_binding) and managed_plan is None:
         raise ProfileLoginRequired()
     if managed_plan is not None:
-        if result_path is None:
+        if (
+            result_path is None
+            or plan_path is None
+            or attempt_result_path is None
+        ):
             raise BrowserEnvironmentError("account_identity_provider_unsupported", "runner_result")
+        _scrub_managed_child_environment(env)
         for name in list(env):
             if name in {
                 "HTTP_PROXY",
@@ -1992,12 +2194,15 @@ def _build_crawler_env(
                 "MONITOR_ACTIVE_PROXY_NAME",
                 "MONITOR_CDP_CONNECT_EXISTING",
                 PLAN_ENV_NAME,
+                PLAN_PATH_ENV_NAME,
                 RESULT_PATH_ENV_NAME,
                 REQUEST_BINDING_ENV_NAME,
                 REQUEST_RESULT_PATH_ENV_NAME,
+                CRAWLER_ATTEMPT_RESULT_ENV_NAME,
+                CRAWLER_RETRY_ORDINAL_ENV_NAME,
             } or name.startswith("MONITOR_CDP_USER_DATA_DIR"):
                 env.pop(name, None)
-        env[PLAN_ENV_NAME] = browser_environment_plan_to_json(managed_plan)
+        env[PLAN_PATH_ENV_NAME] = str(plan_path.resolve())
         env[RESULT_PATH_ENV_NAME] = str(result_path.resolve())
         if request_binding is None or request_result_path is None:
             raise BrowserEnvironmentError(
@@ -2013,6 +2218,8 @@ def _build_crawler_env(
         )
         env[REQUEST_BINDING_ENV_NAME] = platform_request_binding_to_json(request_binding)
         env[REQUEST_RESULT_PATH_ENV_NAME] = str(request_result_path.resolve())
+        env[CRAWLER_ATTEMPT_RESULT_ENV_NAME] = str(attempt_result_path.resolve())
+        env[CRAWLER_RETRY_ORDINAL_ENV_NAME] = str(retry_ordinal)
         if _is_profile_only_binding(account_binding):
             metadata = _require_profile_only_binding(account_binding, managed_plan)
             for name in list(env):
@@ -2049,6 +2256,196 @@ def _build_crawler_env(
             }
         )
     return env
+
+
+def _scrub_managed_child_environment(env: dict[str, str]) -> None:
+    sensitive_markers = (
+        "COOKIE",
+        "TOKEN",
+        "PASSWORD",
+        "PASSWD",
+        "SECRET",
+        "API_KEY",
+        "AUTHORIZATION",
+    )
+    sensitive_names = {
+        "HTTP_PROXY",
+        "HTTPS_PROXY",
+        "ALL_PROXY",
+        "NO_PROXY",
+        "PIP_INDEX_URL",
+        "PIP_EXTRA_INDEX_URL",
+        "UV_INDEX_URL",
+        "UV_EXTRA_INDEX_URL",
+        "MONITOR_BROWSER_EXECUTABLE",
+    }
+    for name in list(env):
+        upper_name = name.upper()
+        if upper_name in sensitive_names or any(
+            marker in upper_name for marker in sensitive_markers
+        ):
+            env.pop(name, None)
+
+
+def _managed_child_secret_values(
+    plan: BrowserEnvironmentPlan,
+    account_binding: dict[str, Any] | None,
+) -> set[str]:
+    values = {
+        str(plan.profile_path or ""),
+        str(plan.proxy_url or ""),
+        str(plan.browser_executable_path or ""),
+    }
+    sensitive_keys = (
+        "cookie",
+        "token",
+        "password",
+        "secret",
+        "proxy_url",
+        "profile_path",
+        "browser_executable_path",
+    )
+
+    def collect(value: Any, key: str = "") -> None:
+        if isinstance(value, dict):
+            for child_key, child_value in value.items():
+                collect(child_value, str(child_key).lower())
+            return
+        if isinstance(value, (list, tuple)):
+            for child_value in value:
+                collect(child_value, key)
+            return
+        if isinstance(value, str) and any(marker in key for marker in sensitive_keys):
+            values.add(value)
+
+    collect(account_binding or {})
+    return {value for value in values if len(value) >= 4}
+
+
+def _assert_managed_child_handoff_safe(
+    cmd: list[str],
+    env: dict[str, str],
+    plan: BrowserEnvironmentPlan,
+    account_binding: dict[str, Any] | None,
+) -> None:
+    serialized = json.dumps(
+        {"cmd": cmd, "env": env},
+        ensure_ascii=False,
+        sort_keys=True,
+    )
+    leaked = [
+        value
+        for value in _managed_child_secret_values(plan, account_binding)
+        if value in serialized
+    ]
+    if leaked:
+        raise BrowserEnvironmentError(
+            "account_identity_snapshot_unsafe",
+            "child_handoff",
+        )
+
+
+def _redact_managed_child_secrets(
+    value: str,
+    plan: BrowserEnvironmentPlan,
+    account_binding: dict[str, Any] | None,
+) -> str:
+    redacted = value
+    for secret in sorted(
+        _managed_child_secret_values(plan, account_binding),
+        key=len,
+        reverse=True,
+    ):
+        redacted = redacted.replace(secret, "***")
+    return redacted
+
+
+def _sanitize_crawler_log(
+    log_path: Path,
+    plan: BrowserEnvironmentPlan | None,
+    account_binding: dict[str, Any] | None,
+) -> str:
+    path = Path(log_path)
+    if not path.is_file():
+        return ""
+    raw = path.read_text(encoding="utf-8", errors="ignore")
+    sanitized = redact_sensitive(raw)
+    if plan is not None:
+        sanitized = _redact_managed_child_secrets(
+            sanitized,
+            plan,
+            account_binding,
+        )
+    if sanitized != raw:
+        temporary = path.with_name(f".{path.name}.{os.getpid()}.sanitize.tmp")
+        try:
+            temporary.write_text(sanitized, encoding="utf-8", errors="ignore")
+            temporary.replace(path)
+        finally:
+            temporary.unlink(missing_ok=True)
+    return sanitized
+
+
+def _managed_child_log_text(
+    value: str,
+    plan: BrowserEnvironmentPlan,
+    account_binding: dict[str, Any] | None,
+) -> str:
+    return _redact_managed_child_secrets(
+        redact_sensitive(str(value or "")),
+        plan,
+        account_binding,
+    )
+
+
+def _append_crawler_log(
+    log_path: Path,
+    value: str,
+    plan: BrowserEnvironmentPlan | None,
+    account_binding: dict[str, Any] | None,
+) -> None:
+    output = redact_sensitive(str(value or ""))
+    if plan is not None:
+        output = _redact_managed_child_secrets(output, plan, account_binding)
+    with Path(log_path).open("a", encoding="utf-8", errors="ignore") as handle:
+        handle.write(output)
+        handle.flush()
+
+
+def _start_managed_child_log_pump(
+    process: subprocess.Popen,
+    log_path: Path,
+    plan: BrowserEnvironmentPlan,
+    account_binding: dict[str, Any] | None,
+    errors: list[BaseException],
+) -> threading.Thread:
+    stream = getattr(process, "stdout", None)
+    if stream is None:
+        raise RuntimeError("managed child stdout pipe is missing")
+
+    def pump() -> None:
+        try:
+            with Path(log_path).open("a", encoding="utf-8", errors="ignore") as handle:
+                for line in stream:
+                    handle.write(
+                        _managed_child_log_text(line, plan, account_binding)
+                    )
+                    handle.flush()
+        except BaseException as exc:
+            errors.append(exc)
+        finally:
+            try:
+                stream.close()
+            except Exception:
+                pass
+
+    thread = threading.Thread(
+        target=pump,
+        name=f"managed-crawler-log-{getattr(process, 'pid', 'pending')}",
+        daemon=True,
+    )
+    thread.start()
+    return thread
 
 
 def _is_profile_only_binding(account_binding: dict[str, Any] | None) -> bool:
@@ -2107,6 +2504,41 @@ def _is_profile_only_login_required_exit(
         and _is_profile_only_binding(account_binding)
         and int((account_binding or {}).get("profile_runtime_version") or 0) >= 1
     )
+
+
+def _load_managed_child_attempt_result(
+    result_path: Path,
+    binding: PlatformRequestBinding,
+    *,
+    retry_ordinal: int,
+    child_started_at: datetime,
+    returncode: int,
+) -> CrawlerAttemptResult:
+    try:
+        try:
+            result = read_crawler_attempt_result(
+                result_path,
+                expected_binding=binding,
+                expected_retry_ordinal=retry_ordinal,
+                child_started_at=child_started_at,
+            )
+        except CrawlerAttemptResultError as exc:
+            reason = (
+                "child_terminal_result_missing"
+                if "missing" in str(exc)
+                else "child_terminal_result_invalid"
+            )
+            raise CrawlerAttemptFailure("process_crashed", reason) from exc
+    finally:
+        Path(result_path).unlink(missing_ok=True)
+    if result.status == "success":
+        if returncode != 0:
+            raise CrawlerAttemptFailure(
+                "process_crashed",
+                "child_exit_conflicts_with_success",
+                result=result,
+            )
+    return result
 
 
 def _load_managed_child_result(
@@ -2595,10 +3027,37 @@ def _crawler_retry_delay_seconds() -> float:
     return max(0.0, float(_runtime_setting_int("crawler_retry_delay_seconds", int(DEFAULT_CRAWLER_RETRY_DELAY_SECONDS))))
 
 
-def _should_retry_crawler_error(error: str) -> bool:
-    if _looks_like_login_required(error) or "登录窗口未关闭" in error or "account_identity_" in error:
-        return False
-    return True
+def _crawler_failure_relogin_reason(category: str) -> str:
+    return {
+        "login_required": "Profile 登录态失效，请重新登录",
+        "cookie_invalid": "Cookie 登录态失效，请重新登录",
+        "second_verification": "平台要求二次验证，请重新打开登录窗口完成验证",
+        "captcha_or_human_verification": "平台要求人工验证，请重新打开登录窗口完成验证",
+    }.get(str(category or ""), "")
+
+
+def _finalize_managed_crawler_failure(
+    account_binding: dict[str, Any] | None,
+    plan: BrowserEnvironmentPlan | None,
+    job: dict[str, Any],
+    failure: CrawlerAttemptFailure,
+) -> None:
+    relogin_reason = _crawler_failure_relogin_reason(failure.category)
+    if account_binding and account_binding.get("account_id") and relogin_reason:
+        mark_social_account_profile_requires_relogin(
+            int(account_binding["account_id"]),
+            reason=relogin_reason,
+            trigger_source="managed_crawler_child",
+            user_id=_safe_int(job.get("created_by")),
+        )
+    if _is_profile_only_binding(account_binding) and plan is not None:
+        _record_profile_only_terminal(
+            account_binding or {},
+            plan,
+            job,
+            result="requires_relogin" if relogin_reason else "failed",
+            reason=failure.category,
+        )
 
 
 def _attempt_output_dir(platform_root: Path, attempt: int, total_attempts: int) -> Path:

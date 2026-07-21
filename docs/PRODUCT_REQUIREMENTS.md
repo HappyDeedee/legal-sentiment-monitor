@@ -1061,3 +1061,11 @@ screen/browser values, proxy, signer input, `a_bogus`, and the final URL. A
 request with missing, changed, fixed, random, or cross-account material stops
 before platform dispatch. Content returned without the bound signed request
 proof does not count as authenticated collection.
+
+Every managed platform attempt must finish with one typed terminal result.
+Only a bounded `transient_network` result may retry, using the same frozen
+resolution and material revisions with a new attempt ID. Login, verification,
+rate, proxy, signature, identity, protocol, timeout, cancellation, and crash
+results remain terminal and visible through safe customer-facing status.
+Managed child output is redacted before log persistence, and process cleanup
+must release locks without changing committed Profile/Cookie authority.

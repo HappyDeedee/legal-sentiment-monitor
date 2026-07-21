@@ -31,6 +31,7 @@ from playwright.async_api import BrowserContext
 from base.base_crawler import AbstractApiClient
 from proxy.proxy_mixin import ProxyRefreshMixin
 from tools import utils
+from tools.crawler_attempt import CrawlerAttemptFailure
 from tools.httpx_util import make_async_client
 from tools.platform_request_environment import (
     REQUEST_RESULT_PATH_ENV_NAME,
@@ -342,8 +343,23 @@ class DouYinClient(AbstractApiClient, ProxyRefreshMixin):
             )
             self._validate_managed_headers(request_headers)
 
-        async with make_async_client(proxy=self.proxy) as client:
-            response = await client.request(method, url, timeout=self.timeout, **kwargs)
+        try:
+            async with make_async_client(proxy=self.proxy) as client:
+                response = await client.request(method, url, timeout=self.timeout, **kwargs)
+        except httpx.TimeoutException as exc:
+            if self.request_environment is not None:
+                raise CrawlerAttemptFailure(
+                    "timeout",
+                    "douyin_request_timeout",
+                ) from exc
+            raise
+        except httpx.TransportError as exc:
+            if self.request_environment is not None:
+                raise CrawlerAttemptFailure(
+                    "transient_network",
+                    "douyin_transport_error",
+                ) from exc
+            raise
         if self.request_environment is not None:
             self._record_safe_request_proof(
                 method=method,
@@ -352,13 +368,62 @@ class DouYinClient(AbstractApiClient, ProxyRefreshMixin):
                 headers=kwargs["headers"],
                 response_status=int(response.status_code),
             )
+        if response.status_code == 408 and self.request_environment is not None:
+            raise CrawlerAttemptFailure("timeout", "douyin_http_request_timeout")
+        if response.status_code == 429 and self.request_environment is not None:
+            raise CrawlerAttemptFailure("rate_limited", "douyin_rate_limited")
+        if response.status_code in {502, 503, 504} and self.request_environment is not None:
+            raise CrawlerAttemptFailure(
+                "transient_network",
+                "douyin_gateway_unavailable",
+            )
+        if response.status_code in {401, 403} and self.request_environment is not None:
+            raise CrawlerAttemptFailure("login_required", "douyin_login_required")
+        if response.text == "" or response.text == "blocked":
+            utils.logger.error("[DouYinClient.request] Account or network blocked")
+            if self.request_environment is not None:
+                raise CrawlerAttemptFailure(
+                    "proxy_or_ip_blocked",
+                    "douyin_account_or_ip_blocked",
+                )
+            raise DataFetchError("account blocked")
         try:
-            if response.text == "" or response.text == "blocked":
-                utils.logger.error(f"request params incrr, response.text: {response.text}")
-                raise Exception("account blocked")
-            return response.json()
-        except Exception as e:
-            raise DataFetchError(f"{e}, {response.text}")
+            payload = response.json()
+        except (TypeError, ValueError) as exc:
+            if self.request_environment is not None:
+                raise CrawlerAttemptFailure(
+                    "platform_protocol_changed",
+                    "douyin_response_invalid",
+                ) from exc
+            raise DataFetchError("response is not valid JSON") from exc
+        if self.request_environment is not None:
+            if not isinstance(payload, dict):
+                raise CrawlerAttemptFailure(
+                    "platform_protocol_changed",
+                    "douyin_response_invalid",
+                )
+            status_code = payload.get("status_code")
+            if status_code not in (None, 0):
+                status_message = str(
+                    payload.get("status_msg")
+                    or payload.get("message")
+                    or ""
+                ).lower()
+                if "verify" in status_message or "captcha" in status_message:
+                    raise CrawlerAttemptFailure(
+                        "captcha_or_human_verification",
+                        "douyin_human_verification",
+                    )
+                if "login" in status_message:
+                    raise CrawlerAttemptFailure(
+                        "login_required",
+                        "douyin_login_required",
+                    )
+                raise CrawlerAttemptFailure(
+                    "platform_protocol_changed",
+                    "douyin_platform_response_error",
+                )
+        return payload
 
     async def get(self, uri: str, params: Optional[Dict] = None, headers: Optional[Dict] = None):
         """

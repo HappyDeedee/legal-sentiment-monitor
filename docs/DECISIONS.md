@@ -773,6 +773,19 @@ short `Superseded by` note rather than deleting history.
   `a_bogus` helper explicitly lacks body-signing proof. Managed POST therefore
   fails closed until a body-aware signer/transport contract has RED/GREEN
   coverage. Existing unmanaged compatibility remains unchanged.
+- Packet D confirms one child terminal contract with safe reason codes and
+  exact account/Profile/resolution/attempt/run/revision binding. The parent
+  consumes this result once and rejects missing, stale, cross-attempt, or
+  exit-code-conflicting results before ingest.
+- Packet D confirms that only `transient_network` is retryable. HTTP/client
+  timeout, 408, login, Cookie, verification, rate, proxy, signature, identity,
+  protocol, cancellation, and crash outcomes are terminal. A retry changes
+  only `attempt_id` and ordinal; the resolution and identity/Cookie/proxy
+  revisions stay frozen.
+- Managed child stdout is piped through exact-secret and generic redaction
+  before disk write. Windows timeout/cancellation terminates the child process
+  tree with `taskkill /T /F`; terminal cleanup releases account/proxy locks and
+  preserves committed Profile/Cookie authority.
 - Public F2 evidence was used only to verify terminology and external-source
   boundaries. Its Apache-2.0 code is not copied and it is not added as a runtime
   dependency; CR-129 retains the current project signer and Profile authority.

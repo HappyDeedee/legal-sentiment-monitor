@@ -591,3 +591,10 @@ CR-129 local real acceptance is explicitly serial and uses Douyin account
 `8972` and Xiaohongshu account `9196`. Accounts `9197` and `9198` are not
 collection targets. This evidence supplements, rather than replaces, the
 separate CR-047 Linux/server-like gate.
+
+Packet D deployment receipt (2026-07-22): managed child stdout is piped and
+redacted before disk write; browser plans and terminal results are one-use
+attempt handles; Windows timeout/cancellation invokes process-tree cleanup;
+and only typed transient-network failures retry within the existing deadline.
+Packet E still owns merged-service restart, browser compatibility, and
+designated real-platform proof.

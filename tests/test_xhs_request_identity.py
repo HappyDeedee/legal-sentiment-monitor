@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import unquote
 
 import pytest
+import httpx
 
 from tools.platform_request_environment import (
     REQUEST_RESULT_PATH_ENV_NAME,
@@ -651,3 +652,268 @@ def test_cr129_packet_b_unmanaged_xhs_client_keeps_account_check_compatibility(m
     assert client.headers["Cookie"] == "legacy=updated"
     assert client.cookie_dict == {"legacy": "updated"}
     assert client.safe_request_proofs == []
+
+
+@pytest.mark.parametrize("payload", [[], "not-an-object"])
+def test_cr129_packet_d_managed_xhs_rejects_non_object_response(monkeypatch, payload):
+    from media_platform.xhs import client as client_module
+    from media_platform.xhs.client import XiaoHongShuClient
+    from media_platform.xhs.request_identity import build_xhs_request_identity
+    from tools.crawler_attempt import CrawlerAttemptFailure
+
+    environment = _environment()
+    headers = _headers(environment)
+    identity = build_xhs_request_identity(
+        environment=environment,
+        cookie_header=headers["Cookie"],
+        cookie_dict=_cookie_dict(),
+        headers=headers,
+        proxy_url=None,
+    )
+
+    class Response:
+        status_code = 200
+        text = "synthetic-invalid-response"
+
+        def json(self):
+            return payload
+
+    class HttpClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def request(self, method, url, **kwargs):
+            return Response()
+
+    monkeypatch.setattr(client_module, "make_async_client", lambda proxy: HttpClient())
+    monkeypatch.setattr(
+        client_module,
+        "sign_with_xhshow",
+        lambda **kwargs: {
+            "x-s": "synthetic-x-s",
+            "x-t": "synthetic-x-t",
+            "x-s-common": "synthetic-common",
+            "x-b3-traceid": "synthetic-trace",
+        },
+    )
+    client = XiaoHongShuClient(
+        headers=headers,
+        playwright_page=object(),
+        cookie_dict=_cookie_dict(),
+        request_environment=environment,
+        request_identity=identity,
+    )
+
+    with pytest.raises(CrawlerAttemptFailure) as exc_info:
+        asyncio.run(client.get("/api/test", {"page": 1}))
+
+    assert exc_info.value.category == "platform_protocol_changed"
+    assert exc_info.value.reason_code == "xhs_response_invalid"
+
+
+def test_cr129_packet_d_managed_xhs_invalid_json_is_typed_without_inner_retry(
+    monkeypatch,
+):
+    from media_platform.xhs import client as client_module
+    from media_platform.xhs.client import XiaoHongShuClient
+    from media_platform.xhs.request_identity import build_xhs_request_identity
+    from tools.crawler_attempt import CrawlerAttemptFailure
+
+    environment = _environment()
+    headers = _headers(environment)
+    identity = build_xhs_request_identity(
+        environment=environment,
+        cookie_header=headers["Cookie"],
+        cookie_dict=_cookie_dict(),
+        headers=headers,
+        proxy_url=None,
+    )
+    calls = 0
+
+    class Response:
+        status_code = 200
+        text = "synthetic-invalid-json"
+
+        def json(self):
+            raise ValueError("synthetic parse detail")
+
+    class HttpClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def request(self, method, url, **kwargs):
+            nonlocal calls
+            calls += 1
+            return Response()
+
+    monkeypatch.setattr(client_module, "make_async_client", lambda proxy: HttpClient())
+    monkeypatch.setattr(
+        client_module,
+        "sign_with_xhshow",
+        lambda **kwargs: {
+            "x-s": "synthetic-x-s",
+            "x-t": "synthetic-x-t",
+            "x-s-common": "synthetic-common",
+            "x-b3-traceid": "synthetic-trace",
+        },
+    )
+    client = XiaoHongShuClient(
+        headers=headers,
+        playwright_page=object(),
+        cookie_dict=_cookie_dict(),
+        request_environment=environment,
+        request_identity=identity,
+    )
+
+    with pytest.raises(CrawlerAttemptFailure) as exc_info:
+        asyncio.run(client.get("/api/test", {"page": 1}))
+
+    assert calls == 1
+    assert exc_info.value.category == "platform_protocol_changed"
+    assert exc_info.value.reason_code == "xhs_response_invalid"
+
+
+@pytest.mark.parametrize(
+    ("response_or_error", "expected_category"),
+    [
+        (
+            httpx.ReadTimeout(
+                "synthetic timeout",
+                request=httpx.Request("GET", "https://edith.xiaohongshu.com/api/test"),
+            ),
+            "timeout",
+        ),
+        (503, "transient_network"),
+        (408, "timeout"),
+    ],
+)
+def test_cr129_packet_d_managed_xhs_classifies_transient_boundaries(
+    monkeypatch,
+    response_or_error,
+    expected_category,
+):
+    from media_platform.xhs import client as client_module
+    from media_platform.xhs.client import XiaoHongShuClient
+    from media_platform.xhs.request_identity import build_xhs_request_identity
+    from tools.crawler_attempt import CrawlerAttemptFailure
+
+    environment = _environment()
+    headers = _headers(environment)
+    identity = build_xhs_request_identity(
+        environment=environment,
+        cookie_header=headers["Cookie"],
+        cookie_dict=_cookie_dict(),
+        headers=headers,
+        proxy_url=None,
+    )
+
+    response_status = response_or_error if isinstance(response_or_error, int) else 200
+
+    class Response:
+        status_code = response_status
+        text = "synthetic gateway response"
+
+        def json(self):
+            return {"success": True, "data": {"ok": True}}
+
+    class HttpClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, exc_type, exc, tb):
+            return False
+
+        async def request(self, method, url, **kwargs):
+            if isinstance(response_or_error, BaseException):
+                raise response_or_error
+            return Response()
+
+    monkeypatch.setattr(client_module, "make_async_client", lambda proxy: HttpClient())
+    monkeypatch.setattr(
+        client_module,
+        "sign_with_xhshow",
+        lambda **kwargs: {
+            "x-s": "synthetic-x-s",
+            "x-t": "synthetic-x-t",
+            "x-s-common": "synthetic-common",
+            "x-b3-traceid": "synthetic-trace",
+        },
+    )
+    client = XiaoHongShuClient(
+        headers=headers,
+        playwright_page=object(),
+        cookie_dict=_cookie_dict(),
+        request_environment=environment,
+        request_identity=identity,
+    )
+
+    with pytest.raises(CrawlerAttemptFailure) as exc_info:
+        asyncio.run(client.get("/api/test", {"page": 1}))
+
+    assert exc_info.value.category == expected_category
+
+
+def test_cr129_packet_d_managed_xhs_core_propagates_client_failure():
+    from media_platform.xhs.core import XiaoHongShuCrawler
+    from media_platform.xhs.exception import DataFetchError
+
+    crawler = object.__new__(XiaoHongShuCrawler)
+    crawler.platform_request_environment = _environment()
+
+    class Client:
+        async def get_note_by_id(self, note_id, xsec_source, xsec_token):
+            raise DataFetchError("synthetic managed failure")
+
+    crawler.xhs_client = Client()
+
+    with pytest.raises(DataFetchError, match="synthetic managed failure"):
+        asyncio.run(
+            crawler.get_note_detail_async_task(
+                "synthetic-note",
+                "pc_search",
+                "synthetic-xsec-token",
+                asyncio.Semaphore(1),
+            )
+        )
+
+
+def test_cr129_packet_d_managed_xhs_retry_error_preserves_terminal_category():
+    from tenacity import Future, RetryError
+
+    from media_platform.xhs.core import XiaoHongShuCrawler
+    from tools.crawler_attempt import CrawlerAttemptFailure
+
+    crawler = object.__new__(XiaoHongShuCrawler)
+    crawler.platform_request_environment = _environment()
+    attempt = Future(1)
+    attempt.set_exception(
+        CrawlerAttemptFailure(
+            "captcha_or_human_verification",
+            "xhs_human_verification",
+        )
+    )
+
+    class Client:
+        async def get_note_by_id(self, note_id, xsec_source, xsec_token):
+            raise RetryError(attempt)
+
+    crawler.xhs_client = Client()
+
+    with pytest.raises(CrawlerAttemptFailure) as exc_info:
+        asyncio.run(
+            crawler.get_note_detail_async_task(
+                "synthetic-note",
+                "pc_search",
+                "synthetic-xsec-token",
+                asyncio.Semaphore(1),
+            )
+        )
+
+    assert exc_info.value.category == "captcha_or_human_verification"
+    assert exc_info.value.reason_code == "xhs_human_verification"

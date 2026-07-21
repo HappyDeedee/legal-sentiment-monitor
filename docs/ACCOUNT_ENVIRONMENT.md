@@ -1980,3 +1980,17 @@ Runner requires a bound signed 2xx Douyin request proof before ingest. The
 current Douyin Client has no POST call sites, and its signer does not prove a
 request body; managed POST therefore stops before network until a body-aware
 signer contract is introduced. Unmanaged compatibility remains unchanged.
+
+Packet D implementation status (2026-07-22): verified. Each managed child
+attempt returns one versioned terminal result bound to the frozen account,
+Profile, resolution, attempt, run, identity, Cookie-material, and proxy
+revisions. Only typed transient network errors retry; the new attempt keeps
+the same verified environment revisions. Terminal login/Cookie/verification
+errors mark the account for a new login, while signer/protocol/network failures
+leave the committed login authority unchanged.
+
+The browser plan and terminal result are one-use attempt files. Managed child
+stdout is redacted before disk write, and Windows termination covers the child
+process tree. Missing, stale, conflicting, cancelled, timed-out, or crashed
+attempts release locks and preserve the prior committed Profile and encrypted
+Cookie.

@@ -1067,5 +1067,12 @@ touch values so Douyin signer inputs come from the same provider result as the
 Profile, Cookie, UA, and proxy. It adds no database field and persists only
 digests and revision-bound dispatch evidence, never raw token values.
 
+Packet D adds no database field. Its terminal result is a short-lived,
+versioned attempt file containing only safe category/reason codes and exact
+IDs/revisions. Runner consumes and deletes it before finalization. Retry
+ordinals and fresh attempt IDs are recorded in existing run-summary proof;
+raw Cookie, token, proxy credential, Profile path, and signature material stay
+outside persistent rows and snapshots.
+
 Content persistence alone is not identity proof. Authenticated status requires
 platform-specific self-identity or an equivalent strong login-state result.

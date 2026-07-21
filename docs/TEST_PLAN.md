@@ -3347,6 +3347,15 @@ body-aware signer exists.
   raw Cookie, token, proxy credentials, Profile path, CDP endpoint, or
   signature material.
 
+Packet D verification receipt (2026-07-22): `84` dedicated tests and `704`
+complete monitoring tests pass. Coverage includes all terminal categories,
+HTTP 408 terminal timeout, same-resolution/fresh-attempt retry, stale and
+cross-attempt result rejection, one-use handles, cancellation during retry
+delay, Windows process-tree termination, pre-write log redaction, non-login
+account-state preservation, XHS RetryError cause preservation, and managed
+Core propagation. Focused independent review returns `PASS` with no remaining
+P0/P1/P2.
+
 ### Packet E Real Acceptance
 
 - Use temporary Profiles and synthetic material for automatic tests; block real

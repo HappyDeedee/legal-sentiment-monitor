@@ -334,6 +334,11 @@ def test_cr129_packet_a_request_proof_file_is_safe_and_bound(tmp_path, monkeypat
 
 def test_cr129_packet_a_runner_handoff_includes_only_safe_request_binding(tmp_path):
     from api.monitoring import runner
+    from tools.browser_environment import PLAN_ENV_NAME, PLAN_PATH_ENV_NAME
+    from tools.crawler_attempt import (
+        CRAWLER_ATTEMPT_RESULT_ENV_NAME,
+        CRAWLER_RETRY_ORDINAL_ENV_NAME,
+    )
 
     plan = _plan()
     account_binding = {
@@ -364,22 +369,34 @@ def test_cr129_packet_a_runner_handoff_includes_only_safe_request_binding(tmp_pa
     )
     browser_result = tmp_path / "browser-result.json"
     request_result = tmp_path / "request-result.json"
+    plan_path = tmp_path / "browser-plan.json"
+    attempt_result = tmp_path / "attempt-result.json"
     env = runner._build_crawler_env(
         account_binding,
         plan,
         browser_result,
         request_binding=binding,
         request_result_path=request_result,
+        plan_path=plan_path,
+        attempt_result_path=attempt_result,
+        retry_ordinal=1,
     )
 
     restored = platform_request_binding_from_json(env[REQUEST_BINDING_ENV_NAME])
     assert restored.account_id == plan.account_id
     assert restored.attempt_id == plan.attempt_id
     assert env[REQUEST_RESULT_PATH_ENV_NAME] == str(request_result.resolve())
+    assert PLAN_ENV_NAME not in env
+    assert env[PLAN_PATH_ENV_NAME] == str(plan_path.resolve())
+    assert env[CRAWLER_ATTEMPT_RESULT_ENV_NAME] == str(attempt_result.resolve())
+    assert env[CRAWLER_RETRY_ORDINAL_ENV_NAME] == "1"
     safe_payload = env[REQUEST_BINDING_ENV_NAME]
     assert plan.profile_path not in safe_payload
     assert "profile_path" not in safe_payload
     assert "proxy_url" not in safe_payload
+    assert plan.profile_path not in json.dumps(env)
+    if plan.proxy_url:
+        assert plan.proxy_url not in json.dumps(env)
 
 
 def test_cr129_packet_a_child_establishes_and_writes_current_environment(tmp_path, monkeypatch):

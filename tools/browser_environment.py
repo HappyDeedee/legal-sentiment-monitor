@@ -16,6 +16,7 @@ from urllib.parse import unquote, urlsplit
 
 
 PLAN_ENV_NAME = "MONITOR_BROWSER_ENVIRONMENT_PLAN"
+PLAN_PATH_ENV_NAME = "MONITOR_BROWSER_ENVIRONMENT_PLAN_PATH"
 RESULT_PATH_ENV_NAME = "MONITOR_BROWSER_ENVIRONMENT_RESULT_PATH"
 PLAN_MAX_BYTES = 8192
 SNAPSHOT_MAX_BYTES = 65536
@@ -292,12 +293,48 @@ def browser_environment_plan_from_json(payload: str) -> BrowserEnvironmentPlan:
         raise BrowserEnvironmentError("account_identity_provider_unsupported", "plan") from exc
 
 
+def write_browser_environment_plan_handle(
+    destination: Path,
+    plan: BrowserEnvironmentPlan,
+) -> None:
+    path = Path(destination).resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = browser_environment_plan_to_json(plan)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        temporary.write_text(payload, encoding="utf-8")
+        try:
+            os.chmod(temporary, 0o600)
+        except OSError:
+            pass
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def plan_from_environment(required: bool = False) -> BrowserEnvironmentPlan | None:
     global _cached_plan
     with _cache_lock:
         if _cached_plan is not None:
             return _cached_plan
         payload = os.environ.pop(PLAN_ENV_NAME, "")
+        handle_value = os.environ.pop(PLAN_PATH_ENV_NAME, "")
+        if payload and handle_value:
+            raise BrowserEnvironmentError(
+                "account_identity_provider_unsupported",
+                "plan_authority",
+            )
+        handle_path = Path(handle_value).resolve() if handle_value else None
+        if handle_path is not None:
+            try:
+                payload = handle_path.read_text(encoding="utf-8")
+            except OSError as exc:
+                raise BrowserEnvironmentError(
+                    "account_identity_provider_unsupported",
+                    "plan_handle",
+                ) from exc
+            finally:
+                handle_path.unlink(missing_ok=True)
         if not payload:
             if required:
                 raise BrowserEnvironmentError("account_identity_provider_unsupported", "plan")

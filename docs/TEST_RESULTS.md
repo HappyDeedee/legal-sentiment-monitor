@@ -2,6 +2,43 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-22 - CR-129 Packet D Verified
+
+Scope: managed child error taxonomy, retry inheritance, process/lock terminal
+states, one-use handoff files, XHS/Douyin propagation, and secret-leakage
+tripwires.
+
+Result: `Verified`.
+
+- Packet D dedicated tests: `84 passed, 1 warning`.
+- Complete monitoring regression: `704 passed, 3 warnings`.
+- The final repository-wide run reported `817 passed, 8 skipped, 7 failed,
+  4 warnings`: six failures require local Redis on `127.0.0.1:6379`, and one
+  is the documented pre-existing XHS Excel factory assertion. None of those
+  files is changed by Packet D.
+- Only `transient_network` retries. Timeout/408, login, Cookie, verification,
+  rate, proxy, signature, identity, protocol, cancellation, and crash are
+  terminal. Retries keep resolution and identity/Cookie/proxy revisions while
+  receiving a fresh attempt ID.
+- Child terminal results are strict, fresh, exactly bound, read once, and then
+  deleted. Windows stop/timeout uses process-tree cleanup. Cancellation during
+  retry delay releases the account lock and starts no second request.
+- Managed stdout is piped through generic and exact-secret redaction before
+  writing to disk. Tests cover argv, environment, logs, proof/result files,
+  Profile paths, executable paths, raw Cookie/token/proxy/signature material,
+  and non-login account-state preservation.
+- Initial independent review returned three alleged P0 and additional P1/P2
+  items. RED/GREEN fixes added immediate result consumption, pre-write logging,
+  408 classification, RetryError cause preservation, process-tree/account-state
+  and cancellation coverage. Focused re-review confirmed the remaining prior
+  findings were correct-by-design, returned `PASS`, no remaining P0/P1/P2, and
+  atomic commit readiness `YES`.
+- Python compile, JavaScript syntax, whitespace, docs consistency, and
+  documentation regression are rerun after this synchronized receipt.
+- No real platform collection was used in Packet D. Designated accounts `8972`
+  and `9196` remain reserved for Packet E; protected accounts `9197` and `9198`
+  were not used.
+
 ## 2026-07-22 - CR-129 Packet C Verified
 
 Scope: Douyin managed Profile/Cookie/request identity, Profile token source,

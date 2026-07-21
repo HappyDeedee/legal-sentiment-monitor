@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 from urllib.parse import parse_qs, urlsplit
 
 import pytest
+import httpx
 
 from tools.platform_request_environment import (
     REQUEST_RESULT_PATH_ENV_NAME,
@@ -571,3 +572,159 @@ def test_cr129_packet_c_douyin_proof_persists_and_runner_requires_signed_success
     runner_module._validate_managed_dispatch_proofs("dy", environment, tuple(proofs))
     with pytest.raises(RuntimeError, match="Douyin request dispatch proof is missing"):
         runner_module._validate_managed_dispatch_proofs("dy", environment, ())
+
+
+def test_cr129_packet_d_managed_douyin_rejects_non_object_response(monkeypatch):
+    from media_platform.douyin import client as client_module
+    from media_platform.douyin.client import DouYinClient
+    from tools.crawler_attempt import CrawlerAttemptFailure
+
+    environment = _environment()
+    identity = _identity(environment=environment)
+
+    async def fake_sign(uri, params, post_data, user_agent, page):
+        return "synthetic-signature"
+
+    class Response:
+        status_code = 200
+        text = "[]"
+
+        def json(self):
+            return []
+
+    class HttpClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def request(self, method, url, **kwargs):
+            return Response()
+
+    monkeypatch.setattr(client_module, "get_a_bogus", fake_sign)
+    monkeypatch.setattr(client_module, "make_async_client", lambda proxy: HttpClient())
+    client = DouYinClient(
+        proxy=None,
+        headers=_headers(environment),
+        playwright_page=object(),
+        cookie_dict=_cookie_dict(),
+        request_environment=environment,
+        request_identity=identity,
+    )
+
+    with pytest.raises(CrawlerAttemptFailure) as exc_info:
+        asyncio.run(client.get("/api/test", {"keyword": "synthetic"}))
+
+    assert exc_info.value.category == "platform_protocol_changed"
+    assert exc_info.value.reason_code == "douyin_response_invalid"
+
+
+@pytest.mark.parametrize(
+    ("response_or_error", "expected_category"),
+    [
+        (
+            httpx.ReadTimeout(
+                "synthetic timeout",
+                request=httpx.Request("GET", "https://www.douyin.com/api/test"),
+            ),
+            "timeout",
+        ),
+        (503, "transient_network"),
+        (408, "timeout"),
+    ],
+)
+def test_cr129_packet_d_managed_douyin_classifies_transient_boundaries(
+    monkeypatch,
+    response_or_error,
+    expected_category,
+):
+    import httpx
+
+    from media_platform.douyin import client as client_module
+    from media_platform.douyin.client import DouYinClient
+    from tools.crawler_attempt import CrawlerAttemptFailure
+
+    environment = _environment()
+    identity = _identity(environment=environment)
+
+    async def fake_sign(uri, params, post_data, user_agent, page):
+        return "synthetic-signature"
+
+    response_status = response_or_error if isinstance(response_or_error, int) else 200
+
+    class Response:
+        status_code = response_status
+        text = "synthetic gateway response"
+
+        def json(self):
+            return {"status_code": 0}
+
+    class HttpClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *args):
+            return False
+
+        async def request(self, method, url, **kwargs):
+            if isinstance(response_or_error, BaseException):
+                raise response_or_error
+            return Response()
+
+    monkeypatch.setattr(client_module, "get_a_bogus", fake_sign)
+    monkeypatch.setattr(client_module, "make_async_client", lambda proxy: HttpClient())
+    client = DouYinClient(
+        proxy=None,
+        headers=_headers(environment),
+        playwright_page=object(),
+        cookie_dict=_cookie_dict(),
+        request_environment=environment,
+        request_identity=identity,
+    )
+
+    with pytest.raises(CrawlerAttemptFailure) as exc_info:
+        asyncio.run(client.get("/api/test", {"keyword": "synthetic"}))
+
+    assert exc_info.value.category == expected_category
+
+
+def test_cr129_packet_d_managed_douyin_core_propagates_client_failure():
+    from media_platform.douyin.core import DouYinCrawler
+    from media_platform.douyin.exception import DataFetchError
+
+    crawler = object.__new__(DouYinCrawler)
+    crawler.platform_request_environment = _environment()
+
+    class Client:
+        async def get_video_by_id(self, aweme_id):
+            raise DataFetchError("synthetic managed failure")
+
+    crawler.dy_client = Client()
+
+    with pytest.raises(DataFetchError, match="synthetic managed failure"):
+        asyncio.run(crawler.get_aweme_detail("synthetic-aweme", asyncio.Semaphore(1)))
+
+
+def test_cr129_packet_d_managed_douyin_comment_task_failure_propagates(monkeypatch):
+    import config
+
+    from media_platform.douyin.core import DouYinCrawler
+    from tools.crawler_attempt import CrawlerAttemptFailure
+
+    crawler = object.__new__(DouYinCrawler)
+    crawler.platform_request_environment = _environment()
+
+    async def fail_comment(aweme_id, semaphore):
+        raise CrawlerAttemptFailure(
+            "signature_mismatch",
+            "douyin_comment_signature_mismatch",
+        )
+
+    crawler.get_comments = fail_comment
+    monkeypatch.setattr(config, "ENABLE_GET_COMMENTS", True)
+
+    with pytest.raises(CrawlerAttemptFailure) as exc_info:
+        asyncio.run(crawler.batch_get_note_comments(["synthetic-aweme"]))
+
+    assert exc_info.value.category == "signature_mismatch"

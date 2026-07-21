@@ -5,7 +5,7 @@
 - CR: CR-129
 - Type: Phase 5.1 follow-up regression fix; account-environment hardening;
   platform-request identity consistency
-- Status: Accepted / In Progress (Packets A-C verified; Packet D next)
+- Status: Accepted / In Progress (Packets A-D verified; Packet E next)
 - Baseline: `main@6cffdbaf0c0ffca8863192c962918a37349f10a4`
 - Branch: `codex/cr-129-request-identity-consistency`
 - Owner: project implementation lane
@@ -300,13 +300,27 @@ Proxy expiry, proxy revision drift, proxy region mismatch, and proxy block are
 terminal managed-environment errors (`proxy_expired`, `proxy_revision_mismatch`,
 `proxy_region_mismatch`, `proxy_blocked`) and require a new explicit
 resolution. They do not refresh the proxy inside an in-flight attempt.
-Transient connection timeout/refusal may retry within the configured count and
-deadline. Each retry gets a new `attempt_id`, inherits the same
+Explicit transport reset/refusal may retry within the configured count and
+deadline; timeout remains terminal. Each retry gets a new `attempt_id`, inherits the same
 `resolution_id` and verified environment revision, records its retry ordinal,
 and stops at the budget or any terminal platform error.
 
 Exit gate: terminal-state, stale-callback, cancellation, restart, crash,
 retry, and leakage tests pass.
+
+Packet D implementation receipt (2026-07-22): `Verified`. The child terminal
+contract covers all 14 categories, binds exact account/Profile/run/revision
+state, and is consumed once by the parent. Only `transient_network` retries;
+each retry has a new attempt ID and unchanged resolution/identity/Cookie/proxy
+revisions. The parent rejects missing, stale, cross-attempt, or conflicting
+terminal evidence. Windows cleanup terminates the complete child process tree.
+Managed stdout is redacted before disk write, with final sanitizer and
+argv/environment/result tripwires as defense in depth. Dedicated tests pass
+`84`; complete monitoring passes `704`; the repository-wide run reports `817`
+passed with only six local-Redis dependency failures and the documented
+pre-existing XHS Excel factory assertion. The initial review findings were
+fixed or resolved with call-chain evidence; focused re-review returned `PASS`,
+no remaining P0/P1/P2, and atomic readiness `YES`. Packet E is next.
 
 ### Packet E - Compatibility And Real Acceptance
 
