@@ -4,6 +4,16 @@ Last updated: 2026-07-22
 
 ## Current Baseline
 
+- CR-130 is a Verified follow-up regression. A new account in Cookie mode
+  could accept pasted Cookie text in the form, but the modal footer
+  `保存账号` path only persisted metadata and never invoked Cookie-to-Profile
+  promotion. The resulting draft had no committed Cookie/Profile material and
+  correctly failed the later login-state check. The frontend fix is now in
+  place; focused `38` and complete monitoring `708` tests, compile, JavaScript,
+  docs, whitespace, and independent read-only review pass. Live test account
+  `9212` completed Cookie promotion and Profile creation with no current
+  error; protected collection accounts were not changed.
+
 - CR-129 is the completed implementation lane on branch
   `codex/cr-129-request-identity-consistency`, based on merged
   `main@6cffdbaf0c0ffca8863192c962918a37349f10a4`. It is currently

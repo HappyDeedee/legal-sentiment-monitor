@@ -130,6 +130,7 @@ Status values:
 - CR-127: Unified Account Login Authority And Cookie/Profile Reliability
 - CR-128: Saved Cookie Recovery After Profile Drift
 - CR-129: Account Profile And Platform Request Identity Consistency
+- CR-130: Cookie Account Save Promotion Consistency
 - CR-096: AI Evaluation Postprocessing Scope Reduction
 - CR-075: Responsive Navigation Interaction Consistency
 - CR-076: Mobile Header Layout Resilience Regression Fix
@@ -4856,6 +4857,84 @@ Acceptance and rollback:
 - The packet plan is the CR-095-compatible execution artifact. Its status is
   Accepted/Ready for Implementation after Claude deep review reached READY;
   packet code still moves through In Progress and Verified independently.
+
+## CR-130 - Cookie Account Save Promotion Consistency
+
+Date: 2026-07-22
+
+Source: operator report that a new account created from a copied Cookie could
+not be recognized and login-state checking reported that no web login existed.
+
+Module: Platform Account form, manual Cookie submission, Cookie-to-Profile
+promotion, and new-account draft persistence.
+
+Type: Regression Fix
+
+Status: Verified
+
+Baseline:
+
+- CR-123, CR-127, and CR-128 are verified and remain the authority for the
+  three login methods, structured Cookie import, and Profile/Cookie promotion.
+- The explicit `验证并保存 Cookie` button already called the promotion route.
+- The modal footer `保存账号` button only called metadata persistence, so a
+  pasted Cookie was left in the browser form and never reached the server.
+  A subsequent login-state check therefore correctly found no Profile or
+  saved Cookie for that draft.
+
+Confirmed boundary:
+
+- Committed Profile remains the browser and crawl authority.
+- Encrypted Cookie remains initialization, refresh, recovery, and migration
+  material; raw Cookie is never sent through ordinary metadata persistence.
+- The explicit Cookie promotion service and its candidate/rollback rules are
+  reused; this CR does not create a second promotion implementation.
+- Existing-account metadata-only saves remain valid when no Cookie operation
+  is pending.
+
+In scope:
+
+- Route a pending Cookie entered in the active Cookie login method through the
+  existing promotion flow when either form save control is used.
+- Prevent a new Cookie-mode account with empty Cookie input from being saved
+  as an unconfigured QR draft through the footer control.
+- Preserve clear-Cookie behavior, failure rollback, ordinary account saves,
+  and customer-visible progress/error text.
+- Add frontend behavior coverage, affected regression coverage, and docs.
+
+Out of scope:
+
+- Changes to Cookie parsing, encryption, Profile creation, platform identity
+  checks, browser selection, QR login, Browser auto-sync, schema, or crawler
+  request identity.
+- Reading, rewriting, or migrating any real account Cookie/Profile.
+
+Acceptance criteria:
+
+- New account + active Cookie method + pasted plain or structured Cookie:
+  both `验证并保存 Cookie` and footer `保存账号` reach the same
+  `/cookie-promotion` flow and commit the destination Profile/Cookie only
+  after validation.
+- New account + active Cookie method + empty input: no account draft is
+  created by the footer control; the form tells the operator to paste Cookie.
+- Existing account + active Cookie method + no pending Cookie: footer save
+  retains ordinary metadata-save behavior.
+- Promotion failure or interruption leaves the previously committed authority
+  unchanged and leaves the form retryable.
+- No raw Cookie enters ordinary account payloads, logs, URLs, argv, or
+  environment variables.
+- Focused behavior tests, affected monitoring regression, syntax, docs,
+  whitespace, and independent read-only review pass.
+
+Live verification (2026-07-22):
+
+- A disposable operator-created Xiaohongshu account completed the manual
+  Cookie import flow after the fix. Its login session reached `success`, its
+  Cookie-to-Profile promotion reached `committed`, and its persistent Profile
+  runtime version is `1`.
+- The account is `active`, has no current error, and its Profile directory is
+  present after the service continued running. The verification used only
+  the operator's test account; no protected collection account was changed.
 
 ## CR-113 - QR Draft Account Identity Choice Forwarding
 

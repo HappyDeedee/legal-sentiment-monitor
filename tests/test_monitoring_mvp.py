@@ -26354,6 +26354,150 @@ def test_cr123_account_login_methods_are_three_peer_panels():
     assert "['qrcode','browser','cookie']" in page
 
 
+def test_cr130_bottom_account_save_routes_pending_cookie_through_promotion():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+
+    cookie_save = page.split("async function saveCurrentPlatformCookieLogin", 1)[1].split(
+        "function browserCookieSyncAvailable", 1
+    )[0]
+    account_save = page.split("async function saveSocialAccount()", 1)[1].split(
+        "async function persistSocialAccount", 1
+    )[0]
+
+    assert "async function saveCurrentPlatformCookieLogin(options={})" in page
+    assert "const buttonId=options.buttonId || 'account_cookie_save_button';" in cookie_save
+    assert "withActionButtonLoading(buttonId" in cookie_save
+    promotion_failure = cookie_save.split("if(!saved){", 1)[1].split("}", 1)[0]
+    assert "return null;" in promotion_failure
+    assert "const cookieInput=val('social_account_cookie_input').trim();" in account_save
+    assert "activeSocialLoginMethod==='cookie'" in account_save
+    assert "await saveCurrentPlatformCookieLogin({buttonId:'account_save_button'})" in account_save
+    assert account_save.index("activeSocialLoginMethod==='cookie'") < account_save.index(
+        "withActionButtonLoading('account_save_button'"
+    )
+    assert "if(!existing){" in account_save
+    assert "请先粘贴 Cookie，再保存账号" in account_save
+
+
+def test_cr130_bottom_account_save_behavior_promotes_cookie_without_empty_draft():
+    from playwright.sync_api import sync_playwright
+
+    page_source = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+
+    def function_source(start: str, end: str) -> str:
+        return start + page_source.split(start, 1)[1].split(end, 1)[0]
+
+    production_functions = "\n".join(
+        [
+            function_source(
+                "async function saveCurrentPlatformCookieLogin(options={})",
+                "function browserCookieSyncAvailable",
+            ),
+            function_source(
+                "async function saveSocialAccount()",
+                "async function persistSocialAccount",
+            ),
+        ]
+    )
+    harness = f"""
+      let activeSocialLoginMethod = 'cookie';
+      let accountIdentityChangeMode = false;
+      const socialAccountCache = new Map();
+      const calls = {{ buttons:[], persist:[], api:[], toasts:[] }};
+      function val(id) {{ return document.getElementById(id)?.value || ''; }}
+      function set(id, value) {{ const field=document.getElementById(id); if(field) field.value=value ?? ''; }}
+      function ensureAccountIdentityCanLogin() {{ return true; }}
+      function accountIdentityPreloginState() {{ return false; }}
+      function toast(message) {{ calls.toasts.push(message); }}
+      function loadingNote(message) {{ return message; }}
+      async function withActionButtonLoading(buttonId, label, work) {{
+        calls.buttons.push({{ buttonId, label }});
+        return await work();
+      }}
+      async function persistSocialAccount(overrides={{}}) {{
+        calls.persist.push(overrides);
+        return {{ id:1301, platform:'dy', profile_key:'1/dy/acc_1301' }};
+      }}
+      async function api(path, options={{}}) {{
+        calls.api.push({{ path, body:JSON.parse(options.body || '{{}}') }});
+        return {{
+          ok:true,
+          json:async()=>({{ account:{{ id:1301, platform:'dy', login_type:'cookie', has_cookies:true }} }}),
+        }};
+      }}
+      async function err() {{ return 'synthetic error'; }}
+      function stopLoginSessionPolling() {{}}
+      function stopBrowserCookieSyncPolling() {{}}
+      function stopVisibleLoginReconciliation() {{}}
+      function syncAccountFromResponse() {{}}
+      async function loadAccountsPool() {{}}
+      async function loadReadiness() {{}}
+      async function loadDoctor() {{}}
+      async function loadDashboard() {{}}
+      function editSocialAccount() {{}}
+      function renderLoginModePanel() {{}}
+      {production_functions}
+      window.__cr130 = {{
+        async run(existing=false) {{
+          if(existing) socialAccountCache.set(1301, {{ id:1301, platform:'dy' }});
+          await saveSocialAccount();
+          return {{
+            calls,
+            cookieValue:document.getElementById('social_account_cookie_input').value,
+          }};
+        }},
+      }};
+    """
+
+    def run_scenario(browser, *, cookie: str, existing: bool) -> dict[str, Any]:
+        page = browser.new_page()
+        try:
+            account_id = "1301" if existing else ""
+            page.set_content(
+                f"""
+                <input id="social_account_id" value="{account_id}">
+                <input id="social_account_name" value="CR-130 synthetic">
+                <textarea id="social_account_cookie_input">{cookie}</textarea>
+                <input id="social_account_clear_cookie" type="checkbox">
+                <div id="cookie_login_result"></div>
+                """
+            )
+            page.add_script_tag(content=harness)
+            return page.evaluate("existing => window.__cr130.run(existing)", existing)
+        finally:
+            page.close()
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            promoted = run_scenario(
+                browser,
+                cookie="sessionid=synthetic-cr130",
+                existing=False,
+            )
+            empty_new = run_scenario(browser, cookie="", existing=False)
+            metadata_only = run_scenario(browser, cookie="", existing=True)
+        finally:
+            browser.close()
+
+    assert promoted["calls"]["buttons"] == [
+        {"buttonId": "account_save_button", "label": "保存中..."}
+    ]
+    assert promoted["calls"]["persist"] == [{"login_type": "qrcode"}]
+    assert promoted["calls"]["api"] == [
+        {
+            "path": "/social-accounts/1301/cookie-promotion",
+            "body": {"cookies": "sessionid=synthetic-cr130"},
+        }
+    ]
+    assert promoted["cookieValue"] == ""
+    assert empty_new["calls"]["persist"] == []
+    assert empty_new["calls"]["api"] == []
+    assert empty_new["calls"]["toasts"] == ["请先粘贴 Cookie，再保存账号"]
+    assert metadata_only["calls"]["persist"] == [{}]
+    assert metadata_only["calls"]["api"] == []
+
+
 def test_cr125_account_list_hides_raw_identity_and_separates_recognition_time():
     page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
     css = Path("api/webui/monitor/monitor.css").read_text(encoding="utf-8")
