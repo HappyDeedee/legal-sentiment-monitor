@@ -4321,6 +4321,20 @@
       }
       return res;
     }
+    async function loginApi(path, options={}, timeoutMs=45000){
+      const controller=new AbortController();
+      const timer=setTimeout(()=>controller.abort(), Math.max(1000, Number(timeoutMs)||45000));
+      try{
+        return await api(path,{...options,signal:controller.signal});
+      } finally {
+        clearTimeout(timer);
+      }
+    }
+    function loginQrRequestTimeoutMs(){
+      const configured=Number(runtimeSettingsCache?.login_qr_timeout_seconds?.value);
+      const seconds=Number.isFinite(configured) && configured>=5 ? Math.min(300, configured) : 20;
+      return Math.max(45000, seconds*1000+15000);
+    }
     async function authApi(path, options={}){
       return fetch('/api/auth' + path, {headers:{'Content-Type':'application/json'}, ...options});
     }
@@ -6791,10 +6805,17 @@
         if(!account){
           account=await persistSocialAccount({login_type:'qrcode'});
           if(!account){ toast('请先填写并保存账号基本资料'); return; }
+          selectSocialLoginType('browser');
         }
         const result=document.getElementById('browser_login_result');
         if(result) result.innerHTML='<div class="login-flow-card">正在准备浏览器登录窗口...</div>';
-        const res=await api('/social-accounts/'+Number(account.id)+'/browser-sync',{method:'POST',body:JSON.stringify({})});
+        let res;
+        try{
+          res=await loginApi('/social-accounts/'+Number(account.id)+'/browser-sync',{method:'POST',body:JSON.stringify({})});
+        }catch(error){
+          browserCookieSyncResultNote(error?.name==='AbortError'?'浏览器登录启动超时，请检查服务窗口中的阶段提示后重试。':'浏览器登录启动请求中断，请重试。','warn');
+          return;
+        }
         if(!res.ok){ if(result) browserCookieSyncResultNote(await err(res),'warn'); return; }
         const data=await res.json();
         const session=data.session||{};
@@ -6987,7 +7008,7 @@
         if(visibleLoginReconcileToken!==token) return;
         rounds -= 1;
         try{
-          const res=await api('/platform-status/'+encodeURIComponent(platform)+'/login-browser/reconcile',{method:'POST',body:JSON.stringify({account_id:numericAccountId})});
+          const res=await loginApi('/platform-status/'+encodeURIComponent(platform)+'/login-browser/reconcile',{method:'POST',body:JSON.stringify({account_id:numericAccountId})},60000);
           if(visibleLoginReconcileToken!==token) return;
           if(!res.ok){ visibleLoginResultNote(await err(res),'warn'); finish(); return; }
           const data=await res.json();
@@ -7037,7 +7058,13 @@
         const result=document.getElementById('browser_login_result');
         if(result) result.innerHTML=`<div class="login-flow-card">${loadingNote('正在打开平台登录窗口...')}</div>`;
         const body=accountId ? JSON.stringify({account_id:accountId}) : JSON.stringify({});
-        const res=await api('/platform-status/'+platform+'/login-browser',{method:'POST',body});
+        let res;
+        try{
+          res=await loginApi('/platform-status/'+platform+'/login-browser',{method:'POST',body});
+        }catch(error){
+          if(result) result.innerHTML=`<div class="small warn">${esc(error?.name==='AbortError'?'登录窗口启动超时，请查看服务窗口中的阶段提示。':'登录窗口启动请求中断，请重试。')}</div>`;
+          return;
+        }
         if(!res.ok){ toast(await err(res)); return; }
         const data=await res.json();
         if(result) result.innerHTML=`<div class="small">${esc(data.message||'登录窗口已打开，系统将自动检测并保存登录状态。')}</div>`;
@@ -7076,7 +7103,16 @@
         proxy_region_snapshot:val('social_account_proxy_region'),
         identity_template_family:val('social_account_identity_template_family')
       };
-      const res=await api('/login-sessions',{method:'POST',body:JSON.stringify(payload)});
+      let res;
+      try{
+        res=await loginApi('/login-sessions',{method:'POST',body:JSON.stringify(payload)},loginQrRequestTimeoutMs());
+      }catch(error){
+        const message=error?.name==='AbortError'?'二维码生成超时，请查看服务窗口中的阶段提示或使用浏览器登录。':'二维码请求中断，请重试。';
+        const result=document.getElementById('login_session_result');
+        if(result) result.innerHTML=`<div class="login-flow-card"><div class="small warn">${esc(message)}</div></div>`;
+        toast(message);
+        return;
+      }
       if(!res.ok){ toast(await err(res)); return; }
       const data=await res.json();
       if(data.account_status && data.account_status.id){
@@ -7092,7 +7128,16 @@
       if(!account || !account.id){ toast('请先选择账号，或在新建账号中生成二维码登录'); return; }
       if(!ensureAccountIdentityCanLogin(account)) return;
       const payload={platform:account.platform,account_id:account.id||null};
-      const res=await api('/login-sessions',{method:'POST',body:JSON.stringify(payload)});
+      let res;
+      try{
+        res=await loginApi('/login-sessions',{method:'POST',body:JSON.stringify(payload)},loginQrRequestTimeoutMs());
+      }catch(error){
+        const message=error?.name==='AbortError'?'二维码生成超时，请查看服务窗口中的阶段提示或使用浏览器登录。':'二维码请求中断，请重试。';
+        const result=document.getElementById('login_session_result');
+        if(result) result.innerHTML=`<div class="login-flow-card"><div class="small warn">${esc(message)}</div></div>`;
+        toast(message);
+        return;
+      }
       if(!res.ok){ toast(await err(res)); return; }
       const data=await res.json();
       syncAccountFromResponse(data.account_status);
@@ -8076,8 +8121,9 @@
     async function openCurrentAccountLoginBrowser(){
       let account=socialAccountCache.get(Number(val('social_account_id')||0));
       if(!account){
-        toast('请先打开已有账号详情，或使用二维码登录完成后自动保存');
-        return;
+        account=await persistSocialAccount({login_type:'qrcode'});
+        if(!account) return;
+        selectSocialLoginType('browser');
       }
       if(!ensureAccountIdentityCanLogin(account)) return;
       if(!localLoginWindowAllowed(account.platform)){

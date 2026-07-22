@@ -66,6 +66,19 @@ shared local browser preflight before service startup:
 5. Installer failure or failed post-install verification stops startup and
    returns `uv run playwright install chromium`.
 
+Both scripts start through `api.monitoring.startup_launcher`, wait for
+`/api/health` to return the exact spawned process ID, and open the browser only
+after that check passes. A stale listener on the selected port therefore stops
+startup instead of opening an older service. `start_monitor_oneclick.bat`
+keeps the service detached; `start_webui.bat` keeps Uvicorn output attached to
+the console and waits in the foreground.
+
+For these two Windows local launchers only, absent values default to
+`MONITOR_BROWSER_COOKIE_SYNC_ENABLED=true`,
+`MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=true`, and
+`MONITOR_LOGIN_QR_HEADLESS=false`. Explicit environment values win. The
+service-only and Docker/server defaults below remain unchanged.
+
 The selection manifest stores only a contract version, browser source/channel,
 and local executable path under `MONITOR_DATA_DIR`; it is not customer-facing.
 Its sibling lock file is a transient cross-process synchronization artifact,

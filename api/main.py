@@ -114,7 +114,7 @@ async def serve_monitor_frontend():
 
 @app.get("/api/health")
 async def health_check():
-    return {"status": "ok"}
+    return {"status": "ok", "process_id": os.getpid()}
 
 
 @app.get("/api/env/check")

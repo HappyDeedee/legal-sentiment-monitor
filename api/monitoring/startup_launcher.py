@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import subprocess
 import sys
@@ -8,6 +9,7 @@ import time
 import webbrowser
 from dataclasses import dataclass
 from pathlib import Path
+from typing import Mapping
 from urllib.request import urlopen
 
 from .browser_selection import (
@@ -22,6 +24,11 @@ DEFAULT_BIND_HOST = "0.0.0.0"
 DEFAULT_PORT = 8080
 LOCAL_BROWSER_HOST = "127.0.0.1"
 MANUAL_BROWSER_INSTALL_COMMAND = "uv run playwright install chromium"
+WINDOWS_LOCAL_LOGIN_DEFAULTS = {
+    "MONITOR_BROWSER_COOKIE_SYNC_ENABLED": "true",
+    "MONITOR_ALLOW_LOCAL_LOGIN_WINDOW": "true",
+    "MONITOR_LOGIN_QR_HEADLESS": "false",
+}
 
 
 @dataclass(frozen=True)
@@ -48,9 +55,16 @@ def build_launch_plan(bind_host: str | None, port: int, browser_url: str | None 
     )
 
 
-def start_oneclick(bind_host: str | None, port: int, browser_url: str | None = None, health_timeout_seconds: float = 45.0) -> LaunchPlan:
+def start_oneclick(
+    bind_host: str | None,
+    port: int,
+    browser_url: str | None = None,
+    health_timeout_seconds: float = 45.0,
+    *,
+    foreground: bool = False,
+) -> LaunchPlan:
     plan = build_launch_plan(bind_host, port, browser_url)
-    env = os.environ.copy()
+    env = apply_windows_local_login_defaults(os.environ) if os.name == "nt" else dict(os.environ)
     env["MONITOR_HOST"] = plan.bind_host
     env["MONITOR_PORT"] = str(plan.port)
     if browser_url:
@@ -59,18 +73,33 @@ def start_oneclick(bind_host: str | None, port: int, browser_url: str | None = N
         plan.command,
         cwd=ROOT,
         env=env,
-        stdout=subprocess.DEVNULL,
-        stderr=subprocess.DEVNULL,
+        stdout=None if foreground else subprocess.DEVNULL,
+        stderr=None if foreground else subprocess.DEVNULL,
         text=True,
-        **_popen_kwargs(),
+        **_popen_kwargs(foreground=foreground),
     )
     try:
         _wait_for_health(plan.probe_url, process, health_timeout_seconds)
         webbrowser.open(plan.browser_url)
+        if foreground:
+            try:
+                process.wait()
+            except KeyboardInterrupt:
+                _terminate(process)
+            if process.returncode not in {None, 0}:
+                raise RuntimeError(f"service exited with code {process.returncode}")
         return plan
     except Exception:
         _terminate(process)
         raise
+
+
+def apply_windows_local_login_defaults(env: Mapping[str, str]) -> dict[str, str]:
+    prepared = dict(env)
+    for key, value in WINDOWS_LOCAL_LOGIN_DEFAULTS.items():
+        if not str(prepared.get(key) or "").strip():
+            prepared[key] = value
+    return prepared
 
 
 def ensure_oneclick_browser() -> Path:
@@ -122,6 +151,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--browser-url", default=os.environ.get("MONITOR_BROWSER_URL"))
     parser.add_argument("--health-timeout-seconds", type=float, default=float(os.environ.get("MONITOR_STARTUP_HEALTH_TIMEOUT_SECONDS", 45.0)))
     parser.add_argument("--browser-preflight-only", action="store_true")
+    parser.add_argument("--foreground", action="store_true")
     args = parser.parse_args(argv)
 
     try:
@@ -129,7 +159,13 @@ def main(argv: list[str] | None = None) -> int:
         if args.browser_preflight_only:
             print(f"浏览器预检通过: {browser_path.name}")
             return 0
-        plan = start_oneclick(args.host, args.port, args.browser_url, args.health_timeout_seconds)
+        plan = start_oneclick(
+            args.host,
+            args.port,
+            args.browser_url,
+            args.health_timeout_seconds,
+            foreground=args.foreground,
+        )
     except Exception as exc:
         print(f"启动失败: {type(exc).__name__}: {exc}", file=sys.stderr)
         return 1
@@ -162,7 +198,8 @@ def _wait_for_health(probe_url: str, process: subprocess.Popen[str], health_time
             raise RuntimeError(f"service exited early with code {process.returncode}")
         try:
             with urlopen(probe_url, timeout=2) as response:
-                if "ok" in response.read().decode("utf-8"):
+                payload = json.loads(response.read().decode("utf-8"))
+                if payload.get("status") == "ok" and int(payload.get("process_id") or 0) == int(process.pid):
                     return
         except Exception:
             time.sleep(0.5)
@@ -197,8 +234,8 @@ def _build_url(host: str, port: int, path: str) -> str:
     return f"http://{host}:{port}{path}"
 
 
-def _popen_kwargs() -> dict[str, object]:
-    if os.name != "nt":
+def _popen_kwargs(*, foreground: bool = False) -> dict[str, object]:
+    if os.name != "nt" or foreground:
         return {}
     creationflags = getattr(subprocess, "DETACHED_PROCESS", 0) | getattr(subprocess, "CREATE_NEW_PROCESS_GROUP", 0)
     return {"creationflags": creationflags} if creationflags else {}

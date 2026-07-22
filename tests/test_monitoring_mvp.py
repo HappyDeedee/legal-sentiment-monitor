@@ -3650,6 +3650,94 @@ def test_cr112_managed_browser_close_accepts_normal_process_exit_race(monkeypatc
     asyncio.run(browser_environment.close_managed_browser_session(FakeContext(), None, (owned,)))
 
 
+def test_cr132_managed_browser_close_timeout_still_reaps_owned_process(monkeypatch):
+    from tools import browser_environment
+    from tools.browser_environment import ManagedBrowserProcess
+
+    owned = ManagedBrowserProcess(pid=201, executable_name="chrome.exe", creation_time=2010)
+    events: list[str] = []
+
+    class HangingContext:
+        async def close(self):
+            events.append("close_started")
+            await asyncio.Event().wait()
+
+    monkeypatch.setattr(browser_environment, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(browser_environment, "managed_browser_processes", lambda value: ())
+    monkeypatch.setattr(browser_environment, "_browser_close_timeout_seconds", lambda: 0.02)
+    monkeypatch.setattr(
+        browser_environment,
+        "_terminate_owned_windows_processes",
+        lambda processes: events.append(f"terminated:{processes[0].pid}") is None,
+    )
+
+    asyncio.run(
+        asyncio.wait_for(
+            browser_environment.close_managed_browser_session(HangingContext(), None, (owned,)),
+            timeout=0.3,
+        )
+    )
+
+    assert events == ["close_started", "terminated:201"]
+
+
+def test_cr132_failed_launch_cleanup_reaps_driver_owned_process_without_context(monkeypatch):
+    from tools import browser_environment
+    from tools.browser_environment import ManagedBrowserProcess
+
+    owned = ManagedBrowserProcess(pid=301, executable_name="chrome.exe", creation_time=3010)
+    terminated: list[ManagedBrowserProcess] = []
+    playwright = object()
+
+    monkeypatch.setattr(browser_environment, "os", SimpleNamespace(name="nt", environ={}))
+    monkeypatch.setattr(
+        browser_environment,
+        "managed_playwright_processes",
+        lambda value: (owned,) if value is playwright else (),
+    )
+    monkeypatch.setattr(
+        browser_environment,
+        "_terminate_owned_windows_processes",
+        lambda processes: terminated.extend(processes) is None,
+    )
+
+    asyncio.run(browser_environment._close_failed_launch(playwright, None, None))
+
+    assert terminated == [owned]
+
+
+def test_cr132_failed_launch_cleanup_keeps_preexisting_driver_descendants(monkeypatch):
+    from tools import browser_environment
+    from tools.browser_environment import ManagedBrowserProcess
+
+    initial = ManagedBrowserProcess(pid=401, executable_name="chrome.exe", creation_time=4010)
+    spawned = ManagedBrowserProcess(pid=402, executable_name="chrome.exe", creation_time=4020)
+    terminated: list[ManagedBrowserProcess] = []
+
+    monkeypatch.setattr(browser_environment, "os", SimpleNamespace(name="nt", environ={}))
+    monkeypatch.setattr(
+        browser_environment,
+        "managed_playwright_processes",
+        lambda value: (initial, spawned),
+    )
+    monkeypatch.setattr(
+        browser_environment,
+        "_terminate_owned_windows_processes",
+        lambda processes: terminated.extend(processes) is None,
+    )
+
+    asyncio.run(
+        browser_environment._close_failed_launch(
+            object(),
+            None,
+            None,
+            (initial,),
+        )
+    )
+
+    assert {process.pid for process in terminated} == {401, 402}
+
+
 @pytest.mark.parametrize("remaining", [True, None])
 def test_cr112_managed_browser_close_rejects_unresolved_owned_process(monkeypatch, remaining):
     from tools import browser_environment
@@ -7528,6 +7616,54 @@ def test_cr120_reconcile_route_checks_once_after_operator_closes_window(monkeypa
         _restore_table("social_accounts", snapshot)
 
 
+def test_cr132_visible_login_reconcile_terminalizes_account_check_stage_timeout(monkeypatch, tmp_path):
+    init_db()
+    snapshot = _snapshot_table("social_accounts")
+    try:
+        account = _login_test_account("dy", tmp_path)
+        database_module.prepare_social_account_identity_login(
+            int(account["id"]), trigger_source="visible_browser_login"
+        )
+        account = get_social_account(int(account["id"]), masked=False)
+        window = {
+            "is_open": False,
+            "pid": None,
+            "debug_port": 19323,
+            "opened_at": "2026-07-22T08:00:00+00:00",
+            "closed_at": "2026-07-22T08:01:00+00:00",
+            "profile_key": account["profile_key"],
+            "profile_path": str(resolve_account_profile_path(str(account["profile_key"]))),
+        }
+
+        async def timed_out_check(account_id, **kwargs):
+            assert account_id == account["id"]
+            return {
+                "ok": False,
+                "status": "account_check_stage_timeout",
+                "stage": "启动账号浏览器",
+                "message": "登录态检测超时（阶段：启动账号浏览器），请重试。",
+                "account": account,
+            }
+
+        monkeypatch.setattr(monitor_router, "_local_login_window_allowed", lambda: True)
+        monkeypatch.setattr(monitor_router, "login_window_status", lambda platform: window)
+        monkeypatch.setattr(monitor_router, "check_social_account_login", timed_out_check)
+        monkeypatch.setattr(monitor_router, "record_login_window_reconciliation", lambda *args, **kwargs: None)
+
+        result = asyncio.run(
+            monitor_router.reconcile_platform_login_browser(
+                "dy", {"account_id": account["id"]}, {"id": 1, "role": "administrator"}
+            )
+        )
+
+        assert result["status"] == "failed"
+        assert result["login_window_open"] is False
+        assert result["stage"] == "启动账号浏览器"
+        assert "启动账号浏览器" in result["message"]
+    finally:
+        _restore_table("social_accounts", snapshot)
+
+
 def test_cr120_reconcile_route_rejects_mismatched_profile_window(monkeypatch, tmp_path):
     init_db()
     snapshot = _snapshot_table("social_accounts")
@@ -7595,6 +7731,8 @@ def test_windows_oneclick_launcher_opens_browser_after_health(monkeypatch):
     seen = {}
 
     class FakeProcess:
+        pid = 43210
+
         def __init__(self):
             self.poll_calls = 0
             self.returncode = None
@@ -7616,7 +7754,7 @@ def test_windows_oneclick_launcher_opens_browser_after_health(monkeypatch):
 
     class FakeResponse:
         def read(self):
-            return b'{"status":"ok"}'
+            return b'{"status":"ok","process_id":43210}'
 
         def __enter__(self):
             return self
@@ -7629,6 +7767,9 @@ def test_windows_oneclick_launcher_opens_browser_after_health(monkeypatch):
         seen["env_host"] = kwargs["env"]["MONITOR_HOST"]
         seen["env_port"] = kwargs["env"]["MONITOR_PORT"]
         seen["env_browser_url"] = kwargs["env"].get("MONITOR_BROWSER_URL")
+        seen["browser_sync"] = kwargs["env"].get("MONITOR_BROWSER_COOKIE_SYNC_ENABLED")
+        seen["local_window"] = kwargs["env"].get("MONITOR_ALLOW_LOCAL_LOGIN_WINDOW")
+        seen["qr_headless"] = kwargs["env"].get("MONITOR_LOGIN_QR_HEADLESS")
         return FakeProcess()
 
     monkeypatch.setattr("api.monitoring.startup_launcher.subprocess.Popen", fake_popen)
@@ -7641,7 +7782,113 @@ def test_windows_oneclick_launcher_opens_browser_after_health(monkeypatch):
     assert seen["env_host"] == "0.0.0.0"
     assert seen["env_port"] == "8080"
     assert seen["env_browser_url"] == "http://10.0.0.12:8080/monitor"
+    assert seen["browser_sync"] == "true"
+    assert seen["local_window"] == "true"
+    assert seen["qr_headless"] == "false"
     assert seen["opened"] == "http://10.0.0.12:8080/monitor"
+
+
+def test_cr132_oneclick_health_rejects_a_stale_service_process(monkeypatch):
+    class FakeProcess:
+        pid = 43210
+        returncode = 1
+
+        def __init__(self):
+            self.poll_calls = 0
+
+        def poll(self):
+            self.poll_calls += 1
+            return None if self.poll_calls == 1 else 1
+
+    class StaleResponse:
+        def read(self):
+            return b'{"status":"ok","process_id":9876}'
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr(
+        "api.monitoring.startup_launcher.urlopen",
+        lambda url, timeout=2: StaleResponse(),
+    )
+    monkeypatch.setattr("api.monitoring.startup_launcher.time.sleep", lambda seconds: None)
+
+    with pytest.raises(RuntimeError, match="service exited early"):
+        api_monitoring_startup_launcher._wait_for_health(
+            "http://127.0.0.1:8080/api/health",
+            FakeProcess(),
+            1,
+        )
+
+
+def test_cr132_foreground_launcher_waits_with_visible_service_output(monkeypatch):
+    seen: dict[str, object] = {}
+
+    class FakeProcess:
+        pid = 43211
+        returncode = None
+
+        def poll(self):
+            return None
+
+        def wait(self):
+            seen["waited"] = True
+            self.returncode = 0
+            return 0
+
+        def terminate(self):
+            raise AssertionError("healthy foreground service must not be terminated")
+
+    class FakeResponse:
+        def read(self):
+            return b'{"status":"ok","process_id":43211}'
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    def fake_popen(*args, **kwargs):
+        seen["stdout"] = kwargs["stdout"]
+        seen["stderr"] = kwargs["stderr"]
+        seen["creationflags"] = kwargs.get("creationflags")
+        return FakeProcess()
+
+    monkeypatch.setattr(api_monitoring_startup_launcher.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(api_monitoring_startup_launcher, "urlopen", lambda *args, **kwargs: FakeResponse())
+    monkeypatch.setattr(api_monitoring_startup_launcher.webbrowser, "open", lambda url: seen.setdefault("opened", url))
+
+    plan = api_monitoring_startup_launcher.start_oneclick(
+        "127.0.0.1",
+        18082,
+        health_timeout_seconds=1,
+        foreground=True,
+    )
+
+    assert plan.browser_url == "http://127.0.0.1:18082/monitor"
+    assert seen["stdout"] is None
+    assert seen["stderr"] is None
+    assert seen["creationflags"] is None
+    assert seen["opened"] == plan.browser_url
+    assert seen["waited"] is True
+
+
+def test_cr132_windows_local_login_defaults_preserve_explicit_operator_values():
+    prepared = api_monitoring_startup_launcher.apply_windows_local_login_defaults(
+        {
+            "MONITOR_BROWSER_COOKIE_SYNC_ENABLED": "false",
+            "MONITOR_ALLOW_LOCAL_LOGIN_WINDOW": "false",
+            "MONITOR_LOGIN_QR_HEADLESS": "true",
+        }
+    )
+
+    assert prepared["MONITOR_BROWSER_COOKIE_SYNC_ENABLED"] == "false"
+    assert prepared["MONITOR_ALLOW_LOCAL_LOGIN_WINDOW"] == "false"
+    assert prepared["MONITOR_LOGIN_QR_HEADLESS"] == "true"
 
 
 def test_cr117_clean_local_selection_prefers_chrome_and_persists(tmp_path, monkeypatch):
@@ -8127,17 +8374,52 @@ def test_cr117_local_batches_check_uv_and_share_browser_preflight():
     assert "api.monitoring.startup_launcher" in oneclick
     assert normalized.index("where uv") < launcher_index
     assert launcher_index < exit_code_index < pause_index < exit_index
+    assert 'if "%monitor_browser_cookie_sync_enabled%"=="" set "monitor_browser_cookie_sync_enabled=true"' in normalized
+    assert 'if "%monitor_allow_local_login_window%"=="" set "monitor_allow_local_login_window=true"' in normalized
+    assert 'if "%monitor_login_qr_headless%"=="" set "monitor_login_qr_headless=false"' in normalized
 
     webui = Path("start_webui.bat").read_text(encoding="utf-8").lower()
-    webui_preflight = webui.index(
-        "uv run python -m api.monitoring.startup_launcher --browser-preflight-only"
-    )
-    webui_service = webui.index("uv run uvicorn api.main:app")
+    webui_launcher = webui.index("uv run python -m api.monitoring.startup_launcher --host")
+    webui_exit_code = webui.index('set "startup_exit_code=%errorlevel%"')
     assert "where uv" in webui
-    assert webui.index("where uv") < webui_preflight < webui_service
+    assert webui.index("where uv") < webui_launcher < webui_exit_code
+    assert "--foreground" in webui
+    assert "--browser-preflight-only" not in webui
+    assert "uv run uvicorn api.main:app" not in webui
+    assert 'start "" "%monitor_browser_url%"' not in webui
+    assert 'if "%monitor_browser_cookie_sync_enabled%"=="" set "monitor_browser_cookie_sync_enabled=true"' in webui
+    assert 'if "%monitor_allow_local_login_window%"=="" set "monitor_allow_local_login_window=true"' in webui
+    assert 'if "%monitor_login_qr_headless%"=="" set "monitor_login_qr_headless=false"' in webui
 
     service_only = Path("start_monitor_service.bat").read_text(encoding="utf-8").lower()
     assert "browser-preflight-only" not in service_only
+
+
+def test_cr132_new_account_can_open_browser_login_and_login_requests_are_bounded():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    start = page.index("async function openCurrentAccountLoginBrowser()")
+    end = page.index("async function openAccountLoginBrowser", start)
+    block = page[start:end]
+
+    assert "account=await persistSocialAccount({login_type:'qrcode'})" in block
+    assert "selectSocialLoginType('browser')" in block
+    assert "await openPlatformLoginBrowser(account.platform, Number(account.id)" in block
+    assert "请先打开已有账号详情" not in block
+    assert "async function loginApi(" in page
+    assert "controller.abort()" in page
+    assert "function loginQrRequestTimeoutMs()" in page
+    assert "runtimeSettingsCache?.login_qr_timeout_seconds?.value" in page
+    assert "loginApi('/login-sessions'" in page
+    assert "loginApi('/social-accounts/'+Number(account.id)+'/browser-sync'" in page
+    assert "loginApi('/platform-status/'+platform+'/login-browser'" in page
+    assert "loginApi('/platform-status/'+encodeURIComponent(platform)+'/login-browser/reconcile'" in page
+    sync_start = page.index("async function startBrowserCookieSyncFromForm()")
+    sync_end = page.index("function renderBrowserCookieSyncSession", sync_start)
+    sync_block = page[sync_start:sync_end]
+    persist_index = sync_block.index("account=await persistSocialAccount({login_type:'qrcode'})")
+    reselect_index = sync_block.index("selectSocialLoginType('browser')", persist_index)
+    request_index = sync_block.index("loginApi('/social-accounts/'", reselect_index)
+    assert persist_index < reselect_index < request_index
 
 
 def test_job_validation_rejects_operator_input_errors():
@@ -12738,6 +13020,118 @@ def test_qrcode_start_has_outer_timeout_and_closes_half_initialized_browser(monk
     assert "close" in events
     assert "stop" in events
     assert 888002 not in login_qrcode_module.ACTIVE_LOGIN_SESSIONS
+
+
+def test_cr132_qrcode_stage_and_cleanup_timeouts_return_terminal_result(monkeypatch, tmp_path):
+    from tools import browser_environment
+
+    events: list[str] = []
+
+    class FakePage:
+        def __init__(self):
+            self.context = None
+
+        def set_default_timeout(self, timeout):
+            pass
+
+        async def goto(self, *args, **kwargs):
+            pass
+
+    class FakeContext:
+        def __init__(self):
+            self.pages = [FakePage()]
+            self.pages[0].context = self
+
+        async def close(self):
+            events.append("close_started")
+            await asyncio.Event().wait()
+
+    class FakeChromium:
+        async def launch_persistent_context(self, **kwargs):
+            return FakeContext()
+
+    class FakePlaywright:
+        chromium = FakeChromium()
+
+        async def stop(self):
+            events.append("stop_started")
+            await asyncio.Event().wait()
+
+    class FakePlaywrightFactory:
+        async def start(self):
+            return FakePlaywright()
+
+    async def not_logged_in(*args, **kwargs):
+        return False
+
+    async def empty_baseline(*args, **kwargs):
+        return ""
+
+    async def hanging_prepare(*args, **kwargs):
+        await asyncio.Event().wait()
+
+    monkeypatch.setenv("MONITOR_LOGIN_BROWSER_STARTUP_STAGE_TIMEOUT_SECONDS", "0.02")
+    monkeypatch.setenv("MONITOR_LOGIN_BROWSER_CLEANUP_TIMEOUT_SECONDS", "0.02")
+    monkeypatch.setattr(browser_environment, "_browser_close_timeout_seconds", lambda: 0.02)
+    monkeypatch.setattr(login_qrcode_module, "async_playwright", lambda: FakePlaywrightFactory())
+    monkeypatch.setattr(login_qrcode_module, "_login_baseline", empty_baseline)
+    monkeypatch.setattr(login_qrcode_module, "_is_logged_in", not_logged_in)
+    monkeypatch.setattr(login_qrcode_module, "_build_mediacrawler_login_adapter", lambda *args: object())
+    monkeypatch.setattr(login_qrcode_module, "_prepare_login_page", hanging_prepare)
+
+    result = asyncio.run(
+        asyncio.wait_for(
+            login_qrcode_module.start_qrcode_login_session_with_profile(
+                888132,
+                "dy",
+                {
+                    "profile_path": str(tmp_path / "dy_profile"),
+                    "browser_path": "chrome",
+                },
+                timeout_ms=500,
+            ),
+            timeout=0.3,
+        )
+    )
+
+    assert result["status"] == "qrcode_failed"
+    assert result["stage"] == "准备平台登录页"
+    assert "准备平台登录页" in result["message"]
+    assert events == ["close_started", "stop_started"]
+    assert 888132 not in login_qrcode_module.ACTIVE_LOGIN_SESSIONS
+
+
+def test_cr132_qrcode_startup_stage_failure_skips_secondary_profile_check(monkeypatch):
+    session = {"id": 91320, "account_id": 81320, "status": "preparing", "qr_image": ""}
+
+    async def unexpected_check(*args, **kwargs):
+        raise AssertionError("startup timeout must not start a second browser check")
+
+    def fake_update(session_id, status, message, qr_image=""):
+        return {**session, "status": status, "message": message, "qr_image": qr_image}
+
+    monkeypatch.setattr(monitor_router, "check_social_account_login", unexpected_check)
+    monkeypatch.setattr(
+        monitor_router,
+        "_recover_prepared_account_identity",
+        lambda *args, **kwargs: {"id": session["account_id"], "status": "limited"},
+    )
+    monkeypatch.setattr(monitor_router, "update_login_session_status", fake_update)
+
+    reconciled, account = asyncio.run(
+        monitor_router._reconcile_login_session_with_account_check(
+            session,
+            {
+                "stage": "启动账号浏览器",
+                "message": "登录二维码生成超时（阶段：启动账号浏览器）。",
+            },
+            "qrcode_failed",
+        )
+    )
+
+    assert reconciled["status"] == "qrcode_failed"
+    assert "启动账号浏览器" in reconciled["message"]
+    assert account["id"] == session["account_id"]
 
 
 def test_qrcode_login_defaults_to_server_headless_browser(monkeypatch):
@@ -25945,6 +26339,326 @@ def test_cr112_c2_wait_terminal_boundaries(case, expected_reason, expected_statu
 
     assert exc_info.value.reason == expected_reason
     assert login_browser_sync._status_for_reason(expected_reason) == expected_status
+
+
+def test_cr132_browser_sync_startup_stage_timeout_terminalizes_session(monkeypatch):
+    from api.monitoring import login_browser_sync
+    from api.monitoring.login_browser_sync import BrowserSyncHandle
+
+    statuses: list[tuple[int, str, str]] = []
+
+    class HangingPlaywrightFactory:
+        async def start(self):
+            await asyncio.Event().wait()
+
+    handle = BrowserSyncHandle(
+        session_id=9132,
+        account_id=8132,
+        profile_key="1/dy/acc_8132",
+        platform="dy",
+        actor_id=1,
+        acquisition_generation=1,
+        created_at=datetime.now(timezone.utc),
+    )
+    login_browser_sync.ACTIVE_BROWSER_SYNC_SESSIONS[handle.session_id] = handle
+    monkeypatch.setattr(login_browser_sync, "async_playwright", lambda: HangingPlaywrightFactory())
+    monkeypatch.setattr(
+        login_browser_sync,
+        "_workspace_account",
+        lambda account_id, workspace_id: {"id": account_id, "profile_key": handle.profile_key, "platform": "dy"},
+    )
+    monkeypatch.setattr(login_browser_sync, "_browser_sync_stage_timeout_seconds", lambda: 0.02)
+    monkeypatch.setattr(
+        login_browser_sync,
+        "_set_session_status",
+        lambda session_id, status, message: statuses.append((session_id, status, message)),
+    )
+    monkeypatch.setattr(login_browser_sync, "_record_browser_sync_terminal", lambda *args: None)
+
+    asyncio.run(asyncio.wait_for(login_browser_sync._run_browser_cookie_sync(handle), timeout=0.3))
+
+    assert handle.finalized is True
+    assert handle.session_id not in login_browser_sync.ACTIVE_BROWSER_SYNC_SESSIONS
+    assert statuses[0][1:] == ("preparing", "正在启动浏览器组件。")
+    assert statuses[-1][1] == "timeout"
+    assert "启动浏览器组件" in statuses[-1][2]
+
+
+def test_cr132_account_check_startup_stage_timeout_returns_terminal_result(monkeypatch, tmp_path):
+    profile_path = tmp_path / "profile"
+    profile_path.mkdir()
+
+    class HangingPlaywrightFactory:
+        async def start(self):
+            await asyncio.Event().wait()
+
+    monkeypatch.setattr(
+        account_check_module,
+        "account_profile_environment",
+        lambda account: {"runtime_path": str(profile_path)},
+    )
+    monkeypatch.setattr(account_check_module, "async_playwright", lambda: HangingPlaywrightFactory())
+    monkeypatch.setattr(account_check_module, "_account_check_stage_timeout_seconds", lambda: 0.02)
+    monkeypatch.setattr(account_check_module, "_account_check_cleanup_timeout_seconds", lambda: 0.02)
+
+    result = asyncio.run(
+        asyncio.wait_for(
+            account_check_module._check_profile_account({"id": 81321, "platform": "dy"}, 100),
+            timeout=0.3,
+        )
+    )
+
+    assert result["ok"] is False
+    assert result["status"] == "account_check_stage_timeout"
+    assert result["_stage"] == "启动浏览器检测组件"
+    assert "启动浏览器检测组件" in result["message"]
+
+
+def test_cr132_account_check_cleanup_steps_have_independent_timeout(monkeypatch):
+    from tools.browser_environment import BrowserEnvironmentError
+
+    events: list[str] = []
+
+    async def hanging_close(*args, **kwargs):
+        events.append("browser")
+        await asyncio.Event().wait()
+
+    class HangingPlaywright:
+        async def stop(self):
+            events.append("playwright")
+            await asyncio.Event().wait()
+
+    monkeypatch.setattr(account_check_module, "close_managed_browser_session", hanging_close)
+    monkeypatch.setattr(account_check_module, "_account_check_cleanup_timeout_seconds", lambda: 0.02)
+    monkeypatch.setattr(account_check_module, "managed_browser_cleanup_timeout_seconds", lambda: 0.02)
+
+    with pytest.raises(BrowserEnvironmentError, match="account_identity_provider_browser_cleanup_failed"):
+        asyncio.run(
+            asyncio.wait_for(
+                account_check_module._close_account_check_browser(object(), None, HangingPlaywright()),
+                timeout=0.3,
+            )
+        )
+
+    assert events == ["browser", "playwright"]
+
+
+def test_cr132_account_check_waits_for_managed_browser_reap_before_stopping_driver(monkeypatch):
+    events: list[str] = []
+
+    async def delayed_close(*args, **kwargs):
+        events.append("browser_started")
+        await asyncio.sleep(0.05)
+        events.append("browser_reaped")
+
+    class FakePlaywright:
+        async def stop(self):
+            events.append("playwright_stopped")
+
+    monkeypatch.setattr(account_check_module, "close_managed_browser_session", delayed_close)
+    monkeypatch.setattr(account_check_module, "_account_check_cleanup_timeout_seconds", lambda: 0.02)
+    monkeypatch.setattr(account_check_module, "managed_browser_cleanup_timeout_seconds", lambda: 0.1)
+
+    asyncio.run(
+        asyncio.wait_for(
+            account_check_module._close_account_check_browser(object(), None, FakePlaywright()),
+            timeout=0.3,
+        )
+    )
+
+    assert events == ["browser_started", "browser_reaped", "playwright_stopped"]
+
+
+def test_cr132_account_check_stage_waits_for_cancel_cleanup_before_return(monkeypatch):
+    events: list[str] = []
+
+    async def delayed_cancel_cleanup():
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            events.append("cleanup_started")
+            await asyncio.sleep(0.05)
+            events.append("cleanup_finished")
+            raise
+
+    async def scenario():
+        with pytest.raises(account_check_module.AccountCheckStageTimeout):
+            await account_check_module._run_account_check_stage(
+                delayed_cancel_cleanup(),
+                "启动账号浏览器",
+            )
+        events.append("stage_returned")
+
+    monkeypatch.setattr(account_check_module, "_account_check_stage_timeout_seconds", lambda: 0.02)
+    monkeypatch.setattr(account_check_module, "_account_check_cleanup_timeout_seconds", lambda: 0.02)
+    monkeypatch.setattr(account_check_module, "managed_browser_cleanup_timeout_seconds", lambda: 0.1)
+
+    asyncio.run(asyncio.wait_for(scenario(), timeout=0.3))
+
+    assert events == ["cleanup_started", "cleanup_finished", "stage_returned"]
+
+
+@pytest.mark.parametrize("stage", ["候选 Profile 验证", "活动 Profile 复检"])
+def test_cr132_profile_validation_timeout_drains_cancelled_runner(stage, monkeypatch):
+    from api.monitoring import profile_promotion
+    from api.monitoring.profile_promotion import ProfilePromotionError
+
+    finalized = {"value": False}
+
+    async def hanging_runner():
+        try:
+            await asyncio.Event().wait()
+        except asyncio.CancelledError:
+            await asyncio.sleep(0.03)
+            finalized["value"] = True
+            raise
+
+    async def scenario():
+        baseline_tasks = set(asyncio.all_tasks())
+        with pytest.raises(ProfilePromotionError) as exc_info:
+            await profile_promotion._run_profile_validation_stage(hanging_runner(), stage)
+        assert exc_info.value.reason == "profile_validation_stage_timeout"
+        await asyncio.sleep(0)
+        return [
+            task
+            for task in asyncio.all_tasks() - baseline_tasks
+            if not task.done()
+        ]
+
+    monkeypatch.setattr(profile_promotion, "_profile_validation_timeout_seconds", lambda: 0.02)
+    monkeypatch.setattr(profile_promotion, "_profile_validation_cleanup_timeout_seconds", lambda: 0.1)
+
+    pending = asyncio.run(asyncio.wait_for(scenario(), timeout=0.3))
+
+    assert finalized["value"] is True
+    assert pending == []
+
+
+def test_cr132_profile_cleanup_timeout_preserves_predecessor_without_unsafe_rollback(tmp_path, monkeypatch):
+    from api.monitoring import account_environment, browser_environment_provider, profile_promotion
+    from api.monitoring.browser_selection import BrowserSelection
+    from api.monitoring.cookie_material import parse_manual_cookie_material
+    from api.monitoring.profile_promotion import ProfilePromotionError, profile_promotion_paths
+
+    profile_root = (tmp_path / "profiles").resolve()
+    browser_path = (tmp_path / "edge.exe").resolve()
+    browser_path.write_bytes(b"synthetic browser")
+    monkeypatch.setattr(account_environment, "ACCOUNT_PROFILE_ROOT", profile_root)
+    monkeypatch.setattr(
+        browser_environment_provider,
+        "resolve_browser_selection",
+        lambda *args, **kwargs: BrowserSelection(browser_path, "system_edge", "edge"),
+    )
+    monkeypatch.setattr(profile_promotion, "_profile_validation_timeout_seconds", lambda: 0.02)
+    monkeypatch.setattr(profile_promotion, "_profile_validation_cleanup_timeout_seconds", lambda: 0.02)
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "account_profile_promotions": _snapshot_table("account_profile_promotions"),
+        "login_sessions": _snapshot_table("login_sessions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        account = save_social_account(
+            {
+                "name": "CR-132 cleanup guard",
+                "platform": "dy",
+                "login_type": "cookie",
+                "cookies": "legacy=must-stay",
+                "status": "active",
+            }
+        )
+        account = get_social_account(account["id"], masked=False)
+        active_path = account_environment.resolve_account_profile_path(account["profile_key"])
+        active_path.mkdir(parents=True)
+        (active_path / "predecessor.txt").write_text("old", encoding="utf-8")
+        plan = browser_environment_provider.resolve_account_browser_environment(
+            account,
+            action="login_check",
+            trigger_source="cookie_profile_promotion",
+            headless=True,
+            launch_mode="persistent_launch",
+            proxy=None,
+            playwright_executable_path=str(browser_path),
+        )
+        calls = 0
+
+        async def delayed_cancel_runner(used_plan, injected_records):
+            nonlocal calls
+            calls += 1
+            path = Path(used_plan.profile_path)
+            if injected_records is not None:
+                (path / "candidate.txt").write_text("new", encoding="utf-8")
+                return {"ok": True, "identity": {}, "runtime_snapshot_json": ""}
+            try:
+                await asyncio.Event().wait()
+            except asyncio.CancelledError:
+                await asyncio.Event().wait()
+
+        with pytest.raises(ProfilePromotionError) as exc_info:
+            asyncio.run(
+                profile_promotion.promote_cookie_to_profile(
+                    account["id"],
+                    parse_manual_cookie_material("dy", "sessionid=new"),
+                    cookie_source="manual",
+                    actor_id=1,
+                    provider_plan=plan,
+                    browser_runner=delayed_cancel_runner,
+                )
+            )
+
+        with get_conn() as conn:
+            latest = dict(
+                conn.execute(
+                    "SELECT * FROM account_profile_promotions WHERE account_id=? ORDER BY id DESC LIMIT 1",
+                    (account["id"],),
+                ).fetchone()
+            )
+        paths = profile_promotion_paths(
+            account_id=account["id"],
+            profile_key=account["profile_key"],
+            promotion_id=latest["id"],
+        )
+        stored = get_social_account(account["id"], masked=False)
+
+        assert exc_info.value.reason == "profile_validation_cleanup_timeout"
+        assert calls == 2
+        assert latest["state"] == "recovery_required"
+        assert (paths.rollback / "predecessor.txt").read_text(encoding="utf-8") == "old"
+        assert (paths.active / "candidate.txt").read_text(encoding="utf-8") == "new"
+        assert stored["cookies"] == "legacy=must-stay"
+    finally:
+        _restore_table("account_profile_promotions", snapshots["account_profile_promotions"])
+        _restore_table("login_sessions", snapshots["login_sessions"])
+        _restore_table("social_accounts", snapshots["social_accounts"])
+        _restore_table("audit_logs", snapshots["audit_logs"])
+
+
+def test_cr132_visible_login_probe_reports_startup_stage_timeout(monkeypatch):
+    from api.monitoring import login_browser
+
+    class HangingPlaywrightFactory:
+        async def start(self):
+            await asyncio.Event().wait()
+
+    monkeypatch.setattr(login_browser, "async_playwright", lambda: HangingPlaywrightFactory())
+    monkeypatch.setattr(login_browser, "_login_browser_step_timeout_seconds", lambda timeout_ms: 0.02)
+
+    with pytest.raises(login_browser.LoginBrowserProbeError) as exc_info:
+        asyncio.run(
+            asyncio.wait_for(
+                login_browser.probe_login_browser_session(
+                    "dy",
+                    9323,
+                    expected_pid=1234,
+                    timeout_ms=100,
+                ),
+                timeout=0.3,
+            )
+        )
+
+    assert exc_info.value.stage == "启动浏览器检测组件"
+    assert "启动浏览器检测组件" in exc_info.value.message
 
 
 def test_cr112_c2_start_route_rejects_every_caller_supplied_parameter():

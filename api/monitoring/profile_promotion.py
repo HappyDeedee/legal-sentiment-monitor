@@ -21,6 +21,7 @@ from tools.browser_environment import (
     BrowserEnvironmentPlan,
     close_managed_browser_session,
     launch_managed_browser_context,
+    managed_browser_cleanup_timeout_seconds,
     managed_browser_processes,
     verify_managed_page,
 )
@@ -42,6 +43,8 @@ PROFILE_OPERATION_ROOT_NAME = ".profile_ops"
 PROFILE_LOCK_ROOT_NAME = ".profile_locks"
 PROMOTION_CLEANUP_DELAY = timedelta(hours=24)
 PROMOTION_MIN_FREE_BYTES = 256 * 1024 * 1024
+DEFAULT_PROFILE_VALIDATION_TIMEOUT_SECONDS = 90.0
+DEFAULT_PROFILE_VALIDATION_CLEANUP_TIMEOUT_SECONDS = 5.0
 
 
 class ProfilePromotionError(RuntimeError):
@@ -256,7 +259,10 @@ async def promote_cookie_to_profile(
                 launch_mode="persistent_launch",
                 profile_path=str(paths.candidate),
             )
-            candidate_result = await runner(candidate_plan, records)
+            candidate_result = await _run_profile_validation_stage(
+                runner(candidate_plan, records),
+                "候选 Profile 验证",
+            )
             _require_validation(candidate_result, "profile_candidate_validation_failed", int(promotion["id"]))
             _require_expected_platform_identity(
                 candidate_result,
@@ -281,7 +287,10 @@ async def promote_cookie_to_profile(
             update_account_profile_promotion(int(promotion["id"]), "swapping", checkpoint="candidate_moved_at")
 
             active_plan = replace(candidate_plan, profile_path=str(paths.active))
-            active_result = await runner(active_plan, None)
+            active_result = await _run_profile_validation_stage(
+                runner(active_plan, None),
+                "活动 Profile 复检",
+            )
             _require_validation(active_result, "profile_active_recheck_failed", int(promotion["id"]))
             _require_expected_platform_identity(
                 active_result,
@@ -314,7 +323,14 @@ async def promote_cookie_to_profile(
             }
     except ProfilePromotionError as exc:
         if promotion and paths and not _promotion_is_committed(int(promotion["id"])):
-            _recover_failed_promotion(promotion, paths, swapped, exc.reason)
+            if exc.reason == "profile_validation_cleanup_timeout":
+                _mark_recovery_required(
+                    int(promotion["id"]),
+                    int(promotion["account_id"]),
+                    exc.reason,
+                )
+            else:
+                _recover_failed_promotion(promotion, paths, swapped, exc.reason)
         if not promotion or not _promotion_is_committed(int(promotion["id"])):
             _mark_login_session_failed(login_session_id, exc.reason)
         raise
@@ -336,9 +352,99 @@ async def promote_cookie_to_profile(
     finally:
         if owned_playwright is not None:
             try:
-                await owned_playwright.stop()
+                await _run_profile_cleanup_step(owned_playwright.stop())
             except Exception:
                 pass
+
+
+async def _run_profile_validation_stage(awaitable: Awaitable[dict[str, Any]], stage: str) -> dict[str, Any]:
+    """Bound browser validation while leaving filesystem commit/rollback synchronous."""
+
+    task = asyncio.ensure_future(awaitable)
+    try:
+        done, _ = await asyncio.wait(
+            {task},
+            timeout=_profile_validation_timeout_seconds(),
+        )
+        if done:
+            return task.result()
+        task.cancel()
+        if not await _drain_profile_validation_task(task):
+            raise ProfilePromotionError(
+                "profile_validation_cleanup_timeout",
+                recovery_required=True,
+            )
+        raise ProfilePromotionError("profile_validation_stage_timeout")
+    except asyncio.CancelledError:
+        task.cancel()
+        if not await _drain_profile_validation_task(task):
+            raise ProfilePromotionError(
+                "profile_validation_cleanup_timeout",
+                recovery_required=True,
+            )
+        raise
+
+
+async def _drain_profile_validation_task(task: asyncio.Task[Any]) -> bool:
+    done, _ = await asyncio.wait(
+        {task},
+        timeout=_profile_validation_cleanup_timeout_seconds(),
+    )
+    if done:
+        _consume_profile_validation_task_result(task)
+        return True
+    task.add_done_callback(_consume_profile_validation_task_result)
+    return False
+
+
+async def _run_profile_cleanup_step(awaitable: Awaitable[Any]) -> None:
+    task = asyncio.ensure_future(awaitable)
+    done, _ = await asyncio.wait(
+        {task},
+        timeout=_profile_validation_cleanup_timeout_seconds(),
+    )
+    if done:
+        task.result()
+        return
+    task.cancel()
+    task.add_done_callback(_consume_profile_validation_task_result)
+
+
+def _consume_profile_validation_task_result(task: asyncio.Future[Any]) -> None:
+    try:
+        task.result()
+    except BaseException:
+        pass
+
+
+def _profile_validation_timeout_seconds() -> float:
+    try:
+        return max(
+            1.0,
+            min(
+                300.0,
+                float(os.environ.get("MONITOR_PROFILE_VALIDATION_TIMEOUT_SECONDS") or DEFAULT_PROFILE_VALIDATION_TIMEOUT_SECONDS),
+            ),
+        )
+    except (TypeError, ValueError):
+        return DEFAULT_PROFILE_VALIDATION_TIMEOUT_SECONDS
+
+
+def _profile_validation_cleanup_timeout_seconds() -> float:
+    try:
+        configured = max(
+            0.05,
+            min(
+                90.0,
+                float(os.environ.get("MONITOR_PROFILE_VALIDATION_CLEANUP_TIMEOUT_SECONDS") or DEFAULT_PROFILE_VALIDATION_CLEANUP_TIMEOUT_SECONDS),
+            ),
+        )
+        return max(configured, managed_browser_cleanup_timeout_seconds())
+    except (TypeError, ValueError):
+        return max(
+            DEFAULT_PROFILE_VALIDATION_CLEANUP_TIMEOUT_SECONDS,
+            managed_browser_cleanup_timeout_seconds(),
+        )
 
 
 def recover_profile_promotions(account_id: int | None = None) -> list[dict[str, Any]]:

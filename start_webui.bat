@@ -13,20 +13,16 @@ if errorlevel 1 (
 
 if "%MONITOR_HOST%"=="" set "MONITOR_HOST=127.0.0.1"
 if "%MONITOR_PORT%"=="" set "MONITOR_PORT=8080"
+if "%MONITOR_BROWSER_COOKIE_SYNC_ENABLED%"=="" set "MONITOR_BROWSER_COOKIE_SYNC_ENABLED=true"
+if "%MONITOR_ALLOW_LOCAL_LOGIN_WINDOW%"=="" set "MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=true"
+if "%MONITOR_LOGIN_QR_HEADLESS%"=="" set "MONITOR_LOGIN_QR_HEADLESS=false"
 if "%MONITOR_BROWSER_URL%"=="" (
     set "MONITOR_BROWSER_URL=http://127.0.0.1:%MONITOR_PORT%/monitor"
 )
 
-uv run python -m api.monitoring.startup_launcher --browser-preflight-only
-set "BROWSER_PREFLIGHT_EXIT_CODE=%ERRORLEVEL%"
-if not "%BROWSER_PREFLIGHT_EXIT_CODE%"=="0" (
-    pause
-    exit /b %BROWSER_PREFLIGHT_EXIT_CODE%
-)
-
 echo Starting legal sentiment monitor at %MONITOR_BROWSER_URL%
-start "" "%MONITOR_BROWSER_URL%"
-
-uv run uvicorn api.main:app --host %MONITOR_HOST% --port %MONITOR_PORT%
+uv run python -m api.monitoring.startup_launcher --host %MONITOR_HOST% --port %MONITOR_PORT% --browser-url "%MONITOR_BROWSER_URL%" --foreground
+set "STARTUP_EXIT_CODE=%ERRORLEVEL%"
 
 pause
+exit /b %STARTUP_EXIT_CODE%

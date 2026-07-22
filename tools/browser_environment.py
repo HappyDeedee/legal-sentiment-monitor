@@ -8,6 +8,7 @@ import json
 import os
 import re
 import threading
+import time
 from dataclasses import asdict, dataclass, fields
 from datetime import datetime, timezone
 from pathlib import Path
@@ -20,6 +21,8 @@ PLAN_PATH_ENV_NAME = "MONITOR_BROWSER_ENVIRONMENT_PLAN_PATH"
 RESULT_PATH_ENV_NAME = "MONITOR_BROWSER_ENVIRONMENT_RESULT_PATH"
 PLAN_MAX_BYTES = 8192
 SNAPSHOT_MAX_BYTES = 65536
+DEFAULT_BROWSER_CLOSE_TIMEOUT_SECONDS = 5.0
+OWNED_PROCESS_TERMINATION_TIMEOUT_SECONDS = 2.0
 
 _ACTIONS = frozenset({"qr_login", "cookie_validation", "login_check", "crawl"})
 _IDENTITY_STATES = frozenset(
@@ -407,6 +410,7 @@ async def launch_managed_browser_context(playwright: Any, plan: BrowserEnvironme
     options = browser_context_options(plan)
     browser = None
     context = None
+    initial_processes = managed_playwright_processes(playwright)
     try:
         if plan.profile_mode == "persistent":
             Path(plan.profile_path).mkdir(parents=True, exist_ok=True)
@@ -438,7 +442,10 @@ async def launch_managed_browser_context(playwright: Any, plan: BrowserEnvironme
                 exc.reason,
                 proxy_effect=effect,
             )
-        await _close_failed_launch(browser, context)
+        await _close_failed_launch(playwright, browser, context, initial_processes)
+        raise
+    except asyncio.CancelledError:
+        await _close_failed_launch(playwright, browser, context, initial_processes)
         raise
     except Exception as exc:
         failure = BrowserEnvironmentError("account_identity_provider_browser_crashed", "browser")
@@ -448,17 +455,27 @@ async def launch_managed_browser_context(playwright: Any, plan: BrowserEnvironme
             failure.reason,
             proxy_effect=effect,
         )
-        await _close_failed_launch(browser, context)
+        await _close_failed_launch(playwright, browser, context, initial_processes)
         raise failure from exc
 
 
 def managed_browser_processes(context: Any) -> tuple[ManagedBrowserProcess, ...]:
     """Return Windows browser descendants owned by this context's Playwright driver."""
 
+    impl = getattr(context, "_impl_obj", None)
+    return _managed_processes_for_connection(getattr(impl, "_connection", None))
+
+
+def managed_playwright_processes(playwright: Any) -> tuple[ManagedBrowserProcess, ...]:
+    """Return browser descendants owned by a Playwright driver before a context is returned."""
+
+    impl = getattr(playwright, "_impl_obj", None)
+    return _managed_processes_for_connection(getattr(impl, "_connection", None))
+
+
+def _managed_processes_for_connection(connection: Any) -> tuple[ManagedBrowserProcess, ...]:
     if os.name != "nt":
         return ()
-    impl = getattr(context, "_impl_obj", None)
-    connection = getattr(impl, "_connection", None)
     transport = getattr(connection, "_transport", None)
     process = getattr(transport, "_proc", None)
     try:
@@ -498,12 +515,14 @@ async def close_managed_browser_session(
     close_failed = False
     if context is not None:
         try:
-            await context.close()
+            if not await _bounded_close(context.close(), _browser_close_timeout_seconds()):
+                close_failed = True
         except Exception:
             close_failed = True
     if browser is not None:
         try:
-            await browser.close()
+            if not await _bounded_close(browser.close(), _browser_close_timeout_seconds()):
+                close_failed = True
         except Exception:
             close_failed = True
     cleanup_ok = True
@@ -745,9 +764,11 @@ def _terminate_owned_windows_processes(owned_processes: tuple[ManagedBrowserProc
             continue
         waiting.append(handle)
 
+    wait_deadline = time.monotonic() + OWNED_PROCESS_TERMINATION_TIMEOUT_SECONDS
     for handle in waiting:
         try:
-            if kernel32.WaitForSingleObject(handle, 2000) != 0:
+            remaining_ms = max(0, int((wait_deadline - time.monotonic()) * 1000))
+            if kernel32.WaitForSingleObject(handle, remaining_ms) != 0:
                 cleanup_ok = False
         finally:
             kernel32.CloseHandle(handle)
@@ -1442,17 +1463,76 @@ def _proxy_probe_timeout_ms() -> int:
     return value
 
 
-async def _close_failed_launch(browser: Any, context: Any) -> None:
-    if context is not None:
-        try:
-            await context.close()
-        except Exception:
-            pass
-    if browser is not None:
-        try:
-            await browser.close()
-        except Exception:
-            pass
+async def _close_failed_launch(
+    playwright: Any,
+    browser: Any,
+    context: Any,
+    initial_processes: tuple[ManagedBrowserProcess, ...] = (),
+) -> None:
+    owned: dict[int, ManagedBrowserProcess] = {
+        process.pid: process for process in initial_processes
+    }
+    if os.name == "nt":
+        for owner in (playwright, context):
+            try:
+                processes = (
+                    managed_playwright_processes(owner)
+                    if owner is playwright
+                    else managed_browser_processes(owner)
+                )
+                owned.update({process.pid: process for process in processes})
+            except Exception:
+                pass
+    try:
+        await close_managed_browser_session(context, browser, tuple(owned.values()))
+    except Exception:
+        pass
+
+
+def managed_browser_cleanup_timeout_seconds() -> float:
+    """Outer cleanup budget that preserves the inner close-and-reap sequence."""
+
+    return (_browser_close_timeout_seconds() * 2) + OWNED_PROCESS_TERMINATION_TIMEOUT_SECONDS + 1.0
+
+
+def _browser_close_timeout_seconds() -> float:
+    try:
+        environ = getattr(os, "environ", {})
+        return max(
+            0.05,
+            min(
+                30.0,
+                float(
+                    environ.get("MONITOR_BROWSER_CLOSE_TIMEOUT_SECONDS")
+                    or DEFAULT_BROWSER_CLOSE_TIMEOUT_SECONDS
+                ),
+            ),
+        )
+    except (TypeError, ValueError):
+        return DEFAULT_BROWSER_CLOSE_TIMEOUT_SECONDS
+
+
+async def _bounded_close(awaitable: Any, timeout_seconds: float) -> bool:
+    task = asyncio.ensure_future(awaitable)
+    try:
+        done, _ = await asyncio.wait({task}, timeout=max(0.001, timeout_seconds))
+        if done:
+            task.result()
+            return True
+        task.cancel()
+        task.add_done_callback(_consume_background_task_result)
+        return False
+    except asyncio.CancelledError:
+        task.cancel()
+        task.add_done_callback(_consume_background_task_result)
+        raise
+
+
+def _consume_background_task_result(task: asyncio.Future[Any]) -> None:
+    try:
+        task.result()
+    except BaseException:
+        pass
 
 
 def _requested_snapshot(plan: BrowserEnvironmentPlan) -> dict[str, Any]:

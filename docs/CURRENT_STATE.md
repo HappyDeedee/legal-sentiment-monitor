@@ -4,6 +4,25 @@ Last updated: 2026-07-22
 
 ## Current Baseline
 
+- CR-132 implementation is verified on
+  `codex/cr-132-windows-login-bootstrap`, based on `main@a0a8583`. Windows
+  local launchers now default browser auto-sync on, unsaved named accounts
+  persist before Browser entry, startup/account-check/Profile-validation and
+  cleanup phases are bounded and reported, failed launch cleanup reaps only
+  process-owned browser descendants, and launcher health accepts only its
+  newly started service process. A Profile validation timeout now waits for
+  managed cleanup before rollback; an unconfirmed cleanup marks the journal
+  `recovery_required` without touching Profile directories. Focused `18`,
+  adjacent `128`, and complete monitoring `727` tests pass. The latest focused
+  rerun adds one extra pre-launch descendant snapshot case (`19 passed`). Isolated
+  desktop/mobile browser checks pass for both new-account Browser paths and
+  runtime-aware QR timeout calculation. Python/JavaScript, documentation, and
+  whitespace gates pass, and final independent read-only re-review returned
+  PASS with no remaining P1/P2. Second-computer Douyin/Xiaohongshu QR and
+  Browser-login acceptance remains operator-gated after availability on
+  `main`. CR-117, CR-120, CR-122, and CR-127
+  remain verified historical baselines.
+
 - CR-130 is a Verified follow-up regression. A new account in Cookie mode
   could accept pasted Cookie text in the form, but the modal footer
   `保存账号` path only persisted metadata and never invoked Cookie-to-Profile

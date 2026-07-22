@@ -1356,6 +1356,9 @@ Accepted login model:
   independent actions after the account name is entered. Browser auto-sync
   persists the account and generated `profile_key` before launching the exact
   managed candidate Profile; generating a QR session is not a prerequisite;
+- the local visible-browser fallback follows the same named-account binding
+  rule: it persists the account and `profile_key` before opening, without
+  requiring an existing detail page or prior QR session;
 - keep Cookie import as an explicitly selected peer method rather than an
   automatic fallback. It accepts either a standard Cookie header or Structured
   Cookie Protocol V1 JSON; structured import preserves canonical scope and
@@ -1707,6 +1710,17 @@ QR capture validates the returned image bytes as an actual QR code. Platform
 advertisements, avatars, banners, and diagnostic screenshots are rejected;
 SMS/captcha/second-factor requirements remain `needs_verification` rather than
 being collapsed into QR extraction failure.
+
+CR-132 bounds QR/browser startup, account-level Profile verification, and
+browser/Playwright cleanup by safe named stages. A stage-specific QR startup
+failure terminalizes directly instead of opening a second Profile browser in
+the same request. Browser-sync candidate validation and post-swap active
+Profile recheck are each bounded; timeout still uses the existing promotion
+journal to preserve or restore the previously committed authority. Managed
+browser cancellation completes its process-owned close-and-reap sequence
+before rollback. If that completion is not confirmed inside the hard cleanup
+budget, the promotion becomes `recovery_required` and no Profile directory is
+renamed or deleted concurrently.
 
 CR-128 adds an explicit saved-state recovery path for Profile drift. The normal
 Profile check remains first. If a limited account has a recoverable failure and

@@ -172,12 +172,31 @@ strategy setting because production acceptance must use the server-side web QR
 flow.
 
 CR-112 browser auto-sync is controlled by deployment-only
-`MONITOR_BROWSER_COOKIE_SYNC_ENABLED`, default `false`. It is not a browser
-template field or ordinary frontend runtime setting. When false, no direct
-managed-browser acquisition or auto-sync action is activated; accepted
-the separately selected Cookie-import method and profile-only runtime behavior
-remain independent of this flag. The rejected Cookie-bridge WebSocket route
-remains absent in both feature states.
+`MONITOR_BROWSER_COOKIE_SYNC_ENABLED`. Its service/Docker default remains
+`false`; CR-132's Windows local `start_monitor_oneclick.bat` and
+`start_webui.bat` set it to `true` only when the operator did not provide an
+explicit value. The same local launchers default
+`MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=true` and `MONITOR_LOGIN_QR_HEADLESS=false`;
+explicit values remain authoritative. These are launcher defaults, not browser
+template fields or editable runtime settings. The rejected Cookie-bridge
+WebSocket route remains absent in both feature states.
+
+Browser startup and cleanup watchdogs are deployment-only environment values:
+`MONITOR_LOGIN_BROWSER_STARTUP_STAGE_TIMEOUT_SECONDS`,
+`MONITOR_LOGIN_BROWSER_CLEANUP_TIMEOUT_SECONDS`,
+`MONITOR_BROWSER_SYNC_STAGE_TIMEOUT_SECONDS`,
+`MONITOR_BROWSER_SYNC_CLEANUP_TIMEOUT_SECONDS`,
+`MONITOR_ACCOUNT_CHECK_STAGE_TIMEOUT_SECONDS`,
+`MONITOR_ACCOUNT_CHECK_CLEANUP_TIMEOUT_SECONDS`,
+`MONITOR_PROFILE_VALIDATION_TIMEOUT_SECONDS`, and
+`MONITOR_PROFILE_VALIDATION_CLEANUP_TIMEOUT_SECONDS`. They bound integration
+stages and do not replace `login_qr_timeout_seconds`, which remains the
+operator-facing total QR creation setting.
+Managed-browser cleanup uses the larger of the configured outer cleanup value
+and the internal context/browser close plus process-reap budget. This prevents
+an outer watchdog from cancelling the owned-process cleanup immediately before
+Profile rollback. A Profile validation cleanup that still exceeds this budget
+is fail-closed as `recovery_required` without concurrent Profile mutation.
 
 ## Database Storage
 

@@ -106,6 +106,7 @@ from ..monitoring.browser_environment_provider import (
     safe_browser_environment_summary,
 )
 from ..monitoring.login_browser import (
+    LoginBrowserProbeError,
     build_login_browser_command,
     build_managed_login_browser_command,
     open_login_browser_with_command,
@@ -579,20 +580,27 @@ async def reconcile_platform_login_browser(
                     expected_pid=int(window.get("pid") or 0),
                     close_when_logged_in=True,
                 )
-            except Exception:
+            except Exception as exc:
+                stage_timeout = isinstance(exc, LoginBrowserProbeError)
                 if not _login_window_startup_grace(window):
+                    probe_message = (
+                        exc.message
+                        if stage_timeout
+                        else "无法连接当前登录窗口，请关闭窗口后重新打开。"
+                    )
                     return _fail_visible_login_reconciliation(
                         platform,
                         window,
                         account_id,
                         admin,
-                        "无法连接当前登录窗口，请关闭窗口后重新打开。",
+                        probe_message,
                         login_window_open=True,
                     )
                 return {
                     "status": "waiting",
                     "login_window_open": True,
-                    "message": "登录窗口正在启动，请稍候。",
+                    "stage": str(getattr(exc, "stage", "连接登录窗口")),
+                    "message": exc.message if stage_timeout else "登录窗口正在启动，请稍候。",
                 }
             if probe.get("process_matched") is False:
                 return _fail_visible_login_reconciliation(
@@ -607,13 +615,15 @@ async def reconcile_platform_login_browser(
                 return {
                     "status": "waiting",
                     "login_window_open": True,
-                    "message": "登录窗口正在运行，请继续完成平台验证。",
+                    "stage": str(probe.get("stage") or "等待平台登录"),
+                    "message": str(probe.get("message") or "登录窗口正在运行，请继续完成平台验证。"),
                 }
             if not probe.get("close_requested"):
                 return {
                     "status": "waiting",
                     "login_window_open": True,
-                    "message": "已识别登录成功，正在保存账号登录状态。",
+                    "stage": str(probe.get("stage") or "保存平台登录态"),
+                    "message": str(probe.get("message") or "已识别登录成功，正在保存账号登录状态。"),
                 }
             await _wait_for_login_window_close(platform, int(window.get("pid") or 0))
             if login_window_status(platform).get("is_open"):
@@ -636,6 +646,18 @@ async def reconcile_platform_login_browser(
                 "status": "success",
                 "login_window_open": False,
                 "message": "登录成功，当前账号登录状态已自动保存。",
+                "account": safe_account,
+            }
+            _persist_visible_login_reconciliation(platform, window, account_id, result)
+            return result
+        if str(check.get("status") or "") == "account_check_stage_timeout":
+            result = {
+                "status": "failed",
+                "login_window_open": False,
+                "stage": str(check.get("stage") or "保存平台登录态"),
+                "message": customer_safe_text(
+                    str(check.get("message") or "登录状态保存超时，请重新打开登录窗口。")
+                ),
                 "account": safe_account,
             }
             _persist_visible_login_reconciliation(platform, window, account_id, result)
@@ -2243,6 +2265,29 @@ async def _reconcile_login_session_with_account_check(
     message = str(qr_poll.get("message") or _default_login_state_message(fallback_status))
     if not account_id:
         return update_login_session_status(int(session["id"]), fallback_status, message, str(qr_poll.get("qr_image") or "")), None
+    if qr_poll.get("stage"):
+        account_status = _recover_prepared_account_identity(
+            account_id,
+            trigger_source="qrcode_login",
+            failure_reason=str(fallback_status or "qrcode_start_failed"),
+            login_session_id=int(session["id"]),
+        )
+        failed_session = update_login_session_status(
+            int(session["id"]),
+            fallback_status,
+            message,
+            str(qr_poll.get("qr_image") or ""),
+        )
+        return (
+            failed_session,
+            account_status
+            or update_social_account_login_state(
+                account_id,
+                fallback_status,
+                message,
+                login_session_id=int(session["id"]),
+            ),
+        )
     try:
         check = await check_social_account_login(
             account_id,

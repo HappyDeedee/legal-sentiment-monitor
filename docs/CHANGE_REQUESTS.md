@@ -131,6 +131,7 @@ Status values:
 - CR-128: Saved Cookie Recovery After Profile Drift
 - CR-129: Account Profile And Platform Request Identity Consistency
 - CR-130: Cookie Account Save Promotion Consistency
+- CR-132: Windows Login Bootstrap And Bounded Browser Startup
 - CR-096: AI Evaluation Postprocessing Scope Reduction
 - CR-075: Responsive Navigation Interaction Consistency
 - CR-076: Mobile Header Layout Resilience Regression Fix
@@ -4935,6 +4936,104 @@ Live verification (2026-07-22):
 - The account is `active`, has no current error, and its Profile directory is
   present after the service continued running. The verification used only
   the operator's test account; no protected collection account was changed.
+
+## CR-132 - Windows Login Bootstrap And Bounded Browser Startup
+
+Date: 2026-07-22
+
+Source: second-computer Windows acceptance report on `main@a0a8583`.
+
+Module: Windows local launchers, Platform Account login entry, managed QR
+startup, browser-sync startup, and local visible-login reconciliation.
+
+Type: Regression Fix
+
+Status: Implementation Verified / Operator Acceptance Pending
+
+Verification update:
+
+- Focused `19`, adjacent `128`, and complete monitoring `727` tests pass after
+  adding delayed-cancellation, failed-launch process-reaping, and
+  cleanup-before-rollback coverage. Final independent re-review returned PASS
+  with no remaining P1/P2; affected-computer acceptance follows reviewed
+  availability on `main`.
+
+Baseline:
+
+- Browser selection succeeds and persists Chrome on the affected computer.
+- QR sessions for Douyin and Xiaohongshu reach `qrcode_failed`, while the
+  initiating request can remain on `生成中` after the configured timeout.
+- Both Windows local launchers leave browser auto-sync disabled unless the
+  operator sets the feature flag manually.
+- Browser-sync already persists an unsaved account before launch, but the
+  visible-browser fallback rejects the same unsaved form.
+- QR timeout cancellation and browser cleanup are not independently bounded;
+  browser-sync also has no bounded pre-window startup stage.
+
+Confirmed decisions:
+
+- Windows one-click and foreground local launchers enable browser auto-sync by
+  default when the operator has not supplied an explicit value.
+- A named new account may enter Browser login directly. The system first
+  creates the existing account draft and `profile_key`, then starts the
+  account-bound browser flow.
+- Explicit deployment environment values still override local defaults.
+- Docker, service-only, and production/server QR defaults remain unchanged.
+
+In scope:
+
+- Apply local Windows login defaults consistently in both launchers and the
+  Python one-click child environment.
+- Preserve automatic browser selection and verify one-click health against
+  the process that was actually started.
+- Persist a new named account before either Browser implementation starts.
+- Report safe QR/browser startup stages, enforce stage and cleanup bounds, and
+  return a terminal actionable result instead of an endless loading state.
+- Stop a stage-specific QR startup failure before the legacy secondary Profile
+  check; bound visible-login account verification and browser cleanup.
+- Bound candidate and active Profile browser validation while retaining the
+  existing promotion journal, swap, and rollback critical section.
+- Reap only Playwright-driver-owned browser descendants when startup fails,
+  including failure before a browser context is returned. Complete managed
+  cleanup before Profile rollback; if cleanup completion is not confirmed,
+  mark the journal `recovery_required` without touching Profile directories.
+- Match frontend QR request timeout to the effective runtime setting plus a
+  cleanup margin, and bound visible-login reconciliation requests.
+- Preserve account-scoped attempt arbitration and Profile/Cookie promotion.
+
+Out of scope:
+
+- Browser-family migration, Profile export/import, schema changes, crawler
+  request identity, proxy scheduling, or platform verification bypass.
+- Treating local Windows browser evidence as production/server acceptance.
+- Reading or changing real account Cookie/Profile material during automated
+  verification.
+
+Acceptance criteria:
+
+- A clean Windows launcher exposes Browser auto-sync without manual feature
+  configuration, while explicit false values remain authoritative.
+- A named unsaved account can start both browser-sync and visible-browser
+  fallback after one draft persistence call; QR generation is not required.
+- A QR startup stuck in driver, browser, navigation, environment-check, or QR
+  extraction returns a stage-specific terminal result, and cleanup has its own
+  finite bound.
+- Browser-sync reports its pre-window stage and reaches a terminal startup
+  timeout when the managed browser does not open.
+- Visible Browser login reaches terminal success/failure after the owned window
+  closes even when account-check browser startup or cleanup stalls.
+- Browser-sync candidate and active Profile validation time out with the prior
+  committed authority preserved. Rollback starts only after validation cleanup
+  finishes; an unconfirmed cleanup blocks the account without concurrent
+  filesystem mutation.
+- A stale service on the configured port cannot satisfy one-click health for a
+  newly spawned process.
+- Focused, adjacent, complete monitoring, syntax, documentation, whitespace,
+  browser, and independent read-only review gates pass.
+
+Goal packet:
+
+- `docs/superpowers/plans/2026-07-22-cr-132-windows-login-bootstrap.md`
 
 ## CR-113 - QR Draft Account Identity Choice Forwarding
 
