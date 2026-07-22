@@ -9,7 +9,8 @@ headless QR acquisition, headed Browser login, wait/retry lifecycle, and
 Xiaohongshu QR/SMS-state discrimination.
 
 Result: implementation behavior, local automated/static gates, and independent
-review verified. Affected-computer operator acceptance remains pending.
+review verified, then merged through PR #17 on `main@d45de1a`.
+Affected-computer operator acceptance remains pending.
 
 - RED coverage reproduced persistent Chrome's duplicate locale override,
   missing CDP-session detach, provider-dependent device-field mismatch,

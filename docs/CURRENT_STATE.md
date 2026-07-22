@@ -4,8 +4,8 @@ Last updated: 2026-07-22
 
 ## Current Baseline
 
-- CR-134 is the active second-computer login regression lane on
-  `codex/cr-134-managed-chromium-login`. The generated account identity is now
+- CR-134 is merged through PR #17 on `main@d45de1a`; second-computer operator
+  acceptance is the remaining gate. The generated account identity is now
   treated as desired browser state: persistent context options perform the
   primary injection and the exact page receives version-compatible CDP
   reinforcement before navigation. Core UA/timezone/locale/Accept-Language

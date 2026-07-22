@@ -5117,6 +5117,8 @@ Verification update:
   Independent review returned PASS with no remaining P0/P1/P2 code finding.
   Real headless Douyin and Xiaohongshu both reached `waiting_qrcode` with a QR
   image, matching `profile_key`, and zero visible owned windows.
+- Implementation merged through PR #17 on `main@d45de1a`; affected-computer
+  operator acceptance remains the final gate.
 
 ## CR-132 - Windows Login Bootstrap And Bounded Browser Startup
 
