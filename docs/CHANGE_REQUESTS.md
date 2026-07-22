@@ -5040,6 +5040,84 @@ Acceptance criteria:
   regression, syntax/docs/whitespace checks, isolated first-run service health,
   and independent read-only review pass.
 
+## CR-134 - Managed Login Environment Injection And Retry
+
+Date: 2026-07-22
+
+Source: second-computer Windows acceptance on Douyin and Xiaohongshu. The
+system Chrome window opened the platform home page, then closed before login
+with `account_identity_snapshot_mismatch`; the same machine could not reliably
+start a second Browser login.
+
+Module: managed browser environment preparation, QR/Browser login session
+lifecycle, browser-version capability handling, and Platform Account login
+feedback.
+
+Type: Regression Fix
+
+Status: Implementation Verified / Operator Acceptance Pending
+
+Confirmed requirements:
+
+- The generated account environment is the desired browser state, not a
+  description of the physical computer. `profile_key` selects the account's
+  persistent Profile, while the generated identity template supplies the
+  browser values that must be applied whenever that Profile is opened.
+- Persistent Playwright contexts receive the complete template through context
+  options. The exact page then receives compatible CDP user-agent/UA-CH,
+  language, timezone, device-metrics, touch, and navigator-language
+  reinforcement before platform navigation. CDP crawler pages use the same
+  page preparation as their primary injection path.
+- Core identity fields (`user_agent`, `timezone`, `locale`, and
+  `accept_language`) remain required and fail closed on effective mismatch.
+  Provider/version-dependent display fields (screen, viewport, scale, mobile,
+  and touch) are compared only when the runtime proves they were effectively
+  managed. An ineffective optional field is recorded in `unsupported_fields`
+  with its actual safe probe value and does not terminate login or crawling.
+- Browser binary version/source and process ownership remain non-injectable
+  runtime evidence and are not presented as failed injectable fields.
+- Windows one-click QR acquisition defaults to headless. Browser auto-sync
+  remains headed so the operator can complete platform login.
+- A mismatch reports only safe field labels and the failed stage before closing
+  the owned browser.
+- A transient waiting-state probe timeout keeps the login window open until the
+  overall login deadline or explicit cancellation.
+- Starting Browser login again waits for the previous remote cancellation and
+  cleanup before creating the next account-bound session.
+- Xiaohongshu's ordinary QR/phone login method copy must not be misclassified
+  as an SMS challenge while the QR method is still available.
+- QR validation may add an in-memory white quiet zone for detection when the
+  platform supplies a tightly cropped QR image; the returned platform image is
+  not changed. Generic Xiaohongshu `drag` class/id matches are not treated as a
+  slider because ordinary page controls use `dragger`.
+
+Scope boundary:
+
+- Preserve account/Profile/Cookie promotion authority, browser process
+  ownership, proxy proof, explicit browser selection, service/server defaults,
+  and committed Profile compatibility.
+- Do not accept a mismatched `profile_key`, Profile, proxy, or core identity
+  field. Optional-field capability handling must remain explicit and auditable.
+
+Acceptance:
+
+- Synthetic persistent Chrome, CDP, and version-capability paths prove
+  injection precedes navigation and validation.
+- Real isolated system Chrome holds the Browser login window and reopens the
+  same account after cancellation. Real isolated Playwright Chromium returns
+  Douyin and Xiaohongshu QR state headlessly with no visible owned window.
+- Douyin and Xiaohongshu QR/Browser login share the corrected managed path.
+- Focused login tests, complete monitoring regression, docs/static checks, an
+  isolated real system-Chrome hold/retry receipt, and independent review pass.
+- The affected second computer remains the final operator acceptance gate.
+
+Verification update:
+
+- Focused `21`, adjacent `224`, and complete monitoring `762` tests pass.
+  Independent review returned PASS with no remaining P0/P1/P2 code finding.
+  Real headless Douyin and Xiaohongshu both reached `waiting_qrcode` with a QR
+  image, matching `profile_key`, and zero visible owned windows.
+
 ## CR-132 - Windows Login Bootstrap And Bounded Browser Startup
 
 Date: 2026-07-22

@@ -4,7 +4,29 @@ Last updated: 2026-07-22
 
 ## Current Baseline
 
-- CR-133 is the active clean-computer Windows startup lane, based on
+- CR-134 is the active second-computer login regression lane on
+  `codex/cr-134-managed-chromium-login`. The generated account identity is now
+  treated as desired browser state: persistent context options perform the
+  primary injection and the exact page receives version-compatible CDP
+  reinforcement before navigation. Core UA/timezone/locale/Accept-Language
+  mismatches remain terminal; ineffective provider-dependent display fields
+  are recorded as unsupported with their safe effective values. Windows
+  one-click QR acquisition now defaults headless while Browser auto-sync stays
+  headed. Browser retry waits for old-session cleanup, transient wait probes
+  keep the window open, and Xiaohongshu QR/phone copy no longer becomes a false
+  SMS gate. Tight QR crops receive a detection-only quiet zone, while ordinary
+  Xiaohongshu `dragger` controls no longer become false slider gates. CR-134
+  focused `21`, adjacent `224`, and complete monitoring `762` tests pass.
+  Isolated system Chrome held and reopened the same Browser login; isolated
+  Playwright Chromium returned Douyin and Xiaohongshu `waiting_qrcode` with a
+  QR image, matching `profile_key`, and no visible owned window.
+  Python/JavaScript/PowerShell, lock, docs, and whitespace gates pass. The
+  repository-wide result remains the known baseline (`892`
+  passed, `8` skipped, `7` failed: six Redis-dependent and one XHS Excel factory
+  assertion). Independent review returned PASS with no remaining P0/P1/P2 code
+  finding; affected-computer acceptance remains operator-gated.
+
+- CR-133 is the verified clean-computer Windows startup lane, based on
   `main@87cb179`.
   The todo baseline classifies CR-117 and CR-132 as verified historical browser
   and login behavior, with their other-computer acceptance still

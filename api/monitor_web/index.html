@@ -6773,7 +6773,7 @@
       const caps=platform ? platformLoginCapability(platform) : {};
       return !!(caps && caps.browser_cookie_sync_available);
     }
-    function stopBrowserCookieSyncPolling(options={}){
+    async function stopBrowserCookieSyncPolling(options={}){
       const sessionId=activeBrowserCookieSyncSessionId;
       if(browserCookieSyncPollTimer){
         clearTimeout(browserCookieSyncPollTimer);
@@ -6782,8 +6782,26 @@
       activeBrowserCookieSyncSessionId=null;
       browserCookieSyncPollToken += 1;
       if(options.cancelRemote && sessionId){
-        api('/browser-sync/login-sessions/'+Number(sessionId)+'/cancel',{method:'POST'}).catch(()=>{});
+        try{
+          const response=await loginApi('/browser-sync/login-sessions/'+Number(sessionId)+'/cancel',{method:'POST'},15000);
+          if(options.requireRemoteClosed){
+            if(!response.ok){
+              activeBrowserCookieSyncSessionId=Number(sessionId)||null;
+              return false;
+            }
+            const session=(await response.json()).session||{};
+            if(session.active){
+              activeBrowserCookieSyncSessionId=Number(session.id||sessionId)||null;
+              return false;
+            }
+          }
+          return true;
+        }catch(error){
+          if(options.requireRemoteClosed) activeBrowserCookieSyncSessionId=Number(sessionId)||null;
+          return false;
+        }
       }
+      return true;
     }
     function browserCookieSyncResultNote(message, tone=''){
       const result=document.getElementById('browser_login_result');
@@ -6800,7 +6818,11 @@
       await withActionButtonLoading('account_browser_sync_button','打开中...',async ()=>{
         stopLoginSessionPolling({closeRemote:true});
         stopVisibleLoginReconciliation();
-        stopBrowserCookieSyncPolling({cancelRemote:true});
+        const previousSessionClosed=await stopBrowserCookieSyncPolling({cancelRemote:true,requireRemoteClosed:true});
+        if(!previousSessionClosed){
+          browserCookieSyncResultNote('旧浏览器登录仍在安全清理，请稍后再次点击浏览器登录。','warn');
+          return;
+        }
         clearRevealedAccountCookie();
         if(!account){
           account=await persistSocialAccount({login_type:'qrcode'});

@@ -1771,6 +1771,42 @@ Run the relevant parts of this checklist after each Phase 11 batch:
   JavaScript syntax, documentation consistency/regression, `git diff --check`,
   and independent read-only full-diff review.
 
+## CR-134 Managed Login Environment Injection And Retry Tests
+
+- A persistent managed context receives the complete template through
+  Playwright context options. Before platform navigation, the exact page
+  receives compatible CDP user-agent/UA-CH, accept-language, timezone,
+  viewport/screen/device-scale, mobile/touch reinforcement plus navigator
+  languages. CDP mode also applies locale at the page layer; persistent mode
+  does not duplicate the already-active context locale override.
+- Validation rejects a CDP page that lacks the exact plan/attempt preparation
+  binding. Persistent pages retain context-level injection and still call page
+  preparation in every production login/check/promotion entry path.
+- Required User-Agent/timezone/locale/Accept-Language mismatch remains terminal.
+  Ineffective provider/version-dependent display fields are retained as safe
+  effective evidence and listed in `unsupported_fields` without blocking the
+  account flow. UA-CH parameter downgrade is also recorded explicitly.
+- Browser, QR, account-check, Profile-validation, and crawler entry paths call
+  page preparation before navigation and validation.
+- Browser-sync mismatch feedback exposes bounded safe field labels and no raw
+  values, paths, proxy data, Cookie, or other secrets.
+- A timed-out waiting-state probe leaves the context and page active until the
+  overall Browser-login deadline.
+- A replacement Browser login awaits old-session cancellation before POSTing a
+  new account-bound session.
+- Windows one-click defaults QR acquisition to headless while Browser auto-sync
+  remains headed. Explicit deployment values remain authoritative.
+- Xiaohongshu ordinary QR/phone login copy containing `获取验证码` is not treated
+  as an SMS challenge while the QR login method remains present.
+- A tightly cropped QR image without a white quiet zone is accepted after an
+  in-memory detection retry, while a non-QR image remains rejected.
+- Xiaohongshu generic `dragger` page controls are not manual slider evidence;
+  specific slider/slide/Geetest/Yidun markers remain covered.
+- Real isolated Windows Chrome holds at `等待平台登录`, can cancel, and can reopen
+  the same account without leaving browser processes or pending sessions.
+- Real isolated Playwright Chromium returns Douyin and Xiaohongshu QR state with
+  `headless=true`, the expected `profile_key`, and no visible owned window.
+
 ## CR-132 Windows Login Bootstrap And Bounded Browser Startup Tests
 
 - Both Windows local launchers default browser auto-sync on, allow the local

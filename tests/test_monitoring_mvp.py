@@ -3927,6 +3927,8 @@ def test_phase_5_1d_proxy_proof_fails_before_platform_navigation(case, expected_
         ("locale", "en-US"),
         ("accept_language", "en-US,en;q=0.9"),
         ("screen_width", 1280),
+        ("screen_height", 720),
+        ("viewport_width", 1024),
         ("viewport_height", 720),
         ("device_scale_factor", 2.0),
         ("has_touch", True),
@@ -3984,16 +3986,30 @@ def test_phase_5_1d_page_probe_records_field_scoped_mismatch(field, mutated_valu
     result = asyncio.run(verify_managed_page(session.context, page))
 
     assert result is not None
-    assert result.ok is False
-    assert result.reason == "account_identity_snapshot_mismatch"
-    assert result.snapshot["mismatch_evidence"] == [
-        {
-            "field": field,
-            "requested": getattr(plan, field),
-            "effective": mutated_value,
-        }
-    ]
-    assert set(result.snapshot["mismatch_evidence"][0]) == {"field", "requested", "effective"}
+    if field in {
+        "screen_width",
+        "screen_height",
+        "viewport_width",
+        "viewport_height",
+        "device_scale_factor",
+        "has_touch",
+        "is_mobile",
+    }:
+        assert result.ok is True
+        assert result.reason == ""
+        assert result.snapshot["mismatch_evidence"] == []
+        assert field in result.snapshot["unsupported_fields"]
+    else:
+        assert result.ok is False
+        assert result.reason == "account_identity_snapshot_mismatch"
+        assert result.snapshot["mismatch_evidence"] == [
+            {
+                "field": field,
+                "requested": getattr(plan, field),
+                "effective": mutated_value,
+            }
+        ]
+        assert set(result.snapshot["mismatch_evidence"][0]) == {"field", "requested", "effective"}
 
 
 def test_cr117_valid_browser_version_change_is_observed_without_environment_mismatch(tmp_path, monkeypatch):
@@ -4284,6 +4300,9 @@ def test_phase_5_1d_qr_provider_mismatch_stops_before_qrcode_prepare(tmp_path, m
         def set_default_timeout(self, timeout):
             pass
 
+        async def add_init_script(self, script):
+            pass
+
         async def goto(self, *args, **kwargs):
             events.append("platform_goto")
             context.request_handler(FakeRequest())
@@ -4294,6 +4313,13 @@ def test_phase_5_1d_qr_provider_mismatch_stops_before_qrcode_prepare(tmp_path, m
     class FakeBrowser:
         version = plan.browser_version
 
+    class FakeCDPSession:
+        async def send(self, method, params):
+            pass
+
+        async def detach(self):
+            pass
+
     class FakeContext:
         browser = FakeBrowser()
         pages = [FakePage()]
@@ -4301,6 +4327,9 @@ def test_phase_5_1d_qr_provider_mismatch_stops_before_qrcode_prepare(tmp_path, m
 
         def on(self, event, callback):
             self.request_handler = callback
+
+        async def new_cdp_session(self, page):
+            return FakeCDPSession()
 
         async def close(self):
             self.closed = True
@@ -7792,7 +7821,7 @@ def test_windows_oneclick_launcher_opens_browser_after_health(monkeypatch):
     assert seen["env_browser_url"] == "http://10.0.0.12:8080/monitor"
     assert seen["browser_sync"] == "true"
     assert seen["local_window"] == "true"
-    assert seen["qr_headless"] == "false"
+    assert seen["qr_headless"] == "true"
     assert seen["opened"] == "http://10.0.0.12:8080/monitor"
 
 
@@ -8451,6 +8480,7 @@ def test_cr133_local_batches_share_clean_computer_bootstrap():
     assert "monitor_browser_cookie_sync_enabled" in bootstrap_normalized
     assert "monitor_allow_local_login_window" in bootstrap_normalized
     assert "monitor_login_qr_headless" in bootstrap_normalized
+    assert '$env:monitor_login_qr_headless = "true"' in bootstrap_normalized
     assert "winget" not in bootstrap_normalized
     assert "127.0.0.1:10809" not in bootstrap_normalized
     assert 'setenvironmentvariable("path"' not in bootstrap_normalized
@@ -30759,3 +30789,764 @@ def test_cr127_qr_failure_recheck_cannot_update_account_after_new_attempt_reserv
     finally:
         _restore_table("login_sessions", snapshots["login_sessions"])
         _restore_table("social_accounts", snapshots["social_accounts"])
+
+
+def test_cr134_persistent_page_applies_version_compatible_environment_overrides(tmp_path, monkeypatch):
+    from tools.browser_environment import bind_managed_context, prepare_managed_page
+
+    plan = _phase_5_1d_plan(
+        tmp_path,
+        monkeypatch,
+        action="login_check",
+        launch_mode="persistent_launch",
+    )
+    commands = []
+
+    class FakeCDPSession:
+        async def send(self, method, params):
+            commands.append((method, params))
+
+        async def detach(self):
+            commands.append(("detach", {}))
+
+    class FakeContext:
+        def on(self, event, callback):
+            pass
+
+        async def new_cdp_session(self, page):
+            return FakeCDPSession()
+
+    class FakePage:
+        def __init__(self):
+            self.init_scripts = []
+
+        async def add_init_script(self, script):
+            self.init_scripts.append(script)
+
+    context = FakeContext()
+    page = FakePage()
+    bind_managed_context(context, plan)
+
+    asyncio.run(prepare_managed_page(context, page))
+
+    assert [method for method, _ in commands] == [
+        "Emulation.setUserAgentOverride",
+        "Emulation.setTimezoneOverride",
+        "Emulation.setDeviceMetricsOverride",
+        "Emulation.setTouchEmulationEnabled",
+        "detach",
+    ]
+    assert commands[2][1] == {
+        "width": plan.viewport_width,
+        "height": plan.viewport_height,
+        "deviceScaleFactor": plan.device_scale_factor,
+        "mobile": plan.is_mobile,
+        "screenWidth": plan.screen_width,
+        "screenHeight": plan.screen_height,
+    }
+    assert page.init_scripts and "Navigator.prototype, 'languages'" in page.init_scripts[0]
+
+
+def test_cr134_cdp_page_applies_locale_override(tmp_path, monkeypatch):
+    from tools.browser_environment import bind_managed_context, prepare_managed_page
+
+    plan = _phase_5_1d_plan(
+        tmp_path,
+        monkeypatch,
+        action="crawl",
+        launch_mode="cdp_launch",
+    )
+    methods = []
+
+    class FakeCDPSession:
+        async def send(self, method, params):
+            methods.append(method)
+
+        async def detach(self):
+            methods.append("detach")
+
+    class FakeContext:
+        def on(self, event, callback):
+            pass
+
+        async def new_cdp_session(self, page):
+            return FakeCDPSession()
+
+    class FakePage:
+        async def add_init_script(self, script):
+            pass
+
+    context = FakeContext()
+    page = FakePage()
+    bind_managed_context(context, plan)
+
+    asyncio.run(prepare_managed_page(context, page))
+
+    assert "Emulation.setLocaleOverride" in methods
+    assert methods[-1] == "detach"
+
+
+def test_cr134_older_browser_records_ua_client_hint_downgrade(tmp_path, monkeypatch):
+    from tools.browser_environment import bind_managed_context, prepare_managed_page, verify_managed_page
+
+    plan = _phase_5_1d_plan(tmp_path, monkeypatch)
+    probe = _phase_5_1d_effective_probe(plan)
+
+    class FakeCDPSession:
+        async def send(self, method, params):
+            if method == "Emulation.setUserAgentOverride" and "userAgentMetadata" in params:
+                raise RuntimeError("Protocol error (Emulation.setUserAgentOverride): Invalid parameters")
+
+        async def detach(self):
+            pass
+
+    class FakeBrowser:
+        version = plan.browser_version
+
+    class FakeContext:
+        browser = FakeBrowser()
+
+        def on(self, event, callback):
+            pass
+
+        async def new_cdp_session(self, page):
+            return FakeCDPSession()
+
+    class FakePage:
+        async def add_init_script(self, script):
+            pass
+
+        async def evaluate(self, script):
+            return probe
+
+    context = FakeContext()
+    page = FakePage()
+    bind_managed_context(context, plan)
+    context._monitor_browser_environment_runtime["accept_language"] = plan.accept_language
+
+    asyncio.run(prepare_managed_page(context, page))
+    result = asyncio.run(verify_managed_page(context, page))
+
+    assert result is not None and result.ok is True
+    assert "ua_client_hints" in result.snapshot["unsupported_fields"]
+
+
+def test_cr134_ineffective_device_override_is_observed_without_blocking_login(tmp_path, monkeypatch):
+    from tools.browser_environment import bind_managed_context, prepare_managed_page, verify_managed_page
+
+    plan = _phase_5_1d_plan(tmp_path, monkeypatch)
+    probe = _phase_5_1d_effective_probe(plan)
+    probe["screen_width"] = plan.screen_width - 1
+
+    class FakeCDPSession:
+        async def send(self, method, params):
+            pass
+
+        async def detach(self):
+            pass
+
+    class FakeBrowser:
+        version = plan.browser_version
+
+    class FakeContext:
+        browser = FakeBrowser()
+
+        def on(self, event, callback):
+            pass
+
+        async def new_cdp_session(self, page):
+            return FakeCDPSession()
+
+    class FakePage:
+        async def add_init_script(self, script):
+            pass
+
+        async def evaluate(self, script):
+            return probe
+
+    context = FakeContext()
+    page = FakePage()
+    bind_managed_context(context, plan)
+    context._monitor_browser_environment_runtime["accept_language"] = plan.accept_language
+
+    asyncio.run(prepare_managed_page(context, page))
+    result = asyncio.run(verify_managed_page(context, page))
+
+    assert result is not None and result.ok is True
+    assert "screen_width" in result.snapshot["unsupported_fields"]
+    assert result.snapshot["mismatch_evidence"] == []
+
+
+def test_cr134_required_identity_mismatch_still_blocks_when_device_override_is_unsupported(tmp_path, monkeypatch):
+    from tools.browser_environment import bind_managed_context, prepare_managed_page, verify_managed_page
+
+    plan = _phase_5_1d_plan(tmp_path, monkeypatch)
+    probe = _phase_5_1d_effective_probe(plan)
+    probe["language"] = "en-US"
+    probe["screen_width"] = plan.screen_width - 1
+
+    class FakeCDPSession:
+        async def send(self, method, params):
+            if method == "Emulation.setDeviceMetricsOverride":
+                raise RuntimeError("Protocol error (Emulation.setDeviceMetricsOverride): Invalid parameters")
+
+        async def detach(self):
+            pass
+
+    class FakeBrowser:
+        version = plan.browser_version
+
+    class FakeContext:
+        browser = FakeBrowser()
+
+        def on(self, event, callback):
+            pass
+
+        async def new_cdp_session(self, page):
+            return FakeCDPSession()
+
+    class FakePage:
+        async def add_init_script(self, script):
+            pass
+
+        async def evaluate(self, script):
+            return probe
+
+    context = FakeContext()
+    page = FakePage()
+    bind_managed_context(context, plan)
+    context._monitor_browser_environment_runtime["accept_language"] = plan.accept_language
+
+    asyncio.run(prepare_managed_page(context, page))
+    result = asyncio.run(verify_managed_page(context, page))
+
+    assert result is not None and result.ok is False
+    assert result.snapshot["mismatch_evidence"] == [
+        {"field": "locale", "requested": plan.locale, "effective": "en-US"}
+    ]
+    assert "screen_width" in result.snapshot["unsupported_fields"]
+
+
+def test_cr134_xhs_login_page_sms_copy_does_not_hide_pending_qrcode():
+    from api.monitoring.login_qrcode import _detect_manual_verification
+
+    class FakeBody:
+        async def inner_text(self, timeout):
+            return "可用 小红书 或 微信 扫码 手机号登录 +86 获取验证码 登录"
+
+    class EmptyLocator:
+        @property
+        def first(self):
+            return self
+
+        async def count(self):
+            return 0
+
+    class FakePage:
+        url = "https://www.xiaohongshu.com/explore"
+
+        async def wait_for_selector(self, selector, state, timeout):
+            if "qrcode" in selector:
+                return object()
+            raise RuntimeError("not visible")
+
+        def locator(self, selector):
+            return FakeBody() if selector == "body" else EmptyLocator()
+
+    result = asyncio.run(_detect_manual_verification("xhs", FakePage()))
+
+    assert result == {"needs_verification": False}
+
+
+def test_cr134_xhs_sms_challenge_is_reported_when_qrcode_is_not_visible():
+    from api.monitoring.login_qrcode import _detect_manual_verification
+
+    class FakeBody:
+        async def inner_text(self, timeout):
+            return "扫码 手机号登录 已向当前手机号发送短信验证码，请输入验证码"
+
+    class EmptyLocator:
+        @property
+        def first(self):
+            return self
+
+        async def count(self):
+            return 0
+
+    class FakePage:
+        url = "https://www.xiaohongshu.com/explore"
+
+        async def wait_for_selector(self, selector, state, timeout):
+            raise RuntimeError("qrcode not visible")
+
+        def locator(self, selector):
+            return FakeBody() if selector == "body" else EmptyLocator()
+
+    result = asyncio.run(_detect_manual_verification("xhs", FakePage()))
+
+    assert result["needs_verification"] is True
+    assert result["verification_type"] == "sms"
+
+
+def test_cr134_qrcode_detector_accepts_platform_crop_without_quiet_zone():
+    import base64
+
+    import cv2
+
+    from tools.crawler_util import is_qrcode_image_data
+
+    qr = cv2.QRCodeEncoder_create().encode("https://example.invalid/login/CR134")
+    qr = cv2.resize(qr, None, fx=4, fy=4, interpolation=cv2.INTER_NEAREST)
+    ok, encoded_qr = cv2.imencode(".png", qr)
+
+    assert ok is True
+    assert is_qrcode_image_data(base64.b64encode(encoded_qr).decode("ascii")) is True
+
+
+def test_cr134_xhs_manual_verification_excludes_generic_drag_controls():
+    from media_platform.xhs.login import XiaoHongShuLogin
+
+    slider_selectors = XiaoHongShuLogin.MANUAL_VERIFICATION_SELECTORS["slider"]
+
+    assert "[class*='drag']" not in slider_selectors
+    assert "[id*='drag']" not in slider_selectors
+
+
+def test_cr134_unprepared_cdp_page_is_rejected_before_probe(tmp_path, monkeypatch):
+    from tools.browser_environment import BrowserEnvironmentError, bind_managed_context, verify_managed_page
+
+    plan = _phase_5_1d_plan(
+        tmp_path,
+        monkeypatch,
+        action="crawl",
+        launch_mode="cdp_launch",
+    )
+
+    class FakeContext:
+        def on(self, event, callback):
+            pass
+
+    class FakePage:
+        async def evaluate(self, script):
+            raise AssertionError("unprepared page must not be probed")
+
+    context = FakeContext()
+    page = FakePage()
+    bind_managed_context(context, plan)
+
+    with pytest.raises(BrowserEnvironmentError) as exc_info:
+        asyncio.run(verify_managed_page(context, page))
+
+    assert exc_info.value.reason == "account_identity_provider_unsupported"
+
+
+def test_cr134_browser_sync_mismatch_message_names_safe_fields_only():
+    from api.monitoring.login_browser_sync import _browser_environment_mismatch_message
+
+    result = SimpleNamespace(
+        snapshot={
+            "mismatch_evidence": [
+                {"field": "locale", "requested": "secret-requested", "effective": "secret-effective"},
+                {"field": "device_scale_factor", "requested": 1, "effective": 1.25},
+            ]
+        }
+    )
+
+    message = _browser_environment_mismatch_message(result)
+
+    assert message == "浏览器账号环境校验未通过（不一致：语言区域、显示缩放），登录窗口已关闭，请重新发起。"
+    assert "secret-requested" not in message
+    assert "secret-effective" not in message
+
+
+def test_cr134_wait_probe_timeout_keeps_browser_session_active(monkeypatch):
+    from api.monitoring import login_browser_sync
+    from api.monitoring.login_browser_sync import BrowserSyncHandle
+
+    statuses = []
+    handle = BrowserSyncHandle(
+        session_id=9134,
+        account_id=8134,
+        profile_key="1/dy/acc_8134",
+        platform="dy",
+        actor_id=1,
+        acquisition_generation=1,
+        created_at=datetime.now(timezone.utc),
+    )
+
+    async def hanging_probe():
+        await asyncio.Event().wait()
+
+    monkeypatch.setattr(login_browser_sync, "_browser_sync_stage_timeout_seconds", lambda: 0.02)
+    monkeypatch.setattr(
+        login_browser_sync,
+        "_set_session_status",
+        lambda session_id, status, message: statuses.append((session_id, status, message)),
+    )
+
+    result = asyncio.run(login_browser_sync._run_browser_sync_waiting_probe(handle, hanging_probe(), "检测平台登录状态"))
+
+    assert result is None
+    assert handle.cancel_event.is_set() is False
+    assert statuses[-1][1] == "waiting_confirm"
+    assert "保持打开" in statuses[-1][2]
+
+
+@pytest.mark.parametrize("prepare_fails", [False, True])
+def test_cr134_qrcode_entry_prepares_before_navigation_and_fails_closed(tmp_path, monkeypatch, prepare_fails):
+    from api.monitoring.login_browser import build_managed_login_browser_command
+
+    plan = _phase_5_1d_plan(tmp_path, monkeypatch, action="qr_login")
+    events = []
+
+    class FakePage:
+        def set_default_timeout(self, timeout):
+            pass
+
+        async def goto(self, *args, **kwargs):
+            events.append("goto")
+
+    page = FakePage()
+    context = SimpleNamespace(pages=[page])
+
+    class FakeFactory:
+        async def start(self):
+            return SimpleNamespace()
+
+    async def fake_launch(playwright, used_plan):
+        return SimpleNamespace(context=context, browser=None, plan=used_plan)
+
+    async def fake_prepare(*args):
+        events.append("prepare")
+        if prepare_fails:
+            raise RuntimeError("synthetic prepare failure")
+
+    async def fake_verify(*args):
+        events.append("verify")
+        return _phase_5_1d_result_for_plan(plan)
+
+    async def fake_baseline(*args):
+        return ""
+
+    async def fake_logged_in(*args):
+        return True
+
+    async def fake_close(*args):
+        events.append("close")
+
+    monkeypatch.setattr(login_qrcode_module, "async_playwright", lambda: FakeFactory())
+    monkeypatch.setattr(login_qrcode_module, "launch_managed_browser_context", fake_launch)
+    monkeypatch.setattr(login_qrcode_module, "managed_browser_processes", lambda value: ())
+    monkeypatch.setattr(login_qrcode_module, "prepare_managed_page", fake_prepare)
+    monkeypatch.setattr(login_qrcode_module, "verify_managed_page", fake_verify)
+    monkeypatch.setattr(login_qrcode_module, "_login_baseline", fake_baseline)
+    monkeypatch.setattr(login_qrcode_module, "_is_logged_in", fake_logged_in)
+    monkeypatch.setattr(login_qrcode_module, "_close_context", fake_close)
+
+    result = asyncio.run(
+        login_qrcode_module._start_qrcode_login_session_with_profile_once(
+            913401,
+            "dy",
+            build_managed_login_browser_command(plan),
+            1000,
+        )
+    )
+
+    if prepare_fails:
+        assert result["ok"] is False
+        assert events == ["prepare", "close"]
+    else:
+        assert result["ok"] is True
+        assert events[:3] == ["prepare", "goto", "verify"]
+
+
+@pytest.mark.parametrize("prepare_fails", [False, True])
+def test_cr134_account_check_entry_prepares_before_navigation_and_fails_closed(tmp_path, monkeypatch, prepare_fails):
+    from tools.browser_environment import ManagedBrowserSession
+
+    plan = _phase_5_1d_plan(tmp_path, monkeypatch, action="login_check")
+    profile_path = Path(plan.profile_path)
+    profile_path.mkdir(parents=True, exist_ok=True)
+    account = _phase_5_1d_persisted_account()
+    events = []
+
+    class FakePage:
+        def set_default_timeout(self, timeout):
+            pass
+
+        async def goto(self, *args, **kwargs):
+            events.append("goto")
+
+        async def wait_for_timeout(self, timeout):
+            events.append("hydrate")
+
+    page = FakePage()
+    context = SimpleNamespace(pages=[page])
+    playwright = SimpleNamespace(chromium=SimpleNamespace(executable_path=plan.browser_executable_path))
+
+    class FakeFactory:
+        async def start(self):
+            return playwright
+
+    async def fake_launch(used_playwright, used_plan):
+        return ManagedBrowserSession(browser=None, context=context, plan=used_plan)
+
+    async def fake_prepare(*args):
+        events.append("prepare")
+        if prepare_fails:
+            raise RuntimeError("synthetic prepare failure")
+
+    async def fake_verify(*args):
+        events.append("verify")
+        return _phase_5_1d_result_for_plan(plan, ok=False, reason="account_identity_snapshot_mismatch")
+
+    async def fake_close(*args):
+        events.append("close")
+
+    monkeypatch.setattr(
+        account_check_module,
+        "account_profile_environment",
+        lambda value: {"runtime_path": str(profile_path)},
+    )
+    monkeypatch.setattr(account_check_module, "get_mediacrawler_login_capability", lambda platform: {"login_url": "https://example.invalid/login"})
+    monkeypatch.setattr(account_check_module, "async_playwright", lambda: FakeFactory())
+    monkeypatch.setattr(account_check_module, "_resolve_account_plan", lambda *args, **kwargs: plan)
+    monkeypatch.setattr(account_check_module, "launch_managed_browser_context", fake_launch)
+    monkeypatch.setattr(account_check_module, "prepare_managed_page", fake_prepare)
+    monkeypatch.setattr(account_check_module, "verify_managed_page", fake_verify)
+    monkeypatch.setattr(account_check_module, "_close_account_check_browser", fake_close)
+
+    result = asyncio.run(account_check_module._check_profile_account(account, 1000))
+
+    if prepare_fails:
+        assert result["status"] == "check_failed"
+        assert events == ["prepare", "close"]
+    else:
+        assert result["status"] == "provider_mismatch"
+        assert events[:4] == ["prepare", "goto", "hydrate", "verify"]
+
+
+@pytest.mark.parametrize("prepare_fails", [False, True])
+def test_cr134_profile_validation_entry_prepares_before_navigation_and_fails_closed(tmp_path, monkeypatch, prepare_fails):
+    from api.monitoring import profile_promotion
+    from tools.browser_environment import ManagedBrowserSession
+
+    plan = _phase_5_1d_plan(tmp_path, monkeypatch, action="login_check")
+    events = []
+
+    class FakePage:
+        def set_default_timeout(self, timeout):
+            pass
+
+        async def goto(self, *args, **kwargs):
+            events.append("goto")
+
+    page = FakePage()
+    context = SimpleNamespace(pages=[page])
+
+    async def fake_launch(playwright, used_plan):
+        return ManagedBrowserSession(browser=None, context=context, plan=used_plan)
+
+    async def fake_prepare(*args):
+        events.append("prepare")
+        if prepare_fails:
+            raise RuntimeError("synthetic prepare failure")
+
+    async def fake_verify(*args):
+        events.append("verify")
+        return _phase_5_1d_result_for_plan(plan, ok=False, reason="account_identity_snapshot_mismatch")
+
+    async def fake_close(*args):
+        events.append("close")
+
+    monkeypatch.setattr(profile_promotion, "os", SimpleNamespace(name="posix"))
+    monkeypatch.setattr(profile_promotion, "launch_managed_browser_context", fake_launch)
+    monkeypatch.setattr(profile_promotion, "managed_browser_processes", lambda value: ())
+    monkeypatch.setattr(profile_promotion, "prepare_managed_page", fake_prepare)
+    monkeypatch.setattr(profile_promotion, "verify_managed_page", fake_verify)
+    monkeypatch.setattr(profile_promotion, "close_managed_browser_session", fake_close)
+    monkeypatch.setattr(profile_promotion, "get_mediacrawler_login_capability", lambda platform: {"login_url": "https://example.invalid/login"})
+
+    runner = profile_promotion.default_profile_browser_runner("dy", object())
+    if prepare_fails:
+        with pytest.raises(RuntimeError, match="synthetic prepare failure"):
+            asyncio.run(runner(plan, None))
+        assert events == ["prepare", "close"]
+    else:
+        result = asyncio.run(runner(plan, None))
+        assert result == {"ok": False, "reason": "account_identity_snapshot_mismatch"}
+        assert events == ["prepare", "goto", "verify", "close"]
+
+
+@pytest.mark.parametrize("prepare_fails", [False, True])
+def test_cr134_browser_sync_entry_prepares_before_navigation_and_fails_closed(tmp_path, monkeypatch, prepare_fails):
+    from api.monitoring import login_browser_sync
+    from tools.browser_environment import ManagedBrowserSession
+
+    plan = _phase_5_1d_plan(tmp_path, monkeypatch, action="login_check")
+    events = []
+
+    class FakePage:
+        def set_default_timeout(self, timeout):
+            pass
+
+        async def goto(self, *args, **kwargs):
+            events.append("goto")
+
+    page = FakePage()
+    context = SimpleNamespace(pages=[page])
+    handle = login_browser_sync.BrowserSyncHandle(
+        session_id=913402,
+        account_id=813402,
+        profile_key=plan.profile_key,
+        platform="dy",
+        actor_id=1,
+        acquisition_generation=1,
+        created_at=datetime.now(timezone.utc),
+        playwright=object(),
+    )
+
+    async def fake_launch(playwright, used_plan):
+        return ManagedBrowserSession(browser=None, context=context, plan=used_plan)
+
+    async def fake_prepare(*args):
+        events.append("prepare")
+        if prepare_fails:
+            raise RuntimeError("synthetic prepare failure")
+
+    async def fake_verify(*args):
+        events.append("verify")
+        return _phase_5_1d_result_for_plan(plan, ok=False, reason="account_identity_snapshot_mismatch")
+
+    async def fake_close(*args):
+        events.append("close")
+
+    async def unused_runner(*args):
+        raise AssertionError("candidate validation must not run after provider mismatch")
+
+    monkeypatch.setattr(login_browser_sync, "get_login_session", lambda session_id: {"profile_promotion_id": 1})
+    monkeypatch.setattr(login_browser_sync, "get_account_profile_promotion", lambda promotion_id: {"id": promotion_id})
+    monkeypatch.setattr(
+        login_browser_sync,
+        "profile_promotion_paths",
+        lambda **kwargs: SimpleNamespace(candidate=Path(plan.profile_path)),
+    )
+    monkeypatch.setattr(login_browser_sync, "_assert_live_binding", lambda *args, **kwargs: None)
+    monkeypatch.setattr(login_browser_sync, "launch_managed_browser_context", fake_launch)
+    monkeypatch.setattr(login_browser_sync, "managed_browser_processes", lambda value: (SimpleNamespace(pid=1),))
+    monkeypatch.setattr(login_browser_sync, "prepare_managed_page", fake_prepare)
+    monkeypatch.setattr(login_browser_sync, "verify_managed_page", fake_verify)
+    monkeypatch.setattr(login_browser_sync, "_close_context_and_browser", fake_close)
+    monkeypatch.setattr(login_browser_sync, "get_mediacrawler_login_capability", lambda platform: {"login_url": "https://example.invalid/login"})
+
+    if prepare_fails:
+        with pytest.raises(RuntimeError, match="synthetic prepare failure") as exc_info:
+            asyncio.run(login_browser_sync._acquire_and_inject_candidate(handle, plan, unused_runner))
+        assert "synthetic prepare failure" in str(exc_info.value)
+        assert events == ["prepare", "close"]
+    else:
+        with pytest.raises(login_browser_sync.BrowserSyncError) as exc_info:
+            asyncio.run(login_browser_sync._acquire_and_inject_candidate(handle, plan, unused_runner))
+        assert getattr(exc_info.value, "reason", "") == "account_identity_snapshot_mismatch"
+        assert events == ["prepare", "goto", "verify", "close"]
+
+
+def test_cr134_frontend_waits_for_confirmed_browser_sync_cancellation_before_retry():
+    from playwright.sync_api import sync_playwright
+
+    page_source = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    start = page_source.index("async function stopBrowserCookieSyncPolling(options={})")
+    end = page_source.index("function renderBrowserCookieSyncSession", start)
+    production_functions = page_source[start:end]
+    harness = f"""
+      let browserCookieSyncPollTimer = null;
+      let activeBrowserCookieSyncSessionId = 13401;
+      let browserCookieSyncPollToken = 0;
+      const socialAccountCache = new Map([[13402, {{ id:13402, platform:'dy' }}]]);
+      const calls = [];
+      let pendingCancel = null;
+      function val(id) {{ return document.getElementById(id)?.value || ''; }}
+      function ensureAccountIdentityCanLogin() {{ return true; }}
+      function browserCookieSyncAvailable() {{ return true; }}
+      function selectSocialLoginType() {{}}
+      async function withActionButtonLoading(buttonId, label, work) {{ return await work(); }}
+      function stopLoginSessionPolling() {{}}
+      function stopVisibleLoginReconciliation() {{}}
+      function clearRevealedAccountCookie() {{}}
+      async function persistSocialAccount() {{ throw new Error('existing account expected'); }}
+      function esc(value) {{ return String(value || ''); }}
+      function cleanCustomerText(value) {{ return String(value || ''); }}
+      function toast() {{}}
+      async function err() {{ return 'synthetic error'; }}
+      function renderBrowserCookieSyncSession() {{}}
+      function pollBrowserCookieSync() {{}}
+      function loginApi(path, options={{}}, timeout=0) {{
+        calls.push(path);
+        if(path.includes('/cancel')) {{
+          return new Promise((resolve, reject) => {{ pendingCancel={{resolve,reject}}; }});
+        }}
+        return Promise.resolve({{
+          ok:true,
+          json:async()=>({{session:{{id:13403,status:'waiting_confirm',active:true}}}}),
+        }});
+      }}
+      {production_functions}
+      let activeRun = null;
+      window.__cr134BrowserRetry = {{
+        start() {{ activeRun=startBrowserCookieSyncFromForm(); }},
+        settle(kind) {{
+          if(kind==='reject') pendingCancel.reject(new Error('network interrupted'));
+          else pendingCancel.resolve({{
+            ok:true,
+            json:async()=>({{session:{{id:13401,active:kind==='active'}}}}),
+          }});
+        }},
+        async wait() {{ await activeRun; }},
+        state() {{
+          return {{
+            calls:[...calls],
+            activeSessionId:activeBrowserCookieSyncSessionId,
+            resultText:document.getElementById('browser_login_result').textContent,
+          }};
+        }},
+      }};
+    """
+
+    def run_scenario(browser, settlement: str) -> tuple[dict[str, Any], dict[str, Any]]:
+        page = browser.new_page()
+        try:
+            page.set_content(
+                """
+                <input id="social_account_id" value="13402">
+                <input id="social_account_platform" value="dy">
+                <div id="browser_login_result"></div>
+                """
+            )
+            page.add_script_tag(content=harness)
+            page.evaluate("window.__cr134BrowserRetry.start()")
+            page.wait_for_function("window.__cr134BrowserRetry.state().calls.length === 1")
+            before = page.evaluate("window.__cr134BrowserRetry.state()")
+            page.evaluate("kind => window.__cr134BrowserRetry.settle(kind)", settlement)
+            page.evaluate("window.__cr134BrowserRetry.wait()")
+            return before, page.evaluate("window.__cr134BrowserRetry.state()")
+        finally:
+            page.close()
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            delayed, closed = run_scenario(browser, "closed")
+            _, active = run_scenario(browser, "active")
+            _, rejected = run_scenario(browser, "reject")
+        finally:
+            browser.close()
+
+    assert delayed["calls"] == ["/browser-sync/login-sessions/13401/cancel"]
+    assert closed["calls"] == [
+        "/browser-sync/login-sessions/13401/cancel",
+        "/social-accounts/13402/browser-sync",
+    ]
+    for state in (active, rejected):
+        assert state["calls"] == ["/browser-sync/login-sessions/13401/cancel"]
+        assert state["activeSessionId"] == 13401
+        assert "旧浏览器登录仍在安全清理" in state["resultText"]

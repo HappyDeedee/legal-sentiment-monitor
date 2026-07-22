@@ -20,6 +20,7 @@ from tools.browser_environment import (
     launch_managed_browser_context,
     managed_browser_cleanup_timeout_seconds,
     managed_browser_processes,
+    prepare_managed_page,
     verify_managed_page,
 )
 
@@ -242,6 +243,13 @@ async def _start_qrcode_login_session_with_profile_once(
             deadline,
         )
         page.set_default_timeout(timeout)
+        if managed_plan is not None:
+            await _run_startup_stage(
+                state,
+                "注入账号浏览器环境",
+                prepare_managed_page(context, page),
+                deadline,
+            )
         await _run_startup_stage(
             state,
             "打开平台登录页",
@@ -827,6 +835,12 @@ async def _detect_manual_verification(platform: str, page: Page) -> dict[str, An
     verification_config = _manual_verification_config(platform)
     if not verification_config:
         return {"needs_verification": False}
+    qrcode_selector = str((QR_SELECTORS.get(platform) or {}).get("selector") or "")
+    qrcode_visible = bool(
+        platform == "xhs"
+        and qrcode_selector
+        and await _selector_visible(page, qrcode_selector, timeout=300)
+    )
     try:
         page_url = str(page.url or "").lower()
         if any(str(marker).lower() in page_url for marker in verification_config.get("url_markers", [])):
@@ -841,6 +855,12 @@ async def _detect_manual_verification(platform: str, page: Page) -> dict[str, An
         visible_text = await page.locator("body").inner_text(timeout=1000)
         lower_text = visible_text.lower()
         for verification_type, markers in dict(verification_config.get("text_markers") or {}).items():
+            if (
+                platform == "xhs"
+                and verification_type == "sms"
+                and qrcode_visible
+            ):
+                continue
             matched = next((str(marker) for marker in markers if str(marker).lower() in lower_text), "")
             if matched:
                 return _verification_result(

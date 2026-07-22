@@ -65,6 +65,26 @@ _UNSUPPORTED_FIELDS = frozenset(
         "long_history",
         "novnc",
         "provider_fingerprint_internals",
+        "ua_client_hints",
+        "screen_width",
+        "screen_height",
+        "viewport_width",
+        "viewport_height",
+        "device_scale_factor",
+        "is_mobile",
+        "has_touch",
+    }
+)
+_BASE_UNSUPPORTED_FIELDS = ("canvas", "webgl", "fonts", "plugins")
+_OPTIONAL_PROVIDER_FIELDS = frozenset(
+    {
+        "screen_width",
+        "screen_height",
+        "viewport_width",
+        "viewport_height",
+        "device_scale_factor",
+        "is_mobile",
+        "has_touch",
     }
 )
 _FORBIDDEN_KEYS = frozenset(
@@ -792,7 +812,7 @@ async def verify_managed_page(context: Any, page: Any) -> BrowserEnvironmentResu
     if plan is None:
         return None
     if plan.launch_mode == "cdp_launch" and not _page_is_prepared(page, plan):
-        failure = BrowserEnvironmentError("account_identity_provider_unsupported", "cdp_page_unprepared")
+        failure = BrowserEnvironmentError("account_identity_provider_unsupported", "managed_page_unprepared")
         runtime = _context_runtime_state(context)
         failure.browser_environment_result = browser_environment_failure_result(
             plan,
@@ -868,6 +888,18 @@ async def verify_managed_page(context: Any, page: Any) -> BrowserEnvironmentResu
                     "effective": ",".join(effective_languages),
                 }
             )
+        provider_unsupported = {
+            str(item["field"])
+            for item in mismatch_evidence
+            if str(item.get("field") or "") in _OPTIONAL_PROVIDER_FIELDS
+        }
+        mismatch_evidence = [
+            item for item in mismatch_evidence if str(item.get("field") or "") not in provider_unsupported
+        ]
+        unsupported_fields = list(_BASE_UNSUPPORTED_FIELDS)
+        unsupported_fields.extend(sorted(set(runtime.get("declared_unsupported_fields") or ())))
+        unsupported_fields.extend(sorted(provider_unsupported))
+        unsupported_fields = list(dict.fromkeys(unsupported_fields))
         ok = not mismatch_evidence
         snapshot = {
             "contract_version": 1,
@@ -914,7 +946,7 @@ async def verify_managed_page(context: Any, page: Any) -> BrowserEnvironmentResu
                 "is_mobile": effective["is_mobile"],
                 "webdriver": _strict_probe_bool(probes.get("webdriver")),
             },
-            "unsupported_fields": ["canvas", "webgl", "fonts", "plugins"],
+            "unsupported_fields": unsupported_fields,
             "mismatch_evidence": mismatch_evidence,
             "fallback_used": False,
             "ok": ok,
@@ -995,7 +1027,7 @@ def browser_environment_failure_result(
             "version": _playwright_version(),
         },
         "probes": {},
-        "unsupported_fields": ["canvas", "webgl", "fonts", "plugins"],
+        "unsupported_fields": list(_BASE_UNSUPPORTED_FIELDS),
         "mismatch_evidence": [],
         "fallback_used": False,
         "ok": False,
@@ -1043,10 +1075,7 @@ async def prepare_managed_page(context: Any, page: Any) -> None:
         return
     if _page_is_prepared(page, plan):
         return
-    if plan.launch_mode != "cdp_launch":
-        _mark_page_prepared(page, plan)
-        return
-    commands = (
+    commands = [
         (
             "Emulation.setUserAgentOverride",
             {
@@ -1055,9 +1084,9 @@ async def prepare_managed_page(context: Any, page: Any) -> None:
                 "platform": _managed_navigator_platform(plan.browser_platform),
                 "userAgentMetadata": _managed_user_agent_metadata(plan),
             },
+            ("user_agent", "accept_language", "browser_platform", "ua_client_hints"),
         ),
-        ("Emulation.setTimezoneOverride", {"timezoneId": plan.timezone}),
-        ("Emulation.setLocaleOverride", {"locale": plan.locale}),
+        ("Emulation.setTimezoneOverride", {"timezoneId": plan.timezone}, ("timezone",)),
         (
             "Emulation.setDeviceMetricsOverride",
             {
@@ -1068,13 +1097,27 @@ async def prepare_managed_page(context: Any, page: Any) -> None:
                 "screenWidth": plan.screen_width,
                 "screenHeight": plan.screen_height,
             },
+            (
+                "viewport_width",
+                "viewport_height",
+                "device_scale_factor",
+                "is_mobile",
+                "screen_width",
+                "screen_height",
+            ),
         ),
-        ("Emulation.setTouchEmulationEnabled", {"enabled": plan.has_touch}),
-    )
+        ("Emulation.setTouchEmulationEnabled", {"enabled": plan.has_touch}, ("has_touch",)),
+    ]
+    if plan.launch_mode == "cdp_launch":
+        commands.insert(
+            2,
+            ("Emulation.setLocaleOverride", {"locale": plan.locale}, ("locale",)),
+        )
+    session = None
     try:
         session = await context.new_cdp_session(page)
-        for method, params in commands:
-            await session.send(method, params)
+        for method, params, fields in commands:
+            await _apply_page_override(context, session, method, params, fields)
         add_init_script = getattr(page, "add_init_script", None)
         if callable(add_init_script):
             languages = json.dumps(_accept_language_tags(plan.accept_language), ensure_ascii=False)
@@ -1096,6 +1139,69 @@ async def prepare_managed_page(context: Any, page: Any) -> None:
         )
         write_browser_environment_result(failure.browser_environment_result)
         raise failure from exc
+    finally:
+        detach = getattr(session, "detach", None)
+        if callable(detach):
+            try:
+                await detach()
+            except Exception:
+                pass
+
+
+async def _apply_page_override(
+    context: Any,
+    session: Any,
+    method: str,
+    params: dict[str, Any],
+    fields: tuple[str, ...],
+) -> None:
+    try:
+        await session.send(method, params)
+        return
+    except Exception as exc:
+        if not _is_cdp_capability_error(exc):
+            raise
+
+    runtime = _context_runtime_state(context)
+    if method == "Emulation.setUserAgentOverride" and "userAgentMetadata" in params:
+        reduced = {key: value for key, value in params.items() if key != "userAgentMetadata"}
+        try:
+            await session.send(method, reduced)
+            runtime.setdefault("declared_unsupported_fields", set()).add("ua_client_hints")
+            return
+        except Exception as exc:
+            if not _is_cdp_capability_error(exc):
+                raise
+    elif method == "Emulation.setDeviceMetricsOverride" and "screenWidth" in params:
+        reduced = {
+            key: value
+            for key, value in params.items()
+            if key not in {"screenWidth", "screenHeight"}
+        }
+        try:
+            await session.send(method, reduced)
+            return
+        except Exception as exc:
+            if not _is_cdp_capability_error(exc):
+                raise
+    if "ua_client_hints" in fields:
+        runtime.setdefault("declared_unsupported_fields", set()).add("ua_client_hints")
+
+
+def _is_cdp_capability_error(exc: Exception) -> bool:
+    value = str(exc).lower()
+    return any(
+        marker in value
+        for marker in (
+            "invalid parameter",
+            "method not found",
+            "wasn't found",
+            "unknown command",
+            "not supported",
+            "not implemented",
+            "another locale override is already in effect",
+        )
+    )
 
 
 def _managed_navigator_platform(browser_platform: str) -> str:
@@ -1343,6 +1449,7 @@ def _bind_context_plan(context: Any, plan: BrowserEnvironmentPlan) -> None:
     runtime = {
         "accept_language": "",
         "proxy_effect_proof": "pending" if plan.proxy_policy == "account_bound" else "not_applicable",
+        "declared_unsupported_fields": set(),
     }
     try:
         setattr(context, _CONTEXT_PLAN_ATTR, plan)
