@@ -2,6 +2,69 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-22 - CR-133 Windows Clean-Computer One-Click Bootstrap Verification
+
+Scope: project-local runtime acquisition, locked dependency preparation,
+uv/Node/Douyin-signing runtime, authenticated proxy handling,
+storage/port/administrator preflight, bounded installer trees, Windows
+virtual-environment process ownership, and isolated one-click service startup.
+
+Result: implementation and independent review verified; other-computer
+operator acceptance remains pending.
+
+- Windows PowerShell 5.1 first exposed an encoding failure when reading a
+  no-BOM UTF-8 script. The shared bootstrap is now ASCII-only and passed its
+  real Windows PowerShell 5.1 entry path.
+- A forced clean-runtime receipt removed system `uv` from the child `PATH`.
+  The official versioned installer created project-local `uv 0.11.30` under
+  ignored `.runtime/uv` without persistent `PATH` changes. The compatible
+  system-uv path also passed without a download. A later receipt put an
+  incompatible fake `uv.exe` first and the compatible project copy later; the
+  launcher rejected the first candidate, moved the selected directory to the
+  current-process `PATH` front, and passed without another download.
+- A fresh empty managed-Python directory downloaded CPython `3.11.15`
+  (`24.5 MiB`), resolved the locked 94-package graph, and installed 92
+  packages. A second run reused the environment and checked all 92 packages
+  without reinstalling them.
+- With no system Node in the child `PATH`, the launcher reused locked
+  Playwright's Node `v20.14.0`. Preflight selected `Node.js (V8)` and completed
+  the real Douyin `sign_datail` call. A service-side `/api/env/check` then ran
+  its normal `uv run main.py --help` child and returned `success=true`, proving
+  the project-local uv remained discoverable after startup.
+- Windows PowerShell 5.1 explicitly parsed a synthetic authenticated proxy,
+  removed user info from the request URI, decoded the username/password into
+  `PSCredential`, and emitted no credential value or network request. Static
+  coverage also proves `HTTPS_PROXY`, `ALL_PROXY`, `HTTP_PROXY`, and `NO_PROXY`
+  handling with no fixed proxy.
+- Isolated startup created a synthetic administrator, initialized a new
+  database, verified more than 1 GB free space, confirmed port `18084`, and
+  selected local `chrome.exe`. No runtime account, Cookie, Profile, or primary
+  database was read or changed.
+- The first detached service receipt exposed Windows virtual-environment PID
+  indirection: the spawned redirector was the parent of the actual Uvicorn
+  service. Health now accepts only the launcher PID or a Windows process proven
+  to be its descendant, and failed startup terminates the owned process tree.
+- The final combined detached receipt returned success in `7.8s` while the
+  incompatible uv candidate remained first in the input `PATH` and no system
+  Node/Python was available. `/api/health` returned service PID `15096`, the
+  port listener had the same PID, `/monitor` returned
+  HTTP `200`, and the synthetic administrator authenticated with role
+  `administrator`. The verified test tree `35724 -> 15096` was stopped, port
+  `18084` was released, and the existing port `8080` service remained healthy
+  on its original PID `40328`.
+- Focused CR-117/CR-132/CR-133 startup coverage passed (`37 passed`); the final
+  CR-133-only rerun passed (`13 passed`). Complete monitoring coverage passed
+  (`739 passed, 3 warnings`).
+- `uv lock --check`, Python compile, external JavaScript parse,
+  `scripts/check_docs.py`, documentation regression (`1 passed`), PowerShell
+  parse/real execution, and `git diff --check` passed.
+- Final independent read-only review returned PASS with no remaining P1/P2.
+- The broader repository run completed `869 passed, 8 skipped, 7 failed`.
+  Six unrelated tests require a live Redis service on `127.0.0.1:6379`. The
+  existing `TestXhsStoreFactory.test_create_excel_store` type assertion also
+  failed alone and does not touch CR-133 files. These are recorded as existing
+  external/baseline gaps rather than changed in this lane.
+
 ## 2026-07-22 - CR-132 Windows Login Bootstrap Verification
 
 Scope: Windows local launcher defaults, one-click service ownership, direct

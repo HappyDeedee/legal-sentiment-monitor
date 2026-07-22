@@ -615,6 +615,18 @@ def _descendant_processes(
     return tuple((pid, executable_name) for _, pid, executable_name in found)
 
 
+def windows_process_is_descendant(root_pid: int, candidate_pid: int) -> bool:
+    """Return whether a live Windows process belongs to a root process tree."""
+
+    if os.name != "nt":
+        return False
+    try:
+        rows = _windows_process_snapshot()
+        return int(candidate_pid) in {pid for pid, _ in _descendant_processes(rows, int(root_pid))}
+    except Exception:
+        return False
+
+
 def _windows_process_creation_time(pid: int) -> int | None:
     if os.name != "nt":
         return None

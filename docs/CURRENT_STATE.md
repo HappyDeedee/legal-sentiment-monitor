@@ -4,6 +4,23 @@ Last updated: 2026-07-22
 
 ## Current Baseline
 
+- CR-133 is the active clean-computer Windows startup lane, based on
+  `main@87cb179`.
+  The todo baseline classifies CR-117 and CR-132 as verified historical browser
+  and login behavior, with their other-computer acceptance still
+  operator-gated. The implementation now reuses compatible `uv` or installs a
+  project-local pinned copy, syncs the committed lock with existing
+  environment/cache reuse, preflights storage/disk/port/schema/administrator,
+  bounds browser installation, and accepts a virtual-environment service only
+  when its PID is the launched process or a proven Windows descendant. A fresh
+  isolated Python 3.11 environment and detached service passed data/admin,
+  browser, real Douyin signing, service-side collection-environment, exact
+  listener, `/monitor`, login, and owned-tree cleanup checks. Focused `37` and
+  complete monitoring `739` tests pass. Final independent read-only review
+  returned PASS with no remaining P1/P2. Second-computer login acceptance is
+  operator-gated; service-only, Docker, server, and account/Profile/Cookie
+  authority remain unchanged.
+
 - CR-132 implementation is verified on
   `codex/cr-132-windows-login-bootstrap`, based on `main@a0a8583`. Windows
   local launchers now default browser auto-sync on, unsaved named accounts

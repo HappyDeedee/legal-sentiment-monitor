@@ -25,11 +25,22 @@ Windows 本地一键启动并自动打开后台：
 .\start_monitor_oneclick.bat
 ```
 
-本地启动需要先安装 `uv`。首次启动会固定选择一个项目浏览器：有效的
+首次运行会自动完成本机启动准备：优先复用符合项目能力要求的系统 `uv`；
+缺失或版本过旧时，复用或安装项目 `.runtime` 中的固定版本，不修改持久化
+`PATH`；随后按 `uv.lock` 检查 Python 3.11 和依赖。已匹配的虚拟环境和下载
+缓存会直接复用，只补齐缺失或不匹配内容。Node.js >=16 也优先复用系统
+版本；没有合格版本时复用锁定 Playwright 自带的 Node，不单独下载 Node。
+
+如果数据库还没有管理员且未设置 `MONITOR_ADMIN_EMAIL` 和
+`MONITOR_ADMIN_PASSWORD`，控制台会提示创建首次管理员，密码输入不会显示。
+启动前还会检查数据目录、至少 1 GB 可用空间和端口占用。
+
+首次启动会固定选择一个项目浏览器：有效的
 `MONITOR_BROWSER_EXECUTABLE` 优先，其次依次检查本机 Chrome、Edge、
 Chromium 和已安装的 Playwright Chromium；全部缺失时自动安装 Playwright
 Chromium。选择结果保存在本机运行数据中，后续不会因为安装了另一个浏览器
-而切换已有账号的 Profile。自动安装失败时，可以手工重试：
+而切换已有账号的 Profile。自动安装失败时，检查网络或代理后重新运行一键
+启动；已有全局 `uv` 时也可以手工检查：
 
 ```powershell
 uv run playwright install chromium

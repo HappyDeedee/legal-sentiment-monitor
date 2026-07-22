@@ -132,6 +132,7 @@ Status values:
 - CR-129: Account Profile And Platform Request Identity Consistency
 - CR-130: Cookie Account Save Promotion Consistency
 - CR-132: Windows Login Bootstrap And Bounded Browser Startup
+- CR-133: Windows Clean-Computer One-Click Bootstrap
 - CR-096: AI Evaluation Postprocessing Scope Reduction
 - CR-075: Responsive Navigation Interaction Consistency
 - CR-076: Mobile Header Layout Resilience Regression Fix
@@ -4936,6 +4937,108 @@ Live verification (2026-07-22):
 - The account is `active`, has no current error, and its Profile directory is
   present after the service continued running. The verification used only
   the operator's test account; no protected collection account was changed.
+
+## CR-133 - Windows Clean-Computer One-Click Bootstrap
+
+Date: 2026-07-22
+
+Source: operator request to make the merged local-login behavior reproducible
+from the Windows one-click launchers on another computer.
+
+Module: Windows local launchers, project runtime bootstrap, startup preflight,
+initial administrator bootstrap, and Playwright browser preparation.
+
+Type: Existing Feature Optimization
+
+Status: Implementation Verified / Operator Acceptance Pending
+
+Verification update:
+
+- Compatible system `uv` and Node are reused; project-local runtime fallback,
+  locked environment preparation, clean Python/Node receipts, real Douyin
+  signing, authenticated proxy parsing, detached service health/page/login,
+  owned-tree cleanup, focused `37`, complete monitoring `739`, and final
+  independent read-only review all pass. Second-computer login acceptance
+  follows availability on `main`.
+
+Baseline:
+
+- CR-132 fixes the account login entry and bounded QR/browser workflow, but
+  both local launchers still stop when `uv` is absent.
+- A clean checkout does not explicitly synchronize the locked Python
+  environment before launching the service.
+- Browser installation has no independent process timeout, and startup does
+  not fail early for an unwritable data directory, low disk space, an occupied
+  port, or a missing initial administrator.
+- CR-117 intentionally left the real clean-Windows runtime bootstrap as a
+  separate acceptance gate.
+
+Confirmed decisions:
+
+- The two interactive Windows local launchers prefer a compatible system `uv`,
+  then reuse or install a pinned project-local copy. The selected executable
+  directory is placed first only in the current launcher/service process
+  `PATH`; the bootstrap does not modify persistent `PATH` or PowerShell
+  profiles.
+- Dependency preparation uses the committed Python version and
+  `uv sync --locked`; it does not rewrite `uv.lock`.
+- When no active administrator exists, existing deployment environment values
+  remain authoritative. Otherwise an interactive console prompt gathers the
+  initial email, display name, and hidden password and uses the existing
+  environment-bootstrap database contract. No plaintext password is written
+  to a project configuration file or printed.
+- Existing proxy and package-index environment values pass through unchanged.
+  The launcher does not guess or persist a machine-specific proxy.
+- Node.js `16` or newer is reused when available. Otherwise the launcher reuses
+  the Node executable already shipped by locked Playwright and proves the real
+  Douyin signing runtime before service startup.
+- `start_monitor_service.bat`, Docker, server defaults, account Profile/Cookie
+  authority, and browser selection authority remain unchanged.
+
+In scope:
+
+- Locate a working `uv`, or install the pinned official Windows build under an
+  ignored project runtime directory.
+- Synchronize the exact locked environment and allow `uv` to obtain the
+  committed Python version when it is absent.
+- Preflight the runtime data directory, minimum free space, configured port,
+  `uv`/Node/Douyin signing runtime, database schema, and initial administrator
+  before starting Uvicorn.
+- Add a finite Playwright Chromium installation timeout and actionable stage
+  errors without exposing proxy values or secrets.
+- Share the same bootstrap from detached one-click and foreground Web UI
+  launchers while preserving their current lifecycle difference.
+- Exercise the path with an isolated data directory and fresh virtual
+  environment so current account, Cookie, Profile, and database state are not
+  read or changed.
+
+Out of scope:
+
+- Git installation or repository cloning, automatic Git pulls, Windows service
+  installation, Docker/Linux provisioning, public setup pages, browser-family
+  migration, and platform verification automation.
+- Embedding credentials, Cookie, Profile data, or a fixed local proxy in the
+  launcher.
+
+Acceptance criteria:
+
+- On a clean supported Windows checkout, either local launcher can prepare its
+  project-local runtime and locked dependencies without a prior global `uv` or
+  Python installation. A compatible system Node is reused; without one, the
+  Playwright-bundled Node makes the Douyin signing probe pass.
+- A first run with no administrator completes a hidden-password console setup;
+  later runs reuse the hashed administrator record without prompting.
+- An unwritable data directory, less than 1 GB free space, an occupied port,
+  dependency failure, browser installer failure, or browser installer timeout
+  stops before opening the monitor and reports the failed stage.
+- Explicit deployment variables, package indexes, and proxy variables remain
+  authoritative, and their secret values are not echoed.
+- The existing Windows browser auto-sync defaults, direct new-account Browser
+  login, QR flow, Cookie/Profile promotion, and owned-process health check stay
+  green.
+- Focused bootstrap tests, adjacent CR-117/CR-132 tests, complete monitoring
+  regression, syntax/docs/whitespace checks, isolated first-run service health,
+  and independent read-only review pass.
 
 ## CR-132 - Windows Login Bootstrap And Bounded Browser Startup
 

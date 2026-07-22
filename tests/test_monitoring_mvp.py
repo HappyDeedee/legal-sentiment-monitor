@@ -7,6 +7,7 @@ import multiprocessing
 import os
 import re
 import smtplib
+import socket
 import sqlite3
 import sys
 import uuid
@@ -109,6 +110,7 @@ from api.monitoring.readiness import get_readiness_status
 from api.monitoring.reporting import create_report, resend_report_email, send_report_with_delivery_log
 from api.monitoring.security import redact_sensitive
 import api.monitoring.startup_launcher as api_monitoring_startup_launcher
+import api.monitoring.windows_first_run as windows_first_run_module
 from api.monitoring.avatar_cache import AVATAR_CACHE_DIR
 from api.monitoring.selftest import create_sample_report
 from api.monitoring.smoke import run_smoke_check
@@ -156,6 +158,12 @@ def _cr117_browser_selection_worker(
         result_queue.put(("ok", selected.source, str(selected.executable_path)))
     except BaseException as exc:
         result_queue.put(("error", type(exc).__name__, str(exc)))
+
+
+def _unused_local_port() -> int:
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.bind(("127.0.0.1", 0))
+        return int(probe.getsockname()[1])
 
 
 def _monitor_section(page: str, section_id: str) -> str:
@@ -8248,7 +8256,7 @@ def test_cr117_local_browser_skips_playwright_install(tmp_path, monkeypatch):
     )
     monkeypatch.setattr(
         api_monitoring_startup_launcher.subprocess,
-        "run",
+        "Popen",
         lambda *args, **kwargs: (_ for _ in ()).throw(AssertionError("installer must not run")),
     )
 
@@ -8269,21 +8277,28 @@ def test_cr117_missing_playwright_installs_automatically_then_rechecks(tmp_path,
             raise BrowserSelectionError("playwright_missing", "missing Playwright")
         return BrowserSelection(bundled_browser.resolve(), "playwright_bundled", "playwright")
 
+    class FakeInstallerProcess:
+        def wait(self, timeout):
+            assert timeout == api_monitoring_startup_launcher.DEFAULT_BROWSER_INSTALL_TIMEOUT_SECONDS
+            return 0
+
     def fake_install(command, **kwargs):
         installer_calls.append((command, kwargs))
         bundled_browser.parent.mkdir()
         bundled_browser.write_bytes(b"synthetic Playwright")
-        return SimpleNamespace(returncode=0)
+        return FakeInstallerProcess()
 
     monkeypatch.setattr(api_monitoring_startup_launcher, "_resolve_local_browser_selection", resolve_selection)
-    monkeypatch.setattr(api_monitoring_startup_launcher.subprocess, "run", fake_install)
+    monkeypatch.setattr(api_monitoring_startup_launcher.subprocess, "Popen", fake_install)
 
     assert api_monitoring_startup_launcher.ensure_oneclick_browser() == bundled_browser.resolve()
     assert "正在自动下载安装" in capsys.readouterr().out
     assert installer_calls == [
         (
             [sys.executable, "-m", "playwright", "install", "chromium"],
-            {"cwd": api_monitoring_startup_launcher.ROOT, "check": False},
+            {
+                "cwd": api_monitoring_startup_launcher.ROOT,
+            },
         )
     ]
 
@@ -8301,13 +8316,17 @@ def test_cr117_playwright_install_failures_stop_with_retry_command(failure_mode,
             raise BrowserSelectionError("playwright_missing", "missing Playwright")
         raise BrowserSelectionError("playwright_missing", "still missing Playwright")
 
+    class FakeInstallerProcess:
+        def wait(self, timeout):
+            return 7 if failure_mode == "nonzero" else 0
+
     def fake_install(*args, **kwargs):
         if failure_mode == "launch":
             raise OSError("synthetic installer launch failure")
-        return SimpleNamespace(returncode=7 if failure_mode == "nonzero" else 0)
+        return FakeInstallerProcess()
 
     monkeypatch.setattr(api_monitoring_startup_launcher, "_resolve_local_browser_selection", resolve_selection)
-    monkeypatch.setattr(api_monitoring_startup_launcher.subprocess, "run", fake_install)
+    monkeypatch.setattr(api_monitoring_startup_launcher.subprocess, "Popen", fake_install)
 
     with pytest.raises(RuntimeError, match="uv run playwright install chromium"):
         api_monitoring_startup_launcher.ensure_oneclick_browser()
@@ -8319,7 +8338,7 @@ def test_cr117_main_checks_browser_before_starting_service(monkeypatch):
     monkeypatch.setattr(
         api_monitoring_startup_launcher,
         "ensure_oneclick_browser",
-        lambda: events.append("browser"),
+        lambda *_: events.append("browser"),
     )
     monkeypatch.setattr(
         api_monitoring_startup_launcher,
@@ -8336,7 +8355,7 @@ def test_cr117_preflight_only_does_not_start_service(monkeypatch):
     monkeypatch.setattr(
         api_monitoring_startup_launcher,
         "ensure_oneclick_browser",
-        lambda: events.append("browser") or Path("chrome.exe"),
+        lambda *_: events.append("browser") or Path("chrome.exe"),
     )
     monkeypatch.setattr(
         api_monitoring_startup_launcher,
@@ -8349,7 +8368,7 @@ def test_cr117_preflight_only_does_not_start_service(monkeypatch):
 
 
 def test_cr117_main_browser_preflight_failure_stops_before_service(monkeypatch, capsys):
-    def fail_preflight():
+    def fail_preflight(*_args):
         raise RuntimeError("synthetic browser install failure")
 
     def forbidden(*args, **kwargs):
@@ -8362,37 +8381,360 @@ def test_cr117_main_browser_preflight_failure_stops_before_service(monkeypatch, 
     assert "synthetic browser install failure" in capsys.readouterr().err
 
 
-def test_cr117_local_batches_check_uv_and_share_browser_preflight():
+def test_cr133_local_batches_share_clean_computer_bootstrap():
     oneclick = Path("start_monitor_oneclick.bat").read_text(encoding="utf-8")
     normalized = oneclick.lower()
-    launcher_index = normalized.index("uv run python -m api.monitoring.startup_launcher")
+    launcher_index = normalized.index("scripts\\windows_oneclick_bootstrap.ps1")
     exit_code_index = normalized.index('set "startup_exit_code=%errorlevel%"')
     pause_index = normalized.index("pause", exit_code_index)
     exit_index = normalized.index("exit /b %startup_exit_code%")
 
-    assert "where uv" in normalized
-    assert "api.monitoring.startup_launcher" in oneclick
-    assert normalized.index("where uv") < launcher_index
+    assert "where uv" not in normalized
+    assert "windowspowershell\\v1.0\\powershell.exe" in normalized
+    assert "-mode detached" in normalized
     assert launcher_index < exit_code_index < pause_index < exit_index
-    assert 'if "%monitor_browser_cookie_sync_enabled%"=="" set "monitor_browser_cookie_sync_enabled=true"' in normalized
-    assert 'if "%monitor_allow_local_login_window%"=="" set "monitor_allow_local_login_window=true"' in normalized
-    assert 'if "%monitor_login_qr_headless%"=="" set "monitor_login_qr_headless=false"' in normalized
 
     webui = Path("start_webui.bat").read_text(encoding="utf-8").lower()
-    webui_launcher = webui.index("uv run python -m api.monitoring.startup_launcher --host")
+    webui_launcher = webui.index("scripts\\windows_oneclick_bootstrap.ps1")
     webui_exit_code = webui.index('set "startup_exit_code=%errorlevel%"')
-    assert "where uv" in webui
-    assert webui.index("where uv") < webui_launcher < webui_exit_code
-    assert "--foreground" in webui
+    assert "where uv" not in webui
+    assert webui_launcher < webui_exit_code
+    assert "-mode foreground" in webui
     assert "--browser-preflight-only" not in webui
     assert "uv run uvicorn api.main:app" not in webui
     assert 'start "" "%monitor_browser_url%"' not in webui
-    assert 'if "%monitor_browser_cookie_sync_enabled%"=="" set "monitor_browser_cookie_sync_enabled=true"' in webui
-    assert 'if "%monitor_allow_local_login_window%"=="" set "monitor_allow_local_login_window=true"' in webui
-    assert 'if "%monitor_login_qr_headless%"=="" set "monitor_login_qr_headless=false"' in webui
+
+    bootstrap = Path("scripts/windows_oneclick_bootstrap.ps1").read_text(encoding="utf-8")
+    bootstrap_normalized = bootstrap.lower()
+    assert bootstrap.isascii()
+    assert '$pinneduvversion = "0.11.30"' in bootstrap_normalized
+    assert "https://astral.sh/uv/$pinneduvversion/install.ps1" in bootstrap_normalized
+    assert "uv_unmanaged_install" in bootstrap_normalized
+    assert "uv_no_modify_path" in bootstrap_normalized
+    assert '"sync", "--locked"' in bootstrap_normalized
+    assert '"run", "--locked", "--no-sync"' in bootstrap_normalized
+    assert "$candidate sync --help" in bootstrap_normalized
+    assert "$candidate run --help" in bootstrap_normalized
+    assert "waitforexit($installertimeoutmilliseconds)" in bootstrap_normalized
+    assert "https_proxy" in bootstrap_normalized
+    assert "all_proxy" in bootstrap_normalized
+    assert "http_proxy" in bootstrap_normalized
+    assert "no_proxy" in bootstrap_normalized
+    assert "$downloadparameters.proxy = $installerproxy" in bootstrap_normalized
+    assert "$downloadparameters.proxycredential = $installerproxy.credential" in bootstrap_normalized
+    assert "$proxyuri.userinfo" in bootstrap_normalized
+    assert "[uri]::unescapedatastring" in bootstrap_normalized
+    assert "$proxybuilder.username = \"\"" in bootstrap_normalized
+    resolve_uv_start = bootstrap_normalized.index("function resolve-uvcommand")
+    resolve_uv_end = bootstrap_normalized.index("function invoke-uvstep", resolve_uv_start)
+    resolve_uv_block = bootstrap_normalized[resolve_uv_start:resolve_uv_end]
+    assert resolve_uv_block.index("get-command uv") < resolve_uv_block.index("test-path -literalpath $projectuv")
+    assert "get-command uv -commandtype application -all" in resolve_uv_block
+    assert "foreach ($systemuv in $systemuvcandidates)" in resolve_uv_block
+    first_password_removal = bootstrap_normalized.index("remove-item env:monitor_admin_password")
+    uv_resolution = bootstrap_normalized.index("$uv = resolve-uvcommand")
+    dependency_sync = bootstrap_normalized.index('invoke-uvstep -uvcommand $uv -uvarguments @("sync", "--locked")')
+    password_restore = bootstrap_normalized.index("$env:monitor_admin_password = $bootstrapadminpassword")
+    first_run_preflight = bootstrap_normalized.index("api.monitoring.windows_first_run", password_restore)
+    final_password_removal = bootstrap_normalized.index("remove-item env:monitor_admin_password", password_restore)
+    assert first_password_removal < uv_resolution < dependency_sync < password_restore < first_run_preflight < final_password_removal
+    assert "add-executabledirectorytoprocesspath -executable $uv" in bootstrap_normalized
+    assert "--print-node-executable" in bootstrap_normalized
+    assert "add-executabledirectorytoprocesspath -executable $node" in bootstrap_normalized
+    assert '$_ -ine $executabledirectory' in bootstrap_normalized
+    assert '$env:path = (@($executabledirectory) + $remaining) -join ";"' in bootstrap_normalized
+    assert "function stop-ownedprocesstree" in bootstrap_normalized
+    assert "/t /f" in bootstrap_normalized
+    assert "api.monitoring.windows_first_run" in bootstrap_normalized
+    assert "api.monitoring.startup_launcher" in bootstrap_normalized
+    assert "remove-item env:monitor_admin_password" in bootstrap_normalized
+    assert "monitor_browser_cookie_sync_enabled" in bootstrap_normalized
+    assert "monitor_allow_local_login_window" in bootstrap_normalized
+    assert "monitor_login_qr_headless" in bootstrap_normalized
+    assert "winget" not in bootstrap_normalized
+    assert "127.0.0.1:10809" not in bootstrap_normalized
+    assert 'setenvironmentvariable("path"' not in bootstrap_normalized
 
     service_only = Path("start_monitor_service.bat").read_text(encoding="utf-8").lower()
     assert "browser-preflight-only" not in service_only
+    assert "windows_oneclick_bootstrap.ps1" not in service_only
+
+
+def test_cr133_playwright_install_timeout_stops_preflight(monkeypatch):
+    from api.monitoring.browser_selection import BrowserSelectionError
+
+    monkeypatch.setattr(
+        api_monitoring_startup_launcher,
+        "_resolve_local_browser_selection",
+        lambda: (_ for _ in ()).throw(BrowserSelectionError("playwright_missing", "missing")),
+    )
+    terminated = []
+
+    class FakeInstallerProcess:
+        def wait(self, timeout):
+            raise api_monitoring_startup_launcher.subprocess.TimeoutExpired("playwright", timeout)
+
+    monkeypatch.setattr(api_monitoring_startup_launcher.subprocess, "Popen", lambda *args, **kwargs: FakeInstallerProcess())
+    monkeypatch.setattr(api_monitoring_startup_launcher, "_terminate", lambda process: terminated.append(process))
+
+    with pytest.raises(RuntimeError, match="超过 12 秒"):
+        api_monitoring_startup_launcher.ensure_oneclick_browser(12)
+    assert len(terminated) == 1
+
+
+def test_cr133_health_accepts_only_a_process_owned_service(monkeypatch):
+    seen: list[tuple[int, int]] = []
+
+    class FakeProcess:
+        pid = 43210
+        returncode = None
+
+        def poll(self):
+            return None
+
+    class FakeResponse:
+        def read(self):
+            return b'{"status":"ok","process_id":54321}'
+
+        def __enter__(self):
+            return self
+
+        def __exit__(self, exc_type, exc, tb):
+            return False
+
+    monkeypatch.setattr(api_monitoring_startup_launcher, "urlopen", lambda *args, **kwargs: FakeResponse())
+    monkeypatch.setattr(
+        api_monitoring_startup_launcher,
+        "_service_process_matches",
+        lambda root_pid, observed_pid: seen.append((root_pid, observed_pid)) or True,
+    )
+
+    api_monitoring_startup_launcher._wait_for_health(
+        "http://127.0.0.1:18084/api/health",
+        FakeProcess(),
+        1,
+    )
+
+    assert seen == [(43210, 54321)]
+
+
+def test_cr133_windows_service_descendant_and_process_tree_cleanup(monkeypatch):
+    from tools import browser_environment
+
+    monkeypatch.setattr(browser_environment, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(
+        browser_environment,
+        "_windows_process_snapshot",
+        lambda: (
+            (100, 1, "python.exe"),
+            (101, 100, "python.exe"),
+            (102, 101, "python.exe"),
+            (200, 1, "python.exe"),
+        ),
+    )
+    assert browser_environment.windows_process_is_descendant(100, 102) is True
+    assert browser_environment.windows_process_is_descendant(100, 200) is False
+
+    calls: list[list[str]] = []
+
+    class FakeProcess:
+        pid = 100
+
+        def poll(self):
+            return None
+
+        def wait(self, timeout):
+            return 0
+
+        def kill(self):
+            raise AssertionError("taskkill tree succeeded")
+
+    monkeypatch.setattr(api_monitoring_startup_launcher, "os", SimpleNamespace(name="nt"))
+    monkeypatch.setattr(
+        api_monitoring_startup_launcher.subprocess,
+        "run",
+        lambda command, **kwargs: calls.append(command) or SimpleNamespace(returncode=0),
+    )
+
+    api_monitoring_startup_launcher._terminate(FakeProcess())
+
+    assert calls == [["taskkill", "/PID", "100", "/T", "/F"]]
+
+
+def test_cr133_first_run_preflight_checks_storage_port_schema_and_admin(tmp_path, monkeypatch):
+    events: list[str] = []
+    state = {"admin": False}
+    monkeypatch.setattr(
+        windows_first_run_module.shutil,
+        "disk_usage",
+        lambda path: SimpleNamespace(total=10 * 1024**3, used=1024**3, free=9 * 1024**3),
+    )
+    monkeypatch.setattr(windows_first_run_module, "init_db", lambda: events.append("schema"))
+    monkeypatch.setattr(windows_first_run_module, "has_active_administrator", lambda: state["admin"])
+    monkeypatch.setattr(
+        windows_first_run_module,
+        "check_command_runtime",
+        lambda command: events.append(f"command:{command}") or Path(f"{command}.exe"),
+    )
+    monkeypatch.setattr(
+        windows_first_run_module,
+        "check_javascript_runtime",
+        lambda: events.append("javascript") or Path("node.exe"),
+    )
+
+    def bootstrap(email, password, display_name):
+        events.append(f"admin:{email}:{display_name}")
+        state["admin"] = True
+        return {"id": 1}
+
+    monkeypatch.setattr(windows_first_run_module, "bootstrap_admin_from_env", bootstrap)
+
+    result = windows_first_run_module.run_first_run_preflight(
+        "127.0.0.1",
+        _unused_local_port(),
+        data_dir=tmp_path / "monitor_data",
+        interactive=False,
+        environ={
+            "MONITOR_ADMIN_EMAIL": "first-admin@example.test",
+            "MONITOR_ADMIN_PASSWORD": "synthetic-secret",
+            "MONITOR_ADMIN_DISPLAY_NAME": "首次管理员",
+        },
+    )
+
+    assert result.data_dir == (tmp_path / "monitor_data").resolve()
+    assert result.admin_source == "environment"
+    assert events == [
+        "command:uv",
+        "javascript",
+        "schema",
+        "admin:first-admin@example.test:首次管理员",
+    ]
+    assert not list(result.data_dir.glob(".startup_write_test_*"))
+
+
+def test_cr133_first_run_interactive_admin_hides_and_confirms_password(monkeypatch, capsys):
+    state = {"admin": False}
+    captured: dict[str, str] = {}
+    answers = iter(["operator@example.test", "系统管理员"])
+    passwords = iter(["secret-123", "secret-123"])
+    monkeypatch.setattr(windows_first_run_module, "has_active_administrator", lambda: state["admin"])
+
+    def bootstrap(email, password, display_name):
+        captured.update(email=email, password=password, display_name=display_name)
+        state["admin"] = True
+        return {"id": 1}
+
+    monkeypatch.setattr(windows_first_run_module, "bootstrap_admin_from_env", bootstrap)
+
+    source = windows_first_run_module.ensure_initial_administrator(
+        interactive=True,
+        environ={},
+        input_fn=lambda prompt: next(answers),
+        password_fn=lambda prompt: next(passwords),
+    )
+
+    assert source == "interactive"
+    assert captured == {
+        "email": "operator@example.test",
+        "password": "secret-123",
+        "display_name": "系统管理员",
+    }
+    assert "secret-123" not in capsys.readouterr().out
+
+
+@pytest.mark.parametrize(
+    ("environ", "message"),
+    [
+        ({}, "当前没有管理员账号"),
+        ({"MONITOR_ADMIN_EMAIL": "admin@example.test"}, "环境变量不完整"),
+        (
+            {
+                "MONITOR_ADMIN_EMAIL": "missing-at-sign",
+                "MONITOR_ADMIN_PASSWORD": "synthetic-secret",
+            },
+            "必须包含 @",
+        ),
+    ],
+)
+def test_cr133_first_run_admin_configuration_errors_stop(environ, message, monkeypatch):
+    monkeypatch.setattr(windows_first_run_module, "has_active_administrator", lambda: False)
+
+    with pytest.raises(windows_first_run_module.FirstRunPreflightError, match=message):
+        windows_first_run_module.ensure_initial_administrator(
+            interactive=False,
+            environ=environ,
+            input_fn=lambda prompt: "",
+            password_fn=lambda prompt: "",
+        )
+
+
+def test_cr133_first_run_rejects_low_disk_and_occupied_port(tmp_path, monkeypatch):
+    monkeypatch.setattr(
+        windows_first_run_module.shutil,
+        "disk_usage",
+        lambda path: SimpleNamespace(total=1024**3, used=768 * 1024**2, free=256 * 1024**2),
+    )
+    with pytest.raises(windows_first_run_module.FirstRunPreflightError, match="启动至少需要 1.0 GB"):
+        windows_first_run_module.check_data_directory(tmp_path / "low-disk")
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as listener:
+        listener.bind(("127.0.0.1", 0))
+        listener.listen()
+        occupied_port = listener.getsockname()[1]
+        with pytest.raises(windows_first_run_module.FirstRunPreflightError, match="端口"):
+            windows_first_run_module.check_port_available("127.0.0.1", occupied_port)
+
+
+def test_cr133_node_resolution_reuses_compatible_system_then_bundled(tmp_path, monkeypatch):
+    system_node = tmp_path / "system" / "node.exe"
+    bundled_node = tmp_path / "playwright" / "driver" / "node.exe"
+    system_node.parent.mkdir()
+    bundled_node.parent.mkdir(parents=True)
+    system_node.write_bytes(b"system")
+    bundled_node.write_bytes(b"bundled")
+
+    monkeypatch.setattr(windows_first_run_module.shutil, "which", lambda command: str(system_node))
+    monkeypatch.setattr(windows_first_run_module, "_node_major_version", lambda path: 18)
+    assert windows_first_run_module.resolve_node_executable() == system_node.resolve()
+
+    import playwright
+
+    monkeypatch.setattr(playwright, "__file__", str(tmp_path / "playwright" / "__init__.py"))
+    monkeypatch.setattr(windows_first_run_module, "_node_major_version", lambda path: 12 if Path(path) == system_node else 20)
+    assert windows_first_run_module.resolve_node_executable() == bundled_node.resolve()
+
+
+def test_cr133_first_run_main_isolates_admin_password_from_runtime_children(monkeypatch):
+    captured: dict[str, object] = {}
+    monkeypatch.setenv("MONITOR_ADMIN_PASSWORD", "synthetic-admin-password")
+
+    def fake_preflight(host, port, **kwargs):
+        captured["process_password"] = os.environ.get("MONITOR_ADMIN_PASSWORD")
+        captured["bootstrap_password"] = kwargs["environ"].get("MONITOR_ADMIN_PASSWORD")
+        return windows_first_run_module.FirstRunPreflightResult(Path("monitor_data"), 2 * 1024**3, "existing")
+
+    monkeypatch.setattr(windows_first_run_module, "run_first_run_preflight", fake_preflight)
+
+    assert windows_first_run_module.main(["--host", "127.0.0.1", "--port", "18084"]) == 0
+    assert captured == {
+        "process_password": None,
+        "bootstrap_password": "synthetic-admin-password",
+    }
+
+
+def test_cr133_node_version_probe_uses_sanitized_child_environment(monkeypatch):
+    captured: dict[str, object] = {}
+    monkeypatch.setenv("MONITOR_ADMIN_PASSWORD", "synthetic-admin-password")
+
+    def fake_run(command, **kwargs):
+        captured["command"] = command
+        captured["password"] = kwargs["env"].get("MONITOR_ADMIN_PASSWORD")
+        return SimpleNamespace(returncode=0, stdout="v20.14.0", stderr="")
+
+    monkeypatch.setattr(windows_first_run_module.subprocess, "run", fake_run)
+
+    assert windows_first_run_module._node_major_version(Path("node.exe")) == 20
+    assert captured == {"command": ["node.exe", "--version"], "password": None}
 
 
 def test_cr132_new_account_can_open_browser_login_and_login_requests_are_bounded():

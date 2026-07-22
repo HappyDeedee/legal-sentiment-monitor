@@ -49,29 +49,64 @@ The Windows helper scripts in the repository should follow the same rule:
 `MONITOR_HOST` controls the bind address, `MONITOR_PORT` controls the port,
 and `MONITOR_BROWSER_URL` overrides only the browser destination.
 
-`start_monitor_oneclick.bat` and `start_webui.bat` require `uv` and run the
-shared local browser preflight before service startup:
+`start_monitor_oneclick.bat` and `start_webui.bat` use one Windows PowerShell
+5.1-compatible bootstrap before service startup:
 
-1. An existing deployment selection is reused. A matching explicit
+1. A working existing `uv` is reused when it supports the locked sync/run
+   capabilities required by this project. A compatible system copy has first
+   priority; otherwise an existing or newly installed pinned copy under ignored
+   `.runtime/uv` is used. Its directory is forced to the front of only the
+   launcher/service process `PATH`; persistent `PATH` and PowerShell profiles
+   are not edited.
+2. `uv sync --locked` prepares the committed Python version and exact locked
+   environment. Matching installed packages and the local download cache are
+   reused; only absent or lock-mismatched content is installed. The launcher
+   does not rewrite `uv.lock`.
+3. A system Node.js `16` or newer is reused. Otherwise the Node executable
+   already included by locked Playwright is placed first in only the current
+   process `PATH`. The preflight executes the real Douyin `sign_datail`
+   JavaScript call, so an old JScript fallback cannot produce a false-ready
+   startup.
+4. The configured data directory is created and write-probed, the existing
+   1 GB operational free-space threshold is enforced, and the configured
+   address/port must be available before database initialization.
+5. The database schema is initialized. An active administrator is reused; a
+   complete `MONITOR_ADMIN_EMAIL`/`MONITOR_ADMIN_PASSWORD` pair bootstraps the
+   existing contract; otherwise an interactive console prompts for email,
+   display name, and a hidden confirmed password. There is no public setup
+   page and plaintext password is not written to project configuration. The
+   helper copies it only for the administrator database call and removes it
+   before dependency, Node, browser, and service child processes.
+6. An existing deployment selection is reused. A matching explicit
    `MONITOR_BROWSER_EXECUTABLE` may confirm it; a conflicting explicit path or
    missing saved system/explicit browser stops startup.
-2. A clean deployment without Profile data selects a valid explicit browser,
+7. A clean deployment without Profile data selects a valid explicit browser,
    then Chrome, Edge, supported Chromium, or installed Playwright Chromium.
-3. Existing Profile data without a manifest preserves a valid explicit browser
+8. Existing Profile data without a manifest preserves a valid explicit browser
    when configured; otherwise it binds to Playwright Chromium.
-4. When the selected Playwright Chromium is absent, the launcher runs
+9. When the selected Playwright Chromium is absent, the launcher runs
    `python -m playwright install chromium` through the active project
-   interpreter. Installation output remains visible and the executable is
-   checked again before service startup.
-5. Installer failure or failed post-install verification stops startup and
-   returns `uv run playwright install chromium`.
+   interpreter with a finite timeout. Installation output remains visible and
+   the executable is checked again before service startup.
+10. Installer timeout, installer failure, or failed post-install verification
+    stops startup before the monitor opens and terminates the owned download
+    process tree.
 
 Both scripts start through `api.monitoring.startup_launcher`, wait for
-`/api/health` to return the exact spawned process ID, and open the browser only
-after that check passes. A stale listener on the selected port therefore stops
-startup instead of opening an older service. `start_monitor_oneclick.bat`
+`/api/health` to return either the spawned process ID or a process proven to be
+its Windows child. This covers the Python virtual-environment redirector while
+still rejecting an unrelated stale listener. The browser opens only after that
+check passes. Failed startup terminates the spawned Windows process tree.
+`start_monitor_oneclick.bat`
 keeps the service detached; `start_webui.bat` keeps Uvicorn output attached to
 the console and waits in the foreground.
+
+Existing `HTTP_PROXY`, `HTTPS_PROXY`, `ALL_PROXY`, `NO_PROXY`, and uv index
+environment values pass through unchanged. Windows PowerShell 5.1 receives the
+selected HTTP(S) proxy explicitly for the initial installer-script download;
+the launcher does not guess, print, or persist a machine-specific proxy.
+`MONITOR_UV_INSTALL_TIMEOUT_SECONDS`
+defaults to `120`; `MONITOR_BROWSER_INSTALL_TIMEOUT_SECONDS` defaults to `300`.
 
 For these two Windows local launchers only, absent values default to
 `MONITOR_BROWSER_COOKIE_SYNC_ENABLED=true`,

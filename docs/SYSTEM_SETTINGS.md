@@ -181,6 +181,14 @@ explicit values remain authoritative. These are launcher defaults, not browser
 template fields or editable runtime settings. The rejected Cookie-bridge
 WebSocket route remains absent in both feature states.
 
+CR-133's Windows runtime and browser download bounds are deployment-only
+`MONITOR_UV_INSTALL_TIMEOUT_SECONDS` (default `120`) and
+`MONITOR_BROWSER_INSTALL_TIMEOUT_SECONDS` (default `300`). Existing uv/package
+cache, index, and proxy environment values are reused. The launchers do not
+persist those values or expose them as editable runtime settings. Compatible
+system uv and Node have priority; selected fallback directories modify only the
+current launcher/service process `PATH`.
+
 Browser startup and cleanup watchdogs are deployment-only environment values:
 `MONITOR_LOGIN_BROWSER_STARTUP_STAGE_TIMEOUT_SECONDS`,
 `MONITOR_LOGIN_BROWSER_CLEANUP_TIMEOUT_SECONDS`,

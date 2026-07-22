@@ -177,6 +177,7 @@ cython_debug/
 /logs/
 /artifacts/
 /.codex_tmp/
+/.runtime/
 deploy/docker/monitor.env
 deploy/docker/data/
 deploy/docker/browser_data/

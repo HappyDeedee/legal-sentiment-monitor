@@ -865,6 +865,37 @@ short `Superseded by` note rather than deleting history.
   Cookie path, administrator reveal boundary, QR production path, CR-112 before
   CR-070 order, or mandatory Douyin/Xiaohongshu Packet D acceptance.
 
+## 2026-07-22 - CR-133 Windows Clean-Computer Bootstrap
+
+- The interactive Windows one-click launchers own local runtime preparation:
+  they prefer a compatible system `uv`, then reuse or install the pinned
+  official build under an ignored project directory, synchronize the committed
+  lock, then run startup preflight and the existing browser/service launcher.
+- The selected `uv` directory is forced to the front of only the launcher
+  process `PATH`, including when an incompatible system copy appears earlier.
+  This makes service Doctor, environment checks, and crawler children use the
+  validated executable without a persistent machine change.
+- Node.js `16` or newer follows the same reuse-first rule. When it is absent or
+  too old, the launcher reuses locked Playwright's bundled Node. Startup proves
+  both the Node version and a real Douyin `sign_datail` call before Uvicorn.
+- The bootstrap does not edit persistent `PATH`, PowerShell profiles, Git,
+  package-index settings, or proxy settings. Existing environment values pass
+  through to child processes and remain authoritative.
+- Local first-administrator entry stays inside the existing environment-
+  bootstrap security boundary. The console gathers a hidden password only when
+  no active administrator and no complete bootstrap environment pair exist;
+  it writes only the existing password hash and audit record. After preflight,
+  the local helper removes the plaintext bootstrap password from runtime,
+  dependency, Node, browser, and service child environments without editing
+  persistent user or machine variables.
+- Data-directory write access, the existing 1 GB operational disk threshold,
+  and port availability become start blockers. Playwright installation gets an
+  independent finite timeout. These checks fail before the service/browser is
+  reported ready.
+- `start_monitor_service.bat`, Docker/server startup, browser selection,
+  account Profile/Cookie authority, and platform verification behavior do not
+  change.
+
 ## 2026-07-22 - CR-132 Windows Local Login Bootstrap
 
 - Windows one-click and foreground local launchers enable browser auto-sync

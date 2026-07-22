@@ -1726,6 +1726,51 @@ Run the relevant parts of this checklist after each Phase 11 batch:
   live service verification with a disposable account, and independent
   read-only review.
 
+## CR-133 Windows Clean-Computer One-Click Bootstrap Tests
+
+- Both interactive Windows local launchers delegate to one PowerShell 5.1
+  compatible bootstrap while preserving detached one-click and foreground Web
+  UI service lifecycles.
+- A working system `uv` is reused. If neither system nor project-local `uv`
+  works, the pinned official installer writes only to the ignored project
+  runtime directory and does not edit persistent `PATH` or a shell profile.
+- A compatible system `uv` has priority. If an incompatible system `uv` is
+  earlier in `PATH` and the compatible project copy appears later, the selected
+  project directory is deduplicated and forced to the front for the current
+  service and crawler children only.
+- Dependency preparation runs `uv sync --locked` against the committed Python
+  version. Tests prove the launcher does not update the lock and stops before
+  service/browser startup when synchronization fails.
+- Preflight creates and probes the configured data directory, requires at
+  least 1 GB free, verifies that the configured host/port can bind, initializes
+  the schema, and requires an active administrator.
+- A compatible system Node.js `>=16` is reused. With no compatible system Node,
+  the locked Playwright bundled Node is put first in the child `PATH`; preflight
+  must select `Node.js (V8)` and complete a real Douyin `sign_datail` call.
+- Existing administrator environment variables remain authoritative. With no
+  active administrator and no complete environment pair, an interactive run
+  prompts for a valid email and hidden confirmed password; a non-interactive
+  run returns an actionable failure. Tests never print or persist plaintext
+  credentials.
+- Playwright Chromium installation has a configurable finite timeout. Timeout,
+  launch failure, non-zero exit, and failed post-install verification stop
+  before service startup and keep the existing manual repair command.
+- Package-index and proxy environment values pass through unchanged, no fixed
+  proxy is present in launcher files, Windows PowerShell 5.1 explicitly applies
+  the environment proxy to its first download, and diagnostics do not echo its
+  value.
+- Plaintext bootstrap password is absent from uv sync, Node, JavaScript,
+  browser installer, Uvicorn, and crawler child environments. Only the
+  administrator database preflight receives a copied mapping.
+- An isolated local receipt uses a temporary `MONITOR_DATA_DIR`, fresh virtual
+  environment, synthetic administrator, and unused port. It verifies the exact
+  child PID health response and HTTP 200 from `/monitor`, then stops only the
+  owned process tree and removes the isolated data.
+- Final gates include focused CR-133 and adjacent CR-107/CR-117/CR-132 tests,
+  complete monitoring regression, Python/PowerShell/batch and inline
+  JavaScript syntax, documentation consistency/regression, `git diff --check`,
+  and independent read-only full-diff review.
+
 ## CR-132 Windows Login Bootstrap And Bounded Browser Startup Tests
 
 - Both Windows local launchers default browser auto-sync on, allow the local

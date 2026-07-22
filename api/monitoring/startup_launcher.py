@@ -24,6 +24,7 @@ DEFAULT_BIND_HOST = "0.0.0.0"
 DEFAULT_PORT = 8080
 LOCAL_BROWSER_HOST = "127.0.0.1"
 MANUAL_BROWSER_INSTALL_COMMAND = "uv run playwright install chromium"
+DEFAULT_BROWSER_INSTALL_TIMEOUT_SECONDS = 300.0
 WINDOWS_LOCAL_LOGIN_DEFAULTS = {
     "MONITOR_BROWSER_COOKIE_SYNC_ENABLED": "true",
     "MONITOR_ALLOW_LOCAL_LOGIN_WINDOW": "true",
@@ -102,7 +103,7 @@ def apply_windows_local_login_defaults(env: Mapping[str, str]) -> dict[str, str]
     return prepared
 
 
-def ensure_oneclick_browser() -> Path:
+def ensure_oneclick_browser(install_timeout_seconds: float | None = None) -> Path:
     try:
         selection = _resolve_local_browser_selection()
     except BrowserSelectionError as exc:
@@ -121,16 +122,29 @@ def ensure_oneclick_browser() -> Path:
     )
 
     try:
-        result = subprocess.run(
+        timeout_seconds = _positive_timeout(
+            install_timeout_seconds,
+            "MONITOR_BROWSER_INSTALL_TIMEOUT_SECONDS",
+            DEFAULT_BROWSER_INSTALL_TIMEOUT_SECONDS,
+        )
+        process = subprocess.Popen(
             [sys.executable, "-m", "playwright", "install", "chromium"],
             cwd=ROOT,
-            check=False,
         )
+        try:
+            returncode = process.wait(timeout=timeout_seconds)
+        except subprocess.TimeoutExpired:
+            _terminate(process)
+            raise
+    except subprocess.TimeoutExpired as exc:
+        raise RuntimeError(
+            f"Playwright Chromium 安装超过 {timeout_seconds:g} 秒，请检查网络或代理后重新运行一键启动。"
+        ) from exc
     except OSError as exc:
         raise RuntimeError(
             f"Playwright Chromium 安装失败，请检查环境后执行：{MANUAL_BROWSER_INSTALL_COMMAND}"
         ) from exc
-    if result.returncode != 0:
+    if returncode != 0:
         raise RuntimeError(
             f"Playwright Chromium 安装失败，请检查网络或代理后执行：{MANUAL_BROWSER_INSTALL_COMMAND}"
         )
@@ -150,12 +164,22 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--port", type=int, default=int(os.environ.get("MONITOR_PORT", DEFAULT_PORT)))
     parser.add_argument("--browser-url", default=os.environ.get("MONITOR_BROWSER_URL"))
     parser.add_argument("--health-timeout-seconds", type=float, default=float(os.environ.get("MONITOR_STARTUP_HEALTH_TIMEOUT_SECONDS", 45.0)))
+    parser.add_argument(
+        "--browser-install-timeout-seconds",
+        type=float,
+        default=float(
+            os.environ.get(
+                "MONITOR_BROWSER_INSTALL_TIMEOUT_SECONDS",
+                DEFAULT_BROWSER_INSTALL_TIMEOUT_SECONDS,
+            )
+        ),
+    )
     parser.add_argument("--browser-preflight-only", action="store_true")
     parser.add_argument("--foreground", action="store_true")
     args = parser.parse_args(argv)
 
     try:
-        browser_path = ensure_oneclick_browser()
+        browser_path = ensure_oneclick_browser(args.browser_install_timeout_seconds)
         if args.browser_preflight_only:
             print(f"浏览器预检通过: {browser_path.name}")
             return 0
@@ -193,23 +217,46 @@ def _resolve_local_browser_selection() -> BrowserSelection:
 
 def _wait_for_health(probe_url: str, process: subprocess.Popen[str], health_timeout_seconds: float) -> None:
     deadline = time.monotonic() + health_timeout_seconds
+    observed_process_id = 0
     while time.monotonic() < deadline:
         if process.poll() is not None:
             raise RuntimeError(f"service exited early with code {process.returncode}")
         try:
             with urlopen(probe_url, timeout=2) as response:
                 payload = json.loads(response.read().decode("utf-8"))
-                if payload.get("status") == "ok" and int(payload.get("process_id") or 0) == int(process.pid):
+                observed_process_id = int(payload.get("process_id") or 0)
+                if payload.get("status") == "ok" and _service_process_matches(process.pid, observed_process_id):
                     return
         except Exception:
             time.sleep(0.5)
             continue
         time.sleep(0.5)
+    if observed_process_id > 0:
+        raise RuntimeError(
+            f"service health process mismatch: launcher={process.pid}, service={observed_process_id}"
+        )
     raise RuntimeError("service did not become healthy")
 
 
 def _terminate(process: subprocess.Popen[str]) -> None:
     if process.poll() is not None:
+        return
+    if os.name == "nt":
+        try:
+            subprocess.run(
+                ["taskkill", "/PID", str(process.pid), "/T", "/F"],
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+                check=False,
+                timeout=15,
+            )
+        except (OSError, subprocess.TimeoutExpired):
+            pass
+        try:
+            process.wait(timeout=10)
+        except subprocess.TimeoutExpired:
+            process.kill()
+            process.wait(timeout=10)
         return
     process.terminate()
     try:
@@ -217,6 +264,19 @@ def _terminate(process: subprocess.Popen[str]) -> None:
     except subprocess.TimeoutExpired:
         process.kill()
         process.wait(timeout=10)
+
+
+def _service_process_matches(root_pid: int, observed_pid: int) -> bool:
+    if int(root_pid) == int(observed_pid):
+        return True
+    if os.name != "nt" or int(observed_pid) <= 0:
+        return False
+    try:
+        from tools.browser_environment import windows_process_is_descendant
+
+        return windows_process_is_descendant(int(root_pid), int(observed_pid))
+    except Exception:
+        return False
 
 
 def _normalize_host(host: str | None) -> str:
@@ -232,6 +292,13 @@ def _build_url(host: str, port: int, path: str) -> str:
     if ":" in host and not host.startswith("["):
         host = f"[{host}]"
     return f"http://{host}:{port}{path}"
+
+
+def _positive_timeout(value: float | None, name: str, default: float) -> float:
+    normalized = default if value is None else float(value)
+    if normalized <= 0:
+        raise RuntimeError(f"{name} 必须大于 0。")
+    return normalized
 
 
 def _popen_kwargs(*, foreground: bool = False) -> dict[str, object]:

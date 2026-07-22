@@ -1946,6 +1946,31 @@ Live receipt (2026-07-22): test account `9212` reached login session `6434`
 account `active` with no current error. No protected collection account was
 changed.
 
+## CR-133 - Windows Clean-Computer One-Click Bootstrap
+
+Implementation status (2026-07-22): implementation, isolated Windows
+first-run verification, and independent review pass; second-computer operator
+acceptance remains pending. CR-117 and CR-132 browser selection and
+account/Profile/Cookie behavior remain closed historical baselines.
+
+- [x] Audit the clean-Windows launcher, dependency, data-directory,
+      administrator, port, browser-install, and proxy boundaries.
+- [x] Register the requirement, decisions, scope, tests, and traceability.
+- [x] Add a shared PowerShell bootstrap for project-local `uv`, locked
+      dependency sync, and both local launcher modes.
+- [x] Add startup preflight for data storage, disk space, port, schema, and
+      initial administrator setup.
+- [x] Bound Playwright Chromium installation and preserve safe actionable
+      diagnostics.
+- [x] Add focused regression coverage without using real accounts or runtime
+      data.
+- [x] Run an isolated fresh-environment first start and verify owned-process
+      health plus `/monitor` reachability.
+- [x] Run adjacent/full/static/documentation gates.
+- [x] Complete independent read-only full-diff review.
+- [ ] Record second-computer pull/start/login acceptance after the reviewed
+      change is available on `main`.
+
 ## CR-132 - Windows Login Bootstrap And Bounded Browser Startup
 
 Implementation status (2026-07-22): implementation verified and independent

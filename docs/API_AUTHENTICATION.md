@@ -28,6 +28,15 @@ If no administrator exists and the bootstrap variables are missing, the service
 should start in a guarded state and return an actionable administrator-only
 setup error, not expose a public first-run setup page.
 
+The interactive Windows local launchers add a pre-service helper for this same
+contract. When no active administrator and no complete environment pair exist,
+the console validates an email containing `@`, gathers a hidden confirmed
+password, and calls the existing hashed bootstrap path. Later launches find the
+active administrator and do not prompt. Service-only and server deployments
+retain the environment/guarded-state behavior above. The local helper keeps a
+private copy only for this administrator call and removes the password from
+dependency, Node, browser, service, and crawler child environments.
+
 ## Session Storage
 
 Use the `user_sessions` table from `DATA_MODEL.md`.
