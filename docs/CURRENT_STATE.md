@@ -4,10 +4,10 @@ Last updated: 2026-07-22
 
 ## Current Baseline
 
-- CR-129 is the active implementation lane on branch
+- CR-129 is the completed implementation lane on branch
   `codex/cr-129-request-identity-consistency`, based on merged
   `main@6cffdbaf0c0ffca8863192c962918a37349f10a4`. It is currently
-  `Accepted / In Progress` with Packets A-D verified after a two-round deep
+  `Verified` with Packets A-E verified after a two-round deep
   Claude read-only plan review and a focused Packet A implementation review.
   The plan review returned `READY` with no blockers or material refinements.
   The TODO baseline classifies CR-112 and CR-119 through CR-128 as verified
@@ -36,14 +36,44 @@ Last updated: 2026-07-22
   Windows timeout/cancellation terminates the complete child process tree.
   Child stdout is redacted before it reaches disk; argv, environment, result,
   and log tripwires exclude raw Cookie, token, proxy credential, Profile path,
-  executable path, and signature material. Packet E compatibility and serial
-  designated real acceptance are next.
+  executable path, and signature material.
+- Packet E is verified. Request contract v3
+  records endpoint signature policy; managed Cookie selection uses an aborted
+  same-origin browser request proof reconciled with the structured store; and
+  startup recovery terminalizes orphaned login sessions without replacing the
+  committed account authority. The affected suite passes `809`.
+- Designated Douyin account `8972` passed a strong Profile identity check and
+  normal monitor run `16854`, which persisted three new items from fourteen
+  real results with `fallback_used=false`. After service restart, the same
+  account passed another strong check and run `16855` persisted one new item
+  from fourteen results with the same safe policy and no leakage matches.
+- Independent full-diff review findings were fixed or resolved with current
+  call-chain evidence; focused and final full-diff re-reviews returned `PASS`,
+  no P0/P1/P2, and atomic technical readiness `YES`. XHS session `6426`
+  reproduced the lowercase `user-agent` signed-UA mismatch; RED/GREEN coverage
+  fixed the case-insensitive header projection. Session `6427` succeeded and
+  promotion `518` committed account `9196`. Strong identity checks passed
+  before and after restart; normal monitor runs `16856` and `16857` persisted
+  20 and 8 new XHS contents with contract-v3 signed HTTP 200 proof and
+  `fallback_used=false`.
+- Existing daily job `15345` has no bound account and had automatically selected
+  protected account `9198` in scheduled run `16846` at 09:00. It failed local
+  `requires_relogin` preflight before platform dispatch, stored no content, and
+  did not change Profile/Cookie digests. CR-129 designated/manual acceptance
+  uses only `8972` and `9196`; this pre-existing job is unchanged.
 - CR-129 protects the existing boundary: committed Profile is crawl authority;
   encrypted Cookie is initialization, refresh, recovery, and migration
   material; managed accounts do not silently use anonymous, generic-Profile,
   other-account, default-proxy, or default-network fallback. Designated real
   acceptance remains Douyin `8972` and Xiaohongshu `9196`; accounts `9197` and
   `9198` are protected from collection.
+
+- Final CR-129 repository collection reports `836 passed, 8 skipped, 7 failed,
+  4 warnings`. The seven failures are the six tests requiring local Redis and
+  the documented pre-existing XHS Excel factory assertion. Exact Cookie
+  fragment/pair scans across acceptance artifacts and runtime logs, plus the
+  current process argument scan, returned zero matches. Protected accounts
+  `9197` and `9198` were not used by the designated/manual acceptance lane.
 
 - CR-128 is verified. A strict post-crawl Xiaohongshu Profile check exposed
   that successful endpoint-specific content retrieval is not sufficient proof

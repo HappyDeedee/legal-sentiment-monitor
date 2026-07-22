@@ -5,7 +5,7 @@
 - CR: CR-129
 - Type: Phase 5.1 follow-up regression fix; account-environment hardening;
   platform-request identity consistency
-- Status: Accepted / In Progress (Packets A-D verified; Packet E next)
+- Status: Verified (Packets A-E)
 - Baseline: `main@6cffdbaf0c0ffca8863192c962918a37349f10a4`
 - Branch: `codex/cr-129-request-identity-consistency`
 - Owner: project implementation lane
@@ -320,7 +320,7 @@ argv/environment/result tripwires as defense in depth. Dedicated tests pass
 passed with only six local-Redis dependency failures and the documented
 pre-existing XHS Excel factory assertion. The initial review findings were
 fixed or resolved with call-chain evidence; focused re-review returned `PASS`,
-no remaining P0/P1/P2, and atomic readiness `YES`. Packet E is next.
+no remaining P0/P1/P2, and atomic readiness `YES`. Packet E follows.
 
 ### Packet E - Compatibility And Real Acceptance
 
@@ -334,6 +334,32 @@ Douyin and XHS real lanes serially.
 Exit gate: each platform proves identity and persists at least one real item,
 `fallback_used=false`, no secret leakage, restart check passes, and protected
 accounts remain unused.
+
+Implementation receipt (2026-07-22): request contract v3 adds explicit
+endpoint signature policy; managed Cookie selection uses an aborted same-origin
+browser-request proof reconciled with the same-moment structured store; and
+startup finalizes orphaned pending login records without changing committed
+authority. The XHS signed-header projection now uses the existing
+case-insensitive, duplicate-rejecting header lookup, fixing the lowercase
+`user-agent` path from account checks. Focused Cookie tests pass `6`, the
+affected suite passes `809`, and the repository-wide run reports `836 passed, 8
+skipped, 7 failed, 4 warnings`
+with only the six Redis-dependent and one pre-existing XHS Excel failures.
+Designated Douyin `8972` passes strong identity and normal monitor run `16854`,
+which stores three new items with contract-v3 proof and
+`fallback_used=false`. After service restart, the same strong check and normal
+run `16855` pass and store one new item with the same safe proof and zero
+leakage-pattern matches. Focused independent re-review returns `PASS` with no
+P0/P1/P2. XHS sessions `6422` through `6425` timed out while preserving the
+committed authority; diagnostic session `6426` reproduced the lowercase
+`user-agent` mismatch and its failed candidate was removed. RED/GREEN coverage
+fixed the projection, session `6427` succeeded, and promotion `518` committed.
+Strong identity checks passed before and after restart. Normal monitor runs
+`16856` and `16857` persisted 20 and 8 new XHS contents, respectively, with
+contract-v3 signed HTTP 200 proof and `fallback_used=false`. Exact Cookie
+fragment/pair scans across acceptance artifacts and runtime logs, plus current
+process argument inspection, returned zero matches. Protected accounts `9197`
+and `9198` were not used by the designated/manual lane.
 
 ## Test Matrix
 

@@ -62,6 +62,8 @@ def test_cr129_packet_d_only_transient_network_is_retryable() -> None:
 
 def test_cr129_packet_d_exception_classification_is_typed_and_secret_free() -> None:
     from tools.crawler_attempt import classify_crawler_exception
+    from tools.crawler_util import ManagedCookieSelectionError
+    from media_platform.douyin.request_identity import DouyinRequestIdentityError
 
     request = httpx.Request("GET", "https://platform.invalid/items")
     cases = [
@@ -80,6 +82,92 @@ def test_cr129_packet_d_exception_classification_is_typed_and_secret_free() -> N
         classified = classify_crawler_exception(error)
         assert classified.category == expected
         assert "synthetic-token-value" not in classified.reason_code
+
+    managed_cookie_mismatch = classify_crawler_exception(
+        DouyinRequestIdentityError("Douyin managed request cookie is ambiguous")
+    )
+    assert managed_cookie_mismatch.category == "account_identity_mismatch"
+    assert managed_cookie_mismatch.reason_code == "managed_request_cookie_ambiguous"
+
+    for message, expected_reason in (
+        (
+            "managed browser cookie request proof missing",
+            "managed_cookie_request_proof_missing",
+        ),
+        (
+            "managed browser cookie request proof malformed",
+            "managed_cookie_request_proof_malformed",
+        ),
+        (
+            "managed browser cookie request proof mismatch",
+            "managed_cookie_request_proof_mismatch",
+        ),
+        (
+            "managed browser cookie request proof name-only segment",
+            "managed_cookie_request_name_only",
+        ),
+        (
+            "managed browser cookie request proof empty-name segment",
+            "managed_cookie_request_empty_name",
+        ),
+        (
+            "managed browser cookie request proof value mismatch",
+            "managed_cookie_request_value_mismatch",
+        ),
+        (
+            "managed browser cookie request proof name mismatch",
+            "managed_cookie_request_name_mismatch",
+        ),
+    ):
+        classified = classify_crawler_exception(ManagedCookieSelectionError(message))
+        assert classified.category == "account_identity_mismatch"
+        assert classified.reason_code == expected_reason
+
+
+@pytest.mark.parametrize(
+    ("message", "expected_reason"),
+    [
+        (
+            "managed Douyin request user-agent mismatch",
+            "managed_request_user_agent_mismatch",
+        ),
+        (
+            "Douyin managed request cookie header mismatch",
+            "managed_request_cookie_header_mismatch",
+        ),
+        (
+            "Douyin managed request cookie sources mismatch",
+            "managed_request_cookie_sources_mismatch",
+        ),
+        (
+            "Douyin managed request cookie is missing",
+            "managed_request_cookie_missing",
+        ),
+        (
+            "Douyin managed request cookie duplicate is identical",
+            "managed_request_cookie_duplicate_identical",
+        ),
+        (
+            "Douyin managed request browser platform mismatch",
+            "managed_request_platform_mismatch",
+        ),
+        (
+            "signed Douyin request target changed before dispatch",
+            "managed_request_signature_mismatch",
+        ),
+    ],
+)
+def test_cr129_packet_e_managed_identity_reason_codes_are_field_specific(
+    message: str,
+    expected_reason: str,
+) -> None:
+    from tools.crawler_attempt import classify_crawler_exception
+    from media_platform.douyin.client import ManagedDouyinRequestIdentityError
+
+    classified = classify_crawler_exception(ManagedDouyinRequestIdentityError(message))
+
+    assert classified.category in {"account_identity_mismatch", "signature_mismatch"}
+    assert classified.reason_code == expected_reason
 
 
 def test_cr129_packet_d_terminal_result_round_trip_is_bound_and_redacted(tmp_path) -> None:

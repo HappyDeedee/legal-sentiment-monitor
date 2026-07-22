@@ -17,7 +17,7 @@ from tools.browser_environment import (
 )
 
 
-REQUEST_ENVIRONMENT_CONTRACT_VERSION = 2
+REQUEST_ENVIRONMENT_CONTRACT_VERSION = 3
 REQUEST_ENVIRONMENT_MAX_BYTES = 16384
 REQUEST_RESULT_MAX_BYTES = 131072
 REQUEST_DISPATCH_PROOF_LIMIT = 32
@@ -685,6 +685,7 @@ def _validate_dispatch_proof(
         "signer_input_digest",
         "signer_output_digest",
         "signed",
+        "signature_required",
         "response_status",
         "dispatched_at",
     }
@@ -734,6 +735,8 @@ def _validate_dispatch_proof(
         _invalid("method")
     if type(proof["signed"]) is not bool:
         _invalid("signed")
+    if type(proof["signature_required"]) is not bool:
+        _invalid("signature_required")
     if type(proof["response_status"]) is not int or not 100 <= proof["response_status"] <= 599:
         _invalid("response_status")
     dispatched = _parse_datetime(str(proof["dispatched_at"]), "dispatched_at")

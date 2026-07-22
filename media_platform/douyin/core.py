@@ -372,10 +372,18 @@ class DouYinCrawler(AbstractCrawler):
 
     async def create_douyin_client(self, httpx_proxy: Optional[str]) -> DouYinClient:
         """Create douyin client"""
-        cookie_str, cookie_dict = await utils.convert_browser_context_cookies(
-            self.browser_context,
-            urls=self.cookie_urls,
-        )  # type: ignore
+        if self.platform_request_environment is not None:
+            cookie_str, cookie_dict = (
+                await utils.convert_browser_context_cookies_for_request(
+                    self.browser_context,
+                    self.index_url,
+                )
+            )
+        else:
+            cookie_str, cookie_dict = await utils.convert_browser_context_cookies(
+                self.browser_context,
+                urls=self.cookie_urls,
+            )  # type: ignore
         page_snapshot = (
             await capture_douyin_page_snapshot(self.context_page)
             if self.platform_request_environment is not None

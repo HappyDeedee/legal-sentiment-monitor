@@ -66,6 +66,8 @@ class _SignedHeaders(dict):
     expected_body_digest: str
     signer_input_digest: str
     signer_output_digest: str
+    signature_required: bool
+    signature_applied: bool
 
 
 class DouYinClient(AbstractApiClient, ProxyRefreshMixin):
@@ -165,18 +167,21 @@ class DouYinClient(AbstractApiClient, ProxyRefreshMixin):
                 request_params[name] = self.request_identity.verify_fp
 
             query_string = urllib.parse.urlencode(request_params, doseq=True)
-            a_bogus = await get_a_bogus(
-                uri,
-                query_string,
-                {},
-                self.request_identity.environment.user_agent,
-                self.playwright_page,
-            )
-            if not isinstance(a_bogus, str) or not a_bogus:
-                raise ManagedDouyinRequestIdentityError(
-                    "managed Douyin request a_bogus is missing"
+            signature_required = "/v1/web/general/search" not in uri
+            a_bogus = ""
+            if signature_required:
+                a_bogus = await get_a_bogus(
+                    uri,
+                    query_string,
+                    {},
+                    self.request_identity.environment.user_agent,
+                    self.playwright_page,
                 )
-            request_params["a_bogus"] = a_bogus
+                if not isinstance(a_bogus, str) or not a_bogus:
+                    raise ManagedDouyinRequestIdentityError(
+                        "managed Douyin request a_bogus is missing"
+                    )
+                request_params["a_bogus"] = a_bogus
             final_query = urllib.parse.urlencode(request_params, doseq=True)
 
             signed_headers = _SignedHeaders(headers)
@@ -197,9 +202,14 @@ class DouYinClient(AbstractApiClient, ProxyRefreshMixin):
                     "user_agent_digest": self.request_identity.user_agent_digest,
                     "client_hints_digest": self.request_identity.client_hints_digest,
                     "proxy_digest": self.request_identity.proxy_digest,
+                    "signature_required": signature_required,
                 }
             )
-            signed_headers.signer_output_digest = safe_digest(a_bogus)
+            signed_headers.signer_output_digest = safe_digest(
+                a_bogus if signature_required else "not_applicable"
+            )
+            signed_headers.signature_required = signature_required
+            signed_headers.signature_applied = signature_required
             return request_params, signed_headers
 
         local_storage: Dict = await self.playwright_page.evaluate("() => window.localStorage")  # type: ignore
@@ -329,6 +339,8 @@ class DouYinClient(AbstractApiClient, ProxyRefreshMixin):
                     "expected_body_digest",
                     "signer_input_digest",
                     "signer_output_digest",
+                    "signature_required",
+                    "signature_applied",
                 ):
                     setattr(request_headers, name, getattr(original_headers, name))
             else:
@@ -497,7 +509,13 @@ class DouYinClient(AbstractApiClient, ProxyRefreshMixin):
             raise ManagedDouyinRequestIdentityError(
                 "managed Douyin request identity is missing"
             )
-        signed = isinstance(headers, _SignedHeaders)
+        managed_headers = isinstance(headers, _SignedHeaders)
+        signature_required = (
+            bool(headers.signature_required)
+            if managed_headers
+            else False
+        )
+        signed = bool(headers.signature_applied) if managed_headers else False
         self._request_sequence += 1
         proof = {
             **self.request_identity.to_safe_dict(),
@@ -508,15 +526,16 @@ class DouYinClient(AbstractApiClient, ProxyRefreshMixin):
             "request_header_digest": safe_digest(dict(headers)),
             "signer_input_digest": (
                 headers.signer_input_digest
-                if signed
+                if managed_headers
                 else safe_digest("not_applicable")
             ),
             "signer_output_digest": (
                 headers.signer_output_digest
-                if signed
+                if managed_headers
                 else safe_digest("not_applicable")
             ),
             "signed": signed,
+            "signature_required": signature_required,
             "response_status": response_status,
             "dispatched_at": datetime.now(timezone.utc).isoformat(),
         }

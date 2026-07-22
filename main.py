@@ -128,7 +128,11 @@ async def main() -> None:
         classified = record_current_crawler_exception(exc)
         print(
             "[Main] Managed crawler attempt failed: "
-            + (classified.category if classified else "login_required")
+            + (
+                f"{classified.category}:{classified.reason_code}"
+                if classified
+                else "login_required"
+            )
         )
         raise SystemExit(PROFILE_LOGIN_REQUIRED_EXIT_CODE) from exc
     except asyncio.CancelledError as exc:
@@ -138,7 +142,10 @@ async def main() -> None:
         classified = record_current_crawler_exception(exc)
         if classified is None:
             raise
-        print(f"[Main] Managed crawler attempt failed: {classified.category}")
+        print(
+            "[Main] Managed crawler attempt failed: "
+            f"{classified.category}:{classified.reason_code}"
+        )
         raise SystemExit(CRAWLER_ATTEMPT_FAILURE_EXIT_CODE) from None
 
 

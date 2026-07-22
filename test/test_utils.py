@@ -25,6 +25,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from tools import utils
+from tools import crawler_util
 
 
 def test_convert_cookies():
@@ -47,3 +48,165 @@ async def test_convert_browser_context_cookies_uses_url_filter():
     browser_context.cookies.assert_awaited_once_with(urls=["https://www.douyin.com"])
     assert cookie_str == "sessionid=abc"
     assert cookie_dict == {"sessionid": "abc"}
+
+
+@pytest.mark.asyncio
+async def test_cr129_managed_cookie_selection_uses_aborted_browser_request_proof():
+    events = []
+
+    class FakeRequest:
+        async def all_headers(self):
+            events.append("header")
+            return {
+                "cookie": (
+                    "sessionid=browser-first;sessionid=browser-second;"
+                    "not-sent-by-browser;"
+                    "complex=segment;without-equals;ttwid=synthetic-ttwid"
+                )
+            }
+
+    class FakeRoute:
+        request = FakeRequest()
+
+        def __init__(self):
+            self.aborted = False
+
+        async def abort(self):
+            self.aborted = True
+            events.append("abort")
+
+    class FakePage:
+        def __init__(self):
+            self.handler = None
+            self.route_obj = FakeRoute()
+            self.closed = False
+            self.unrouted = False
+
+        async def route(self, _url, handler):
+            self.handler = handler
+
+        async def goto(self, _url, **_kwargs):
+            await self.handler(self.route_obj)
+
+        async def unroute(self, _url, handler):
+            assert handler is self.handler
+            self.unrouted = True
+
+        async def close(self):
+            self.closed = True
+
+    class FakeContext:
+        def __init__(self):
+            self.page = FakePage()
+            self.cookie_urls = None
+
+        async def cookies(self, *, urls):
+            self.cookie_urls = urls
+            events.append("store")
+            return [
+                {"name": "", "value": "not-sent-by-browser"},
+                {"name": "sessionid", "value": "browser-first"},
+                {"name": "sessionid", "value": "browser-second"},
+                {"name": "complex", "value": "segment;without-equals"},
+                {"name": "ttwid", "value": "synthetic-ttwid"},
+            ]
+
+        async def new_page(self):
+            return self.page
+
+    browser_context = FakeContext()
+
+    cookie_str, cookie_dict = await utils.convert_browser_context_cookies_for_request(
+        browser_context,
+        "https://www.douyin.com/",
+    )
+
+    assert len(browser_context.cookie_urls) == 1
+    assert browser_context.cookie_urls[0].startswith(
+        "https://www.douyin.com/?__mediacrawler_cookie_probe__="
+    )
+    assert browser_context.page.route_obj.aborted is True
+    assert events == ["header", "store", "abort"]
+    assert browser_context.page.unrouted is True
+    assert browser_context.page.closed is True
+    assert cookie_str == (
+        "sessionid=browser-first;complex=segment;without-equals;"
+        "ttwid=synthetic-ttwid"
+    )
+    assert cookie_dict == {
+        "sessionid": "browser-first",
+        "complex": "segment;without-equals",
+        "ttwid": "synthetic-ttwid",
+    }
+
+
+def test_cr129_managed_cookie_request_proof_must_match_structured_store():
+    with pytest.raises(
+        utils.ManagedCookieSelectionError,
+        match="proof value mismatch",
+    ):
+        crawler_util._canonical_browser_cookie_header(
+            "sessionid=browser-value",
+            [{"name": "sessionid", "value": "different-store-value"}],
+        )
+
+
+def test_cr129_managed_cookie_request_proof_skips_spaced_nameless_segment():
+    cookie_str, cookie_dict = crawler_util._canonical_browser_cookie_header(
+        "nameless-value  ; sessionid=browser-value",
+        [
+            {"name": "", "value": "nameless-value"},
+            {"name": "sessionid", "value": "browser-value"},
+        ],
+    )
+
+    assert cookie_str == "sessionid=browser-value"
+    assert cookie_dict == {"sessionid": "browser-value"}
+
+
+@pytest.mark.asyncio
+async def test_cr129_managed_cookie_request_proof_cleanup_fails_closed():
+    class FakeRequest:
+        async def all_headers(self):
+            return {"cookie": "sessionid=browser-value"}
+
+    class FakeRoute:
+        request = FakeRequest()
+
+        async def abort(self):
+            return None
+
+    class FakePage:
+        async def route(self, _url, handler):
+            self.handler = handler
+
+        async def goto(self, _url, **_kwargs):
+            await self.handler(FakeRoute())
+
+        async def unroute(self, _url, _handler):
+            raise RuntimeError("sensitive browser cleanup detail")
+
+        async def close(self):
+            return None
+
+    class FakeContext:
+        async def new_page(self):
+            return FakePage()
+
+        async def cookies(self, *, urls):
+            assert len(urls) == 1
+            assert urls[0].startswith(
+                "https://www.douyin.com/?__mediacrawler_cookie_probe__="
+            )
+            return [{"name": "sessionid", "value": "browser-value"}]
+
+    with pytest.raises(
+        utils.ManagedCookieSelectionError,
+        match="proof cleanup failed",
+    ) as error:
+        await utils.convert_browser_context_cookies_for_request(
+            FakeContext(),
+            "https://www.douyin.com/",
+        )
+
+    assert "sensitive browser cleanup detail" not in str(error.value)

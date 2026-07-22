@@ -3368,3 +3368,21 @@ P0/P1/P2.
   Profile check/crawl.
 - Do not select or touch protected collection accounts 9197/9198. Kuaishou is
   Deferred and does not affect this gate.
+
+Packet E verified receipt (2026-07-22): Cookie-proof focused tests pass `6`, the
+affected monitoring/request suite passes `809`, and the CR-129 monitor selection
+passes `10`. Repository-wide collection reports `836 passed, 8 skipped, 7
+failed, 4 warnings`; the failures remain six Redis-dependent tests and the
+pre-existing XHS Excel factory assertion. Designated Douyin `8972` passes strong
+identity and normal monitor run `16854`, which persists three new items with
+contract-v3 proof and `fallback_used=false`. The service-restart Douyin check
+and run `16855` also pass, persisting one new item. XHS sessions `6422` through
+`6425` timed out while preserving committed authority; session `6426` exposed
+the lowercase `user-agent` signed-UA projection bug and its candidate was
+removed. RED/GREEN coverage fixed the case-insensitive lookup. Session `6427`
+and promotion `518` succeeded. Designated XHS `9196` passed strong identity and
+normal monitor run `16856`, which persisted twenty new items; after restart,
+run `16857` persisted eight. Both XHS runs recorded contract-v3 signed HTTP 200
+proof and `fallback_used=false`. Acceptance artifact/log and current-process
+argument scans returned zero exact Cookie fragment/pair matches. Protected
+accounts `9197` and `9198` were not used by the designated/manual lane.

@@ -1799,7 +1799,9 @@ follow-up and does not reopen completed Phase 5.1 or CR-118.
 
 ## CR-129 - Account Profile And Platform Request Identity Consistency
 
-Implementation status (2026-07-22): Packets A-D Verified; Packet E is next. This is a new follow-up
+Implementation status (2026-07-22): Verified. Packets A-E, automatic
+compatibility, and the designated Douyin/XHS real and restart lanes pass. This
+is a new follow-up
 after the verified CR-128 baseline. It does not reopen Phase 5.1, CR-112, or
 the verified CR-119 through CR-128 history.
 
@@ -1824,16 +1826,16 @@ Readiness gate: passed on 2026-07-22 after two Claude read-only review rounds.
 
 Hard boundaries:
 
-- [ ] Keep the committed Profile as crawl/browser authority and encrypted
+- [x] Keep the committed Profile as crawl/browser authority and encrypted
       Cookie as initialization, refresh, recovery, and migration material.
-- [ ] Keep BrowserEnvironmentProvider as the only browser/Profile/UA/proxy
+- [x] Keep BrowserEnvironmentProvider as the only browser/Profile/UA/proxy
       resolver and make platform clients consume its frozen request projection.
-- [ ] Keep account, platform, `profile_key`, identity revision, browser,
+- [x] Keep account, platform, `profile_key`, identity revision, browser,
       proxy, resolution, attempt, and run binding explicit and immutable per
       attempt.
-- [ ] Preserve CR-112 same-machine Windows and Packet B component decisions;
+- [x] Preserve CR-112 same-machine Windows and Packet B component decisions;
       keep CR-070 after this lane.
-- [ ] Use only designated real accounts 8972 (Douyin) and 9196 (XHS);
+- [x] Use only designated real accounts 8972 (Douyin) and 9196 (XHS);
       protect 9197 and 9198 from collection.
 
 Atomic packages:
@@ -1855,19 +1857,24 @@ Atomic packages:
 - [x] Packet D: add typed platform/environment errors, bounded transient-only
       retry, terminal session states, stale callback guards, and safe child
       handles with argv/environment/log tripwires.
-- [ ] Packet E: verify QR, Browser, manual Cookie, saved Profile, restart,
+- [x] Packet E: verify QR, Browser, manual Cookie, saved Profile, restart,
       manual, scheduled, server-like, and normal monitor paths.
-- [ ] Packet E: serially prove exact identity and at least one stored real item
+- [x] Packet E: serially prove exact identity and at least one stored real item
       for designated Douyin 8972 and XHS 9196 with `fallback_used=false`.
+- [x] Packet E: prove designated Douyin 8972 strong identity, normal monitor
+      collection, three persisted new items, contract-v3 endpoint policy, and
+      `fallback_used=false` without using protected accounts.
+- [x] Packet E: complete designated XHS 9196 strong identity and persisted-item
+      proof, then restart the service and repeat bounded Profile checks/crawls.
 
 Per-package gates:
 
-- [ ] Reproduce the issue and add a failing RED test before the fix.
-- [ ] Verify focused and affected/full tests, compile, JavaScript checks,
+- [x] Reproduce the issue and add a failing RED test before the fix.
+- [x] Verify focused and affected/full tests, compile, JavaScript checks,
       documentation checks, whitespace, and independent read-only review.
-- [ ] Synchronize CHANGE_REQUESTS, TASKS, CURRENT_STATE, TEST_RESULTS,
+- [x] Synchronize CHANGE_REQUESTS, TASKS, CURRENT_STATE, TEST_RESULTS,
       TRACEABILITY, DECISIONS, and specialist documents after each package.
-- [ ] Create one atomic commit only after the package evidence is complete.
+- [x] Create one atomic commit only after the package evidence is complete.
 
 Packet A receipt (2026-07-22): `19` focused tests, `228` affected tests, and
 `715` complete monitoring tests passed. Compile, docs consistency,
@@ -1886,6 +1893,30 @@ The complete repository collection reports `817 passed, 8 skipped, 7 failed`:
 six Redis-dependent failures while local Redis is not running and the
 documented pre-existing XHS Excel factory assertion. Packet E remains the real
 compatibility/identity gate.
+
+Packet E receipt (2026-07-22): affected regression passes `809` and the CR-129
+monitor selection passes `10`. Repository-wide collection reports `836 passed,
+8 skipped, 7 failed, 4 warnings`; the seven failures remain the six local-Redis
+dependencies and the pre-existing XHS Excel factory assertion. Douyin run
+`16854` used exact account `8972`,
+stored three new items, emitted contract-v3 request proof with
+`fallback_used=false`, and passed strong identity and real-log leakage checks.
+After service restart, run `16855` again passed and stored one new item with
+the same safe proof; focused Claude re-review returned `PASS` with no P0/P1/P2.
+The audit also found scheduled run `16846` had automatically selected protected
+account `9198` from an unbound existing daily job before the explicit guard; it
+stopped at `requires_relogin` preflight, made no platform request, stored no
+content, and left Profile/Cookie digests unchanged.
+XHS sessions `6422` through `6425` reached bounded timeout and preserved the
+committed authority. Diagnostic session `6426` exposed the lowercase
+`user-agent` signed-UA mismatch; RED/GREEN coverage fixed the case-insensitive
+header projection and removed its failed candidate. Session `6427` and
+promotion `518` succeeded. Exact account `9196` passed strong identity before
+and after restart; monitor runs `16856` and `16857` persisted 20 and 8 new XHS
+contents with contract-v3 signed HTTP 200 proof and `fallback_used=false`.
+Acceptance artifact/log and current-process argument scans found zero exact
+Cookie fragments or pairs. Protected accounts `9197` and `9198` were not used
+by the designated/manual acceptance lane.
 
 ## CR-120 - Local Visible Login Automatic Reconciliation
 

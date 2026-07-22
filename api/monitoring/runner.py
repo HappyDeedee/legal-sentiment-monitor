@@ -1107,7 +1107,7 @@ def _validate_managed_dispatch_proofs(
         raise RuntimeError(
             f"managed {platform_label} request dispatch proof is missing"
         )
-    signed_success = False
+    valid_dispatch = False
     for proof in dispatch_proofs:
         if (
             proof.get("account_id") != environment.account_id
@@ -1119,11 +1119,22 @@ def _validate_managed_dispatch_proofs(
             raise RuntimeError(
                 f"managed {platform_label} request dispatch proof binding mismatch"
             )
-        if proof.get("signed") is True and 200 <= int(proof.get("response_status", 0)) < 300:
-            signed_success = True
-    if not signed_success:
+        response_ok = 200 <= int(proof.get("response_status", 0)) < 300
+        signature_required = proof.get("signature_required")
+        if type(signature_required) is not bool:
+            raise RuntimeError(
+                f"managed {platform_label} request signature policy is invalid"
+            )
+        signature_policy_ok = (
+            proof.get("signed") is True
+            if signature_required
+            else proof.get("signed") is False
+        )
+        if response_ok and signature_policy_ok:
+            valid_dispatch = True
+    if not valid_dispatch:
         raise RuntimeError(
-            f"managed {platform_label} signed request proof is missing"
+            f"managed {platform_label} valid request proof is missing"
         )
 
 

@@ -1061,11 +1061,18 @@ proof file; it adds no database column and does not rewrite historical run or
 account rows. A future persistent request-proof field remains subject to the
 additive migration gate below.
 
-Packets B-C keep this proof ephemeral and safe-serialized. Contract v2 adds
+Packets B-C keep this proof ephemeral and safe-serialized. Contract v2 added
 provider-effective browser-platform, screen, viewport, scale, mobile, and
 touch values so Douyin signer inputs come from the same provider result as the
 Profile, Cookie, UA, and proxy. It adds no database field and persists only
 digests and revision-bound dispatch evidence, never raw token values.
+
+Packet E upgrades the ephemeral contract to v3 by adding the boolean
+`signature_required` dispatch policy. This distinguishes the explicitly
+unsigned Douyin general-search protocol from endpoints that require signer
+output without weakening Runner validation. Browser Cookie request proof and
+login-session restart recovery use existing runtime objects and rows; no new
+database field or migration is introduced.
 
 Packet D adds no database field. Its terminal result is a short-lived,
 versioned attempt file containing only safe category/reason codes and exact

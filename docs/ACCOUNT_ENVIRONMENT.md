@@ -1976,9 +1976,11 @@ query, signer input, generated `a_bogus`, and final URL must remain bound to
 that same resolution. Per-request Page reads, random/fixed managed tokens,
 caller overrides, and in-flight Cookie or proxy changes stop before HTTP.
 
-Runner requires a bound signed 2xx Douyin request proof before ingest. The
-current Douyin Client has no POST call sites, and its signer does not prove a
-request body; managed POST therefore stops before network until a body-aware
+Runner requires a bound 2xx Douyin request proof matching the endpoint's
+explicit signature policy before ingest. General search is an explicitly
+unsigned platform protocol; other managed GET endpoints require `a_bogus`.
+The current Douyin Client has no POST call sites, and its signer does not prove
+a request body; managed POST therefore stops before network until a body-aware
 signer contract is introduced. Unmanaged compatibility remains unchanged.
 
 Packet D implementation status (2026-07-22): verified. Each managed child
@@ -1994,3 +1996,18 @@ stdout is redacted before disk write, and Windows termination covers the child
 process tree. Missing, stale, conflicting, cancelled, timed-out, or crashed
 attempts release locks and preserve the prior committed Profile and encrypted
 Cookie.
+
+Packet E implementation status (2026-07-22): verified. Request contract v3
+adds `signature_required`. Managed Cookie selection captures Chromium's actual
+Cookie header from a unique same-origin request that is intercepted and aborted
+before network, then reconciles it with the structured store captured in the
+same route callback. Unknown, malformed, conflicting, or cleanup-failed proof
+stops before Client construction. Startup terminalizes pending login records
+whose in-memory owner disappeared, without changing committed Profile/Cookie
+material. XHS signed-header projection uses the existing case-insensitive,
+duplicate-rejecting lookup so lowercase `user-agent` from account checks is
+bound to the same request identity. Automatic compatibility and designated
+Douyin/XHS identity, normal monitor, persisted-content, zero-leakage, and
+post-restart acceptance pass. Runs `16854` through `16857` record
+`fallback_used=false`; protected accounts `9197` and `9198` were not used by
+the designated/manual lane.

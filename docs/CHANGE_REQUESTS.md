@@ -4658,13 +4658,12 @@ collection proof.
 Type: Phase 5.1 follow-up regression fix; account-environment architecture
 hardening; platform-request identity consistency.
 
-Status: In Progress (Packets A-D Verified; Packet E next)
+Status: Verified (Packets A-E)
 
 Execution: Ready for Implementation after deep plan-cross-validation.
 
-Packet status: Packets A, B, C, and D are `Verified` on 2026-07-22. Packet E is
-the next execution unit; CR-129 remains In Progress until Packet E and designated
-real acceptance pass.
+Packet status: Packets A-E are `Verified` on 2026-07-22. The automatic
+compatibility suite and the designated Douyin and XHS real/restart lanes pass.
 
 Baseline: `main@6cffdbaf0c0ffca8863192c962918a37349f10a4`.
 
@@ -4744,7 +4743,7 @@ success proof before managed XHS ingest. Raw Cookie, proxy credentials, URL,
 headers, signature output, and Profile path remain outside persisted proof.
 The unmanaged account-check/update-Cookie path remains compatible.
 
-Packet C evidence: `PlatformRequestEnvironment` contract v2 projects the
+Packet C evidence: `PlatformRequestEnvironment` contract v2 projected the
 provider-effective browser platform, screen, viewport, device scale, mobile,
 and touch values in addition to the Packet A binding. Managed Douyin Core reads
 the already-verified Profile once: `xmst` supplies `msToken`,
@@ -4754,10 +4753,10 @@ identity, reject caller/token/header/proxy/target drift before HTTP, sign the
 same encoded query that is dispatched, and persist only bound digests. The
 fixed creator `verifyFp`, per-request random `webid`, per-request LocalStorage
 read, and fixed Mac/Chrome-125/screen values are absent from managed mode.
-Runner requires one bound signed 2xx Douyin proof before ingest. The current
-Douyin Client has no POST call sites; managed POST remains fail-closed until a
-body-aware signer contract is implemented and tested rather than reusing an
-unproven GET signature.
+Runner requires one bound 2xx Douyin proof that matches the endpoint signature
+policy before ingest. The current Douyin Client has no POST call sites; managed
+POST remains fail-closed until a body-aware signer contract is implemented and
+tested rather than reusing an unproven GET signature.
 
 Packet D evidence: the child writes one strict, versioned, attempt-bound
 terminal result and the parent consumes it once. Only `transient_network`
@@ -4770,6 +4769,62 @@ redacted before disk write, and argv/environment/result/log tripwires reject
 raw secrets and local authority paths. Dedicated tests pass `84`; complete
 monitoring passes `704`. Independent focused re-review returns `PASS` with no
 remaining P0/P1/P2.
+
+Packet E implementation evidence: contract v3 adds an explicit
+`signature_required` dispatch-policy field. Managed browser Cookie material is
+now taken from a same-origin request intercepted and aborted before network,
+then reconciled with the same-moment structured browser store; malformed,
+unknown, cleanup-failed, or conflicting proof stops before Client construction.
+XHS header lookup is case-insensitive and rejects duplicate case variants, so
+the lowercase `user-agent` supplied by account checks is frozen into the same
+signed request identity instead of being misread as an empty UA.
+Douyin general search follows the verified platform protocol and omits
+`a_bogus`; other managed GET endpoints keep signed proof. Startup recovery
+terminalizes orphaned pending login records while preserving committed Profile
+and encrypted Cookie authority. The affected suite passes `808`; the complete
+repository run reports `835 passed, 8 skipped, 7 failed, 4 warnings`, with the
+same six Redis-dependent failures and one pre-existing XHS Excel factory
+assertion. After the XHS header fix, the affected suite passes `809`; the final
+repository run reports `836 passed, 8 skipped, 7 failed, 4 warnings` with the
+same seven baseline failures.
+
+Packet E designated Douyin evidence: account `8972` passed the strong Profile
+check with non-empty platform name/avatar/home identity fields, then normal
+monitor run `16854` persisted three new items from fourteen real results. Its
+safe proof is contract v3, account/Profile/browser/proxy bound, HTTP 200,
+`signature_required=false`, `signed=false`, and `fallback_used=false`. Run-log
+tripwire scans found no plaintext Cookie/token/proxy/Profile arguments.
+Protected accounts `9197` and `9198` were not collection targets.
+
+After service restart, account `8972` again passed the strong Profile check and
+normal monitor run `16855` returned fourteen real items and persisted one new
+item with the same contract-v3 account/Profile/browser policy and
+`fallback_used=false`; its run-log leakage scan remained zero. Independent
+round-1 review findings were fixed or disproved by call-chain evidence, and the
+focused re-review returned `PASS` with no P0/P1/P2.
+
+Protected-account audit clarification: pre-existing daily job `15345`, which
+has no bound account, automatically selected `9198` at 09:00 in scheduled run
+`16846`. It stopped at local `requires_relogin` preflight before platform
+dispatch and persisted no content; the Profile and encrypted Cookie digests
+remain unchanged. No designated/manual CR-129 real-acceptance run used `9197`
+or `9198` after the explicit protected-account boundary. The existing job is
+not modified by CR-129.
+
+XHS completion evidence: sessions `6422` through `6425` ended at bounded login
+timeouts and preserved the committed authority. Diagnostic session `6426`
+then reproduced a pre-dispatch signed-UA mismatch caused by the lowercase
+`user-agent` header; its candidate was removed. RED/GREEN coverage fixed the
+case-insensitive header projection. Session `6427` succeeded and promotion
+`518` committed the account-bound Cookie/Profile authority. Designated account
+`9196` passed the strong platform identity check before and after service
+restart. Normal monitor runs `16856` and `16857` used exact account `9196`,
+`profile_key=1/xhs/acc_9196`, bundled Chromium `127.0.6533.17`, direct proxy
+policy, contract-v3 signed HTTP 200 proofs, and `fallback_used=false`; they
+persisted 20 and 8 new XHS contents respectively. Exact Cookie fragment/pair
+scans across acceptance artifacts and runtime logs, plus current process
+argument inspection, returned zero matches. Protected accounts `9197` and
+`9198` were not used by the designated/manual acceptance lane.
 
 Real acceptance:
 

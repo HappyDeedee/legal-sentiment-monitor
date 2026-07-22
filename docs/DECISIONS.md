@@ -789,6 +789,18 @@ short `Superseded by` note rather than deleting history.
 - Public F2 evidence was used only to verify terminology and external-source
   boundaries. Its Apache-2.0 code is not copied and it is not added as a runtime
   dependency; CR-129 retains the current project signer and Profile authority.
+- Packet E upgrades the ephemeral request contract to v3. Every dispatch proof
+  carries an explicit `signature_required` policy. Douyin general search is
+  accepted only as explicitly unsigned; other managed GET endpoints still
+  require signer output, and managed POST remains pre-network fail-closed.
+- Managed Cookie authority is the Cookie header Chromium would actually send
+  for the target origin, proven through a unique same-origin request intercepted
+  and aborted before network and reconciled with the same-moment structured
+  Cookie store. A second independently timed Cookie snapshot is not accepted as
+  equivalent proof.
+- A service restart terminalizes pending login records that no longer have an
+  in-memory owner. It does not promote a candidate or replace the committed
+  Profile/encrypted Cookie authority.
 
 ## 2026-07-21 - CR-112 Acceptance And Execution Order
 

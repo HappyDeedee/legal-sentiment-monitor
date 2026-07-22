@@ -611,7 +611,11 @@ def test_cr129_packet_a_platform_client_receives_verified_request_environment(
         def __init__(self, **kwargs):
             captured.update(kwargs)
 
-    monkeypatch.setattr(module.utils, "convert_browser_context_cookies", fake_cookies)
+    monkeypatch.setattr(
+        module.utils,
+        "convert_browser_context_cookies_for_request",
+        fake_cookies,
+    )
     monkeypatch.setattr(module, client_name, FakeClient)
     if module_name.endswith("douyin.core"):
         async def fake_evaluate(*args, **kwargs):

@@ -855,6 +855,11 @@ adds provider-effective window/device fields to the in-memory and safe-binding
 contract only. XHS and Douyin dispatch proof remains short-lived and
 digest-only; existing rows and encrypted material are not migrated.
 
+Packet E request contract v3 adds only the ephemeral `signature_required`
+dispatch-policy field. Browser Cookie proof is in-memory and the existing
+`login_sessions` rows receive terminal startup status through current columns.
+No account, Profile, Cookie, run, or schema migration is required.
+
 Packet D verification requires no schema change. The browser-plan and terminal
 handles are one-use files under the attempt directory, and the existing run
 summary stores only redacted category and safe request proof. Restart recovery

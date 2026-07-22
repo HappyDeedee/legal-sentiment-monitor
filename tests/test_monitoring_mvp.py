@@ -4468,6 +4468,7 @@ def _cr129_signed_dispatch_proof(environment, *, request_index=1):
         "signer_input_digest": "2" * 64,
         "signer_output_digest": "3" * 64,
         "signed": True,
+        "signature_required": True,
         "response_status": 200,
         "dispatched_at": environment.created_at,
     }
@@ -5016,6 +5017,8 @@ def test_phase_5_1d_runner_ignores_stored_generic_profile_path(tmp_path, monkeyp
 def test_phase_5_1d_cdp_prepares_exact_commands_before_navigation_and_writes_result(tmp_path, monkeypatch):
     from tools.browser_environment import (
         RESULT_PATH_ENV_NAME,
+        _managed_navigator_platform,
+        _managed_user_agent_metadata,
         bind_managed_context,
         prepare_managed_page,
         verify_managed_page,
@@ -5075,7 +5078,8 @@ def test_phase_5_1d_cdp_prepares_exact_commands_before_navigation_and_writes_res
     assert events[0][1] == {
         "userAgent": plan.user_agent,
         "acceptLanguage": plan.accept_language,
-        "platform": plan.browser_platform,
+        "platform": _managed_navigator_platform(plan.browser_platform),
+        "userAgentMetadata": _managed_user_agent_metadata(plan),
     }
     assert events[3][1] == {
         "width": plan.viewport_width,
@@ -5328,7 +5332,12 @@ def test_phase_5_1d_context_and_page_bindings_survive_reused_object_ids(tmp_path
         {
             "userAgent": first_plan.user_agent,
             "acceptLanguage": first_plan.accept_language,
-            "platform": first_plan.browser_platform,
+            "platform": browser_environment._managed_navigator_platform(
+                first_plan.browser_platform
+            ),
+            "userAgentMetadata": browser_environment._managed_user_agent_metadata(
+                first_plan
+            ),
         },
     )
     assert sent_commands["second"][0] == (
@@ -5336,7 +5345,12 @@ def test_phase_5_1d_context_and_page_bindings_survive_reused_object_ids(tmp_path
         {
             "userAgent": second_plan.user_agent,
             "acceptLanguage": second_plan.accept_language,
-            "platform": second_plan.browser_platform,
+            "platform": browser_environment._managed_navigator_platform(
+                second_plan.browser_platform
+            ),
+            "userAgentMetadata": browser_environment._managed_user_agent_metadata(
+                second_plan
+            ),
         },
     )
 
@@ -28193,6 +28207,54 @@ def test_cr129_packet_d_timeout_redacts_managed_child_log(tmp_path, monkeypatch)
     assert plan.profile_path not in log_text
 
 
+def test_cr129_packet_e_cdp_logs_and_browser_info_exclude_endpoint_and_port(
+    caplog, monkeypatch
+):
+    import asyncio
+
+    import tools.cdp_browser as cdp_browser_module
+    from tools.cdp_browser import CDPBrowserManager
+
+    endpoint = "ws://127.0.0.1:9222/devtools/browser/synthetic-endpoint"
+    captured = {}
+
+    class FakeBrowser:
+        contexts = []
+
+        def is_connected(self):
+            return True
+
+        version = "127.0.6533.17"
+
+    class FakeChromium:
+        async def connect_over_cdp(self, url):
+            captured["url"] = url
+            return FakeBrowser()
+
+    class FakePlaywright:
+        chromium = FakeChromium()
+
+    manager = CDPBrowserManager()
+    manager.debug_port = 9222
+    monkeypatch.setattr(
+        manager,
+        "_get_browser_websocket_url",
+        lambda debug_port: asyncio.sleep(0, result=endpoint),
+    )
+    monkeypatch.setattr(cdp_browser_module.config, "CDP_CONNECT_EXISTING", False)
+
+    with caplog.at_level("INFO"):
+        asyncio.run(manager._connect_via_cdp(FakePlaywright()))
+        info = asyncio.run(manager.get_browser_info())
+
+    assert captured["url"] == endpoint
+    assert "debug_port" not in info
+    log_text = caplog.text
+    assert endpoint not in log_text
+    assert "/devtools/browser/" not in log_text
+    assert "9222" not in log_text
+
+
 def test_cr129_packet_d_cancel_terminates_managed_child(tmp_path, monkeypatch):
     plan = _phase_5_1d_plan(
         tmp_path,
@@ -28486,6 +28548,7 @@ def test_cr112_c3_startup_cutover_runs_before_scheduler(monkeypatch):
     monkeypatch.setattr(api_main, "repair_promoted_account_login_authority", lambda *args: events.append("authority"))
     monkeypatch.setattr(api_main, "recover_interrupted_cookie_promotion_sessions", lambda *args: events.append("cookie_sessions"))
     monkeypatch.setattr(api_main, "enforce_profile_only_cookie_cutover", lambda *args: events.append("cutover"))
+    monkeypatch.setattr(api_main, "recover_interrupted_login_sessions", lambda *args: events.append("login_sessions"))
     monkeypatch.setattr(api_main, "browser_cookie_sync_enabled", lambda: False)
 
     async def fake_scheduler():
@@ -28495,7 +28558,18 @@ def test_cr112_c3_startup_cutover_runs_before_scheduler(monkeypatch):
 
     asyncio.run(api_main.startup_monitoring())
 
-    assert events == ["db", "admin", "runs", "promotions", "cleanup", "authority", "cookie_sessions", "cutover", "scheduler"]
+    assert events == [
+        "db",
+        "admin",
+        "runs",
+        "promotions",
+        "cleanup",
+        "authority",
+        "cookie_sessions",
+        "cutover",
+        "login_sessions",
+        "scheduler",
+    ]
 
 
 def test_cr127_qr_image_bytes_reject_non_qr_and_accept_generated_qr():
@@ -28788,6 +28862,76 @@ def test_cr127_interrupted_manual_cookie_session_recovers_terminal():
         assert stored["status"] == "platform_error"
         assert "服务重启" in stored["message"]
         assert get_social_account(account["id"], masked=False)["status"] == "active"
+    finally:
+        _restore_table("audit_logs", snapshots["audit_logs"])
+        _restore_table("login_sessions", snapshots["login_sessions"])
+        _restore_table("social_accounts", snapshots["social_accounts"])
+
+
+def test_cr129_packet_e_restart_finalizes_all_remaining_pending_login_sessions():
+    from api.monitoring.database import recover_interrupted_login_sessions
+
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "login_sessions": _snapshot_table("login_sessions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        account = save_social_account(
+            {
+                "name": "CR-129 restart authority",
+                "platform": "dy",
+                "login_type": "cookie",
+                "cookies": "sessionid=synthetic-cr129-restart",
+                "status": "active",
+            }
+        )
+        qrcode = create_login_session(
+            {
+                "platform": "dy",
+                "account_id": account["id"],
+                "status": "waiting_qrcode",
+            }
+        )
+        browser_sync = create_login_session(
+            {
+                "platform": "dy",
+                "account_id": account["id"],
+                "cookie_source": "browser_sync",
+                "status": "waiting_confirm",
+            }
+        )
+        legacy_verification = create_login_session({"platform": "xhs", "status": "needs_verification"})
+        terminal = create_login_session({"platform": "dy", "status": "success", "message": "done"})
+        with get_conn() as conn:
+            conn.execute(
+                "UPDATE login_sessions SET status='waiting_verification' WHERE id=?",
+                (legacy_verification["id"],),
+            )
+
+        recovered = recover_interrupted_login_sessions("startup")
+
+        assert {qrcode["id"], browser_sync["id"], legacy_verification["id"]}.issubset(recovered)
+        for session_id in (qrcode["id"], browser_sync["id"], legacy_verification["id"]):
+            stored = get_login_session(session_id)
+            assert stored["status"] == "platform_error"
+            assert "服务已重启" in stored["message"]
+        assert get_login_session(terminal["id"])["status"] == "success"
+        stored_account = get_social_account(account["id"], masked=False)
+        assert stored_account["status"] == "active"
+        assert stored_account["cookies"] == "sessionid=synthetic-cr129-restart"
+        with get_conn() as conn:
+            audit = conn.execute(
+                """
+                SELECT details_json FROM audit_logs
+                WHERE action_type='recover_interrupted_login_sessions'
+                ORDER BY id DESC LIMIT 1
+                """
+            ).fetchone()
+        details = json.loads(audit["details_json"])
+        assert details["result"] == "pending_sessions_terminalized"
+        assert "sessionid" not in audit["details_json"]
     finally:
         _restore_table("audit_logs", snapshots["audit_logs"])
         _restore_table("login_sessions", snapshots["login_sessions"])

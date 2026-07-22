@@ -202,9 +202,12 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
 
         # 使用 xhshow 纯算法生成签名
         signed_headers = _SignedHeaders(self.headers)
-        signed_cookie = str(signed_headers.get("Cookie") or "")
+        signed_cookie = self._header_value(signed_headers, "cookie")
         signed_headers.signed_cookie = signed_cookie
-        signed_headers.signed_user_agent = str(signed_headers.get("User-Agent") or "")
+        signed_headers.signed_user_agent = self._header_value(
+            signed_headers,
+            "user-agent",
+        )
         signing_content = _build_sign_string(url, data, method)
         signs = sign_with_xhshow(
             uri=url,
@@ -536,6 +539,7 @@ class XiaoHongShuClient(AbstractApiClient, ProxyRefreshMixin):
             "signer_input_digest": headers.signer_input_digest if signed else safe_digest("not_applicable"),
             "signer_output_digest": headers.signer_output_digest if signed else safe_digest("not_applicable"),
             "signed": signed,
+            "signature_required": True,
             "response_status": response_status,
             "dispatched_at": datetime.now(timezone.utc).isoformat(),
         }

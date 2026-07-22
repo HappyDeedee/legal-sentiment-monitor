@@ -26,7 +26,7 @@ def _environment(
 ) -> PlatformRequestEnvironment:
     created = datetime.now(timezone.utc)
     return PlatformRequestEnvironment(
-        contract_version=2,
+        contract_version=3,
         workspace_id=1,
         account_id=account_id,
         platform="dy",
@@ -133,6 +133,85 @@ def _identity(
     )
 
 
+def test_cr129_packet_e_douyin_uses_provider_ua_ch_and_allows_runtime_version_drift():
+    from media_platform.douyin.request_identity import build_douyin_request_identity
+    from tools.browser_environment import _managed_user_agent_metadata
+
+    environment = replace(
+        _environment(),
+        effective_browser_version="128.0.6613.0",
+    )
+    metadata = _managed_user_agent_metadata(_plan_for_request_identity_test(environment))
+    snapshot = _page_snapshot()
+    snapshot.update(
+        {
+            "navigator_platform": "windows",
+            "ua_platform": metadata["platform"],
+            "ua_brands": tuple(
+                (item["brand"], item["version"])
+                for item in metadata["brands"]
+            ),
+        }
+    )
+
+    identity = build_douyin_request_identity(
+        environment=environment,
+        cookie_header=_cookie_header(),
+        cookie_dict=_cookie_dict(),
+        headers=_headers(environment),
+        proxy_url=None,
+        page_snapshot=snapshot,
+    )
+    common = dict(identity.common_param_items)
+
+    assert common["browser_version"] == "127.0.6533.17"
+    assert common["engine_version"] == "127.0.6533.17"
+    assert common["browser_platform"] == "Win32"
+
+
+def _plan_for_request_identity_test(environment):
+    from tools.browser_environment import BrowserEnvironmentPlan
+
+    return BrowserEnvironmentPlan(
+        contract_version=1,
+        resolution_id="resolution-test",
+        attempt_id="attempt-test",
+        action="crawl",
+        trigger_source="test",
+        workspace_id=environment.workspace_id,
+        account_id=environment.account_id,
+        platform="dy",
+        identity_state="validated",
+        identity_template="CN_WIN_CHROME_1920",
+        browser_executable_path="C:/playwright/chromium.exe",
+        browser_family="chromium",
+        browser_source="playwright_bundled",
+        browser_version=environment.effective_browser_version,
+        profile_key=environment.profile_key,
+        profile_path="C:/profiles/test",
+        profile_mode="persistent",
+        proxy_policy="direct",
+        proxy_id=None,
+        proxy_region="CN",
+        proxy_url="",
+        browser_platform="windows",
+        user_agent=environment.user_agent,
+        timezone=environment.timezone,
+        locale=environment.locale,
+        accept_language=environment.accept_language,
+        screen_width=environment.screen_width,
+        screen_height=environment.screen_height,
+        viewport_width=environment.viewport_width,
+        viewport_height=environment.viewport_height,
+        device_scale_factor=environment.device_scale_factor,
+        is_mobile=environment.is_mobile,
+        has_touch=environment.has_touch,
+        provider_name="playwright",
+        launch_mode="cdp_launch",
+        headless=True,
+    )
+
+
 @pytest.mark.parametrize(
     ("target", "key", "message"),
     [
@@ -205,6 +284,35 @@ def test_cr129_packet_c_douyin_identity_rejects_cookie_ua_screen_and_proxy_drift
         )
     with pytest.raises(DouyinRequestIdentityError, match="proxy"):
         build_douyin_request_identity(**{**common, "proxy_url": None})
+
+
+@pytest.mark.parametrize(
+    ("duplicate_value", "message"),
+    [
+        ("ttwid-8972", "cookie duplicate is identical"),
+        ("conflicting-ttwid", "cookie is ambiguous"),
+    ],
+)
+def test_cr129_packet_e_douyin_cookie_duplicates_report_safe_conflict_kind(
+    duplicate_value: str,
+    message: str,
+) -> None:
+    from media_platform.douyin.request_identity import (
+        DouyinRequestIdentityError,
+        build_douyin_request_identity,
+    )
+
+    environment = _environment()
+    cookie_header = f"{_cookie_header()};ttwid={duplicate_value}"
+    with pytest.raises(DouyinRequestIdentityError, match=message):
+        build_douyin_request_identity(
+            environment=environment,
+            cookie_header=cookie_header,
+            cookie_dict=_cookie_dict(),
+            headers={**_headers(environment), "Cookie": cookie_header},
+            proxy_url=None,
+            page_snapshot=_page_snapshot(),
+        )
 
 
 def test_cr129_packet_c_douyin_safe_projection_excludes_raw_material():
@@ -301,7 +409,7 @@ def test_cr129_packet_c_douyin_signer_and_http_dispatch_share_frozen_inputs(monk
         request_identity=identity,
     )
     result = asyncio.run(
-        client.get("/aweme/v1/web/general/search/single/", {"keyword": "synthetic", "count": 1})
+        client.get("/aweme/v1/web/aweme/detail/", {"aweme_id": "synthetic"})
     )
 
     assert result["status_code"] == 0
@@ -326,6 +434,84 @@ def test_cr129_packet_c_douyin_signer_and_http_dispatch_share_frozen_inputs(monk
     assert sent_headers["Cookie"] == _cookie_header()
     assert sent_headers["sec-ch-ua"] == _headers(environment)["sec-ch-ua"]
     assert client.safe_request_proofs[-1]["signed"] is True
+    assert client.safe_request_proofs[-1]["signature_required"] is True
+
+
+def test_cr129_packet_e_douyin_search_uses_explicit_unsigned_protocol(monkeypatch):
+    from api.monitoring import runner as runner_module
+    from media_platform.douyin import client as client_module
+    from media_platform.douyin.client import DouYinClient
+
+    environment = _environment()
+    identity = _identity(environment=environment)
+    captured = {}
+
+    async def forbidden_sign(*_args, **_kwargs):
+        raise AssertionError("Douyin search protocol must omit a_bogus")
+
+    class Response:
+        status_code = 200
+        text = '{"status_code":0,"data":[]}'
+
+        def json(self):
+            return {"status_code": 0, "data": []}
+
+    class HttpClient:
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_args):
+            return False
+
+        async def request(self, method, url, **kwargs):
+            captured["url"] = url
+            captured["headers"] = kwargs["headers"]
+            return Response()
+
+    monkeypatch.setattr(client_module, "get_a_bogus", forbidden_sign)
+    monkeypatch.setattr(client_module, "make_async_client", lambda proxy: HttpClient())
+    client = DouYinClient(
+        proxy=None,
+        headers=_headers(environment),
+        playwright_page=object(),
+        cookie_dict=_cookie_dict(),
+        request_environment=environment,
+        request_identity=identity,
+    )
+
+    result = asyncio.run(
+        client.get(
+            "/aweme/v1/web/general/search/single/",
+            {"keyword": "synthetic", "count": 1},
+        )
+    )
+
+    assert result["status_code"] == 0
+    assert "a_bogus" not in parse_qs(urlsplit(str(captured["url"])).query)
+    proof = client.safe_request_proofs[-1]
+    assert proof["signed"] is False
+    assert proof["signature_required"] is False
+    runner_module._validate_managed_dispatch_proofs("dy", environment, (proof,))
+
+
+def test_cr129_packet_e_runner_rejects_non_boolean_signature_policy():
+    from api.monitoring import runner as runner_module
+
+    environment = _environment()
+    proof = {
+        **environment.to_safe_dict(),
+        "account_id": environment.account_id,
+        "platform": environment.platform,
+        "profile_key": environment.profile_key,
+        "attempt_id": environment.attempt_id,
+        "resolution_id": environment.resolution_id,
+        "response_status": 200,
+        "signed": True,
+        "signature_required": "true",
+    }
+
+    with pytest.raises(RuntimeError, match="signature policy is invalid"):
+        runner_module._validate_managed_dispatch_proofs("dy", environment, (proof,))
 
 
 def test_cr129_packet_c_page_or_header_changes_after_freeze_do_not_change_request(monkeypatch):

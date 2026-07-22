@@ -29,6 +29,7 @@ import random
 import re
 import urllib
 import urllib.parse
+import uuid
 from io import BytesIO
 from typing import Dict, List, Optional, Tuple, cast
 
@@ -277,6 +278,169 @@ def convert_cookies(cookies: Optional[List[Cookie]]) -> Tuple[str, Dict]:
     return cookies_str, cookie_dict
 
 
+class ManagedCookieSelectionError(ValueError):
+    """The browser request Cookie proof is missing or conflicts with its store."""
+
+
+def _canonical_browser_cookie_header(
+    cookie_header: str,
+    cookies: Optional[List[Cookie]],
+) -> Tuple[str, Dict]:
+    available = []
+    seen_pairs: set[tuple[str, str]] = set()
+    nameless_values: set[str] = set()
+    for cookie in cookies or []:
+        name = str(cookie.get("name") or "").strip()
+        value = str(cookie.get("value") or "")
+        if not name:
+            nameless_values.add(value)
+            continue
+        pair = (name, value)
+        if pair not in seen_pairs:
+            seen_pairs.add(pair)
+            available.append((f"{name}={value}", name, value))
+    available.sort(key=lambda item: len(item[0]), reverse=True)
+
+    raw_header = str(cookie_header or "")
+    cookie_dict: Dict[str, str] = {}
+    ordered: list[tuple[str, str]] = []
+    position = 0
+    while position < len(raw_header):
+        while position < len(raw_header) and raw_header[position] in " \t":
+            position += 1
+        if position >= len(raw_header):
+            break
+        matched = next(
+            (
+                item
+                for item in available
+                if raw_header.startswith(item[0], position)
+                and (
+                    position + len(item[0]) == len(raw_header)
+                    or raw_header[position + len(item[0])] == ";"
+                )
+            ),
+            None,
+        )
+        if matched is None:
+            delimiter_position = raw_header.find(";", position)
+            segment_end = (
+                len(raw_header) if delimiter_position < 0 else delimiter_position
+            )
+            segment = raw_header[position:segment_end].strip()
+            if "=" not in segment:
+                if segment in nameless_values:
+                    position = (
+                        len(raw_header)
+                        if delimiter_position < 0
+                        else delimiter_position + 1
+                    )
+                    continue
+                raise ManagedCookieSelectionError(
+                    "managed browser cookie request proof name-only segment"
+                )
+            segment_name, _ = segment.split("=", 1)
+            segment_name = segment_name.strip()
+            if not segment_name:
+                raise ManagedCookieSelectionError(
+                    "managed browser cookie request proof empty-name segment"
+                )
+            known_names = {item[1] for item in available}
+            reason = (
+                "managed browser cookie request proof value mismatch"
+                if segment_name in known_names
+                else "managed browser cookie request proof name mismatch"
+            )
+            raise ManagedCookieSelectionError(reason)
+        token, name, value = matched
+        if name not in cookie_dict:
+            cookie_dict[name] = value
+            ordered.append((name, value))
+        position += len(token)
+        if position == len(raw_header):
+            break
+        if raw_header[position] != ";":
+            raise ManagedCookieSelectionError(
+                "managed browser cookie request proof malformed"
+            )
+        position += 1
+    return ";".join(f"{name}={value}" for name, value in ordered), cookie_dict
+
+
+async def _capture_browser_cookie_proof(
+    browser_context: BrowserContext,
+    request_url: str,
+) -> Tuple[str, List[Cookie]]:
+    parsed = urllib.parse.urlsplit(str(request_url or ""))
+    if parsed.scheme not in {"http", "https"} or not parsed.hostname:
+        raise ManagedCookieSelectionError("managed cookie request URL invalid")
+    query = urllib.parse.parse_qsl(parsed.query, keep_blank_values=True)
+    query.append(("__mediacrawler_cookie_probe__", uuid.uuid4().hex))
+    probe_url = urllib.parse.urlunsplit(
+        (
+            parsed.scheme,
+            parsed.netloc,
+            parsed.path or "/",
+            urllib.parse.urlencode(query),
+            "",
+        )
+    )
+    page = await browser_context.new_page()
+    captured: dict[str, object] = {
+        "seen": False,
+        "cookie": "",
+        "cookies": [],
+    }
+
+    async def capture(route) -> None:
+        headers = await route.request.all_headers()
+        cookie_header = next(
+            (
+                str(value)
+                for name, value in headers.items()
+                if str(name).casefold() == "cookie"
+            ),
+            "",
+        )
+        structured_cookies = await browser_context.cookies(urls=[probe_url])
+        captured["cookie"] = cookie_header
+        captured["cookies"] = structured_cookies
+        captured["seen"] = True
+        await route.abort()
+
+    route_registered = False
+    try:
+        await page.route(probe_url, capture)
+        route_registered = True
+        try:
+            await page.goto(probe_url, wait_until="commit", timeout=5000)
+        except Exception:
+            if not captured["seen"]:
+                raise ManagedCookieSelectionError(
+                    "managed browser cookie request proof missing"
+                )
+    finally:
+        cleanup_failed = False
+        if route_registered:
+            try:
+                await page.unroute(probe_url, capture)
+            except Exception:
+                cleanup_failed = True
+        try:
+            await page.close()
+        except Exception:
+            cleanup_failed = True
+        if cleanup_failed:
+            raise ManagedCookieSelectionError(
+                "managed browser cookie request proof cleanup failed"
+            )
+    if not captured["seen"]:
+        raise ManagedCookieSelectionError(
+            "managed browser cookie request proof missing"
+        )
+    return str(captured["cookie"]), cast(List[Cookie], captured["cookies"])
+
+
 async def convert_browser_context_cookies(
     browser_context: BrowserContext, urls: Optional[List[str]] = None
 ) -> Tuple[str, Dict]:
@@ -286,6 +450,17 @@ async def convert_browser_context_cookies(
         else await browser_context.cookies()
     )
     return convert_cookies(cookies)
+
+
+async def convert_browser_context_cookies_for_request(
+    browser_context: BrowserContext,
+    request_url: str,
+) -> Tuple[str, Dict]:
+    cookie_header, cookies = await _capture_browser_cookie_proof(
+        browser_context,
+        request_url,
+    )
+    return _canonical_browser_cookie_header(cookie_header, cookies)
 
 
 def convert_str_cookie_to_dict(cookie_str: str) -> Dict:

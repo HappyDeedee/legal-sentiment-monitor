@@ -23,7 +23,7 @@ from tools.platform_request_environment import (
 def _environment(*, proxy_policy: str = "direct", proxy_id: int | None = None) -> PlatformRequestEnvironment:
     created = datetime.now(timezone.utc)
     return PlatformRequestEnvironment(
-        contract_version=2,
+        contract_version=3,
         workspace_id=1,
         account_id=9196,
         platform="xhs",
@@ -232,6 +232,33 @@ def test_cr129_packet_b_xhs_signer_and_dispatch_use_one_frozen_request(monkeypat
     post_result = asyncio.run(client.post("/api/test", complex_payload))
     assert post_result == {"ok": True}
     assert captured["signing_content"] == f"/api/test{captured['kwargs']['data']}"
+
+
+def test_cr129_packet_e_unmanaged_xhs_signer_preserves_lowercase_user_agent():
+    from media_platform.xhs.client import XiaoHongShuClient
+
+    user_agent = "Mozilla/5.0 Chrome/127.0.6533.17"
+    client = XiaoHongShuClient(
+        headers={
+            "accept": "application/json, text/plain, */*",
+            "user-agent": user_agent,
+            "Cookie": "a1=a1-value; web_session=session-value",
+        },
+        playwright_page=object(),
+        cookie_dict={"a1": "a1-value", "web_session": "session-value"},
+    )
+
+    signed_headers = asyncio.run(
+        client._pre_headers("/api/sns/web/v1/user/me", params={})
+    )
+
+    assert signed_headers.signed_user_agent == user_agent
+    client._validate_signed_headers(
+        signed_headers,
+        method="GET",
+        url=signed_headers.expected_url,
+        body=None,
+    )
 
 
 def test_cr129_packet_b_xhs_managed_cookie_update_requires_new_resolution(monkeypatch):

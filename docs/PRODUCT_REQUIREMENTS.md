@@ -1058,9 +1058,10 @@ and explicit identity validation before promotion.
 For managed Douyin requests, `msToken`, `webid`, `verifyFp/fp`, and `ttwid`
 come from the verified committed Profile and are frozen with Cookie, UA/UA-CH,
 screen/browser values, proxy, signer input, `a_bogus`, and the final URL. A
-request with missing, changed, fixed, random, or cross-account material stops
-before platform dispatch. Content returned without the bound signed request
-proof does not count as authenticated collection.
+  request with missing, changed, fixed, random, or cross-account material stops
+  before platform dispatch. Content returned without a bound request proof that
+  matches the endpoint's explicit signature policy does not count as
+  authenticated collection.
 
 Every managed platform attempt must finish with one typed terminal result.
 Only a bounded `transient_network` result may retry, using the same frozen

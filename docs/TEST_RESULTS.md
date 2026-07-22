@@ -2,6 +2,72 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-22 - CR-129 Packet E Verified
+
+Scope: managed browser Cookie request proof, endpoint signature policy,
+same-family browser-version compatibility, orphaned login-session startup
+recovery, affected/full regression, and designated real collection.
+
+Result: `Verified`.
+
+- Cookie-proof focused tests: `6 passed`; affected monitoring/request suite
+  after the XHS header fix: `809 passed, 3 warnings`; CR-129 monitor selection:
+  `10 passed, 696
+  deselected, 1 warning`.
+- Repository-wide collection: `836 passed, 8 skipped, 7 failed, 4 warnings`.
+  Six failures still require local Redis, and the seventh is the documented
+  pre-existing XHS Excel factory assertion.
+- Python compile, JavaScript syntax, current docs consistency, documentation
+  regression (`1 passed`), and `git diff --check` pass. The final Claude
+  full-diff read-only review returns `PASS` with no P0/P1/P2.
+- Contract v3 adds explicit `signature_required`. Browser Cookie proof is
+  captured from a same-origin request aborted before network and reconciled
+  against the same-moment structured store. Invalid proof or cleanup stops
+  before Client construction.
+- Designated Douyin account `8972` passed strong Profile validation with
+  non-empty name/avatar/home identity fields. Normal monitor run `16854`
+  returned fourteen real items and persisted three new rows; the safe request
+  proof is bound to account `8972`, `profile_key=1/dy/acc_8972`, bundled
+  Chromium `127.0.6533.17`, direct proxy policy, HTTP 200, explicit unsigned
+  search protocol, and `fallback_used=false`.
+- The real run directory contains zero matches for plaintext Cookie/session,
+  token, proxy URL, or Profile launch arguments. Protected accounts `9197` and
+  `9198` were not used by the designated/manual acceptance lane.
+- After restarting the service on current branch code, `8972` passed strong
+  Profile validation again. Normal monitor run `16855` returned fourteen real
+  items, persisted one new row, recorded contract v3 and
+  `fallback_used=false`, and again produced zero leakage-pattern matches.
+- Independent round-1 findings resulted in exact probe-URL Cookie capture and
+  Runner boolean-policy defense-in-depth tests; the remaining findings were
+  disproved by current code. Focused re-review returned `PASS`, no P0/P1/P2,
+  and atomic technical readiness `YES`.
+- Protected-account audit found pre-existing unbound daily job `15345` had
+  automatically selected `9198` in scheduled run `16846` at 09:00. It stopped
+  at local `requires_relogin` preflight before platform dispatch, stored no
+  content, and left Profile/Cookie digests unchanged. The job is not a CR-129
+  designated acceptance run and is not modified in this packet.
+- XHS sessions `6422` through `6425` terminalized at bounded timeout while
+  preserving the committed Profile/Cookie authority. Diagnostic session `6426`
+  reproduced `signed request user-agent changed before dispatch`: account
+  checks supplied lowercase `user-agent`, while XHS projection used a
+  case-sensitive lookup and froze an empty UA. Its failed candidate was
+  removed. A RED test reproduced the mismatch; the client now uses the
+  existing case-insensitive, duplicate-rejecting header lookup. The focused XHS
+  suite passes `20`.
+- Session `6427` succeeded and promotion `518` committed account `9196` with
+  `cookie_source=browser_sync` and its account-bound Profile. Strong identity
+  checks passed before and after service restart with the same safe identity
+  digest and non-empty platform ID/name/avatar/home evidence.
+- Normal monitor run `16856` returned forty real XHS items and persisted twenty
+  new rows. After restart, run `16857` returned forty and persisted eight new
+  rows. Both used exact account `9196`, `profile_key=1/xhs/acc_9196`, bundled
+  Chromium `127.0.6533.17`, direct proxy policy, one request environment,
+  contract-v3 signed HTTP 200 proofs, and `fallback_used=false`.
+- Exact Cookie fragment/pair scans across acceptance artifacts and runtime
+  logs returned zero matches; current-process argument inspection also
+  returned zero. Protected accounts `9197` and `9198` were not used by the
+  designated/manual acceptance lane.
+
 ## 2026-07-22 - CR-129 Packet D Verified
 
 Scope: managed child error taxonomy, retry inheritance, process/lock terminal

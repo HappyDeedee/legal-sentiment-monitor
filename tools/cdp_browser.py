@@ -211,9 +211,7 @@ class CDPBrowserManager:
         or launch Chrome with --remote-debugging-port flag.
         """
         self.debug_port = config.CDP_DEBUG_PORT
-        utils.logger.info(
-            f"[CDPBrowserManager] Connecting to existing browser on port {self.debug_port}..."
-        )
+        utils.logger.info("[CDPBrowserManager] Connecting to existing browser...")
         utils.logger.info(
             "[CDPBrowserManager] Make sure remote debugging is enabled in your browser: "
             "chrome://inspect/#remote-debugging"
@@ -239,11 +237,8 @@ class CDPBrowserManager:
 
         if not connected:
             raise RuntimeError(
-                f"Cannot connect to existing browser on port {self.debug_port} "
-                f"after waiting {timeout}s. Please ensure:\n"
-                "  1. Your browser is running\n"
-                "  2. Remote debugging is enabled (chrome://inspect/#remote-debugging)\n"
-                f"  3. The debug port is {self.debug_port} (configure via CDP_DEBUG_PORT)"
+                f"Cannot connect to existing browser after waiting {timeout}s. "
+                "Please ensure the browser is running and remote debugging is enabled."
             )
 
         # Connect via CDP (reuse existing method)
@@ -299,17 +294,13 @@ class CDPBrowserManager:
                 s.settimeout(5)
                 result = s.connect_ex(("127.0.0.1", debug_port))
                 if result == 0:
-                    utils.logger.info(
-                        f"[CDPBrowserManager] CDP port {debug_port} is accessible"
-                    )
+                    utils.logger.info("[CDPBrowserManager] CDP endpoint is accessible")
                     return True
                 else:
-                    utils.logger.warning(
-                        f"[CDPBrowserManager] CDP port {debug_port} is not accessible"
-                    )
+                    utils.logger.warning("[CDPBrowserManager] CDP endpoint is not accessible")
                     return False
-        except Exception as e:
-            utils.logger.warning(f"[CDPBrowserManager] CDP connection test failed: {e}")
+        except Exception:
+            utils.logger.warning("[CDPBrowserManager] CDP connection test failed")
             return False
 
     async def _launch_browser(self, browser_path: str, headless: bool):
@@ -328,7 +319,6 @@ class CDPBrowserManager:
         elif config.SAVE_LOGIN_STATE:
             user_data_dir = resolve_cdp_user_data_dir(config.PLATFORM)
             os.makedirs(user_data_dir, exist_ok=True)
-            utils.logger.info(f"[CDPBrowserManager] User data directory: {user_data_dir}")
 
         # Launch browser
         self.launcher.browser_process = self.launcher.launch_browser(
@@ -380,9 +370,7 @@ class CDPBrowserManager:
                         data = response.json()
                         ws_url = data.get("webSocketDebuggerUrl")
                         if ws_url:
-                            utils.logger.info(
-                                f"[CDPBrowserManager] Got browser WebSocket URL: {ws_url}"
-                            )
+                            utils.logger.info("[CDPBrowserManager] Browser CDP endpoint obtained")
                             return ws_url
                         raise RuntimeError("webSocketDebuggerUrl not found")
                     raise RuntimeError(f"HTTP {response.status_code}: {response.text}")
@@ -391,8 +379,8 @@ class CDPBrowserManager:
                 if attempt < 10:
                     await asyncio.sleep(0.5)
 
-        utils.logger.error(f"[CDPBrowserManager] Failed to get WebSocket URL: {last_error}")
-        raise last_error
+        utils.logger.error("[CDPBrowserManager] Failed to obtain browser CDP endpoint")
+        raise RuntimeError("CDP browser endpoint unavailable") from last_error
 
     async def _connect_via_cdp(self, playwright: Playwright):
         """
@@ -401,7 +389,7 @@ class CDPBrowserManager:
         try:
             if config.CDP_CONNECT_EXISTING and self.managed_plan is None:
                 ws_url = await self._get_browser_websocket_url(self.debug_port)
-                utils.logger.info(f"[CDPBrowserManager] Connecting to existing browser via CDP: {ws_url}")
+                utils.logger.info("[CDPBrowserManager] Connecting to existing browser via CDP")
                 utils.logger.info(
                     "[CDPBrowserManager] Please check your browser for a confirmation dialog and accept it"
                 )
@@ -411,7 +399,7 @@ class CDPBrowserManager:
             else:
                 # For launched browser, get WebSocket URL first
                 ws_url = await self._get_browser_websocket_url(self.debug_port)
-                utils.logger.info(f"[CDPBrowserManager] Connecting to browser via CDP: {ws_url}")
+                utils.logger.info("[CDPBrowserManager] Connecting to browser via CDP")
                 self.browser = await playwright.chromium.connect_over_cdp(ws_url)
 
             if self.browser.is_connected():
@@ -422,9 +410,9 @@ class CDPBrowserManager:
             else:
                 raise RuntimeError("CDP connection failed")
 
-        except Exception as e:
-            utils.logger.error(f"[CDPBrowserManager] CDP connection failed: {e}")
-            raise
+        except Exception as exc:
+            utils.logger.error("[CDPBrowserManager] CDP connection failed")
+            raise RuntimeError("CDP connection failed") from exc
 
     async def _create_browser_context(
         self, playwright_proxy: Optional[Dict] = None, user_agent: Optional[str] = None
@@ -596,9 +584,8 @@ class CDPBrowserManager:
             return {
                 "version": version,
                 "contexts_count": contexts_count,
-                "debug_port": self.debug_port,
                 "is_connected": self.is_connected(),
             }
-        except Exception as e:
-            utils.logger.warning(f"[CDPBrowserManager] Failed to get browser info: {e}")
+        except Exception:
+            utils.logger.warning("[CDPBrowserManager] Failed to get browser info")
             return {}

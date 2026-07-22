@@ -190,7 +190,6 @@ class BrowserLauncher:
             utils.logger.info("[BrowserLauncher] Launching managed browser environment")
         else:
             utils.logger.info(f"[BrowserLauncher] Launching browser: {browser_path}")
-            utils.logger.info(f"[BrowserLauncher] Debug port: {debug_port}")
             utils.logger.info(f"[BrowserLauncher] Headless mode: {headless}")
 
         try:
@@ -221,7 +220,7 @@ class BrowserLauncher:
         """
         Wait for browser to be ready
         """
-        utils.logger.info(f"[BrowserLauncher] Waiting for browser to be ready on port {debug_port}...")
+        utils.logger.info("[BrowserLauncher] Waiting for browser to become ready...")
 
         start_time = time.time()
         while time.time() - start_time < timeout:
@@ -230,7 +229,7 @@ class BrowserLauncher:
                     s.settimeout(1)
                     result = s.connect_ex(('localhost', debug_port))
                     if result == 0:
-                        utils.logger.info(f"[BrowserLauncher] Browser is ready on port {debug_port}")
+                        utils.logger.info("[BrowserLauncher] Browser is ready")
                         return True
             except Exception:
                 pass

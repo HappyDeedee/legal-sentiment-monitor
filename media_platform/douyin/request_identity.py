@@ -24,6 +24,7 @@ _CANONICAL_HEADER_NAMES = {
     "sec-ch-ua-platform": "sec-ch-ua-platform",
     "user-agent": "User-Agent",
 }
+_REQUEST_UA_VERSION_RE = re.compile(r"(?:Chrome|CriOS|Edg|Edge)/(\d+(?:\.\d+){0,3})")
 _BOUND_HEADER_NAMES = (
     "Accept-Language",
     "Cookie",
@@ -217,7 +218,11 @@ def build_douyin_request_identity(
         raise DouyinRequestIdentityError(
             "Douyin managed request browser platform is unsupported"
         )
-    if snapshot["navigator_platform"] != "Win32" or snapshot["ua_platform"] != "Windows":
+    if (
+        _normalize_navigator_platform(snapshot["navigator_platform"])
+        != _expected_navigator_platform(environment.browser_platform)
+        or snapshot["ua_platform"] != _expected_ua_ch_platform(environment.browser_platform)
+    ):
         raise DouyinRequestIdentityError(
             "Douyin managed request browser platform mismatch"
         )
@@ -317,16 +322,16 @@ def _common_params(
         "pc_client_type": "1",
         "cookie_enabled": "true",
         "browser_language": environment.locale,
-        "browser_platform": str(snapshot["navigator_platform"]),
+        "browser_platform": _normalize_navigator_platform(snapshot["navigator_platform"]),
         "browser_name": browser_name,
-        "browser_version": environment.effective_browser_version,
+        "browser_version": _request_browser_version(environment),
         "browser_online": "true",
         "engine_name": "Blink",
         "os_name": "Windows",
         "os_version": "10",
         "cpu_core_num": str(snapshot["hardware_concurrency"]),
         "device_memory": str(snapshot["device_memory"]),
-        "engine_version": environment.effective_browser_version,
+        "engine_version": _request_browser_version(environment),
         "platform": "PC",
         "screen_width": str(environment.screen_width),
         "screen_height": str(environment.screen_height),
@@ -417,7 +422,7 @@ def _sec_ch_ua(
     brands: tuple[tuple[str, str], ...],
     environment: PlatformRequestEnvironment,
 ) -> str:
-    major = str(environment.effective_browser_version).split(".", 1)[0]
+    major = _request_browser_major(environment)
     if not any(version == major and "chrom" in brand.lower() for brand, version in brands):
         raise DouyinRequestIdentityError(
             "Douyin managed request Profile UA brands mismatch"
@@ -426,6 +431,66 @@ def _sec_ch_ua(
         f'"{brand.replace(chr(34), "")}";v="{version}"'
         for brand, version in brands
     )
+
+
+def _request_browser_major(environment: PlatformRequestEnvironment) -> str:
+    match = _REQUEST_UA_VERSION_RE.search(environment.user_agent)
+    if match:
+        return match.group(1).split(".", 1)[0]
+    return str(environment.effective_browser_version).split(".", 1)[0]
+
+
+def _request_browser_version(environment: PlatformRequestEnvironment) -> str:
+    match = _REQUEST_UA_VERSION_RE.search(environment.user_agent)
+    if match:
+        return match.group(1)
+    return environment.effective_browser_version
+
+
+def _normalize_navigator_platform(value: str) -> str:
+    normalized = str(value or "").strip().casefold()
+    values = {
+        "win32": "Win32",
+        "windows": "Win32",
+        "win64": "Win32",
+        "macintel": "MacIntel",
+        "macos": "MacIntel",
+        "linux armv8l": "Linux armv8l",
+    }
+    try:
+        return values[normalized]
+    except KeyError as exc:
+        raise DouyinRequestIdentityError(
+            "Douyin managed request browser platform mismatch"
+        ) from exc
+
+
+def _expected_navigator_platform(browser_platform: str) -> str:
+    values = {
+        "windows": "Win32",
+        "macos": "MacIntel",
+        "android": "Linux armv8l",
+    }
+    try:
+        return values[browser_platform]
+    except KeyError as exc:
+        raise DouyinRequestIdentityError(
+            "Douyin managed request browser platform mismatch"
+        ) from exc
+
+
+def _expected_ua_ch_platform(browser_platform: str) -> str:
+    values = {
+        "windows": "Windows",
+        "macos": "macOS",
+        "android": "Android",
+    }
+    try:
+        return values[browser_platform]
+    except KeyError as exc:
+        raise DouyinRequestIdentityError(
+            "Douyin managed request browser platform mismatch"
+        ) from exc
 
 
 def _canonical_headers(headers: Mapping[str, Any]) -> dict[str, str]:
@@ -456,11 +521,16 @@ def _parse_cookie_header(cookie_header: str) -> dict[str, str]:
             )
         name, value = token.split("=", 1)
         name = name.strip()
+        normalized_value = value.strip()
+        if name in parsed and parsed[name] == normalized_value:
+            raise DouyinRequestIdentityError(
+                "Douyin managed request cookie duplicate is identical"
+            )
         if not name or name in parsed:
             raise DouyinRequestIdentityError(
                 "Douyin managed request cookie is ambiguous"
             )
-        parsed[name] = value.strip()
+        parsed[name] = normalized_value
     return parsed
 
 

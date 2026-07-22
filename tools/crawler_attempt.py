@@ -177,6 +177,27 @@ def classify_crawler_exception(exc: BaseException) -> CrawlerFailureClassificati
             "browser_environment_mismatch",
             "request_environment_mismatch",
         )
+    if class_name == "ManagedCookieSelectionError":
+        if "proof missing" in message:
+            reason_code = "managed_cookie_request_proof_missing"
+        elif "proof malformed" in message:
+            reason_code = "managed_cookie_request_proof_malformed"
+        elif "proof mismatch" in message:
+            reason_code = "managed_cookie_request_proof_mismatch"
+        elif "proof name-only" in message:
+            reason_code = "managed_cookie_request_name_only"
+        elif "proof empty-name" in message:
+            reason_code = "managed_cookie_request_empty_name"
+        elif "proof value mismatch" in message:
+            reason_code = "managed_cookie_request_value_mismatch"
+        elif "proof name mismatch" in message:
+            reason_code = "managed_cookie_request_name_mismatch"
+        else:
+            reason_code = "managed_cookie_selection_failed"
+        return CrawlerFailureClassification(
+            "account_identity_mismatch",
+            reason_code,
+        )
     if class_name in {
         "ManagedRequestIdentityError",
         "ManagedDouyinRequestIdentityError",
@@ -187,6 +208,19 @@ def classify_crawler_exception(exc: BaseException) -> CrawlerFailureClassificati
             return CrawlerFailureClassification(
                 "signature_mismatch",
                 "managed_request_signature_mismatch",
+            )
+        if _contains_any(
+            message,
+            "managed request",
+            "managed douyin request",
+            "managed xhs request",
+            "signed douyin request",
+            "signed xhs request",
+            "request identity",
+        ):
+            return CrawlerFailureClassification(
+                "account_identity_mismatch",
+                _managed_request_identity_reason(message),
             )
         if "cookie" in message:
             return CrawlerFailureClassification(
@@ -445,6 +479,36 @@ def _validate_reason_code(reason_code: str) -> None:
 
 def _contains_any(value: str, *markers: str) -> bool:
     return any(marker in value for marker in markers)
+
+
+def _managed_request_identity_reason(message: str) -> str:
+    """Project request-material mismatches into secret-free stable reason codes."""
+    markers = (
+        ("cookie sources", "managed_request_cookie_sources_mismatch"),
+        ("cookie header", "managed_request_cookie_header_mismatch"),
+        ("cookie is missing", "managed_request_cookie_missing"),
+        ("cookie is malformed", "managed_request_cookie_malformed"),
+        ("cookie duplicate is identical", "managed_request_cookie_duplicate_identical"),
+        ("cookie is ambiguous", "managed_request_cookie_ambiguous"),
+        ("cookie changed", "managed_request_cookie_changed"),
+        ("user-agent", "managed_request_user_agent_mismatch"),
+        ("navigator user-agent", "managed_request_user_agent_mismatch"),
+        ("accept-language", "managed_request_accept_language_mismatch"),
+        ("sec-ch-ua", "managed_request_client_hints_mismatch"),
+        ("client hints", "managed_request_client_hints_mismatch"),
+        ("platform", "managed_request_platform_mismatch"),
+        ("screen", "managed_request_screen_mismatch"),
+        ("mobile flag", "managed_request_mobile_mismatch"),
+        ("proxy", "managed_request_proxy_mismatch"),
+        ("target", "managed_request_target_mismatch"),
+        ("body", "managed_request_body_mismatch"),
+        ("environment", "managed_request_environment_mismatch"),
+        ("profile", "managed_request_profile_mismatch"),
+    )
+    for marker, reason in markers:
+        if marker in message:
+            return reason
+    return "managed_request_identity_mismatch"
 
 
 def _parse_datetime(value: str, field: str) -> datetime:

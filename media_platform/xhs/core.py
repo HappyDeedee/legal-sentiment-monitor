@@ -436,10 +436,18 @@ class XiaoHongShuCrawler(AbstractCrawler):
     async def create_xhs_client(self, httpx_proxy: Optional[str]) -> XiaoHongShuClient:
         """Create Xiaohongshu client"""
         utils.logger.info("[XiaoHongShuCrawler.create_xhs_client] Begin create Xiaohongshu API client ...")
-        cookie_str, cookie_dict = await utils.convert_browser_context_cookies(
-            self.browser_context,
-            urls=self.cookie_urls,
-        )
+        if self.platform_request_environment is not None:
+            cookie_str, cookie_dict = (
+                await utils.convert_browser_context_cookies_for_request(
+                    self.browser_context,
+                    self.index_url,
+                )
+            )
+        else:
+            cookie_str, cookie_dict = await utils.convert_browser_context_cookies(
+                self.browser_context,
+                urls=self.cookie_urls,
+            )
         sec_ch_ua = (
             build_xhs_sec_ch_ua(self.platform_request_environment)
             if self.platform_request_environment is not None
