@@ -9,7 +9,7 @@ new-account Browser entry, staged QR/browser startup, bounded Playwright/browser
 cleanup, and visible-login reconciliation.
 
 Result: implementation verified; affected-computer acceptance remains pending
-until the reviewed change is available on `main`.
+after deployment of the reviewed commit.
 
 - RED coverage reproduced missing Windows defaults, stale-listener health
   acceptance, missing direct new-account Browser persistence, unbounded QR
