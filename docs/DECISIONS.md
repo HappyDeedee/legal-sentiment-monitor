@@ -747,6 +747,7 @@ short `Superseded by` note rather than deleting history.
   the Runner rejects missing, stale, conflicting, expired, or cross-account
   proof before ingest. Complete child-process leakage tripwires remain Packet
   D scope.
+
 - Packet B confirms the actual XHS signer entry is `sign_with_xhshow()` with
   `_build_sign_string()`, not the superseded `get_xs()` name. Core creates one
   immutable XHS request identity from the Provider-effective environment;
@@ -863,6 +864,23 @@ short `Superseded by` note rather than deleting history.
 - Confirmed the result does not change the accepted Profile authority, manual
   Cookie path, administrator reveal boundary, QR production path, CR-112 before
   CR-070 order, or mandatory Douyin/Xiaohongshu Packet D acceptance.
+
+## 2026-07-22 - CR-132 Windows Local Login Bootstrap
+
+- Windows one-click and foreground local launchers enable browser auto-sync
+  and the local visible-login fallback when those environment values are not
+  explicitly configured. Explicit deployment values remain authoritative;
+  service-only, Docker, and production/server defaults do not change.
+- A named unsaved Platform Account may start Browser login directly. Both the
+  managed browser-sync path and local visible fallback first use the existing
+  draft-account persistence path so account ID and `profile_key` exist before
+  launch.
+- QR and Browser startup use customer-safe stages and independent finite
+  cleanup bounds. A timeout preserves the prior committed Profile/Cookie
+  authority and returns the stage that needs operator attention.
+- Browser selection remains CR-117 deployment authority. CR-132 does not
+  select a second browser, migrate browser channels, or treat local Windows
+  evidence as server acceptance.
 
 ## 2026-07-22 - CR-128 Saved Cookie Recovery And Packet D Closure
 

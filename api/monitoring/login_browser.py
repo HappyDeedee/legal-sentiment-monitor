@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 import os
 import subprocess
 from pathlib import Path
@@ -15,6 +16,16 @@ from .normalizer import PLATFORM_LABELS
 from .platform_status import PROFILE_DIRS, PROJECT_ROOT
 from tools.browser_launcher import BrowserLauncher
 from tools.browser_environment import BrowserEnvironmentPlan
+
+
+logger = logging.getLogger(__name__)
+
+
+class LoginBrowserProbeError(RuntimeError):
+    def __init__(self, stage: str) -> None:
+        self.stage = stage
+        self.message = f"登录窗口状态检测超时（阶段：{stage}）。"
+        super().__init__(self.message)
 
 
 PLATFORM_LOGIN_URLS = {
@@ -155,7 +166,7 @@ async def probe_login_browser_session(
     expected_pid: int,
     close_when_logged_in: bool = False,
     timeout_ms: int = 4000,
-) -> dict[str, bool]:
+) -> dict[str, Any]:
     if platform not in PLATFORM_LOGIN_URLS:
         raise ValueError("unsupported platform")
     port = int(debug_port)
@@ -165,15 +176,38 @@ async def probe_login_browser_session(
     if process_id <= 0:
         raise ValueError("invalid browser process")
 
-    playwright = await async_playwright().start()
+    stage_state = {"stage": "启动浏览器检测组件"}
+    playwright = await _run_login_browser_step(
+        async_playwright().start(),
+        stage_state["stage"],
+        platform,
+        timeout_ms,
+    )
     session = None
     try:
-        browser = await playwright.chromium.connect_over_cdp(
-            f"http://127.0.0.1:{port}",
-            timeout=max(1000, int(timeout_ms)),
+        stage_state["stage"] = "连接登录窗口"
+        browser = await _run_login_browser_step(
+            playwright.chromium.connect_over_cdp(
+                f"http://127.0.0.1:{port}",
+                timeout=max(1000, int(timeout_ms)),
+            ),
+            stage_state["stage"],
+            platform,
+            timeout_ms,
         )
-        session = await browser.new_browser_cdp_session()
-        process_matched = await _browser_process_matches(session, process_id)
+        stage_state["stage"] = "校验登录窗口进程"
+        session = await _run_login_browser_step(
+            browser.new_browser_cdp_session(),
+            stage_state["stage"],
+            platform,
+            timeout_ms,
+        )
+        process_matched = await _run_login_browser_step(
+            _browser_process_matches(session, process_id),
+            stage_state["stage"],
+            platform,
+            timeout_ms,
+        )
         if not process_matched:
             return {
                 "connected": True,
@@ -181,6 +215,7 @@ async def probe_login_browser_session(
                 "logged_in": False,
                 "close_requested": False,
             }
+        stage_state["stage"] = "定位平台登录页"
         page = _login_browser_page(browser.contexts, platform)
         if page is None:
             return {
@@ -192,17 +227,28 @@ async def probe_login_browser_session(
         page.set_default_timeout(max(1000, int(timeout_ms)))
         from .login_qrcode import _is_logged_in
 
+        stage_state["stage"] = "检测平台登录状态"
         logged_in = bool(
-            await asyncio.wait_for(
+            await _run_login_browser_step(
                 _is_logged_in(platform, page.context, page),
-                timeout=max(2.0, float(timeout_ms) / 1000 + 1.0),
+                stage_state["stage"],
+                platform,
+                timeout_ms,
             )
         )
         close_requested = False
         if logged_in and close_when_logged_in:
+            stage_state["stage"] = "关闭已登录窗口"
             try:
-                await session.send("Browser.close")
+                await _run_login_browser_step(
+                    session.send("Browser.close"),
+                    stage_state["stage"],
+                    platform,
+                    timeout_ms,
+                )
                 close_requested = True
+            except LoginBrowserProbeError:
+                raise
             except Exception:
                 close_requested = not browser.is_connected()
         return {
@@ -213,11 +259,8 @@ async def probe_login_browser_session(
         }
     finally:
         if session is not None:
-            try:
-                await session.detach()
-            except Exception:
-                pass
-        await playwright.stop()
+            await _bounded_login_browser_cleanup(session.detach())
+        await _bounded_login_browser_cleanup(playwright.stop())
 
 
 async def close_login_browser_session(
@@ -238,15 +281,35 @@ async def close_login_browser_session(
     if process_id <= 0:
         raise ValueError("invalid browser process")
 
-    playwright = await async_playwright().start()
+    playwright = await _run_login_browser_step(
+        async_playwright().start(),
+        "启动浏览器检测组件",
+        platform,
+        timeout_ms,
+    )
     session = None
     try:
-        browser = await playwright.chromium.connect_over_cdp(
-            f"http://127.0.0.1:{port}",
-            timeout=max(1000, int(timeout_ms)),
+        browser = await _run_login_browser_step(
+            playwright.chromium.connect_over_cdp(
+                f"http://127.0.0.1:{port}",
+                timeout=max(1000, int(timeout_ms)),
+            ),
+            "连接登录窗口",
+            platform,
+            timeout_ms,
         )
-        session = await browser.new_browser_cdp_session()
-        process_matched = await _browser_process_matches(session, process_id)
+        session = await _run_login_browser_step(
+            browser.new_browser_cdp_session(),
+            "校验登录窗口进程",
+            platform,
+            timeout_ms,
+        )
+        process_matched = await _run_login_browser_step(
+            _browser_process_matches(session, process_id),
+            "校验登录窗口进程",
+            platform,
+            timeout_ms,
+        )
         if not process_matched:
             return {
                 "connected": True,
@@ -255,8 +318,15 @@ async def close_login_browser_session(
                 "close_requested": False,
             }
         try:
-            await session.send("Browser.close")
+            await _run_login_browser_step(
+                session.send("Browser.close"),
+                "关闭登录窗口",
+                platform,
+                timeout_ms,
+            )
             close_requested = True
+        except LoginBrowserProbeError:
+            raise
         except Exception:
             close_requested = not browser.is_connected()
         return {
@@ -267,11 +337,8 @@ async def close_login_browser_session(
         }
     finally:
         if session is not None:
-            try:
-                await session.detach()
-            except Exception:
-                pass
-        await playwright.stop()
+            await _bounded_login_browser_cleanup(session.detach())
+        await _bounded_login_browser_cleanup(playwright.stop())
 
 
 def _login_browser_page(contexts: list[Any], platform: str):
@@ -301,6 +368,70 @@ async def _browser_process_matches(session: Any, expected_pid: int) -> bool:
         except (TypeError, ValueError):
             return False
     return False
+
+
+async def _run_login_browser_step(
+    awaitable: Any,
+    stage: str,
+    platform: str,
+    timeout_ms: int,
+) -> Any:
+    logger.info("login_browser_probe_stage platform=%s stage=%s", platform, stage)
+    task = asyncio.ensure_future(awaitable)
+    timeout_seconds = _login_browser_step_timeout_seconds(timeout_ms)
+    try:
+        done, _ = await asyncio.wait({task}, timeout=timeout_seconds)
+        if done:
+            return task.result()
+        task.cancel()
+        task.add_done_callback(_consume_login_browser_task_result)
+        raise LoginBrowserProbeError(stage)
+    except asyncio.CancelledError:
+        task.cancel()
+        task.add_done_callback(_consume_login_browser_task_result)
+        raise
+
+
+def _login_browser_step_timeout_seconds(timeout_ms: int) -> float:
+    override = str(os.environ.get("MONITOR_LOGIN_BROWSER_PROBE_STEP_TIMEOUT_SECONDS") or "").strip()
+    try:
+        value = float(override) if override else float(timeout_ms) / 1000 + 1.0
+    except (TypeError, ValueError):
+        value = float(timeout_ms) / 1000 + 1.0
+    return max(0.05, min(30.0, value))
+
+
+async def _bounded_login_browser_cleanup(awaitable: Any) -> None:
+    task = asyncio.ensure_future(awaitable)
+    done, _ = await asyncio.wait({task}, timeout=_login_browser_cleanup_timeout_seconds())
+    if done:
+        try:
+            task.result()
+        except Exception:
+            pass
+        return
+    task.cancel()
+    task.add_done_callback(_consume_login_browser_task_result)
+
+
+def _login_browser_cleanup_timeout_seconds() -> float:
+    try:
+        return max(
+            0.05,
+            min(
+                30.0,
+                float(os.environ.get("MONITOR_LOGIN_BROWSER_CLEANUP_TIMEOUT_SECONDS") or "5"),
+            ),
+        )
+    except (TypeError, ValueError):
+        return 5.0
+
+
+def _consume_login_browser_task_result(task: asyncio.Future[Any]) -> None:
+    try:
+        task.result()
+    except BaseException:
+        pass
 
 
 def _profile_path(platform: str) -> Path:

@@ -675,6 +675,11 @@ Fields:
   Cookie import are peer user-facing choices; browser auto-sync is available
   only when enabled and healthy; an administrator may explicitly reveal/copy
   one selected account's complete Cookie from a default-masked field.
+- CR-132 Windows local login bootstrap: a named unsaved account may start
+  managed browser-sync or the local visible-browser fallback after one account
+  persistence step, without first creating a QR session. Startup, final
+  account verification, Profile validation, and cleanup expose bounded safe
+  stages; explicit deployment values still override local launcher defaults.
 - CR-127 login authority: one account has one current pending login attempt.
   Starting QR, Browser, visible-browser, or Cookie login supersedes older
   pending attempts, and a stale callback cannot replace committed

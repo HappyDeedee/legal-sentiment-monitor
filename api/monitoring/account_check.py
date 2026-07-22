@@ -1,6 +1,8 @@
 from __future__ import annotations
 
 import asyncio
+import logging
+import os
 from pathlib import Path
 from typing import Any
 
@@ -17,6 +19,7 @@ from tools.browser_environment import (
     browser_environment_failure_result,
     close_managed_browser_session,
     launch_managed_browser_context,
+    managed_browser_cleanup_timeout_seconds,
     verify_managed_page,
 )
 from tools.browser_launcher import BrowserLauncher
@@ -49,6 +52,17 @@ MEDIACRAWLER_CLIENT_CLASSES = {
     "ks": KuaiShouClient,
     "xhs": XiaoHongShuClient,
 }
+
+
+DEFAULT_ACCOUNT_CHECK_STAGE_TIMEOUT_SECONDS = 30.0
+DEFAULT_ACCOUNT_CHECK_CLEANUP_TIMEOUT_SECONDS = 5.0
+logger = logging.getLogger(__name__)
+
+
+class AccountCheckStageTimeout(TimeoutError):
+    def __init__(self, stage: str) -> None:
+        self.stage = stage
+        super().__init__(stage)
 
 
 async def check_social_account_login(
@@ -101,6 +115,7 @@ async def check_social_account_login(
             result = await _check_profile_account(account, timeout_ms)
         provider_plan = result.pop("_browser_environment_plan", None)
         provider_result = result.pop("_browser_environment_result", None)
+        stage = str(result.pop("_stage", "") or "")
         result.pop("_browser_session_closed", None)
         if provider_plan is not None or provider_result is not None:
             if provider_plan is None or provider_result is None:
@@ -111,7 +126,7 @@ async def check_social_account_login(
                     **result,
                     "ok": False,
                     "status": provider_result.reason,
-                    "message": "浏览器账号环境校验未通过，请重试或重新登录。",
+                    "message": str(result.get("message") or "浏览器账号环境校验未通过，请重试或重新登录。"),
                 }
     except Exception:
         complete_social_account_identity_login(
@@ -163,6 +178,7 @@ async def check_social_account_login(
         "platform": platform,
         "platform_label": platform_label,
         "login_type": login_type,
+        "stage": stage,
         "account": updated,
     }
 
@@ -183,8 +199,12 @@ async def _check_profile_account(account: dict[str, Any], timeout_ms: int) -> di
     provider_result = None
     result: dict[str, Any] | None = None
     session_closed = False
+    failure_stage = ""
     try:
-        playwright = await async_playwright().start()
+        playwright = await _run_account_check_stage(
+            async_playwright().start(),
+            "启动浏览器检测组件",
+        )
         plan = _resolve_account_plan(
             account,
             action="login_check",
@@ -192,33 +212,73 @@ async def _check_profile_account(account: dict[str, Any], timeout_ms: int) -> di
             launch_mode="persistent_launch",
             playwright_executable_path=str(playwright.chromium.executable_path),
         )
-        session = await launch_managed_browser_context(playwright, plan)
+        session = await _run_account_check_stage(
+            launch_managed_browser_context(playwright, plan),
+            "启动账号浏览器",
+        )
         browser = session.browser
         context = session.context
-        page = context.pages[0] if context.pages else await context.new_page()
+        page = context.pages[0] if context.pages else await _run_account_check_stage(
+            context.new_page(),
+            "创建平台登录页面",
+        )
         page.set_default_timeout(timeout_ms)
-        await page.goto(str(capability.get("login_url") or ""), wait_until="domcontentloaded", timeout=timeout_ms)
-        await page.wait_for_timeout(COOKIE_LOGIN_HYDRATION_WAIT_MS)
-        provider_result = await verify_managed_page(context, page)
+        await _run_account_check_stage(
+            page.goto(str(capability.get("login_url") or ""), wait_until="domcontentloaded", timeout=timeout_ms),
+            "打开平台登录页",
+        )
+        await _run_account_check_stage(
+            page.wait_for_timeout(COOKIE_LOGIN_HYDRATION_WAIT_MS),
+            "等待平台登录页稳定",
+        )
+        provider_result = await _run_account_check_stage(
+            verify_managed_page(context, page),
+            "校验账号浏览器环境",
+        )
         if provider_result is None or not provider_result.ok:
             result = _result(False, "浏览器账号环境校验未通过，请重新登录。", "provider_mismatch")
         else:
-            login_baseline = await _login_baseline(platform, context)
-            verified = await _verify_collectable_login(platform, context, page, timeout_ms, login_baseline)
+            login_baseline = await _run_account_check_stage(
+                _login_baseline(platform, context),
+                "读取已有登录态",
+            )
+            verified = await _run_account_check_stage(
+                _verify_collectable_login(platform, context, page, timeout_ms, login_baseline),
+                "检查已有登录态",
+            )
             if verified.get("ok"):
                 identity = _merge_platform_identity(
-                    await _extract_platform_identity(platform, page),
+                    await _run_account_check_stage(
+                        _extract_platform_identity(platform, page),
+                        "读取平台账号身份",
+                    ),
                     verified.get("identity"),
                 )
                 result = _result(True, "登录态有效，可供采集任务使用。", "valid", identity)
             else:
-                verification = await _detect_simple_verification(page)
+                verification = await _run_account_check_stage(
+                    _detect_simple_verification(page),
+                    "检查平台验证状态",
+                )
                 if verification:
                     result = _result(False, verification, "needs_verification")
                 elif verified.get("status") == "client_check_failed":
                     result = _result(False, str(verified.get("message") or ""), "client_check_failed")
                 else:
                     result = _result(False, "登录态无效或已失效，请重新扫码登录。", "invalid")
+    except AccountCheckStageTimeout as exc:
+        failure_stage = exc.stage
+        if plan is not None:
+            provider_result = browser_environment_failure_result(
+                plan,
+                "account_check_stage_timeout",
+                proxy_effect="failed" if plan.proxy_policy == "account_bound" else "not_applicable",
+            )
+        result = _result(
+            False,
+            f"登录态检测超时（阶段：{exc.stage}），请重试。",
+            "account_check_stage_timeout",
+        )
     except BrowserEnvironmentError as exc:
         if plan is None:
             raise
@@ -245,6 +305,11 @@ async def _check_profile_account(account: dict[str, Any], timeout_ms: int) -> di
         except BrowserEnvironmentError as exc:
             if plan is None:
                 raise
+            failure_stage = (
+                "停止浏览器检测组件"
+                if "playwright" in getattr(exc, "fields", ())
+                else "清理账号浏览器"
+            )
             provider_result = browser_environment_failure_result(
                 plan,
                 exc.reason,
@@ -256,6 +321,7 @@ async def _check_profile_account(account: dict[str, Any], timeout_ms: int) -> di
         "_browser_environment_plan": plan,
         "_browser_environment_result": provider_result,
         "_browser_session_closed": session_closed,
+        "_stage": failure_stage,
     }
 
 
@@ -272,8 +338,12 @@ async def _check_cookie_account(account: dict[str, Any], timeout_ms: int) -> dic
     provider_result = None
     result: dict[str, Any] | None = None
     session_closed = False
+    failure_stage = ""
     try:
-        playwright = await async_playwright().start()
+        playwright = await _run_account_check_stage(
+            async_playwright().start(),
+            "启动浏览器检测组件",
+        )
         plan = _resolve_account_plan(
             account,
             action="cookie_validation",
@@ -281,34 +351,77 @@ async def _check_cookie_account(account: dict[str, Any], timeout_ms: int) -> dic
             launch_mode="ephemeral_cookie_validation",
             playwright_executable_path=str(playwright.chromium.executable_path),
         )
-        session = await launch_managed_browser_context(playwright, plan)
+        session = await _run_account_check_stage(
+            launch_managed_browser_context(playwright, plan),
+            "启动账号浏览器",
+        )
         browser = session.browser
         context = session.context
-        await context.add_cookies(_cookie_items(platform, cookies))
-        page = await context.new_page()
+        await _run_account_check_stage(
+            context.add_cookies(_cookie_items(platform, cookies)),
+            "注入 Cookie",
+        )
+        page = await _run_account_check_stage(
+            context.new_page(),
+            "创建平台登录页面",
+        )
         page.set_default_timeout(timeout_ms)
-        await page.goto(str(capability.get("login_url") or ""), wait_until="domcontentloaded", timeout=timeout_ms)
-        await page.wait_for_timeout(COOKIE_LOGIN_HYDRATION_WAIT_MS)
-        provider_result = await verify_managed_page(context, page)
+        await _run_account_check_stage(
+            page.goto(str(capability.get("login_url") or ""), wait_until="domcontentloaded", timeout=timeout_ms),
+            "打开平台登录页",
+        )
+        await _run_account_check_stage(
+            page.wait_for_timeout(COOKIE_LOGIN_HYDRATION_WAIT_MS),
+            "等待平台登录页稳定",
+        )
+        provider_result = await _run_account_check_stage(
+            verify_managed_page(context, page),
+            "校验账号浏览器环境",
+        )
         if provider_result is None or not provider_result.ok:
             result = _result(False, "浏览器账号环境校验未通过，请重新保存 Cookie。", "provider_mismatch")
         else:
-            login_baseline = await _login_baseline(platform, context)
-            verified = await _verify_collectable_login(platform, context, page, timeout_ms, login_baseline)
+            login_baseline = await _run_account_check_stage(
+                _login_baseline(platform, context),
+                "读取已有登录态",
+            )
+            verified = await _run_account_check_stage(
+                _verify_collectable_login(platform, context, page, timeout_ms, login_baseline),
+                "检查已有登录态",
+            )
             if verified.get("ok"):
                 identity = _merge_platform_identity(
-                    await _extract_platform_identity(platform, page),
+                    await _run_account_check_stage(
+                        _extract_platform_identity(platform, page),
+                        "读取平台账号身份",
+                    ),
                     verified.get("identity"),
                 )
                 result = _result(True, "Cookie 登录态有效，可供采集任务使用。", "valid", identity)
             else:
-                verification = await _detect_simple_verification(page)
+                verification = await _run_account_check_stage(
+                    _detect_simple_verification(page),
+                    "检查平台验证状态",
+                )
                 if verification:
                     result = _result(False, verification, "needs_verification")
                 elif verified.get("status") == "client_check_failed":
                     result = _result(False, "Cookie 页面状态存在，但采集前验活未通过，请重新保存 Cookie 后再检测。", "client_check_failed")
                 else:
                     result = _result(False, "Cookie 登录态无效或已失效，请重新保存 Cookie。", "invalid")
+    except AccountCheckStageTimeout as exc:
+        failure_stage = exc.stage
+        if plan is not None:
+            provider_result = browser_environment_failure_result(
+                plan,
+                "account_check_stage_timeout",
+                proxy_effect="failed" if plan.proxy_policy == "account_bound" else "not_applicable",
+            )
+        result = _result(
+            False,
+            f"Cookie 登录态检测超时（阶段：{exc.stage}），请重试。",
+            "account_check_stage_timeout",
+        )
     except BrowserEnvironmentError as exc:
         if plan is None:
             raise
@@ -335,6 +448,11 @@ async def _check_cookie_account(account: dict[str, Any], timeout_ms: int) -> dic
         except BrowserEnvironmentError as exc:
             if plan is None:
                 raise
+            failure_stage = (
+                "停止浏览器检测组件"
+                if "playwright" in getattr(exc, "fields", ())
+                else "清理账号浏览器"
+            )
             provider_result = browser_environment_failure_result(
                 plan,
                 exc.reason,
@@ -346,13 +464,18 @@ async def _check_cookie_account(account: dict[str, Any], timeout_ms: int) -> dic
         "_browser_environment_plan": plan,
         "_browser_environment_result": provider_result,
         "_browser_session_closed": session_closed,
+        "_stage": failure_stage,
     }
 
 
 async def _close_account_check_browser(context, browser, playwright) -> None:
     cleanup_error: BrowserEnvironmentError | None = None
     try:
-        await close_managed_browser_session(context, browser)
+        logger.info("account_check_stage stage=%s", "清理账号浏览器")
+        await _bounded_account_check_cleanup(
+            close_managed_browser_session(context, browser),
+            "browser",
+        )
     except BrowserEnvironmentError as exc:
         cleanup_error = exc
     except Exception as exc:
@@ -362,7 +485,8 @@ async def _close_account_check_browser(context, browser, playwright) -> None:
         cleanup_error.__cause__ = exc
     if playwright is not None:
         try:
-            await playwright.stop()
+            logger.info("account_check_stage stage=%s", "停止浏览器检测组件")
+            await _bounded_account_check_cleanup(playwright.stop(), "playwright")
         except Exception as exc:
             if cleanup_error is None:
                 cleanup_error = BrowserEnvironmentError(
@@ -371,6 +495,87 @@ async def _close_account_check_browser(context, browser, playwright) -> None:
                 cleanup_error.__cause__ = exc
     if cleanup_error is not None:
         raise cleanup_error
+
+
+async def _run_account_check_stage(awaitable: Any, stage: str) -> Any:
+    logger.info("account_check_stage stage=%s", stage)
+    task = asyncio.ensure_future(awaitable)
+    try:
+        done, _ = await asyncio.wait(
+            {task},
+            timeout=_account_check_stage_timeout_seconds(),
+        )
+        if done:
+            return task.result()
+        task.cancel()
+        await _drain_account_check_task(task)
+        raise AccountCheckStageTimeout(stage)
+    except asyncio.CancelledError:
+        task.cancel()
+        await _drain_account_check_task(task)
+        raise
+
+
+async def _drain_account_check_task(task: asyncio.Task[Any]) -> None:
+    done, _ = await asyncio.wait(
+        {task},
+        timeout=max(
+            _account_check_cleanup_timeout_seconds(),
+            managed_browser_cleanup_timeout_seconds(),
+        ),
+    )
+    if not done:
+        task.add_done_callback(_consume_account_check_task_result)
+
+
+async def _bounded_account_check_cleanup(awaitable: Any, field: str) -> None:
+    task = asyncio.ensure_future(awaitable)
+    timeout_seconds = _account_check_cleanup_timeout_seconds()
+    if field == "browser":
+        timeout_seconds = max(timeout_seconds, managed_browser_cleanup_timeout_seconds())
+    done, _ = await asyncio.wait(
+        {task},
+        timeout=timeout_seconds,
+    )
+    if done:
+        task.result()
+        return
+    task.cancel()
+    task.add_done_callback(_consume_account_check_task_result)
+    raise BrowserEnvironmentError("account_identity_provider_browser_cleanup_failed", field)
+
+
+def _consume_account_check_task_result(task: asyncio.Future[Any]) -> None:
+    try:
+        task.result()
+    except BaseException:
+        pass
+
+
+def _account_check_stage_timeout_seconds() -> float:
+    try:
+        return max(
+            0.05,
+            min(
+                120.0,
+                float(os.environ.get("MONITOR_ACCOUNT_CHECK_STAGE_TIMEOUT_SECONDS") or DEFAULT_ACCOUNT_CHECK_STAGE_TIMEOUT_SECONDS),
+            ),
+        )
+    except (TypeError, ValueError):
+        return DEFAULT_ACCOUNT_CHECK_STAGE_TIMEOUT_SECONDS
+
+
+def _account_check_cleanup_timeout_seconds() -> float:
+    try:
+        return max(
+            0.05,
+            min(
+                30.0,
+                float(os.environ.get("MONITOR_ACCOUNT_CHECK_CLEANUP_TIMEOUT_SECONDS") or DEFAULT_ACCOUNT_CHECK_CLEANUP_TIMEOUT_SECONDS),
+            ),
+        )
+    except (TypeError, ValueError):
+        return DEFAULT_ACCOUNT_CHECK_CLEANUP_TIMEOUT_SECONDS
 
 
 def _resolve_account_plan(

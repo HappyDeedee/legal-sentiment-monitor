@@ -2,6 +2,49 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-22 - CR-132 Windows Login Bootstrap Verification
+
+Scope: Windows local launcher defaults, one-click service ownership, direct
+new-account Browser entry, staged QR/browser startup, bounded Playwright/browser
+cleanup, and visible-login reconciliation.
+
+Result: implementation verified; affected-computer acceptance remains pending
+until the reviewed change is available on `main`.
+
+- RED coverage reproduced missing Windows defaults, stale-listener health
+  acceptance, missing direct new-account Browser persistence, unbounded QR
+  cleanup, and unbounded browser startup phases.
+- The first independent review found missing foreground-launch ownership,
+  route-level post-timeout checks, visible-login save bounds, Profile
+  validation bounds, and runtime-aware frontend timeout handling. Those paths
+  are now covered by the implementation and new regression tests.
+- The first full-diff re-review then found two cleanup-order blockers: a
+  validation task could outlive Profile rollback, and failed browser startup
+  could miss driver-owned process reaping. The fix now waits through the
+  managed close-and-reap budget, captures browser descendants from the
+  Playwright driver even before a context is returned, and marks an
+  unconfirmed validation cleanup `recovery_required` without changing active,
+  candidate, or rollback directories.
+- Current focused CR-132 coverage passed (`19 passed`). The adjacent
+  login/account-check/Profile selection passed (`128 passed`).
+- Complete `tests/test_monitoring_mvp.py` passed: `727 passed, 3 warnings`.
+- Python compile, external and inline JavaScript parsing,
+  `scripts/check_docs.py`, documentation regression (`1 passed`), and
+  `git diff --check` passed.
+- An isolated local service used a temporary database and synthetic Browser
+  endpoint responses. Desktop `1440x900` and mobile `390x844` checks confirmed
+  browser auto-sync availability, named new-account persistence before both
+  Browser paths, no old detail-page block, no JavaScript errors, and no
+  document-width overflow. The live page also calculated `315000ms` for a
+  `300s` QR setting and retained the `45000ms` minimum for the default `20s`
+  setting. No real Cookie/Profile or protected account was used.
+- Live `/api/health` returned the temporary service's exact process ID. The
+  affected second computer still needs to pull merged `main`, start once, and
+  complete designated Douyin/Xiaohongshu QR and Browser login acceptance.
+- Post-fix Python/JavaScript, documentation, and whitespace gates pass. Final
+  independent read-only re-review returned PASS with no remaining P1/P2.
+  Second-computer real Douyin/Xiaohongshu acceptance remains operator-gated.
+
 ## 2026-07-22 - CR-130 Automated Verification And Independent Review
 
 Scope: new-account manual Cookie form submission, footer save delegation,

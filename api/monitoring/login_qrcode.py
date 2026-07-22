@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import asyncio
 import base64
+import logging
 import os
 import re
 from dataclasses import dataclass
@@ -14,7 +15,11 @@ from playwright.async_api import BrowserContext, Page, Playwright, async_playwri
 from tools import utils
 from tools.browser_environment import (
     BrowserEnvironmentError,
+    ManagedBrowserProcess,
+    close_managed_browser_session,
     launch_managed_browser_context,
+    managed_browser_cleanup_timeout_seconds,
+    managed_browser_processes,
     verify_managed_page,
 )
 
@@ -40,6 +45,9 @@ from .security import redact_sensitive
 from .database import get_runtime_setting_value
 
 
+logger = logging.getLogger(__name__)
+
+
 @dataclass
 class LoginSessionHandle:
     platform: str
@@ -49,6 +57,25 @@ class LoginSessionHandle:
     profile_path: str
     created_at: datetime
     login_baseline: str = ""
+    browser: Any | None = None
+    owned_processes: tuple[ManagedBrowserProcess, ...] = ()
+
+
+@dataclass
+class LoginStartupState:
+    session_id: int
+    platform: str
+    stage: str = "初始化登录会话"
+    playwright: Playwright | None = None
+    context: BrowserContext | None = None
+    browser: Any | None = None
+    owned_processes: tuple[ManagedBrowserProcess, ...] = ()
+
+
+class LoginStartupStageTimeout(TimeoutError):
+    def __init__(self, stage: str) -> None:
+        self.stage = stage
+        super().__init__(stage)
 
 
 ACTIVE_LOGIN_SESSIONS: dict[int, LoginSessionHandle] = {}
@@ -97,16 +124,55 @@ async def start_qrcode_login_session_with_profile(
     """Start a QR login session using an explicit browser/profile command."""
 
     timeout = int(timeout_ms or _login_qr_timeout_ms())
-    timeout_seconds = max(0.001, timeout / 1000)
+    timeout_seconds = max(0.05, timeout / 1000)
     await close_qrcode_login_session(session_id)
     await close_qrcode_login_sessions_for_profile(command.get("profile_path") or "", except_session_id=session_id)
     if platform not in QR_SELECTORS:
         raise ValueError("unsupported platform")
+    state = LoginStartupState(session_id=int(session_id), platform=platform)
+    deadline = asyncio.get_running_loop().time() + timeout_seconds
+    task = asyncio.create_task(
+        _start_qrcode_login_session_with_profile_once(
+            session_id,
+            platform,
+            command,
+            timeout,
+            state,
+            deadline,
+        )
+    )
     try:
-        async with asyncio.timeout(timeout_seconds):
-            return await _start_qrcode_login_session_with_profile_once(session_id, platform, command, timeout)
-    except TimeoutError:
-        return _failure(platform, command, "登录二维码生成超时，请稍后重试或打开登录窗口。")
+        done, _ = await asyncio.wait({task}, timeout=timeout_seconds)
+        if done:
+            return task.result()
+        await _cancel_and_drain_background_task(task)
+        logger.warning(
+            "login_qrcode_timeout session_id=%s platform=%s stage=%s",
+            session_id,
+            platform,
+            state.stage,
+        )
+        await _close_context(
+            state.playwright,
+            state.context,
+            state.browser,
+            state.owned_processes,
+        )
+        return _failure(
+            platform,
+            command,
+            f"登录二维码生成超时（阶段：{state.stage}），请稍后重试或打开登录窗口。",
+            stage=state.stage,
+        )
+    except asyncio.CancelledError:
+        await _cancel_and_drain_background_task(task)
+        await _close_context(
+            state.playwright,
+            state.context,
+            state.browser,
+            state.owned_processes,
+        )
+        raise
 
 
 async def _start_qrcode_login_session_with_profile_once(
@@ -114,17 +180,35 @@ async def _start_qrcode_login_session_with_profile_once(
     platform: str,
     command: dict[str, Any],
     timeout: int,
+    state: LoginStartupState | None = None,
+    deadline: float | None = None,
 ) -> dict[str, Any]:
+    state = state or LoginStartupState(session_id=int(session_id), platform=platform)
+    deadline = deadline or (asyncio.get_running_loop().time() + max(0.05, timeout / 1000))
     capability = MEDIACRAWLER_LOGIN_FLOWS[platform]
     headless = _login_qr_headless()
     playwright: Playwright | None = None
     context: BrowserContext | None = None
+    browser: Any | None = None
+    owned_processes: tuple[ManagedBrowserProcess, ...] = ()
     try:
-        playwright = await async_playwright().start()
+        playwright = await _run_startup_stage(
+            state,
+            "启动浏览器组件",
+            async_playwright().start(),
+            deadline,
+        )
+        state.playwright = playwright
         managed_plan = command.get("_browser_environment_plan")
         if managed_plan is not None:
-            managed_session = await launch_managed_browser_context(playwright, managed_plan)
+            managed_session = await _run_startup_stage(
+                state,
+                "启动账号浏览器",
+                launch_managed_browser_context(playwright, managed_plan),
+                deadline,
+            )
             context = managed_session.context
+            browser = managed_session.browser
         else:
             profile_path = Path(command["profile_path"])
             profile_path.mkdir(parents=True, exist_ok=True)
@@ -138,22 +222,59 @@ async def _start_qrcode_login_session_with_profile_once(
             }
             if command.get("proxy_url"):
                 launch_options["proxy"] = {"server": str(command.get("proxy_url") or "")}
-            context = await playwright.chromium.launch_persistent_context(**launch_options)
-        page = context.pages[0] if context.pages else await context.new_page()
+            context = await _run_startup_stage(
+                state,
+                "启动账号浏览器",
+                playwright.chromium.launch_persistent_context(**launch_options),
+                deadline,
+            )
+        state.context = context
+        state.browser = browser
+        try:
+            owned_processes = managed_browser_processes(context)
+        except Exception:
+            owned_processes = ()
+        state.owned_processes = owned_processes
+        page = context.pages[0] if context.pages else await _run_startup_stage(
+            state,
+            "创建平台页面",
+            context.new_page(),
+            deadline,
+        )
         page.set_default_timeout(timeout)
-        await page.goto(QR_SELECTORS[platform]["url"], wait_until="domcontentloaded", timeout=timeout)
+        await _run_startup_stage(
+            state,
+            "打开平台登录页",
+            page.goto(QR_SELECTORS[platform]["url"], wait_until="domcontentloaded", timeout=timeout),
+            deadline,
+        )
         if managed_plan is not None:
-            provider_result = await verify_managed_page(context, page)
+            provider_result = await _run_startup_stage(
+                state,
+                "校验账号浏览器环境",
+                verify_managed_page(context, page),
+                deadline,
+            )
             if provider_result is None or not provider_result.ok:
-                await _close_context(playwright, context)
+                await _close_context(playwright, context, browser, owned_processes)
                 return {
                     **_failure(platform, command, "浏览器账号环境校验未通过，请重新生成二维码。"),
                     "_browser_environment_plan": managed_plan,
                     "_browser_environment_result": provider_result,
                 }
-        login_baseline = await _login_baseline(platform, context)
-        if await _is_logged_in(platform, context, page, login_baseline):
-            await _close_context(playwright, context)
+        login_baseline = await _run_startup_stage(
+            state,
+            "读取已有登录态",
+            _login_baseline(platform, context),
+            deadline,
+        )
+        if await _run_startup_stage(
+            state,
+            "检查已有登录态",
+            _is_logged_in(platform, context, page, login_baseline),
+            deadline,
+        ):
+            await _close_context(playwright, context, browser, owned_processes)
             return {
                 "ok": True,
                 "status": LOGIN_STATE_SUCCESS,
@@ -170,8 +291,18 @@ async def _start_qrcode_login_session_with_profile_once(
             }
 
         login_adapter = _build_mediacrawler_login_adapter(platform, context, page)
-        await _prepare_login_page(platform, page, timeout, login_adapter)
-        qr_image = await _find_login_qrcode(page, platform, timeout, login_adapter)
+        await _run_startup_stage(
+            state,
+            "准备平台登录页",
+            _prepare_login_page(platform, page, timeout, login_adapter),
+            deadline,
+        )
+        qr_image = await _run_startup_stage(
+            state,
+            "提取登录二维码",
+            _find_login_qrcode(page, platform, timeout, login_adapter),
+            deadline,
+        )
         if not qr_image:
             verification = await _detect_manual_verification(platform, page)
             if verification.get("needs_verification"):
@@ -184,9 +315,11 @@ async def _start_qrcode_login_session_with_profile_once(
                     page,
                     login_baseline,
                     verification,
+                    browser,
+                    owned_processes,
                 )
             details = await _describe_qrcode_failure(page, platform)
-            await _close_context(playwright, context)
+            await _close_context(playwright, context, browser, owned_processes)
             return _failure(
                 platform,
                 command,
@@ -200,6 +333,8 @@ async def _start_qrcode_login_session_with_profile_once(
             profile_path=command["profile_path"],
             created_at=datetime.now(timezone.utc),
             login_baseline=login_baseline,
+            browser=browser,
+            owned_processes=owned_processes,
         )
         return {
             "ok": True,
@@ -215,10 +350,23 @@ async def _start_qrcode_login_session_with_profile_once(
             "message": "请使用手机扫码登录。扫码成功后系统会自动保存登录状态。",
         }
     except asyncio.CancelledError:
-        await _close_context(playwright, context)
         raise
+    except LoginStartupStageTimeout as exc:
+        await _close_context(playwright, context, browser, owned_processes)
+        logger.warning(
+            "login_qrcode_stage_timeout session_id=%s platform=%s stage=%s",
+            session_id,
+            platform,
+            exc.stage,
+        )
+        return _failure(
+            platform,
+            command,
+            f"登录二维码生成超时（阶段：{exc.stage}），请稍后重试或打开登录窗口。",
+            stage=exc.stage,
+        )
     except BrowserEnvironmentError as exc:
-        await _close_context(playwright, context)
+        await _close_context(playwright, context, browser, owned_processes)
         result = _failure(platform, command, "浏览器账号环境校验失败，请重新生成二维码。")
         managed_plan = command.get("_browser_environment_plan")
         provider_result = getattr(exc, "browser_environment_result", None)
@@ -230,8 +378,8 @@ async def _start_qrcode_login_session_with_profile_once(
             }
         return result
     except Exception as exc:
-        await _close_context(playwright, context)
-        return _failure(platform, command, _brief_exception_message(exc))
+        await _close_context(playwright, context, browser, owned_processes)
+        return _failure(platform, command, _brief_exception_message(exc), stage=state.stage)
 
 
 async def poll_qrcode_login_session(session_id: int) -> dict[str, Any]:
@@ -330,7 +478,7 @@ async def close_qrcode_login_session(session_id: int) -> None:
     handle = ACTIVE_LOGIN_SESSIONS.pop(int(session_id), None)
     if not handle:
         return
-    await _close_context(handle.playwright, handle.context)
+    await _close_context(handle.playwright, handle.context, handle.browser, handle.owned_processes)
 
 
 async def close_qrcode_login_sessions_for_profile(profile_path: str, except_session_id: int | None = None) -> None:
@@ -571,6 +719,8 @@ async def _manual_verification_response(
     page: Page,
     login_baseline: str,
     verification: dict[str, Any] | None = None,
+    browser: Any | None = None,
+    owned_processes: tuple[ManagedBrowserProcess, ...] = (),
 ) -> dict[str, Any]:
     capability = MEDIACRAWLER_LOGIN_FLOWS[platform]
     ACTIVE_LOGIN_SESSIONS[int(session_id)] = LoginSessionHandle(
@@ -581,6 +731,8 @@ async def _manual_verification_response(
         profile_path=command["profile_path"],
         created_at=datetime.now(timezone.utc),
         login_baseline=login_baseline,
+        browser=browser,
+        owned_processes=owned_processes,
     )
     return {
         "ok": True,
@@ -901,7 +1053,14 @@ def _login_qr_timeout_ms() -> int:
         return int(os.environ.get("MONITOR_LOGIN_QR_TIMEOUT_MS") or 20000)
 
 
-def _failure(platform: str, command: dict[str, Any], message: str, diagnostic_image: str = "") -> dict[str, Any]:
+def _failure(
+    platform: str,
+    command: dict[str, Any],
+    message: str,
+    diagnostic_image: str = "",
+    *,
+    stage: str = "",
+) -> dict[str, Any]:
     capability = MEDIACRAWLER_LOGIN_FLOWS.get(platform) or {}
     return {
         "ok": False,
@@ -915,6 +1074,7 @@ def _failure(platform: str, command: dict[str, Any], message: str, diagnostic_im
         "diagnostic_image": diagnostic_image,
         "login_url": PLATFORM_LOGIN_URLS.get(platform, ""),
         "profile_path": command.get("profile_path") or "",
+        "stage": str(stage or ""),
         "message": redact_sensitive(message),
     }
 
@@ -953,6 +1113,102 @@ async def _bounded_poll_step(awaitable: Any, timeout_seconds: float, fallback: A
         task.cancel()
         await asyncio.gather(task, return_exceptions=True)
         raise
+
+
+async def _run_startup_stage(
+    state: LoginStartupState,
+    stage: str,
+    awaitable: Any,
+    deadline: float,
+) -> Any:
+    state.stage = stage
+    logger.info(
+        "login_qrcode_stage session_id=%s platform=%s stage=%s",
+        state.session_id,
+        state.platform,
+        stage,
+    )
+    remaining = deadline - asyncio.get_running_loop().time()
+    timeout_seconds = min(remaining, _login_qr_stage_timeout_seconds())
+    if timeout_seconds <= 0:
+        if hasattr(awaitable, "close"):
+            awaitable.close()
+        raise LoginStartupStageTimeout(stage)
+    task = asyncio.ensure_future(awaitable)
+    try:
+        done, _ = await asyncio.wait({task}, timeout=timeout_seconds)
+        if done:
+            return task.result()
+        await _cancel_and_drain_background_task(task)
+        raise LoginStartupStageTimeout(stage)
+    except asyncio.CancelledError:
+        await _cancel_and_drain_background_task(task)
+        raise
+
+
+def _login_qr_stage_timeout_seconds() -> float:
+    try:
+        return max(
+            0.05,
+            min(
+                120.0,
+                float(os.environ.get("MONITOR_LOGIN_BROWSER_STARTUP_STAGE_TIMEOUT_SECONDS") or "30"),
+            ),
+        )
+    except (TypeError, ValueError):
+        return 30.0
+
+
+def _login_browser_cleanup_timeout_seconds() -> float:
+    try:
+        return max(
+            0.05,
+            min(
+                30.0,
+                float(os.environ.get("MONITOR_LOGIN_BROWSER_CLEANUP_TIMEOUT_SECONDS") or "5"),
+            ),
+        )
+    except (TypeError, ValueError):
+        return 5.0
+
+
+def _login_managed_cleanup_timeout_seconds() -> float:
+    return max(
+        _login_browser_cleanup_timeout_seconds(),
+        managed_browser_cleanup_timeout_seconds(),
+    )
+
+
+async def _bounded_cleanup_step(awaitable: Any) -> None:
+    task = asyncio.ensure_future(awaitable)
+    done, _ = await asyncio.wait({task}, timeout=_login_browser_cleanup_timeout_seconds())
+    if done:
+        try:
+            task.result()
+        except Exception:
+            pass
+        return
+    task.cancel()
+    task.add_done_callback(_consume_background_task_result)
+
+
+async def _cancel_and_drain_background_task(task: asyncio.Task[Any]) -> None:
+    task.cancel()
+    done, _ = await asyncio.wait(
+        {task},
+        timeout=_login_managed_cleanup_timeout_seconds(),
+    )
+    if done:
+        _consume_background_task_result(task)
+    else:
+        task.add_done_callback(_consume_background_task_result)
+
+
+def _consume_background_task_result(task: asyncio.Future[Any]) -> None:
+    try:
+        task.result()
+    except BaseException:
+        pass
 
 
 async def _is_logged_in(platform: str, context: BrowserContext, page: Page, login_baseline: str = "") -> bool:
@@ -1024,14 +1280,15 @@ def _login_qr_poll_timeout_seconds() -> float:
         return 2.5
 
 
-async def _close_context(playwright: Playwright | None, context: BrowserContext | None) -> None:
-    if context:
-        try:
-            await context.close()
-        except Exception:
-            pass
+async def _close_context(
+    playwright: Playwright | None,
+    context: BrowserContext | None,
+    browser: Any | None = None,
+    owned_processes: tuple[ManagedBrowserProcess, ...] = (),
+) -> None:
+    try:
+        await close_managed_browser_session(context, browser, owned_processes)
+    except Exception:
+        pass
     if playwright:
-        try:
-            await playwright.stop()
-        except Exception:
-            pass
+        await _bounded_cleanup_step(playwright.stop())

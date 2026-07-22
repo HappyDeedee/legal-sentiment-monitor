@@ -1726,6 +1726,49 @@ Run the relevant parts of this checklist after each Phase 11 batch:
   live service verification with a disposable account, and independent
   read-only review.
 
+## CR-132 Windows Login Bootstrap And Bounded Browser Startup Tests
+
+- Both Windows local launchers default browser auto-sync on, allow the local
+  visible-login fallback, and keep explicit operator values authoritative.
+  Service-only and Docker entry points remain unchanged.
+- The Python one-click child receives the same defaults and accepts health only
+  from its spawned service process, so a stale listener cannot be reported as
+  the new service.
+- Browser selection order and persisted manifest behavior from CR-117 remain
+  green; no test downloads or launches a real browser.
+- With a non-empty account name and no saved account ID, the visible Browser
+  action performs one existing draft persistence call before opening the
+  account-bound browser. Browser-sync retains the same pre-launch contract.
+- QR startup reports safe driver/browser/navigation/environment/login/QR
+  stages. A hung stage returns a stage-specific terminal failure, and a hung
+  context or Playwright cleanup cannot keep the API request open indefinitely.
+- A stage-specific QR startup failure terminalizes immediately and does not
+  start a second account/Profile browser check inside the same request.
+- Browser-sync reports its pre-window stage and applies a finite timeout to
+  driver startup, provider resolution, managed browser launch, navigation, and
+  environment verification while preserving the normal manual-login window.
+  Candidate Profile validation and active Profile recheck each have a finite
+  browser bound while filesystem swap/commit keeps the existing journal and
+  rollback rules.
+- Cancellation tests delay managed browser cleanup and prove account checks do
+  not return and Profile rollback does not start before cleanup finishes.
+  A failed launch before context return reaps only descendants proven to belong
+  to the current Playwright driver. If validation cleanup still exceeds its
+  hard budget, the journal becomes `recovery_required` without Profile path
+  mutation.
+- Local visible-login probing distinguishes browser connection, platform-page,
+  platform-verification, and Profile-save stages. The final account check and
+  its browser/Playwright cleanup are stage-bounded, and frontend reconciliation
+  has a finite per-request timeout without exposing URLs, ports, Profile paths,
+  Cookie, or platform secrets.
+- Frontend QR creation derives its request timeout from
+  `login_qr_timeout_seconds` plus cleanup margin, so valid values above 45
+  seconds are not aborted early.
+- Final gates include focused CR-132 and adjacent CR-108/CR-117/CR-120/
+  CR-122/CR-127 tests, complete monitoring regression, Python and inline
+  JavaScript syntax, documentation consistency/regression, `git diff --check`,
+  local rendered browser checks, and independent read-only full-diff review.
+
 ## CR-121 Crawler Account Identity Snapshot Header Tests
 
 - A prepared managed page and an unprepared background page must not share

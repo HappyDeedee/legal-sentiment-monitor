@@ -1946,6 +1946,35 @@ Live receipt (2026-07-22): test account `9212` reached login session `6434`
 account `active` with no current error. No protected collection account was
 changed.
 
+## CR-132 - Windows Login Bootstrap And Bounded Browser Startup
+
+Implementation status (2026-07-22): implementation verified and independent
+re-review passed; second-computer post-merge acceptance remains
+operator-gated. This is a second-computer
+Windows regression follow-up to CR-117, CR-120, CR-122, and CR-127. Their
+verified account/Profile authority remains closed history.
+
+- [x] Register the observed clean-computer launcher, new-account entry, QR
+      timeout-cleanup, and browser startup-stage gaps.
+- [x] Confirm Windows local browser auto-sync defaults and direct new-account
+      Browser entry with the operator.
+- [x] Add RED coverage for launcher defaults/instance ownership, new-account
+      visible Browser entry, QR cleanup bounds, and browser-sync startup stage.
+- [x] Apply reversible Windows local defaults without changing service-only or
+      production/server behavior.
+- [x] Bound and report QR/browser startup and cleanup stages without changing
+      account attempt, Profile, Cookie, or promotion authority.
+- [x] Reap driver-owned browser descendants on failed startup and require
+      managed cleanup completion before Profile rollback; retain an
+      unconfirmed cleanup as `recovery_required` without filesystem mutation.
+- [x] Run focused and adjacent login regressions after the route, account-check,
+      Profile-validation, launcher, and frontend timeout fixes.
+- [x] Run complete monitoring, syntax/docs/whitespace, and rendered-browser
+      gates.
+- [x] Complete independent read-only re-review and close implementation.
+- [ ] Record second-computer pull/start/login acceptance after the reviewed
+      change is available on `main`.
+
 ## CR-120 - Local Visible Login Automatic Reconciliation
 
 Implementation status (2026-07-20): verified. This is a local fallback

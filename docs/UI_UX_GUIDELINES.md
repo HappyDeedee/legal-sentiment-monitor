@@ -238,6 +238,11 @@ Interaction rules:
   actions. Both remain visible but disabled until the account name is entered;
   browser auto-sync then saves the account binding before opening the managed
   login window and does not require a QR session first.
+- The local visible-login action follows the same new-account rule: after a
+  name is entered it persists the account, keeps the Browser panel selected,
+  and opens the account-bound window without requiring an existing detail
+  page. QR creation and visible-browser reconciliation requests show a bounded
+  terminal timeout instead of an endless loading state.
 - Browser-sync and account-bound local visible-login progress belongs to the
   Browser panel. QR images, verification, and QR fallback status remain in the
   QR panel. The Cookie panel accepts standard Cookie text or the complete

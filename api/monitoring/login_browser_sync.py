@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import hashlib
+import logging
 import os
 import time
 from dataclasses import dataclass, field, replace
@@ -18,6 +19,7 @@ from tools.browser_environment import (
     ManagedBrowserProcess,
     close_managed_browser_session,
     launch_managed_browser_context,
+    managed_browser_cleanup_timeout_seconds,
     managed_browser_processes,
     verify_managed_page,
 )
@@ -48,6 +50,7 @@ from .login_attempts import account_login_start_lock, supersede_account_login_at
 from .login_status import (
     LOGIN_STATE_NEEDS_VERIFICATION,
     LOGIN_STATE_PLATFORM_ERROR,
+    LOGIN_STATE_PREPARING,
     LOGIN_STATE_QRCODE_FAILED,
     LOGIN_STATE_TIMEOUT,
     LOGIN_STATE_WAITING_CONFIRM,
@@ -70,6 +73,11 @@ COOKIE_SYNC_TIMEOUT_ENV = "MONITOR_BROWSER_COOKIE_SYNC_TIMEOUT_SECONDS"
 DEFAULT_COOKIE_SYNC_TIMEOUT_SECONDS = 600
 MIN_COOKIE_SYNC_TIMEOUT_SECONDS = 60
 MAX_COOKIE_SYNC_TIMEOUT_SECONDS = 1800
+DEFAULT_BROWSER_SYNC_STAGE_TIMEOUT_SECONDS = 30.0
+DEFAULT_BROWSER_SYNC_CLEANUP_TIMEOUT_SECONDS = 5.0
+
+
+logger = logging.getLogger(__name__)
 
 
 class BrowserSyncError(ProfilePromotionError):
@@ -99,6 +107,7 @@ class BrowserSyncHandle:
     cancel_event: asyncio.Event = field(default_factory=asyncio.Event)
     ready_event: asyncio.Event = field(default_factory=asyncio.Event)
     finalized: bool = False
+    stage: str = "创建浏览器同步会话"
 
 
 ACTIVE_BROWSER_SYNC_SESSIONS: dict[int, BrowserSyncHandle] = {}
@@ -294,6 +303,7 @@ def browser_sync_session_view(session_id: int) -> dict[str, Any]:
     view["active"] = bool(handle and not handle.finalized and handle.task and not handle.task.done())
     view["browser_open"] = bool(handle and handle.context is not None and handle.page is not None)
     view["cancel_requested"] = bool(handle and handle.cancel_event.is_set())
+    view["stage"] = str(handle.stage if handle else "")
     return view
 
 
@@ -304,18 +314,33 @@ async def _run_browser_cookie_sync(handle: BrowserSyncHandle) -> None:
         account = _workspace_account(handle.account_id, handle.workspace_id)
         if str(account.get("profile_key") or "") != handle.profile_key:
             raise BrowserSyncError("browser_sync_account_changed", "账号环境已变化，请重新发起浏览器同步。")
-        handle.playwright = await async_playwright().start()
-        provider_plan = await asyncio.to_thread(_resolve_provider_plan, account, handle.playwright)
+        handle.playwright = await _run_browser_sync_stage(
+            handle,
+            "启动浏览器组件",
+            "正在启动浏览器组件。",
+            async_playwright().start(),
+        )
+        provider_plan = await _run_browser_sync_stage(
+            handle,
+            "解析账号浏览器环境",
+            "正在解析账号浏览器环境。",
+            asyncio.to_thread(_resolve_provider_plan, account, handle.playwright),
+        )
         handle.provider_resolution_id = str(provider_plan.resolution_id)
         handle.browser_attempt_id = str(provider_plan.attempt_id)
-        bound = await asyncio.to_thread(
-            bind_browser_sync_login_session,
-            handle.session_id,
-            account_id=handle.account_id,
-            profile_key=handle.profile_key,
-            acquisition_generation=handle.acquisition_generation,
-            provider_resolution_id=handle.provider_resolution_id,
-            browser_attempt_id=handle.browser_attempt_id,
+        bound = await _run_browser_sync_stage(
+            handle,
+            "绑定账号登录会话",
+            "正在绑定账号登录会话。",
+            asyncio.to_thread(
+                bind_browser_sync_login_session,
+                handle.session_id,
+                account_id=handle.account_id,
+                profile_key=handle.profile_key,
+                acquisition_generation=handle.acquisition_generation,
+                provider_resolution_id=handle.provider_resolution_id,
+                browser_attempt_id=handle.browser_attempt_id,
+            ),
         )
         _assert_session_binding(handle, bound, provider_plan, require_promotion=False)
         runner = _build_browser_sync_runner(handle, provider_plan)
@@ -342,12 +367,20 @@ async def _run_browser_cookie_sync(handle: BrowserSyncHandle) -> None:
         _set_session_status(handle.session_id, _status_for_reason(exc.reason), exc.message)
     except ProfilePromotionError as exc:
         terminal_reason = exc.reason
-        _set_session_status(handle.session_id, _status_for_reason(exc.reason), _message_for_reason(exc.reason))
+        message = _message_for_reason(exc.reason)
+        if exc.reason in {"profile_validation_stage_timeout", "profile_validation_cleanup_timeout"}:
+            message = f"登录态保存超时（阶段：{handle.stage}），原登录态已保留，请重新发起。"
+        _set_session_status(handle.session_id, _status_for_reason(exc.reason), message)
     except (BrowserEnvironmentError, AccountIdentityError) as exc:
         terminal_reason = str(getattr(exc, "reason", "browser_sync_failed"))
         _set_session_status(handle.session_id, LOGIN_STATE_PLATFORM_ERROR, _message_for_reason(getattr(exc, "reason", "browser_sync_failed")))
     except Exception:
-        _set_session_status(handle.session_id, LOGIN_STATE_PLATFORM_ERROR, "浏览器同步失败，请重新发起。")
+        terminal_reason = "browser_sync_unexpected_failure"
+        _set_session_status(
+            handle.session_id,
+            LOGIN_STATE_PLATFORM_ERROR,
+            f"浏览器同步失败（阶段：{handle.stage}），请重新发起。",
+        )
     finally:
         try:
             await _close_handle_browser(handle)
@@ -384,6 +417,12 @@ def _build_browser_sync_runner(handle: BrowserSyncHandle, provider_plan: Any) ->
             return await _acquire_and_inject_candidate(handle, plan, default_runner)
         if phase == 1:
             raise ProfilePromotionError("profile_cookie_capture_missing")
+        _set_browser_sync_stage(
+            handle,
+            "复检活动 Profile",
+            "登录态已切换，正在复检活动 Profile。",
+            status=LOGIN_STATE_WAITING_CONFIRM,
+        )
         return await default_runner(replace(plan, headless=True), injected_records)
 
     return run
@@ -408,7 +447,12 @@ async def _acquire_and_inject_candidate(handle: BrowserSyncHandle, plan: Any, de
     acquisition_browser = None
     try:
         acquisition_plan = replace(plan, trigger_source="browser_sync_acquisition", headless=False)
-        managed_session = await launch_managed_browser_context(handle.playwright, acquisition_plan)
+        managed_session = await _run_browser_sync_stage(
+            handle,
+            "启动账号登录窗口",
+            "正在启动账号登录窗口。",
+            launch_managed_browser_context(handle.playwright, acquisition_plan),
+        )
         acquisition_context = managed_session.context
         acquisition_browser = managed_session.browser
         handle.owned_processes = managed_browser_processes(acquisition_context)
@@ -417,25 +461,55 @@ async def _acquire_and_inject_candidate(handle: BrowserSyncHandle, plan: Any, de
                 "browser_sync_process_ownership_unavailable",
                 "登录浏览器进程归属校验失败，请重新发起。",
             )
-        page = acquisition_context.pages[0] if acquisition_context.pages else await acquisition_context.new_page()
+        page = acquisition_context.pages[0] if acquisition_context.pages else await _run_browser_sync_stage(
+            handle,
+            "创建平台登录页面",
+            "正在创建平台登录页面。",
+            acquisition_context.new_page(),
+        )
         page.set_default_timeout(15000)
-        await page.goto(str(get_mediacrawler_login_capability(handle.platform).get("login_url") or ""), wait_until="domcontentloaded", timeout=15000)
-        provider_result = await verify_managed_page(acquisition_context, page)
+        await _run_browser_sync_stage(
+            handle,
+            "打开平台登录页",
+            "正在打开平台登录页。",
+            page.goto(str(get_mediacrawler_login_capability(handle.platform).get("login_url") or ""), wait_until="domcontentloaded", timeout=15000),
+        )
+        provider_result = await _run_browser_sync_stage(
+            handle,
+            "校验账号浏览器环境",
+            "正在校验账号浏览器环境。",
+            verify_managed_page(acquisition_context, page),
+        )
         if provider_result is None or not provider_result.ok:
             raise ProfilePromotionError("account_identity_snapshot_mismatch", promotion_id)
-        baseline = await _login_baseline(handle.platform, acquisition_context)
+        baseline = await _run_browser_sync_stage(
+            handle,
+            "读取已有登录态",
+            "正在读取已有登录态。",
+            _login_baseline(handle.platform, acquisition_context),
+        )
         handle.context = acquisition_context
         handle.page = page
         handle.ready_event.set()
+        handle.stage = "等待平台登录"
         _set_session_status(handle.session_id, LOGIN_STATE_WAITING_CONFIRM, "登录窗口已打开，请在窗口中完成平台登录。")
         deadline = time.monotonic() + browser_cookie_sync_timeout_seconds()
         identity: dict[str, Any] = {}
         while True:
             _require_browser_sync_waiting(handle, acquisition_context, page, deadline)
-            if await _is_logged_in(handle.platform, acquisition_context, page, baseline):
-                verified = await _verify_collectable_login(handle.platform, acquisition_context, page, 15000, baseline)
+            if await _run_browser_sync_probe(
+                _is_logged_in(handle.platform, acquisition_context, page, baseline),
+                "检测平台登录状态",
+            ):
+                verified = await _run_browser_sync_probe(
+                    _verify_collectable_login(handle.platform, acquisition_context, page, 15000, baseline),
+                    "校验平台登录状态",
+                )
                 if verified.get("ok"):
-                    identity = await _extract_platform_identity(handle.platform, page)
+                    identity = await _run_browser_sync_probe(
+                        _extract_platform_identity(handle.platform, page),
+                        "读取平台账号身份",
+                    )
                     break
                 _set_session_status(handle.session_id, LOGIN_STATE_NEEDS_VERIFICATION, "平台登录已变化，正在等待完成平台验证。")
             else:
@@ -446,7 +520,16 @@ async def _acquire_and_inject_candidate(handle: BrowserSyncHandle, plan: Any, de
                     _set_session_status(handle.session_id, LOGIN_STATE_WAITING_CONFIRM, "请在浏览器窗口中完成登录，系统会自动确认。")
             await asyncio.sleep(0.8)
         _assert_live_binding(handle, plan, expected_context=acquisition_context)
-        raw_cookies = await acquisition_context.cookies(_client_cookie_urls(handle.platform))
+        _set_browser_sync_stage(
+            handle,
+            "保存平台登录态",
+            "平台登录已确认，正在保存账号登录状态。",
+            status=LOGIN_STATE_WAITING_CONFIRM,
+        )
+        raw_cookies = await _run_browser_sync_probe(
+            acquisition_context.cookies(_client_cookie_urls(handle.platform)),
+            "读取平台 Cookie",
+        )
         records = canonicalize_cookie_records(handle.platform, _playwright_cookie_records(raw_cookies))
     finally:
         owned_processes = handle.owned_processes
@@ -458,6 +541,12 @@ async def _acquire_and_inject_candidate(handle: BrowserSyncHandle, plan: Any, de
         raise BrowserSyncError("browser_sync_cancelled", "浏览器同步已取消。")
     _assert_live_binding(handle, plan, require_context=False)
     reset_candidate_profile_for_cookie_injection(paths, promotion)
+    _set_browser_sync_stage(
+        handle,
+        "验证候选 Profile",
+        "Cookie 已读取，正在验证候选 Profile。",
+        status=LOGIN_STATE_WAITING_CONFIRM,
+    )
     candidate_result = await default_runner(replace(plan, headless=True), records)
     if handle.cancel_event.is_set():
         raise BrowserSyncError("browser_sync_cancelled", "浏览器同步已取消。")
@@ -562,15 +651,19 @@ def _assert_live_binding(
 async def _close_handle_browser(handle: BrowserSyncHandle) -> None:
     owned_processes = handle.owned_processes
     handle.owned_processes = ()
-    await _close_context_and_browser(handle.context, None, owned_processes)
-    handle.context = None
-    handle.page = None
-    if handle.playwright is not None:
-        try:
-            await handle.playwright.stop()
-        except Exception:
-            pass
-        handle.playwright = None
+    cleanup_error: BrowserEnvironmentError | None = None
+    try:
+        await _close_context_and_browser(handle.context, None, owned_processes)
+    except BrowserEnvironmentError as exc:
+        cleanup_error = exc
+    finally:
+        handle.context = None
+        handle.page = None
+        if handle.playwright is not None:
+            await _bounded_browser_sync_cleanup(handle.playwright.stop())
+            handle.playwright = None
+    if cleanup_error is not None:
+        raise cleanup_error
 
 
 async def _close_context_and_browser(
@@ -579,6 +672,121 @@ async def _close_context_and_browser(
     owned_processes: tuple[ManagedBrowserProcess, ...] = (),
 ) -> None:
     await close_managed_browser_session(context, browser, owned_processes)
+
+
+async def _run_browser_sync_stage(
+    handle: BrowserSyncHandle,
+    stage: str,
+    message: str,
+    awaitable: Any,
+) -> Any:
+    _set_browser_sync_stage(handle, stage, message)
+    return await _run_browser_sync_probe(awaitable, stage)
+
+
+async def _run_browser_sync_probe(awaitable: Any, stage: str) -> Any:
+    task = asyncio.ensure_future(awaitable)
+    try:
+        done, _ = await asyncio.wait({task}, timeout=_browser_sync_stage_timeout_seconds())
+        if done:
+            return task.result()
+        await _cancel_and_drain_browser_sync_task(task)
+        raise BrowserSyncError(
+            "browser_sync_stage_timeout",
+            f"浏览器登录超时（阶段：{stage}），请重新发起。",
+        )
+    except asyncio.CancelledError:
+        await _cancel_and_drain_browser_sync_task(task)
+        raise
+
+
+def _set_browser_sync_stage(
+    handle: BrowserSyncHandle,
+    stage: str,
+    message: str,
+    *,
+    status: str = LOGIN_STATE_PREPARING,
+) -> None:
+    handle.stage = stage
+    logger.info(
+        "browser_sync_stage session_id=%s account_id=%s platform=%s stage=%s",
+        handle.session_id,
+        handle.account_id,
+        handle.platform,
+        stage,
+    )
+    _set_session_status(handle.session_id, status, message)
+
+
+def _browser_sync_stage_timeout_seconds() -> float:
+    try:
+        return max(
+            0.05,
+            min(
+                120.0,
+                float(
+                    os.environ.get("MONITOR_BROWSER_SYNC_STAGE_TIMEOUT_SECONDS")
+                    or DEFAULT_BROWSER_SYNC_STAGE_TIMEOUT_SECONDS
+                ),
+            ),
+        )
+    except (TypeError, ValueError):
+        return DEFAULT_BROWSER_SYNC_STAGE_TIMEOUT_SECONDS
+
+
+def _browser_sync_cleanup_timeout_seconds() -> float:
+    try:
+        return max(
+            0.05,
+            min(
+                30.0,
+                float(
+                    os.environ.get("MONITOR_BROWSER_SYNC_CLEANUP_TIMEOUT_SECONDS")
+                    or DEFAULT_BROWSER_SYNC_CLEANUP_TIMEOUT_SECONDS
+                ),
+            ),
+        )
+    except (TypeError, ValueError):
+        return DEFAULT_BROWSER_SYNC_CLEANUP_TIMEOUT_SECONDS
+
+
+def _browser_sync_managed_cleanup_timeout_seconds() -> float:
+    return max(
+        _browser_sync_cleanup_timeout_seconds(),
+        managed_browser_cleanup_timeout_seconds(),
+    )
+
+
+async def _bounded_browser_sync_cleanup(awaitable: Any) -> None:
+    task = asyncio.ensure_future(awaitable)
+    done, _ = await asyncio.wait({task}, timeout=_browser_sync_cleanup_timeout_seconds())
+    if done:
+        try:
+            task.result()
+        except Exception:
+            pass
+        return
+    task.cancel()
+    task.add_done_callback(_consume_browser_sync_task_result)
+
+
+async def _cancel_and_drain_browser_sync_task(task: asyncio.Task[Any]) -> None:
+    task.cancel()
+    done, _ = await asyncio.wait(
+        {task},
+        timeout=_browser_sync_managed_cleanup_timeout_seconds(),
+    )
+    if done:
+        _consume_browser_sync_task_result(task)
+    else:
+        task.add_done_callback(_consume_browser_sync_task_result)
+
+
+def _consume_browser_sync_task_result(task: asyncio.Future[Any]) -> None:
+    try:
+        task.result()
+    except BaseException:
+        pass
 
 
 def _set_session_status(session_id: int, status: str, message: str) -> None:
@@ -635,6 +843,8 @@ def _message_for_reason(reason: str) -> str:
         "account_identity_snapshot_mismatch": "浏览器账号环境校验未通过，请重新登录。",
         "profile_candidate_validation_failed": "新登录态验证未通过，原登录态已保留。",
         "profile_active_recheck_failed": "新登录态切换后的验活未通过，原登录态已保留。",
+        "profile_validation_stage_timeout": "登录态保存超时，原登录态已保留，请重新发起。",
+        "profile_validation_cleanup_timeout": "登录态清理超时，原登录态已保留并停止继续使用，请重启服务后检查账号。",
         "profile_cookie_capture_missing": "没有取得有效 Cookie，原登录态已保留。",
         "profile_promotion_cancelled": "浏览器同步已取消，原登录态已保留。",
         "profile_promotion_failed": "登录态保存失败，原登录态已保留。",
