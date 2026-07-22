@@ -712,6 +712,96 @@ short `Superseded by` note rather than deleting history.
   the prepared page still fails closed as
   `account_identity_snapshot_mismatch`.
 
+## 2026-07-22 - CR-129 Request Environment Authority Boundary
+
+- Accepted boundary for the queued CR-129 follow-up: the committed Profile
+  resolved from `social_account.profile_key` remains the browser and crawl
+  login authority. Encrypted Cookie remains initialization, refresh, recovery,
+  and migration material.
+- Accepted boundary: `BrowserEnvironmentProvider` is the sole source for the
+  browser family/channel/version, Profile, UA, locale, timezone, window, and
+  proxy environment. XHS and Douyin clients/signers must consume one frozen
+  request projection from its effective proof instead of deriving a second
+  environment.
+- Accepted invariant: one managed crawl attempt binds account ID, platform,
+  `profile_key`, browser proof, proxy revision, identity revision,
+  resolution ID, attempt ID, and run ID. Missing, conflicting, expired, or
+  cross-account values fail closed before platform dispatch.
+- Accepted retry boundary: transient network failures may use bounded retries
+  against the same verified environment revision. Login, challenge, second
+  verification, rate-limit, proxy-block, signature, protocol, and identity
+  failures become terminal typed results until an explicit new resolution.
+- Accepted safety boundary: raw Cookie, token, proxy credentials, and signature
+  material stay in controlled runtime memory or existing encrypted references;
+  safe handles and proof snapshots contain only IDs, revisions, hashes, and
+  redacted metadata.
+- Accepted sequencing: CR-070 remains after CR-112 and CR-129. CR-112's
+  same-machine Windows and Packet B Extension/Connector/transport decisions
+  remain protected and are not reimplemented by CR-129.
+- Accepted real-acceptance boundary: use only designated Douyin account 8972
+  and Xiaohongshu account 9196 for collection validation. Accounts 9197 and
+  9198 are protected and excluded. Kuaishou remains Deferred.
+- Packet A implementation confirms that the request proof is an additive,
+  in-memory/attempt-file projection with no schema migration: the committed
+  Profile remains authority, the safe binding carries only IDs/revisions, and
+  the Runner rejects missing, stale, conflicting, expired, or cross-account
+  proof before ingest. Complete child-process leakage tripwires remain Packet
+  D scope.
+- Packet B confirms the actual XHS signer entry is `sign_with_xhshow()` with
+  `_build_sign_string()`, not the superseded `get_xs()` name. Core creates one
+  immutable XHS request identity from the Provider-effective environment;
+  Client signs and dispatches copied URL/query/body/Cookie/UA/proxy inputs from
+  that identity and rejects drift before HTTP.
+- Packet B safe dispatch evidence retains request 1 plus the latest 31
+  monotonic records. Every request is still validated in memory; the bounded
+  persisted window prevents long crawls from growing the attempt proof without
+  limit. Runner requires at least one bound signed 2xx XHS proof before ingest.
+- Explicit browser selections derive only the safe channel label
+  (`chrome`, `edge`, or `chromium`) from the executable path. The path itself
+  remains excluded from request and dispatch proof.
+- Packet C confirms the managed Douyin Profile sources: LocalStorage `xmst`
+  supplies `msToken`; `__tea_cache_tokens_6383.web_id` supplies the 19-digit
+  `webid`; Profile Cookie `s_v_web_id` supplies `verifyFp/fp`; Profile Cookie
+  `ttwid` supplies `ttwid`. These values are captured once from the already
+  verified Page and frozen for the attempt. Managed mode does not use the old
+  random `get_web_id()` path or the old fixed creator `verifyFp`.
+- Packet C upgrades the safe request-environment contract to v2 so the
+  provider-effective browser platform, screen, viewport, scale, mobile, and
+  touch values are explicit request inputs. This remains an ephemeral
+  parent/child contract and adds no database migration.
+- The current Douyin Client has no POST API call sites, while its existing
+  `a_bogus` helper explicitly lacks body-signing proof. Managed POST therefore
+  fails closed until a body-aware signer/transport contract has RED/GREEN
+  coverage. Existing unmanaged compatibility remains unchanged.
+- Packet D confirms one child terminal contract with safe reason codes and
+  exact account/Profile/resolution/attempt/run/revision binding. The parent
+  consumes this result once and rejects missing, stale, cross-attempt, or
+  exit-code-conflicting results before ingest.
+- Packet D confirms that only `transient_network` is retryable. HTTP/client
+  timeout, 408, login, Cookie, verification, rate, proxy, signature, identity,
+  protocol, cancellation, and crash outcomes are terminal. A retry changes
+  only `attempt_id` and ordinal; the resolution and identity/Cookie/proxy
+  revisions stay frozen.
+- Managed child stdout is piped through exact-secret and generic redaction
+  before disk write. Windows timeout/cancellation terminates the child process
+  tree with `taskkill /T /F`; terminal cleanup releases account/proxy locks and
+  preserves committed Profile/Cookie authority.
+- Public F2 evidence was used only to verify terminology and external-source
+  boundaries. Its Apache-2.0 code is not copied and it is not added as a runtime
+  dependency; CR-129 retains the current project signer and Profile authority.
+- Packet E upgrades the ephemeral request contract to v3. Every dispatch proof
+  carries an explicit `signature_required` policy. Douyin general search is
+  accepted only as explicitly unsigned; other managed GET endpoints still
+  require signer output, and managed POST remains pre-network fail-closed.
+- Managed Cookie authority is the Cookie header Chromium would actually send
+  for the target origin, proven through a unique same-origin request intercepted
+  and aborted before network and reconciled with the same-moment structured
+  Cookie store. A second independently timed Cookie snapshot is not accepted as
+  equivalent proof.
+- A service restart terminalizes pending login records that no longer have an
+  in-memory owner. It does not promote a candidate or replace the committed
+  Profile/encrypted Cookie authority.
+
 ## 2026-07-21 - CR-112 Acceptance And Execution Order
 
 - Confirmed for CR-112: V1 browser auto-sync is a same-machine Windows

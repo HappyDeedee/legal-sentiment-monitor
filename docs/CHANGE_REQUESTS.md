@@ -127,6 +127,9 @@ Status values:
 - CR-124: Saved Login Recheck, Test Isolation, And Portable Cookie Clarity
 - CR-125: Platform Account Identity List Simplification
 - CR-126: Xiaohongshu Self-Info Display Name Extraction
+- CR-127: Unified Account Login Authority And Cookie/Profile Reliability
+- CR-128: Saved Cookie Recovery After Profile Drift
+- CR-129: Account Profile And Platform Request Identity Consistency
 - CR-096: AI Evaluation Postprocessing Scope Reduction
 - CR-075: Responsive Navigation Interaction Consistency
 - CR-076: Mobile Header Layout Resilience Regression Fix
@@ -4640,6 +4643,219 @@ Verification:
 
 - Verified on 2026-06-18 with targeted frontend regression coverage, syntax
   checks, docs check, and browser inspection of the local `/monitor` page.
+
+## CR-129 - Account Profile And Platform Request Identity Consistency
+
+Date: 2026-07-22
+
+Source: TODO baseline review after CR-128 exposed a remaining split between the
+verified account/browser environment and the platform request/signature paths.
+
+Module: managed account request environment, Xiaohongshu and Douyin clients and
+signers, proxy binding, Runner retries, child-process boundaries, and real
+collection proof.
+
+Type: Phase 5.1 follow-up regression fix; account-environment architecture
+hardening; platform-request identity consistency.
+
+Status: Verified (Packets A-E)
+
+Execution: Ready for Implementation after deep plan-cross-validation.
+
+Packet status: Packets A-E are `Verified` on 2026-07-22. The automatic
+compatibility suite and the designated Douyin and XHS real/restart lanes pass.
+
+Baseline: `main@6cffdbaf0c0ffca8863192c962918a37349f10a4`.
+
+Background:
+
+- `BrowserEnvironmentProvider` and `BrowserEnvironmentPlan` now establish the
+  account-scoped browser, Profile, UA, locale, timezone, and proxy result.
+- Packets B and C close the XHS and Douyin request-authority splits. Packet D
+  closes typed-error, retry, process-terminal, and leakage boundaries; Packet E
+  owns compatibility and designated real acceptance.
+- A successful content response alone does not prove that the designated
+  account identity, signature inputs, and final request used one environment.
+
+Confirmed boundary:
+
+- Profile is the crawl and browser-runtime authority.
+- Encrypted Cookie is initialization, refresh, recovery, and migration
+  material.
+- BrowserEnvironmentProvider is the sole browser/Profile/UA/proxy authority.
+- Platform clients and signers consume one frozen request environment.
+- Managed accounts keep their bound account, Profile, identity revision,
+  browser, proxy, and network; silent anonymous, generic-Profile, other-account,
+  or default-network fallback is outside the boundary.
+- CR-112's same-machine Windows and Packet B component decisions remain
+  protected. This CR does not reimplement Extension, Connector, or WebSocket
+  transport.
+- CR-070 remains after CR-112 and this follow-up.
+
+In scope:
+
+- Versioned immutable request-environment projection from effective provider
+  proof.
+- XHS Cookie/a1/web_session/UA/signature/final-request consistency.
+- Douyin Cookie/webid/verifyFp/msToken/ttwid/a_bogus/UA/signature/final-
+  request consistency.
+- Proxy revision, retry, process, restart, cancellation, timeout, and typed
+  identity/error boundaries.
+- Synthetic RED/GREEN tests, affected regression, documentation, and serial
+  designated real acceptance.
+
+Out of scope:
+
+- CR-070 export/import package, new crawler framework, account rotation,
+  challenge bypass, whole-Profile cross-host transfer, or new external
+  dependency.
+- Real collection using protected accounts 9197 and 9198.
+
+Atomic implementation packages:
+
+- Packet A: project and validate `PlatformRequestEnvironment`.
+- Packet A must make safe request proof mandatory for every post-CR-129
+  platform attempt. Proof stores IDs, revisions, digests, effective values,
+  expiry, and redacted signer/request evidence only; historical runs remain
+  limited-context.
+- Packet B: unify Xiaohongshu signer/client/request identity.
+- Packet C: unify Douyin signer/client/request identity.
+- Packet D: typed errors, bounded retry, cross-process safe handle, terminal
+  states, and secret tripwires.
+- Packet E: browser compatibility, saved-Profile compatibility, and real
+  acceptance.
+
+Packet A evidence: the immutable request contract is projected from the
+effective browser proof, passed through a safe parent binding, written by the
+child atomically, and validated by the Runner before ingest. Managed proxy
+refresh drift, stale attempt proof, XHS signed Cookie/UA mutation, missing
+Douyin Profile `msToken`, and two-account projection isolation have regression
+coverage. Full child-process tripwires remain Packet D scope.
+
+Packet B evidence: managed XHS Core now builds one frozen request identity from
+the effective request environment, complete Cookie map, `a1`, `web_session`,
+UA/UA-CH, Accept-Language, Profile binding, and proxy. `_pre_headers()`,
+`sign_with_xhshow()` / `_build_sign_string()`, and the final httpx URL/body use
+the same copied input. Runtime drift fails before dispatch. Safe signed 2xx
+dispatch proofs are written atomically, reject stale/non-monotonic writes, and
+retain a bounded first-plus-latest-31 window. Runner requires a bound signed
+success proof before managed XHS ingest. Raw Cookie, proxy credentials, URL,
+headers, signature output, and Profile path remain outside persisted proof.
+The unmanaged account-check/update-Cookie path remains compatible.
+
+Packet C evidence: `PlatformRequestEnvironment` contract v2 projected the
+provider-effective browser platform, screen, viewport, device scale, mobile,
+and touch values in addition to the Packet A binding. Managed Douyin Core reads
+the already-verified Profile once: `xmst` supplies `msToken`,
+`__tea_cache_tokens_6383.web_id` supplies `webid`, and Profile cookies supply
+`s_v_web_id` as `verifyFp/fp` plus `ttwid`. Client requests consume that frozen
+identity, reject caller/token/header/proxy/target drift before HTTP, sign the
+same encoded query that is dispatched, and persist only bound digests. The
+fixed creator `verifyFp`, per-request random `webid`, per-request LocalStorage
+read, and fixed Mac/Chrome-125/screen values are absent from managed mode.
+Runner requires one bound 2xx Douyin proof that matches the endpoint signature
+policy before ingest. The current Douyin Client has no POST call sites; managed
+POST remains fail-closed until a body-aware signer contract is implemented and
+tested rather than reusing an unproven GET signature.
+
+Packet D evidence: the child writes one strict, versioned, attempt-bound
+terminal result and the parent consumes it once. Only `transient_network`
+retries within the existing deadline; retries keep the same resolution,
+identity, Cookie-material, and proxy revisions while receiving a fresh
+`attempt_id`. Login, Cookie, second-verification, human-verification, rate,
+proxy, signature, identity, protocol, timeout, cancellation, and crash results
+are terminal. Windows cleanup uses process-tree termination. Managed stdout is
+redacted before disk write, and argv/environment/result/log tripwires reject
+raw secrets and local authority paths. Dedicated tests pass `84`; complete
+monitoring passes `704`. Independent focused re-review returns `PASS` with no
+remaining P0/P1/P2.
+
+Packet E implementation evidence: contract v3 adds an explicit
+`signature_required` dispatch-policy field. Managed browser Cookie material is
+now taken from a same-origin request intercepted and aborted before network,
+then reconciled with the same-moment structured browser store; malformed,
+unknown, cleanup-failed, or conflicting proof stops before Client construction.
+XHS header lookup is case-insensitive and rejects duplicate case variants, so
+the lowercase `user-agent` supplied by account checks is frozen into the same
+signed request identity instead of being misread as an empty UA.
+Douyin general search follows the verified platform protocol and omits
+`a_bogus`; other managed GET endpoints keep signed proof. Startup recovery
+terminalizes orphaned pending login records while preserving committed Profile
+and encrypted Cookie authority. The affected suite passes `808`; the complete
+repository run reports `835 passed, 8 skipped, 7 failed, 4 warnings`, with the
+same six Redis-dependent failures and one pre-existing XHS Excel factory
+assertion. After the XHS header fix, the affected suite passes `809`; the final
+repository run reports `836 passed, 8 skipped, 7 failed, 4 warnings` with the
+same seven baseline failures.
+
+Packet E designated Douyin evidence: account `8972` passed the strong Profile
+check with non-empty platform name/avatar/home identity fields, then normal
+monitor run `16854` persisted three new items from fourteen real results. Its
+safe proof is contract v3, account/Profile/browser/proxy bound, HTTP 200,
+`signature_required=false`, `signed=false`, and `fallback_used=false`. Run-log
+tripwire scans found no plaintext Cookie/token/proxy/Profile arguments.
+Protected accounts `9197` and `9198` were not collection targets.
+
+After service restart, account `8972` again passed the strong Profile check and
+normal monitor run `16855` returned fourteen real items and persisted one new
+item with the same contract-v3 account/Profile/browser policy and
+`fallback_used=false`; its run-log leakage scan remained zero. Independent
+round-1 review findings were fixed or disproved by call-chain evidence, and the
+focused re-review returned `PASS` with no P0/P1/P2.
+
+Protected-account audit clarification: pre-existing daily job `15345`, which
+has no bound account, automatically selected `9198` at 09:00 in scheduled run
+`16846`. It stopped at local `requires_relogin` preflight before platform
+dispatch and persisted no content; the Profile and encrypted Cookie digests
+remain unchanged. No designated/manual CR-129 real-acceptance run used `9197`
+or `9198` after the explicit protected-account boundary. The existing job is
+not modified by CR-129.
+
+XHS completion evidence: sessions `6422` through `6425` ended at bounded login
+timeouts and preserved the committed authority. Diagnostic session `6426`
+then reproduced a pre-dispatch signed-UA mismatch caused by the lowercase
+`user-agent` header; its candidate was removed. RED/GREEN coverage fixed the
+case-insensitive header projection. Session `6427` succeeded and promotion
+`518` committed the account-bound Cookie/Profile authority. Designated account
+`9196` passed the strong platform identity check before and after service
+restart. Normal monitor runs `16856` and `16857` used exact account `9196`,
+`profile_key=1/xhs/acc_9196`, bundled Chromium `127.0.6533.17`, direct proxy
+policy, contract-v3 signed HTTP 200 proofs, and `fallback_used=false`; they
+persisted 20 and 8 new XHS contents respectively. Exact Cookie fragment/pair
+scans across acceptance artifacts and runtime logs, plus current process
+argument inspection, returned zero matches. Protected accounts `9197` and
+`9198` were not used by the designated/manual acceptance lane.
+
+Real acceptance:
+
+- Designated Douyin account: `8972`.
+- Designated Xiaohongshu account: `9196`.
+- Run serially through the normal monitor entry; prove exact identity, one
+  stored item per platform, `fallback_used=false`, no plaintext secrets in
+  child argv/environment/logs/snapshots, and service-restart Profile checks.
+- Kuaishou remains Deferred.
+
+Acceptance and rollback:
+
+- Every packet requires RED/GREEN coverage, affected/full regression, compile,
+  JavaScript, docs, whitespace, and independent read-only review before its
+  atomic commit.
+- Packet B covers XHS `_pre_headers()`, `sign_with_xhshow()`,
+  `_build_sign_string()`, Core preparation, and final transport; Packet C must
+  cover Douyin `_pre_headers()`, `get_web_id()`,
+  `get_a_bogus()`, page evidence, and final transport. Proxy expiry/revision/
+  region drift is terminal and requires a new resolution; only bounded
+  transient connection failures reuse the verified environment revision.
+- Child-process tripwires must prove that Cookie, token, proxy credentials,
+  Profile paths, CDP endpoints, and raw signatures are absent from argv,
+  environment, logs, and safe result files.
+- Invalid or expired candidate environments are discarded before changing the
+  committed Profile/Cookie authority.
+- Failed, cancelled, timed-out, interrupted, and browser-closed operations
+  preserve the previous committed account material.
+- The packet plan is the CR-095-compatible execution artifact. Its status is
+  Accepted/Ready for Implementation after Claude deep review reached READY;
+  packet code still moves through In Progress and Verified independently.
 
 ## CR-113 - QR Draft Account Identity Choice Forwarding
 

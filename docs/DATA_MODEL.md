@@ -1020,3 +1020,66 @@ metadata needed to explain which template was used.
   report history.
 - Email idempotency uses `email_delivery_logs` and schedule-window keys:
   daily by date; `6h`, `12h`, and `cron` by hour.
+
+## CR-129 Safe Request Environment Proof
+
+CR-129 adds a request-layer proof concept without making raw browser or
+Cookie material a new authority. The preferred representation is a versioned
+immutable runtime contract projected from the effective
+`BrowserEnvironmentResult` and bound to one account, platform, Profile,
+proxy, identity revision, resolution, attempt, and run.
+
+The safe proof may contain:
+
+- contract version and lifecycle timestamps;
+- account/platform/workspace IDs and `profile_key`;
+- browser family/source/channel/version digest;
+- proxy ID/policy/revision digest;
+- identity and Cookie-material revision references;
+- locale, timezone, UA, Accept-Language, and provider-effective window/device
+  values used by the signer;
+- resolution, attempt, and run IDs;
+- signer/request algorithm versions and redacted result digests.
+
+It must not contain raw Cookie values, token values, proxy credentials,
+Profile paths, complete headers, URL query secrets, or signature material.
+Existing `identity_runtime_snapshot_json` remains the browser/account proof;
+request proof is additive and may be persisted only when the implementation
+needs historical run evidence. If a schema field is required, it must be
+added compatibly with a nullable/default-safe column and a reversible
+migration. No existing account/Profile/Cookie row is removed or silently
+rewritten by CR-129.
+
+The data model invariant is:
+
+```text
+one managed attempt = one frozen request environment
+```
+
+Packet A uses an in-memory immutable contract and a short-lived safe attempt
+proof file; it adds no database column and does not rewrite historical run or
+account rows. A future persistent request-proof field remains subject to the
+additive migration gate below.
+
+Packets B-C keep this proof ephemeral and safe-serialized. Contract v2 added
+provider-effective browser-platform, screen, viewport, scale, mobile, and
+touch values so Douyin signer inputs come from the same provider result as the
+Profile, Cookie, UA, and proxy. It adds no database field and persists only
+digests and revision-bound dispatch evidence, never raw token values.
+
+Packet E upgrades the ephemeral contract to v3 by adding the boolean
+`signature_required` dispatch policy. This distinguishes the explicitly
+unsigned Douyin general-search protocol from endpoints that require signer
+output without weakening Runner validation. Browser Cookie request proof and
+login-session restart recovery use existing runtime objects and rows; no new
+database field or migration is introduced.
+
+Packet D adds no database field. Its terminal result is a short-lived,
+versioned attempt file containing only safe category/reason codes and exact
+IDs/revisions. Runner consumes and deletes it before finalization. Retry
+ordinals and fresh attempt IDs are recorded in existing run-summary proof;
+raw Cookie, token, proxy credential, Profile path, and signature material stay
+outside persistent rows and snapshots.
+
+Content persistence alone is not identity proof. Authenticated status requires
+platform-specific self-identity or an equivalent strong login-state result.

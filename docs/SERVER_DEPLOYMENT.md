@@ -556,3 +556,61 @@ Acceptance cannot be marked complete until:
 - the web UI controls login;
 - server-side profile persistence is verified across restart;
 - concurrency limits are verified for account/profile/proxy resources.
+
+## CR-129 Managed Request Environment
+
+The server runtime must pass the effective provider proof into one immutable
+platform request environment before constructing a managed XHS or Douyin
+Client. The environment is bound to the account, platform, `profile_key`,
+browser proof, proxy revision, identity revision, resolution ID, attempt ID,
+and run ID. A child process receives only a versioned safe handle or
+Profile-only launch metadata.
+
+Request contract v3 carries provider-effective browser-platform, screen,
+viewport, scale, mobile, and touch values. Managed Douyin reads its required
+Profile token sources once before Client construction and binds them to the
+same Cookie, browser, UA, proxy, signer input, and final URL. The current
+contract also records whether an endpoint requires signing: Douyin general
+search is explicitly unsigned, other managed GET endpoints require `a_bogus`,
+and managed POST stops before network until a body-aware signer proof exists.
+
+Deployment acceptance must inspect that:
+
+- a missing or conflicting field stops the request before platform dispatch;
+- a managed account does not change browser, Profile, proxy, or network during
+  a retry;
+- only bounded transient-network failures retry;
+- login/challenge/second-verification/rate-limit/signature/environment/
+  identity failures reach a terminal actionable state;
+- raw Cookie, token, proxy credentials, Profile paths, and signature material
+  are absent from argv, environment variables, logs, audit details, and safe
+  snapshots;
+- service restart, browser close, cancellation, timeout, and child-process
+  exit leave the prior committed account authority intact.
+
+CR-129 local real acceptance is explicitly serial and uses Douyin account
+`8972` and Xiaohongshu account `9196`. Accounts `9197` and `9198` are not
+collection targets. This evidence supplements, rather than replaces, the
+separate CR-047 Linux/server-like gate.
+
+Packet D deployment receipt (2026-07-22): managed child stdout is piped and
+redacted before disk write; browser plans and terminal results are one-use
+attempt handles; Windows timeout/cancellation invokes process-tree cleanup;
+and only typed transient-network failures retry within the existing deadline.
+Packet E verified deployment receipt (2026-07-22): managed browser Cookie proof
+is intercepted and aborted before network, contract v3 validates endpoint
+signature policy, and startup terminalizes orphaned pending login sessions.
+Designated Douyin account `8972` passed strong identity and normal monitor run
+`16854`, persisted three new items, and recorded `fallback_used=false` with no
+plaintext secret matches in its real run logs. After restarting the service on
+current branch code, the strong check and normal run `16855` passed again,
+persisted one new item, and retained the same safe proof/leakage result.
+XHS case-insensitive signed-header projection fixes the lowercase `user-agent`
+account-check path. Session `6427` committed promotion `518`; designated XHS
+`9196` passed strong identity and run `16856`, persisting twenty new items.
+After restarting the service, its Profile passed again and run `16857`
+persisted eight new items. Both runs used contract-v3 signed HTTP 200 proof and
+`fallback_used=false`. Exact Cookie-fragment/pair and current-process argument
+scans returned zero matches. Protected accounts `9197` and `9198` were not used
+by the designated/manual acceptance lane. The separate CR-047 Linux/server-like
+gate remains unchanged.

@@ -3252,3 +3252,137 @@ Layout stress inputs:
   `390x844`.
 - All implementation verification is recorded in `docs/TEST_RESULTS.md` after
   code changes are actually made and tested.
+
+## CR-129 Account Profile And Platform Request Identity Tests
+
+### Plan Readiness Tests
+
+- Compare current `main` with TASKS, CHANGE_REQUESTS, CURRENT_STATE,
+  DECISIONS, TRACEABILITY, and accepted specialist decisions.
+- Classify stale, duplicate, future-valid, operator-gated, historical, and
+  active items before implementation.
+- Run deep read-only Claude review with only `Read`, `Grep`, and `Glob`.
+- Require `Overall verdict=READY`, no blocking findings, no material
+  refinements, consistent formal documents, docs consistency, documentation
+  tests, and `git diff --check`.
+
+### Packet A Tests
+
+- Required account, platform, Profile, browser, proxy, identity, resolution,
+  attempt, run, locale, timezone, UA, language, Cookie revision, and expiry
+  fields are validated before Client construction.
+- Every post-CR-129 platform attempt persists safe proof containing contract,
+  account/Profile/platform, browser digest, proxy revision, identity/Cookie
+  revisions, resolution/attempt/run IDs, effective language, expiry,
+  `fallback_used`, and redacted signer/request digests. Historical runs remain
+  limited-context rather than receiving guessed proof.
+- Missing, conflicting, expired, cross-account, cross-Profile, and stale
+  revisions produce typed failures before any platform request.
+- Safe serialization contains IDs/revisions/hashes only and never raw Cookie,
+  token, proxy credentials, Profile path, or signature material.
+
+Packet A verification receipt (2026-07-22): the contract, safe binding/proof,
+stale-attempt, proxy-freeze, XHS header, Douyin Profile-token, and concurrent
+account tests passed. Complete child-process argv/environment/log tripwires are
+tested in Packet D, not inferred from this Packet A receipt.
+
+### Packet B XHS Tests
+
+- Signer and final request use the same Cookie, `a1`, `web_session`, UA,
+  UA-CH, Accept-Language, URL, query, body, headers, Profile, and proxy.
+- Coverage names `_pre_headers()`, `sign_with_xhshow()`,
+  `_build_sign_string()`, the request transport, and Core preparation as one
+  frozen input path.
+- Old Cookie, old UA, old proxy, or changed signed body paired with a new
+  request produces a RED failure.
+- Two accounts and same-account concurrent attempts remain isolated and
+  serialized; identity loss preserves the committed Profile.
+
+Packet B verification receipt (2026-07-22): combined Packet A+B focused tests
+pass `33`; the affected monitoring selection passes `12`; complete monitoring
+passes `696` with three existing warnings. The complete `tests` collection
+passes `747` with the separately documented pre-existing XHS Store factory
+assertion remaining. Coverage includes exact GET/list-query and complex POST
+signer/transport equality, Header casing, Cookie/proxy/body/target drift,
+pre-dispatch expiry, two-account isolation, atomic bounded proof persistence,
+stale proof rejection, and unmanaged account-check compatibility.
+
+### Packet C Douyin Tests
+
+- Signer and final request use the same Cookie, webid, verifyFp, msToken,
+  ttwid, a_bogus, UA/UA-CH, page/local-storage evidence, URL, query, body,
+  Profile, and proxy.
+- Fixed, random, stale, or cross-account token values are rejected when they
+  are not bound to the current environment revision.
+- Coverage names `_pre_headers()`, `get_web_id()`, `get_a_bogus()`, page
+  evidence, and final transport as one frozen input path.
+- Identity loss and second verification become actionable terminal results;
+  anonymous content is not accepted as authenticated collection.
+
+Packet C verification receipt (2026-07-22): combined Packet A-C focused tests
+pass `48`; complete monitoring passes `696` with three existing warnings. The
+complete `tests` collection passes `767` with the separately documented
+pre-existing XHS Store factory assertion remaining. Coverage proves required
+Profile `xmst`/`web_id`/`s_v_web_id`/`ttwid`, Cookie/header/screen/proxy drift
+rejection, signer/final-query equality including `verifyFp/fp`, stale override
+and target rejection, two-account isolation, digest-only proof persistence,
+Runner proof gating, and managed Cookie-update/new-resolution behavior.
+Managed POST has an explicit pre-network fail-closed test boundary until a
+body-aware signer exists.
+
+### Packet D Boundary Tests
+
+- Typed errors cover login required, second verification, challenge,
+  rate-limit, proxy block, signature mismatch, invalid Cookie, browser/
+  account identity mismatch, transient network, protocol change, timeout,
+  cancellation, and process crash.
+- Only bounded transient-network errors retry; each retry has a new attempt ID
+  and the same verified environment revision.
+- Proxy expiry, proxy revision drift, proxy region mismatch, and proxy block
+  are terminal managed-environment errors requiring a new resolution; an
+  in-flight attempt never refreshes its proxy.
+- Stale callback, late child result, restart, cancel, timeout, and crash cannot
+  overwrite newer state; every path has a terminal state and releases locks.
+- Tripwires inspect argv, environment, logs, audit details, and snapshots for
+  raw Cookie, token, proxy credentials, Profile path, CDP endpoint, or
+  signature material.
+
+Packet D verification receipt (2026-07-22): `84` dedicated tests and `704`
+complete monitoring tests pass. Coverage includes all terminal categories,
+HTTP 408 terminal timeout, same-resolution/fresh-attempt retry, stale and
+cross-attempt result rejection, one-use handles, cancellation during retry
+delay, Windows process-tree termination, pre-write log redaction, non-login
+account-state preservation, XHS RetryError cause preservation, and managed
+Core propagation. Focused independent review returns `PASS` with no remaining
+P0/P1/P2.
+
+### Packet E Real Acceptance
+
+- Use temporary Profiles and synthetic material for automatic tests; block real
+  platform traffic with a tripwire.
+- Set explicit designated IDs only: `DESIGNATED_DY_ACCOUNT_ID=8972` and
+  `DESIGNATED_XHS_ACCOUNT_ID=9196`.
+- Serially prove identity, Profile/browser/proxy/request consistency, normal
+  monitor entry, one persisted real item per platform, `fallback_used=false`,
+  no secret process leakage, cleanup, service restart, and a second bounded
+  Profile check/crawl.
+- Do not select or touch protected collection accounts 9197/9198. Kuaishou is
+  Deferred and does not affect this gate.
+
+Packet E verified receipt (2026-07-22): Cookie-proof focused tests pass `6`, the
+affected monitoring/request suite passes `809`, and the CR-129 monitor selection
+passes `10`. Repository-wide collection reports `836 passed, 8 skipped, 7
+failed, 4 warnings`; the failures remain six Redis-dependent tests and the
+pre-existing XHS Excel factory assertion. Designated Douyin `8972` passes strong
+identity and normal monitor run `16854`, which persists three new items with
+contract-v3 proof and `fallback_used=false`. The service-restart Douyin check
+and run `16855` also pass, persisting one new item. XHS sessions `6422` through
+`6425` timed out while preserving committed authority; session `6426` exposed
+the lowercase `user-agent` signed-UA projection bug and its candidate was
+removed. RED/GREEN coverage fixed the case-insensitive lookup. Session `6427`
+and promotion `518` succeeded. Designated XHS `9196` passed strong identity and
+normal monitor run `16856`, which persisted twenty new items; after restart,
+run `16857` persisted eight. Both XHS runs recorded contract-v3 signed HTTP 200
+proof and `fallback_used=false`. Acceptance artifact/log and current-process
+argument scans returned zero exact Cookie fragment/pair matches. Protected
+accounts `9197` and `9198` were not used by the designated/manual lane.

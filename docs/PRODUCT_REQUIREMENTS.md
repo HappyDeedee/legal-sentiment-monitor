@@ -1028,3 +1028,45 @@ Rules:
 
 - diagnostic text must be customer-safe;
 - raw paths and secrets are not shown to normal users.
+
+### 6.7 Managed Account Request Identity
+
+For a managed platform account, the normal monitor path must use the account's
+committed Profile and the effective browser environment resolved by the
+provider. The platform request Client and signer must consume one frozen
+attempt environment containing the account, platform, `profile_key`, browser
+proof, proxy revision, identity revision, resolution ID, attempt ID, and run
+ID.
+
+The product must keep these distinctions visible in operational state:
+
+- a saved Profile is the normal crawl authority;
+- encrypted Cookie is initialization, refresh, recovery, and migration
+  material;
+- a content response without platform identity proof is not shown as an
+  authenticated account success;
+- login-required, second-verification, challenge, rate-limit, proxy, signer,
+  environment, and account-identity failures are actionable typed outcomes,
+  not anonymous success.
+
+A managed account keeps its account-bound Profile, browser, identity, proxy,
+and network. The product does not silently substitute a generic Profile,
+another account, or a default network. Same-family browser version updates
+retain `profile_key`; browser-family/channel changes use a candidate Profile
+and explicit identity validation before promotion.
+
+For managed Douyin requests, `msToken`, `webid`, `verifyFp/fp`, and `ttwid`
+come from the verified committed Profile and are frozen with Cookie, UA/UA-CH,
+screen/browser values, proxy, signer input, `a_bogus`, and the final URL. A
+  request with missing, changed, fixed, random, or cross-account material stops
+  before platform dispatch. Content returned without a bound request proof that
+  matches the endpoint's explicit signature policy does not count as
+  authenticated collection.
+
+Every managed platform attempt must finish with one typed terminal result.
+Only a bounded `transient_network` result may retry, using the same frozen
+resolution and material revisions with a new attempt ID. Login, verification,
+rate, proxy, signature, identity, protocol, timeout, cancellation, and crash
+results remain terminal and visible through safe customer-facing status.
+Managed child output is redacted before log persistence, and process cleanup
+must release locks without changing committed Profile/Cookie authority.

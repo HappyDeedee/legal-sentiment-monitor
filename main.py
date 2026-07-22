@@ -44,6 +44,11 @@ from media_platform.weibo import WeiboCrawler
 from media_platform.xhs import XiaoHongShuCrawler
 from media_platform.zhihu import ZhihuCrawler
 from tools.async_file_writer import AsyncFileWriter
+from tools.crawler_attempt import (
+    CRAWLER_ATTEMPT_FAILURE_EXIT_CODE,
+    record_current_crawler_attempt_result,
+    record_current_crawler_exception,
+)
 from tools.profile_only import PROFILE_LOGIN_REQUIRED_EXIT_CODE, ProfileLoginRequired
 from var import crawler_type_var
 
@@ -101,24 +106,47 @@ async def _generate_wordcloud_if_needed() -> None:
 async def main() -> None:
     global crawler
 
-    args = await cmd_arg.parse_cmd()
-    if args.init_db:
-        await db.init_db(args.init_db)
-        print(f"Database {args.init_db} initialized successfully.")
-        return
-
-    crawler = CrawlerFactory.create_crawler(platform=config.PLATFORM)
     try:
+        args = await cmd_arg.parse_cmd()
+        if args.init_db:
+            await db.init_db(args.init_db)
+            print(f"Database {args.init_db} initialized successfully.")
+            return
+
+        crawler = CrawlerFactory.create_crawler(platform=config.PLATFORM)
         await crawler.start()
+        _flush_excel_if_needed()
+
+        # Generate wordcloud after crawling is complete
+        # Only for JSON save mode
+        await _generate_wordcloud_if_needed()
+        record_current_crawler_attempt_result(
+            status="success",
+            reason_code="crawler_completed",
+        )
     except ProfileLoginRequired as exc:
-        print("[Main] Managed Profile login state requires re-login.")
+        classified = record_current_crawler_exception(exc)
+        print(
+            "[Main] Managed crawler attempt failed: "
+            + (
+                f"{classified.category}:{classified.reason_code}"
+                if classified
+                else "login_required"
+            )
+        )
         raise SystemExit(PROFILE_LOGIN_REQUIRED_EXIT_CODE) from exc
-
-    _flush_excel_if_needed()
-
-    # Generate wordcloud after crawling is complete
-    # Only for JSON save mode
-    await _generate_wordcloud_if_needed()
+    except asyncio.CancelledError as exc:
+        record_current_crawler_exception(exc)
+        raise
+    except BaseException as exc:
+        classified = record_current_crawler_exception(exc)
+        if classified is None:
+            raise
+        print(
+            "[Main] Managed crawler attempt failed: "
+            f"{classified.category}:{classified.reason_code}"
+        )
+        raise SystemExit(CRAWLER_ATTEMPT_FAILURE_EXIT_CODE) from None
 
 
 async def async_cleanup() -> None:

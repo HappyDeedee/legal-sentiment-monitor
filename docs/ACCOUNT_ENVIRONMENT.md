@@ -1901,3 +1901,113 @@ Server-like acceptance must verify:
 - two same-platform accounts have different profiles;
 - same account/profile cannot run concurrently;
 - proxy binding is respected during login and crawl.
+
+## CR-129 Request Environment Boundary
+
+The account environment is resolved in two explicit layers:
+
+```text
+social_account + profile_key
+  -> BrowserEnvironmentProvider
+  -> effective BrowserEnvironmentResult
+  -> frozen platform request environment
+  -> platform Client + signer + HTTP request
+```
+
+The second arrow is a projection, not a second account authority. A managed
+request environment must bind at least:
+
+- workspace and account IDs;
+- platform and `profile_key`;
+- browser family, source, channel, and effective version;
+- account-bound proxy ID/policy and proxy revision;
+- account identity revision;
+- provider resolution ID, crawl attempt ID, and run ID;
+- locale, timezone, User-Agent, and Accept-Language;
+- provider-effective browser platform, screen, viewport, scale, mobile, and
+  touch values used by the request signer;
+- Cookie material revision and source reference;
+- creation and expiry timestamps.
+
+Only safe IDs, revisions, hashes, and redacted proof may cross a process or be
+persisted as a request snapshot. Raw Cookie, token, proxy credentials, and
+Profile paths remain in controlled runtime objects or existing encrypted
+material. XHS and Douyin Client/signer code must not read a second browser,
+Profile, proxy, page, global config, or default network for a managed attempt.
+
+For a same-family browser version update, retain `profile_key`, obtain fresh
+effective proof, and update the runtime snapshot. A version change alone does
+not require login. A browser-family/channel change uses a candidate Profile,
+Cookie validation, exact identity check, and promotion; the active Profile is
+kept until the candidate passes.
+
+CR-129 real validation is serial and explicit: Douyin account `8972` and
+Xiaohongshu account `9196`. Accounts `9197` and `9198` are protected from
+collection. Kuaishou is Deferred.
+
+Packet A implementation status (2026-07-22): verified. The effective browser
+proof now projects into one immutable request environment for managed XHS and
+Douyin attempts. Parent/child transfer uses a safe binding; the child writes a
+short-lived atomic proof file; Runner validates account, Profile, revision,
+resolution, attempt, run, expiry, and fallback state before ingest. This is an
+additive runtime contract and does not replace Profile or encrypted Cookie
+authority.
+
+Packet B implementation status (2026-07-22): verified. For managed XHS
+attempts, the full Cookie map, required `a1` and `web_session`, UA, derived
+browser-channel UA-CH, Accept-Language, Profile binding, proxy, URL/query/body,
+and signer inputs are frozen once. The final httpx transport must match that
+snapshot exactly. Cookie refresh, proxy refresh, expiry, target/body drift, or
+account/Profile/revision mismatch requires a new resolution and cannot mutate
+the committed Profile.
+
+The child keeps raw Cookie and proxy material in controlled memory. Its attempt
+file stores only bound IDs/revisions and digests. Dispatch records are atomic,
+monotonic, and bounded to request 1 plus the latest 31; Runner requires a
+signed 2xx XHS proof before ingest. The unmanaged account-check path remains
+available and does not create managed proof.
+
+Packet C implementation status (2026-07-22): verified. For managed Douyin
+attempts, the verified Profile is read once before Client construction. The
+Profile `xmst`, `__tea_cache_tokens_6383.web_id`, `s_v_web_id`, and `ttwid`
+values become the frozen `msToken`, `webid`, `verifyFp/fp`, and `ttwid`
+request identity. Cookie, UA/UA-CH, screen and browser values, proxy, target,
+query, signer input, generated `a_bogus`, and final URL must remain bound to
+that same resolution. Per-request Page reads, random/fixed managed tokens,
+caller overrides, and in-flight Cookie or proxy changes stop before HTTP.
+
+Runner requires a bound 2xx Douyin request proof matching the endpoint's
+explicit signature policy before ingest. General search is an explicitly
+unsigned platform protocol; other managed GET endpoints require `a_bogus`.
+The current Douyin Client has no POST call sites, and its signer does not prove
+a request body; managed POST therefore stops before network until a body-aware
+signer contract is introduced. Unmanaged compatibility remains unchanged.
+
+Packet D implementation status (2026-07-22): verified. Each managed child
+attempt returns one versioned terminal result bound to the frozen account,
+Profile, resolution, attempt, run, identity, Cookie-material, and proxy
+revisions. Only typed transient network errors retry; the new attempt keeps
+the same verified environment revisions. Terminal login/Cookie/verification
+errors mark the account for a new login, while signer/protocol/network failures
+leave the committed login authority unchanged.
+
+The browser plan and terminal result are one-use attempt files. Managed child
+stdout is redacted before disk write, and Windows termination covers the child
+process tree. Missing, stale, conflicting, cancelled, timed-out, or crashed
+attempts release locks and preserve the prior committed Profile and encrypted
+Cookie.
+
+Packet E implementation status (2026-07-22): verified. Request contract v3
+adds `signature_required`. Managed Cookie selection captures Chromium's actual
+Cookie header from a unique same-origin request that is intercepted and aborted
+before network, then reconciles it with the structured store captured in the
+same route callback. Unknown, malformed, conflicting, or cleanup-failed proof
+stops before Client construction. Startup terminalizes pending login records
+whose in-memory owner disappeared, without changing committed Profile/Cookie
+material. XHS signed-header projection uses the existing case-insensitive,
+duplicate-rejecting lookup so lowercase `user-agent` from account checks is
+bound to the same request identity. Automatic compatibility and designated
+Douyin/XHS identity, normal monitor, persisted-content, zero-leakage, and
+post-restart acceptance pass. Runs `16854` through `16857` record
+`fallback_used=false`; protected accounts `9197` and `9198` were not used by
+the designated/manual lane.

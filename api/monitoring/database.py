@@ -6858,6 +6858,60 @@ def recover_interrupted_cookie_promotion_sessions(trigger_source: str = "startup
     return recovered
 
 
+def recover_interrupted_login_sessions(trigger_source: str = "startup") -> list[int]:
+    """Finalize pending login records that have no in-memory owner after restart."""
+
+    recovered: list[int] = []
+    recovered_by_workspace: dict[int, int] = {}
+    now = utc_now()
+    with get_conn() as conn:
+        rows = conn.execute(
+            """
+            SELECT id, workspace_id, status
+            FROM login_sessions
+            ORDER BY id
+            """
+        ).fetchall()
+        for row in rows:
+            if normalize_login_state(row["status"]) not in PENDING_LOGIN_STATES:
+                continue
+            session_id = int(row["id"])
+            updated = conn.execute(
+                """
+                UPDATE login_sessions
+                SET status=?, message=?, updated_at=?
+                WHERE id=? AND status=?
+                """,
+                (
+                    LOGIN_STATE_PLATFORM_ERROR,
+                    "服务已重启，之前的登录会话已结束；原账号 Profile 和 Cookie 已保留，请重新发起。",
+                    now,
+                    session_id,
+                    str(row["status"]),
+                ),
+            )
+            if updated.rowcount != 1:
+                continue
+            recovered.append(session_id)
+            workspace_id = int(row["workspace_id"] or DEFAULT_WORKSPACE_ID)
+            recovered_by_workspace[workspace_id] = recovered_by_workspace.get(workspace_id, 0) + 1
+        for workspace_id, recovered_count in recovered_by_workspace.items():
+            _record_audit_log(
+                conn,
+                workspace_id,
+                None,
+                "recover_interrupted_login_sessions",
+                "login_session",
+                "startup",
+                {
+                    "trigger_source": str(trigger_source or "startup")[:64],
+                    "recovered_count": recovered_count,
+                    "result": "pending_sessions_terminalized",
+                },
+            )
+    return recovered
+
+
 def mark_social_account_profile_requires_relogin(
     account_id: int,
     *,

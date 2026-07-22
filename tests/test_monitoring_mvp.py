@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import asyncio
+import io
 import json
 import multiprocessing
 import os
@@ -4442,15 +4443,71 @@ def _phase_5_1d_result_for_plan(plan, *, ok=True, reason=""):
     return BrowserEnvironmentResult(ok=ok, reason=reason, snapshot=snapshot)
 
 
+def _cr129_signed_dispatch_proof(environment, *, request_index=1):
+    return {
+        "contract_version": environment.contract_version,
+        "workspace_id": environment.workspace_id,
+        "account_id": environment.account_id,
+        "platform": environment.platform,
+        "profile_key": environment.profile_key,
+        "resolution_id": environment.resolution_id,
+        "attempt_id": environment.attempt_id,
+        "run_id": environment.run_id,
+        "identity_revision": environment.identity_revision,
+        "cookie_material_revision": environment.cookie_material_revision,
+        "proxy_revision": environment.proxy_revision,
+        "cookie_digest": "a" * 64,
+        "user_agent_digest": "b" * 64,
+        "client_hints_digest": "c" * 64,
+        "proxy_digest": "d" * 64,
+        "request_index": request_index,
+        "method": "GET",
+        "target_digest": "e" * 64,
+        "body_digest": "f" * 64,
+        "request_header_digest": "1" * 64,
+        "signer_input_digest": "2" * 64,
+        "signer_output_digest": "3" * 64,
+        "signed": True,
+        "signature_required": True,
+        "response_status": 200,
+        "dispatched_at": environment.created_at,
+    }
+
+
+def _cr129_attempt_terminal(
+    binding,
+    *,
+    retry_ordinal=1,
+    status="success",
+    category="",
+    reason_code="crawler_completed",
+):
+    from tools.crawler_attempt import build_crawler_attempt_result
+
+    return build_crawler_attempt_result(
+        binding,
+        status=status,
+        category=category,
+        reason_code=reason_code,
+        retry_ordinal=retry_ordinal,
+    )
+
+
 def test_phase_5_1d_runner_handoff_is_bounded_and_not_in_command_or_summary(tmp_path, monkeypatch):
     from dataclasses import replace
 
     from tools.browser_environment import (
         PLAN_ENV_NAME,
+        PLAN_PATH_ENV_NAME,
         RESULT_PATH_ENV_NAME,
-        browser_environment_plan_from_json,
+        BrowserEnvironmentError,
         plan_from_environment,
         reset_browser_environment_cache_for_tests,
+        write_browser_environment_plan_handle,
+    )
+    from tools.crawler_attempt import (
+        CRAWLER_ATTEMPT_RESULT_ENV_NAME,
+        CRAWLER_RETRY_ORDINAL_ENV_NAME,
     )
 
     plan = _phase_5_1d_plan(tmp_path, monkeypatch, proxy_bound=True, action="crawl", launch_mode="cdp_launch")
@@ -4465,12 +4522,33 @@ def test_phase_5_1d_runner_handoff_is_bounded_and_not_in_command_or_summary(tmp_
         "proxy_id": plan.proxy_id,
         "proxy_name": "synthetic proxy",
         "proxy_url": plan.proxy_url,
+        "cookie": "sessionid=synthetic-child-cookie",
+        "ms_token": "synthetic-child-token",
     }
     monkeypatch.setenv("HTTP_PROXY", "http://process-default.invalid:8888")
+    monkeypatch.setenv("SYNTHETIC_COOKIE", account_binding["cookie"])
+    monkeypatch.setenv("SYNTHETIC_TOKEN", account_binding["ms_token"])
     monkeypatch.setenv("MONITOR_CDP_USER_DATA_DIR", r"C:\generic\profile")
     monkeypatch.setenv("MONITOR_CDP_CONNECT_EXISTING", "false")
 
-    env = runner_module._build_crawler_env(account_binding, plan, result_path)
+    request_binding = runner_module._build_request_binding_for_attempt(
+        account_binding,
+        plan,
+        run_id=5101,
+    )
+    request_result_path = tmp_path / "attempt" / "platform-request-environment.json"
+    plan_path = tmp_path / "attempt" / "browser-environment-plan.json"
+    attempt_result_path = tmp_path / "attempt" / "crawler-attempt-result.json"
+    env = runner_module._build_crawler_env(
+        account_binding,
+        plan,
+        result_path,
+        request_binding=request_binding,
+        request_result_path=request_result_path,
+        plan_path=plan_path,
+        attempt_result_path=attempt_result_path,
+        retry_ordinal=1,
+    )
     cmd = runner_module._build_crawler_cmd(
         {"keywords": ["Phase 5.1D"], "target_type": "search"},
         "dy",
@@ -4479,9 +4557,11 @@ def test_phase_5_1d_runner_handoff_is_bounded_and_not_in_command_or_summary(tmp_
         plan,
     )
 
-    assert len(env[PLAN_ENV_NAME].encode("utf-8")) <= 8192
-    assert browser_environment_plan_from_json(env[PLAN_ENV_NAME]) == plan
+    assert PLAN_ENV_NAME not in env
+    assert env[PLAN_PATH_ENV_NAME] == str(plan_path.resolve())
     assert env[RESULT_PATH_ENV_NAME] == str(result_path.resolve())
+    assert env[CRAWLER_ATTEMPT_RESULT_ENV_NAME] == str(attempt_result_path.resolve())
+    assert env[CRAWLER_RETRY_ORDINAL_ENV_NAME] == "1"
     for forbidden_env in (
         "HTTP_PROXY",
         "HTTPS_PROXY",
@@ -4495,6 +4575,33 @@ def test_phase_5_1d_runner_handoff_is_bounded_and_not_in_command_or_summary(tmp_
     serialized_cmd = " ".join(cmd)
     for forbidden in (PLAN_ENV_NAME, plan.profile_path, plan.proxy_url, plan.resolution_id, plan.attempt_id):
         assert forbidden not in serialized_cmd
+    serialized_env = json.dumps(env, ensure_ascii=False)
+    for forbidden in (
+        plan.profile_path,
+        plan.proxy_url,
+        plan.browser_executable_path,
+        account_binding["cookie"],
+        account_binding["ms_token"],
+    ):
+        assert forbidden not in serialized_env
+    assert "SYNTHETIC_COOKIE" not in env
+    assert "SYNTHETIC_TOKEN" not in env
+    runner_module._assert_managed_child_handoff_safe(cmd, env, plan, account_binding)
+    with pytest.raises(BrowserEnvironmentError, match="snapshot_unsafe"):
+        runner_module._assert_managed_child_handoff_safe(
+            cmd,
+            {**env, "SYNTHETIC_VALUE": account_binding["cookie"]},
+            plan,
+            account_binding,
+        )
+    redacted_log = runner_module._redact_managed_child_secrets(
+        f"cookie={account_binding['cookie']} token={account_binding['ms_token']} proxy={plan.proxy_url}",
+        plan,
+        account_binding,
+    )
+    assert account_binding["cookie"] not in redacted_log
+    assert account_binding["ms_token"] not in redacted_log
+    assert plan.proxy_url not in redacted_log
     assert _cmd_value(cmd, "--cdp_connect_existing") == "false"
     assert _cmd_value(cmd, "--headless") == "true"
 
@@ -4503,19 +4610,26 @@ def test_phase_5_1d_runner_handoff_is_bounded_and_not_in_command_or_summary(tmp_
         user_agent="Mozilla/5.0 " + ("X" * 900),
         proxy_url="http://" + ("u" * 700) + ":" + ("p" * 700) + "@proxy.invalid:8080",
     )
-    long_payload = runner_module._build_crawler_env(account_binding, long_plan, result_path)[PLAN_ENV_NAME]
-    parsed_long = browser_environment_plan_from_json(long_payload)
+    long_plan_path = tmp_path / "attempt" / "long-browser-plan.json"
+    write_browser_environment_plan_handle(long_plan_path, long_plan)
+    assert long_plan_path.stat().st_size <= 8192
+    reset_browser_environment_cache_for_tests()
+    monkeypatch.setenv(PLAN_PATH_ENV_NAME, str(long_plan_path))
+    parsed_long = plan_from_environment(required=True)
     assert parsed_long.user_agent == long_plan.user_agent
     assert parsed_long.proxy_url == long_plan.proxy_url
-    assert len(long_payload.encode("utf-8")) <= 8192
+    assert not long_plan_path.exists()
 
     reset_browser_environment_cache_for_tests()
-    monkeypatch.setenv(PLAN_ENV_NAME, env[PLAN_ENV_NAME])
+    write_browser_environment_plan_handle(plan_path, plan)
+    monkeypatch.setenv(PLAN_PATH_ENV_NAME, str(plan_path))
     monkeypatch.setenv("HTTP_PROXY", plan.proxy_url)
     monkeypatch.setenv("HTTPS_PROXY", plan.proxy_url)
     parsed = plan_from_environment(required=True)
     assert parsed == plan
+    assert PLAN_PATH_ENV_NAME not in os.environ
     assert PLAN_ENV_NAME not in os.environ
+    assert not plan_path.exists()
     assert "HTTP_PROXY" not in os.environ
     assert "HTTPS_PROXY" not in os.environ
     reset_browser_environment_cache_for_tests()
@@ -4644,7 +4758,23 @@ def test_phase_5_1d_runner_resolves_after_locks_and_persists_before_ingest(tmp_p
         assert lock_state["held"] is True
         events.append("attempt")
         plan = job_arg["_browser_environment_plan"]
-        return _phase_5_1d_result_for_plan(plan)
+        result = _phase_5_1d_result_for_plan(plan)
+        request_environment = runner_module.build_platform_request_environment_from_binding(
+            plan,
+            result,
+            job_arg["_platform_request_binding"],
+        )
+        return runner_module.ManagedCrawlerOutcome(
+            result,
+            0,
+            False,
+            request_environment,
+            (_cr129_signed_dispatch_proof(request_environment),),
+            _cr129_attempt_terminal(
+                job_arg["_platform_request_binding"],
+                retry_ordinal=job_arg["_crawler_retry_ordinal"],
+            ),
+        )
 
     monkeypatch.setattr(runner_module, "_run_crawler_attempt", fake_attempt)
 
@@ -4668,6 +4798,7 @@ def test_phase_5_1d_runner_resolves_after_locks_and_persists_before_ingest(tmp_p
     )
     monkeypatch.setattr(runner_module, "_update_collection_progress", lambda *args, **kwargs: None)
     monkeypatch.setattr(runner_module, "_finalize_collection_progress", lambda *args, **kwargs: None)
+    monkeypatch.setattr(runner_module, "_record_request_environment_proof", lambda *args, **kwargs: None)
     monkeypatch.setenv("MONITOR_CRAWLER_MAX_RETRIES", "0")
 
     manual = asyncio.run(
@@ -4721,7 +4852,9 @@ def test_phase_5_1d_runner_missing_child_result_blocks_ingest(tmp_path, monkeypa
     monkeypatch.setattr(runner_module, "_update_collection_progress", lambda *args, **kwargs: None)
     monkeypatch.setenv("MONITOR_CRAWLER_MAX_RETRIES", "0")
 
-    with pytest.raises(RuntimeError, match="child result"):
+    from tools.crawler_attempt import CrawlerAttemptFailure
+
+    with pytest.raises(CrawlerAttemptFailure) as exc_info:
         asyncio.run(
             runner_module.run_platform(
                 {"id": 9521, "keywords": [], "_trigger_source": "manual"},
@@ -4730,6 +4863,8 @@ def test_phase_5_1d_runner_missing_child_result_blocks_ingest(tmp_path, monkeypa
                 tmp_path,
             )
         )
+    assert exc_info.value.category == "process_crashed"
+    assert exc_info.value.reason_code == "managed_child_result_missing"
 
 
 def test_phase_5_1d_runner_provider_failure_stops_retry_chain_after_persistence(tmp_path, monkeypatch):
@@ -4773,7 +4908,18 @@ def test_phase_5_1d_runner_provider_failure_stops_retry_chain_after_persistence(
             ok=False,
             reason="account_identity_snapshot_mismatch",
         )
-        return runner_module.ManagedCrawlerOutcome(result, 0, False)
+        return runner_module.ManagedCrawlerOutcome(
+            result,
+            43,
+            False,
+            terminal_result=_cr129_attempt_terminal(
+                job_arg["_platform_request_binding"],
+                retry_ordinal=job_arg["_crawler_retry_ordinal"],
+                status="failed",
+                category="browser_environment_mismatch",
+                reason_code="browser_environment_mismatch",
+            ),
+        )
 
     def persist(*args):
         calls["persist"] += 1
@@ -4787,7 +4933,9 @@ def test_phase_5_1d_runner_provider_failure_stops_retry_chain_after_persistence(
         lambda *args: (_ for _ in ()).throw(AssertionError("provider failure must block ingest")),
     )
 
-    with pytest.raises(RuntimeError, match="failed after 1 attempt.*account_identity_snapshot_mismatch"):
+    from tools.crawler_attempt import CrawlerAttemptFailure
+
+    with pytest.raises(CrawlerAttemptFailure, match="browser_environment_mismatch"):
         asyncio.run(
             runner_module.run_platform(
                 {"id": 9522, "keywords": [], "_trigger_source": "manual"},
@@ -4869,6 +5017,8 @@ def test_phase_5_1d_runner_ignores_stored_generic_profile_path(tmp_path, monkeyp
 def test_phase_5_1d_cdp_prepares_exact_commands_before_navigation_and_writes_result(tmp_path, monkeypatch):
     from tools.browser_environment import (
         RESULT_PATH_ENV_NAME,
+        _managed_navigator_platform,
+        _managed_user_agent_metadata,
         bind_managed_context,
         prepare_managed_page,
         verify_managed_page,
@@ -4928,7 +5078,8 @@ def test_phase_5_1d_cdp_prepares_exact_commands_before_navigation_and_writes_res
     assert events[0][1] == {
         "userAgent": plan.user_agent,
         "acceptLanguage": plan.accept_language,
-        "platform": plan.browser_platform,
+        "platform": _managed_navigator_platform(plan.browser_platform),
+        "userAgentMetadata": _managed_user_agent_metadata(plan),
     }
     assert events[3][1] == {
         "width": plan.viewport_width,
@@ -5181,7 +5332,12 @@ def test_phase_5_1d_context_and_page_bindings_survive_reused_object_ids(tmp_path
         {
             "userAgent": first_plan.user_agent,
             "acceptLanguage": first_plan.accept_language,
-            "platform": first_plan.browser_platform,
+            "platform": browser_environment._managed_navigator_platform(
+                first_plan.browser_platform
+            ),
+            "userAgentMetadata": browser_environment._managed_user_agent_metadata(
+                first_plan
+            ),
         },
     )
     assert sent_commands["second"][0] == (
@@ -5189,7 +5345,12 @@ def test_phase_5_1d_context_and_page_bindings_survive_reused_object_ids(tmp_path
         {
             "userAgent": second_plan.user_agent,
             "acceptLanguage": second_plan.accept_language,
-            "platform": second_plan.browser_platform,
+            "platform": browser_environment._managed_navigator_platform(
+                second_plan.browser_platform
+            ),
+            "userAgentMetadata": browser_environment._managed_user_agent_metadata(
+                second_plan
+            ),
         },
     )
 
@@ -5440,11 +5601,17 @@ def test_phase_5_1d_all_platforms_use_one_managed_plan_before_first_navigation(
         assert used_context is context
         assert used_page is page
         events.append(("verify",))
-        return None
+        return _phase_5_1d_result_for_plan(plan)
 
     monkeypatch.setattr(module, "launch_managed_browser_context", fake_launch_managed, raising=False)
     monkeypatch.setattr(module, "prepare_managed_page", fake_prepare, raising=False)
     monkeypatch.setattr(module, "verify_managed_page", fake_verify, raising=False)
+    if hasattr(module, "establish_platform_request_environment"):
+        monkeypatch.setattr(
+            module,
+            "establish_platform_request_environment",
+            lambda used_plan, result: {"plan": used_plan, "result": result},
+        )
 
     class FakePlaywrightManager:
         async def __aenter__(self):
@@ -6267,7 +6434,12 @@ def test_phase_2_run_platform_uses_settings_for_retry_and_deadline(tmp_path, mon
     def fake_run_attempt(job_arg, platform_arg, out_dir, proxy_binding=None):
         calls.append({"timeout": job_arg.get("_crawler_timeout_seconds"), "out_dir": out_dir})
         if len(calls) == 1:
-            raise RuntimeError("temporary network error")
+            from tools.crawler_attempt import CrawlerAttemptFailure
+
+            raise CrawlerAttemptFailure(
+                "transient_network",
+                "synthetic_transport_error",
+            )
         json_dir = out_dir / "douyin" / "json"
         json_dir.mkdir(parents=True)
         (json_dir / "search_contents_runtime_settings.json").write_text(
@@ -23576,6 +23748,8 @@ def test_run_job_blocks_platform_when_login_window_is_open(monkeypatch):
 
 
 def test_run_platform_retries_transient_crawler_failure(tmp_path, monkeypatch):
+    from tools.crawler_attempt import CrawlerAttemptFailure
+
     init_db()
     job = {
         "id": 9991,
@@ -23590,7 +23764,10 @@ def test_run_platform_retries_transient_crawler_failure(tmp_path, monkeypatch):
         calls.append(out_dir)
         if len(calls) == 1:
             (out_dir / "crawler.log").write_text("temporary network error", encoding="utf-8")
-            raise RuntimeError(f"MediaCrawler exited with 1; see {out_dir / 'crawler.log'}")
+            raise CrawlerAttemptFailure(
+                "transient_network",
+                "synthetic_transport_error",
+            )
         json_dir = out_dir / "douyin" / "json"
         json_dir.mkdir(parents=True)
         (json_dir / "search_contents_retry.json").write_text(
@@ -23624,6 +23801,215 @@ def test_run_platform_retries_transient_crawler_failure(tmp_path, monkeypatch):
     assert result["attempts"] == 2
     assert result["max_retries"] == 1
     assert result["new_contents"] == 1
+
+
+def test_cr129_packet_d_managed_retry_freezes_revisions_and_changes_attempt_id(
+    tmp_path,
+    monkeypatch,
+):
+    from tools.crawler_attempt import CrawlerAttemptFailure
+
+    init_db()
+    plan = _phase_5_1d_plan(
+        tmp_path,
+        monkeypatch,
+        action="crawl",
+        launch_mode="cdp_launch",
+    )
+    account = _phase_5_1d_persisted_account(state="active", proxy_id=None)
+    binding = {
+        "account_id": plan.account_id,
+        "account_name": "CR-129 retry account",
+        "platform": "dy",
+        "login_type": "qrcode",
+        "profile_key": plan.profile_key,
+        "profile_path": plan.profile_path,
+        "proxy_id": None,
+        "proxy_url": "",
+        "_account": account,
+        "_proxy": None,
+    }
+    job = {
+        "id": 9994,
+        "law_firm_name": "冻结重试环境律所",
+        "keywords": ["冻结重试环境律所"],
+        "enable_comments": False,
+        "time_window_type": "recent_1d",
+        "_trigger_source": "manual",
+    }
+    attempts = []
+
+    def fake_attempt(job_arg, platform_arg, out_dir, account_binding):
+        attempts.append(
+            (
+                job_arg["_browser_environment_plan"],
+                job_arg["_platform_request_binding"],
+                job_arg["_crawler_retry_ordinal"],
+            )
+        )
+        if len(attempts) == 1:
+            raise CrawlerAttemptFailure(
+                "transient_network",
+                "synthetic_transport_error",
+            )
+        json_dir = out_dir / "douyin" / "json"
+        json_dir.mkdir(parents=True)
+        (json_dir / "search_contents_frozen_retry.json").write_text(
+            json.dumps(
+                [
+                    {
+                        "aweme_id": "pytest_frozen_retry_001",
+                        "title": "冻结重试环境律所",
+                        "desc": "第二次尝试保持同一请求环境",
+                        "create_time": int(datetime.now(timezone.utc).timestamp()),
+                    }
+                ],
+                ensure_ascii=False,
+            ),
+            encoding="utf-8",
+        )
+        attempt_plan, request_binding, retry_ordinal = attempts[-1]
+        provider_result = _phase_5_1d_result_for_plan(attempt_plan)
+        request_environment = runner_module.build_platform_request_environment_from_binding(
+            attempt_plan,
+            provider_result,
+            request_binding,
+        )
+        return runner_module.ManagedCrawlerOutcome(
+            provider_result,
+            0,
+            False,
+            request_environment,
+            (_cr129_signed_dispatch_proof(request_environment),),
+            _cr129_attempt_terminal(
+                request_binding,
+                retry_ordinal=retry_ordinal,
+            ),
+        )
+
+    monkeypatch.setenv("MONITOR_CRAWLER_MAX_RETRIES", "1")
+    monkeypatch.setenv("MONITOR_CRAWLER_RETRY_DELAY_SECONDS", "0")
+    monkeypatch.setattr(runner_module, "list_platform_status", lambda: [{"platform": "dy", "login_window_open": False}])
+    monkeypatch.setattr(runner_module, "_resolve_platform_account_binding", lambda *args: binding)
+    monkeypatch.setattr(runner_module, "_resolve_runner_browser_plan", lambda *args: plan)
+    monkeypatch.setattr(runner_module, "acquire_account_lock", lambda *args: True)
+    monkeypatch.setattr(runner_module, "release_account_lock", lambda *args: None)
+    monkeypatch.setattr(runner_module, "set_run_resource_bindings", lambda *args: None)
+    monkeypatch.setattr(runner_module, "persist_account_browser_environment_result", lambda *args: args[2].snapshot)
+    monkeypatch.setattr(runner_module, "cleanup_after_successful_managed_run", lambda *args: None)
+    monkeypatch.setattr(runner_module, "_run_crawler_attempt", fake_attempt)
+
+    try:
+        result = asyncio.run(runner_module.run_platform(job, 10004, "dy", tmp_path))
+    finally:
+        _cleanup_test_records(job["id"], "pytest_frozen_retry_001")
+
+    assert result["attempts"] == 2
+    assert [item[2] for item in attempts] == [1, 2]
+    first_plan, first_binding, _ = attempts[0]
+    second_plan, second_binding, _ = attempts[1]
+    assert first_plan.resolution_id == second_plan.resolution_id
+    assert first_plan.attempt_id != second_plan.attempt_id
+    assert first_binding.resolution_id == second_binding.resolution_id
+    assert first_binding.attempt_id != second_binding.attempt_id
+    assert first_binding.identity_revision == second_binding.identity_revision
+    assert first_binding.cookie_material_revision == second_binding.cookie_material_revision
+    assert first_binding.proxy_revision == second_binding.proxy_revision
+
+
+@pytest.mark.parametrize(
+    ("category", "reason_code", "expected_reason"),
+    [
+        (
+            "second_verification",
+            "douyin_second_verification",
+            "平台要求二次验证，请重新打开登录窗口完成验证",
+        ),
+        (
+            "captcha_or_human_verification",
+            "douyin_human_verification",
+            "平台要求人工验证，请重新打开登录窗口完成验证",
+        ),
+    ],
+)
+def test_cr129_packet_d_operator_verification_marks_managed_account_for_relogin(
+    tmp_path,
+    monkeypatch,
+    category,
+    reason_code,
+    expected_reason,
+):
+    from tools.crawler_attempt import CrawlerAttemptFailure
+
+    init_db()
+    plan = _phase_5_1d_plan(
+        tmp_path,
+        monkeypatch,
+        action="crawl",
+        launch_mode="cdp_launch",
+    )
+    account = _phase_5_1d_persisted_account(state="active", proxy_id=None)
+    binding = {
+        "account_id": plan.account_id,
+        "account_name": "CR-129 second verification account",
+        "platform": "dy",
+        "login_type": "qrcode",
+        "profile_key": plan.profile_key,
+        "profile_path": plan.profile_path,
+        "proxy_id": None,
+        "proxy_url": "",
+        "_account": account,
+        "_proxy": None,
+    }
+    job = {
+        "id": 9995,
+        "law_firm_name": "二验终态测试律所",
+        "keywords": ["二验终态测试律所"],
+        "enable_comments": False,
+        "time_window_type": "recent_1d",
+        "_trigger_source": "manual",
+        "created_by": 1,
+    }
+    marked = []
+    calls = 0
+
+    def fake_attempt(*args, **kwargs):
+        nonlocal calls
+        calls += 1
+        raise CrawlerAttemptFailure(
+            category,
+            reason_code,
+        )
+
+    monkeypatch.setenv("MONITOR_CRAWLER_MAX_RETRIES", "3")
+    monkeypatch.setattr(runner_module, "list_platform_status", lambda: [{"platform": "dy", "login_window_open": False}])
+    monkeypatch.setattr(runner_module, "_resolve_platform_account_binding", lambda *args: binding)
+    monkeypatch.setattr(runner_module, "_resolve_runner_browser_plan", lambda *args: plan)
+    monkeypatch.setattr(runner_module, "acquire_account_lock", lambda *args: True)
+    monkeypatch.setattr(runner_module, "release_account_lock", lambda *args: None)
+    monkeypatch.setattr(runner_module, "set_run_resource_bindings", lambda *args: None)
+    monkeypatch.setattr(
+        runner_module,
+        "mark_social_account_profile_requires_relogin",
+        lambda account_id, **kwargs: marked.append((account_id, kwargs)),
+    )
+    monkeypatch.setattr(runner_module, "_run_crawler_attempt", fake_attempt)
+
+    with pytest.raises(CrawlerAttemptFailure) as exc_info:
+        asyncio.run(runner_module.run_platform(job, 10005, "dy", tmp_path))
+
+    assert calls == 1
+    assert exc_info.value.category == category
+    assert marked == [
+        (
+            plan.account_id,
+            {
+                "reason": expected_reason,
+                "trigger_source": "managed_crawler_child",
+                "user_id": 1,
+            },
+        )
+    ]
 
 
 def test_run_platform_attaches_bound_proxy_summary(tmp_path, monkeypatch):
@@ -23660,7 +24046,24 @@ def test_run_platform_attaches_bound_proxy_summary(tmp_path, monkeypatch):
             ),
             encoding="utf-8",
         )
-        return _phase_5_1d_result_for_plan(job_arg["_browser_environment_plan"])
+        plan = job_arg["_browser_environment_plan"]
+        provider_result = _phase_5_1d_result_for_plan(plan)
+        request_environment = runner_module.build_platform_request_environment_from_binding(
+            plan,
+            provider_result,
+            job_arg["_platform_request_binding"],
+        )
+        return runner_module.ManagedCrawlerOutcome(
+            provider_result,
+            0,
+            False,
+            request_environment,
+            (_cr129_signed_dispatch_proof(request_environment),),
+            _cr129_attempt_terminal(
+                job_arg["_platform_request_binding"],
+                retry_ordinal=job_arg["_crawler_retry_ordinal"],
+            ),
+        )
 
     try:
         proxy = save_proxy_profile(
@@ -23715,6 +24118,8 @@ def test_run_platform_attaches_bound_proxy_summary(tmp_path, monkeypatch):
 
 
 def test_run_platform_does_not_retry_login_required_error(tmp_path, monkeypatch):
+    from tools.crawler_attempt import CrawlerAttemptFailure
+
     job = {
         "id": 9992,
         "law_firm_name": "登录失败测试律所",
@@ -23735,10 +24140,11 @@ def test_run_platform_does_not_retry_login_required_error(tmp_path, monkeypatch)
     monkeypatch.setattr(runner_module, "_resolve_platform_account_binding", lambda platform, job: None)
     monkeypatch.setattr(runner_module, "_run_crawler_attempt", fake_run_attempt)
 
-    with pytest.raises(RuntimeError, match="failed after 1 attempt"):
+    with pytest.raises(CrawlerAttemptFailure, match="login_required") as exc_info:
         asyncio.run(runner_module.run_platform(job, 10002, "dy", tmp_path))
 
     assert calls == 1
+    assert exc_info.value.category == "login_required"
 
 
 def test_expired_cross_process_lock_is_replaced(tmp_path, monkeypatch):
@@ -27149,6 +27555,14 @@ def test_cr112_c3_profile_only_command_and_environment_contain_no_cookie(tmp_pat
     Path(plan.profile_path).mkdir(parents=True, exist_ok=True)
     binding = _cr112_c3_binding(plan)
     result_path = tmp_path / "result.json"
+    request_binding = runner_module._build_request_binding_for_attempt(
+        binding,
+        plan,
+        run_id=5101,
+    )
+    request_result_path = tmp_path / "request-result.json"
+    plan_path = tmp_path / "browser-plan.json"
+    attempt_result_path = tmp_path / "attempt-result.json"
     monkeypatch.setenv("COOKIE", "synthetic-inherited-cookie")
     monkeypatch.setenv("MONITOR_BROWSER_COOKIE_SYNC_ENABLED", "true")
 
@@ -27159,7 +27573,16 @@ def test_cr112_c3_profile_only_command_and_environment_contain_no_cookie(tmp_pat
         binding,
         plan,
     )
-    env = runner_module._build_crawler_env(binding, plan, result_path)
+    env = runner_module._build_crawler_env(
+        binding,
+        plan,
+        result_path,
+        request_binding=request_binding,
+        request_result_path=request_result_path,
+        plan_path=plan_path,
+        attempt_result_path=attempt_result_path,
+        retry_ordinal=1,
+    )
 
     assert _cmd_value(cmd, "--lt") == "cookie"
     assert _cmd_value(cmd, "--monitor_profile_only") == "true"
@@ -27599,6 +28022,19 @@ def test_cr112_c3_explicit_legacy_cookie_account_requires_profile_relogin():
 
 def test_cr112_c3_effective_popen_arguments_and_environment_exclude_cookie(tmp_path, monkeypatch):
     from tools.browser_environment import RESULT_PATH_ENV_NAME
+    from tools.crawler_attempt import (
+        CRAWLER_ATTEMPT_RESULT_ENV_NAME,
+        CRAWLER_RETRY_ORDINAL_ENV_NAME,
+        build_crawler_attempt_result,
+        write_crawler_attempt_result,
+    )
+    from tools.platform_request_environment import (
+        REQUEST_BINDING_ENV_NAME,
+        REQUEST_RESULT_PATH_ENV_NAME,
+        build_platform_request_environment_from_binding,
+        platform_request_binding_from_json,
+        platform_request_environment_to_json,
+    )
 
     plan = _phase_5_1d_plan(tmp_path, monkeypatch, action="crawl", launch_mode="cdp_launch")
     Path(plan.profile_path).mkdir(parents=True, exist_ok=True)
@@ -27606,11 +28042,18 @@ def test_cr112_c3_effective_popen_arguments_and_environment_exclude_cookie(tmp_p
     out_dir = tmp_path / "attempt"
     out_dir.mkdir()
     result_path = out_dir / "browser-result.json"
+    request_result_path = out_dir / "request-result.json"
+    request_binding = runner_module._build_request_binding_for_attempt(
+        binding,
+        plan,
+        run_id=7401,
+    )
     captured = {}
     monkeypatch.setenv("COOKIE", "synthetic-process-cookie")
 
     class FakeProcess:
         returncode = 0
+        stdout = io.StringIO("")
 
         def wait(self, timeout=None):
             return 0
@@ -27623,6 +28066,27 @@ def test_cr112_c3_effective_popen_arguments_and_environment_exclude_cookie(tmp_p
             json.dumps({"ok": result.ok, "reason": result.reason, "snapshot": result.snapshot}),
             encoding="utf-8",
         )
+        child_binding = platform_request_binding_from_json(
+            kwargs["env"][REQUEST_BINDING_ENV_NAME]
+        )
+        request_environment = build_platform_request_environment_from_binding(
+            plan,
+            result,
+            child_binding,
+        )
+        Path(kwargs["env"][REQUEST_RESULT_PATH_ENV_NAME]).write_text(
+            platform_request_environment_to_json(request_environment),
+            encoding="utf-8",
+        )
+        write_crawler_attempt_result(
+            Path(kwargs["env"][CRAWLER_ATTEMPT_RESULT_ENV_NAME]),
+            build_crawler_attempt_result(
+                child_binding,
+                status="success",
+                reason_code="crawler_completed",
+                retry_ordinal=int(kwargs["env"][CRAWLER_RETRY_ORDINAL_ENV_NAME]),
+            ),
+        )
         return FakeProcess()
 
     monkeypatch.setattr(runner_module.subprocess, "Popen", fake_popen)
@@ -27631,8 +28095,11 @@ def test_cr112_c3_effective_popen_arguments_and_environment_exclude_cookie(tmp_p
             "id": 7401,
             "keywords": ["CR-112 C3"],
             "target_type": "search",
+            "_run_id": 7401,
             "_browser_environment_plan": plan,
             "_browser_environment_result_path": result_path,
+            "_platform_request_binding": request_binding,
+            "_platform_request_result_path": request_result_path,
         },
         plan.platform,
         out_dir,
@@ -27640,11 +28107,343 @@ def test_cr112_c3_effective_popen_arguments_and_environment_exclude_cookie(tmp_p
     )
 
     assert outcome.returncode == 0
+    assert outcome.request_environment is not None
     assert "--cookies" not in captured["cmd"]
     serialized = json.dumps(captured, ensure_ascii=False)
     assert "synthetic-c3-secret" not in serialized
     assert "synthetic-process-cookie" not in serialized
     assert not [name for name in captured["env"] if "COOKIE" in name.upper()]
+
+
+def test_cr129_packet_d_timeout_redacts_managed_child_log(tmp_path, monkeypatch):
+    import subprocess
+
+    plan = _phase_5_1d_plan(
+        tmp_path,
+        monkeypatch,
+        proxy_bound=True,
+        action="crawl",
+        launch_mode="cdp_launch",
+    )
+    Path(plan.profile_path).mkdir(parents=True, exist_ok=True)
+    raw_cookie = "sessionid=synthetic-timeout-cookie"
+    binding = {
+        **_cr112_c3_binding(plan),
+        "login_type": "qrcode",
+        "cookie": raw_cookie,
+        "proxy_url": plan.proxy_url,
+    }
+    out_dir = tmp_path / "timeout-attempt"
+    out_dir.mkdir()
+    result_path = out_dir / "browser-result.json"
+    request_result_path = out_dir / "request-result.json"
+    request_binding = runner_module._build_request_binding_for_attempt(
+        binding,
+        plan,
+        run_id=7402,
+    )
+    base_now = datetime.now(timezone.utc)
+
+    class FutureDatetime(datetime):
+        calls = 0
+
+        @classmethod
+        def now(cls, tz=None):
+            cls.calls += 1
+            value = base_now if cls.calls <= 2 else base_now + timedelta(seconds=5)
+            return value if tz is not None else value.replace(tzinfo=None)
+
+    class FakeProcess:
+        pid = 7402
+        returncode = None
+        stdout = io.StringIO(
+            f"raw-cookie={raw_cookie} raw-proxy={plan.proxy_url} "
+            f"profile={plan.profile_path}\n"
+        )
+
+        def poll(self):
+            return self.returncode
+
+        def wait(self, timeout=None):
+            if self.returncode is None:
+                raise subprocess.TimeoutExpired("synthetic", timeout)
+            return self.returncode
+
+    process = FakeProcess()
+
+    def fake_popen(cmd, **kwargs):
+        assert kwargs["stdout"] == runner_module.subprocess.PIPE
+        return process
+
+    def fake_terminate(target):
+        target.returncode = 1
+        return True
+
+    monkeypatch.setattr(runner_module, "datetime", FutureDatetime)
+    monkeypatch.setattr(runner_module.subprocess, "Popen", fake_popen)
+    monkeypatch.setattr(runner_module, "_terminate_process", fake_terminate)
+
+    with pytest.raises(runner_module.CrawlerTimedOut):
+        runner_module._run_crawler_attempt(
+            {
+                "id": 7402,
+                "keywords": ["CR-129 timeout"],
+                "target_type": "search",
+                "_run_id": 0,
+                "_crawler_timeout_seconds": 1,
+                "_browser_environment_plan": plan,
+                "_browser_environment_result_path": result_path,
+                "_platform_request_binding": request_binding,
+                "_platform_request_result_path": request_result_path,
+            },
+            plan.platform,
+            out_dir,
+            binding,
+        )
+
+    log_text = (out_dir / "crawler.log").read_text(encoding="utf-8")
+    assert raw_cookie not in log_text
+    assert plan.proxy_url not in log_text
+    assert plan.profile_path not in log_text
+
+
+def test_cr129_packet_e_cdp_logs_and_browser_info_exclude_endpoint_and_port(
+    caplog, monkeypatch
+):
+    import asyncio
+
+    import tools.cdp_browser as cdp_browser_module
+    from tools.cdp_browser import CDPBrowserManager
+
+    endpoint = "ws://127.0.0.1:9222/devtools/browser/synthetic-endpoint"
+    captured = {}
+
+    class FakeBrowser:
+        contexts = []
+
+        def is_connected(self):
+            return True
+
+        version = "127.0.6533.17"
+
+    class FakeChromium:
+        async def connect_over_cdp(self, url):
+            captured["url"] = url
+            return FakeBrowser()
+
+    class FakePlaywright:
+        chromium = FakeChromium()
+
+    manager = CDPBrowserManager()
+    manager.debug_port = 9222
+    monkeypatch.setattr(
+        manager,
+        "_get_browser_websocket_url",
+        lambda debug_port: asyncio.sleep(0, result=endpoint),
+    )
+    monkeypatch.setattr(cdp_browser_module.config, "CDP_CONNECT_EXISTING", False)
+
+    with caplog.at_level("INFO"):
+        asyncio.run(manager._connect_via_cdp(FakePlaywright()))
+        info = asyncio.run(manager.get_browser_info())
+
+    assert captured["url"] == endpoint
+    assert "debug_port" not in info
+    log_text = caplog.text
+    assert endpoint not in log_text
+    assert "/devtools/browser/" not in log_text
+    assert "9222" not in log_text
+
+
+def test_cr129_packet_d_cancel_terminates_managed_child(tmp_path, monkeypatch):
+    plan = _phase_5_1d_plan(
+        tmp_path,
+        monkeypatch,
+        action="crawl",
+        launch_mode="cdp_launch",
+    )
+    Path(plan.profile_path).mkdir(parents=True, exist_ok=True)
+    binding = {**_cr112_c3_binding(plan), "login_type": "qrcode"}
+    out_dir = tmp_path / "cancel-attempt"
+    out_dir.mkdir()
+    request_binding = runner_module._build_request_binding_for_attempt(
+        binding,
+        plan,
+        run_id=7403,
+    )
+    stop_checks = 0
+    terminated = []
+
+    class FakeProcess:
+        pid = 7403
+        returncode = None
+        stdout = io.StringIO("")
+
+        def wait(self, timeout=None):
+            return self.returncode
+
+    process = FakeProcess()
+
+    def fake_stop_check(job_id):
+        nonlocal stop_checks
+        stop_checks += 1
+        if stop_checks >= 2:
+            raise runner_module.CrawlerStopped("synthetic stop")
+
+    def fake_terminate(target):
+        terminated.append(target.pid)
+        target.returncode = 1
+        return True
+
+    monkeypatch.setattr(runner_module, "_raise_if_stop_requested", fake_stop_check)
+    monkeypatch.setattr(runner_module.subprocess, "Popen", lambda *args, **kwargs: process)
+    monkeypatch.setattr(runner_module, "_terminate_process", fake_terminate)
+
+    with pytest.raises(runner_module.CrawlerStopped):
+        runner_module._run_crawler_attempt(
+            {
+                "id": 7403,
+                "keywords": ["CR-129 cancel"],
+                "target_type": "search",
+                "_run_id": 0,
+                "_crawler_timeout_seconds": 30,
+                "_browser_environment_plan": plan,
+                "_browser_environment_result_path": out_dir / "browser-result.json",
+                "_platform_request_binding": request_binding,
+                "_platform_request_result_path": out_dir / "request-result.json",
+            },
+            plan.platform,
+            out_dir,
+            binding,
+        )
+
+    assert terminated == [process.pid]
+    assert process.returncode == 1
+
+
+def test_cr129_packet_d_windows_termination_kills_child_process_tree(monkeypatch):
+    calls = []
+
+    class Process:
+        pid = 7410
+
+        @staticmethod
+        def poll():
+            return None
+
+    monkeypatch.setattr(runner_module.os, "name", "nt")
+    monkeypatch.setattr(
+        runner_module.subprocess,
+        "run",
+        lambda command, **kwargs: calls.append((command, kwargs)),
+    )
+
+    assert runner_module._terminate_process(Process()) is True
+    assert calls[0][0] == ["taskkill", "/PID", "7410", "/T", "/F"]
+
+
+def test_cr129_packet_d_non_login_failure_preserves_account_login_state(monkeypatch):
+    from tools.crawler_attempt import CrawlerAttemptFailure
+
+    marked = []
+    monkeypatch.setattr(
+        runner_module,
+        "mark_social_account_profile_requires_relogin",
+        lambda *args, **kwargs: marked.append((args, kwargs)),
+    )
+
+    runner_module._finalize_managed_crawler_failure(
+        {"account_id": 8972, "login_type": "qrcode"},
+        None,
+        {"created_by": 1},
+        CrawlerAttemptFailure(
+            "signature_mismatch",
+            "douyin_signature_mismatch",
+        ),
+    )
+
+    assert marked == []
+
+
+def test_cr129_packet_d_cancel_during_retry_delay_releases_account_lock(
+    tmp_path,
+    monkeypatch,
+):
+    from tools.crawler_attempt import CrawlerAttemptFailure
+
+    init_db()
+    plan = _phase_5_1d_plan(
+        tmp_path,
+        monkeypatch,
+        action="crawl",
+        launch_mode="cdp_launch",
+    )
+    account = _phase_5_1d_persisted_account(state="active", proxy_id=None)
+    binding = {
+        "account_id": plan.account_id,
+        "account_name": "CR-129 cancelled retry account",
+        "platform": "dy",
+        "login_type": "qrcode",
+        "profile_key": plan.profile_key,
+        "profile_path": plan.profile_path,
+        "proxy_id": None,
+        "proxy_url": "",
+        "_account": account,
+        "_proxy": None,
+    }
+    job = {
+        "id": 9996,
+        "law_firm_name": "取消重试测试律所",
+        "keywords": ["取消重试测试律所"],
+        "enable_comments": False,
+        "time_window_type": "recent_1d",
+        "_trigger_source": "manual",
+    }
+    attempts = []
+    releases = []
+
+    def fail_transient(*args, **kwargs):
+        attempts.append(1)
+        raise CrawlerAttemptFailure(
+            "transient_network",
+            "synthetic_transport_error",
+        )
+
+    async def cancel_retry_delay(delay):
+        raise asyncio.CancelledError()
+
+    monkeypatch.setenv("MONITOR_CRAWLER_MAX_RETRIES", "1")
+    monkeypatch.setenv("MONITOR_CRAWLER_RETRY_DELAY_SECONDS", "1")
+    monkeypatch.setattr(
+        runner_module,
+        "list_platform_status",
+        lambda: [{"platform": "dy", "login_window_open": False}],
+    )
+    monkeypatch.setattr(
+        runner_module,
+        "_resolve_platform_account_binding",
+        lambda *args: binding,
+    )
+    monkeypatch.setattr(
+        runner_module,
+        "_resolve_runner_browser_plan",
+        lambda *args: plan,
+    )
+    monkeypatch.setattr(runner_module, "acquire_account_lock", lambda *args: True)
+    monkeypatch.setattr(
+        runner_module,
+        "release_account_lock",
+        lambda account_id, run_id: releases.append((account_id, run_id)),
+    )
+    monkeypatch.setattr(runner_module, "set_run_resource_bindings", lambda *args: None)
+    monkeypatch.setattr(runner_module, "_run_crawler_attempt", fail_transient)
+    monkeypatch.setattr(runner_module.asyncio, "sleep", cancel_retry_delay)
+
+    with pytest.raises(asyncio.CancelledError):
+        asyncio.run(runner_module.run_platform(job, 10006, "dy", tmp_path))
+
+    assert attempts == [1]
+    assert releases == [(plan.account_id, 10006)]
 
 
 @pytest.mark.parametrize("login_ok", [True, False])
@@ -27749,6 +28548,7 @@ def test_cr112_c3_startup_cutover_runs_before_scheduler(monkeypatch):
     monkeypatch.setattr(api_main, "repair_promoted_account_login_authority", lambda *args: events.append("authority"))
     monkeypatch.setattr(api_main, "recover_interrupted_cookie_promotion_sessions", lambda *args: events.append("cookie_sessions"))
     monkeypatch.setattr(api_main, "enforce_profile_only_cookie_cutover", lambda *args: events.append("cutover"))
+    monkeypatch.setattr(api_main, "recover_interrupted_login_sessions", lambda *args: events.append("login_sessions"))
     monkeypatch.setattr(api_main, "browser_cookie_sync_enabled", lambda: False)
 
     async def fake_scheduler():
@@ -27758,7 +28558,18 @@ def test_cr112_c3_startup_cutover_runs_before_scheduler(monkeypatch):
 
     asyncio.run(api_main.startup_monitoring())
 
-    assert events == ["db", "admin", "runs", "promotions", "cleanup", "authority", "cookie_sessions", "cutover", "scheduler"]
+    assert events == [
+        "db",
+        "admin",
+        "runs",
+        "promotions",
+        "cleanup",
+        "authority",
+        "cookie_sessions",
+        "cutover",
+        "login_sessions",
+        "scheduler",
+    ]
 
 
 def test_cr127_qr_image_bytes_reject_non_qr_and_accept_generated_qr():
@@ -28051,6 +28862,76 @@ def test_cr127_interrupted_manual_cookie_session_recovers_terminal():
         assert stored["status"] == "platform_error"
         assert "服务重启" in stored["message"]
         assert get_social_account(account["id"], masked=False)["status"] == "active"
+    finally:
+        _restore_table("audit_logs", snapshots["audit_logs"])
+        _restore_table("login_sessions", snapshots["login_sessions"])
+        _restore_table("social_accounts", snapshots["social_accounts"])
+
+
+def test_cr129_packet_e_restart_finalizes_all_remaining_pending_login_sessions():
+    from api.monitoring.database import recover_interrupted_login_sessions
+
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "login_sessions": _snapshot_table("login_sessions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        account = save_social_account(
+            {
+                "name": "CR-129 restart authority",
+                "platform": "dy",
+                "login_type": "cookie",
+                "cookies": "sessionid=synthetic-cr129-restart",
+                "status": "active",
+            }
+        )
+        qrcode = create_login_session(
+            {
+                "platform": "dy",
+                "account_id": account["id"],
+                "status": "waiting_qrcode",
+            }
+        )
+        browser_sync = create_login_session(
+            {
+                "platform": "dy",
+                "account_id": account["id"],
+                "cookie_source": "browser_sync",
+                "status": "waiting_confirm",
+            }
+        )
+        legacy_verification = create_login_session({"platform": "xhs", "status": "needs_verification"})
+        terminal = create_login_session({"platform": "dy", "status": "success", "message": "done"})
+        with get_conn() as conn:
+            conn.execute(
+                "UPDATE login_sessions SET status='waiting_verification' WHERE id=?",
+                (legacy_verification["id"],),
+            )
+
+        recovered = recover_interrupted_login_sessions("startup")
+
+        assert {qrcode["id"], browser_sync["id"], legacy_verification["id"]}.issubset(recovered)
+        for session_id in (qrcode["id"], browser_sync["id"], legacy_verification["id"]):
+            stored = get_login_session(session_id)
+            assert stored["status"] == "platform_error"
+            assert "服务已重启" in stored["message"]
+        assert get_login_session(terminal["id"])["status"] == "success"
+        stored_account = get_social_account(account["id"], masked=False)
+        assert stored_account["status"] == "active"
+        assert stored_account["cookies"] == "sessionid=synthetic-cr129-restart"
+        with get_conn() as conn:
+            audit = conn.execute(
+                """
+                SELECT details_json FROM audit_logs
+                WHERE action_type='recover_interrupted_login_sessions'
+                ORDER BY id DESC LIMIT 1
+                """
+            ).fetchone()
+        details = json.loads(audit["details_json"])
+        assert details["result"] == "pending_sessions_terminalized"
+        assert "sessionid" not in audit["details_json"]
     finally:
         _restore_table("audit_logs", snapshots["audit_logs"])
         _restore_table("login_sessions", snapshots["login_sessions"])

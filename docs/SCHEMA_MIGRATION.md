@@ -837,3 +837,44 @@ Confirmed:
 - Phase 10-18 run type uses `scheduled | manual | test`.
 - Phase 10-18 email delivery uses `email_delivery_logs`.
 - Phase 10-18 report orphan handling uses `reports.job_snapshot_json`.
+
+## CR-129 Migration Boundary
+
+CR-129 starts with an in-memory, versioned request-environment contract and
+safe proof projection. A database column is added only when packet review
+proves that historical request proof is required for an existing API or run
+record. Any such change must be additive, nullable/default-safe, compatible
+with old rows, and reversible.
+
+Packet A verification confirms that no schema change is needed for the first
+runtime contract. The child proof is short-lived and safe-serialized; existing
+account, Profile, Cookie, proxy, and run rows remain unchanged.
+
+Packets B-C verification also requires no schema change. Request contract v2
+adds provider-effective window/device fields to the in-memory and safe-binding
+contract only. XHS and Douyin dispatch proof remains short-lived and
+digest-only; existing rows and encrypted material are not migrated.
+
+Packet E request contract v3 adds only the ephemeral `signature_required`
+dispatch-policy field. Browser Cookie proof is in-memory and the existing
+`login_sessions` rows receive terminal startup status through current columns.
+No account, Profile, Cookie, run, or schema migration is required.
+
+Packet D verification requires no schema change. The browser-plan and terminal
+handles are one-use files under the attempt directory, and the existing run
+summary stores only redacted category and safe request proof. Restart recovery
+continues to use existing run, lock, Profile, and encrypted Cookie records.
+
+Migration rules:
+
+1. Do not move raw Cookie, token, proxy password, Profile path, or complete
+   request headers into a new table or JSON snapshot.
+2. Derive safe revisions from existing encrypted/material or account/proxy
+   records; do not guess missing provenance for old rows.
+3. Validate the old active Profile and account identity before any candidate
+   promotion.
+4. On startup, failed migration, service interruption, or candidate mismatch,
+   preserve the prior committed Profile/Cookie authority and record a
+   terminal safe result.
+5. Rollback removes only the new candidate/proof record and leaves existing
+   account rows and encrypted material readable.

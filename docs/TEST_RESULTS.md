@@ -2,6 +2,233 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-22 - CR-129 Packet E Verified
+
+Scope: managed browser Cookie request proof, endpoint signature policy,
+same-family browser-version compatibility, orphaned login-session startup
+recovery, affected/full regression, and designated real collection.
+
+Result: `Verified`.
+
+- Cookie-proof focused tests: `6 passed`; affected monitoring/request suite
+  after the XHS header fix: `809 passed, 3 warnings`; CR-129 monitor selection:
+  `10 passed, 696
+  deselected, 1 warning`.
+- Repository-wide collection: `836 passed, 8 skipped, 7 failed, 4 warnings`.
+  Six failures still require local Redis, and the seventh is the documented
+  pre-existing XHS Excel factory assertion.
+- Python compile, JavaScript syntax, current docs consistency, documentation
+  regression (`1 passed`), and `git diff --check` pass. The final Claude
+  full-diff read-only review returns `PASS` with no P0/P1/P2.
+- Contract v3 adds explicit `signature_required`. Browser Cookie proof is
+  captured from a same-origin request aborted before network and reconciled
+  against the same-moment structured store. Invalid proof or cleanup stops
+  before Client construction.
+- Designated Douyin account `8972` passed strong Profile validation with
+  non-empty name/avatar/home identity fields. Normal monitor run `16854`
+  returned fourteen real items and persisted three new rows; the safe request
+  proof is bound to account `8972`, `profile_key=1/dy/acc_8972`, bundled
+  Chromium `127.0.6533.17`, direct proxy policy, HTTP 200, explicit unsigned
+  search protocol, and `fallback_used=false`.
+- The real run directory contains zero matches for plaintext Cookie/session,
+  token, proxy URL, or Profile launch arguments. Protected accounts `9197` and
+  `9198` were not used by the designated/manual acceptance lane.
+- After restarting the service on current branch code, `8972` passed strong
+  Profile validation again. Normal monitor run `16855` returned fourteen real
+  items, persisted one new row, recorded contract v3 and
+  `fallback_used=false`, and again produced zero leakage-pattern matches.
+- Independent round-1 findings resulted in exact probe-URL Cookie capture and
+  Runner boolean-policy defense-in-depth tests; the remaining findings were
+  disproved by current code. Focused re-review returned `PASS`, no P0/P1/P2,
+  and atomic technical readiness `YES`.
+- Protected-account audit found pre-existing unbound daily job `15345` had
+  automatically selected `9198` in scheduled run `16846` at 09:00. It stopped
+  at local `requires_relogin` preflight before platform dispatch, stored no
+  content, and left Profile/Cookie digests unchanged. The job is not a CR-129
+  designated acceptance run and is not modified in this packet.
+- XHS sessions `6422` through `6425` terminalized at bounded timeout while
+  preserving the committed Profile/Cookie authority. Diagnostic session `6426`
+  reproduced `signed request user-agent changed before dispatch`: account
+  checks supplied lowercase `user-agent`, while XHS projection used a
+  case-sensitive lookup and froze an empty UA. Its failed candidate was
+  removed. A RED test reproduced the mismatch; the client now uses the
+  existing case-insensitive, duplicate-rejecting header lookup. The focused XHS
+  suite passes `20`.
+- Session `6427` succeeded and promotion `518` committed account `9196` with
+  `cookie_source=browser_sync` and its account-bound Profile. Strong identity
+  checks passed before and after service restart with the same safe identity
+  digest and non-empty platform ID/name/avatar/home evidence.
+- Normal monitor run `16856` returned forty real XHS items and persisted twenty
+  new rows. After restart, run `16857` returned forty and persisted eight new
+  rows. Both used exact account `9196`, `profile_key=1/xhs/acc_9196`, bundled
+  Chromium `127.0.6533.17`, direct proxy policy, one request environment,
+  contract-v3 signed HTTP 200 proofs, and `fallback_used=false`.
+- Exact Cookie fragment/pair scans across acceptance artifacts and runtime
+  logs returned zero matches; current-process argument inspection also
+  returned zero. Protected accounts `9197` and `9198` were not used by the
+  designated/manual acceptance lane.
+
+## 2026-07-22 - CR-129 Packet D Verified
+
+Scope: managed child error taxonomy, retry inheritance, process/lock terminal
+states, one-use handoff files, XHS/Douyin propagation, and secret-leakage
+tripwires.
+
+Result: `Verified`.
+
+- Packet D dedicated tests: `84 passed, 1 warning`.
+- Complete monitoring regression: `704 passed, 3 warnings`.
+- The final repository-wide run reported `817 passed, 8 skipped, 7 failed,
+  4 warnings`: six failures require local Redis on `127.0.0.1:6379`, and one
+  is the documented pre-existing XHS Excel factory assertion. None of those
+  files is changed by Packet D.
+- Only `transient_network` retries. Timeout/408, login, Cookie, verification,
+  rate, proxy, signature, identity, protocol, cancellation, and crash are
+  terminal. Retries keep resolution and identity/Cookie/proxy revisions while
+  receiving a fresh attempt ID.
+- Child terminal results are strict, fresh, exactly bound, read once, and then
+  deleted. Windows stop/timeout uses process-tree cleanup. Cancellation during
+  retry delay releases the account lock and starts no second request.
+- Managed stdout is piped through generic and exact-secret redaction before
+  writing to disk. Tests cover argv, environment, logs, proof/result files,
+  Profile paths, executable paths, raw Cookie/token/proxy/signature material,
+  and non-login account-state preservation.
+- Initial independent review returned three alleged P0 and additional P1/P2
+  items. RED/GREEN fixes added immediate result consumption, pre-write logging,
+  408 classification, RetryError cause preservation, process-tree/account-state
+  and cancellation coverage. Focused re-review confirmed the remaining prior
+  findings were correct-by-design, returned `PASS`, no remaining P0/P1/P2, and
+  atomic commit readiness `YES`.
+- Python compile, JavaScript syntax, whitespace, docs consistency, and
+  documentation regression are rerun after this synchronized receipt.
+- No real platform collection was used in Packet D. Designated accounts `8972`
+  and `9196` remain reserved for Packet E; protected accounts `9197` and `9198`
+  were not used.
+
+## 2026-07-22 - CR-129 Packet C Verified
+
+Scope: Douyin managed Profile/Cookie/request identity, Profile token source,
+signer-to-URL equality, browser/window request values, safe dispatch proof,
+account isolation, and Runner ingest gate.
+
+Result: `Verified`.
+
+- Combined Packet A-C focused tests: `48 passed`.
+- Complete monitoring regression: `696 passed, 3 warnings`.
+- Complete `tests` collection: `767 passed, 1 failed, 3 warnings`. The sole
+  failure remains the pre-existing `TestXhsStoreFactory.test_create_excel_store`
+  assertion recorded in Packet B; Packet C does not touch Store code.
+- RED/GREEN coverage proves `xmst` -> `msToken`, Profile `web_id` -> `webid`,
+  `s_v_web_id` -> `verifyFp/fp`, and `ttwid` -> `ttwid`; Cookie, UA/UA-CH,
+  screen, proxy, stale token, target, signer-query, final-URL, proof, and
+  two-account boundaries fail closed.
+- The designated account `8972` was used only for a bounded local Profile
+  construction diagnostic: the existing bundled-Chromium Profile opened,
+  required material was present, Client construction passed, raw values were
+  absent from the safe projection, and the browser was closed. No content API
+  or collection run was used. Protected accounts `9197` and `9198` were unused.
+- The actual local `a_bogus` generator produced a nonempty result from
+  synthetic inputs; automated tests did not call a real content endpoint.
+- Python compile, JavaScript syntax, and `git diff --check` pass. Docs checks
+  run after this synchronized receipt.
+- Initial independent Claude review found missing automatic `verifyFp/fp`
+  insertion for ordinary managed GET requests. The fix added both values to
+  signer input/final URL and stale-override RED coverage. Focused re-review
+  returned `PASS`, with no blocker or material refinement, and atomic commit
+  readiness `YES`.
+- Packet D remains the gate for typed platform errors, transient-only retry,
+  process terminal states, and full argv/environment/log/snapshot tripwires.
+
+## 2026-07-22 - CR-129 Packet B Verified
+
+Scope: Xiaohongshu managed Cookie/Profile/request identity, signer-to-transport
+byte equality, safe dispatch proof, browser-channel client hints, account
+isolation, expiry, and unmanaged account-check compatibility.
+
+Result: `Verified`.
+
+- Packet A+B focused tests: `33 passed`.
+- Affected monitoring selection: `12 passed`; complete monitoring regression:
+  `696 passed, 3 warnings`.
+- Complete `tests` collection: `747 passed, 1 failed, 3 warnings`. The sole
+  failure is the documented pre-existing
+  `TestXhsStoreFactory.test_create_excel_store` assertion: it expects
+  `XhsExcelStoreImplement` while the current factory returns `ExcelStoreBase`.
+  Packet B does not touch Store code.
+- XHS tests prove required `a1`/`web_session`, Cookie/UA/proxy drift rejection,
+  list-query and complex-POST byte equality, case-insensitive header handling,
+  two-account isolation, concurrent atomic proof writes, bounded first-plus-
+  latest-31 retention, stale-write rejection, pre-dispatch expiry, and legacy
+  unmanaged Cookie updates.
+- Python compile, JavaScript syntax, docs consistency, documentation tests,
+  and `git diff --check` passed.
+- Independent Claude focused re-review returned `PASS`, `BLOCKERS=None`, and
+  `MATERIAL REFINEMENTS=None`. Two non-blocking P2 observations concern tolerant
+  Cookie whitespace and proxy URL validation already enforced by the upstream
+  account/proxy authority.
+- No real account, Profile, Cookie, browser, proxy, or platform traffic was
+  used. Designated real XHS account `9196` remains gated to Packet E; protected
+  accounts `9197` and `9198` remain unused.
+
+## 2026-07-22 - CR-129 Packet A Verified
+
+Scope: immutable platform request environment, safe parent/child binding,
+Runner proof validation, managed proxy freeze, XHS signed-header snapshot,
+Douyin managed Profile token gate, stale-attempt ordering, and account
+projection isolation.
+
+Result: `Verified`.
+
+- Packet A focused tests: `19 passed`.
+- Affected governed selection: `228 passed, 3 warnings`.
+- Complete monitoring regression plus Packet A tests: `715 passed, 3 warnings`.
+- Python compile, `uv run python scripts/check_docs.py`, documentation tests,
+  and `git diff --check` passed.
+- Independent Claude focused re-review: no P0/P1 findings; two documentation
+  P2 notes were corrected. Packet A is permitted to commit.
+- Full child argv/environment/log tripwires, complete platform signer/request
+  equality, typed retry taxonomy, and real accounts remain deferred to Packets
+  B-E. No real account or platform traffic was used in this packet.
+
+## 2026-07-22 - CR-129 Plan Cross-Validation READY
+
+Scope: CR-129 TODO baseline, account/Profile/browser/proxy/request authority,
+XHS/Douyin signer boundaries, retry/process safety, and packet sequencing.
+
+Result: `Accepted / Ready for Implementation`.
+
+- Round 1 deep Claude review identified six blocking plan gaps: exact contract
+  gates, mutable signer inputs, proxy drift classification, retry inheritance,
+  mandatory safe proof, and child-process secret boundaries.
+- The plan and formal documents were revised to define all six gates, named
+  XHS/Douyin entry points, terminal proxy categories, same-resolution retry
+  inheritance, mandatory post-CR-129 safe proof, and argv/environment/log/
+  audit/snapshot tripwires.
+- Round 2 focused Claude review returned `Overall verdict=READY`,
+  `Blocking findings=None`, and `Material refinements=None`.
+- This entry records plan readiness only. No CR-129 runtime code, account,
+  Profile, Cookie, proxy, browser, or real-platform data was changed.
+
+## 2026-07-22 - CR-129 TODO Baseline And Plan Registration
+
+Scope: read-only baseline comparison after merged CR-128 and registration of
+the Account Profile And Platform Request Identity Consistency follow-up.
+
+Result: `Proposed / Queued`.
+
+- Latest baseline is `main@6cffdbaf0c0ffca8863192c962918a37349f10a4` on the new
+  CR-129 branch. CR-112 and CR-119 through CR-128 remain historical Verified;
+  CR-047 server-like real acceptance remains operator-gated; CR-070 remains
+  future-valid after CR-112 and this follow-up.
+- The active gap is documented as a request-layer authority split: provider
+  effective browser/Profile/proxy proof is not yet projected into one immutable
+  XHS/Douyin Client/signer/request contract.
+- No CR-129 code, schema, account, Profile, Cookie, proxy, browser, or runtime
+  data was changed in this registration step. Real platform collection was not
+  run for CR-129.
+- Plan validation and implementation remain gated on the deep Claude review
+  and its READY criteria.
+
 ## 2026-07-22 - CR-128 Saved Cookie Recovery And Packet D Real-Account Lane
 
 Scope: saved Cookie recovery after Profile drift, exact identity gates,

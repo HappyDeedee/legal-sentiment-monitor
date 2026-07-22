@@ -4,6 +4,7 @@ Use this file to connect requirements, tasks, code areas, and tests.
 
 | Requirement | Module | Task Area | Code Area | Test Area | Status |
 | --- | --- | --- | --- | --- | --- |
+| CR-129 | Account Profile And Platform Request Identity Consistency | CR-129 Packet A-E; TODO baseline and deep plan review | tools/platform_request_environment.py, tools/crawler_attempt.py, tools/crawler_util.py, api/monitoring/runner.py, api/monitoring/database.py, media_platform/xhs/request_identity.py, media_platform/douyin/request_identity.py, XHS/Douyin Core and Client request binding, proxy/retry/process boundaries | Packets A-E verified. Packet E contract v3, browser Cookie proof, startup login terminalization, endpoint signature policy, and case-insensitive XHS signed-UA projection pass. Designated Douyin 8972 runs 16854/16855 and XHS 9196 runs 16856/16857 passed strong identity, service-restart checks, persisted real contents, contract-v3 proof, and fallback_used=false. Exact Cookie-fragment/pair and process-argument scans returned zero; protected accounts 9197/9198 were not used. | Verified |
 | CR-001 | Project governance | Phase 0 | docs, AGENTS.md | Documentation review | Verified |
 | CR-002 | Product requirements | Phase 0 | docs/PRODUCT_REQUIREMENTS.md | Documentation review | Verified |
 | CR-003 | Agent workflow | Phase 0 | docs, AGENTS.md | Documentation review | Verified |

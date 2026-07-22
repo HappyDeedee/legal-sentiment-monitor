@@ -31,6 +31,12 @@ if TYPE_CHECKING:
     from proxy.proxy_ip_pool import ProxyIpPool
 
 
+class ManagedProxyEnvironmentError(RuntimeError):
+    """Raised when a managed request would change its frozen proxy identity."""
+
+    reason = "proxy_expired"
+
+
 class ProxyRefreshMixin:
     """
     Auto-refresh proxy Mixin class
@@ -63,6 +69,10 @@ class ProxyRefreshMixin:
             return
 
         if self._proxy_ip_pool.is_current_proxy_expired():
+            if getattr(self, "request_environment", None) is not None:
+                raise ManagedProxyEnvironmentError(
+                    "managed request proxy expired; create a new resolution"
+                )
             utils.logger.info(
                 f"[{self.__class__.__name__}._refresh_proxy_if_expired] Proxy expired, refreshing..."
             )

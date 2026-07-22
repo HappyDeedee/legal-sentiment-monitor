@@ -16,6 +16,7 @@ from urllib.parse import unquote, urlsplit
 
 
 PLAN_ENV_NAME = "MONITOR_BROWSER_ENVIRONMENT_PLAN"
+PLAN_PATH_ENV_NAME = "MONITOR_BROWSER_ENVIRONMENT_PLAN_PATH"
 RESULT_PATH_ENV_NAME = "MONITOR_BROWSER_ENVIRONMENT_RESULT_PATH"
 PLAN_MAX_BYTES = 8192
 SNAPSHOT_MAX_BYTES = 65536
@@ -50,6 +51,7 @@ _LAUNCH_MODES = frozenset(
     {"persistent_launch", "ephemeral_cookie_validation", "cdp_launch"}
 )
 _EFFECT_PROOFS = frozenset({"pending", "passed", "not_applicable", "failed"})
+_UA_VERSION_RE = re.compile(r"(?:Chrome|CriOS|Edg|Edge)/(\d+(?:\.\d+){0,3})")
 _UNSUPPORTED_FIELDS = frozenset(
     {
         "canvas",
@@ -292,12 +294,48 @@ def browser_environment_plan_from_json(payload: str) -> BrowserEnvironmentPlan:
         raise BrowserEnvironmentError("account_identity_provider_unsupported", "plan") from exc
 
 
+def write_browser_environment_plan_handle(
+    destination: Path,
+    plan: BrowserEnvironmentPlan,
+) -> None:
+    path = Path(destination).resolve()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    payload = browser_environment_plan_to_json(plan)
+    temporary = path.with_name(f".{path.name}.{os.getpid()}.tmp")
+    try:
+        temporary.write_text(payload, encoding="utf-8")
+        try:
+            os.chmod(temporary, 0o600)
+        except OSError:
+            pass
+        temporary.replace(path)
+    finally:
+        temporary.unlink(missing_ok=True)
+
+
 def plan_from_environment(required: bool = False) -> BrowserEnvironmentPlan | None:
     global _cached_plan
     with _cache_lock:
         if _cached_plan is not None:
             return _cached_plan
         payload = os.environ.pop(PLAN_ENV_NAME, "")
+        handle_value = os.environ.pop(PLAN_PATH_ENV_NAME, "")
+        if payload and handle_value:
+            raise BrowserEnvironmentError(
+                "account_identity_provider_unsupported",
+                "plan_authority",
+            )
+        handle_path = Path(handle_value).resolve() if handle_value else None
+        if handle_path is not None:
+            try:
+                payload = handle_path.read_text(encoding="utf-8")
+            except OSError as exc:
+                raise BrowserEnvironmentError(
+                    "account_identity_provider_unsupported",
+                    "plan_handle",
+                ) from exc
+            finally:
+                handle_path.unlink(missing_ok=True)
         if not payload:
             if required:
                 raise BrowserEnvironmentError("account_identity_provider_unsupported", "plan")
@@ -981,7 +1019,8 @@ async def prepare_managed_page(context: Any, page: Any) -> None:
             {
                 "userAgent": plan.user_agent,
                 "acceptLanguage": plan.accept_language,
-                "platform": plan.browser_platform,
+                "platform": _managed_navigator_platform(plan.browser_platform),
+                "userAgentMetadata": _managed_user_agent_metadata(plan),
             },
         ),
         ("Emulation.setTimezoneOverride", {"timezoneId": plan.timezone}),
@@ -1024,6 +1063,87 @@ async def prepare_managed_page(context: Any, page: Any) -> None:
         )
         write_browser_environment_result(failure.browser_environment_result)
         raise failure from exc
+
+
+def _managed_navigator_platform(browser_platform: str) -> str:
+    """Return the navigator.platform value for the provider platform."""
+    values = {
+        "windows": "Win32",
+        "macos": "MacIntel",
+        "android": "Linux armv8l",
+    }
+    try:
+        return values[browser_platform]
+    except KeyError as exc:
+        raise BrowserEnvironmentError(
+            "account_identity_provider_unsupported",
+            "browser_platform",
+        ) from exc
+
+
+def _managed_user_agent_metadata(plan: BrowserEnvironmentPlan) -> dict[str, Any]:
+    """Build UA-CH metadata from the frozen provider plan, not page defaults."""
+    match = _UA_VERSION_RE.search(plan.user_agent)
+    version = str(match.group(1) if match else plan.browser_version or "").strip()
+    if not re.fullmatch(r"\d+(?:\.\d+){0,3}", version):
+        raise BrowserEnvironmentError(
+            "account_identity_provider_unsupported",
+            "user_agent_metadata",
+        )
+    parts = version.split(".")
+    major = parts[0]
+    full_version = ".".join(parts + ["0"] * (4 - len(parts)))
+    source = str(plan.browser_source)
+    executable = str(plan.browser_executable_path).lower().replace("/", "\\")
+    user_agent = plan.user_agent.lower()
+    if source == "system_edge" or "msedge" in executable or "\\microsoft edge" in executable:
+        channel = "edge"
+    elif source in {"playwright_bundled", "system_chromium"}:
+        channel = "chromium"
+    elif source == "system_chrome" or "\\chrome" in executable or "chrome/" in user_agent:
+        channel = "chrome"
+    else:
+        channel = "chromium"
+
+    brands = [("Not.A/Brand", "99"), ("Chromium", major)]
+    if channel == "chrome":
+        brands.append(("Google Chrome", major))
+    elif channel == "edge":
+        brands.append(("Microsoft Edge", major))
+
+    platform_values = {
+        "windows": ("Windows", "10.0.0", "x86", "64"),
+        "macos": ("macOS", "10.15.7", "x86", "64"),
+        "android": ("Android", "13.0.0", "arm", "64"),
+    }
+    try:
+        platform, platform_version, architecture, bitness = platform_values[
+            plan.browser_platform
+        ]
+    except KeyError as exc:
+        raise BrowserEnvironmentError(
+            "account_identity_provider_unsupported",
+            "browser_platform",
+        ) from exc
+
+    return {
+        "brands": [
+            {"brand": brand, "version": brand_version}
+            for brand, brand_version in brands
+        ],
+        "fullVersionList": [
+            {"brand": brand, "version": full_version}
+            for brand, _ in brands
+        ],
+        "fullVersion": full_version,
+        "platform": platform,
+        "platformVersion": platform_version,
+        "architecture": architecture,
+        "model": "",
+        "mobile": plan.is_mobile,
+        "bitness": bitness,
+        "wow64": False,
+    }
 
 
 def validate_safe_runtime_snapshot(snapshot: dict[str, Any]) -> dict[str, Any]:

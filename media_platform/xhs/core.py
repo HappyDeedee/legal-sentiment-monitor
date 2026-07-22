@@ -38,6 +38,7 @@ from model.m_xiaohongshu import NoteUrlInfo, CreatorUrlInfo
 from proxy.proxy_ip_pool import IpInfoModel, create_ip_pool
 from store import xhs as xhs_store
 from tools import utils
+from tools.crawler_attempt import CrawlerAttemptFailure, classify_crawler_exception
 from tools.browser_environment import (
     BrowserEnvironmentError,
     launch_managed_browser_context,
@@ -48,6 +49,10 @@ from tools.browser_environment import (
 )
 from tools.cdp_browser import CDPBrowserManager
 from tools.profile_only import should_begin_platform_login
+from tools.platform_request_environment import (
+    PlatformRequestEnvironment,
+    establish_platform_request_environment,
+)
 from var import crawler_type_var, source_keyword_var
 
 from .client import XiaoHongShuClient
@@ -55,6 +60,7 @@ from .exception import DataFetchError, NoteNotFoundError
 from .field import SearchSortType
 from .help import parse_note_info_from_note_url, parse_creator_info_from_url, get_search_id
 from .login import XiaoHongShuLogin
+from .request_identity import build_xhs_request_identity, build_xhs_sec_ch_ua
 
 
 class XiaoHongShuCrawler(AbstractCrawler):
@@ -62,6 +68,7 @@ class XiaoHongShuCrawler(AbstractCrawler):
     xhs_client: XiaoHongShuClient
     browser_context: BrowserContext
     cdp_manager: Optional[CDPBrowserManager]
+    platform_request_environment: PlatformRequestEnvironment | None
 
     def __init__(self) -> None:
         self.index_url = "https://www.rednote.com" if config.XHS_INTERNATIONAL else "https://www.xiaohongshu.com"
@@ -75,6 +82,7 @@ class XiaoHongShuCrawler(AbstractCrawler):
         self.managed_browser = None
         self.cdp_manager = None
         self.ip_proxy_pool = None  # Proxy IP pool for automatic proxy refresh
+        self.platform_request_environment = None
 
     async def start(self) -> None:
         playwright_proxy_format, httpx_proxy_format = None, None
@@ -118,6 +126,16 @@ class XiaoHongShuCrawler(AbstractCrawler):
             provider_result = await verify_managed_page(self.browser_context, self.context_page)
             if provider_result is not None and not provider_result.ok:
                 raise BrowserEnvironmentError(provider_result.reason, "page")
+            if self.browser_environment_plan is not None:
+                if provider_result is None:
+                    raise BrowserEnvironmentError(
+                        "account_identity_provider_unsupported",
+                        "request_environment",
+                    )
+                self.platform_request_environment = establish_platform_request_environment(
+                    self.browser_environment_plan,
+                    provider_result,
+                )
 
             # Create a client to interact with the Xiaohongshu website.
             self.xhs_client = await self.create_xhs_client(httpx_proxy_format)
@@ -179,7 +197,11 @@ class XiaoHongShuCrawler(AbstractCrawler):
                         page=page,
                         sort=(SearchSortType(config.SORT_TYPE) if config.SORT_TYPE != "" else SearchSortType.GENERAL),
                     )
-                    utils.logger.info(f"[XiaoHongShuCrawler.search] Search notes response: {notes_res}")
+                    utils.logger.info(
+                        "[XiaoHongShuCrawler.search] Search response: "
+                        f"items={len(notes_res.get('items') or [])} "
+                        f"has_more={bool(notes_res.get('has_more'))}"
+                    )
                     if not notes_res or not notes_res.get("has_more", False):
                         utils.logger.info("[XiaoHongShuCrawler.search] No more content!")
                         break
@@ -200,13 +222,17 @@ class XiaoHongShuCrawler(AbstractCrawler):
                             note_ids.append(note_detail.get("note_id"))
                             xsec_tokens.append(note_detail.get("xsec_token"))
                     page += 1
-                    utils.logger.info(f"[XiaoHongShuCrawler.search] Note details: {note_details}")
+                    utils.logger.info(
+                        f"[XiaoHongShuCrawler.search] Note details: count={len(note_details)}"
+                    )
                     await self.batch_get_note_comments(note_ids, xsec_tokens)
 
                     # Sleep after each page navigation
                     await asyncio.sleep(config.CRAWLER_MAX_SLEEP_SEC)
                     utils.logger.info(f"[XiaoHongShuCrawler.search] Sleeping for {config.CRAWLER_MAX_SLEEP_SEC} seconds after page {page-1}")
                 except DataFetchError:
+                    if self.platform_request_environment is not None:
+                        raise
                     utils.logger.error("[XiaoHongShuCrawler.search] Get note detail error")
                     break
 
@@ -217,8 +243,10 @@ class XiaoHongShuCrawler(AbstractCrawler):
             try:
                 # Parse creator URL to get user_id and security tokens
                 creator_info: CreatorUrlInfo = parse_creator_info_from_url(creator_url)
-                utils.logger.info(f"[XiaoHongShuCrawler.get_creators_and_notes] Parse creator URL info: {creator_info}")
                 user_id = creator_info.user_id
+                utils.logger.info(
+                    f"[XiaoHongShuCrawler.get_creators_and_notes] Parsed creator: {user_id}"
+                )
 
                 # get creator detail info from web html content
                 createor_info: Dict = await self.xhs_client.get_creator_info(
@@ -320,8 +348,24 @@ class XiaoHongShuCrawler(AbstractCrawler):
             try:
                 try:
                     note_detail = await self.xhs_client.get_note_by_id(note_id, xsec_source, xsec_token)
-                except RetryError:
-                    pass
+                except RetryError as ex:
+                    if self.platform_request_environment is not None:
+                        last_attempt = getattr(ex, "last_attempt", None)
+                        last_exception = (
+                            last_attempt.exception()
+                            if last_attempt is not None
+                            and callable(getattr(last_attempt, "exception", None))
+                            else ex.__cause__
+                        )
+                        if isinstance(last_exception, CrawlerAttemptFailure):
+                            raise last_exception from ex
+                        classified = classify_crawler_exception(
+                            last_exception or ex
+                        )
+                        raise CrawlerAttemptFailure(
+                            classified.category,
+                            classified.reason_code,
+                        ) from ex
 
                 if not note_detail:
                     note_detail = await self.xhs_client.get_note_by_id_from_html(note_id, xsec_source, xsec_token,
@@ -341,9 +385,16 @@ class XiaoHongShuCrawler(AbstractCrawler):
                 utils.logger.warning(f"[XiaoHongShuCrawler.get_note_detail_async_task] Note not found: {note_id}, {ex}")
                 return None
             except DataFetchError as ex:
+                if self.platform_request_environment is not None:
+                    raise
                 utils.logger.error(f"[XiaoHongShuCrawler.get_note_detail_async_task] Get note detail error: {ex}")
                 return None
             except KeyError as ex:
+                if self.platform_request_environment is not None:
+                    raise CrawlerAttemptFailure(
+                        "platform_protocol_changed",
+                        "xhs_detail_response_missing_field",
+                    ) from ex
                 utils.logger.error(f"[XiaoHongShuCrawler.get_note_detail_async_task] have not fund note detail note_id:{note_id}, err: {ex}")
                 return None
 
@@ -385,33 +436,64 @@ class XiaoHongShuCrawler(AbstractCrawler):
     async def create_xhs_client(self, httpx_proxy: Optional[str]) -> XiaoHongShuClient:
         """Create Xiaohongshu client"""
         utils.logger.info("[XiaoHongShuCrawler.create_xhs_client] Begin create Xiaohongshu API client ...")
-        cookie_str, cookie_dict = await utils.convert_browser_context_cookies(
-            self.browser_context,
-            urls=self.cookie_urls,
+        if self.platform_request_environment is not None:
+            cookie_str, cookie_dict = (
+                await utils.convert_browser_context_cookies_for_request(
+                    self.browser_context,
+                    self.index_url,
+                )
+            )
+        else:
+            cookie_str, cookie_dict = await utils.convert_browser_context_cookies(
+                self.browser_context,
+                urls=self.cookie_urls,
+            )
+        sec_ch_ua = (
+            build_xhs_sec_ch_ua(self.platform_request_environment)
+            if self.platform_request_environment is not None
+            else '"Chromium";v="136", "Google Chrome";v="136", "Not.A/Brand";v="99"'
+        )
+        headers = {
+            "accept": "application/json, text/plain, */*",
+            "accept-language": (
+                self.browser_environment_plan.accept_language
+                if self.browser_environment_plan
+                else "zh-CN,zh;q=0.9"
+            ),
+            "cache-control": "no-cache",
+            "content-type": "application/json;charset=UTF-8",
+            "origin": self.index_url,
+            "pragma": "no-cache",
+            "priority": "u=1, i",
+            "referer": f"{self.index_url}/",
+            "sec-ch-ua": sec_ch_ua,
+            "sec-ch-ua-mobile": "?0",
+            "sec-ch-ua-platform": '"Windows"',
+            "sec-fetch-dest": "empty",
+            "sec-fetch-mode": "cors",
+            "sec-fetch-site": "same-site",
+            "user-agent": self.user_agent,
+            "Cookie": cookie_str,
+        }
+        request_identity = (
+            build_xhs_request_identity(
+                environment=self.platform_request_environment,
+                cookie_header=cookie_str,
+                cookie_dict=cookie_dict,
+                headers=headers,
+                proxy_url=httpx_proxy,
+            )
+            if self.platform_request_environment is not None
+            else None
         )
         xhs_client_obj = XiaoHongShuClient(
             proxy=httpx_proxy,
-            headers={
-                "accept": "application/json, text/plain, */*",
-                "accept-language": "zh-CN,zh;q=0.9",
-                "cache-control": "no-cache",
-                "content-type": "application/json;charset=UTF-8",
-                "origin": self.index_url,
-                "pragma": "no-cache",
-                "priority": "u=1, i",
-                "referer": f"{self.index_url}/",
-                "sec-ch-ua": '"Chromium";v="136", "Google Chrome";v="136", "Not.A/Brand";v="99"',
-                "sec-ch-ua-mobile": "?0",
-                "sec-ch-ua-platform": '"Windows"',
-                "sec-fetch-dest": "empty",
-                "sec-fetch-mode": "cors",
-                "sec-fetch-site": "same-site",
-                "user-agent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/137.0.0.0 Safari/537.36",
-                "Cookie": cookie_str,
-            },
+            headers=headers,
             playwright_page=self.context_page,
             cookie_dict=cookie_dict,
             proxy_ip_pool=self.ip_proxy_pool,  # Pass proxy pool for automatic refresh
+            request_environment=self.platform_request_environment,
+            request_identity=request_identity,
         )
         return xhs_client_obj
 

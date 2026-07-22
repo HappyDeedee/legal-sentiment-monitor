@@ -36,6 +36,7 @@ from base.base_crawler import AbstractCrawler
 from proxy.proxy_ip_pool import IpInfoModel, create_ip_pool
 from store import douyin as douyin_store
 from tools import utils
+from tools.crawler_attempt import CrawlerAttemptFailure
 from tools.browser_environment import (
     BrowserEnvironmentError,
     launch_managed_browser_context,
@@ -46,6 +47,10 @@ from tools.browser_environment import (
 )
 from tools.cdp_browser import CDPBrowserManager
 from tools.profile_only import should_begin_platform_login
+from tools.platform_request_environment import (
+    PlatformRequestEnvironment,
+    establish_platform_request_environment,
+)
 from var import crawler_type_var, source_keyword_var
 
 from .client import DouYinClient
@@ -53,6 +58,11 @@ from .exception import DataFetchError
 from .field import PublishTimeType
 from .help import parse_video_info_from_url, parse_creator_info_from_url
 from .login import DouYinLogin
+from .request_identity import (
+    build_douyin_client_hints,
+    build_douyin_request_identity,
+    capture_douyin_page_snapshot,
+)
 
 
 class DouYinCrawler(AbstractCrawler):
@@ -60,6 +70,7 @@ class DouYinCrawler(AbstractCrawler):
     dy_client: DouYinClient
     browser_context: BrowserContext
     cdp_manager: Optional[CDPBrowserManager]
+    platform_request_environment: PlatformRequestEnvironment | None
 
     def __init__(self) -> None:
         self.index_url = "https://www.douyin.com"
@@ -75,6 +86,7 @@ class DouYinCrawler(AbstractCrawler):
         self.managed_browser = None
         self.cdp_manager = None
         self.ip_proxy_pool = None  # Proxy IP pool for automatic proxy refresh
+        self.platform_request_environment = None
 
     async def start(self) -> None:
         playwright_proxy_format, httpx_proxy_format = None, None
@@ -118,6 +130,16 @@ class DouYinCrawler(AbstractCrawler):
             provider_result = await verify_managed_page(self.browser_context, self.context_page)
             if provider_result is not None and not provider_result.ok:
                 raise BrowserEnvironmentError(provider_result.reason, "page")
+            if self.browser_environment_plan is not None:
+                if provider_result is None:
+                    raise BrowserEnvironmentError(
+                        "account_identity_provider_unsupported",
+                        "request_environment",
+                    )
+                self.platform_request_environment = establish_platform_request_environment(
+                    self.browser_environment_plan,
+                    provider_result,
+                )
 
             self.dy_client = await self.create_douyin_client(httpx_proxy_format)
             logged_in = await self.dy_client.pong(browser_context=self.browser_context)
@@ -176,11 +198,18 @@ class DouYinCrawler(AbstractCrawler):
                         utils.logger.info(f"[DouYinCrawler.search] search douyin keyword: {keyword}, page: {page} is empty,{posts_res.get('data')}`")
                         break
                 except DataFetchError:
+                    if self.platform_request_environment is not None:
+                        raise
                     utils.logger.error(f"[DouYinCrawler.search] search douyin keyword: {keyword} failed")
                     break
 
                 page += 1
                 if "data" not in posts_res:
+                    if self.platform_request_environment is not None:
+                        raise CrawlerAttemptFailure(
+                            "platform_protocol_changed",
+                            "douyin_search_response_missing_data",
+                        )
                     utils.logger.error(f"[DouYinCrawler.search] search douyin keyword: {keyword} failed，账号也许被风控了。")
                     break
                 dy_search_id = posts_res.get("extra", {}).get("logid", "")
@@ -248,9 +277,16 @@ class DouYinCrawler(AbstractCrawler):
                 utils.logger.info(f"[DouYinCrawler.get_aweme_detail] Sleeping for {config.CRAWLER_MAX_SLEEP_SEC} seconds after fetching aweme {aweme_id}")
                 return result
             except DataFetchError as ex:
+                if self.platform_request_environment is not None:
+                    raise
                 utils.logger.error(f"[DouYinCrawler.get_aweme_detail] Get aweme detail error: {ex}")
                 return None
             except KeyError as ex:
+                if self.platform_request_environment is not None:
+                    raise CrawlerAttemptFailure(
+                        "platform_protocol_changed",
+                        "douyin_detail_response_missing_field",
+                    ) from ex
                 utils.logger.error(f"[DouYinCrawler.get_aweme_detail] have not fund note detail aweme_id:{aweme_id}, err: {ex}")
                 return None
 
@@ -268,7 +304,10 @@ class DouYinCrawler(AbstractCrawler):
             task = asyncio.create_task(self.get_comments(aweme_id, semaphore), name=aweme_id)
             task_list.append(task)
         if len(task_list) > 0:
-            await asyncio.wait(task_list)
+            if self.platform_request_environment is not None:
+                await asyncio.gather(*task_list)
+            else:
+                await asyncio.wait(task_list)
 
     async def get_comments(self, aweme_id: str, semaphore: asyncio.Semaphore) -> None:
         async with semaphore:
@@ -288,6 +327,8 @@ class DouYinCrawler(AbstractCrawler):
                 utils.logger.info(f"[DouYinCrawler.get_comments] Sleeping for {crawl_interval} seconds after fetching comments for aweme {aweme_id}")
                 utils.logger.info(f"[DouYinCrawler.get_comments] aweme_id: {aweme_id} comments have all been obtained and filtered ...")
             except DataFetchError as e:
+                if self.platform_request_environment is not None:
+                    raise
                 utils.logger.error(f"[DouYinCrawler.get_comments] aweme_id: {aweme_id} get comments failed, error: {e}")
 
     async def get_creators_and_videos(self) -> None:
@@ -301,7 +342,7 @@ class DouYinCrawler(AbstractCrawler):
             try:
                 creator_info_parsed = parse_creator_info_from_url(creator_url)
                 user_id = creator_info_parsed.sec_user_id
-                utils.logger.info(f"[DouYinCrawler.get_creators_and_videos] Parsed sec_user_id: {user_id} from {creator_url}")
+                utils.logger.info(f"[DouYinCrawler.get_creators_and_videos] Parsed creator: {user_id}")
             except ValueError as e:
                 utils.logger.error(f"[DouYinCrawler.get_creators_and_videos] Failed to parse creator URL: {e}")
                 continue
@@ -331,23 +372,70 @@ class DouYinCrawler(AbstractCrawler):
 
     async def create_douyin_client(self, httpx_proxy: Optional[str]) -> DouYinClient:
         """Create douyin client"""
-        cookie_str, cookie_dict = await utils.convert_browser_context_cookies(
-            self.browser_context,
-            urls=self.cookie_urls,
-        )  # type: ignore
+        if self.platform_request_environment is not None:
+            cookie_str, cookie_dict = (
+                await utils.convert_browser_context_cookies_for_request(
+                    self.browser_context,
+                    self.index_url,
+                )
+            )
+        else:
+            cookie_str, cookie_dict = await utils.convert_browser_context_cookies(
+                self.browser_context,
+                urls=self.cookie_urls,
+            )  # type: ignore
+        page_snapshot = (
+            await capture_douyin_page_snapshot(self.context_page)
+            if self.platform_request_environment is not None
+            else None
+        )
+        user_agent = (
+            self.platform_request_environment.user_agent
+            if self.platform_request_environment is not None
+            else await self.context_page.evaluate("() => navigator.userAgent")
+        )
+        client_hints = (
+            build_douyin_client_hints(
+                self.platform_request_environment,
+                page_snapshot,
+            )
+            if self.platform_request_environment is not None and page_snapshot is not None
+            else {}
+        )
+        headers = {
+            "User-Agent": user_agent,
+            "Accept-Language": (
+                self.platform_request_environment.accept_language
+                if self.platform_request_environment is not None
+                else "zh-CN,zh;q=0.9"
+            ),
+            "Cookie": cookie_str,
+            "Host": "www.douyin.com",
+            "Origin": "https://www.douyin.com/",
+            "Referer": "https://www.douyin.com/",
+            "Content-Type": "application/json;charset=UTF-8",
+            **client_hints,
+        }
+        request_identity = (
+            build_douyin_request_identity(
+                environment=self.platform_request_environment,
+                cookie_header=cookie_str,
+                cookie_dict=cookie_dict,
+                headers=headers,
+                proxy_url=httpx_proxy,
+                page_snapshot=page_snapshot,
+            )
+            if self.platform_request_environment is not None and page_snapshot is not None
+            else None
+        )
         douyin_client = DouYinClient(
             proxy=httpx_proxy,
-            headers={
-                "User-Agent": await self.context_page.evaluate("() => navigator.userAgent"),
-                "Cookie": cookie_str,
-                "Host": "www.douyin.com",
-                "Origin": "https://www.douyin.com/",
-                "Referer": "https://www.douyin.com/",
-                "Content-Type": "application/json;charset=UTF-8",
-            },
+            headers=headers,
             playwright_page=self.context_page,
             cookie_dict=cookie_dict,
             proxy_ip_pool=self.ip_proxy_pool,  # Pass proxy pool for automatic refresh
+            request_environment=self.platform_request_environment,
+            request_identity=request_identity,
         )
         return douyin_client
 
@@ -386,7 +474,7 @@ class DouYinCrawler(AbstractCrawler):
         headless: bool = True,
     ) -> BrowserContext:
         """
-        使用CDP模式启动浏览器
+        Launch the browser using CDP mode.
         """
         try:
             self.cdp_manager = CDPBrowserManager(plan=self.browser_environment_plan)

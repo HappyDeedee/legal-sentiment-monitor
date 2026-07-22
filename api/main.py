@@ -35,6 +35,7 @@ from .monitoring.database import (
     enforce_profile_only_cookie_cutover,
     init_db,
     recover_interrupted_cookie_promotion_sessions,
+    recover_interrupted_login_sessions,
     recover_stale_runs_and_locks,
     repair_promoted_account_login_authority,
 )
@@ -93,6 +94,7 @@ async def startup_monitoring():
     await asyncio.to_thread(enforce_profile_only_cookie_cutover, "startup")
     if browser_cookie_sync_enabled():
         recover_browser_cookie_sync_sessions()
+    await asyncio.to_thread(recover_interrupted_login_sessions, "startup")
     await start_scheduler()
 
 
