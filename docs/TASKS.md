@@ -1918,6 +1918,34 @@ Acceptance artifact/log and current-process argument scans found zero exact
 Cookie fragments or pairs. Protected accounts `9197` and `9198` were not used
 by the designated/manual acceptance lane.
 
+## CR-130 - Cookie Account Save Promotion Consistency
+
+Implementation status (2026-07-22): Verified. This is a regression follow-up
+to the verified CR-123/CR-127 Cookie login flow and does not reopen those
+completed CRs.
+
+- [x] Register the observed new-account Cookie submission gap and preserve the
+      Profile/Cookie authority boundary.
+- [x] Reproduce the gap: footer `保存账号` persisted metadata without invoking
+      Cookie promotion, leaving no committed Cookie/Profile material.
+- [x] Add RED/GREEN frontend contract and browser-behavior coverage for both
+      Cookie save controls, empty new-account input, and existing-account
+      metadata-only save.
+- [x] Route pending Cookie submission from the footer through the existing
+      candidate Profile promotion service.
+- [x] Run affected/full monitoring regression, compile, JavaScript, docs,
+      whitespace, and independent read-only review.
+- [x] Fix the review finding on the promotion failure return contract and
+      rerun focused/full regression and final checks.
+- [x] Update the live service and verify a disposable operator account can be
+      created from a copied Cookie and pass identity/login-state checking.
+- [x] Record final evidence and close the CR as Verified.
+
+Live receipt (2026-07-22): test account `9212` reached login session `6434`
+`success`, promotion `525` `committed`, Profile runtime version `1`, and
+account `active` with no current error. No protected collection account was
+changed.
+
 ## CR-120 - Local Visible Login Automatic Reconciliation
 
 Implementation status (2026-07-20): verified. This is a local fallback

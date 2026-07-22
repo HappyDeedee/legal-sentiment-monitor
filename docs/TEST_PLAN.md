@@ -1703,6 +1703,29 @@ Run the relevant parts of this checklist after each Phase 11 batch:
   coverage, complete monitoring regression, Python compile, documentation
   consistency/regression, `git diff --check`, and independent read-only review.
 
+## CR-130 Cookie Account Save Promotion Consistency Tests
+
+- The Platform Account form must keep the explicit Cookie action and the modal
+  footer action on one implementation path when Cookie input is pending.
+- A browser behavior test must execute the production save functions with a
+  synthetic Cookie and prove that the footer action performs one draft save
+  followed by one `/cookie-promotion` request, clears only the transient form
+  value after success, and does not perform a second metadata save.
+- A new account in Cookie mode with empty input must not create an unconfigured
+  draft through the footer action and must show actionable paste guidance.
+- An existing account in Cookie mode with no pending Cookie must retain the
+  ordinary metadata-only footer save behavior.
+- The existing backend promotion tests remain the authority for structured and
+  plain Cookie parsing, candidate Profile validation, account identity checks,
+  atomic promotion, rollback, encrypted storage, and no raw-secret leakage.
+- Failed, cancelled, timed-out, or interrupted promotion must preserve the
+  previously committed Profile/Cookie authority and leave the form retryable.
+- Final gates include focused CR-130 and adjacent CR-123/CR-127/CR-128 tests,
+  affected and complete monitoring regression, Python compile, inline
+  JavaScript parse, documentation consistency/regression, `git diff --check`,
+  live service verification with a disposable account, and independent
+  read-only review.
+
 ## CR-121 Crawler Account Identity Snapshot Header Tests
 
 - A prepared managed page and an unprepared background page must not share

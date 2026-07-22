@@ -6698,20 +6698,21 @@
     }
     function platformStatusCell(p){ if(p.login_window_open) return `<span class="status">登录窗口验证中</span><div class="small">完成平台验证后，系统会自动保存登录状态。</div>`; if(p.login_type==='cookie' && !p.has_cookies) return '<span class="status">Cookie 待填写</span><div class="small">保存 Cookie 后才能使用 Cookie 登录。</div>'; if(p.needs_login) return `<span class="status">需重新登录</span><div class="small">${esc(compactPlatformError(p.last_error)||'请重新登录该平台账号')}</div>`; return '<span class="status ok">可运行</span>'; }
     function compactPlatformError(error){ const text=String(error||''); if(!text) return ''; const lower=text.toLowerCase(); if(text.includes('登录态失效') || lower.includes('no login') || lower.includes('unauthenticated') || lower.includes('login state result: false')) return '平台登录态可能失效，请重新登录该平台账号。'; if(text.includes('登录窗口未关闭')) return '登录窗口未关闭，请关闭后刷新状态。'; return cleanCustomerText(text.split('; see ')[0].slice(0,160)); }
-    async function saveCurrentPlatformCookieLogin(){
+    async function saveCurrentPlatformCookieLogin(options={}){
+      const buttonId=options.buttonId || 'account_cookie_save_button';
       let current=socialAccountCache.get(Number(val('social_account_id')||0));
-      if(!ensureAccountIdentityCanLogin(current)) return;
+      if(!ensureAccountIdentityCanLogin(current)) return null;
       const cookies=val('social_account_cookie_input');
       const clearCookies=document.getElementById('social_account_clear_cookie').checked;
-      if(!cookies && !clearCookies){ toast('请粘贴当前账号 Cookie，或勾选清空已保存 Cookie'); return; }
-      await withActionButtonLoading('account_cookie_save_button', clearCookies ? '清空中...' : '保存中...', async ()=>{
+      if(!cookies && !clearCookies){ toast('请粘贴当前账号 Cookie，或勾选清空已保存 Cookie'); return null; }
+      return await withActionButtonLoading(buttonId, clearCookies ? '清空中...' : '保存中...', async ()=>{
         const result=document.getElementById('cookie_login_result');
         if(result) result.innerHTML=loadingNote(clearCookies ? '正在清空当前账号已保存 Cookie...' : '正在验证 Cookie 并创建本机 Profile，通常需要 10-60 秒...');
         if(clearCookies){
           const saved=await persistSocialAccount({login_type:'qrcode', cookies:'', clear_cookies:true});
           if(!saved){
             if(result) result.textContent='Cookie 未清空，请按页面提示检查后重试。';
-            return;
+            return null;
           }
           set('social_account_cookie_input','');
           document.getElementById('social_account_clear_cookie').checked=false;
@@ -6719,13 +6720,13 @@
           toast('当前账号 Cookie 已清空');
           await Promise.all([loadAccountsPool(), loadReadiness(), loadDoctor()]);
           renderLoginModePanel();
-          return;
+          return saved;
         }
         if(!current){
           current=await persistSocialAccount({login_type:'qrcode'});
           if(!current){
             if(result) result.textContent='请先保存账号基本信息。';
-            return;
+            return null;
           }
         }
         stopLoginSessionPolling({closeRemote:true});
@@ -6737,7 +6738,7 @@
           const saved=responseBody && responseBody.account ? responseBody.account : null;
           if(!saved){
             if(result) result.textContent=responseBody?.detail || await err(response) || 'Cookie 未保存，请按页面提示检查后重试。';
-            return;
+            return null;
           }
           syncAccountFromResponse(saved);
           set('social_account_cookie_input','');
@@ -6746,9 +6747,11 @@
           toast('Cookie 已验证并保存登录态');
           await Promise.all([loadAccountsPool(), loadReadiness(), loadDoctor()]);
           editSocialAccount(Number(saved.id), true);
+          return saved;
         }catch(error){
           if(result) result.textContent='Cookie 验证请求已中断，原账号登录态保持不变。请确认服务正常后重新提交。';
           toast('Cookie 验证请求已中断，请重新提交');
+          return null;
         }
       });
     }
@@ -7847,6 +7850,18 @@
       if(existing && accountIdentityChangeMode && !accountIdentityPreloginState(existing)){
         toast('环境变更请点击“重置并重新登录”完成');
         return;
+      }
+      const cookieInput=val('social_account_cookie_input').trim();
+      const clearCookies=document.getElementById('social_account_clear_cookie')?.checked;
+      if(activeSocialLoginMethod==='cookie'){
+        if(cookieInput || clearCookies){
+          await saveCurrentPlatformCookieLogin({buttonId:'account_save_button'});
+          return;
+        }
+        if(!existing){
+          toast('请先粘贴 Cookie，再保存账号');
+          return;
+        }
       }
       await withActionButtonLoading('account_save_button', '保存中...', async ()=>{
         const saved=await persistSocialAccount();

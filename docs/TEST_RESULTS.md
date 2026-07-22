@@ -2,6 +2,35 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-22 - CR-130 Automated Verification And Independent Review
+
+Scope: new-account manual Cookie form submission, footer save delegation,
+empty-input guard, existing-account metadata compatibility, and promotion
+failure return contract.
+
+Result: Verified.
+
+- RED coverage reproduced the original gap: the footer `保存账号` path only
+  called ordinary metadata persistence and did not reach Cookie promotion.
+- The fixed production functions were executed in an isolated Playwright
+  harness with synthetic Cookie data. The harness proved one draft save,
+  exactly one `/social-accounts/{id}/cookie-promotion` request, transient form
+  clearing after success, empty new-account blocking, and existing-account
+  metadata-only save. Raw real Cookie/Profile data was not used.
+- Focused CR-130 plus adjacent CR-123/CR-127/CR-128 coverage: `38 passed`.
+- Complete `tests/test_monitoring_mvp.py`: `708 passed, 3 warnings`.
+- Python compile, external and inline JavaScript parsing, `scripts/check_docs.py`,
+  documentation regression (`1 passed`), and `git diff --check` passed.
+- Independent Claude Code read-only review first found and the implementation
+  then fixed an inconsistent promotion-failure `return`; the focused re-review
+  returned `PASS` with no P0/P1/P2 findings.
+- The running `/monitor` service returned the updated footer delegation code.
+- Live operator verification completed with test account `9212`: login session
+  `6434` reached `success`, promotion `525` reached `committed`, the account
+  reached `active` with `cookie_source=manual`, `profile_runtime_version=1`,
+  no current error, and its persistent Profile directory was present. No
+  protected collection account was changed.
+
 ## 2026-07-22 - CR-129 Packet E Verified
 
 Scope: managed browser Cookie request proof, endpoint signature policy,
