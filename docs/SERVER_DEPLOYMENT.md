@@ -111,7 +111,7 @@ defaults to `120`; `MONITOR_BROWSER_INSTALL_TIMEOUT_SECONDS` defaults to `300`.
 For these two Windows local launchers only, absent values default to
 `MONITOR_BROWSER_COOKIE_SYNC_ENABLED=true`,
 `MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=true`, and
-`MONITOR_LOGIN_QR_HEADLESS=false`. Explicit environment values win. The
+`MONITOR_LOGIN_QR_HEADLESS=true`. Explicit environment values win. The
 service-only and Docker/server defaults below remain unchanged.
 
 The selection manifest stores only a contract version, browser source/channel,

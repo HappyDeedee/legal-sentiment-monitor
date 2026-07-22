@@ -284,7 +284,7 @@ try {
         $env:MONITOR_ALLOW_LOCAL_LOGIN_WINDOW = "true"
     }
     if ([string]::IsNullOrWhiteSpace([string]$env:MONITOR_LOGIN_QR_HEADLESS)) {
-        $env:MONITOR_LOGIN_QR_HEADLESS = "false"
+        $env:MONITOR_LOGIN_QR_HEADLESS = "true"
     }
 
     Write-Host "[1/5] Checking project runtime..."

@@ -176,7 +176,7 @@ CR-112 browser auto-sync is controlled by deployment-only
 `false`; CR-132's Windows local `start_monitor_oneclick.bat` and
 `start_webui.bat` set it to `true` only when the operator did not provide an
 explicit value. The same local launchers default
-`MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=true` and `MONITOR_LOGIN_QR_HEADLESS=false`;
+`MONITOR_ALLOW_LOCAL_LOGIN_WINDOW=true` and `MONITOR_LOGIN_QR_HEADLESS=true`;
 explicit values remain authoritative. These are launcher defaults, not browser
 template fields or editable runtime settings. The rejected Cookie-bridge
 WebSocket route remains absent in both feature states.

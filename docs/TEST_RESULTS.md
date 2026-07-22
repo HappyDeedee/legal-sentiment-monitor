@@ -2,6 +2,57 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-22 - CR-134 Managed Login Environment And Headless QR Verification
+
+Scope: generated identity injection, browser-version capability handling,
+headless QR acquisition, headed Browser login, wait/retry lifecycle, and
+Xiaohongshu QR/SMS-state discrimination.
+
+Result: implementation behavior, local automated/static gates, and independent
+review verified. Affected-computer operator acceptance remains pending.
+
+- RED coverage reproduced persistent Chrome's duplicate locale override,
+  missing CDP-session detach, provider-dependent device-field mismatch,
+  one-click headed QR default, retry ordering, transient wait-probe
+  terminalization, Xiaohongshu QR text being misclassified as SMS, tightly
+  cropped QR detection failure, and ordinary `dragger` controls being
+  misclassified as a slider.
+- Persistent contexts now receive the complete template at context creation.
+  Before navigation, the exact page receives compatible UA/UA-CH,
+  Accept-Language, timezone, device-metrics, touch, and navigator-language
+  reinforcement. CDP crawler mode also applies locale; persistent mode keeps
+  the already-active Playwright locale override.
+- Core UA/timezone/locale/Accept-Language mismatches remain terminal. Screen,
+  viewport, scale, mobile, and touch values that the effective provider does
+  not honor are retained as safe probe evidence and listed in
+  `unsupported_fields`. An older-browser UA-CH parameter downgrade is also
+  recorded explicitly.
+- Windows one-click QR now defaults `MONITOR_LOGIN_QR_HEADLESS=true`; Browser
+  auto-sync remains headed and explicit deployment values still win.
+- Tightly cropped QR images receive a detection-only in-memory white quiet zone;
+  returned QR bytes are unchanged. Xiaohongshu generic `drag` selectors were
+  removed while specific slider, slide, Geetest, and Yidun checks remain.
+- CR-134 focused coverage passed (`21 passed`), adjacent browser/login/Profile
+  coverage passed (`224 passed`), and complete `tests/test_monitoring_mvp.py`
+  passed (`762 passed, 3 warnings`).
+- An isolated real system-Chrome Browser login reached `等待平台登录`, held for
+  ten seconds, canceled, reopened the same account, held again, and left no
+  active handle. This directly covers the reported open-then-close/retry gap.
+- Isolated real Playwright Chromium returned Douyin and Xiaohongshu
+  `waiting_qrcode` with `headless=true`, `qr_image=true`, matching `profile_key`,
+  and zero visible owned windows. The final receipts observed six owned Douyin
+  processes and five owned Xiaohongshu processes.
+- Python compile, external and inline JavaScript parse, PowerShell parse,
+  `uv lock --check`, `scripts/check_docs.py`, documentation regression, and
+  `git diff --check` passed.
+- Repository-wide collection completed `892 passed, 8 skipped, 7 failed, 4
+  warnings`. Six failures require Redis on `127.0.0.1:6379`; the seventh is the
+  existing XHS Excel factory type assertion. None touches the CR-134 files or
+  the fully passing monitoring suite.
+- Two independent read-only reviews passed after their P2 test-coverage and
+  documentation findings were closed; final code review reports no remaining
+  P0/P1/P2 finding.
+
 ## 2026-07-22 - CR-133 Windows Clean-Computer One-Click Bootstrap Verification
 
 Scope: project-local runtime acquisition, locked dependency preparation,

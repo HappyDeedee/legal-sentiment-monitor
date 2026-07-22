@@ -600,12 +600,20 @@ Rules:
 
 - write the snapshot after successful login validation and after successful
   crawl launch if the effective values are available;
-- if requested and effective values differ for a required field, the launch is
+- the identity template is desired browser state rather than a passive snapshot
+  of the host computer. Persistent Playwright context options apply the full
+  template; compatible page-level CDP preparation reinforces it before
+  navigation, while CDP crawler mode uses page preparation as its primary path;
+- if requested and effective values differ for a required core field
+  (`user_agent`, `timezone`, `locale`, or `accept_language`), the launch is
   invalid and must fail closed;
-- if a supported field is unavailable from the provider, fail closed instead of
-  fabricating an effective value;
-- `unsupported_fields` is allowed only for future/provider-dependent or
-  metadata-only fields that are explicitly documented as not managed in V1;
+- screen/viewport dimensions, device scale, mobile, and touch are
+  provider/version-dependent optional managed fields. After injection is
+  attempted, an ineffective optional field keeps its actual safe probe value
+  and is added to `unsupported_fields` instead of being fabricated or treated
+  as an account/Profile mismatch;
+- `unsupported_fields` also covers explicitly documented non-managed metadata
+  such as canvas, WebGL, fonts, plugins, and unavailable UA client hints;
 - exact keys, scalar types, enum values, account binding, identifier formats,
   and the 64 KiB serialized limit are validated before persistence;
 - recursive validation rejects cookies, proxy URLs/credentials, raw Profile or

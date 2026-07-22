@@ -105,8 +105,6 @@ class XiaoHongShuLogin(AbstractLogin):
         "slider": (
             "[class*='slider']",
             "[id*='slider']",
-            "[class*='drag']",
-            "[id*='drag']",
             "[class*='slide']",
             "[id*='slide']",
             ".geetest_panel",

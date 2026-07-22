@@ -23,6 +23,7 @@ from tools.browser_environment import (
     launch_managed_browser_context,
     managed_browser_cleanup_timeout_seconds,
     managed_browser_processes,
+    prepare_managed_page,
     verify_managed_page,
 )
 
@@ -623,6 +624,7 @@ def _default_browser_runner(platform: str, playwright: Any) -> BrowserRunner:
             page = context.pages[0] if getattr(context, "pages", None) else await context.new_page()
             page.set_default_timeout(15000)
             capability = get_mediacrawler_login_capability(platform)
+            await prepare_managed_page(context, page)
             await page.goto(str(capability.get("login_url") or ""), wait_until="domcontentloaded", timeout=15000)
             provider_result = await verify_managed_page(context, page)
             if provider_result is None or not provider_result.ok:

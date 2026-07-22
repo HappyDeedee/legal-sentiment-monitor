@@ -20,6 +20,7 @@ from tools.browser_environment import (
     close_managed_browser_session,
     launch_managed_browser_context,
     managed_browser_cleanup_timeout_seconds,
+    prepare_managed_page,
     verify_managed_page,
 )
 from tools.browser_launcher import BrowserLauncher
@@ -224,6 +225,10 @@ async def _check_profile_account(account: dict[str, Any], timeout_ms: int) -> di
         )
         page.set_default_timeout(timeout_ms)
         await _run_account_check_stage(
+            prepare_managed_page(context, page),
+            "注入账号浏览器环境",
+        )
+        await _run_account_check_stage(
             page.goto(str(capability.get("login_url") or ""), wait_until="domcontentloaded", timeout=timeout_ms),
             "打开平台登录页",
         )
@@ -366,6 +371,10 @@ async def _check_cookie_account(account: dict[str, Any], timeout_ms: int) -> dic
             "创建平台登录页面",
         )
         page.set_default_timeout(timeout_ms)
+        await _run_account_check_stage(
+            prepare_managed_page(context, page),
+            "注入账号浏览器环境",
+        )
         await _run_account_check_stage(
             page.goto(str(capability.get("login_url") or ""), wait_until="domcontentloaded", timeout=timeout_ms),
             "打开平台登录页",

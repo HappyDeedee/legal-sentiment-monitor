@@ -1971,6 +1971,35 @@ account/Profile/Cookie behavior remain closed historical baselines.
 - [ ] Record second-computer pull/start/login acceptance after the reviewed
       change is available on `main`.
 
+## CR-134 - Managed Login Environment Injection And Retry
+
+Implementation status (2026-07-22): implementation and independent review
+verified after second-computer Douyin and Xiaohongshu Browser login both failed
+managed environment validation before operator login. Affected-computer
+operator acceptance remains pending.
+
+- [x] Trace the shared failure to post-navigation environment validation.
+- [x] Confirm that generated environment fields are desired injected state.
+- [x] Add RED coverage for persistent-page injection, unprepared-page rejection,
+      safe mismatch detail, transient wait probes, and serialized retry.
+- [x] Apply the complete managed environment before platform navigation across
+      Browser, QR, account-check, Profile-validation, and crawler paths.
+- [x] Negotiate browser-version capability: keep core identity fields strict and
+      record ineffective optional device fields as unsupported.
+- [x] Default Windows one-click QR acquisition to headless while keeping Browser
+      auto-sync headed.
+- [x] Prevent Xiaohongshu QR/phone method copy from becoming a false SMS gate.
+- [x] Accept tightly cropped platform QR images through an in-memory detection
+      quiet zone and exclude generic Xiaohongshu `dragger` controls from slider
+      detection.
+- [x] Preserve overall login bounds while tolerating transient waiting probes.
+- [x] Wait for remote cancellation before a replacement Browser session starts.
+- [x] Run focused/full/static/docs, repository-wide baseline, real-Chrome
+      hold/retry, and real headless Douyin/Xiaohongshu QR checks.
+- [x] Complete independent read-only review.
+- [ ] Record second-computer pull/start/Douyin/Xiaohongshu login acceptance
+      after the reviewed change is available on `main`.
+
 ## CR-132 - Windows Login Bootstrap And Bounded Browser Startup
 
 Implementation status (2026-07-22): implementation verified and independent

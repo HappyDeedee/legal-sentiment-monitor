@@ -183,7 +183,20 @@ def is_qrcode_image_data(image_data: str) -> bool:
         height, width = image.shape[:2]
         if min(width, height) < 64 or max(width, height) > 4096:
             return False
-        detected, points = cv2.QRCodeDetector().detect(image)
+        detector = cv2.QRCodeDetector()
+        detected, points = detector.detect(image)
+        if not detected or points is None:
+            quiet_zone = max(4, int(round(min(width, height) * 0.125)))
+            padded = cv2.copyMakeBorder(
+                image,
+                quiet_zone,
+                quiet_zone,
+                quiet_zone,
+                quiet_zone,
+                cv2.BORDER_CONSTANT,
+                value=255,
+            )
+            detected, points = detector.detect(padded)
         return bool(detected and points is not None)
     except (ValueError, cv2.error):
         return False

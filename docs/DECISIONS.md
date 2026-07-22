@@ -913,6 +913,37 @@ short `Superseded by` note rather than deleting history.
   select a second browser, migrate browser channels, or treat local Windows
   evidence as server acceptance.
 
+## 2026-07-22 - CR-134 Managed Environment Injection Before Validation
+
+- The generated account environment is desired managed-browser state, not a
+  passive comparison target or a fingerprint of the physical computer. The
+  account's `profile_key` remains persistent login-state authority; the
+  identity template is applied whenever that Profile is opened.
+- Persistent Playwright launch options are the primary full-template injection.
+  Page-level CDP preparation is a compatible reinforcement before navigation;
+  CDP crawler mode uses it as the primary page injection. Persistent mode does
+  not repeat `Emulation.setLocaleOverride` because Playwright has already
+  established that override for the context.
+- User-Agent, timezone, locale, and Accept-Language are required managed fields.
+  Screen, viewport, scale, mobile, and touch are provider/version-dependent:
+  when attempted injection is not reflected by the runtime probe, the field and
+  actual safe value are recorded as unsupported rather than terminating the
+  account flow. Required-field mismatches remain fail-closed.
+- Browser version/source and owned-process identity remain observed runtime
+  evidence. They are not injectable and are not silently rewritten.
+- Windows one-click QR acquisition defaults headless; the separate Browser
+  auto-sync action remains headed.
+- Browser login keeps the window open across a transient status-probe timeout;
+  the overall login deadline and explicit cancellation remain authoritative.
+- A replacement Browser login serializes cancellation and cleanup of the prior
+  account-bound session before it starts.
+- QR image validation may retry against an in-memory white quiet zone when a
+  platform returns a tightly cropped code. This changes detection only; the QR
+  image shown to the operator remains the platform image.
+- Xiaohongshu manual-verification selectors do not use generic `drag` class/id
+  substring matches because normal carousel controls use `dragger`; specific
+  slider, slide, Geetest, and Yidun markers remain authoritative.
+
 ## 2026-07-22 - CR-128 Saved Cookie Recovery And Packet D Closure
 
 - Confirmed for CR-128: a strict Profile check remains the first check. An
