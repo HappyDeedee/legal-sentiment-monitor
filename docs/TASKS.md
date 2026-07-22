@@ -1974,9 +1974,9 @@ account/Profile/Cookie behavior remain closed historical baselines.
 ## CR-134 - Managed Login Environment Injection And Retry
 
 Implementation status (2026-07-22): implementation and independent review
-verified after second-computer Douyin and Xiaohongshu Browser login both failed
-managed environment validation before operator login. Affected-computer
-operator acceptance remains pending.
+verified and merged through PR #17 on `main@d45de1a` after second-computer
+Douyin and Xiaohongshu Browser login both failed managed environment validation
+before operator login. Affected-computer operator acceptance remains pending.
 
 - [x] Trace the shared failure to post-navigation environment validation.
 - [x] Confirm that generated environment fields are desired injected state.
