@@ -125,9 +125,12 @@ Current goal rhythm:
 5. CR-112 Packet B, C, and the designated same-machine Windows Packet D
    real-account lane are verified serially. Preserve the recorded proof
    boundaries and do not treat local evidence as CR-047 server-like proof.
-6. CR-070 / Phase 5.2A-E is the next lane after a fresh todo baseline review
-   and atomic execution packet; it consumes only committed CR-112 state.
-7. CR-092, CR-093, and CR-094 remain future independent backlog lanes.
+6. CR-129 is Verified. CR-131 follows it as the transport-identity hardening
+   lane; Packet B starts only after its deep architecture/instruction gate.
+7. CR-070 / Phase 5.2A-E follows CR-131 after a fresh todo baseline review and
+   atomic execution packet; it consumes only committed account/Profile state
+   and never exports live Session/Jar/pool/TLS state.
+8. CR-092, CR-093, and CR-094 remain future independent backlog lanes.
 
 Use the iteration rule from `docs/GOAL_EXECUTION_GUIDELINES.md`:
 pre-check, implement only the packet, run targeted checks, fix and rerun, run

@@ -2011,3 +2011,67 @@ Douyin/XHS identity, normal monitor, persisted-content, zero-leakage, and
 post-restart acceptance pass. Runs `16854` through `16857` record
 `fallback_used=false`; protected accounts `9197` and `9198` were not used by
 the designated/manual lane.
+
+## CR-131 Managed Transport Identity Boundary
+
+CR-131 extends the CR-129 frozen request identity through the managed network
+transport. It does not create a second account or browser authority.
+
+The target chain is:
+
+```text
+social_account + profile_key
+  -> BrowserEnvironmentProvider effective result
+  -> frozen PlatformRequestEnvironment + NetworkPersona
+  -> attempt-bound ManagedImpersonationTransport
+  -> XHS/Douyin account check + collection
+  -> isolated Set-Cookie candidate
+  -> candidate Profile/browser reconciliation
+  -> journaled committed authority promotion
+```
+
+The initial managed engine is a pinned, exact-target
+`curl_cffi.AsyncSession`. One Session/Jar/pool binds one account, platform,
+Profile, resolution, attempt, run, identity revision, Cookie-material revision,
+proxy revision, persona revision, transport-fingerprint revision, and Profile
+runtime revision. It uses the provider-approved proxy/DNS policy and
+`trust_env=False`. The DNS mode is explicit (`proxy_remote`, `proxy_connect`,
+or provider-selected direct), never a system default. It never crosses accounts
+or attempts and never falls back to ambient proxy or direct network.
+
+Browser and transport proofs are channel-specific. Each must match its own
+reviewed allowed range before the compatibility rule compares browser family,
+version range, OS/platform, UA/UA-CH, language, timezone, screen/device, region,
+and proxy egress. Matching one JA3/JA3N/JA4/H2 hash is not sufficient. GREASE,
+ClientHello random, ephemeral keys, PSK binders, tickets, and connection IDs
+vary at runtime and do not become account metadata.
+
+Each persona and transport profile carries an explicit `valid_until` and is
+quarantined when it expires or when the browser, engine, channel, or catalog
+changes. The validity window is determined by repeat evidence and release
+events, not by an unmeasured fixed-day assumption.
+
+The committed Profile remains browser-login authority. A response Cookie Jar
+is attempt-local only. Separate Set-Cookie lines become a bounded structured
+candidate that preserves `(name, domain, path)`, host-only, Secure, HttpOnly,
+SameSite, expiry, ordering, and deletion semantics. Candidate material is
+encrypted/staged, checked through the same account/persona/proxy environment,
+injected into a candidate Profile, and browser-validated before the existing
+promotion journal and compare-and-swap revisions make it authoritative.
+
+Retry closes the old Session before a new attempt Session is created from the
+same frozen identity/Cookie/proxy/persona revisions. Timeout, cancellation,
+crash, second verification, proxy/persona mismatch, or concurrent promotion
+discards uncommitted candidates and preserves the old authority. Service
+restart recreates the Session; sockets, pools, TLS tickets, and live Jars are
+never persisted.
+
+Unsupported browser/transport combinations fail before platform dispatch.
+Current Packet A evidence finds no exact published target for local Chrome 150
+or Edge 150; Edge cannot inherit a Chrome target. Packet B must add a reviewed
+machine-readable persona entry before either combination is accepted.
+
+The complete packet and evidence contract is in
+`docs/superpowers/plans/2026-07-22-cr-131-managed-transport-identity-consistency.md`.
+CR-047 Linux/server-like acceptance remains a separate operator gate, and
+CR-070 export/import excludes live Session/Jar/pool/TLS state.

@@ -1070,3 +1070,35 @@ rate, proxy, signature, identity, protocol, timeout, cancellation, and crash
 results remain terminal and visible through safe customer-facing status.
 Managed child output is redacted before log persistence, and process cleanup
 must release locks without changing committed Profile/Cookie authority.
+
+### 6.8 Managed Account Transport Identity
+
+Managed XHS and Douyin account liveness checks and collection must extend the
+same account authority through the HTTP transport. The browser remains the QR,
+second-verification, visible-login, Profile-validation, and credential-refresh
+channel; batch API collection does not use the native Chrome network stack.
+
+One attempt owns one account/Profile/credential/proxy/persona binding and one
+managed Session, Cookie Jar, and connection pool. Retry closes the previous
+pool before creating a new attempt Session from the same frozen revisions.
+Service restart rebuilds the Session and never persists live connections, TLS
+tickets, or a response Jar.
+
+Browser and transport TLS/H2 proofs may contain different runtime-random bytes,
+but each must match its versioned channel allowlist and pass a machine-readable
+compatibility rule for browser family/version range, OS, UA/UA-CH, language,
+timezone, screen/device, region, and proxy egress. Unsupported Chrome/Edge
+combinations stop before dispatch; Edge does not use a generic Chrome target.
+
+Response Set-Cookie values are candidates, not immediate login authority.
+Domain/path/host-only/SameSite/Secure/expiry/duplicate/delete semantics are
+preserved, the same account/persona/proxy is verified, and a candidate Profile
+passes browser identity validation before journaled atomic promotion. Failure,
+timeout, cancellation, second verification, proxy drift, concurrency conflict,
+or crash preserves the last committed Profile/Cookie pair.
+
+The product provides no managed fallback to an anonymous identity, generic
+Profile, another account, ambient/default proxy, direct network, or browser
+batch transport. The acceptance promise is controllable consistency,
+isolation, and auditability, not immunity from platform-side account
+association.

@@ -131,6 +131,7 @@ Status values:
 - CR-128: Saved Cookie Recovery After Profile Drift
 - CR-129: Account Profile And Platform Request Identity Consistency
 - CR-130: Cookie Account Save Promotion Consistency
+- CR-131: Managed Account End-to-End Transport Identity Consistency
 - CR-096: AI Evaluation Postprocessing Scope Reduction
 - CR-075: Responsive Navigation Interaction Consistency
 - CR-076: Mobile Header Layout Resilience Regression Fix
@@ -4935,6 +4936,123 @@ Live verification (2026-07-22):
 - The account is `active`, has no current error, and its Profile directory is
   present after the service continued running. The verification used only
   the operator's test account; no protected collection account was changed.
+
+## CR-131 - Managed Account End-to-End Transport Identity Consistency
+
+Date: 2026-07-22
+
+Source: confirmed requirement to extend CR-129 identity consistency through
+the Python HTTP transport while keeping browser login and batch collection as
+separate channels under one account authority.
+
+Module: account/Profile/browser authority, managed XHS/Douyin transport,
+network persona, Cookie evolution, Runner lifecycle, and deployment preflight.
+
+Type: Existing Feature Optimization
+
+Status: Accepted / Ready for Implementation
+
+Background:
+
+- CR-129 is Verified and binds account, Profile, Cookie, UA/UA-CH, token,
+  proxy, signer input, final request, retry, and terminal result at the
+  application layer.
+- Managed XHS and Douyin still create HTTPX clients for final dispatch, and
+  the account liveness-check clients do not consume the managed request
+  environment. TLS, HTTP/2, connection reuse, response Cookie evolution, and
+  account-bound transport Session ownership are not yet part of the contract.
+- This CR is a follow-up hardening lane. It does not reopen or weaken CR-129.
+
+Confirmed boundaries:
+
+- Batch collection does not use the native Chrome network stack. The browser
+  remains responsible for QR login, second verification, visible login,
+  Profile validation, and credential refresh.
+- The committed Profile remains browser-login authority. Encrypted Cookie is
+  initialization, refresh, recovery, and migration material.
+- `BrowserEnvironmentProvider` remains the sole browser/Profile/persona/proxy
+  resolver. Managed mode has no anonymous, generic-Profile, other-account,
+  ambient-proxy, default-proxy, or direct-network fallback.
+- The goal is consistent, isolated, and auditable controllable signals, not a
+  promise that a platform cannot associate accounts.
+
+Accepted technical direction after Packet A evidence and two-round independent
+read-only review:
+
+- Use a project-owned `ManagedImpersonationTransport` backed by a pinned,
+  exact-target `curl_cffi.AsyncSession` for managed XHS/Douyin platform calls.
+- Bind one Session, Cookie Jar, connection pool, proxy/DNS policy, and
+  versioned NetworkPersona to one account/platform/resolution/attempt/run and
+  one set of identity/Cookie/proxy/persona revisions.
+- The ownership key also includes transport-fingerprint and Profile-runtime
+  revisions. Persona/profile proofs carry an explicit `valid_until` and are
+  invalidated by browser/engine/channel/catalog changes; DNS mode is explicit,
+  never a system default.
+- Use channel-specific browser and transport fingerprint proofs plus a
+  machine-readable compatibility rule. Raw random handshake values are not
+  persisted or compared for equality.
+- Unsupported Chrome/Edge targets stop before dispatch. Edge never inherits a
+  generic Chrome preset, and rolling aliases are not valid managed targets.
+- Isolate response `Set-Cookie` material as a structured candidate. Browser
+  identity reconciliation and journaled compare-and-swap promotion must pass
+  before committed Profile/Cookie authority changes.
+- Douyin managed POST remains blocked until the signer proves the exact final
+  UTF-8 body bytes and digest match the dispatched body byte-for-byte.
+
+Scope:
+
+- Packet A: dependency/license, wheel/channel coverage, synthetic Session,
+  Cookie, proxy, TLS/JA3N/JA4/H2 and current-signature feasibility evidence.
+- Packet B: NetworkPersona, TransportFingerprintProfile, proof schemas, and
+  cross-channel compatibility.
+- Packet C: attempt-bound Session lifecycle, account check, connection reuse,
+  proxy/DNS, retry, cancellation, crash, and restart.
+- Packet D: XHS managed transport integration.
+- Packet E: Douyin managed transport integration and body-aware POST gate.
+- Packet F: structured Set-Cookie candidate, Profile reconciliation, atomic
+  promotion, and recovery.
+- Packet G: Windows/Linux preflight, complete regression, two-account
+  isolation, restart, and explicitly gated designated-account acceptance.
+
+Out of scope:
+
+- BrowserPageTransport batch collection, Kuaishou/other-platform migration,
+  new account rotation/proxy scheduling, captcha/SMS bypass, schema migration,
+  user-editable fingerprint settings, or code copied from restricted private
+  references.
+
+Dependencies and sequencing:
+
+- CR-112, CR-117, CR-118 through CR-130 remain Verified history.
+- CR-047 Linux/server-like account-identity acceptance stays operator-gated
+  and separate.
+- CR-131 follows CR-129 and precedes a fresh CR-070 baseline/execution gate.
+
+Acceptance criteria:
+
+- Login, Profile check, Cookie refresh, account check, manual/scheduled
+  collection, Runner retry/recovery, and restart consume the same account
+  authority and compatible NetworkPersona.
+- One attempt has one exact account/Profile/credential/proxy/persona/Session
+  binding; retry closes the old pool before creating a new attempt Session.
+- Browser and transport proofs independently match reviewed allowed ranges;
+  UA/UA-CH, OS, language, timezone, screen, region, proxy, Cookie/token, and
+  signatures do not contradict the bound persona.
+- Set-Cookie domain/path/host-only/SameSite/Secure/expiry/duplicate/delete
+  semantics survive candidate processing. Failure or interruption preserves
+  the prior committed Profile/Cookie pair.
+- Automatic tests use loopback/synthetic material and a real-platform network
+  tripwire. Designated acceptance, when Packet G is reached, is serial and
+  limited to Douyin `8972` and XHS `9196`; `9197`/`9198` remain protected and
+  Kuaishou remains Deferred.
+- Raw Cookie, token, proxy password, Profile path, TLS random, ticket, and raw
+  signature material do not enter argv, environment, logs, audit, or safe
+  proofs.
+- The plan in
+  `docs/superpowers/plans/2026-07-22-cr-131-managed-transport-identity-consistency.md`
+  records `Architecture verdict = SOUND`, `Instruction verdict = READY`, no
+  blockers/material refinements, and no unresolved user decisions. Packet B is
+  the first product-code packet; Packets B-G remain unstarted.
 
 ## CR-113 - QR Draft Account Identity Choice Forwarding
 

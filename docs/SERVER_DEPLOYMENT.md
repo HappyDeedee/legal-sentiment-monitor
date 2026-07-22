@@ -614,3 +614,48 @@ persisted eight new items. Both runs used contract-v3 signed HTTP 200 proof and
 scans returned zero matches. Protected accounts `9197` and `9198` were not used
 by the designated/manual acceptance lane. The separate CR-047 Linux/server-like
 gate remains unchanged.
+
+## CR-131 Managed Transport Deployment
+
+CR-131 deployment adds an in-process managed transport for XHS/Douyin account
+checks and collection. It does not use the native Chrome network stack for
+batch requests and does not introduce a TLS sidecar in the accepted baseline.
+
+Deployment preflight must verify before platform dispatch:
+
+- the pinned `curl_cffi` package and native library import successfully on the
+  exact Windows or Linux/server image;
+- the effective browser channel/version and OS have a reviewed NetworkPersona
+  entry and exact transport target; rolling aliases and Edge-to-Chrome mapping
+  are rejected;
+- browser and transport fingerprint proofs independently match their expected
+  JA3N/JA4/ALPN/H2 ranges and pass the semantic compatibility rule;
+- the provider-approved proxy and DNS mode are explicit, the proxy revision is
+  current, the mode is one of `proxy_remote`, `proxy_connect`, or an explicitly
+  provider-selected direct policy, `trust_env=False`, and an invalid proxy
+  cannot reach the origin directly;
+- managed account check and collection receive one attempt-bound Session key;
+  no inner HTTPX client (including the account-check path) or cross-account pool
+  exists;
+- persona and transport-profile `valid_until` is current; browser/engine/
+  channel/catalog changes quarantine the proof until it is remeasured;
+- logs and diagnostics contain only safe IDs, revisions, digests, target
+  labels, reason codes, and package/browser versions.
+
+Missing dependency, unsupported browser/target, stale persona, proxy/DNS
+mismatch, or proof mismatch is an actionable preflight failure. It never
+triggers anonymous, generic Profile, other account, default proxy, ambient
+proxy, direct network, or BrowserPageTransport fallback.
+
+On cancellation, timeout, crash, or transient retry, deployment cleanup closes
+the old Session and connection pool before releasing the attempt. Service
+restart reconstructs Sessions from committed identity/Cookie/proxy/persona
+revisions and never restores sockets, pools, TLS tickets, or live Cookie Jars.
+Startup recovery must finish or roll back any Cookie/Profile promotion journal
+without replacing the prior committed authority by inference.
+
+Automated deployment validation uses a loopback/synthetic platform tripwire.
+Designated real acceptance is a separate explicit operator step limited to
+Douyin `8972` and XHS `9196`; accounts `9197`/`9198` remain protected and
+Kuaishou remains Deferred. Passing CR-131 on Windows does not close the
+independent CR-047 Linux/server-like acceptance gate.

@@ -4,6 +4,19 @@ Last updated: 2026-07-22
 
 ## Current Baseline
 
+- CR-131 is the Accepted / Ready for Implementation CR-129 follow-up for
+  end-to-end managed transport identity. Packet A planning evidence selects a
+  project-owned, attempt-bound
+  `curl_cffi.AsyncSession` wrapper under the existing
+  `BrowserEnvironmentProvider`; it does not add a second identity authority.
+  Current HTTPX final dispatch and unmanaged account-check behavior are the
+  active gaps. Local Chrome/Edge 150 do not have exact published
+  `curl_cffi 0.15.0` targets, so unsupported channel/version combinations must
+  stop before dispatch. The plan passed two-round independent review with
+  SOUND/READY and no blockers/material refinements. Product-code Packets B-G
+  have not started. CR-047 remains operator-gated and CR-070 remains
+  future-valid after CR-131.
+
 - CR-130 is a Verified follow-up regression. A new account in Cookie mode
   could accept pasted Cookie text in the form, but the modal footer
   `保存账号` path only persisted metadata and never invoked Cookie-to-Profile
@@ -1927,28 +1940,32 @@ and stop conditions.
 4. keep the verified CR-112 same-machine Windows real-account lane as the
    current Cookie/Profile baseline. Its local evidence never closes or weakens
    the separate CR-047 Linux/server-like real acceptance;
-5. before implementing CR-070/Phase 5.2, complete a fresh todo baseline review
+5. start CR-131 after CR-129 and before CR-070. Packet B is the first
+   product-code packet; it must add machine-readable
+   browser/transport persona compatibility and exact-target fail-closed
+   preflight before changing XHS/Douyin transport;
+6. before implementing CR-070/Phase 5.2, complete a fresh todo baseline review
    and atomic execution packet. Export/import consumes only committed Profile/
-   account state and excludes CR-112 operation journals and operation
-   directories;
-6. keep CR-092 `/monitor-next` planning, CR-093 MediaCrawler public exposure
+   account state and excludes CR-112/CR-131 operation journals, live Sessions,
+   pools, TLS tickets, and operation directories;
+7. keep CR-092 `/monitor-next` planning, CR-093 MediaCrawler public exposure
    boundary, and CR-094 crawler provider architecture as future independent
    backlog lanes. They may receive read-only planning or documentation
    refinement, but they must not be treated as current implementation work,
    Phase 21 work, Phase 5.1P prerequisites, or CR-070 prerequisites without a
    later accepted decision;
-7. keep the documentation-governance cleanup complete: future backlog and
+8. keep the documentation-governance cleanup complete: future backlog and
    governance CRs were renumbered to CR-091 through CR-095 while completed
    Phase 21 historical CRs kept their original identifiers;
-8. keep Phase 17.1D historical orphan email evidence closed as read-only
+9. keep Phase 17.1D historical orphan email evidence closed as read-only
    dry-run/checklist/runbook work unless the operator explicitly approves a
    backup, rollback, and mutation path;
-9. handle CR-035/Phase 7.1D historical run remediation only when the operator
+10. handle CR-035/Phase 7.1D historical run remediation only when the operator
    explicitly approves the dry-run, backup, rollback, and repair path; it is a
    conditional operations task, not a normal feature batch;
-10. keep CR-037 role-based email governance and the currently unrendered Users
+11. keep CR-037 role-based email governance and the currently unrendered Users
    And Permissions page as separate future/new-capability work until confirmed;
-11. prepare broader production pilot handoff and deployment-specific validation
+12. prepare broader production pilot handoff and deployment-specific validation
    for additional live credentials after the first usable pilot baseline.
 
 Test gate hardening recorded:
@@ -1999,16 +2016,19 @@ Lowest-risk parallel execution lane:
    binding and CR-114 object-scoped follow-up are independently verified,
    merged, and rechecked. The separate server-like acceptance packet is active.
 
-CR-112 is the verified serial baseline before CR-070. Its Packet B/C/D evidence
-does not alter the verified Phase 5.1P/Phase 5.1A-D history or close the still-
-open CR-047 server-like acceptance. CR-070 is the next implementation lane
-after its own baseline review and execution packet.
+CR-112 and CR-129 are the verified identity baseline. CR-131 is the accepted
+next implementation lane after its deep SOUND/READY plan gate; Packet B is its
+first product-code packet. Its work does not alter verified Phase 5.1P/
+Phase 5.1A-D history or close the still-open CR-047 server-like acceptance.
+CR-070 follows CR-131 and still requires its own fresh baseline review and
+execution packet.
 
 Do not run Phase 19 and Phase 20 in parallel, and do not run more than one
 frontend worktree that edits the formal console shell at the same time.
 CR-038, CR-045, CR-050, and CR-074 are already verified follow-ups and should
 remain historical closed items rather than next implementation tasks. CR-070
-must not start before CR-047 provider/effective snapshot verification.
+must not start before CR-131 and the existing CR-047 provider/effective
+snapshot prerequisites.
 
 ## Latest Verification
 

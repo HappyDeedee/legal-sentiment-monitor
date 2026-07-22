@@ -911,3 +911,45 @@ short `Superseded by` note rather than deleting history.
   platform/method cell and removes the duplicate source column/detail field.
   Notes and runtime error data remain database-compatible but are no longer
   editable in the account form; runtime errors are system-owned.
+
+## 2026-07-22 - CR-131 Accepted Managed Transport Boundary
+
+Status: Accepted / Ready for Implementation after Packet A evidence, a full
+deep review, and a focused re-review. The product-code packets remain
+unstarted.
+
+- CR-131 follows Verified CR-129 and precedes a fresh CR-070 execution gate.
+  It does not reopen CR-112, CR-117, CR-118 through CR-130, or the separate
+  operator-gated CR-047 Linux/server-like acceptance.
+- Batch collection stays off the native Chrome network stack. Browser login,
+  second verification, visible login, Profile validation, and credential
+  refresh remain browser responsibilities under `BrowserEnvironmentProvider`.
+- The selected candidate route is a project-owned
+  `ManagedImpersonationTransport` backed by a pinned exact-target
+  `curl_cffi.AsyncSession`; HTTPX remains for control-plane and unmanaged
+  paths. This is a route decision, not permission to add the dependency before
+  Packet B implementation starts.
+- A managed Session, Cookie Jar, connection pool, proxy/DNS policy, and
+  NetworkPersona bind exactly one account/platform/Profile/resolution/attempt/
+  run and identity/Cookie/proxy/persona, transport-fingerprint, and Profile
+  runtime revisions. Retry closes the old pool; restart rebuilds it; no live
+  connection or TLS ticket is persisted.
+- Browser and transport proofs are channel-specific and machine-checked for
+  allowed ranges plus semantic compatibility. Runtime-random handshake values
+  are expected to vary and are never frozen. Unsupported browser/target pairs
+  fail before dispatch; Edge never inherits a Chrome target.
+- Persona and transport-profile proofs carry an explicit `valid_until` and are
+  invalidated by browser/engine/channel/catalog changes. The validity window
+  comes from repeat evidence and release events, not an unmeasured fixed-day
+  threshold. DNS mode is explicit (`proxy_remote`, `proxy_connect`, or an
+  explicitly provider-selected direct policy), never a system default.
+- Committed Profile remains browser-login authority and encrypted Cookie
+  remains initialization/refresh/recovery/migration material. Set-Cookie is an
+  isolated structured candidate; browser reconciliation and journaled
+  compare-and-swap promotion are required before authority changes.
+- No CR-131 schema migration or user-editable fingerprint setting is accepted
+  in the planning baseline. A durable persona binding would require a new
+  additive, reversible decision before implementation.
+- The complete comparison, evidence ledger, packet order, rollback rules, and
+  test matrix are maintained in
+  `docs/superpowers/plans/2026-07-22-cr-131-managed-transport-identity-consistency.md`.

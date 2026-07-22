@@ -30,9 +30,9 @@ governance goal.
 - The packet follows the current execution order unless a later accepted
   decision changes it: Phase 21, Phase 5.1A-D, and CR-114 are merged and
   verified; CR-047 Linux/server-like acceptance remains operator-gated;
-  CR-112 Packet B/C/D are verified serially for the local Windows lane; then
-  CR-070 / Phase 5.2 starts only after its fresh baseline review and atomic
-  packet.
+  CR-112 Packet B/C/D and CR-129 are verified; CR-131 follows CR-129 and
+  precedes CR-070; then CR-070 / Phase 5.2 starts only after CR-131 and its own
+  fresh baseline review and atomic packet.
 - Phase 21 packets remain frontend-visual only and preserve Task Center, Run
   Detail, drawer, modal, row-menu, select/date, close, scroll, refresh,
   routing, owner-scope, and permission behavior unless a separate accepted CR
@@ -1725,6 +1725,119 @@ Run the relevant parts of this checklist after each Phase 11 batch:
   JavaScript parse, documentation consistency/regression, `git diff --check`,
   live service verification with a disposable account, and independent
   read-only review.
+
+## CR-131 Managed Account End-to-End Transport Identity Tests
+
+### Plan And Packet A Readiness
+
+- Compare `main` and current worktree evidence with CR-112, CR-117 through
+  CR-130, CR-047, CR-070, current HTTPX call sites, account checks, Runner,
+  signer boundaries, Profile/Cookie authority, and deployment rules.
+- Keep Verified CRs historical, CR-047 operator-gated, CR-070 future-valid
+  after CR-131, and other-platform transports deferred.
+- Record stable candidate dependency version, published Windows/Linux wheels,
+  exact browser target coverage, licenses, private-source readability, and
+  direct-use/adaptation/reference/exclusion decisions.
+- Use only temporary dependencies, loopback servers, public synthetic
+  fingerprint collectors, synthetic Cookies, and existing tests. Do not edit
+  dependency/lock files or touch product/runtime/account state.
+- Measure browser and managed-transport JA3N, JA4, ALPN, H2 SETTINGS/order, and
+  connection behavior. Do not record IP, ClientHello random, ticket, ephemeral
+  key, or other runtime-random material as a reusable expected value.
+- Require a deep independent review with final
+  `Architecture verdict=SOUND`, `Instruction verdict=READY`, no blockers, no
+  material refinements, and no unresolved user decisions before changing the
+  CR to Accepted / Ready for Implementation.
+
+### Packet B Persona Contract Tests
+
+- Reject a missing/pinned-engine mismatch, rolling alias, unsupported browser
+  channel/version, Edge-to-Chrome target substitution, stale proof, and a
+  persona where only one fingerprint hash matches.
+- Browser and transport proofs independently match their channel-specific
+  allowed ranges, then pass a machine-readable browser-family/version/OS/
+  UA/UA-CH/language/region/proxy compatibility rule.
+- GREASE values, ClientHello random, ephemeral key share, PSK binder, ticket,
+  and connection identifiers vary and are excluded from reusable proofs.
+- Persona/catalog input is versioned, size-limited, field-allowlisted, schema
+  validated, and safe-digested. `valid_until` and browser/engine/catalog
+  invalidation are enforced. Raw secrets and executable/Profile paths are
+  rejected from its projection.
+
+### Packet C Session And Lifecycle Tests
+
+- One Session ownership key binds workspace/account/platform/Profile,
+  resolution/attempt/run, identity/Cookie/proxy/persona/profile revisions, and
+  exact transport target.
+- Same-attempt account check and API collection reuse the same Session and
+  pool. XHS/Douyin managed Clients and the account-check path do not create an
+  inner HTTPX client.
+- Concurrent accounts have disjoint Cookie Jars and connection sets. No
+  Session crosses an account, platform, attempt, run, proxy, or persona
+  revision.
+- `trust_env=False` defeats ambient proxy variables. Invalid explicit proxy,
+  wrong DNS mode, proxy revision drift, or egress mismatch stops without
+  reaching the origin directly.
+- Retry closes and finalizes the old pool before the new attempt starts.
+  Timeout, cancellation, crash, service restart, and repeated cleanup converge
+  once and preserve committed authority.
+
+### Packet D XHS Tests
+
+- XHS `a1`, `web_session`, scoped Cookie, UA/UA-CH, language, proxy, persona,
+  sign string, final URL/query/body/header order, and response candidate bind to
+  the same attempt transport.
+- Any post-sign change or transport/Session mismatch stops before dispatch.
+- Same-name Cookie domain/path cases are not flattened. Set-Cookie remains an
+  isolated candidate and does not mutate the in-flight request or committed
+  Profile.
+- Only bound signed 2xx proof permits XHS ingest; two-account, retry,
+  cancel/crash, and no-real-network tripwire cases pass.
+
+### Packet E Douyin Tests
+
+- Douyin `ttwid`, `verifyFp/fp`, `msToken`, `webid`, Cookie, UA/UA-CH,
+  screen, proxy, persona, query/body, endpoint signature policy, `a_bogus`, and
+  final request bind to the same attempt transport.
+- Managed general search remains explicitly unsigned; other current managed
+  GET endpoints require signer output.
+- Managed POST remains pre-network blocked until body canonicalization and a
+  body-aware signer prove the exact final UTF-8 body digest matches the
+  dispatched body byte-for-byte.
+- Only bound 2xx proof permits Douyin ingest; two-account, retry,
+  cancel/crash, and no-real-network tripwire cases pass.
+
+### Packet F Cookie/Profile Reconciliation Tests
+
+- Parse separate Set-Cookie lines and preserve host-only/Domain, Path, Secure,
+  HttpOnly, SameSite, Expires, Max-Age, creation order, exact-key duplicates,
+  and deletion semantics.
+- Reject malformed, oversized, control-character, public-suffix,
+  cross-platform, or ambiguous candidate material.
+- Candidate API identity check, encrypted staging, candidate Profile
+  injection, browser identity validation, and compare-and-swap promotion all
+  use one account/persona/proxy authority and expected base revisions.
+- Failure, timeout, cancellation, proxy drift, second verification,
+  concurrent promotion, and crashes at every journal boundary retain or
+  recover one committed Profile/Cookie generation.
+
+### Packet G Deployment And Acceptance Tests
+
+- Missing/wrong native dependency, exact target, browser compatibility entry,
+  persona evidence, proxy, or DNS policy produces a safe startup/pre-dispatch
+  diagnostic on Windows and target Linux/server-like environments.
+- Automatic tests install a platform-network tripwire before platform-client
+  import and use only temporary Profile/Cookie/proxy material.
+- Three service restarts preserve account/persona/proxy/credential revisions
+  while rebuilding Sessions; no socket, pool, TLS ticket, or live Jar is
+  persisted.
+- Designated real acceptance is serial and explicitly opts in only Douyin
+  `8972` and XHS `9196`; accounts `9197`/`9198` remain untouched and Kuaishou
+  remains Deferred.
+- Each designated platform persists at least one real item with bound proof
+  and `fallback_used=false`; exact-secret and process/argv/environment/log/
+  audit scans return zero matches. This does not close CR-047 unless its own
+  server-like evidence is also recorded.
 
 ## CR-121 Crawler Account Identity Snapshot Header Tests
 

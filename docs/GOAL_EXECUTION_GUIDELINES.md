@@ -82,17 +82,18 @@ decision:
    runtime snapshots, provider metadata, proxy effect proof or fail-closed
    behavior, manual/scheduler reuse, MediaCrawler CDP binding, and
    container/server-like validation.
-6. Execute accepted CR-112 Packet B, C, and D serially. Packet B is active
-   after atomic plan commit `44baf78` and selected direct managed-context
-   acquisition; Packet C waits for Packet B focused review and commit. Local
-   CR-112 proof does not close the CR-047 server-like gate.
-7. Start CR-070 / Phase 5.2 only after CR-112 Packet D is verified. Execute Phase 5.2A-E in
+6. Keep CR-112 and CR-129 closed as Verified history. Local CR-112/CR-129 proof
+   does not close the CR-047 server-like gate.
+7. Execute CR-131 after its deep SOUND/READY planning gate. Packet B is the
+   first product-code packet and must establish exact-target persona proof
+   before XHS/Douyin transport migration.
+8. Start CR-070 / Phase 5.2 only after CR-131. Execute Phase 5.2A-E in
    order: package contract/security, export flow, import flow,
    post-import/recovery, then test safety and verification.
-8. Keep CR-092, CR-093, and CR-094 as future independent backlog lanes. They do
+9. Keep CR-092, CR-093, and CR-094 as future independent backlog lanes. They do
    not block Phase 21, Phase 5.1P, Phase 5.1, or CR-070, and they cannot be
    treated as hidden prerequisites without a later accepted decision.
-9. Keep CR-037, Users And Permissions page work, and Phase 7.1D historical
+10. Keep CR-037, Users And Permissions page work, and Phase 7.1D historical
     remediation as separate deferred or operator-gated items.
 
 ## Test Iteration Loop

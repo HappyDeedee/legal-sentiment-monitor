@@ -2,6 +2,82 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-22 - CR-131 Packet A Feasibility And Plan Registration
+
+Scope: TODO baseline, transport-option comparison, dependency/license and
+private-source review, Windows/Linux wheel evidence, browser target coverage,
+temporary Session/Cookie/proxy/isolation/cancellation tests, TLS/JA3N/JA4/H2
+measurement, and current XHS/Douyin signer boundary.
+
+Registration result: Proposed / Needs Technical Validation at initial intake;
+the final status is recorded by the separate review entry below.
+- Current `main`, local `HEAD`, and live GitHub `main` resolve to
+  `a0a85834479ff6d7503b0a21f0a354a71d3c4d0b`. The CR-131 branch started from a
+  clean worktree. `git fetch origin` timed out on port 443, so the live commit
+  and branch check was completed through authenticated GitHub API reads.
+- Baseline review keeps CR-112/CR-117/CR-118-CR-130 Verified, CR-047
+  operator-gated, CR-070 future-valid after CR-131, and non-XHS/Douyin
+  transports deferred. Current XHS/Douyin dispatch and account checks confirm
+  the transport-layer gap without reopening CR-129.
+- Stable `curl_cffi 0.15.0` installed through
+  `uv run --no-project --with curl-cffi==0.15.0` on Windows/Python 3.12.
+  Published artifacts include Windows x86-64/ARM64 and Linux manylinux/
+  musllinux wheels. Target-server import remains Packet G evidence.
+- Loopback prototypes prove same-Session Cookie import and connection reuse,
+  disjoint concurrent account Sessions/Jars/connections, cancellation and
+  close behavior, empty new Session state, separate Set-Cookie header access,
+  and failure on an invalid explicit proxy without direct origin access.
+- The candidate Jar retained domain/path/Secure/expiry/HttpOnly evidence but
+  did not expose SameSite in the observed Jar projection; the plan therefore
+  requires separate Set-Cookie header parsing and a structured candidate
+  model before authority promotion.
+- The specified `https://tls.sub2api.org/` collector returned HTTP 502. A
+  public synthetic fallback collector showed current HTTPX with the same UA on
+  HTTP/1.1, while `curl_cffi` used H2 and stable JA4/Akamai profile families.
+  Raw JA3 varied across Chrome-style extension permutation. Native Chrome 150
+  and `chrome146` matched on the measured JA3N and H2 digest but differed on
+  JA4, proving that one matching hash is insufficient.
+- Installed Chrome and Edge are version 150. Published candidate targets stop
+  at Chrome 146 and Edge 101. The plan accepts this as a fail-closed coverage
+  limitation; it does not silently map Edge to Chrome or use a rolling alias.
+- The focused CR-129 request-identity suite initially hit a Windows system-temp
+  ACL error. Re-running with isolated `--basetemp .codex_tmp/cr131-pytest` and
+  no cache passed `97` tests with one existing SQLAlchemy warning.
+- Existing XHS signer/final-request and Douyin managed GET boundaries remain
+  verified. Managed Douyin POST is intentionally pre-network blocked until
+  Packet E adds body-aware signer proof.
+- `pyproject.toml`, lock files, product code, database, real Profiles, and real
+  platform accounts were not changed or accessed.
+
+## 2026-07-22 - CR-131 Plan Cross-Validation SOUND/READY
+
+Scope: full deep architecture/instruction review followed by focused
+re-review of the ownership key, account-check route, dependency sequence,
+persona validity/invalidation, DNS mode, Douyin body-aware POST proof, and
+ephemeral TLS-state negative tests.
+
+Result: Accepted / Ready for Implementation.
+
+- Round 1 found one blocker (ambiguous transport/Profile revision naming) and
+  five material refinements; all were fixed in the plan and synchronized
+  specialist documents. One operational warning, the current Chrome/Edge 150
+  target gap, was explicitly accepted as fail-closed rather than mapped.
+- Round 2 focused Claude read-only review found no new blocker or material
+  refinement. Final gate:
+  `Architecture verdict = SOUND`; `Architecture blockers = None`;
+  `Architecture material refinements = None`; `Instruction verdict = READY`;
+  `Instruction blockers = None`; `Instruction material refinements = None`;
+  `Unresolved user decisions = None`.
+- Packet A remains documentation/temporary feasibility evidence. Packet B is
+  the first product-code packet; Packets B-G remain unchecked and unstarted.
+- Final state-only Claude read-only review returned `PASS` with no blocking or
+  material status-consistency finding.
+- `uv run python scripts/check_docs.py`: PASS.
+- Documentation regression with no cache and an isolated writable basetemp:
+  `1 passed, 1 existing SQLAlchemy deprecation warning`.
+- `git diff --check`: PASS; Git reported only the repository's normal
+  LF-to-CRLF working-copy notices.
+
 ## 2026-07-22 - CR-130 Automated Verification And Independent Review
 
 Scope: new-account manual Cookie form submission, footer save delegation,

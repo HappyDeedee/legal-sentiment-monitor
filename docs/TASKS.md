@@ -1946,6 +1946,56 @@ Live receipt (2026-07-22): test account `9212` reached login session `6434`
 account `active` with no current error. No protected collection account was
 changed.
 
+## CR-131 - Managed Account End-to-End Transport Identity Consistency
+
+Planning status (2026-07-22): Accepted / Ready for Implementation after
+Packet A evidence, a full deep review, and a focused re-review. This is a
+CR-129 follow-up and does not reopen any Verified CR. The product-code Packets
+B-G remain not started.
+
+- [x] Complete the read-only TODO baseline and classify CR-112/CR-117/
+      CR-118-CR-130 as Verified history, CR-047 as operator-gated, CR-070 as
+      future-valid after CR-131, and other platform transports as deferred.
+- [x] Complete Packet A dependency/license, Windows/Linux wheel, exact-target,
+      Edge coverage, AsyncSession, Cookie, proxy, connection reuse,
+      cancellation, isolation, TLS/JA3N/JA4/H2, and signer-boundary evidence.
+- [ ] Packet B: implement versioned NetworkPersona,
+      TransportFingerprintProfile, channel-specific expected proofs,
+      machine-readable compatibility, explicit `valid_until` and DNS-mode
+      policy, safe projections, and fail-closed exact-target preflight.
+- [ ] Packet C: implement the attempt-bound managed transport, account-check
+      unification without a separate HTTPX client, Session/pool/Jar ownership,
+      explicit proxy/DNS policy, retry handoff, cancellation/crash finalization,
+      and restart rebuild.
+- [ ] Packet D: move managed XHS account check and collection through the
+      attempt Session while preserving signer/final-request byte identity and
+      isolated response Cookie candidates.
+- [ ] Packet E: move managed Douyin account check and GET collection through
+      the attempt Session; define exact final UTF-8 body bytes and a body digest
+      in the signer proof before enabling any managed POST.
+- [ ] Packet F: implement bounded structured Set-Cookie candidates, encrypted
+      staging, candidate Profile verification, journaled compare-and-swap
+      promotion, concurrency, cancellation, and crash recovery.
+- [ ] Packet G: prove dependency/persona preflight on Windows and target
+      Linux/server-like deployment, complete synthetic regression and
+      two-account isolation, then run explicitly gated designated XHS/Douyin
+      acceptance without touching protected accounts.
+- [ ] Update CR-131 implementation receipts after each packet; do not mark the
+      CR In Progress until Packet B starts or Verified until Packets B-G and
+      their required review/acceptance gates pass.
+
+Execution contract:
+
+- plan:
+  `docs/superpowers/plans/2026-07-22-cr-131-managed-transport-identity-consistency.md`;
+- batch collection does not use BrowserPageTransport;
+- managed mode pins an exact transport target with `trust_env=False` and has
+  no rolling-target, generic Profile, other-account, proxy, or direct fallback;
+- committed Profile remains authority and encrypted Cookie remains material;
+- unsupported local Chrome/Edge combinations stop before platform dispatch;
+- Packet B is the first product-code packet after the final SOUND/READY plan
+  gate.
+
 ## CR-120 - Local Visible Login Automatic Reconciliation
 
 Implementation status (2026-07-20): verified. This is a local fallback
