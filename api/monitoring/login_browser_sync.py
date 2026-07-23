@@ -65,7 +65,7 @@ from .profile_promotion import (
     default_profile_browser_runner,
     profile_promotion_paths,
     promote_cookie_to_profile,
-    reset_candidate_profile_for_cookie_injection,
+    validate_candidate_profile_ownership,
 )
 
 
@@ -413,24 +413,43 @@ def _build_browser_sync_runner(handle: BrowserSyncHandle, provider_plan: Any) ->
     phase = 0
 
     async def run(plan: Any, injected_records: Any) -> dict[str, Any]:
+        # Browser acquisition, candidate validation, and active recheck are distinct phases.
         nonlocal phase
         phase += 1
-        if phase == 1 and injected_records is None:
-            return await _acquire_and_inject_candidate(handle, plan, default_runner)
         if phase == 1:
-            raise ProfilePromotionError("profile_cookie_capture_missing")
-        _set_browser_sync_stage(
-            handle,
-            "复检活动 Profile",
-            "登录态已切换，正在复检活动 Profile。",
-            status=LOGIN_STATE_WAITING_CONFIRM,
-        )
-        return await default_runner(replace(plan, headless=True), injected_records)
+            if injected_records is not None:
+                raise ProfilePromotionError("profile_cookie_capture_missing")
+            return await _acquire_candidate_profile(handle, plan)
+        if phase == 2:
+            if injected_records is None:
+                raise ProfilePromotionError("profile_cookie_capture_missing")
+            _set_browser_sync_stage(
+                handle,
+                "验证候选 Profile",
+                "登录态已读取，正在验证候选 Profile。",
+                status=LOGIN_STATE_WAITING_CONFIRM,
+            )
+            result = await default_runner(replace(plan, headless=True), injected_records)
+            if handle.cancel_event.is_set():
+                raise BrowserSyncError("browser_sync_cancelled", "浏览器同步已取消。")
+            return result
+        if phase == 3:
+            if injected_records is not None:
+                raise ProfilePromotionError("profile_promotion_provider_mismatch")
+            _set_browser_sync_stage(
+                handle,
+                "复检活动 Profile",
+                "登录态已切换，正在复检活动 Profile。",
+                status=LOGIN_STATE_WAITING_CONFIRM,
+            )
+            # After the directory swap, finish the deterministic commit/rollback path.
+            return await default_runner(replace(plan, headless=True), None)
+        raise ProfilePromotionError("profile_promotion_provider_mismatch")
 
     return run
 
 
-async def _acquire_and_inject_candidate(handle: BrowserSyncHandle, plan: Any, default_runner: BrowserRunner) -> dict[str, Any]:
+async def _acquire_candidate_profile(handle: BrowserSyncHandle, plan: Any) -> dict[str, Any]:
     _assert_live_binding(handle, plan, require_context=False)
     session = get_login_session(handle.session_id) or {}
     promotion_id = int(session.get("profile_promotion_id") or 0)
@@ -565,19 +584,8 @@ async def _acquire_and_inject_candidate(handle: BrowserSyncHandle, plan: Any, de
     if handle.cancel_event.is_set():
         raise BrowserSyncError("browser_sync_cancelled", "浏览器同步已取消。")
     _assert_live_binding(handle, plan, require_context=False)
-    reset_candidate_profile_for_cookie_injection(paths, promotion)
-    _set_browser_sync_stage(
-        handle,
-        "验证候选 Profile",
-        "Cookie 已读取，正在验证候选 Profile。",
-        status=LOGIN_STATE_WAITING_CONFIRM,
-    )
-    candidate_result = await default_runner(replace(plan, headless=True), records)
-    if handle.cancel_event.is_set():
-        raise BrowserSyncError("browser_sync_cancelled", "浏览器同步已取消。")
-    if candidate_result.get("ok") is not True:
-        return candidate_result
-    return {**candidate_result, "identity": identity, "cookie_records": records}
+    validate_candidate_profile_ownership(paths, promotion)
+    return {"ok": True, "identity": identity, "cookie_records": records}
 
 
 def _require_browser_sync_waiting(

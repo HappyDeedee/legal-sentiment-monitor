@@ -170,7 +170,7 @@ async def promote_cookie_to_profile(
     browser_runner: BrowserRunner | None = None,
     expected_platform_account_id: str = "",
 ) -> dict[str, Any]:
-    """Validate Cookie material and promote a fresh candidate to the fixed path."""
+    """Acquire or inject login material, validate, and promote a fresh candidate."""
 
     from .database import (
         create_account_profile_promotion,
@@ -260,23 +260,33 @@ async def promote_cookie_to_profile(
                 launch_mode="persistent_launch",
                 profile_path=str(paths.candidate),
             )
+            if records is None:
+                # Browser sync owns its bounded headed acquisition before validation.
+                acquisition_result = await runner(candidate_plan, None)
+                _require_validation(acquisition_result, "profile_candidate_validation_failed", int(promotion["id"]))
+                _require_expected_platform_identity(
+                    acquisition_result,
+                    expected_platform_account_id,
+                    "profile_candidate_identity_mismatch",
+                    int(promotion["id"]),
+                )
+                acquired_records = acquisition_result.get("cookie_records") if isinstance(acquisition_result, Mapping) else None
+                if not isinstance(acquired_records, Sequence) or isinstance(acquired_records, (str, bytes, bytearray)):
+                    raise ProfilePromotionError("profile_cookie_capture_missing", int(promotion["id"]))
+                records = canonicalize_cookie_records(platform, acquired_records)
+                serialized_material = serialize_cookie_material(platform, records)
             candidate_result = await _run_profile_validation_stage(
                 runner(candidate_plan, records),
                 "候选 Profile 验证",
             )
             _require_validation(candidate_result, "profile_candidate_validation_failed", int(promotion["id"]))
-            _require_expected_platform_identity(
-                candidate_result,
-                expected_platform_account_id,
-                "profile_candidate_identity_mismatch",
-                int(promotion["id"]),
-            )
-            if records is None:
-                acquired_records = candidate_result.get("cookie_records") if isinstance(candidate_result, Mapping) else None
-                if not isinstance(acquired_records, Sequence) or isinstance(acquired_records, (str, bytes, bytearray)):
-                    raise ProfilePromotionError("profile_cookie_capture_missing", int(promotion["id"]))
-                records = canonicalize_cookie_records(platform, acquired_records)
-                serialized_material = serialize_cookie_material(platform, records)
+            if cookie_records is not None:
+                _require_expected_platform_identity(
+                    candidate_result,
+                    expected_platform_account_id,
+                    "profile_candidate_identity_mismatch",
+                    int(promotion["id"]),
+                )
             update_account_profile_promotion(int(promotion["id"]), "candidate_ready", checkpoint="candidate_ready_at")
 
             update_account_profile_promotion(int(promotion["id"]), "swapping", checkpoint="swap_started_at")
@@ -702,22 +712,12 @@ def _prepare_operation_paths(paths: ProfilePromotionPaths, promotion: Mapping[st
     os.replace(temporary, paths.candidate_marker)
 
 
-def reset_candidate_profile_for_cookie_injection(paths: ProfilePromotionPaths, promotion: Mapping[str, Any]) -> None:
-    """Remove browser storage acquired during login while retaining the journal marker."""
-
+def validate_candidate_profile_ownership(paths: ProfilePromotionPaths, promotion: Mapping[str, Any]) -> None:
+    """Verify that a candidate directory still belongs to the active promotion."""
     if not paths.candidate.exists() or not paths.candidate.is_dir() or paths.candidate.is_symlink():
         raise ProfilePromotionError("profile_candidate_missing", int(promotion["id"]))
     if not _marker_matches(paths.candidate, promotion):
         raise ProfilePromotionError("profile_marker_mismatch", int(promotion["id"]), recovery_required=True)
-    for child in paths.candidate.iterdir():
-        if child.name == PROFILE_OPERATION_MARKER:
-            continue
-        if child.is_symlink() or child.is_file():
-            child.unlink()
-        elif child.is_dir():
-            shutil.rmtree(child)
-        else:
-            raise ProfilePromotionError("profile_artifact_invalid", int(promotion["id"]), recovery_required=True)
 
 
 def _recover_failed_promotion(

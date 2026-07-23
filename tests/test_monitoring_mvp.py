@@ -12981,6 +12981,69 @@ def test_login_qrcode_bridge_uses_mediacrawler_login_adapter(monkeypatch):
     assert calls == ["init:qrcode", "prepare:1234", "capture"]
 
 
+def test_cr135_douyin_qrcode_auto_dialog_probe_leaves_fallback_budget(monkeypatch):
+    from media_platform.douyin import login as douyin_login
+
+    waits: list[int] = []
+    clicks: list[int] = []
+
+    class FakePage:
+        async def wait_for_selector(self, selector, *, timeout):
+            waits.append(timeout)
+            raise RuntimeError("dialog unavailable")
+
+    async def fake_click_login_button(*, timeout_ms):
+        clicks.append(timeout_ms)
+
+    async def fake_sleep(seconds):
+        return None
+
+    adapter = douyin_login.DouYinLogin("qrcode", object(), FakePage())
+    monkeypatch.setattr(adapter, "click_login_button", fake_click_login_button)
+    monkeypatch.setattr(douyin_login.asyncio, "sleep", fake_sleep)
+
+    asyncio.run(adapter.prepare_qrcode_login(timeout_ms=20_000))
+
+    assert waits == [adapter.AUTO_DIALOG_PROBE_TIMEOUT_MS]
+    assert 0 < waits[0] < 20_000
+    assert clicks == [adapter.LOGIN_ENTRY_CLICK_TIMEOUT_MS]
+    assert clicks[0] <= 20_000 - adapter.QRCODE_EXTRACTION_RESERVE_MS
+
+
+def test_cr135_douyin_login_entry_selectors_share_one_click_budget():
+    from media_platform.douyin import login as douyin_login
+
+    clicks: list[int] = []
+
+    class FakeLocator:
+        @property
+        def first(self):
+            return self
+
+        async def count(self):
+            return 1
+
+        async def is_visible(self, *, timeout):
+            return True
+
+        async def click(self, *, timeout):
+            clicks.append(timeout)
+            await asyncio.sleep(timeout / 1000)
+            raise RuntimeError("synthetic click timeout")
+
+    class FakePage:
+        def locator(self, selector):
+            return FakeLocator()
+
+    adapter = douyin_login.DouYinLogin("qrcode", object(), FakePage())
+
+    with pytest.raises(RuntimeError, match="synthetic click timeout"):
+        asyncio.run(adapter.click_login_button(timeout_ms=30))
+
+    assert len(clicks) == 1
+    assert 0 < clicks[0] <= 30
+
+
 def test_login_session_route_keeps_manual_verification_status_when_window_is_open(monkeypatch):
     init_db()
     snapshot = _snapshot_table("login_sessions")
@@ -26411,8 +26474,8 @@ def test_cr112_manual_cookie_update_keeps_verified_account_active(monkeypatch):
         _restore_table("audit_logs", snapshots["audit_logs"])
 
 
-def test_cr112_c2_profile_promotion_accepts_exact_context_cookie_result(tmp_path, monkeypatch):
-    from api.monitoring import account_environment, browser_environment_provider
+def test_cr135_browser_acquisition_is_outside_profile_validation_timeout(tmp_path, monkeypatch):
+    from api.monitoring import account_environment, browser_environment_provider, profile_promotion
     from api.monitoring.browser_selection import BrowserSelection
     from api.monitoring.cookie_material import deserialize_cookie_material
     from api.monitoring.database import create_login_session
@@ -26466,6 +26529,7 @@ def test_cr112_c2_profile_promotion_accepts_exact_context_cookie_result(tmp_path
         async def fake_runner(used_plan, injected_records):
             calls.append((Path(used_plan.profile_path), injected_records))
             if len(calls) == 1:
+                await asyncio.sleep(0.08)
                 return {
                     "ok": True,
                     "cookie_records": [
@@ -26485,6 +26549,8 @@ def test_cr112_c2_profile_promotion_accepts_exact_context_cookie_result(tmp_path
                 }
             return {"ok": True, "identity": {"platform_account_id": "captured-user"}, "runtime_snapshot_json": ""}
 
+        monkeypatch.setattr(profile_promotion, "_profile_validation_timeout_seconds", lambda: 0.05)
+
         result = asyncio.run(
             promote_cookie_to_profile(
                 account["id"],
@@ -26498,7 +26564,10 @@ def test_cr112_c2_profile_promotion_accepts_exact_context_cookie_result(tmp_path
             )
         )
         assert result["ok"] is True
-        assert len(calls) == 2
+        assert len(calls) == 3
+        assert calls[0][1] is None
+        assert calls[1][1][0]["value"] == "captured-value"
+        assert calls[2][1] is None
         stored = get_social_account(account["id"], masked=False)
         records = deserialize_cookie_material("dy", stored["cookies"])
         assert records[0]["name"] == "sessionid"
@@ -26576,36 +26645,62 @@ def test_cr112_c2_profile_runner_waits_for_cookie_hydration(tmp_path, monkeypatc
     assert waits == [3000]
 
 
-def test_cr112_c2_candidate_reset_removes_acquired_browser_storage(tmp_path, monkeypatch):
+def test_cr135_profile_promotion_candidate_starts_with_only_ownership_marker(tmp_path, monkeypatch):
     from api.monitoring import account_environment
     from api.monitoring.profile_promotion import (
         PROFILE_OPERATION_MARKER,
+        _prepare_operation_paths,
         profile_promotion_paths,
-        reset_candidate_profile_for_cookie_injection,
+    )
+
+    profile_root = (tmp_path / "profiles").resolve()
+    monkeypatch.setattr(account_environment, "ACCOUNT_PROFILE_ROOT", profile_root)
+    paths = profile_promotion_paths(account_id=91, profile_key="1/dy/acc_91", promotion_id=17)
+    promotion = {"id": 17, "account_id": 91, "profile_key": "1/dy/acc_91"}
+
+    _prepare_operation_paths(paths, promotion)
+
+    assert list(paths.candidate.iterdir()) == [paths.candidate / PROFILE_OPERATION_MARKER]
+
+
+def test_cr135_candidate_ownership_validation_preserves_browser_storage(tmp_path, monkeypatch):
+    from api.monitoring import account_environment
+    from api.monitoring.profile_promotion import (
+        PROFILE_OPERATION_MARKER,
+        ProfilePromotionError,
+        profile_promotion_paths,
+        validate_candidate_profile_ownership,
     )
     import hashlib
 
     profile_root = (tmp_path / "profiles").resolve()
     monkeypatch.setattr(account_environment, "ACCOUNT_PROFILE_ROOT", profile_root)
-    paths = profile_promotion_paths(account_id=91, profile_key="1/dy/acc_91", promotion_id=17)
+    paths = profile_promotion_paths(account_id=92, profile_key="1/dy/acc_92", promotion_id=18)
     paths.candidate.mkdir(parents=True)
-    promotion = {"id": 17, "account_id": 91, "profile_key": "1/dy/acc_91"}
+    promotion = {
+        "id": 18,
+        "account_id": 92,
+        "profile_key": "1/dy/acc_92",
+    }
     marker = {
-        "promotion_id": 17,
-        "account_id": 91,
-        "profile_key_hash": hashlib.sha256(b"1/dy/acc_91").hexdigest(),
+        "promotion_id": 18,
+        "account_id": 92,
+        "profile_key_hash": hashlib.sha256(b"1/dy/acc_92").hexdigest(),
         "role": "candidate",
     }
     (paths.candidate / PROFILE_OPERATION_MARKER).write_text(json.dumps(marker), encoding="utf-8")
-    (paths.candidate / "Local Storage").mkdir()
-    (paths.candidate / "Local Storage" / "state").write_text("old", encoding="utf-8")
-    (paths.candidate / "Cache").mkdir()
-    (paths.candidate / "Cache" / "entry").write_text("old", encoding="utf-8")
-    (paths.candidate / "Cookies").write_text("old", encoding="utf-8")
+    storage = paths.candidate / "Local Storage" / "state"
+    storage.parent.mkdir()
+    storage.write_text("preserved", encoding="utf-8")
 
-    reset_candidate_profile_for_cookie_injection(paths, promotion)
+    validate_candidate_profile_ownership(paths, promotion)
 
-    assert list(paths.candidate.iterdir()) == [paths.candidate / PROFILE_OPERATION_MARKER]
+    assert storage.read_text(encoding="utf-8") == "preserved"
+    marker["account_id"] = 999
+    (paths.candidate / PROFILE_OPERATION_MARKER).write_text(json.dumps(marker), encoding="utf-8")
+    with pytest.raises(ProfilePromotionError, match="profile_marker_mismatch") as exc_info:
+        validate_candidate_profile_ownership(paths, promotion)
+    assert exc_info.value.recovery_required is True
 
 
 def test_cr112_c2_browser_sync_session_generation_and_provider_binding():
@@ -27117,7 +27212,7 @@ def test_cr112_c2_cookie_reveal_is_admin_only_and_no_store(monkeypatch):
 
 
 @pytest.mark.parametrize("cancel_phase", ["none", "candidate", "active"])
-def test_cr112_c2_exact_context_flow_injects_only_captured_cookie(cancel_phase, tmp_path, monkeypatch):
+def test_cr135_c2_exact_context_preserves_profile_and_captured_cookie(cancel_phase, tmp_path, monkeypatch):
     from api.monitoring import account_environment, browser_environment_provider, login_browser_sync
     from api.monitoring.browser_selection import BrowserSelection
     from api.monitoring.database import (
@@ -27224,7 +27319,7 @@ def test_cr112_c2_exact_context_flow_injects_only_captured_cookie(cancel_phase, 
         async def fake_launch(playwright, used_plan):
             acquired_storage = Path(used_plan.profile_path) / "Local Storage"
             acquired_storage.mkdir(parents=True, exist_ok=True)
-            (acquired_storage / "state").write_text("must be removed", encoding="utf-8")
+            (acquired_storage / "state").write_text("must be preserved", encoding="utf-8")
             context = FakeContext()
             contexts.append(context)
             return SimpleNamespace(context=context, browser=None)
@@ -27248,7 +27343,7 @@ def test_cr112_c2_exact_context_flow_injects_only_captured_cookie(cancel_phase, 
             path = Path(used_plan.profile_path)
             validation_calls.append((path, injected_records))
             if injected_records is not None:
-                assert not (path / "Local Storage").exists()
+                assert (path / "Local Storage" / "state").read_text(encoding="utf-8") == "must be preserved"
                 assert injected_records[0]["value"] == "exact-context-secret"
                 (path / "validated-profile").write_text("ready", encoding="utf-8")
                 if cancel_phase == "candidate":
@@ -31421,9 +31516,6 @@ def test_cr134_browser_sync_entry_prepares_before_navigation_and_fails_closed(tm
     async def fake_close(*args):
         events.append("close")
 
-    async def unused_runner(*args):
-        raise AssertionError("candidate validation must not run after provider mismatch")
-
     monkeypatch.setattr(login_browser_sync, "get_login_session", lambda session_id: {"profile_promotion_id": 1})
     monkeypatch.setattr(login_browser_sync, "get_account_profile_promotion", lambda promotion_id: {"id": promotion_id})
     monkeypatch.setattr(
@@ -31441,12 +31533,12 @@ def test_cr134_browser_sync_entry_prepares_before_navigation_and_fails_closed(tm
 
     if prepare_fails:
         with pytest.raises(RuntimeError, match="synthetic prepare failure") as exc_info:
-            asyncio.run(login_browser_sync._acquire_and_inject_candidate(handle, plan, unused_runner))
+            asyncio.run(login_browser_sync._acquire_candidate_profile(handle, plan))
         assert "synthetic prepare failure" in str(exc_info.value)
         assert events == ["prepare", "close"]
     else:
         with pytest.raises(login_browser_sync.BrowserSyncError) as exc_info:
-            asyncio.run(login_browser_sync._acquire_and_inject_candidate(handle, plan, unused_runner))
+            asyncio.run(login_browser_sync._acquire_candidate_profile(handle, plan))
         assert getattr(exc_info.value, "reason", "") == "account_identity_snapshot_mismatch"
         assert events == ["prepare", "goto", "verify", "close"]
 

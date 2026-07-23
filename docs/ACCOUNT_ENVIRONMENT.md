@@ -1730,6 +1730,20 @@ before rollback. If that completion is not confirmed inside the hard cleanup
 budget, the promotion becomes `recovery_required` and no Profile directory is
 renamed or deleted concurrently.
 
+CR-135 refines steps 4 and 7 for Browser sync after affected-computer evidence
+proved that Douyin may confirm the visible login through Profile LocalStorage
+without issuing a `LOGIN_STATUS` Cookie. The initially fresh candidate remains
+the exact promotion-owned visible-login Profile. After the headed context is
+closed, the system verifies its ownership marker, reopens that same candidate,
+and retains provider-owned LocalStorage, IndexedDB, service-worker, and session
+state while also injecting the captured canonical Cookie records. It does not
+clear the candidate into a Cookie-only Profile. Manual Cookie and saved-Cookie
+recovery still create a fresh empty candidate and inject only their structured
+Cookie material. Headed operator acquisition uses its configured deadline;
+candidate validation and active recheck keep separate bounded deadlines. A
+late cancellation after directory swap waits for the deterministic
+commit-or-rollback terminal result.
+
 CR-128 adds an explicit saved-state recovery path for Profile drift. The normal
 Profile check remains first. If a limited account has a recoverable failure and
 retains encrypted Cookie material, an administrator may request recovery. A

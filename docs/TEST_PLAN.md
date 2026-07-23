@@ -1771,6 +1771,35 @@ Run the relevant parts of this checklist after each Phase 11 batch:
   JavaScript syntax, documentation consistency/regression, `git diff --check`,
   and independent read-only full-diff review.
 
+## CR-135 Second-Computer Login Budget And Profile Preservation Tests
+
+- Douyin QR preparation probes the automatic dialog for a short bounded period,
+  then invokes the compatible login-entry click before the overall QR deadline.
+  Increasing the configured overall timeout must not increase the automatic
+  dialog probe to the same full duration.
+- Browser-sync acquisition is bounded by the configured operator-login timeout
+  and is not nested inside the shorter Profile-validation timeout. Candidate and
+  active Profile validation each remain independently bounded.
+- A Browser-sync acquisition that returns canonical Cookie records and an exact
+  account identity proceeds through a second candidate validation call and an
+  active recheck. Manual Cookie promotion retains its existing two-call
+  candidate/active sequence.
+- LocalStorage and other candidate browser storage created by the headed login
+  remain under the exact promotion-owned candidate when it is reopened for
+  validation. Candidate path, marker, account, `profile_key`, generation,
+  provider resolution, and browser attempt mismatches remain terminal.
+- Captured Cookie records are canonicalized, encrypted, and committed only after
+  candidate and active validation. No Cookie value or Profile path enters logs,
+  diagnostics, audit details, or API responses.
+- Cancellation or failure before swap removes the owned candidate and preserves
+  the prior Profile/Cookie. After swap, late cancellation observes the final
+  safe commit-or-rollback result; failed active recheck restores the predecessor.
+  A successful service restart reuses the same committed `profile_key`.
+- Final gates include focused CR-135 and adjacent CR-112/CR-132/CR-134 tests,
+  complete monitoring regression, Python/JavaScript/PowerShell syntax,
+  documentation consistency/regression, `git diff --check`, controlled local
+  Browser/QR probes, and independent read-only review.
+
 ## CR-134 Managed Login Environment Injection And Retry Tests
 
 - A persistent managed context receives the complete template through

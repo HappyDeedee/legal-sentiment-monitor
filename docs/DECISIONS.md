@@ -991,3 +991,24 @@ short `Superseded by` note rather than deleting history.
   platform/method cell and removes the duplicate source column/detail field.
   Notes and runtime error data remain database-compatible but are no longer
   editable in the account form; runtime errors are system-owned.
+
+## 2026-07-23 - CR-135 Browser Acquisition And Validation Boundaries
+
+- A headed Browser-sync acquisition creates the promotion-owned candidate
+  Profile. After the operator login is confirmed, that same Profile, including
+  provider-owned LocalStorage and other session state, is reopened for candidate
+  validation and then promoted. Browser sync does not erase it into a
+  Cookie-only candidate.
+- Canonical structured Cookie captured from Browser sync remains separately
+  encrypted recovery/export material. It does not replace the persistent
+  Profile as normal account authority. Manual Cookie promotion continues to
+  create and validate a fresh empty candidate.
+- The operator-login deadline, candidate-validation deadline, and active-recheck
+  deadline are independent. A shorter validation deadline must not close the
+  headed login window before the configured operator deadline.
+- Cancellation before swap removes the candidate. Cancellation received after
+  swap does not interrupt the active recheck; the operation reaches its existing
+  deterministic commit-or-rollback terminal state.
+- QR automatic-dialog detection is a short probe inside the overall startup
+  budget. Failure to auto-open must leave time for an explicit login-entry click
+  and QR extraction.
