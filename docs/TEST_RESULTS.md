@@ -2,6 +2,64 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-23 - CR-135 Login Budget And Profile Preservation Verification
+
+Scope: Douyin QR preparation budgets, Browser-sync operator timing, exact
+candidate Profile preservation, encrypted Cookie capture, cancellation/rollback
+compatibility, and real local Chromium lifecycle.
+
+Result: implementation behavior and local automated/real-browser gates are
+verified on `codex/cr-135-browser-profile-preservation`. Merge and
+affected-computer operator acceptance remain pending.
+
+- RED coverage first produced five expected failures: missing bounded QR probe
+  and shared click budget, headed acquisition being terminated by the shorter
+  Profile-validation wrapper, and LocalStorage being absent after candidate
+  reset.
+- Douyin QR preparation now caps the automatic-dialog probe at 1.5 seconds,
+  gives compatible selectors one shared click deadline, and reserves part of
+  the overall startup budget for QR extraction.
+- Browser sync now has three explicit phases: headed acquisition under the
+  configured operator deadline, headless candidate validation under the
+  Profile-validation deadline, and headless active recheck under a separate
+  Profile-validation deadline. The exact promotion-owned candidate is preserved
+  instead of reset to Cookie-only state.
+- Focused CR-135 coverage passed (`15 passed`), adjacent QR/login/Profile
+  coverage passed (`102 passed, 663 deselected, 1 warning`), and complete
+  `tests/test_monitoring_mvp.py` passed (`765 passed, 3 warnings`).
+  A final direct `-k cr135` rerun also passed (`8 passed, 757 deselected, 1
+  warning`); the `15`-test focused set includes the adjacent timeout and
+  rollback contracts exercised by CR-135.
+- Repository-wide collection completed `895 passed, 8 skipped, 7 failed, 4
+  warnings`. Six failures require Redis on `127.0.0.1:6379`; the seventh is the
+  existing XHS Excel factory type assertion. None touches the CR-135 files or
+  the fully passing monitoring suite.
+- A real managed Playwright Chromium ran the production Douyin QR path headless.
+  After the 1.5-second automatic-dialog probe, fallback click and extraction
+  completed in 8.36 seconds with `waiting_qrcode`, a non-empty QR image,
+  matching `profile_key`, five captured owned processes, and zero visible owned
+  windows.
+- A controlled full production `start_browser_cookie_sync` receipt used three
+  real persistent Chromium contexts: headed acquisition, headless candidate
+  validation, and headless active recheck. LocalStorage `HasUserLogin=1`
+  remained readable in every phase. The captured synthetic Cookie committed as
+  encrypted material without a `LOGIN_STATUS` Cookie, Profile runtime advanced
+  to version 1, promotion reached `committed`, and no captured browser process
+  remained.
+- The real-browser fixtures used an isolated database/Profile root and an
+  in-memory same-origin platform page. They printed no Cookie value, account
+  credential, Profile path, or identity seed, and their temporary files were
+  removed after the receipts were recorded.
+- An isolated current-branch Uvicorn service started on `127.0.0.1:8092` with
+  process `29476`. `/api/health` and `/monitor` returned HTTP 200, the expected
+  console title rendered, and a synthetic administrator authenticated with
+  role `administrator`. Existing services on ports `8080` and `8091` were not
+  changed.
+- Relevant Python compile, external JavaScript parse, PowerShell parse,
+  `uv lock --check`, `scripts/check_docs.py`, documentation regression
+  (`1 passed`), and `git diff --check` passed. Final independent full-diff
+  read-only review returned PASS with no remaining P0/P1/P2 finding.
+
 ## 2026-07-22 - CR-134 Managed Login Environment And Headless QR Verification
 
 Scope: generated identity injection, browser-version capability handling,

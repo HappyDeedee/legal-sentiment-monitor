@@ -1,8 +1,33 @@
 # Current State
 
-Last updated: 2026-07-22
+Last updated: 2026-07-23
 
 ## Current Baseline
+
+- CR-135 is implementation-verified on
+  `codex/cr-135-browser-profile-preservation`; merge and affected-computer
+  operator acceptance remain. Affected-computer evidence on `main@6d70ee0`
+  proved three regressions: the 20-second Douyin QR preparation spent its budget
+  waiting for an automatic dialog, the intended 600-second headed login wait
+  sat inside a 90-second validation wrapper, and Browser sync deleted a valid
+  `HasUserLogin=1` candidate before Cookie-only validation. QR preparation now
+  performs a 1.5-second automatic-dialog probe, shares a bounded login-click
+  budget, and reserves QR extraction time. Headed acquisition now owns its full
+  operator deadline; the same candidate Profile is then ownership-checked,
+  reopened headless, promoted, and reopened headless for active validation
+  without clearing LocalStorage or other provider state. Manual Cookie
+  promotion remains a fresh Cookie-only candidate. Focused `15`, adjacent
+  `102`, and complete monitoring `765` tests pass. A real managed headless
+  Douyin QR receipt returned an image in 8.36 seconds. A full real Chromium
+  Browser-sync receipt preserved `HasUserLogin` through all three contexts,
+  committed encrypted Cookie without `LOGIN_STATUS`, reached promotion state
+  `committed`, and left no owned browser process. Repository-wide collection
+  remains the known external baseline (`895 passed`, `8 skipped`, `7 failed`:
+  six Redis-dependent and one existing XHS Excel factory assertion). Python,
+  JavaScript, PowerShell, lock, documentation, and whitespace gates pass. Final
+  independent full-diff review reports no remaining P0/P1/P2 finding. An
+  isolated current-branch service on port `8092` returned HTTP 200 for health
+  and `/monitor`, and its synthetic administrator authenticated successfully.
 
 - CR-134 is merged through PR #17 on `main@d45de1a`; second-computer operator
   acceptance is the remaining gate. The generated account identity is now

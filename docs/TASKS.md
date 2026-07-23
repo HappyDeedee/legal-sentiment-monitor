@@ -1971,6 +1971,33 @@ account/Profile/Cookie behavior remain closed historical baselines.
 - [ ] Record second-computer pull/start/login acceptance after the reviewed
       change is available on `main`.
 
+## CR-135 - Second-Computer Login Budget And Profile Preservation
+
+Implementation status (2026-07-23): implementation and local verification are
+complete after controlled affected-computer diagnostics on `main@6d70ee0`
+proved the QR fallback-budget, 90-second Browser-sync cap, and
+HasUserLogin-only Profile-loss regressions. Merge and affected-computer
+operator acceptance remain.
+
+- [x] Reproduce and classify the affected-computer QR, timeout, and
+      Browser-sync candidate failures with redacted evidence.
+- [x] Confirm the effective 90-second wrapper around the configured 600-second
+      operator-login wait.
+- [x] Confirm that Browser sync clears the candidate's LocalStorage before
+      Cookie-only validation and that the captured Douyin Cookie set lacks
+      `LOGIN_STATUS` while the visible Profile has `HasUserLogin=1`.
+- [x] Add RED coverage for short QR probing, independent acquisition/validation
+      timing, and retained Browser-sync candidate storage.
+- [x] Preserve the exact Browser-sync candidate Profile while keeping manual
+      Cookie promotion on a fresh empty candidate.
+- [x] Separate the operator-login deadline from candidate and active Profile
+      validation bounds.
+- [x] Run focused, adjacent, complete monitoring, static, docs, whitespace, and
+      real local Browser/QR verification.
+- [x] Complete independent read-only review after final documentation sync.
+- [ ] Record affected-computer pull/start/Douyin QR and Browser-login acceptance
+      after the reviewed change is merged to `main`.
+
 ## CR-134 - Managed Login Environment Injection And Retry
 
 Implementation status (2026-07-22): implementation and independent review

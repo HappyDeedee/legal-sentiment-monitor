@@ -133,6 +133,7 @@ Status values:
 - CR-130: Cookie Account Save Promotion Consistency
 - CR-132: Windows Login Bootstrap And Bounded Browser Startup
 - CR-133: Windows Clean-Computer One-Click Bootstrap
+- CR-135: Second-Computer Login Budget And Profile Preservation
 - CR-096: AI Evaluation Postprocessing Scope Reduction
 - CR-075: Responsive Navigation Interaction Consistency
 - CR-076: Mobile Header Layout Resilience Regression Fix
@@ -5039,6 +5040,95 @@ Acceptance criteria:
 - Focused bootstrap tests, adjacent CR-117/CR-132 tests, complete monitoring
   regression, syntax/docs/whitespace checks, isolated first-run service health,
   and independent read-only review pass.
+
+## CR-135 - Second-Computer Login Budget And Profile Preservation
+
+Date: 2026-07-23
+
+Source: affected-computer Windows acceptance on `main@6d70ee0`. Douyin QR
+startup repeatedly exhausted the configured 20-second budget while preparing
+the login page. Browser sync then closed near 90 seconds despite a configured
+600-second operator wait. A controlled redacted Browser-sync probe confirmed
+that the visible Chrome Profile had `HasUserLogin=1`, 59 scoped Cookie records,
+and no `LOGIN_STATUS`; the subsequent Cookie-only candidate had neither login
+marker and failed with `profile_login_invalid`.
+
+Module: Douyin QR preparation, Browser-sync acquisition timing, candidate
+Profile promotion, and login failure diagnostics.
+
+Type: Regression Fix
+
+Status: Implementation Verified / Operator Acceptance Pending
+
+Confirmed requirements:
+
+- Douyin QR preparation uses a short bounded automatic-dialog probe and leaves
+  usable time to click the login entry and extract the QR image. The configured
+  QR startup limit remains an overall bound, not the timeout for every nested
+  operation.
+- The headed operator-login wait uses its own configured deadline (600 seconds
+  by default). Candidate and active Profile validation retain their separate
+  bounded validation timeout (90 seconds by default).
+- Browser sync preserves the exact account-bound candidate Profile created by
+  the visible login, including LocalStorage, IndexedDB, service-worker, and
+  other provider-owned session state. It reopens and validates that same
+  candidate before promotion instead of clearing it into a Cookie-only Profile.
+- Browser sync still captures canonical structured Cookie records and commits
+  encrypted Cookie material only after candidate and active Profile validation.
+  Cookie remains recovery/export material; the persisted Profile remains the
+  normal account authority.
+- Manual Cookie promotion continues to use a fresh empty candidate and does not
+  inherit browser-acquisition storage.
+- Candidate ownership marker, exact `profile_key`, account lock, process
+  ownership, cancellation, rollback, and predecessor preservation remain
+  fail-closed. Logs and persisted failure categories remain redacted.
+
+Non-goals:
+
+- No raw Cookie, LocalStorage, IndexedDB, or Profile export through logs or API.
+- No cross-host raw Profile-folder copy, browser-version bypass, captcha/SMS
+  automation, or weakening of managed-environment validation.
+- No change to service/server Browser-sync availability or manual Cookie UI.
+
+Acceptance:
+
+- A missing automatic Douyin login dialog reaches the fallback login click
+  within the overall QR budget and leaves a separate QR extraction opportunity.
+- A synthetic headed acquisition that lasts longer than the Profile-validation
+  timeout but less than the Browser-sync operator timeout completes; a hanging
+  candidate or active recheck still terminates at the Profile-validation bound.
+- LocalStorage written by the visible Browser login remains present when the
+  same candidate Profile is reopened, while captured Cookie records are still
+  canonicalized and committed after successful validation.
+- Candidate cancellation/failure removes only the owned candidate and preserves
+  the predecessor Profile/Cookie. After the directory swap, a late cancellation
+  waits for the deterministic commit-or-rollback result. Successful swap and
+  service restart continue to reuse the same `profile_key`.
+- Focused CR-135, adjacent CR-112/CR-132/CR-134, complete monitoring, static,
+  documentation, whitespace, real local Browser/QR, and independent read-only
+  review gates pass. The affected computer remains the final operator gate.
+
+Implementation verification (2026-07-23):
+
+- The Douyin automatic-dialog probe is capped at 1.5 seconds, login-entry
+  selectors share one bounded click budget, and the overall deadline reserves a
+  separate QR-extraction opportunity. The real managed headless Chromium path
+  reached `waiting_qrcode` with an image in 8.36 seconds and left no visible
+  owned window.
+- Browser acquisition now runs outside the Profile-validation wrapper. The
+  exact candidate created by the headed login is closed, ownership-checked,
+  reopened headless for candidate validation, promoted, and reopened headless
+  for active validation without deleting its browser storage.
+- A controlled full `start_browser_cookie_sync` receipt used three real
+  persistent Chromium contexts. `HasUserLogin=1` remained readable in all three
+  phases, the captured synthetic Cookie committed encrypted without a
+  `LOGIN_STATUS` Cookie, the promotion reached `committed`, and all captured
+  browser processes exited.
+- Focused CR-135 (`15`), adjacent (`102`), and complete monitoring (`765`)
+  tests pass. Repository-wide collection remains at the known external baseline:
+  `895 passed, 8 skipped, 7 failed`; six failures require Redis and one is the
+  existing XHS Excel factory assertion. Final merge and affected-computer
+  operator acceptance remain separate gates.
 
 ## CR-134 - Managed Login Environment Injection And Retry
 
