@@ -2002,7 +2002,7 @@ operator acceptance remain.
 
 Implementation status (2026-07-24): local QR/Cookie implementation,
 desktop/mobile geometry, and automated/static verification are complete on
-`main` with uncommitted changes; affected-computer acceptance remains pending.
+the CR-136 delivery branch; affected-computer acceptance remains pending.
 
 - [x] Reproduce and classify the affected-computer Douyin/XHS QR difference and
       new-account Cookie promotion panel reset with redacted evidence.

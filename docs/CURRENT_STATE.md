@@ -4,8 +4,8 @@ Last updated: 2026-07-24
 
 ## Current Baseline
 
-- CR-136 is locally implementation-verified on `main` with the current
-  uncommitted QR/Cookie/UI changes. Exact QR selector extraction now receives
+- CR-136 is locally implementation-verified and committed for delivery.
+  Exact QR selector extraction now receives
   bounded probe time and yields to the generic candidate/screenshot fallback;
   cancellation-resistant probes have a secondary drain bound, and failure
   evidence preserves time to begin context cleanup;

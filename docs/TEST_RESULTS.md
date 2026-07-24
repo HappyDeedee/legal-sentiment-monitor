@@ -7,8 +7,8 @@ This file records verification outcomes. Add new entries at the top.
 Scope: bounded QR selector probing, generic QR fallback reachability, new-account
 Cookie panel state, and Browser-sync cancellation action layout.
 
-Result: local implementation and automated/static gates pass on `main` with
-uncommitted CR-136 changes. Affected-computer operator acceptance remains
+Result: local implementation and automated/static gates pass on the committed
+CR-136 delivery branch. Affected-computer operator acceptance remains
 pending. Local Playwright geometry identifies the reported initial controls and
 confirms the action layout at desktop and mobile sizes.
 
