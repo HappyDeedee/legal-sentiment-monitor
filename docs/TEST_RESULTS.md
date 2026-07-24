@@ -2,6 +2,43 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-24 - CR-136 QR Fallback And Cookie Panel Verification
+
+Scope: bounded QR selector probing, generic QR fallback reachability, new-account
+Cookie panel state, and Browser-sync cancellation action layout.
+
+Result: local implementation and automated/static gates pass on `main` with
+uncommitted CR-136 changes. Affected-computer operator acceptance remains
+pending. Local Playwright geometry identifies the reported initial controls and
+confirms the action layout at desktop and mobile sizes.
+
+- RED/GREEN coverage verifies the exact QR selector receives an explicit
+  timeout, a hanging exact probe is cancelled, the generic candidate fallback
+  runs within the remaining budget, and only safe probe stage names are logged.
+  Cancellation-resistant probes now return after a `0.25`-second secondary
+  drain bound; failure evidence is bounded and preserves context-close time.
+- New-account Cookie promotion now restores the Cookie panel after the draft
+  account persistence redraw. Isolated Playwright behavior verifies both a
+  successful promotion and a failed promotion remain on the Cookie panel; the
+  failure text remains visible without a manual mode switch.
+- The Browser-sync result's single cancellation button now uses the primary
+  single-column action layout. Login-method card titles and supporting text are
+  centered without changing unrelated modal layout.
+- Local Playwright geometry measured the initial Browser-login action and
+  login-method cards at `1440x900` and `390x844`; the visible action buttons and
+  cards are centered. The synthetic pending Browser-sync cancellation action
+  is also centered at both sizes.
+- Focused QR/Cookie/layout hardening coverage passed (`9 passed`), related
+  browser/profile/account checks passed (`61 passed`), and complete
+  `tests/test_monitoring_mvp.py` passed (`772 passed, 4 warnings`).
+- A fresh real managed headless Douyin QR run returned `waiting_qrcode` with a
+  non-empty QR image in `7.67` seconds and left no matching browser process.
+- Python compile, inline JavaScript parse, and `git diff --check` passed.
+  The repository-wide suite and affected-computer acceptance were not rerun
+  in this batch. Independent read-only reviews found the Cookie success-message
+  redraw and QR cancellation/diagnostic-reserve gaps; all were fixed and
+  covered. Final independent re-review found no remaining P0/P1/P2 issue.
+
 ## 2026-07-23 - CR-135 Login Budget And Profile Preservation Verification
 
 Scope: Douyin QR preparation budgets, Browser-sync operator timing, exact

@@ -1800,6 +1800,29 @@ Run the relevant parts of this checklist after each Phase 11 batch:
   documentation consistency/regression, `git diff --check`, controlled local
   Browser/QR probes, and independent read-only review.
 
+## CR-136 Second-Computer QR Fallback And Cookie Panel State Tests
+
+- The QR finder passes explicit bounded timeouts into the MediaCrawler adapter
+  and exact-selector utility. An exact-selector miss reaches generic candidate
+  or screenshot fallback before the outer startup deadline, and each probe
+  stage is safe to cancel and drain.
+- A probe that delays cancellation cannot hold the caller past the secondary
+  drain bound. Manual-verification detection and safe failure description use
+  only their remaining diagnostic budget and leave context-close reserve.
+- A new-account Cookie submission keeps `activeSocialLoginMethod='cookie'`
+  after initial account persistence. Promotion failure remains visible in
+  `cookie_login_result`; success keeps the saved Cookie/Profile state and does
+  not return the operator to the QR panel.
+- The Browser-sync cancellation action uses a centered single-column layout at
+  desktop and mobile widths. The initial Browser-sync action and login-method
+  cards, including their title and supporting text, are centered.
+- Failure diagnostics record bounded probe-stage names and safe image/URL
+  summaries only; raw QR bytes, Cookie values, tokens, credentials, Profile
+  paths, and full DOM dumps remain outside logs and persisted records.
+- Final gates include focused CR-136, adjacent QR/login/Profile suites,
+  complete monitoring, Python/JavaScript/PowerShell syntax, docs/lock/
+  whitespace checks, local browser geometry, and independent review.
+
 ## CR-134 Managed Login Environment Injection And Retry Tests
 
 - A persistent managed context receives the complete template through

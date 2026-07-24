@@ -12799,7 +12799,7 @@ def test_qrcode_lookup_falls_back_to_visible_page_candidate(monkeypatch):
     async def no_adapter_qrcode(login_adapter):
         return ""
 
-    async def no_selector_qrcode(page, selector):
+    async def no_selector_qrcode(page, selector, timeout_ms=None):
         return ""
 
     async def candidate_qrcode(page, platform):
@@ -12812,6 +12812,171 @@ def test_qrcode_lookup_falls_back_to_visible_page_candidate(monkeypatch):
     image = asyncio.run(login_qrcode_module._find_login_qrcode(object(), "xhs", 1000, object()))
 
     assert image == "ZmFrZS1xcmNvZGU="
+
+
+def test_qrcode_lookup_bounds_exact_selector_and_reaches_generic_fallback(monkeypatch, caplog):
+    observed: list[int | None] = []
+
+    async def no_adapter_qrcode(login_adapter):
+        return ""
+
+    async def hanging_selector_qrcode(page, selector, timeout_ms=None):
+        observed.append(timeout_ms)
+        await asyncio.sleep(5)
+        return ""
+
+    async def candidate_qrcode(page, platform):
+        return "ZmFrZS1xcmNvZGU="
+
+    monkeypatch.setattr(login_qrcode_module, "_find_qrcode_with_mediacrawler_adapter", no_adapter_qrcode)
+    monkeypatch.setattr(login_qrcode_module, "_find_qrcode_with_mediacrawler_util", hanging_selector_qrcode)
+    monkeypatch.setattr(login_qrcode_module, "_find_visible_qrcode_candidate_screenshot", candidate_qrcode)
+
+    with caplog.at_level("INFO", logger=login_qrcode_module.logger.name):
+        image = asyncio.run(login_qrcode_module._find_login_qrcode(object(), "dy", 1200, object()))
+
+    assert image == "ZmFrZS1xcmNvZGU="
+    assert observed and 0 < observed[0] <= login_qrcode_module.QR_PROBE_STAGE_MAX_TIMEOUT_MS
+    assert "stage=exact_selector" in caplog.text
+    assert "stage=generic_candidate" in caplog.text
+
+
+def test_qrcode_probe_cancels_hanging_adapter_and_generic_candidate(monkeypatch):
+    cancelled: list[str] = []
+
+    async def hanging_adapter(login_adapter):
+        try:
+            await asyncio.sleep(5)
+        except asyncio.CancelledError:
+            cancelled.append("adapter")
+            raise
+        return ""
+
+    async def no_selector(page, selector, timeout_ms=None):
+        return ""
+
+    async def fast_candidate(page, platform):
+        return "ZmFrZS1xcmNvZGU="
+
+    monkeypatch.setattr(login_qrcode_module, "_find_qrcode_with_mediacrawler_adapter", hanging_adapter)
+    monkeypatch.setattr(login_qrcode_module, "_find_qrcode_with_mediacrawler_util", no_selector)
+    monkeypatch.setattr(login_qrcode_module, "_find_visible_qrcode_candidate_screenshot", fast_candidate)
+
+    assert asyncio.run(login_qrcode_module._find_login_qrcode(object(), "dy", 900, object()))
+    assert "adapter" in cancelled
+
+    async def hanging_candidate(page, platform):
+        try:
+            await asyncio.sleep(5)
+        except asyncio.CancelledError:
+            cancelled.append("generic")
+            raise
+        return ""
+
+    monkeypatch.setattr(login_qrcode_module, "_find_visible_qrcode_candidate_screenshot", hanging_candidate)
+    assert asyncio.run(login_qrcode_module._find_login_qrcode(object(), "dy", 900)) == ""
+    assert "generic" in cancelled
+
+
+def test_qrcode_probe_cancel_drain_has_a_secondary_bound():
+    cancelled: list[str] = []
+
+    async def cancellation_delayed():
+        try:
+            await asyncio.sleep(5)
+        except asyncio.CancelledError:
+            cancelled.append("first")
+            await asyncio.sleep(5)
+
+    async def run_probe():
+        started = asyncio.get_running_loop().time()
+        result = await login_qrcode_module._bounded_poll_step(
+            cancellation_delayed(),
+            0.01,
+            "fallback",
+        )
+        return result, asyncio.get_running_loop().time() - started
+
+    result, elapsed = asyncio.run(run_probe())
+
+    assert result == "fallback"
+    assert cancelled == ["first"]
+    assert elapsed < login_qrcode_module.QR_PROBE_CANCEL_DRAIN_TIMEOUT_SECONDS + 0.2
+
+
+def test_qrcode_failure_evidence_respects_diagnostic_and_close_budget(monkeypatch):
+    cancelled: list[str] = []
+
+    async def cancellation_delayed_verification(platform, page):
+        try:
+            await asyncio.sleep(5)
+        except asyncio.CancelledError:
+            cancelled.append("verification")
+            await asyncio.sleep(5)
+        return {"needs_verification": False}
+
+    async def cancellation_delayed_details(page, platform):
+        try:
+            await asyncio.sleep(5)
+        except asyncio.CancelledError:
+            cancelled.append("details")
+            await asyncio.sleep(5)
+        return "late details"
+
+    monkeypatch.setattr(login_qrcode_module, "QR_PROBE_CANCEL_DRAIN_TIMEOUT_SECONDS", 0.02)
+    monkeypatch.setattr(login_qrcode_module, "QR_FAILURE_CONTEXT_CLOSE_RESERVE_SECONDS", 0.05)
+    monkeypatch.setattr(
+        login_qrcode_module,
+        "_detect_manual_verification",
+        cancellation_delayed_verification,
+    )
+    monkeypatch.setattr(login_qrcode_module, "_describe_qrcode_failure", cancellation_delayed_details)
+
+    async def collect():
+        loop = asyncio.get_running_loop()
+        started = loop.time()
+        deadline = loop.time() + 0.35
+        evidence = await login_qrcode_module._collect_qrcode_failure_evidence(
+            object(),
+            "dy",
+            deadline,
+        )
+        return evidence, loop.time() - started, deadline - loop.time()
+
+    (verification, details), elapsed, remaining = asyncio.run(collect())
+
+    assert verification == {"needs_verification": False}
+    assert details == ""
+    assert cancelled == ["verification", "details"]
+    assert elapsed < 0.35
+    assert remaining >= login_qrcode_module.QR_FAILURE_CONTEXT_CLOSE_RESERVE_SECONDS - 0.02
+
+
+def test_mediacrawler_qrcode_util_forwards_explicit_timeout():
+    observed: dict[str, object] = {}
+
+    class FakeElement:
+        async def get_attribute(self, attr):
+            return ""
+
+        async def evaluate(self, script):
+            return ""
+
+        async def screenshot(self):
+            return _synthetic_qrcode_png_bytes()
+
+    class FakePage:
+        async def wait_for_selector(self, selector, **kwargs):
+            observed["selector"] = selector
+            observed.update(kwargs)
+            return FakeElement()
+
+    result = asyncio.run(login_qrcode_module.utils.find_login_qrcode(FakePage(), "img.qrcode", timeout_ms=321))
+
+    import base64
+
+    assert observed == {"selector": "img.qrcode", "timeout": 321}
+    assert result == base64.b64encode(_synthetic_qrcode_png_bytes()).decode("ascii")
 
 
 def test_login_session_route_maps_manual_verification_then_qrcode(monkeypatch):
@@ -13211,10 +13376,11 @@ def test_login_capabilities_are_sourced_from_mediacrawler():
 
 
 def test_qrcode_finder_prefers_mediacrawler_util(monkeypatch):
-    seen: dict[str, str] = {}
+    seen: dict[str, object] = {}
 
-    async def fake_find_login_qrcode(page, selector):
+    async def fake_find_login_qrcode(page, selector, timeout_ms=None):
         seen["selector"] = selector
+        seen["timeout_ms"] = timeout_ms
         return _synthetic_qrcode_data_url()
 
     monkeypatch.setattr(login_qrcode_module.utils, "find_login_qrcode", fake_find_login_qrcode)
@@ -13222,6 +13388,7 @@ def test_qrcode_finder_prefers_mediacrawler_util(monkeypatch):
     result = asyncio.run(login_qrcode_module._find_login_qrcode(object(), "xhs", 3000))
 
     assert "qrcode" in seen["selector"]
+    assert isinstance(seen["timeout_ms"], int)
     assert result == _synthetic_qrcode_data_url()
 
 
@@ -27558,6 +27725,74 @@ def test_cr130_bottom_account_save_routes_pending_cookie_through_promotion():
     )
     assert "if(!existing){" in account_save
     assert "请先粘贴 Cookie，再保存账号" in account_save
+    new_account_cookie_branch = cookie_save.split("if(!current){", 1)[1].split(
+        "stopLoginSessionPolling", 1
+    )[0]
+    assert "selectSocialLoginType('cookie');" in new_account_cookie_branch
+
+
+def test_cr136_browser_sync_cancel_action_uses_centered_primary_grid():
+    page = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    method_option_css = page.split(".login-method-option {", 1)[1].split("}", 1)[0]
+    render = page.split("function renderBrowserCookieSyncSession(session){", 1)[1].split(
+        "function pollBrowserCookieSync", 1
+    )[0]
+
+    assert "text-align:center" in method_option_css
+    assert '<div class="login-actions login-actions-primary">${cancel}</div>' in render
+
+
+def test_cr136_login_controls_center_in_desktop_and_mobile_geometry():
+    from playwright.sync_api import sync_playwright
+
+    page_source = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    css = page_source.split("<style>", 1)[1].split("</style>", 1)[0]
+    markup = f"""
+      <style>{css}</style>
+      <main style="width:min(1000px, calc(100vw - 40px)); margin:20px auto">
+        <div class="login-method-options">
+          <button class="login-method-option"><strong>扫码登录</strong><span>使用手机扫码确认</span></button>
+          <button class="login-method-option active"><strong>浏览器登录</strong><span>登录后自动同步</span></button>
+          <button class="login-method-option"><strong>Cookie 登录</strong><span>导入已有 Cookie</span></button>
+        </div>
+        <div class="login-actions login-actions-primary">
+          <button class="secondary">取消同步</button>
+        </div>
+      </main>
+    """
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            for width, height in ((1440, 900), (390, 844)):
+                page = browser.new_page(viewport={"width": width, "height": height})
+                try:
+                    page.set_content(markup)
+                    geometry = page.evaluate(
+                        """() => {
+                          const cards=[...document.querySelectorAll('.login-method-option')];
+                          const cancel=document.querySelector('.login-actions-primary button');
+                          const parent=cancel.parentElement;
+                          return {
+                            cardTextAlign:cards.map(card=>getComputedStyle(card).textAlign),
+                            titleTextAlign:cards.map(card=>getComputedStyle(card.querySelector('strong')).textAlign),
+                            cancelTextAlign:getComputedStyle(cancel).textAlign,
+                            cancelWidth:cancel.getBoundingClientRect().width,
+                            parentWidth:parent.getBoundingClientRect().width,
+                            columns:getComputedStyle(parent).gridTemplateColumns,
+                          };
+                        }"""
+                    )
+                finally:
+                    page.close()
+
+                assert geometry["cardTextAlign"] == ["center", "center", "center"]
+                assert geometry["titleTextAlign"] == ["center", "center", "center"]
+                assert geometry["cancelTextAlign"] == "center"
+                assert abs(geometry["cancelWidth"] - geometry["parentWidth"]) < 1
+                assert len(str(geometry["columns"]).split()) == 1
+        finally:
+            browser.close()
 
 
 def test_cr130_bottom_account_save_behavior_promotes_cookie_without_empty_draft():
@@ -27585,6 +27820,7 @@ def test_cr130_bottom_account_save_behavior_promotes_cookie_without_empty_draft(
       let accountIdentityChangeMode = false;
       const socialAccountCache = new Map();
       const calls = {{ buttons:[], persist:[], api:[], toasts:[] }};
+      let promotionOk = true;
       function val(id) {{ return document.getElementById(id)?.value || ''; }}
       function set(id, value) {{ const field=document.getElementById(id); if(field) field.value=value ?? ''; }}
       function ensureAccountIdentityCanLogin() {{ return true; }}
@@ -27597,10 +27833,14 @@ def test_cr130_bottom_account_save_behavior_promotes_cookie_without_empty_draft(
       }}
       async function persistSocialAccount(overrides={{}}) {{
         calls.persist.push(overrides);
-        return {{ id:1301, platform:'dy', profile_key:'1/dy/acc_1301' }};
+        const draft={{ id:1301, platform:'dy', login_type:'qrcode', profile_key:'1/dy/acc_1301' }};
+        socialAccountCache.set(1301, draft);
+        editSocialAccount(1301);
+        return draft;
       }}
       async function api(path, options={{}}) {{
         calls.api.push({{ path, body:JSON.parse(options.body || '{{}}') }});
+        if(!promotionOk) return {{ ok:false, json:async()=>({{ detail:'synthetic promotion failure' }}) }};
         return {{
           ok:true,
           json:async()=>({{ account:{{ id:1301, platform:'dy', login_type:'cookie', has_cookies:true }} }}),
@@ -27610,27 +27850,46 @@ def test_cr130_bottom_account_save_behavior_promotes_cookie_without_empty_draft(
       function stopLoginSessionPolling() {{}}
       function stopBrowserCookieSyncPolling() {{}}
       function stopVisibleLoginReconciliation() {{}}
-      function syncAccountFromResponse() {{}}
+      function syncAccountFromResponse(account) {{
+        if(account && account.id) socialAccountCache.set(Number(account.id), account);
+      }}
       async function loadAccountsPool() {{}}
       async function loadReadiness() {{}}
       async function loadDoctor() {{}}
       async function loadDashboard() {{}}
-      function editSocialAccount() {{}}
-      function renderLoginModePanel() {{}}
+      function editSocialAccount(id) {{
+        const account=socialAccountCache.get(Number(id));
+        activeSocialLoginMethod=account && account.login_type==='cookie' ? 'cookie' : 'qrcode';
+        renderLoginModePanel();
+      }}
+      function selectSocialLoginType(type) {{ activeSocialLoginMethod=type; renderLoginModePanel(); }}
+      function renderLoginModePanel() {{
+        ['qrcode','cookie'].forEach(type=>{{
+          const panel=document.getElementById('login_panel_'+type);
+          if(panel) panel.style.display=activeSocialLoginMethod===type ? 'block' : 'none';
+        }});
+        const result=document.getElementById('cookie_login_result');
+        if(result) result.textContent='当前账号已保存完整 Cookie 数据。可复制后直接粘贴到另一台电脑项目的 Cookie 登录。';
+      }}
       {production_functions}
       window.__cr130 = {{
-        async run(existing=false) {{
+        async run(existing=false, promote=true) {{
+          promotionOk=promote;
           if(existing) socialAccountCache.set(1301, {{ id:1301, platform:'dy' }});
           await saveSocialAccount();
           return {{
             calls,
             cookieValue:document.getElementById('social_account_cookie_input').value,
+            activeMethod:activeSocialLoginMethod,
+            cookiePanelDisplay:document.getElementById('login_panel_cookie')?.style.display || '',
+            qrcodePanelDisplay:document.getElementById('login_panel_qrcode')?.style.display || '',
+            cookieResult:document.getElementById('cookie_login_result')?.textContent || '',
           }};
         }},
       }};
     """
 
-    def run_scenario(browser, *, cookie: str, existing: bool) -> dict[str, Any]:
+    def run_scenario(browser, *, cookie: str, existing: bool, promote: bool = True) -> dict[str, Any]:
         page = browser.new_page()
         try:
             account_id = "1301" if existing else ""
@@ -27640,11 +27899,16 @@ def test_cr130_bottom_account_save_behavior_promotes_cookie_without_empty_draft(
                 <input id="social_account_name" value="CR-130 synthetic">
                 <textarea id="social_account_cookie_input">{cookie}</textarea>
                 <input id="social_account_clear_cookie" type="checkbox">
+                <div id="login_panel_qrcode" style="display:none"></div>
+                <div id="login_panel_cookie" style="display:block"></div>
                 <div id="cookie_login_result"></div>
                 """
             )
             page.add_script_tag(content=harness)
-            return page.evaluate("existing => window.__cr130.run(existing)", existing)
+            return page.evaluate(
+                "args => window.__cr130.run(args.existing, args.promote)",
+                {"existing": existing, "promote": promote},
+            )
         finally:
             page.close()
 
@@ -27658,6 +27922,12 @@ def test_cr130_bottom_account_save_behavior_promotes_cookie_without_empty_draft(
             )
             empty_new = run_scenario(browser, cookie="", existing=False)
             metadata_only = run_scenario(browser, cookie="", existing=True)
+            failed_new = run_scenario(
+                browser,
+                cookie="sessionid=synthetic-cr136",
+                existing=False,
+                promote=False,
+            )
         finally:
             browser.close()
 
@@ -27677,6 +27947,14 @@ def test_cr130_bottom_account_save_behavior_promotes_cookie_without_empty_draft(
     assert empty_new["calls"]["toasts"] == ["请先粘贴 Cookie，再保存账号"]
     assert metadata_only["calls"]["persist"] == [{}]
     assert metadata_only["calls"]["api"] == []
+    assert promoted["activeMethod"] == "cookie"
+    assert promoted["cookiePanelDisplay"] == "block"
+    assert promoted["qrcodePanelDisplay"] == "none"
+    assert promoted["cookieResult"] == "Cookie 已验证并写入该账号的持久网页登录态。页面不会回显原文。"
+    assert failed_new["activeMethod"] == "cookie"
+    assert failed_new["cookiePanelDisplay"] == "block"
+    assert failed_new["qrcodePanelDisplay"] == "none"
+    assert "synthetic error" in failed_new["cookieResult"]
 
 
 def test_cr125_account_list_hides_raw_identity_and_separates_recognition_time():

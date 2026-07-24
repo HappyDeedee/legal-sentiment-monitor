@@ -43,12 +43,18 @@ from . import utils
 from .httpx_util import make_async_client
 
 
-async def find_login_qrcode(page: Page, selector: str) -> str:
-    """find login qrcode image from target selector"""
+async def find_login_qrcode(page: Page, selector: str, timeout_ms: int | None = None) -> str:
+    """find login qrcode image from target selector.
+
+    Callers that manage a larger startup deadline can pass an explicit probe
+    budget.  The default keeps the historical Playwright timeout behavior for
+    the platform login adapters and other MediaCrawler callers.
+    """
     try:
-        elements = await page.wait_for_selector(
-            selector=selector,
-        )
+        wait_kwargs = {"selector": selector}
+        if timeout_ms is not None:
+            wait_kwargs["timeout"] = max(1, int(timeout_ms))
+        elements = await page.wait_for_selector(**wait_kwargs)
         for source in await _login_qrcode_image_sources(page, elements):
             login_qrcode_img = await _login_qrcode_source_to_base64(page, source)
             if is_qrcode_image_data(login_qrcode_img):
