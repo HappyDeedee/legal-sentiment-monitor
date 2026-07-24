@@ -245,7 +245,7 @@
     .login-method-guide strong { display:block; margin-bottom:6px; }
     .login-method-guide ul { margin:8px 0 0 18px; padding:0; color:var(--muted); font-size:12px; line-height:1.7; }
     .login-method-options { display:grid; grid-template-columns:repeat(auto-fit, minmax(180px,1fr)); gap:8px; margin:10px 0; }
-    .login-method-option { border:1px solid var(--line); background:#fff; border-radius:8px; padding:10px 8px; text-align:left; cursor:pointer; color:var(--text); }
+    .login-method-option { border:1px solid var(--line); background:#fff; border-radius:8px; padding:10px 8px; text-align:center; cursor:pointer; color:var(--text); }
     .login-method-option strong { display:block; margin-bottom:4px; font-size:13px; }
     .login-method-option span { display:block; color:var(--muted); font-size:12px; line-height:1.35; }
     .login-method-option.active { border-color:#93c5fd; background:#eff6ff; color:#1d4ed8; }
@@ -6742,6 +6742,7 @@
             if(result) result.textContent='请先保存账号基本信息。';
             return null;
           }
+          selectSocialLoginType('cookie');
         }
         stopLoginSessionPolling({closeRemote:true});
         stopBrowserCookieSyncPolling({cancelRemote:true});
@@ -6757,10 +6758,13 @@
           syncAccountFromResponse(saved);
           set('social_account_cookie_input','');
           document.getElementById('social_account_clear_cookie').checked=false;
-          if(result) result.textContent='Cookie 已验证并写入该账号的持久网页登录态。页面不会回显原文。';
+          const cookiePromotionSuccessMessage='Cookie 已验证并写入该账号的持久网页登录态。页面不会回显原文。';
+          if(result) result.textContent=cookiePromotionSuccessMessage;
           toast('Cookie 已验证并保存登录态');
           await Promise.all([loadAccountsPool(), loadReadiness(), loadDoctor()]);
           editSocialAccount(Number(saved.id), true);
+          const refreshedResult=document.getElementById('cookie_login_result');
+          if(refreshedResult) refreshedResult.textContent=cookiePromotionSuccessMessage;
           return saved;
         }catch(error){
           if(result) result.textContent='Cookie 验证请求已中断，原账号登录态保持不变。请确认服务正常后重新提交。';
@@ -6854,7 +6858,7 @@
       const pending=isLoginSessionPending(status);
       const cancel=pending && session?.id ? `<button class="secondary" type="button" data-feedback-bound="1" onclick="cancelCurrentBrowserCookieSync(this)">取消同步</button>` : '';
       const message=session?.message || (status==='success'?'登录成功，登录态已保存。':'正在准备浏览器登录窗口...');
-      result.innerHTML=`<div class="login-flow-card"><div class="small ${status==='success'?'ok':(pending?'':'warn')}">${esc(cleanCustomerText(message))}</div><div class="login-actions">${cancel}</div></div>`;
+      result.innerHTML=`<div class="login-flow-card"><div class="small ${status==='success'?'ok':(pending?'':'warn')}">${esc(cleanCustomerText(message))}</div><div class="login-actions login-actions-primary">${cancel}</div></div>`;
       const badge=document.getElementById('login_status_badge');
       if(badge){ badge.textContent=status==='success'?'登录成功':(pending?'浏览器登录中':loginSessionText(status)); badge.className='status '+(status==='success'?'ok':(pending?'warn':'bad')); }
     }

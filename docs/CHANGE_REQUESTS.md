@@ -134,6 +134,7 @@ Status values:
 - CR-132: Windows Login Bootstrap And Bounded Browser Startup
 - CR-133: Windows Clean-Computer One-Click Bootstrap
 - CR-135: Second-Computer Login Budget And Profile Preservation
+- CR-136: Second-Computer QR Fallback And Cookie Panel State Regression
 - CR-096: AI Evaluation Postprocessing Scope Reduction
 - CR-075: Responsive Navigation Interaction Consistency
 - CR-076: Mobile Header Layout Resilience Regression Fix
@@ -5129,6 +5130,63 @@ Implementation verification (2026-07-23):
   `895 passed, 8 skipped, 7 failed`; six failures require Redis and one is the
   existing XHS Excel factory assertion. Final merge and affected-computer
   operator acceptance remain separate gates.
+
+## CR-136 - Second-Computer QR Fallback And Cookie Panel State Regression
+
+Date: 2026-07-24
+
+Source: affected-computer acceptance on merged `main@bbb22b3`. Xiaohongshu QR
+login succeeds, while Douyin QR extraction reaches the 20-second outer timeout.
+New-account Cookie validation also returns the UI to the QR panel before the
+Cookie promotion result is visible. A Browser-login layout report identifies a
+definite single-cancel-button grid defect and a separate, still-unresolved
+question about which visible control the operator describes as off-center.
+
+Module: QR extraction deadline propagation, new-account Cookie promotion UI
+state, and Browser-login action layout.
+
+Type: Regression Fix
+
+Status: Implementation Verified / Affected-Computer Acceptance Pending
+
+Confirmed requirements:
+
+- Douyin QR extraction must use the remaining startup budget as an explicit,
+  bounded probe budget. A missing exact selector must quickly yield to the
+  generic candidate/screenshot fallback instead of consuming the entire outer
+  deadline. Probe cancellation/drain and failure diagnostics must have their
+  own secondary bounds, leaving time to start browser-context cleanup before
+  the outer deadline. Diagnostics must not record Cookie, token, Profile, or
+  credential data.
+- New-account Cookie promotion must keep the Cookie method selected from the
+  initial persistence through candidate validation and terminal result. A
+  failure must remain visible in the Cookie panel; a success must keep the
+  account's normal Cookie/Profile result state.
+- The Browser-sync result's one-button cancellation action must occupy a
+  single centered action column. The three login-method cards also center their
+  title and supporting text. Local desktop/mobile geometry confirms the initial
+  Browser-login action and login-method cards are centered at `1440x900` and
+  `390x844`; the affected-computer visual remains an operator acceptance check.
+
+Non-goals:
+
+- No change to QR headless policy, Browser/Profile authority, Cookie encryption,
+  platform verification boundaries, or manual verification handling.
+- No blanket increase of the QR timeout in place of bounded extraction probes.
+- No unrelated modal, navigation, or account-card redesign.
+
+Acceptance:
+
+- A synthetic exact-selector miss reaches a generic QR candidate inside the
+  total timeout and records bounded probe stages.
+- A new-account Cookie submission remains on the Cookie panel when promotion
+  fails and shows the terminal error without another manual panel switch.
+- The Browser-sync cancellation action is centered at desktop and mobile
+  widths; the reported initial control is either proven centered or separately
+  identified before any additional CSS change.
+- Focused, adjacent, complete monitoring, static, documentation, whitespace,
+  and independent review gates pass. The affected computer remains the final
+  operator gate.
 
 ## CR-134 - Managed Login Environment Injection And Retry
 

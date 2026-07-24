@@ -105,6 +105,12 @@ QR_SELECTORS = {
     for platform, flow in MEDIACRAWLER_LOGIN_FLOWS.items()
 }
 
+QR_PROBE_STAGE_MAX_TIMEOUT_MS = 1500
+QR_PROBE_DIAGNOSTIC_RESERVE_MS = 2000
+QR_PROBE_CANCEL_DRAIN_TIMEOUT_SECONDS = 0.25
+QR_FAILURE_CONTEXT_CLOSE_RESERVE_SECONDS = 0.5
+QR_FAILURE_VERIFICATION_MAX_TIMEOUT_SECONDS = 1.0
+
 
 async def start_qrcode_login_session(session_id: int, platform: str, timeout_ms: int | None = None) -> dict[str, Any]:
     """Start a browser-backed QR login session and keep it alive for polling."""
@@ -305,14 +311,22 @@ async def _start_qrcode_login_session_with_profile_once(
             _prepare_login_page(platform, page, timeout, login_adapter),
             deadline,
         )
+        remaining_qr_timeout_ms = max(
+            1,
+            int((deadline - asyncio.get_running_loop().time()) * 1000),
+        )
         qr_image = await _run_startup_stage(
             state,
             "提取登录二维码",
-            _find_login_qrcode(page, platform, timeout, login_adapter),
+            _find_login_qrcode(page, platform, remaining_qr_timeout_ms, login_adapter),
             deadline,
         )
         if not qr_image:
-            verification = await _detect_manual_verification(platform, page)
+            verification, details = await _collect_qrcode_failure_evidence(
+                page,
+                platform,
+                deadline,
+            )
             if verification.get("needs_verification"):
                 return await _manual_verification_response(
                     session_id,
@@ -326,7 +340,6 @@ async def _start_qrcode_login_session_with_profile_once(
                     browser,
                     owned_processes,
                 )
-            details = await _describe_qrcode_failure(page, platform)
             await _close_context(playwright, context, browser, owned_processes)
             return _failure(
                 platform,
@@ -811,13 +824,69 @@ async def _selector_visible(page: Page, selector: str, timeout: int = 1000) -> b
 async def _find_login_qrcode(page: Page, platform: str, timeout: int, login_adapter: Any | None = None) -> str:
     config = QR_SELECTORS[platform]
     selector = str(config["selector"])
-    media_crawler_image = await _find_qrcode_with_mediacrawler_adapter(login_adapter)
+    total_timeout_ms = max(1, int(timeout))
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + total_timeout_ms / 1000
+    diagnostic_reserve_ms = min(
+        total_timeout_ms // 2,
+        max(1, min(QR_PROBE_DIAGNOSTIC_RESERVE_MS, total_timeout_ms // 5)),
+    )
+    search_deadline = deadline - diagnostic_reserve_ms / 1000
+
+    async def run_probe(stage: str, awaitable: Any, budget_ms: int) -> Any:
+        budget_ms = max(1, int(budget_ms))
+        result = await _bounded_poll_step(awaitable, budget_ms / 1000, "")
+        logger.info(
+            "login_qrcode_probe platform=%s stage=%s budget_ms=%s result=%s",
+            platform,
+            stage,
+            budget_ms,
+            "found" if result else "miss",
+        )
+        return result
+
+    def remaining_search_ms() -> int:
+        return max(0, int((search_deadline - loop.time()) * 1000))
+
+    remaining_ms = remaining_search_ms()
+    if login_adapter and remaining_ms:
+        media_crawler_image = await run_probe(
+            "adapter_capture",
+            _find_qrcode_with_mediacrawler_adapter(login_adapter),
+            min(QR_PROBE_STAGE_MAX_TIMEOUT_MS, max(1, remaining_ms // 3)),
+        )
+    else:
+        media_crawler_image = ""
+        logger.info(
+            "login_qrcode_probe platform=%s stage=adapter_capture budget_ms=0 result=skipped",
+            platform,
+        )
     if media_crawler_image:
         return media_crawler_image
-    media_crawler_image = await _find_qrcode_with_mediacrawler_util(page, selector)
+
+    remaining_ms = remaining_search_ms()
+    if not remaining_ms:
+        return ""
+    media_crawler_image = await run_probe(
+        "exact_selector",
+        _find_qrcode_with_mediacrawler_util(
+            page,
+            selector,
+            timeout_ms=min(QR_PROBE_STAGE_MAX_TIMEOUT_MS, max(1, remaining_ms // 3)),
+        ),
+        min(QR_PROBE_STAGE_MAX_TIMEOUT_MS, max(1, remaining_ms // 3)),
+    )
     if media_crawler_image:
         return media_crawler_image
-    candidate_image = await _find_visible_qrcode_candidate_screenshot(page, platform)
+
+    remaining_ms = remaining_search_ms()
+    if not remaining_ms:
+        return ""
+    candidate_image = await run_probe(
+        "generic_candidate",
+        _find_visible_qrcode_candidate_screenshot(page, platform),
+        remaining_ms,
+    )
     if candidate_image:
         return candidate_image
     return ""
@@ -932,9 +1001,16 @@ def _compact_visible_text(visible_text: str, matched: str) -> str:
     return text[start:end]
 
 
-async def _find_qrcode_with_mediacrawler_util(page: Page, selector: str) -> str:
+async def _find_qrcode_with_mediacrawler_util(
+    page: Page,
+    selector: str,
+    timeout_ms: int | None = None,
+) -> str:
     try:
-        image = await utils.find_login_qrcode(page, selector=selector)
+        kwargs: dict[str, Any] = {"selector": selector}
+        if timeout_ms is not None:
+            kwargs["timeout_ms"] = max(1, int(timeout_ms))
+        image = await utils.find_login_qrcode(page, **kwargs)
     except Exception:
         return ""
     if _valid_qrcode_image_source(image) and utils.is_qrcode_image_data(str(image)):
@@ -1056,6 +1132,43 @@ async def _describe_qrcode_failure(page: Page, platform: str) -> str:
     return platform_hint + page_hint + title_hint + image_hint
 
 
+async def _collect_qrcode_failure_evidence(
+    page: Page,
+    platform: str,
+    deadline: float,
+) -> tuple[dict[str, Any], str]:
+    loop = asyncio.get_running_loop()
+    diagnostic_deadline = (
+        deadline
+        - QR_FAILURE_CONTEXT_CLOSE_RESERVE_SECONDS
+        - (QR_PROBE_CANCEL_DRAIN_TIMEOUT_SECONDS * 2)
+    )
+
+    def remaining_seconds() -> float:
+        return max(0.0, diagnostic_deadline - loop.time())
+
+    remaining = remaining_seconds()
+    if remaining <= 0:
+        return {"needs_verification": False}, ""
+    verification = await _bounded_poll_step(
+        _detect_manual_verification(platform, page),
+        min(QR_FAILURE_VERIFICATION_MAX_TIMEOUT_SECONDS, max(0.001, remaining * 0.55)),
+        {"needs_verification": False},
+    )
+    if verification.get("needs_verification"):
+        return verification, ""
+
+    remaining = remaining_seconds()
+    if remaining <= 0:
+        return verification, ""
+    details = await _bounded_poll_step(
+        _describe_qrcode_failure(page, platform),
+        remaining,
+        "",
+    )
+    return verification, str(details or "")
+
+
 def _as_data_url(qr_image: str) -> str:
     if qr_image.startswith("data:image"):
         return qr_image
@@ -1126,13 +1239,23 @@ async def _bounded_poll_step(awaitable: Any, timeout_seconds: float, fallback: A
         done, _ = await asyncio.wait({task}, timeout=max(0.001, timeout_seconds))
         if done:
             return task.result()
-        task.cancel()
-        await asyncio.gather(task, return_exceptions=True)
+        await _cancel_and_drain_poll_task(task)
         return fallback
     except asyncio.CancelledError:
-        task.cancel()
-        await asyncio.gather(task, return_exceptions=True)
+        await _cancel_and_drain_poll_task(task)
         raise
+
+
+async def _cancel_and_drain_poll_task(task: asyncio.Task[Any]) -> None:
+    task.cancel()
+    done, _ = await asyncio.wait(
+        {task},
+        timeout=QR_PROBE_CANCEL_DRAIN_TIMEOUT_SECONDS,
+    )
+    if done:
+        _consume_background_task_result(task)
+    else:
+        task.add_done_callback(_consume_background_task_result)
 
 
 async def _run_startup_stage(

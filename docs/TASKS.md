@@ -1998,6 +1998,39 @@ operator acceptance remain.
 - [ ] Record affected-computer pull/start/Douyin QR and Browser-login acceptance
       after the reviewed change is merged to `main`.
 
+## CR-136 - Second-Computer QR Fallback And Cookie Panel State Regression
+
+Implementation status (2026-07-24): local QR/Cookie implementation,
+desktop/mobile geometry, and automated/static verification are complete on
+the CR-136 delivery branch; affected-computer acceptance remains pending.
+
+- [x] Reproduce and classify the affected-computer Douyin/XHS QR difference and
+      new-account Cookie promotion panel reset with redacted evidence.
+- [x] Confirm the exact QR selector wait inherits the page default and can
+      consume the remaining outer deadline before generic fallback.
+- [x] Confirm the new-account Cookie flow persists a qrcode draft, re-renders
+      the QR method, then hides the Cookie result before promotion finishes.
+- [x] Confirm the Browser-sync cancellation button is a single item in the
+      default two-column action grid.
+- [x] Add RED coverage for explicit QR probe budgets, fallback reachability,
+      and safe probe-stage diagnostics.
+- [x] Bound cancellation-resistant probe cleanup and failure evidence within
+      the outer startup deadline while reserving context-close time.
+- [x] Add RED/GREEN coverage keeping the new-account Cookie method active and
+      its result visible across promotion failure/success.
+- [x] Center the confirmed Browser-sync cancellation action in the primary
+      single-column layout.
+- [x] Center login-method card titles and supporting text.
+- [x] Capture desktop/mobile geometry for the initial Browser-login control and
+      login-method cards; both are centered on `1440x900` and `390x844`.
+- [x] Run focused, adjacent, complete monitoring, static, docs, whitespace,
+      and real managed headless Douyin QR checks.
+- [x] Complete independent read-only review after the Cookie redraw and QR
+      cancellation/diagnostic-reserve fixes.
+- [x] Update delivery docs to match the verified implementation and test
+      results.
+- [ ] Record affected-computer acceptance after this CR is merged to `main`.
+
 ## CR-134 - Managed Login Environment Injection And Retry
 
 Implementation status (2026-07-22): implementation and independent review

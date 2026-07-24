@@ -1,12 +1,32 @@
 # Current State
 
-Last updated: 2026-07-23
+Last updated: 2026-07-24
 
 ## Current Baseline
 
-- CR-135 is implementation-verified on
-  `codex/cr-135-browser-profile-preservation`; merge and affected-computer
-  operator acceptance remain. Affected-computer evidence on `main@6d70ee0`
+- CR-136 is locally implementation-verified and committed for delivery.
+  Exact QR selector extraction now receives
+  bounded probe time and yields to the generic candidate/screenshot fallback;
+  cancellation-resistant probes have a secondary drain bound, and failure
+  evidence preserves time to begin context cleanup;
+  new-account Cookie promotion restores the Cookie panel after draft
+  persistence and keeps terminal errors visible; the Browser-sync cancellation
+  action uses a centered single-column layout, and login-method card text is
+  centered. Focused hardening/adjacent coverage (`9` and `61` tests) and
+  complete monitoring (`772` tests) pass, as do
+  Python, inline JavaScript, and whitespace checks. The affected computer has
+  not yet confirmed Douyin QR or Cookie behavior. Local Playwright geometry at
+  `1440x900` and `390x844` confirms the initial Browser-login action,
+  login-method cards, and synthetic cancellation action are centered; the
+  affected computer remains the final visual acceptance gate. No broad CSS
+  change was made. Independent review found and the implementation fixed one
+  P2 Cookie success-message redraw gap. A fresh real managed headless Douyin QR
+  returned a non-empty image in `7.67` seconds with no matching process left.
+  Final independent hardening re-review reports no remaining P0/P1/P2 finding.
+
+- CR-135 is implementation-verified and merged on
+  `main@bbb22b3`; affected-computer
+  operator acceptance remains. Affected-computer evidence on `main@6d70ee0`
   proved three regressions: the 20-second Douyin QR preparation spent its budget
   waiting for an automatic dialog, the intended 600-second headed login wait
   sat inside a 90-second validation wrapper, and Browser sync deleted a valid

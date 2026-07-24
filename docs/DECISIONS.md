@@ -1012,3 +1012,21 @@ short `Superseded by` note rather than deleting history.
 - QR automatic-dialog detection is a short probe inside the overall startup
   budget. Failure to auto-open must leave time for an explicit login-entry click
   and QR extraction.
+
+## 2026-07-24 - CR-136 QR Probe And Cookie Panel Boundaries
+
+- QR extraction keeps the outer startup deadline, but each adapter, exact
+  selector, and generic candidate attempt receives an explicit bounded budget.
+  A selector miss must reach the existing generic fallback and safe failure
+  description before the page closes; a global timeout increase is not the
+  chosen fix.
+- Probe cancellation receives a short secondary drain bound. Failure evidence
+  runs only inside the remaining diagnostic budget and reserves time to begin
+  browser-context cleanup before the outer deadline.
+- A new-account Cookie promotion preserves the Cookie method in the UI while
+  the draft account is persisted and the promotion is running. Its result must
+  remain visible until a terminal success or failure is shown.
+- The definite Browser-sync cancellation action uses the single-column primary
+  layout. Login-method card titles and supporting text are centered; this is a
+  local deterministic presentation fix, while the affected computer remains
+  the final visual acceptance gate.
