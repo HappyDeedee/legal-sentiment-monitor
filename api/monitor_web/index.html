@@ -4332,7 +4332,7 @@
     }
     function loginQrRequestTimeoutMs(){
       const configured=Number(runtimeSettingsCache?.login_qr_timeout_seconds?.value);
-      const seconds=Number.isFinite(configured) && configured>=5 ? Math.min(300, configured) : 20;
+      const seconds=Number.isFinite(configured) && configured>=5 ? Math.min(300, configured) : 45;
       return Math.max(45000, seconds*1000+15000);
     }
     async function authApi(path, options={}){
@@ -6701,13 +6701,27 @@
         <div class="small">正在运行的任务：${esc(details)}</div>
       </div>`;
     }
+    function loginSessionProfileState(session={}, platformStatus={}){
+      const status=normalizeLoginSessionStatus(session.status||'');
+      const pending=['preparing','waiting_qrcode','waiting_scan','waiting_confirm','needs_verification'].includes(status);
+      const hasSavedMaterial=session.profile_exists===true || platformStatus.profile_exists===true;
+      const hasPlatformTruth=Object.prototype.hasOwnProperty.call(platformStatus, 'login_ready') || Object.prototype.hasOwnProperty.call(platformStatus, 'needs_login');
+      const loginReady=status==='success' && (!hasPlatformTruth || !!(platformStatus.login_ready && !platformStatus.needs_login));
+      if(loginReady) return {key:'ready', label:'登录态已验证'};
+      if(hasSavedMaterial) return pending
+        ? {key:'pending', label:'登录材料已保存，登录处理中'}
+        : {key:'incomplete', label:'登录材料已保存，登录未完成'};
+      if(pending) return {key:'pending', label:'登录处理中'};
+      return {key:'missing', label:'登录材料未保存'};
+    }
     function platformStatusTable(platforms){ return table(['平台','登录方式','登录材料','最近状态','更新时间','操作'], platforms.map(p=>[esc(p.platform_label), esc(p.login_type_label||p.login_type||'扫码登录'), loginMaterialCell(p), platformStatusCell(p), esc((p.profile_last_modified||'').replace('T',' ').slice(0,19)), `<div class="wide-actions"><button class="secondary" onclick="switchTab('accounts')">管理账号</button></div>`])); }
     function loginMaterialCell(p){
-      const profile=p.profile_exists ? '<span class="status">登录态已配置</span>' : '<span class="status">登录态未配置</span>';
+      const materialAvailable=!!(p.profile_exists && p.login_ready && !p.needs_login);
+      const profile=p.profile_exists ? (materialAvailable ? '<span class="status ok">登录材料可用</span>' : '<span class="status warn">登录材料已保存</span>') : '<span class="status">登录材料未保存</span>';
       const profileSource=p.using_account_profile ? `当前使用账号：${p.active_account_name||p.active_account_id||'-'}` : '尚未绑定具体账号';
       const proxy=p.active_proxy_id ? `<div class="small">绑定代理：${esc(p.active_proxy_name||('#'+p.active_proxy_id))}（${esc(poolStatusText(p.active_proxy_status))}）${p.active_proxy_error?'；'+esc(p.active_proxy_error).slice(0,80):''}</div>` : '';
       const cookie=p.has_cookies ? '<span class="status">Cookie 已保存</span>' : '<span class="muted">未使用 Cookie</span>';
-      const profileNote=p.profile_exists ? '登录态已配置，可供任务复用。' : '尚未发现可用网页登录态。';
+      const profileNote=materialAvailable ? '已有登录材料，当前无已知登录异常。' : (p.profile_exists ? (p.needs_login ? '已有 Profile 材料，当前状态需重新登录。' : '已有 Profile 材料，当前尚未通过登录态验证。') : '尚未保存网页登录材料。');
       return `${profile}<div class="small">${esc(profileSource)}</div>${proxy}<div class="small">${esc(profileNote)}</div><div style="height:4px"></div>${cookie}`;
     }
     function platformStatusCell(p){ if(p.login_window_open) return `<span class="status">登录窗口验证中</span><div class="small">完成平台验证后，系统会自动保存登录状态。</div>`; if(p.login_type==='cookie' && !p.has_cookies) return '<span class="status">Cookie 待填写</span><div class="small">保存 Cookie 后才能使用 Cookie 登录。</div>'; if(p.needs_login) return `<span class="status">需重新登录</span><div class="small">${esc(compactPlatformError(p.last_error)||'请重新登录该平台账号')}</div>`; return '<span class="status ok">可运行</span>'; }
@@ -7191,11 +7205,15 @@
       const data=await res.json();
       target.innerHTML = (data.sessions||[]).length ? table(
         ['时间','登录结果','说明'],
-        data.sessions.map(s=>[
-          esc(formatTime(s.updated_at)),
-          loginSessionBadge(s.status),
-          `<div>${s.profile_path?'<span class="status ok">已生成登录态</span>':'<span class="muted">未生成登录态</span>'}</div><div class="small">${esc(cleanCustomerText(s.message||''))}</div>`
-        ])
+        data.sessions.map(s=>{
+          const profileState=loginSessionProfileState(s);
+          const profileClass=profileState.key==='ready' ? 'status ok' : (profileState.key==='missing' ? 'muted' : 'status warn');
+          return [
+            esc(formatTime(s.updated_at)),
+            loginSessionBadge(s.status),
+            `<div><span class="${profileClass}">${esc(profileState.label)}</span></div><div class="small">${esc(cleanCustomerText(s.message||''))}</div>`
+          ];
+        })
       ) : '<div class="empty">当前账号还没有登录记录。</div>';
     }
     async function openLoginSessionBrowser(sessionId, platform, accountId=null, triggerButton=null){
@@ -7416,7 +7434,7 @@
         </div>`;
       }
       const sourceLine='此登录会话只作用于当前账号；如平台需要额外确认，系统会提示下一步操作。';
-      const profileState = session.profile_path || platformStatus.profile_path ? '登录态已配置' : '登录态未配置';
+      const profileState=loginSessionProfileState(session, platformStatus);
       const pollingLine=pending ? `<div class="login-polling"><span class="login-spinner"></span><span>系统正在自动确认登录结果，每 3 秒刷新一次。</span></div>` : '';
       const cancelAction=pending && session.id ? `<div class="login-actions"><button class="secondary" type="button" data-feedback-bound="1" onclick="cancelCurrentLoginSession(${Number(session.id)}, this)">取消本次登录</button></div>` : '';
       if(result) result.innerHTML = `<div class="login-flow-card">
@@ -7432,7 +7450,7 @@
         ${actionBlock}
         ${cancelAction}
         <div class="small">${sourceLine}</div>
-        <div class="small">登录态：${esc(profileState)}${session.updated_at ? '；最后更新：'+esc(formatTime(session.updated_at)) : ''}</div>
+        <div class="small">登录材料：${esc(profileState.label)}${session.updated_at ? '；最后更新：'+esc(formatTime(session.updated_at)) : ''}</div>
       </div>`;
     }
     function syncAccountFromResponse(account){

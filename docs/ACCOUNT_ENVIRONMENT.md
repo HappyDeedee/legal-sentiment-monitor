@@ -374,6 +374,16 @@ Template rules:
 - The generator must not improvise a different template silently.
 - If no administrator template-family override is provided, automatic template
   selection is used.
+- Product entrypoints may narrow that automatic choice to a provider-supported
+  family before calling the deterministic generator. The current Douyin QR and
+  crawl adapter is desktop-web-only, so a new Douyin `auto` choice resolves to
+  `windows_chrome_desktop`. This resolved family is part of the generator input
+  and remains stable for that account.
+- An explicit or historical `CN_ANDROID_CHROME` Douyin identity is not silently
+  rewritten. QR startup stops before launching the browser and directs the
+  administrator to the audited reset/re-login workflow with `auto` or Windows
+  Chrome desktop. Mobile-web Douyin login/crawl support requires a separate
+  adapter capability and tests.
 - `screen` is the physical display envelope used for the template; `viewport`
   is the browser content area.
 - `is_mobile` and `has_touch` must agree with the template family.

@@ -107,6 +107,9 @@ selected HTTP(S) proxy explicitly for the initial installer-script download;
 the launcher does not guess, print, or persist a machine-specific proxy.
 `MONITOR_UV_INSTALL_TIMEOUT_SECONDS`
 defaults to `120`; `MONITOR_BROWSER_INSTALL_TIMEOUT_SECONDS` defaults to `300`.
+Douyin QR readiness uses a `45`-second default total creation budget and a
+matching `MONITOR_LOGIN_BROWSER_STARTUP_STAGE_TIMEOUT_SECONDS` default. Both
+remain finite, and explicit deployment/runtime values retain precedence.
 
 For these two Windows local launchers only, absent values default to
 `MONITOR_BROWSER_COOKIE_SYNC_ENABLED=true`,

@@ -1030,3 +1030,38 @@ short `Superseded by` note rather than deleting history.
   layout. Login-method card titles and supporting text are centered; this is a
   local deterministic presentation fix, while the affected computer remains
   the final visual acceptance gate.
+
+## 2026-07-28 - CR-137 Douyin QR Readiness Boundary
+
+- Douyin QR preparation is governed by observable login-surface state, not by
+  Playwright click completion or `DOMContentLoaded` alone. The flow may retry
+  the same scoped login entry inside one deadline and must recheck state after
+  click errors because an opening overlay can make the original button lose
+  actionability.
+- The QR startup path remains headless and keeps finite stage/cleanup bounds.
+  The default total QR creation budget is `45` seconds because affected-system
+  Chrome required about `23.6` seconds to finish loading and exposed the QR
+  after the former `20`-second default. Explicit runtime/environment values
+  remain authoritative. Supported Docker/systemd examples use the same
+  `45`-second total and startup-stage values.
+- When the frontend runtime-setting cache is absent, it also starts from `45`
+  seconds and keeps its existing `15`-second response margin, so the client
+  does not abort at the same instant as the backend deadline.
+- Browser startup, navigation, environment verification, platform preparation,
+  and QR extraction share one outer deadline. The adapter receives only the
+  remaining budget after the preparation bridge's exact-QR probe and fallback
+  steps, and readiness requires a visible dialog or QR surface.
+- Profile directory/material existence and current login validity are separate
+  facts. Customer-facing reusable-login wording requires a ready/success state;
+  stale or limited material is labeled as saved material requiring login. A
+  precomputed or configured path is not proof that material exists.
+- Platform summary `login_ready` is a material-availability signal, not a fresh
+  login check. It is rendered as “登录材料可用”; “登录态已验证” is reserved for a
+  successful login session. Login-session responses accept platform status only
+  when account/Profile identity matches, with an explicit default-session rule.
+- Douyin's current formal QR/crawl adapter is a desktop-web capability. For new
+  Douyin accounts, the product-level `auto` template choice resolves to the
+  deterministic Windows Chrome desktop family before identity generation.
+  Explicit or historical Android identities are preserved, but QR startup
+  fails early with the existing audited reset/re-login path because injecting
+  a desktop identity only for login would break account consistency.

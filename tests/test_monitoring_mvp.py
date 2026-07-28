@@ -19,6 +19,7 @@ import httpx
 import pytest
 from fastapi import HTTPException
 from openpyxl import load_workbook
+from playwright.async_api import TimeoutError as PlaywrightTimeoutError
 
 from api.monitoring.ai import _build_endpoint, _parse_json, _validate_ai_output, build_evaluation_payload, test_ai as run_ai_config_test
 from api.monitoring.ai import DEFAULT_PROMPT
@@ -2735,7 +2736,19 @@ def test_phase_5_1c_verification_code_terminal_failure_recovers_identity(route_n
             }
 
         monkeypatch.setattr(monitor_router, "check_social_account_login", fake_check)
-        monkeypatch.setattr(monitor_router, "list_platform_status", lambda: [])
+        monkeypatch.setattr(
+            monitor_router,
+            "list_platform_status",
+            lambda: [
+                {
+                    "platform": "dy",
+                    "active_account_id": int(account["id"]) + 1000,
+                    "profile_exists": True,
+                    "login_ready": True,
+                    "needs_login": False,
+                }
+            ],
+        )
         if route_name == "submit":
             monkeypatch.setattr(monitor_router, "submit_qrcode_login_verification_code", fake_code_action)
             result = asyncio.run(
@@ -2755,6 +2768,7 @@ def test_phase_5_1c_verification_code_terminal_failure_recovers_identity(route_n
             )
 
         assert result["session"]["status"] == "platform_error"
+        assert result["platform_status"] == {}
         assert get_social_account(account["id"])["identity_state"] == "validated"
     finally:
         for table, snapshot in snapshots.items():
@@ -11762,10 +11776,11 @@ def test_login_session_routes_create_pollable_session(monkeypatch):
             monitor_router,
             "list_platform_status",
             lambda: [
-                {
-                    "platform": "dy",
-                    "platform_label": "抖音",
-                    "profile_path": "browser_data/cdp_dy_user_data_dir",
+                    {
+                        "platform": "dy",
+                        "platform_label": "抖音",
+                        "active_account_id": account["id"],
+                        "profile_path": "browser_data/cdp_dy_user_data_dir",
                     "login_ready": False,
                     "login_window_open": False,
                 }
@@ -12359,7 +12374,7 @@ def test_account_login_session_does_not_inherit_default_platform_success(monkeyp
 
     assert polled["session"]["status"] == "qrcode_failed"
     assert "TargetClosedError" in polled["session"]["message"]
-    assert polled["platform_status"]["login_ready"] is True
+    assert polled["platform_status"] == {}
 
 
 def test_terminal_login_session_lookup_does_not_downgrade_checked_account(monkeypatch, tmp_path):
@@ -12755,7 +12770,8 @@ def test_waiting_qrcode_session_does_not_inherit_platform_success(monkeypatch, t
     init_db()
     snapshot = _snapshot_table("login_sessions")
     try:
-        profile_path = str(tmp_path / "default_profile")
+        profile_path = str(tmp_path / "session_profile")
+        other_profile_path = str(tmp_path / "other_profile")
         session = create_login_session(
             {
                 "platform": "xhs",
@@ -12775,11 +12791,11 @@ def test_waiting_qrcode_session_does_not_inherit_platform_success(monkeypatch, t
             monitor_router,
             "list_platform_status",
             lambda: [
-                {
-                    "platform": "xhs",
-                    "platform_label": "小红书",
-                    "profile_path": profile_path,
-                    "active_account_id": None,
+                    {
+                        "platform": "xhs",
+                        "platform_label": "小红书",
+                        "profile_path": other_profile_path,
+                        "active_account_id": 999999,
                     "login_ready": True,
                     "login_window_open": False,
                 }
@@ -12792,7 +12808,7 @@ def test_waiting_qrcode_session_does_not_inherit_platform_success(monkeypatch, t
 
     assert polled["session"]["status"] == "waiting_scan"
     assert polled["session"]["qr_image"].startswith("data:image")
-    assert polled["platform_status"]["login_ready"] is True
+    assert polled["platform_status"] == {}
 
 
 def test_qrcode_lookup_falls_back_to_visible_page_candidate(monkeypatch):
@@ -13143,7 +13159,10 @@ def test_login_qrcode_bridge_uses_mediacrawler_login_adapter(monkeypatch):
     image = asyncio.run(login_qrcode_module._find_login_qrcode(FakePage(), "dy", 1234, adapter))
 
     assert image == _synthetic_qrcode_data_url()
-    assert calls == ["init:qrcode", "prepare:1234", "capture"]
+    assert calls[0] == "init:qrcode"
+    assert calls[1].startswith("prepare:")
+    assert 1 <= int(calls[1].split(":", 1)[1]) <= 1234
+    assert calls[2] == "capture"
 
 
 def test_cr135_douyin_qrcode_auto_dialog_probe_leaves_fallback_budget(monkeypatch):
@@ -13151,25 +13170,28 @@ def test_cr135_douyin_qrcode_auto_dialog_probe_leaves_fallback_budget(monkeypatc
 
     waits: list[int] = []
     clicks: list[int] = []
+    surface_visible = False
 
     class FakePage:
-        async def wait_for_selector(self, selector, *, timeout):
+        async def wait_for_selector(self, selector, *, timeout, state=None):
             waits.append(timeout)
+            if selector == douyin_login.DouYinLogin.LOGIN_DIALOG_SELECTOR and surface_visible:
+                return object()
             raise RuntimeError("dialog unavailable")
 
     async def fake_click_login_button(*, timeout_ms):
+        nonlocal surface_visible
         clicks.append(timeout_ms)
-
-    async def fake_sleep(seconds):
-        return None
+        surface_visible = True
+        return "button:has-text('登录')"
 
     adapter = douyin_login.DouYinLogin("qrcode", object(), FakePage())
+    monkeypatch.setattr(adapter, "AUTO_SURFACE_WAIT_MAX_MS", 1)
     monkeypatch.setattr(adapter, "click_login_button", fake_click_login_button)
-    monkeypatch.setattr(douyin_login.asyncio, "sleep", fake_sleep)
 
     asyncio.run(adapter.prepare_qrcode_login(timeout_ms=20_000))
 
-    assert waits == [adapter.AUTO_DIALOG_PROBE_TIMEOUT_MS]
+    assert waits[0] == adapter.AUTO_DIALOG_PROBE_TIMEOUT_MS
     assert 0 < waits[0] < 20_000
     assert clicks == [adapter.LOGIN_ENTRY_CLICK_TIMEOUT_MS]
     assert clicks[0] <= 20_000 - adapter.QRCODE_EXTRACTION_RESERVE_MS
@@ -13207,6 +13229,508 @@ def test_cr135_douyin_login_entry_selectors_share_one_click_budget():
 
     assert len(clicks) == 1
     assert 0 < clicks[0] <= 30
+
+
+def test_cr137_douyin_qrcode_retries_early_noop_until_login_surface(monkeypatch):
+    from media_platform.douyin import login as douyin_login
+
+    clicks: list[int] = []
+
+    class FakePage:
+        async def wait_for_selector(self, selector, *, timeout, state=None):
+            if selector == douyin_login.DouYinLogin.LOGIN_DIALOG_SELECTOR and len(clicks) >= 2:
+                return object()
+            raise PlaywrightTimeoutError("login surface unavailable")
+
+    async def fake_click_login_button(*, timeout_ms):
+        clicks.append(timeout_ms)
+        return "button:has-text('登录')"
+
+    adapter = douyin_login.DouYinLogin("qrcode", object(), FakePage())
+    monkeypatch.setattr(adapter, "click_login_button", fake_click_login_button)
+
+    asyncio.run(adapter.prepare_qrcode_login(timeout_ms=600))
+
+    assert len(clicks) == 2
+    assert all(0 < item <= adapter.LOGIN_ENTRY_CLICK_TIMEOUT_MS for item in clicks)
+
+
+def test_cr137_douyin_qrcode_waits_for_automatic_surface_before_click(monkeypatch):
+    from media_platform.douyin import login as douyin_login
+
+    dialog_probes = 0
+    clicks = 0
+
+    class FakePage:
+        async def wait_for_selector(self, selector, *, timeout, state=None):
+            nonlocal dialog_probes
+            if selector == douyin_login.DouYinLogin.LOGIN_DIALOG_SELECTOR:
+                dialog_probes += 1
+                if dialog_probes >= 3:
+                    return object()
+            raise PlaywrightTimeoutError("login surface unavailable")
+
+    async def fake_click_login_button(*, timeout_ms):
+        nonlocal clicks
+        clicks += 1
+        return "button:has-text('登录')"
+
+    adapter = douyin_login.DouYinLogin("qrcode", object(), FakePage())
+    monkeypatch.setattr(adapter, "click_login_button", fake_click_login_button)
+
+    asyncio.run(adapter.prepare_qrcode_login(timeout_ms=600))
+
+    assert dialog_probes >= 3
+    assert clicks == 0
+
+
+def test_cr137_douyin_qrcode_waits_for_load_before_fallback_click(monkeypatch):
+    from media_platform.douyin import login as douyin_login
+
+    load_seen = False
+    surface_visible = False
+    clicks = 0
+
+    class FakePage:
+        async def wait_for_selector(self, selector, *, timeout, state=None):
+            if selector == douyin_login.DouYinLogin.LOGIN_DIALOG_SELECTOR and surface_visible:
+                return object()
+            raise PlaywrightTimeoutError("login surface unavailable")
+
+        async def wait_for_load_state(self, state, *, timeout):
+            nonlocal load_seen
+            assert state == "load"
+            load_seen = True
+
+    async def fake_click_login_button(*, timeout_ms):
+        nonlocal clicks, surface_visible
+        assert load_seen is True
+        clicks += 1
+        surface_visible = True
+        return "button:has-text('登录')"
+
+    adapter = douyin_login.DouYinLogin("qrcode", object(), FakePage())
+    monkeypatch.setattr(adapter, "POST_LOAD_SURFACE_GRACE_MS", 1)
+    monkeypatch.setattr(adapter, "click_login_button", fake_click_login_button)
+
+    asyncio.run(adapter.prepare_qrcode_login(timeout_ms=600))
+
+    assert clicks == 1
+
+
+def test_cr137_douyin_click_error_returns_to_surface_check_without_trying_broad_fallback():
+    from media_platform.douyin import login as douyin_login
+
+    clicked_selectors: list[str] = []
+
+    class FakeLocator:
+        def __init__(self, selector):
+            self.selector = selector
+
+        @property
+        def first(self):
+            return self
+
+        async def count(self):
+            return 1
+
+        async def is_visible(self, *, timeout):
+            return True
+
+        async def click(self, *, timeout):
+            clicked_selectors.append(self.selector)
+            if len(clicked_selectors) == 1:
+                raise PlaywrightTimeoutError("button became covered by login surface")
+
+    class FakePage:
+        def locator(self, selector):
+            return FakeLocator(selector)
+
+    adapter = douyin_login.DouYinLogin("qrcode", object(), FakePage())
+
+    with pytest.raises(PlaywrightTimeoutError, match="covered"):
+        asyncio.run(adapter.click_login_button(timeout_ms=100))
+
+    assert clicked_selectors == [adapter.LOGIN_BUTTON_FALLBACK_SELECTORS[0]]
+
+
+def test_cr137_douyin_qrcode_accepts_surface_opened_during_click_timeout(monkeypatch):
+    from media_platform.douyin import login as douyin_login
+
+    surface_visible = False
+    clicks = 0
+
+    class FakePage:
+        async def wait_for_selector(self, selector, *, timeout, state=None):
+            if selector == douyin_login.DouYinLogin.LOGIN_DIALOG_SELECTOR and surface_visible:
+                return object()
+            raise PlaywrightTimeoutError("login surface unavailable")
+
+    async def fake_click_login_button(*, timeout_ms):
+        nonlocal clicks, surface_visible
+        clicks += 1
+        surface_visible = True
+        raise PlaywrightTimeoutError("button became covered by login surface")
+
+    adapter = douyin_login.DouYinLogin("qrcode", object(), FakePage())
+    monkeypatch.setattr(adapter, "click_login_button", fake_click_login_button)
+
+    asyncio.run(adapter.prepare_qrcode_login(timeout_ms=300))
+
+    assert clicks == 1
+
+
+def test_cr137_douyin_qrcode_fails_when_login_surface_never_appears(monkeypatch):
+    from media_platform.douyin import login as douyin_login
+
+    clicks = 0
+
+    class FakePage:
+        async def wait_for_selector(self, selector, *, timeout, state=None):
+            raise PlaywrightTimeoutError("login surface unavailable")
+
+    async def fake_click_login_button(*, timeout_ms):
+        nonlocal clicks
+        clicks += 1
+        return "button:has-text('登录')"
+
+    adapter = douyin_login.DouYinLogin("qrcode", object(), FakePage())
+    monkeypatch.setattr(adapter, "click_login_button", fake_click_login_button)
+
+    with pytest.raises(PlaywrightTimeoutError, match="login surface"):
+        asyncio.run(adapter.prepare_qrcode_login(timeout_ms=120))
+
+    assert clicks >= 1
+
+
+def test_cr137_douyin_qrcode_requires_visible_login_surface(monkeypatch):
+    from media_platform.douyin import login as douyin_login
+
+    surface_visible = False
+    clicks = 0
+    requested_states: list[str | None] = []
+
+    class FakePage:
+        async def wait_for_selector(self, selector, *, timeout, state=None):
+            requested_states.append(state)
+            if selector == douyin_login.DouYinLogin.LOGIN_DIALOG_SELECTOR:
+                if state != "visible":
+                    return object()
+                if surface_visible:
+                    return object()
+            raise PlaywrightTimeoutError("visible login surface unavailable")
+
+        async def wait_for_load_state(self, state, *, timeout):
+            return None
+
+    async def fake_click_login_button(*, timeout_ms):
+        nonlocal clicks, surface_visible
+        clicks += 1
+        surface_visible = True
+        return "button:has-text('登录')"
+
+    adapter = douyin_login.DouYinLogin("qrcode", object(), FakePage())
+    monkeypatch.setattr(adapter, "AUTO_SURFACE_WAIT_MAX_MS", 1)
+    monkeypatch.setattr(adapter, "POST_LOAD_SURFACE_GRACE_MS", 1)
+    monkeypatch.setattr(adapter, "click_login_button", fake_click_login_button)
+
+    asyncio.run(adapter.prepare_qrcode_login(timeout_ms=600))
+
+    assert clicks == 1
+    assert requested_states
+    assert all(state == "visible" for state in requested_states)
+
+
+def test_cr137_default_qrcode_timeout_covers_slow_chrome_readiness(monkeypatch):
+    from api.monitoring import settings as settings_module
+
+    definition = next(
+        item
+        for item in settings_module.RUNTIME_SETTING_DEFINITIONS
+        if item.key == "login_qr_timeout_seconds"
+    )
+    assert definition.default == 45
+
+    monkeypatch.delenv("MONITOR_LOGIN_QR_TIMEOUT_MS", raising=False)
+    monkeypatch.delenv("MONITOR_LOGIN_BROWSER_STARTUP_STAGE_TIMEOUT_SECONDS", raising=False)
+    monkeypatch.setattr(
+        login_qrcode_module,
+        "get_runtime_setting_value",
+        lambda key: (_ for _ in ()).throw(RuntimeError("synthetic settings failure")),
+    )
+    assert login_qrcode_module._login_qr_timeout_ms() == 45_000
+    assert login_qrcode_module._login_qr_stage_timeout_seconds() == 45.0
+
+    for path in (
+        Path("deploy/docker/monitor.env.example"),
+        Path("deploy/systemd/legal-sentiment-monitor.env.example"),
+    ):
+        content = path.read_text(encoding="utf-8")
+        assert "MONITOR_LOGIN_QR_TIMEOUT_MS=45000" in content, path
+        assert "MONITOR_LOGIN_QR_TIMEOUT_SECONDS=45" in content, path
+        assert "MONITOR_LOGIN_BROWSER_STARTUP_STAGE_TIMEOUT_SECONDS=45" in content, path
+
+
+def test_cr137_frontend_qrcode_timeout_keeps_response_margin_without_settings_cache():
+    from playwright.sync_api import sync_playwright
+
+    page_source = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+    function_source = (
+        "function loginQrRequestTimeoutMs()"
+        + page_source.split("function loginQrRequestTimeoutMs()", 1)[1].split(
+            "async function authApi", 1
+        )[0]
+    )
+    harness = f"""
+      let runtimeSettingsCache = {{}};
+      {function_source}
+      window.__cr137QrTimeout = {{
+        withoutCache: loginQrRequestTimeoutMs(),
+        configured20: (() => {{
+          runtimeSettingsCache = {{login_qr_timeout_seconds: {{value:20}}}};
+          return loginQrRequestTimeoutMs();
+        }})(),
+        configured45: (() => {{
+          runtimeSettingsCache = {{login_qr_timeout_seconds: {{value:45}}}};
+          return loginQrRequestTimeoutMs();
+        }})(),
+      }};
+    """
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.add_script_tag(content=harness)
+            result = page.evaluate("window.__cr137QrTimeout")
+        finally:
+            browser.close()
+
+    assert result == {
+        "withoutCache": 60_000,
+        "configured20": 45_000,
+        "configured45": 60_000,
+    }
+
+
+def test_cr137_qrcode_preparation_receives_only_global_remaining_budget(monkeypatch, tmp_path):
+    observed: dict[str, int] = {}
+
+    class FakePage:
+        def __init__(self):
+            self.context = None
+
+        def set_default_timeout(self, timeout):
+            return None
+
+        async def goto(self, *args, **kwargs):
+            await asyncio.sleep(0.06)
+
+    class FakeContext:
+        def __init__(self):
+            self.pages = [FakePage()]
+            self.pages[0].context = self
+
+        async def new_page(self):
+            page = FakePage()
+            page.context = self
+            self.pages.append(page)
+            return page
+
+        async def close(self):
+            return None
+
+    class FakeChromium:
+        async def launch_persistent_context(self, **kwargs):
+            return FakeContext()
+
+    class FakePlaywright:
+        chromium = FakeChromium()
+
+        async def stop(self):
+            return None
+
+    class FakePlaywrightFactory:
+        async def start(self):
+            return FakePlaywright()
+
+    async def fake_prepare_login_page(platform, page, timeout, login_adapter=None):
+        observed["prepare_timeout_ms"] = timeout
+        await asyncio.sleep(max(0, timeout - 50) / 1000)
+
+    async def fake_find_login_qrcode(page, platform, timeout, login_adapter=None):
+        observed["extract_timeout_ms"] = timeout
+        return _synthetic_qrcode_data_url()
+
+    async def fake_login_baseline(*args, **kwargs):
+        return ""
+
+    async def fake_is_logged_in(*args, **kwargs):
+        return False
+
+    monkeypatch.setattr(login_qrcode_module, "async_playwright", lambda: FakePlaywrightFactory())
+    monkeypatch.setattr(login_qrcode_module, "_login_baseline", fake_login_baseline)
+    monkeypatch.setattr(login_qrcode_module, "_is_logged_in", fake_is_logged_in)
+    monkeypatch.setattr(login_qrcode_module, "_build_mediacrawler_login_adapter", lambda *args: object())
+    monkeypatch.setattr(login_qrcode_module, "_prepare_login_page", fake_prepare_login_page)
+    monkeypatch.setattr(login_qrcode_module, "_find_login_qrcode", fake_find_login_qrcode)
+
+    result = asyncio.run(
+        login_qrcode_module.start_qrcode_login_session_with_profile(
+            9138,
+            "dy",
+            {
+                "profile_path": str(tmp_path / "dy_profile"),
+                "browser_path": "chrome",
+            },
+            timeout_ms=300,
+        )
+    )
+
+    try:
+        assert result["status"] == "waiting_qrcode"
+        assert 1 <= observed["prepare_timeout_ms"] < 270
+        assert 1 <= observed["extract_timeout_ms"] <= 80
+    finally:
+        asyncio.run(login_qrcode_module.close_qrcode_login_session(9138))
+
+
+def test_cr137_qrcode_prepare_bridge_deducts_exact_selector_probe_time():
+    observed: dict[str, int] = {}
+
+    class FakePage:
+        async def wait_for_selector(self, selector, *, state, timeout):
+            assert state == "visible"
+            await asyncio.sleep(0.06)
+            raise PlaywrightTimeoutError("exact QR unavailable")
+
+    class FakeAdapter:
+        async def prepare_qrcode_login(self, timeout_ms):
+            observed["adapter_timeout_ms"] = timeout_ms
+
+    asyncio.run(
+        login_qrcode_module._prepare_login_page(
+            "dy",
+            FakePage(),
+            200,
+            FakeAdapter(),
+        )
+    )
+
+    assert 1 <= observed["adapter_timeout_ms"] < 170
+
+
+def test_cr137_douyin_auto_identity_defaults_to_desktop_web_template():
+    from api.monitoring.account_identity import identity_template_family
+    from api.monitoring.database import create_draft_social_account
+
+    init_db()
+    account_snapshot = _snapshot_table("social_accounts")
+    audit_snapshot = _snapshot_table("audit_logs")
+    try:
+        automatic = create_draft_social_account(
+            {
+                "name": "CR-137 Douyin automatic desktop identity",
+                "platform": "dy",
+                "proxy_region_snapshot": "CN_MAINLAND",
+            }
+        )
+        explicit_mobile = create_draft_social_account(
+            {
+                "name": "CR-137 Douyin explicit mobile identity",
+                "platform": "dy",
+                "proxy_region_snapshot": "CN_MAINLAND",
+                "identity_template_family": "android_chrome",
+            }
+        )
+
+        assert identity_template_family(automatic["identity_template"]) == "windows_chrome_desktop"
+        assert automatic["is_mobile"] is False
+        assert identity_template_family(explicit_mobile["identity_template"]) == "android_chrome"
+        assert explicit_mobile["is_mobile"] is True
+    finally:
+        _restore_table("audit_logs", audit_snapshot)
+        _restore_table("social_accounts", account_snapshot)
+
+
+def test_cr137_douyin_mobile_identity_qrcode_fails_before_browser_start(monkeypatch):
+    from types import SimpleNamespace
+
+    async def forbidden_start(*args, **kwargs):
+        raise AssertionError("mobile Douyin QR must stop before browser startup")
+
+    monkeypatch.setattr(
+        login_qrcode_module,
+        "_start_qrcode_login_session_with_profile_once",
+        forbidden_start,
+    )
+    command = {
+        "profile_path": "browser_data/cr137-mobile-douyin",
+        "_browser_environment_plan": SimpleNamespace(
+            is_mobile=True,
+            identity_template="CN_ANDROID_CHROME",
+        ),
+    }
+
+    result = asyncio.run(
+        login_qrcode_module.start_qrcode_login_session_with_profile(
+            9137,
+            "dy",
+            command,
+            timeout_ms=45_000,
+        )
+    )
+
+    assert result["status"] == "qrcode_failed"
+    assert result["stage"] == "校验账号浏览器环境"
+    assert "Windows Chrome" in result["message"]
+    assert "重置" in result["message"]
+
+
+def test_cr137_mobile_identity_stage_failure_recovers_account_login_state(tmp_path):
+    init_db()
+    snapshots = {
+        "audit_logs": _snapshot_table("audit_logs"),
+        "login_sessions": _snapshot_table("login_sessions"),
+        "social_accounts": _snapshot_table("social_accounts"),
+    }
+    try:
+        account = _login_test_account("dy", tmp_path)
+        session = create_login_session(
+            {
+                "platform": "dy",
+                "account_id": account["id"],
+                "login_url": "https://www.douyin.com/",
+                "profile_path": str(resolve_account_profile_path(str(account["profile_key"]))),
+                "message": "正在准备二维码",
+            }
+        )
+        prepared = database_module.prepare_social_account_identity_login(
+            int(account["id"]),
+            trigger_source="qrcode_login",
+            login_session_id=int(session["id"]),
+        )
+        assert prepared["identity_state"] == "login_in_progress"
+
+        failed_session, account_status = asyncio.run(
+            monitor_router._reconcile_login_session_with_account_check(
+                session,
+                {
+                    "stage": "校验账号浏览器环境",
+                    "message": "当前账号模板不适用于抖音网页二维码登录。",
+                },
+                "qrcode_failed",
+            )
+        )
+
+        refreshed = get_social_account(int(account["id"]), masked=False)
+        assert failed_session["status"] == "qrcode_failed"
+        assert account_status["id"] == account["id"]
+        assert refreshed["identity_state"] != "login_in_progress"
+    finally:
+        _restore_table("audit_logs", snapshots["audit_logs"])
+        _restore_table("login_sessions", snapshots["login_sessions"])
+        _restore_table("social_accounts", snapshots["social_accounts"])
 
 
 def test_login_session_route_keeps_manual_verification_status_when_window_is_open(monkeypatch):
@@ -14687,7 +15211,7 @@ def test_qrcode_poll_timeout_returns_pending_state(monkeypatch):
         result = asyncio.run(
             asyncio.wait_for(
                 login_qrcode_module.poll_qrcode_login_session(99998),
-                timeout=0.2,
+                timeout=0.6,
             )
         )
     finally:
@@ -17611,7 +18135,7 @@ def test_monitor_page_uses_tob_information_architecture_without_customer_facing_
     assert "查看状态" not in page
     assert "刷新记录" not in page
     assert "刷新当前账号" not in page
-    assert "已生成登录态" in page
+    assert "登录材料已保存，登录未完成" in page
     assert "account_metrics" in page
     assert "renderAccountList" in page
     assert "social-accounts" in page
@@ -27793,6 +28317,92 @@ def test_cr136_login_controls_center_in_desktop_and_mobile_geometry():
                 assert len(str(geometry["columns"]).split()) == 1
         finally:
             browser.close()
+
+
+def test_cr137_login_material_copy_distinguishes_saved_profile_from_valid_login():
+    from playwright.sync_api import sync_playwright
+
+    page_source = Path("api/monitor_web/index.html").read_text(encoding="utf-8")
+
+    def function_source(start: str, end: str) -> str:
+        assert start in page_source
+        return start + page_source.split(start, 1)[1].split(end, 1)[0]
+
+    assert "function loginSessionProfileState" in page_source
+    production_functions = "\n".join(
+        [
+            function_source("function loginMaterialCell(p){", "function platformStatusCell"),
+            function_source("function loginSessionProfileState", "function platformStatusTable"),
+        ]
+    )
+    harness = f"""
+      function esc(value) {{ return String(value ?? ''); }}
+      function poolStatusText(value) {{ return String(value ?? ''); }}
+      function normalizeLoginSessionStatus(value) {{ return String(value ?? ''); }}
+      {production_functions}
+      window.__cr137 = {{
+        stale: loginMaterialCell({{
+          profile_exists:true,
+          login_ready:false,
+          needs_login:true,
+          using_account_profile:false,
+          has_cookies:false,
+        }}),
+        ready: loginMaterialCell({{
+          profile_exists:true,
+          login_ready:true,
+          needs_login:false,
+          using_account_profile:false,
+          has_cookies:false,
+        }}),
+        pendingConfiguredOnly: loginSessionProfileState(
+          {{status:'waiting_qrcode', profile_path:true}},
+          {{profile_exists:false, needs_login:true}}
+        ),
+        failedConfiguredOnly: loginSessionProfileState(
+          {{status:'qrcode_failed', profile_path:true}},
+          {{profile_exists:false, needs_login:true}}
+        ),
+        savedPending: loginSessionProfileState(
+          {{status:'waiting_qrcode', profile_path:true}},
+          {{profile_exists:true, needs_login:true}}
+        ),
+        successSession: loginSessionProfileState(
+          {{status:'success', profile_path:true}},
+          {{profile_exists:true, login_ready:true, needs_login:false}}
+        ),
+        pendingWithReadyMaterial: loginSessionProfileState(
+          {{status:'waiting_qrcode', profile_path:true}},
+          {{profile_exists:true, login_ready:true, needs_login:false}}
+        ),
+      }};
+    """
+
+    with sync_playwright() as playwright:
+        browser = playwright.chromium.launch(headless=True)
+        try:
+            page = browser.new_page()
+            page.add_script_tag(content=harness)
+            result = page.evaluate("window.__cr137")
+        finally:
+            browser.close()
+
+    assert "登录材料已保存" in result["stale"]
+    assert "需重新登录" in result["stale"]
+    assert "可供任务复用" not in result["stale"]
+    assert "登录材料可用" in result["ready"]
+    assert "当前无已知登录异常" in result["ready"]
+    assert "登录态已验证" not in result["ready"]
+    assert "可供任务复用" not in result["ready"]
+    assert result["pendingConfiguredOnly"] == {"key": "pending", "label": "登录处理中"}
+    assert result["failedConfiguredOnly"] == {"key": "missing", "label": "登录材料未保存"}
+    assert result["savedPending"] == {"key": "pending", "label": "登录材料已保存，登录处理中"}
+    assert result["successSession"]["key"] == "ready"
+    assert result["successSession"]["label"] == "登录态已验证"
+    assert result["pendingWithReadyMaterial"] == {
+        "key": "pending",
+        "label": "登录材料已保存，登录处理中",
+    }
 
 
 def test_cr130_bottom_account_save_behavior_promotes_cookie_without_empty_draft():

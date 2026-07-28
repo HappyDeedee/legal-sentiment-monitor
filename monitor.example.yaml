@@ -42,7 +42,7 @@ platforms:
 
 login:
   # QR code wait timeout in seconds for a login session.
-  qr_timeout_seconds: 20
+  qr_timeout_seconds: 45
 
   # Server-side login session TTL in seconds.
   session_ttl_seconds: 600

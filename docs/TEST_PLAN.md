@@ -1823,6 +1823,51 @@ Run the relevant parts of this checklist after each Phase 11 batch:
   complete monitoring, Python/JavaScript/PowerShell syntax, docs/lock/
   whitespace checks, local browser geometry, and independent review.
 
+## CR-137 Douyin QR Login Surface Readiness Tests
+
+- A synthetic Douyin page accepts an early login-entry click but exposes no
+  dialog or QR. Preparation retries inside one deadline and returns only after
+  a later attempt or automatic page transition exposes the login surface.
+- If the login overlay appears while Playwright is waiting to click the now
+  covered button, the click timeout is followed by a state check and the
+  visible dialog/QR is accepted.
+- A page that never exposes a dialog or QR terminates within the preparation
+  deadline and records only bounded attempt/state identifiers.
+- A hidden attached login panel is ignored until the surface becomes visible.
+- Browser startup/navigation consumes the global budget before the adapter is
+  called; the adapter receives only the remaining milliseconds and retains its
+  QR-extraction reserve inside that deadline.
+- The bridge-level exact-QR probe consumes measurable time and the adapter
+  receives a correspondingly smaller positive timeout; generic fallback waits
+  also use the latest remaining time.
+- Existing adapter capture, exact-selector, generic QR fallback, diagnostic
+  reserve, manual-verification, and cleanup behavior remain covered.
+- The default `login_qr_timeout_seconds` is `45`; database/config/environment
+  precedence and the existing valid range remain unchanged. Docker and systemd
+  examples carry `45000/45/45` total, setting, and startup-stage values.
+- With an empty runtime-settings cache, the frontend QR request timeout is
+  `60000` ms; explicit `20` and `45` second values retain the existing minimum
+  and `15`-second response-margin behavior.
+- A new Douyin account with the ordinary `auto` choice receives a deterministic
+  Windows Chrome desktop identity. Explicit Android selection remains
+  available as persisted identity input, but the current Douyin QR path stops
+  before browser startup and names the reset/template action.
+- Real headless probes correlate the failing Android/mobile-UA identities and
+  successful Windows identities, then verify a fresh default account through
+  system Chrome with a non-empty QR and no visible owned window.
+- Frontend regression coverage distinguishes `profile_exists=true` plus
+  `needs_login=true` from a validated reusable login state, and proves a
+  configured Profile path without `profile_exists=true` is not presented as
+  created or saved material.
+- A pending session cannot become “登录态已验证” from platform material status.
+  Platform summary copy says “登录材料可用” and makes no fresh-validation claim.
+- QR polling and both verification-code routes filter platform status for a
+  different account/Profile while preserving matching account and default
+  platform-session behavior.
+- Final gates include focused CR-137 and adjacent CR-135/CR-136 login tests,
+  complete monitoring, syntax/docs/lock/whitespace checks, real managed
+  headless Douyin QR, affected-computer acceptance, and independent review.
+
 ## CR-134 Managed Login Environment Injection And Retry Tests
 
 - A persistent managed context receives the complete template through

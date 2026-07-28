@@ -33,7 +33,7 @@ Confirmed V1 direction:
 | lock_cleanup_buffer_seconds | integer | 300 | 60-3600 | next run |
 | crawler_retry_count | integer | 1 | 0-5 | next run |
 | crawler_retry_delay_seconds | integer | 3 | 0-300 | next run |
-| login_qr_timeout_seconds | integer | 20 | 5-300 | next session |
+| login_qr_timeout_seconds | integer | 45 | 5-300 | next session |
 | login_session_ttl_seconds | integer | 600 | 60-3600 | next session |
 | scheduler_tick_seconds | integer | 60 | 10-600 | restart or scheduler reload |
 | scheduler_disabled | boolean | false | true/false | restart or scheduler reload |
@@ -200,6 +200,9 @@ Browser startup and cleanup watchdogs are deployment-only environment values:
 `MONITOR_PROFILE_VALIDATION_CLEANUP_TIMEOUT_SECONDS`. They bound integration
 stages and do not replace `login_qr_timeout_seconds`, which remains the
 operator-facing total QR creation setting.
+CR-137 aligns the QR/browser startup-stage default with that setting at `45`
+seconds; explicit deployment values remain authoritative and the outer QR
+deadline still bounds the complete operation.
 Managed-browser cleanup uses the larger of the configured outer cleanup value
 and the internal context/browser close plus process-reap budget. This prevents
 an outer watchdog from cancelling the owned-process cleanup immediately before
@@ -254,7 +257,7 @@ platforms:
     max_concurrency: 1
 
 login:
-  qr_timeout_seconds: 20
+  qr_timeout_seconds: 45
   session_ttl_seconds: 600
 
 scheduler:

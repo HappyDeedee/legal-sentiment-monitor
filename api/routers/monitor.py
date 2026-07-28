@@ -2017,6 +2017,8 @@ async def _login_session_locked(session_id: int) -> dict[str, Any]:
         )
     statuses = {item["platform"]: item for item in list_platform_status()}
     platform_status = statuses.get(platform) or {}
+    if not _platform_status_matches_login_session(session, platform_status):
+        platform_status = {}
     status = normalize_login_state(session.get("status"))
     return {
         "session": _customer_view_login_session({**session, "status": status}),
@@ -2084,6 +2086,8 @@ async def _submit_login_session_verification_code_locked(session_id: int, payloa
     statuses = {item["platform"]: item for item in list_platform_status()}
     platform = str(session.get("platform") or "")
     platform_status = statuses.get(platform) or {}
+    if not _platform_status_matches_login_session(session, platform_status):
+        platform_status = {}
     session_view = _customer_view_login_session(session)
     return {
         "session": session_view,
@@ -2151,6 +2155,8 @@ async def _request_login_session_verification_code_locked(session_id: int) -> di
     statuses = {item["platform"]: item for item in list_platform_status()}
     platform = str(session.get("platform") or "")
     platform_status = statuses.get(platform) or {}
+    if not _platform_status_matches_login_session(session, platform_status):
+        platform_status = {}
     session_view = _customer_view_login_session(session)
     return {
         "session": session_view,
@@ -2976,6 +2982,8 @@ def _platform_status_matches_login_session(session: dict[str, Any], platform_sta
         return bool(session_profile_key and status_profile_key and session_profile_key == status_profile_key)
     session_profile = str(session.get("profile_path") or "").strip()
     status_profile = str(platform_status.get("profile_path") or "").strip()
+    if not session_profile:
+        return True
     return bool(session_profile and status_profile and session_profile == status_profile)
 
 

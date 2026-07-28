@@ -29,6 +29,7 @@ from .account_identity import (
     AccountIdentityError,
     generate_account_identity,
     identity_template_family,
+    resolve_platform_identity_template_family,
     validate_account_identity,
 )
 from .auth import generate_session_token, hash_password, hash_session_token, verify_password
@@ -5331,7 +5332,7 @@ def _generate_new_social_account_identity(
         platform=platform,
         account_id=account_id,
         proxy_region_snapshot=proxy_region_snapshot,
-        template_family=template_family,
+        template_family=resolve_platform_identity_template_family(platform, template_family),
     )
     bound_proxy_exists = proxy_id is None or conn.execute(
         "SELECT 1 FROM proxy_profiles WHERE id=?",
@@ -5861,7 +5862,10 @@ def _generate_identity_for_account(
         platform=str(account.get("platform") or ""),
         account_id=int(account["id"]),
         proxy_region_snapshot=proxy_region_snapshot,
-        template_family=template_family,
+        template_family=resolve_platform_identity_template_family(
+            account.get("platform"),
+            template_family,
+        ),
     )
     validate_account_identity(
         {

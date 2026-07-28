@@ -1,8 +1,38 @@
 # Current State
 
-Last updated: 2026-07-24
+Last updated: 2026-07-28
 
 ## Current Baseline
+
+- CR-137 is locally implementation-verified on
+  `codex/cr-137-douyin-qr-readiness`; affected-computer acceptance after
+  delivery remains pending. The affected-machine matrix proved early
+  pre-hydration clicks are no-ops. Local cross-Profile probes further proved
+  failed samples were Android/mobile identities while Windows desktop samples
+  generated QR images. Douyin preparation now waits for observable surface or
+  page-load readiness before short clicks; the default total/stage budget is
+  `45` seconds; new Douyin `auto` accounts resolve to Windows desktop identity;
+  persisted Android identities receive reset guidance before browser startup;
+  and UI wording separates saved material from validated reusable login.
+  The preparation adapter now receives only the global remaining budget, all
+  login-surface probes require visibility, and Docker/systemd examples use the
+  same `45`-second total/stage values. A configured Profile path alone is no
+  longer presented as saved material. The frontend no-cache request fallback
+  uses the same `45`-second setting plus `15` seconds response margin.
+  Login-session poll responses now keep platform material status only when its
+  account/Profile belongs to that session; default unbound sessions still match
+  the platform default Profile. Platform summary copy says material is usable,
+  while only a successful login session says the login state was validated.
+  The bridge's initial exact-QR probe also deducts its elapsed time before
+  passing the remaining budget to the platform adapter. Focused/adjacent
+  coverage (`25`) and complete monitoring (`787`) pass, as do
+  Python/JavaScript, lock, documentation, and whitespace gates. Real managed
+  system Chrome and Playwright Chromium headless returned non-empty QR images
+  in `9.78` and `10.34` seconds with no visible owned window, mismatch, or
+  unsupported field. Fresh independent backend and frontend/documentation
+  reviews found one final P2 bridge-budget gap and no other P0/P1/P2 issue;
+  that gap is fixed and covered by focused, full, and real-browser verification.
+  Affected-computer acceptance after delivery remains the only CR-137 gate.
 
 - CR-136 is locally implementation-verified and committed for delivery.
   Exact QR selector extraction now receives

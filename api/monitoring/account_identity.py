@@ -48,6 +48,7 @@ TEMPLATE_FAMILIES = {
     "mac_chrome_desktop",
     "android_chrome",
 }
+DOUYIN_DESKTOP_WEB_TEMPLATE_FAMILY = "windows_chrome_desktop"
 
 _WINDOWS_CHROME_UA = (
     "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 "
@@ -178,6 +179,14 @@ IDENTITY_TEMPLATE_BY_NAME = MappingProxyType(
 def identity_template_family(identity_template: Any) -> str:
     template = IDENTITY_TEMPLATE_BY_NAME.get(str(identity_template or ""))
     return str(template["family"]) if template else TEMPLATE_FAMILY_AUTO
+
+
+def resolve_platform_identity_template_family(platform: Any, template_family: Any) -> str:
+    platform_value = str(platform or "").strip().lower()
+    family_value = str(template_family or TEMPLATE_FAMILY_AUTO).strip().lower()
+    if platform_value == "dy" and family_value == TEMPLATE_FAMILY_AUTO:
+        return DOUYIN_DESKTOP_WEB_TEMPLATE_FAMILY
+    return family_value
 
 GENERATOR_OWNED_FIELDS = (
     "environment_region",

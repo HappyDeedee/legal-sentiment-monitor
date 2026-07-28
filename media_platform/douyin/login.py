@@ -45,14 +45,22 @@ class DouYinLogin(AbstractLogin):
         "xpath=//*[normalize-space()='登录' and (self::button or self::div or self::p or self::span)]",
     )
     AUTO_DIALOG_PROBE_TIMEOUT_MS = 1500
-    LOGIN_ENTRY_CLICK_TIMEOUT_MS = 5000
-    QRCODE_EXTRACTION_RESERVE_MS = 2000
-    POST_CLICK_SETTLE_MS = 500
+    AUTO_SURFACE_WAIT_MAX_MS = 32000
+    AUTO_SURFACE_POLL_INTERVAL_MS = 250
+    LOAD_STATE_PROBE_SLICE_MS = 500
+    POST_LOAD_SURFACE_GRACE_MS = 1500
+    LOGIN_FALLBACK_RESERVE_MS = 5000
+    LOGIN_ENTRY_CLICK_TIMEOUT_MS = 1000
+    LOGIN_ENTRY_MAX_ATTEMPTS = 4
+    LOGIN_SURFACE_PROBE_SLICE_MS = 250
+    LOGIN_SURFACE_POST_CLICK_PROBE_MS = 1000
+    LOGIN_ENTRY_RETRY_INTERVAL_MS = 500
+    QRCODE_EXTRACTION_RESERVE_MS = 5000
     QRCODE_SELECTOR = "xpath=//div[@id='animate_qrcode_container']//img"
     QRCODE_CAPTURE_METHOD = "tools.utils.find_login_qrcode"
     QRCODE_FLOW_STEPS = (
         "打开 LOGIN_URL",
-        "等待 LOGIN_DIALOG_SELECTOR；未出现时点击 LOGIN_BUTTON_SELECTOR 或兼容入口",
+        "等待 LOGIN_DIALOG_SELECTOR；未出现时在同一截止时间内重试兼容登录入口并确认登录面板或二维码出现",
         "调用 tools.utils.find_login_qrcode(context_page, QRCODE_SELECTOR) 获取二维码",
         "使用 check_login_state 的 Cookie/localStorage 规则轮询登录结果",
     )
@@ -229,35 +237,175 @@ class DouYinLogin(AbstractLogin):
 
     async def prepare_qrcode_login(self, timeout_ms: int = 10000) -> None:
         """Prepare the MediaCrawler Douyin QR login dialog without waiting for scan completion."""
+        loop = asyncio.get_running_loop()
+        preparation_started = loop.time()
         overall_timeout_ms = max(1, int(timeout_ms))
         extraction_reserve_ms = min(
             self.QRCODE_EXTRACTION_RESERVE_MS,
             max(1, overall_timeout_ms // 3),
         )
         preparation_budget_ms = max(1, overall_timeout_ms - extraction_reserve_ms)
-        preparation_deadline = asyncio.get_running_loop().time() + preparation_budget_ms / 1000
+        preparation_deadline = preparation_started + preparation_budget_ms / 1000
+        fallback_reserve_ms = min(
+            self.LOGIN_FALLBACK_RESERVE_MS,
+            max(1, preparation_budget_ms // 3),
+        )
+        automatic_wait_budget_ms = max(1, preparation_budget_ms - fallback_reserve_ms)
+        automatic_wait_deadline = min(
+            preparation_deadline,
+            preparation_started
+            + min(self.AUTO_SURFACE_WAIT_MAX_MS, automatic_wait_budget_ms) / 1000,
+        )
         probe_timeout_ms = min(preparation_budget_ms, self.AUTO_DIALOG_PROBE_TIMEOUT_MS)
         try:
-            await self.context_page.wait_for_selector(self.LOGIN_DIALOG_SELECTOR, timeout=probe_timeout_ms)
+            await self.context_page.wait_for_selector(
+                self.LOGIN_DIALOG_SELECTOR,
+                state="visible",
+                timeout=probe_timeout_ms,
+            )
+            return
         except Exception as e:
-            utils.logger.error(f"[DouYinLogin.prepare_qrcode_login] login dialog box does not pop up automatically, error: {e}")
-            remaining_ms = max(1, int((preparation_deadline - asyncio.get_running_loop().time()) * 1000))
-            settle_reserve_ms = min(self.POST_CLICK_SETTLE_MS, max(0, remaining_ms - 1))
-            click_timeout_ms = min(
-                max(1, remaining_ms - settle_reserve_ms),
-                self.LOGIN_ENTRY_CLICK_TIMEOUT_MS,
+            utils.logger.info(
+                "[DouYinLogin.prepare_qrcode_login] automatic dialog probe missed error_type=%s",
+                type(e).__name__,
             )
-            await self.click_login_button(timeout_ms=click_timeout_ms)
-            settle_seconds = min(
-                self.POST_CLICK_SETTLE_MS / 1000,
-                max(0.0, preparation_deadline - asyncio.get_running_loop().time()),
-            )
-            if settle_seconds:
-                await asyncio.sleep(settle_seconds)
 
-    async def click_login_button(self, timeout_ms: int = 10000) -> None:
+        if await self._wait_for_automatic_login_surface(automatic_wait_deadline):
+            return
+
+        attempts = 0
+        last_error_type = ""
+        while loop.time() < preparation_deadline:
+            remaining_ms = max(0, int((preparation_deadline - loop.time()) * 1000))
+            if remaining_ms <= 0:
+                break
+            if await self._login_surface_visible(
+                min(self.LOGIN_SURFACE_POST_CLICK_PROBE_MS, remaining_ms)
+            ):
+                return
+
+            if attempts < self.LOGIN_ENTRY_MAX_ATTEMPTS:
+                remaining_ms = max(0, int((preparation_deadline - loop.time()) * 1000))
+                if remaining_ms <= 0:
+                    break
+                click_timeout_ms = min(
+                    self.LOGIN_ENTRY_CLICK_TIMEOUT_MS,
+                    max(1, remaining_ms),
+                )
+                attempts += 1
+                clicked_selector = ""
+                try:
+                    clicked_selector = await self.click_login_button(
+                        timeout_ms=click_timeout_ms
+                    )
+                    last_error_type = ""
+                except Exception as e:
+                    clicked_selector = str(
+                        getattr(self, "_last_login_button_selector", "") or ""
+                    )
+                    last_error_type = type(e).__name__
+                utils.logger.info(
+                    "[DouYinLogin.prepare_qrcode_login] login entry attempt=%s selector=%s error_type=%s",
+                    attempts,
+                    clicked_selector or "none",
+                    last_error_type or "none",
+                )
+
+                remaining_ms = max(0, int((preparation_deadline - loop.time()) * 1000))
+                if remaining_ms > 0 and await self._login_surface_visible(
+                    min(
+                        self.LOGIN_SURFACE_POST_CLICK_PROBE_MS,
+                        max(1, remaining_ms // 3),
+                    )
+                ):
+                    return
+
+            remaining_ms = max(0, int((preparation_deadline - loop.time()) * 1000))
+            if remaining_ms <= 0:
+                break
+            await asyncio.sleep(
+                min(
+                    self.LOGIN_ENTRY_RETRY_INTERVAL_MS,
+                    max(1, remaining_ms // 4),
+                )
+                / 1000
+            )
+
+        raise PlaywrightTimeoutError(
+            "Douyin login surface did not become ready "
+            f"within the preparation deadline (attempts={attempts}, last_error_type={last_error_type or 'none'})"
+        )
+
+    async def _wait_for_automatic_login_surface(self, deadline: float) -> bool:
+        loop = asyncio.get_running_loop()
+        post_load_deadline: float | None = None
+        while loop.time() < deadline:
+            remaining_ms = max(0, int((deadline - loop.time()) * 1000))
+            if remaining_ms <= 0:
+                break
+            if await self._login_surface_visible(
+                min(self.LOGIN_SURFACE_POST_CLICK_PROBE_MS, remaining_ms)
+            ):
+                return True
+
+            if post_load_deadline is not None:
+                if loop.time() >= post_load_deadline:
+                    return False
+            else:
+                remaining_ms = max(0, int((deadline - loop.time()) * 1000))
+                if remaining_ms <= 0:
+                    break
+                try:
+                    await self.context_page.wait_for_load_state(
+                        "load",
+                        timeout=min(self.LOAD_STATE_PROBE_SLICE_MS, remaining_ms),
+                    )
+                    post_load_deadline = min(
+                        deadline,
+                        loop.time() + self.POST_LOAD_SURFACE_GRACE_MS / 1000,
+                    )
+                except Exception:
+                    pass
+
+            remaining_ms = max(0, int((deadline - loop.time()) * 1000))
+            if remaining_ms <= 0:
+                break
+            sleep_ms = min(self.AUTO_SURFACE_POLL_INTERVAL_MS, remaining_ms)
+            if post_load_deadline is not None:
+                sleep_ms = min(
+                    sleep_ms,
+                    max(1, int((post_load_deadline - loop.time()) * 1000)),
+                )
+            await asyncio.sleep(sleep_ms / 1000)
+        return False
+
+    async def _login_surface_visible(self, timeout_ms: int) -> bool:
+        deadline = asyncio.get_running_loop().time() + max(1, int(timeout_ms)) / 1000
+        selectors = (self.LOGIN_DIALOG_SELECTOR, self.QRCODE_SELECTOR)
+        for index, selector in enumerate(selectors):
+            remaining_ms = max(0, int((deadline - asyncio.get_running_loop().time()) * 1000))
+            if remaining_ms <= 0:
+                return False
+            selectors_left = len(selectors) - index
+            selector_timeout_ms = min(
+                self.LOGIN_SURFACE_PROBE_SLICE_MS,
+                max(1, remaining_ms // selectors_left),
+            )
+            try:
+                await self.context_page.wait_for_selector(
+                    selector,
+                    state="visible",
+                    timeout=selector_timeout_ms,
+                )
+                return True
+            except Exception:
+                continue
+        return False
+
+    async def click_login_button(self, timeout_ms: int = 10000) -> str:
         """Click the current Douyin web login entry, with legacy selectors as fallback."""
         last_error: Exception | None = None
+        self._last_login_button_selector = ""
         deadline = asyncio.get_running_loop().time() + max(1, int(timeout_ms)) / 1000
         for selector in self.LOGIN_BUTTON_FALLBACK_SELECTORS:
             remaining_ms = int((deadline - asyncio.get_running_loop().time()) * 1000)
@@ -269,14 +417,15 @@ class DouYinLogin(AbstractLogin):
                     continue
                 if not await login_button_ele.is_visible(timeout=min(500, remaining_ms)):
                     continue
-                remaining_ms = int((deadline - asyncio.get_running_loop().time()) * 1000)
-                if remaining_ms <= 0:
-                    break
-                await login_button_ele.click(timeout=max(1, remaining_ms))
-                return
             except Exception as e:
                 last_error = e
                 continue
+            self._last_login_button_selector = selector
+            remaining_ms = int((deadline - asyncio.get_running_loop().time()) * 1000)
+            if remaining_ms <= 0:
+                break
+            await login_button_ele.click(timeout=max(1, remaining_ms))
+            return selector
         if last_error:
             raise last_error
         raise PlaywrightTimeoutError("Douyin login button not found")
