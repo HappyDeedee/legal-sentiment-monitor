@@ -39,7 +39,7 @@ RUNTIME_SETTING_DEFINITIONS: tuple[RuntimeSettingDefinition, ...] = (
     RuntimeSettingDefinition("crawler_retry_delay_seconds", "Crawling", "采集重试间隔", "integer", 3, 0, 300, "next run", "runtime.crawler_retry_delay_seconds", "MONITOR_CRAWLER_RETRY_DELAY_SECONDS"),
     RuntimeSettingDefinition("ai_item_timeout_seconds", "AI", "单条 AI 评估超时", "integer", 120, 5, 600, "next run", "ai.item_timeout_seconds", "MONITOR_AI_ITEM_TIMEOUT_SECONDS"),
     RuntimeSettingDefinition("ai_item_retry_count", "AI", "单条 AI 评估重试次数", "integer", 1, 0, 5, "next run", "ai.item_retry_count", "MONITOR_AI_ITEM_RETRY_COUNT"),
-    RuntimeSettingDefinition("login_qr_timeout_seconds", "Login", "二维码等待超时", "integer", 20, 5, 300, "next session", "login.qr_timeout_seconds", "MONITOR_LOGIN_QR_TIMEOUT_SECONDS"),
+    RuntimeSettingDefinition("login_qr_timeout_seconds", "Login", "二维码等待超时", "integer", 45, 5, 300, "next session", "login.qr_timeout_seconds", "MONITOR_LOGIN_QR_TIMEOUT_SECONDS"),
     RuntimeSettingDefinition("login_session_ttl_seconds", "Login", "登录会话有效期", "integer", 600, 60, 3600, "next session", "login.session_ttl_seconds", "MONITOR_LOGIN_QR_TTL_SECONDS"),
     RuntimeSettingDefinition("scheduler_tick_seconds", "Scheduler", "调度检查间隔", "integer", 60, 10, 600, "scheduler reload or restart", "scheduler.tick_seconds", "MONITOR_SCHEDULER_TICK_SECONDS"),
     RuntimeSettingDefinition("scheduler_disabled", "Scheduler", "暂停自动调度", "boolean", False, None, None, "scheduler reload or restart", "scheduler.disabled", "MONITOR_DISABLE_SCHEDULER"),

@@ -2031,6 +2031,51 @@ the CR-136 delivery branch; affected-computer acceptance remains pending.
       results.
 - [ ] Record affected-computer acceptance after this CR is merged to `main`.
 
+## CR-137 - Douyin QR Login Surface Readiness And Login-Material Truthfulness
+
+Implementation status (2026-07-28): locally implementation-verified from the
+affected-computer timing/headless/browser matrix on `main@74aa4c1`; final
+independent review and affected-computer acceptance remain.
+
+- [x] Confirm system Chrome headless can render the Douyin QR and exclude a
+      general headless or Chrome-versus-Chromium incompatibility.
+- [x] Confirm the baseline click occurs before page readiness and produces no
+      dialog, QR, manual-verification, page, or frame transition.
+- [x] Confirm the current default `20`-second budget is shorter than the
+      measured affected-computer Chrome `load` time of about `23.6` seconds.
+- [x] Add RED coverage for early no-op click retry, overlay-during-click
+      success, and bounded no-surface failure.
+- [x] Implement condition-based Douyin login-surface readiness with bounded
+      click retries and safe attempt diagnostics.
+- [x] Raise the default total QR creation budget to the reviewed bounded value
+      while preserving runtime and environment precedence.
+- [x] Keep Docker/systemd deployment examples aligned with the `45`-second
+      total and browser-startup stage budgets.
+- [x] Keep the frontend no-cache QR request fallback aligned with the
+      `45`-second backend budget plus its existing `15`-second response margin.
+- [x] Pass only the global remaining time into platform preparation so slow
+      browser startup cannot consume the adapter's QR-extraction reserve.
+- [x] Deduct the bridge's initial exact-QR probe and every generic preparation
+      step before passing the latest remaining budget to the adapter/fallback.
+- [x] Require the Douyin dialog/QR surface to be visible before preparation is
+      considered ready.
+- [x] Distinguish Profile material existence from validated reusable login
+      state in the platform table, login history, and session detail; a
+      configured path alone is not saved material.
+- [x] Filter login-session platform status by account/Profile ownership across
+      QR polling and verification-code routes; preserve explicit default
+      platform-session matching.
+- [x] Reserve “登录态已验证” for successful login sessions and describe the
+      platform summary as available material without claiming a fresh check.
+- [x] Resolve new Douyin `auto` identities to a desktop-web-compatible Windows
+      template and fail early for persisted Android QR identities with reset
+      guidance.
+- [x] Run focused, adjacent, complete monitoring, static, docs, whitespace,
+      and local real Playwright/system-Chrome headless QR checks.
+- [x] Complete final independent backend and frontend/documentation read-only
+      reviews, fix every finding, and synchronize the final verified result.
+- [ ] Record affected-computer acceptance after delivery to `main`.
+
 ## CR-134 - Managed Login Environment Injection And Retry
 
 Implementation status (2026-07-22): implementation and independent review

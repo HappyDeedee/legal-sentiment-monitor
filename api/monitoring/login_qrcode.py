@@ -136,6 +136,15 @@ async def start_qrcode_login_session_with_profile(
     await close_qrcode_login_sessions_for_profile(command.get("profile_path") or "", except_session_id=session_id)
     if platform not in QR_SELECTORS:
         raise ValueError("unsupported platform")
+    managed_plan = command.get("_browser_environment_plan")
+    if platform == "dy" and bool(getattr(managed_plan, "is_mobile", False)):
+        return _failure(
+            platform,
+            command,
+            "当前抖音账号使用 Android 移动端模板；二维码登录使用桌面网页。"
+            "请重置账号登录环境并选择“自动”或“Windows Chrome 桌面”后重试。",
+            stage="校验账号浏览器环境",
+        )
     state = LoginStartupState(session_id=int(session_id), platform=platform)
     deadline = asyncio.get_running_loop().time() + timeout_seconds
     task = asyncio.create_task(
@@ -305,10 +314,19 @@ async def _start_qrcode_login_session_with_profile_once(
             }
 
         login_adapter = _build_mediacrawler_login_adapter(platform, context, page)
+        remaining_prepare_timeout_ms = max(
+            1,
+            int((deadline - asyncio.get_running_loop().time()) * 1000),
+        )
         await _run_startup_stage(
             state,
             "准备平台登录页",
-            _prepare_login_page(platform, page, timeout, login_adapter),
+            _prepare_login_page(
+                platform,
+                page,
+                remaining_prepare_timeout_ms,
+                login_adapter,
+            ),
             deadline,
         )
         remaining_qr_timeout_ms = max(
@@ -797,20 +815,39 @@ def _build_mediacrawler_login_adapter(platform: str, context: BrowserContext, pa
 
 
 async def _prepare_login_page(platform: str, page: Page, timeout: int, login_adapter: Any | None = None) -> None:
-    if await _selector_visible(page, QR_SELECTORS[platform]["selector"], timeout=1000):
+    loop = asyncio.get_running_loop()
+    deadline = loop.time() + max(1, int(timeout)) / 1000
+
+    def remaining_timeout_ms() -> int:
+        remaining = int((deadline - loop.time()) * 1000)
+        if remaining <= 0:
+            raise LoginStartupStageTimeout("准备平台登录页")
+        return remaining
+
+    if await _selector_visible(
+        page,
+        QR_SELECTORS[platform]["selector"],
+        timeout=min(1000, remaining_timeout_ms()),
+    ):
         return
     if login_adapter and hasattr(login_adapter, "prepare_qrcode_login"):
-        await login_adapter.prepare_qrcode_login(timeout)
+        await login_adapter.prepare_qrcode_login(remaining_timeout_ms())
         return
     if await _needs_manual_verification(platform, page):
         return
     dialog_selector = QR_SELECTORS[platform].get("login_dialog_selector") or ""
-    if dialog_selector and await _selector_visible(page, dialog_selector, timeout=min(timeout, 8000)):
+    if dialog_selector and await _selector_visible(
+        page,
+        dialog_selector,
+        timeout=min(remaining_timeout_ms(), 8000),
+    ):
         return
     login_button_selector = QR_SELECTORS[platform].get("login_button_selector") or ""
     if login_button_selector:
-        await page.locator(login_button_selector).click(timeout=min(timeout, 5000))
-        await page.wait_for_timeout(600)
+        await page.locator(login_button_selector).click(
+            timeout=min(remaining_timeout_ms(), 5000)
+        )
+        await page.wait_for_timeout(min(remaining_timeout_ms(), 600))
 
 
 async def _selector_visible(page: Page, selector: str, timeout: int = 1000) -> bool:
@@ -1183,7 +1220,7 @@ def _login_qr_timeout_ms() -> int:
     try:
         return max(5000, int(get_runtime_setting_value("login_qr_timeout_seconds")) * 1000)
     except Exception:
-        return int(os.environ.get("MONITOR_LOGIN_QR_TIMEOUT_MS") or 20000)
+        return int(os.environ.get("MONITOR_LOGIN_QR_TIMEOUT_MS") or 45000)
 
 
 def _failure(
@@ -1295,11 +1332,11 @@ def _login_qr_stage_timeout_seconds() -> float:
             0.05,
             min(
                 120.0,
-                float(os.environ.get("MONITOR_LOGIN_BROWSER_STARTUP_STAGE_TIMEOUT_SECONDS") or "30"),
+                float(os.environ.get("MONITOR_LOGIN_BROWSER_STARTUP_STAGE_TIMEOUT_SECONDS") or "45"),
             ),
         )
     except (TypeError, ValueError):
-        return 30.0
+        return 45.0
 
 
 def _login_browser_cleanup_timeout_seconds() -> float:

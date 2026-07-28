@@ -5188,6 +5188,103 @@ Acceptance:
   and independent review gates pass. The affected computer remains the final
   operator gate.
 
+## CR-137 - Douyin QR Login Surface Readiness And Login-Material Truthfulness
+
+Date: 2026-07-28
+
+Source: affected-computer acceptance on merged `main@74aa4c1`. A controlled
+Chrome/Chromium and headed/headless timing matrix proved that system Chrome in
+headless mode can render the Douyin QR code, but the current flow clicks the
+login entry about `0.6` seconds after `DOMContentLoaded`, before the page is
+ready. That early click produces no login surface. The same system Chrome page
+took about `23.6` seconds to reach `load` and then exposed the QR before a
+click, which exceeds the current default `20`-second total QR creation budget.
+
+Module: Douyin QR page readiness, bounded login-entry retries, QR creation
+budget, Douyin desktop-web identity compatibility, and Platform Account
+login-material status wording.
+
+Type: Regression Fix
+
+Status: Implementation Verified / Operator Acceptance Pending
+
+Confirmed requirements:
+
+- Douyin QR preparation is condition-based. A completed Playwright click is
+  not proof that the login surface is ready. Preparation succeeds only after
+  the login dialog or exact QR surface becomes visible.
+- An early no-op click is retried inside one finite preparation deadline. If a
+  login overlay appears while a click is waiting and causes that click to time
+  out, the subsequent state check treats the visible login surface as success.
+- The default total QR creation budget must cover the measured clean-system
+  Chrome readiness time while remaining bounded. Existing deployment/runtime
+  overrides remain authoritative.
+- Supported Docker/systemd examples use the same reviewed total and startup
+  stage values, so example deployment does not restore the former timeout.
+- When runtime settings are not yet available in the browser, the frontend
+  uses the same `45`-second QR value plus the existing `15`-second response
+  margin instead of aborting at the backend deadline.
+- Platform preparation receives the remaining global budget after browser
+  startup, navigation, and identity checks. Its extraction reserve therefore
+  remains inside the one authoritative outer deadline.
+- The preparation bridge deducts its own exact-QR probe and generic fallback
+  steps before forwarding the latest remaining milliseconds to an adapter.
+- A new Douyin account using automatic identity selection must receive a
+  desktop-web-compatible Windows Chrome template. The current QR/crawl adapter
+  does not claim Android-web support. An explicitly selected or historical
+  Android template fails before browser startup with reset/template guidance
+  instead of waiting for the QR timeout.
+- Failure evidence records only bounded stage names, attempt counts, and safe
+  selector identifiers. Cookie, token, QR bytes, Profile paths, and full DOM
+  content stay outside logs and responses.
+- UI wording distinguishes saved Profile/login material from a currently
+  validated reusable login state. A stale or limited Profile must not be
+  described as ready for task reuse, and a configured path alone must not be
+  described as created or saved material.
+- Login-session responses must not attach another account's or Profile's
+  platform material status. Account-bound sessions match account identity;
+  default unbound sessions may match only the platform default status.
+- Platform summary readiness means usable saved material with no known login
+  error; only a successfully verified login session uses validated-login copy.
+
+Non-goals:
+
+- No change to headless QR policy, selected browser/Profile authority, proxy
+  binding, Cookie encryption, manual verification handling, or Browser-login
+  behavior.
+- No silent rewrite of an existing persisted Android identity. The operator
+  uses the existing audited reset/re-login workflow to select automatic or
+  Windows Chrome desktop identity.
+- No unbounded page-load wait and no dependence on `networkidle`.
+- No hard-coded Douyin scan-tab click without affected-page DOM evidence.
+
+Acceptance:
+
+- Synthetic coverage proves an early successful click with no state change is
+  retried and preparation returns only after a later dialog/QR state appears.
+- A dialog that appears during a Playwright click timeout is accepted after a
+  post-click state check; a page that never exposes a login surface terminates
+  at the bounded preparation deadline.
+- The default QR creation setting covers the observed load/readiness window,
+  while explicit runtime/environment values retain precedence and supported
+  deployment examples carry the reviewed `45`-second values.
+- The frontend QR request waits `60` seconds when its runtime setting cache is
+  empty, preserving a `15`-second response margin over the backend default.
+- A hidden attached login-panel element does not satisfy readiness, and a slow
+  pre-navigation phase reduces the preparation timeout passed to the adapter.
+- A delayed initial exact-QR probe reduces the adapter timeout by the elapsed
+  amount instead of forwarding the bridge's original input unchanged.
+- Automatic new-account identity resolves to a Windows desktop template for
+  Douyin; explicit Android selection remains persisted but QR creation stops
+  early with actionable reset guidance.
+- Profile-present plus `needs_login` renders material-exists wording instead
+  of reusable-login wording; a session containing only its configured Profile
+  path renders processing or not-saved wording.
+- QR poll plus both verification-code routes return an empty platform status
+  for a mismatched account/Profile and retain matching/default status.
+- Focused, adjacent, complete monitoring, static, docs, whitespace, local real
+  headless QR, affected-computer, and independent review gates pass.
+
 ## CR-134 - Managed Login Environment Injection And Retry
 
 Date: 2026-07-22

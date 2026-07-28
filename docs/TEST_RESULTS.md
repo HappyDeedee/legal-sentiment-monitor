@@ -2,6 +2,69 @@
 
 This file records verification outcomes. Add new entries at the top.
 
+## 2026-07-28 - CR-137 Douyin QR Readiness And Identity Compatibility
+
+Scope: affected-computer timing evidence, condition-based visible Douyin QR
+readiness, one global QR budget, deployment-example consistency, desktop-web
+identity compatibility, and login-material truthfulness.
+
+Result: local implementation, complete monitoring, static/documentation, and
+real headless browser gates pass. Affected-computer operator acceptance after
+delivery remains pending.
+
+- The affected-computer A-D matrix proved system Chrome headless can render the
+  Douyin QR. An early click about `0.6` seconds after `DOMContentLoaded` was a
+  no-op, while a fully loaded page exposed the login surface/QR. This excluded
+  a general headless, Chrome, Playwright, or network failure.
+- Local system-Chrome probes then isolated a second deterministic factor:
+  every sampled failed account used `CN_ANDROID_CHROME`, Android platform,
+  Mobile UA, and mobile screen geometry; sampled Windows desktop identities
+  generated a QR. A direct post-load desktop probe showed the panel after
+  `0.5` seconds and the exact QR after `1.5` seconds.
+- Douyin preparation now observes automatic dialog/QR state and page `load`
+  before using short bounded login-entry clicks. A matched selector's click
+  error immediately returns to state observation instead of continuing through
+  broad fallback selectors.
+- New Douyin `auto` identities resolve to deterministic Windows Chrome desktop
+  templates. Explicit/historical Android identities remain persisted and stop
+  before browser startup with audited reset/re-login guidance; no identity is
+  silently rewritten.
+- Independent review rounds found eight gaps and all are covered and fixed:
+  Docker and systemd examples still overriding the default with `20` seconds,
+  preparation
+  receiving the original rather than remaining global budget, hidden attached
+  login panels being eligible for readiness, and configured paths being
+  presented as existing Profile material, plus the frontend no-cache fallback
+  aborting at the same `45`-second boundary as the backend, login-session
+  responses inheriting another account/Profile's platform status, and platform
+  material availability being labeled as a fresh login validation, plus the
+  preparation bridge forwarding its original budget after an exact-QR probe.
+- RED/GREEN coverage covers automatic visible-surface waiting,
+  load-before-click, overlay-during-click, no-surface timeout, selector fallback
+  boundaries, global and bridge-level remaining budgets,
+  `45`-second deployment/default/stage
+  values, `60`-second frontend no-cache request allowance, automatic desktop
+  identity, early Android rejection plus route-state recovery, and
+  saved-material versus configured-path versus validated-login wording.
+  Existing QR poll and both verification-code route tests now cover matching,
+  mismatched-account/Profile, and default-platform status behavior.
+- Focused and adjacent QR/identity coverage passed (`25 passed, 762
+  deselected, 2 warnings`). Complete `tests/test_monitoring_mvp.py` passed
+  (`787 passed, 4 warnings`). The code warnings are existing SQLAlchemy/FastAPI
+  deprecations; the additional warning is the local pytest-cache permission
+  condition.
+- A fresh default Douyin account resolved to `CN_WIN_CHROME_1536`; the real
+  final managed system-Chrome headless recheck returned `waiting_qrcode` with a
+  non-empty QR in `9.78` seconds, zero visible owned windows, no identity
+  mismatches, and no unsupported fields. The fresh managed Playwright Chromium
+  recheck returned a non-empty QR in `10.34` seconds with the same clean result.
+- Python compile, inline JavaScript parse, `uv lock --check`, documentation
+  consistency, the documentation regression, and `git diff --check` passed.
+  The frontend/documentation final re-review reported no P0/P1/P2 issue; the
+  backend final review identified the bridge-budget P2 and no other issue. That
+  final finding is fixed and verified by RED/GREEN, full-suite, and two real
+  browser receipts. The affected computer remains the final operator gate.
+
 ## 2026-07-24 - CR-136 QR Fallback And Cookie Panel Verification
 
 Scope: bounded QR selector probing, generic QR fallback reachability, new-account
